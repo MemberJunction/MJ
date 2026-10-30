@@ -38,7 +38,9 @@ import {
     BuildSavedQuerySearchFilter,
     ComposeStudioFirstMessage,
     BuildStudioAppContext,
+    BuildStudioBriefClientTools,
 } from '../VideoStudio/video-studio-agent-context';
+import { VSStudioSlideInStateService } from '../VideoStudio/services/vs-studio-slide-in-state.service';
 
 // ============================================================================
 // Common helpers
@@ -265,7 +267,7 @@ describe('FilterBrandKitCards & BuildBrandKitsAgentContext', () => {
         expect(FilterBrandKitCards(kits, { ...allFilter, SearchQuery: 'regional' }).map((k) => k.ID)).toEqual(['kit-2']);
     });
 
-    it('builds Brand Kits agent context with active/inactive/default counts', () => {
+    it('builds Brand Kits agent context with active/inactive/default counts and SuppressChatOverlay: true', () => {
         const input: BrandKitsAgentContextInput = {
             AllCards: kits,
             FilteredCards: [kits[0]],
@@ -276,6 +278,7 @@ describe('FilterBrandKitCards & BuildBrandKitsAgentContext', () => {
         };
         const ctx = BuildBrandKitsAgentContext(input);
         expect(ctx['Surface']).toBe('VideoStudioBrandKits');
+        expect(ctx['SuppressChatOverlay']).toBe(true);
         expect(ctx['TotalBrandKitCount']).toBe(2);
         expect(ctx['FilteredBrandKitCount']).toBe(1);
         expect(ctx['ActiveBrandKitCount']).toBe(1);
@@ -341,7 +344,7 @@ describe('FilterArchetypeCards, GroupArchetypesByCategory & BuildArchetypesAgent
         expect(groups[1].Archetypes[0].ID).toBe('arch-2');
     });
 
-    it('builds Archetypes agent context with shipped/company counts and categories', () => {
+    it('builds Archetypes agent context with shipped/company counts, categories, and SuppressChatOverlay: true', () => {
         const input: ArchetypesAgentContextInput = {
             AllCards: archetypes,
             FilteredCards: archetypes,
@@ -351,6 +354,7 @@ describe('FilterArchetypeCards, GroupArchetypesByCategory & BuildArchetypesAgent
         };
         const ctx = BuildArchetypesAgentContext(input);
         expect(ctx['Surface']).toBe('VideoStudioArchetypes');
+        expect(ctx['SuppressChatOverlay']).toBe(true);
         expect(ctx['TotalArchetypeCount']).toBe(2);
         expect(ctx['ShippedArchetypeCount']).toBe(1);
         expect(ctx['CompanyArchetypeCount']).toBe(1);
@@ -360,10 +364,10 @@ describe('FilterArchetypeCards, GroupArchetypesByCategory & BuildArchetypesAgent
 });
 
 // ============================================================================
-// 4. Studio brief helpers
+// 4. Studio brief helpers & shared slide-in state service
 // ============================================================================
 
-describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstMessage & BuildStudioAppContext', () => {
+describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstMessage, BuildStudioAppContext, BuildStudioBriefClientTools & VSStudioSlideInStateService', () => {
     it('parses JSON array or comma-separated formats and falls back to 16:9 when empty/invalid', () => {
         expect(ParseArchetypeDefaultFormats('["16:9", "9:16"]')).toEqual(['16:9', '9:16']);
         expect(ParseArchetypeDefaultFormats('16:9, 1:1, 4:5, 16:9')).toEqual(['16:9', '1:1', '4:5']);
@@ -481,7 +485,118 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
         );
         expect(minMaxOnly.reduce((acc, item) => acc + item.Seconds, 0)).toBe(25);
     });
+
+    it('keeps open state, ConversationId, and brief client tool selections across page changes in VSStudioSlideInStateService', async () => {
+        const service = new VSStudioSlideInStateService();
+        expect(service.IsOpen).toBe(false);
+        expect(service.ConversationId).toBeNull();
+
+        service.OpenIterate('conv-across-pages-1', 'art-1', 2);
+        expect(service.IsOpen).toBe(true);
+        expect(service.ConversationId).toBe('conv-across-pages-1');
+        expect(service.PendingArtifactId).toBe('art-1');
+        expect(service.PendingArtifactVersionNumber).toBe(2);
+        expect(service.IsBriefShowing).toBe(false);
+        // When an active conversation is open, BuildBriefClientTools returns []
+        expect(service.BuildBriefClientTools()).toEqual([]);
+
+        // Opening a new production resets ConversationId to null while keeping IsOpen = true
+        service.OpenNewProduction();
+        expect(service.IsOpen).toBe(true);
+        expect(service.ConversationId).toBeNull();
+        expect(service.IsBriefShowing).toBe(true);
+
+        const sampleArchetype = makeArchetypeCard({
+            ID: 'arch-kpi-1',
+            Name: 'KPI Briefing',
+            DefaultDurationSeconds: 60,
+            MinDurationSeconds: 30,
+            MaxDurationSeconds: 90,
+            DefaultFormats: '["16:9", "9:16"]',
+        });
+        const sampleKit = makeBrandKitCard({
+            ID: 'kit-org-1',
+            Name: 'Org Default Kit',
+        });
+
+        const publishedContexts: Record<string, unknown>[] = [];
+        const tools = service.BuildBriefClientTools({
+            GetFallbackArchetypes: () => [sampleArchetype],
+            GetFallbackBrandKits: () => [sampleKit],
+            OnBriefMutated: () => {
+                publishedContexts.push(
+                    service.BuildCombinedAppContext({ Surface: 'VideoStudioBrandKits', SuppressChatOverlay: true }),
+                );
+            },
+        });
+        expect(tools.map((t) => t.Name)).toEqual([
+            'SelectStudioArchetype',
+            'SelectStudioBrandKit',
+            'SetStudioFormats',
+            'SetStudioTopic',
+        ]);
+
+        const archTool = tools.find((t) => t.Name === 'SelectStudioArchetype')!;
+        const kitTool = tools.find((t) => t.Name === 'SelectStudioBrandKit')!;
+        const fmtTool = tools.find((t) => t.Name === 'SetStudioFormats')!;
+        const topicTool = tools.find((t) => t.Name === 'SetStudioTopic')!;
+
+        expect((await archTool.Handler({ archetype: 'KPI Briefing' })).Success).toBe(true);
+        expect((await kitTool.Handler({ brandKit: 'Org Default Kit' })).Success).toBe(true);
+        expect((await fmtTool.Handler({ formats: ['16:9', '9:16'] })).Success).toBe(true);
+        expect((await topicTool.Handler({ topic: 'Q3 ARR growth' })).Success).toBe(true);
+
+        // Moving to Archetypes page preserves IsOpen, ConversationId, and brief state
+        expect(service.IsOpen).toBe(true);
+        expect(service.BriefSelectedArchetype?.ID).toBe('arch-kpi-1');
+        expect(service.BriefSelectedBrandKit?.ID).toBe('kit-org-1');
+        expect(service.BriefSelectedFormats).toEqual(['16:9', '9:16']);
+        expect(service.BriefTopic).toBe('Q3 ARR growth');
+        expect(publishedContexts.length).toBe(4);
+
+        const archetypesCombined = service.BuildCombinedAppContext({
+            Surface: 'VideoStudioArchetypes',
+            SuppressChatOverlay: true,
+        });
+        expect(archetypesCombined['Surface']).toBe('VideoStudioArchetypes');
+        expect(archetypesCombined['SuppressChatOverlay']).toBe(true);
+        expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['ArchetypeID']).toBe('arch-kpi-1');
+        expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['BrandKitID']).toBe('kit-org-1');
+        expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['Formats']).toEqual(['16:9', '9:16']);
+
+        // Also test BuildStudioBriefClientTools directly with a mounted brief handle
+        const handle = {
+            ApplyClientToolArchetype: (ref: string) => ({
+                Success: true,
+                Message: `Selected ${ref}`,
+                Data: { SelectedArchetypeId: 'arch-resolved-9' },
+            }),
+            ApplyClientToolBrandKit: (ref: string) => ({
+                Success: true,
+                Message: `Selected ${ref}`,
+                Data: { SelectedBrandKitId: 'kit-resolved-9' },
+            }),
+            ApplyClientToolFormats: (formats: unknown) => ({
+                Success: true,
+                Message: 'Formats set',
+                Data: { SelectedFormats: formats },
+            }),
+            ApplyClientToolTopic: (topic: string) => ({
+                Success: true,
+                Message: 'Topic set',
+                Data: { Topic: topic },
+            }),
+        };
+        const directTools = BuildStudioBriefClientTools({
+            GetBriefComponent: () => handle,
+        });
+        const directArchRes = await directTools[0].Handler({ archetype: 'Executive Briefing' });
+        expect(directArchRes.Success).toBe(true);
+        expect(directArchRes.Data?.['SelectedArchetypeId']).toBe('arch-resolved-9');
+    });
 });
+
+
 
 
 

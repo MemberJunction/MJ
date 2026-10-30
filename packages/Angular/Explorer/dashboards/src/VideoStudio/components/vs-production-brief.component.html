@@ -1,13 +1,17 @@
 <div class="vs-brief" data-testid="vs-production-brief">
   <div class="vs-brief__scroll">
-    <!-- 1. Setup health -->
-    <section class="vs-brief__section" aria-label="Setup health">
-      <vs-setup-health-card
-        [Result]="SetupHealthResult"
-        [Loading]="IsCheckingSetupHealth"
-        (Recheck)="CheckSetupHealth()"
-      ></vs-setup-health-card>
-    </section>
+    <!-- 1. Setup health (shown on warning/error, or when Setup OK details are toggled from the header) -->
+    @if (ShouldShowSetupHealthCard) {
+      <section class="vs-brief__section" aria-label="Setup health">
+        <vs-setup-health-card
+          [Result]="SetupHealthResult"
+          [Loading]="IsCheckingSetupHealth"
+          [Expanded]="IsAllSetupOk && ShowHealthySetupDetails"
+          (ExpandedChange)="OnSetupHealthExpandedChange($event)"
+          (Recheck)="CheckSetupHealth()"
+        ></vs-setup-health-card>
+      </section>
+    }
 
     <!-- 2. What's it about? -->
     <section class="vs-brief__section">
@@ -18,7 +22,7 @@
         id="vs-brief-topic-input"
         class="vs-brief__textarea"
         data-testid="vs-brief-topic-input"
-        rows="3"
+        rows="2"
         placeholder="Describe the video topic, audience, and goal…"
         [ngModel]="Topic"
         (ngModelChange)="OnTopicChange($event)"
@@ -217,6 +221,7 @@
       type="button"
       mjButton
       Variant="primary"
+      Size="md"
       class="vs-brief__start-btn"
       data-testid="vs-brief-start-button"
       [disabled]="!CanStartProduction"

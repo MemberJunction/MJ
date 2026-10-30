@@ -210,6 +210,23 @@
   color: var(--mj-text-secondary);
 }
 
+.vs-resource-shell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.vs-resource-shell__page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vs-brand-kit-card,
   .vs-palette-swatch {

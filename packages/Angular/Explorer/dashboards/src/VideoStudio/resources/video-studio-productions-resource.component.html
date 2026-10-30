@@ -1,9 +1,10 @@
-<mj-page-layout>
-  <mj-page-header
-    Title="Productions"
-    Icon="fa-solid fa-clapperboard"
-    Subtitle="Browse, preview, and iterate on video productions"
-  >
+<div class="vs-resource-shell" [class.vs-resource-shell--slidein-open]="IsCopilotSlideInOpen">
+  <mj-page-layout class="vs-resource-shell__page">
+    <mj-page-header
+      Title="Productions"
+      Icon="fa-solid fa-clapperboard"
+      Subtitle="Browse, preview, and iterate on video productions"
+    >
     <div meta>
       <mj-stat-badge
         [Count]="FilteredCount"
@@ -73,56 +74,57 @@
   </mj-page-header>
 
   <mj-page-body>
-    <div class="vs-productions-shell" [class.vs-productions-shell--slidein-open]="IsCopilotSlideInOpen">
-      <div class="vs-productions-main">
-        @if (IsLoading && AllProductions.length === 0) {
-          <div class="vs-loading-state" data-testid="productions-loading">
-            <mj-loading Text="Loading video productions..." Size="medium" />
-          </div>
-        } @else if (LoadError) {
+    <div class="vs-productions-main">
+      @if (IsLoading && AllProductions.length === 0) {
+        <div class="vs-loading-state" data-testid="productions-loading">
+          <mj-loading Text="Loading video productions..." Size="medium" />
+        </div>
+      } @else if (LoadError) {
+        <mj-empty-state
+          data-testid="productions-error"
+          Role="alert"
+          Variant="error"
+          Icon="fa-solid fa-triangle-exclamation"
+          Title="Unable to load productions"
+          [Message]="LoadError"
+          ActionText="Try again"
+          ActionIcon="fa-solid fa-rotate"
+          ActionVariant="secondary"
+          (Action)="Refresh()"
+        ></mj-empty-state>
+      } @else if (FilteredProductions.length === 0) {
+        @if (AllProductions.length === 0) {
           <mj-empty-state
-            data-testid="productions-error"
-            Role="alert"
-            Variant="error"
-            Icon="fa-solid fa-triangle-exclamation"
-            Title="Unable to load productions"
-            [Message]="LoadError"
-            ActionText="Try again"
-            ActionIcon="fa-solid fa-rotate"
-            ActionVariant="secondary"
-            (Action)="Refresh()"
+            data-testid="productions-empty"
+            Variant="empty"
+            Icon="fa-solid fa-clapperboard"
+            Title="No video productions yet"
+            Message="Open Video Studio to set a brief, storyboard beats, and render your first production."
+            ActionText="New production"
+            ActionIcon="fa-solid fa-plus"
+            ActionVariant="primary"
+            (Action)="OpenNewProductionCopilot()"
           ></mj-empty-state>
-        } @else if (FilteredProductions.length === 0) {
-          @if (AllProductions.length === 0) {
-            <mj-empty-state
-              data-testid="productions-empty"
-              Variant="empty"
-              Icon="fa-solid fa-clapperboard"
-              Title="No video productions yet"
-              Message="Open Video Studio to set a brief, storyboard beats, and render your first production."
-              ActionText="New production"
-              ActionIcon="fa-solid fa-plus"
-              ActionVariant="primary"
-              (Action)="OpenNewProductionCopilot()"
-            ></mj-empty-state>
-          } @else {
-            <mj-empty-state
-              data-testid="productions-empty"
-              Variant="no-results"
-              Icon="fa-solid fa-clapperboard"
-              Title="No productions match your filters"
-              Message="Try adjusting your search query or clearing active filter criteria."
-              ActionText="Reset filters"
-              ActionIcon="fa-solid fa-filter-circle-xmark"
-              ActionVariant="secondary"
-              (Action)="ResetFiltersAndSearch()"
-            ></mj-empty-state>
-          }
         } @else {
-          <div
-            class="vs-productions-workspace"
-            [class.vs-productions-workspace--split]="SelectedProduction !== null"
-          >
+          <mj-empty-state
+            data-testid="productions-empty"
+            Variant="no-results"
+            Icon="fa-solid fa-clapperboard"
+            Title="No productions match your filters"
+            Message="Try adjusting your search query or clearing active filter criteria."
+            ActionText="Reset filters"
+            ActionIcon="fa-solid fa-filter-circle-xmark"
+            ActionVariant="secondary"
+            (Action)="ResetFiltersAndSearch()"
+          ></mj-empty-state>
+        }
+      } @else {
+        <div
+          class="vs-productions-workspace"
+          [class.vs-productions-workspace--split]="SelectedProduction !== null && !IsIterateFocusMode"
+          [class.vs-productions-workspace--focus]="IsIterateFocusMode"
+        >
+          @if (!IsIterateFocusMode) {
             <div class="vs-productions-grid" data-testid="productions-grid">
               @for (item of FilteredProductions; track item.ID) {
                 <article
@@ -200,91 +202,64 @@
                 </article>
               }
             </div>
+          }
 
-            @if (SelectedProduction !== null) {
-              <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
-                <div class="vs-production-detail-toolbar" data-testid="production-detail-toolbar">
+          @if (SelectedProduction !== null) {
+            <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
+              <div class="vs-production-detail-toolbar" data-testid="production-detail-toolbar">
+                <div class="vs-production-detail-toolbar__start">
+                  @if (IsIterateFocusMode) {
+                    <button
+                      mjButton
+                      Variant="flat"
+                      Size="sm"
+                      type="button"
+                      data-testid="production-all-productions-button"
+                      title="Show all productions"
+                      (click)="ShowAllProductions()"
+                    >
+                      <i class="fa-solid fa-table-cells-large" aria-hidden="true"></i>
+                      <span>All productions</span>
+                    </button>
+                  }
                   <span class="vs-production-detail-toolbar__title">{{ SelectedProduction.Name }}</span>
-                  <button
-                    mjButton
-                    Variant="outline"
-                    Size="sm"
-                    type="button"
-                    data-testid="production-iterate-button"
-                    [disabled]="!SelectedProductionConversationId"
-                    [attr.title]="
-                      SelectedProductionConversationId
-                        ? 'Iterate on this production in its conversation'
-                        : 'Made outside a conversation. Start a new production in Video Studio.'
-                    "
-                    (click)="StartIterate()"
-                  >
-                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-                    <span>Iterate</span>
-                  </button>
                 </div>
-                <div class="vs-production-detail-body">
-                  <div class="vs-production-detail-viewer" data-testid="production-detail-viewer">
-                    <mj-artifact-viewer-panel
-                      [artifactId]="SelectedProduction.ID"
-                      [Provider]="Provider"
-                      [CurrentUser]="ProviderToUse.CurrentUser"
-                      [canShare]="CanShareSelected"
-                      [canEdit]="CanEditSelected"
-                      [ShowSaveToCollection]="false"
-                      (Closed)="CloseDetailPane()"
-                      (ShareRequested)="OpenShareModal($event)"
-                      (NavigateToLink)="OnNavigateToArtifactLink($event)"
-                    />
-                  </div>
+                <button
+                  mjButton
+                  Variant="outline"
+                  Size="sm"
+                  type="button"
+                  data-testid="production-iterate-button"
+                  [disabled]="!SelectedProductionConversationId"
+                  [attr.title]="
+                    SelectedProductionConversationId
+                      ? 'Iterate on this production in its conversation'
+                      : 'Made outside a conversation. Start a new production in Video Studio.'
+                  "
+                  (click)="StartIterate()"
+                >
+                  <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                  <span>Iterate</span>
+                </button>
+              </div>
+              <div class="vs-production-detail-body">
+                <div class="vs-production-detail-viewer" data-testid="production-detail-viewer">
+                  <mj-artifact-viewer-panel
+                    [artifactId]="SelectedProduction.ID"
+                    [Provider]="Provider"
+                    [CurrentUser]="ProviderToUse.CurrentUser"
+                    [canShare]="CanShareSelected"
+                    [canEdit]="CanEditSelected"
+                    [ShowSaveToCollection]="false"
+                    (Closed)="CloseDetailPane()"
+                    (ShareRequested)="OpenShareModal($event)"
+                    (NavigateToLink)="OnNavigateToArtifactLink($event)"
+                  />
                 </div>
-              </aside>
-            }
-          </div>
-        }
-      </div>
-
-      @if (!IsCopilotSlideInOpen) {
-        <button
-          type="button"
-          class="vs-copilot-strip"
-          data-testid="productions-copilot-strip"
-          title="Open Video Studio"
-          aria-label="Open Video Studio"
-          (click)="ReopenCopilotSlideIn()"
-        >
-          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-          <span class="vs-copilot-strip__label">Video Studio</span>
-        </button>
-      }
-
-      @if (IsCopilotSlideInOpen) {
-        <aside
-          class="vs-copilot-slidein"
-          data-testid="productions-copilot-slidein"
-          role="complementary"
-          aria-label="Video Studio"
-        >
-          <div class="vs-copilot-slidein__body">
-            <vs-copilot-panel
-              #copilotPanel
-              [Provider]="ProviderToUse"
-              [CurrentUser]="CurrentUser"
-              [EnvironmentId]="EnvironmentId"
-              [ApplicationId]="ApplicationId"
-              [ConversationId]="SlideInConversationId"
-              [PendingArtifactId]="SlideInPendingArtifactId"
-              [PendingArtifactVersionNumber]="SlideInPendingArtifactVersionNumber"
-              [AppContext]="CopilotAppContext"
-              [HeaderTitle]="'Video Studio'"
-              [ShowCloseButton]="true"
-              (ConversationCreated)="OnSlideInConversationCreated($event)"
-              (PendingArtifactConsumed)="OnSlideInPendingArtifactConsumed()"
-              (BriefStateChange)="OnBriefStateChange($event)"
-              (CloseRequested)="CloseCopilotSlideIn()"
-            ></vs-copilot-panel>
-          </div>
-        </aside>
+              </div>
+            </aside>
+          }
+        </div>
       }
     </div>
 
@@ -298,4 +273,19 @@
       />
     }
   </mj-page-body>
-</mj-page-layout>
+  </mj-page-layout>
+
+  <vs-studio-slide-in
+    #studioSlideIn
+    [Provider]="ProviderToUse"
+    [CurrentUser]="CurrentUser"
+    [EnvironmentId]="EnvironmentId"
+    [ApplicationId]="ApplicationId"
+    [AppContext]="CopilotAppContext"
+    [HeaderTitle]="'Video Studio'"
+    (OpenChange)="OnSlideInOpenChange($event)"
+    (ConversationCreated)="OnSlideInConversationCreated($event)"
+    (PendingArtifactConsumed)="OnSlideInPendingArtifactConsumed()"
+    (BriefStateChange)="OnBriefStateChange($event)"
+  ></vs-studio-slide-in>
+</div>

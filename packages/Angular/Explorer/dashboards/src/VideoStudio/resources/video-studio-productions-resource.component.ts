@@ -7,6 +7,7 @@ import {
   ViewChild,
   inject,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   BrandKitEngine,
@@ -27,12 +28,12 @@ import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { VideoCaptionMode, VideoProductionStatus } from '@memberjunction/video-studio-core';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VSProductionBriefStateSnapshot } from '../components/vs-production-brief.component';
+import { VSStudioSlideInComponent } from '../components/vs-studio-slide-in.component';
+import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import {
   ArchetypeCardSnapshot,
   BrandKitCardSnapshot,
   BuildProductionsAgentContext,
-  BuildStudioAppContext,
-  ClampStudioDuration,
   CountActiveProductionPopoverFilters,
   FilterProductionCards,
   ParseArchetypeDefaultFormats,
@@ -40,7 +41,6 @@ import {
   ProductionCardStatus,
   ProductionFilterState,
   ResolveVideoStudioItem,
-  STUDIO_VIDEO_FORMATS,
 } from '../video-studio-agent-context';
 
 /**
@@ -134,17 +134,31 @@ export class VideoStudioProductionsResourceComponent
   private brandKitsById = new Map<string, MJBrandKitEntity>();
   private companiesById = new Map<string, string>();
 
+  public readonly SlideInState = inject(VSStudioSlideInStateService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly artifactPermissionService = inject(ArtifactPermissionService);
+  private slideInStateSub: Subscription | null = null;
+  private lastBriefShowingState: boolean | null = null;
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
     this.registerAgentClientTools();
+    this.slideInStateSub = this.SlideInState.State$.subscribe(() => {
+      this.CopilotAppContext = this.buildCopilotAppContext();
+      if (this.lastBriefShowingState !== this.SlideInState.IsBriefShowing) {
+        this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
+        this.registerAgentClientTools();
+      }
+      this.cdr.markForCheck();
+    });
     await this.LoadProductions(false);
     this.NotifyLoadComplete();
   }
 
   override ngOnDestroy(): void {
+    this.slideInStateSub?.unsubscribe();
+    this.slideInStateSub = null;
     super.ngOnDestroy();
   }
 
@@ -392,25 +406,124 @@ export class VideoStudioProductionsResourceComponent
     this.applyFiltersAndSync();
   }
 
-  @ViewChild('copilotPanel')
-  public CopilotPanel?: VSCopilotPanelComponent;
+  @ViewChild('studioSlideIn')
+  public StudioSlideIn?: VSStudioSlideInComponent;
+
+  public get CopilotPanel(): VSCopilotPanelComponent | undefined {
+    return this.StudioSlideIn?.CopilotPanel;
+  }
 
   public SelectedProductionConversationId: string | null = null;
+  public ShowGridInFocusMode = false;
 
-  public IsCopilotSlideInOpen = false;
-  public SlideInConversationId: string | null = null;
-  public SlideInPendingArtifactId: string | null = null;
-  public SlideInPendingArtifactVersionNumber: number | null = null;
+  public get IsIterateFocusMode(): boolean {
+    return (
+      this.SelectedProduction !== null &&
+      this.IsCopilotSlideInOpen &&
+      !this.ShowGridInFocusMode
+    );
+  }
 
-  public BriefArchetypes: ArchetypeCardSnapshot[] = [];
-  public BriefBrandKits: BrandKitCardSnapshot[] = [];
-  public BriefSelectedArchetype: ArchetypeCardSnapshot | null = null;
-  public BriefSelectedBrandKit: BrandKitCardSnapshot | null = null;
-  public BriefSelectedFormats: string[] = ['16:9'];
-  public BriefDurationSeconds = 30;
-  public BriefTopic = '';
-  public NarrationEnabled = true;
-  public CaptionsMode: VideoCaptionMode = 'Burned';
+  public ShowAllProductions(): void {
+    this.ShowGridInFocusMode = true;
+    this.cdr.markForCheck();
+  }
+
+  public get IsCopilotSlideInOpen(): boolean {
+    return this.SlideInState.IsOpen;
+  }
+  public set IsCopilotSlideInOpen(value: boolean) {
+    if (value) {
+      this.SlideInState.Reopen();
+    } else {
+      this.SlideInState.Close();
+    }
+  }
+
+  public get SlideInConversationId(): string | null {
+    return this.SlideInState.ConversationId;
+  }
+  public set SlideInConversationId(value: string | null) {
+    this.SlideInState.SetConversationId(value);
+  }
+
+  public get SlideInPendingArtifactId(): string | null {
+    return this.SlideInState.PendingArtifactId;
+  }
+  public set SlideInPendingArtifactId(value: string | null) {
+    this.SlideInState.PendingArtifactId = value;
+  }
+
+  public get SlideInPendingArtifactVersionNumber(): number | null {
+    return this.SlideInState.PendingArtifactVersionNumber;
+  }
+  public set SlideInPendingArtifactVersionNumber(value: number | null) {
+    this.SlideInState.PendingArtifactVersionNumber = value;
+  }
+
+  public get BriefArchetypes(): ArchetypeCardSnapshot[] {
+    return this.SlideInState.BriefArchetypes;
+  }
+  public set BriefArchetypes(value: ArchetypeCardSnapshot[]) {
+    this.SlideInState.BriefArchetypes = value;
+  }
+
+  public get BriefBrandKits(): BrandKitCardSnapshot[] {
+    return this.SlideInState.BriefBrandKits;
+  }
+  public set BriefBrandKits(value: BrandKitCardSnapshot[]) {
+    this.SlideInState.BriefBrandKits = value;
+  }
+
+  public get BriefSelectedArchetype(): ArchetypeCardSnapshot | null {
+    return this.SlideInState.BriefSelectedArchetype;
+  }
+  public set BriefSelectedArchetype(value: ArchetypeCardSnapshot | null) {
+    this.SlideInState.BriefSelectedArchetype = value;
+  }
+
+  public get BriefSelectedBrandKit(): BrandKitCardSnapshot | null {
+    return this.SlideInState.BriefSelectedBrandKit;
+  }
+  public set BriefSelectedBrandKit(value: BrandKitCardSnapshot | null) {
+    this.SlideInState.BriefSelectedBrandKit = value;
+  }
+
+  public get BriefSelectedFormats(): string[] {
+    return this.SlideInState.BriefSelectedFormats;
+  }
+  public set BriefSelectedFormats(value: string[]) {
+    this.SlideInState.BriefSelectedFormats = value;
+  }
+
+  public get BriefDurationSeconds(): number {
+    return this.SlideInState.BriefDurationSeconds;
+  }
+  public set BriefDurationSeconds(value: number) {
+    this.SlideInState.BriefDurationSeconds = value;
+  }
+
+  public get BriefTopic(): string {
+    return this.SlideInState.BriefTopic;
+  }
+  public set BriefTopic(value: string) {
+    this.SlideInState.BriefTopic = value;
+  }
+
+  public get NarrationEnabled(): boolean {
+    return this.SlideInState.NarrationEnabled;
+  }
+  public set NarrationEnabled(value: boolean) {
+    this.SlideInState.SetNarrationEnabled(value);
+  }
+
+  public get CaptionsMode(): VideoCaptionMode {
+    return this.SlideInState.CaptionsMode;
+  }
+  public set CaptionsMode(value: VideoCaptionMode) {
+    this.SlideInState.SetCaptionsMode(value);
+  }
+
   public CopilotAppContext: Record<string, unknown> = this.buildCopilotAppContext();
 
   public get CurrentUser(): UserInfo | null {
@@ -433,10 +546,8 @@ export class VideoStudioProductionsResourceComponent
    * displaying `<vs-production-brief>` in the chat area's `emptyState` slot.
    */
   public OpenNewProductionCopilot(): void {
-    this.SlideInConversationId = null;
-    this.SlideInPendingArtifactId = null;
-    this.SlideInPendingArtifactVersionNumber = null;
-    this.IsCopilotSlideInOpen = true;
+    this.ShowGridInFocusMode = false;
+    this.SlideInState.OpenNewProduction();
     this.CopilotAppContext = this.buildCopilotAppContext();
     this.syncAgentContext();
     this.cdr.markForCheck();
@@ -447,7 +558,8 @@ export class VideoStudioProductionsResourceComponent
    * conversation or showing the brief if none is active.
    */
   public ReopenCopilotSlideIn(): void {
-    this.IsCopilotSlideInOpen = true;
+    this.ShowGridInFocusMode = false;
+    this.SlideInState.Reopen();
     this.CopilotAppContext = this.buildCopilotAppContext();
     this.syncAgentContext();
     this.cdr.markForCheck();
@@ -462,70 +574,65 @@ export class VideoStudioProductionsResourceComponent
   }
 
   public CloseCopilotSlideIn(): void {
-    this.IsCopilotSlideInOpen = false;
-    this.SlideInPendingArtifactId = null;
-    this.SlideInPendingArtifactVersionNumber = null;
+    this.ShowGridInFocusMode = false;
+    this.SlideInState.Close();
+    this.syncAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideInOpenChange(isOpen: boolean): void {
+    if (!isOpen) {
+      this.ShowGridInFocusMode = false;
+    }
+    this.CopilotAppContext = this.buildCopilotAppContext();
     this.syncAgentContext();
     this.cdr.markForCheck();
   }
 
   public ToggleNarrationEnabled(): void {
-    this.NarrationEnabled = !this.NarrationEnabled;
+    this.SlideInState.SetNarrationEnabled(!this.SlideInState.NarrationEnabled);
     this.CopilotAppContext = this.buildCopilotAppContext();
     this.cdr.markForCheck();
   }
 
   public SetCaptionsMode(mode: VideoCaptionMode): void {
-    this.CaptionsMode = mode;
+    this.SlideInState.SetCaptionsMode(mode);
     this.CopilotAppContext = this.buildCopilotAppContext();
     this.cdr.markForCheck();
   }
 
   public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
-    this.BriefArchetypes = snapshot.AllArchetypes;
-    this.BriefBrandKits = snapshot.AllBrandKits;
-    this.BriefSelectedArchetype = snapshot.SelectedArchetype;
-    this.BriefSelectedBrandKit = snapshot.SelectedBrandKit;
-    this.BriefSelectedFormats = [...snapshot.SelectedFormats];
-    this.BriefDurationSeconds = snapshot.DurationSeconds;
-    this.BriefTopic = snapshot.Topic;
-    this.NarrationEnabled = snapshot.NarrationEnabled;
-    this.CaptionsMode = snapshot.CaptionsMode;
-    this.CopilotAppContext = snapshot.AppContext;
+    this.SlideInState.ApplyBriefSnapshot(snapshot);
+    this.CopilotAppContext = this.buildCopilotAppContext();
     this.syncAgentContext();
     this.cdr.markForCheck();
   }
 
   public OnSlideInConversationCreated(event: { conversation: { ID: string } }): void {
-    this.SlideInConversationId = event.conversation.ID;
+    this.SlideInState.SetConversationId(event.conversation.ID);
     this.syncAgentContext();
     this.cdr.markForCheck();
   }
 
   public OnSlideInPendingArtifactConsumed(): void {
-    this.SlideInPendingArtifactId = null;
-    this.SlideInPendingArtifactVersionNumber = null;
+    this.SlideInState.ClearPendingArtifact();
     this.cdr.markForCheck();
   }
 
   private buildCopilotAppContext(): Record<string, unknown> {
-    return BuildStudioAppContext({
-      ArchetypeID: this.BriefSelectedArchetype?.ID ?? null,
-      BrandKitID:
-        this.BriefSelectedBrandKit?.ID ??
-        (this.BrandKitFilter || (this.SelectedProduction?.BrandKitID ?? null)),
-      Formats: this.BriefSelectedFormats.length > 0 ? this.BriefSelectedFormats : ['16:9'],
-      DurationSeconds: this.BriefDurationSeconds,
-      QueryIDs: [],
-      NarrationEnabled: this.NarrationEnabled ? undefined : false,
-      CaptionsMode: this.CaptionsMode === 'Burned' ? undefined : this.CaptionsMode,
-    });
+    const fallbackBrandKitId =
+      this.BrandKitFilter || (this.SelectedProduction?.BrandKitID ?? null);
+    return this.SlideInState.BuildCombinedAppContext(
+      this.buildProductionsContext(),
+      fallbackBrandKitId,
+    );
   }
 
   public async SelectProduction(
     item: ProductionCardSnapshot | null,
     updateUrl = true,
   ): Promise<void> {
+    this.ShowGridInFocusMode = false;
     this.SelectedProduction = item;
     this.CanShareSelected = false;
     this.CanEditSelected = false;
@@ -578,10 +685,12 @@ export class VideoStudioProductionsResourceComponent
     if (!this.SelectedProduction || !this.SelectedProductionConversationId) {
       return;
     }
-    this.SlideInConversationId = this.SelectedProductionConversationId;
-    this.SlideInPendingArtifactId = this.SelectedProduction.ID;
-    this.SlideInPendingArtifactVersionNumber = this.SelectedProduction.VersionNumber;
-    this.IsCopilotSlideInOpen = true;
+    this.ShowGridInFocusMode = false;
+    this.SlideInState.OpenIterate(
+      this.SelectedProductionConversationId,
+      this.SelectedProduction.ID,
+      this.SelectedProduction.VersionNumber,
+    );
     this.syncAgentContext();
     this.cdr.markForCheck();
   }
@@ -853,186 +962,28 @@ export class VideoStudioProductionsResourceComponent
           return { Success: true };
         },
       },
-      {
-        Name: 'SelectStudioArchetype',
-        Description:
-          'Select a video archetype in the Video Studio brief by ID or name. Prefills default formats and duration bounds.',
-        ParameterSchema: {
-          type: 'object',
-          properties: {
-            archetype: {
-              type: 'string',
-              description: 'Archetype ID or name to select',
-            },
-          },
-          required: ['archetype'],
-        },
-        Handler: async (params: Record<string, unknown>) => {
-          // SAFETY BOUNDARY: Mutates local brief form state only.
-          const raw = typeof params?.['archetype'] === 'string' ? params['archetype'] : '';
-          const brief = this.CopilotPanel?.BriefComponent;
-          if (brief) {
-            return brief.ApplyClientToolArchetype(raw);
-          }
-          const resolution = ResolveVideoStudioItem(raw, this.BriefArchetypes, 'archetype');
-          if (!resolution.Ok) {
-            return { Success: false, ErrorMessage: resolution.Error };
-          }
-          this.BriefSelectedArchetype = resolution.Item;
-          this.BriefSelectedFormats = ParseArchetypeDefaultFormats(resolution.Item.DefaultFormats);
-          this.BriefDurationSeconds = ClampStudioDuration(
-            resolution.Item.DefaultDurationSeconds,
-            resolution.Item.MinDurationSeconds,
-            resolution.Item.MaxDurationSeconds,
-          );
+      ...this.SlideInState.BuildBriefClientTools({
+        GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
+        GetFallbackBrandKits: () =>
+          Array.from(this.brandKitsById.values()).map((k) => ({
+            ID: k.ID,
+            Name: k.Name,
+            Description: k.Description ?? '',
+            CompanyID: k.CompanyID ?? null,
+            CompanyName: this.findCompanyName(k.CompanyID ?? null),
+            IsDefault: Boolean(k.IsDefault),
+            Status: k.Status === 'Inactive' ? 'Inactive' : 'Active',
+            Swatches: [],
+            PrimaryLogoFileID: null,
+            PrimaryLogoUrl: null,
+            AssetCount: 0,
+          })),
+        OnBriefMutated: () => {
           this.CopilotAppContext = this.buildCopilotAppContext();
           this.syncAgentContext();
           this.cdr.markForCheck();
-          return {
-            Success: true,
-            Data: {
-              SelectedArchetypeId: resolution.Item.ID,
-              SelectedArchetypeName: resolution.Item.Name,
-            },
-          };
         },
-      },
-      {
-        Name: 'SelectStudioBrandKit',
-        Description:
-          'Select a Brand Kit in the Video Studio brief by ID or name (or pass "none" to clear the selection).',
-        ParameterSchema: {
-          type: 'object',
-          properties: {
-            brandKit: {
-              type: 'string',
-              description: 'Brand Kit ID or name to select, or "none" to clear',
-            },
-          },
-          required: ['brandKit'],
-        },
-        Handler: async (params: Record<string, unknown>) => {
-          // SAFETY BOUNDARY: Mutates local brief form state only.
-          const raw = typeof params?.['brandKit'] === 'string' ? params['brandKit'].trim() : '';
-          const brief = this.CopilotPanel?.BriefComponent;
-          if (brief) {
-            return brief.ApplyClientToolBrandKit(raw);
-          }
-          if (!raw || raw.toLowerCase() === 'none') {
-            this.BriefSelectedBrandKit = null;
-            this.CopilotAppContext = this.buildCopilotAppContext();
-            this.syncAgentContext();
-            this.cdr.markForCheck();
-            return { Success: true, Data: { SelectedBrandKitId: null } };
-          }
-          const availableKits: BrandKitCardSnapshot[] =
-            this.BriefBrandKits.length > 0
-              ? this.BriefBrandKits
-              : Array.from(this.brandKitsById.values()).map((k) => ({
-                  ID: k.ID,
-                  Name: k.Name,
-                  Description: k.Description ?? '',
-                  CompanyID: k.CompanyID ?? null,
-                  CompanyName: this.findCompanyName(k.CompanyID ?? null),
-                  IsDefault: Boolean(k.IsDefault),
-                  Status: k.Status === 'Inactive' ? 'Inactive' : 'Active',
-                  Swatches: [],
-                  PrimaryLogoFileID: null,
-                  PrimaryLogoUrl: null,
-                  AssetCount: 0,
-                }));
-          const resolution = ResolveVideoStudioItem(raw, availableKits, 'brand kit');
-          if (!resolution.Ok) {
-            return { Success: false, ErrorMessage: resolution.Error };
-          }
-          this.BriefSelectedBrandKit = resolution.Item;
-          this.CopilotAppContext = this.buildCopilotAppContext();
-          this.syncAgentContext();
-          this.cdr.markForCheck();
-          return {
-            Success: true,
-            Data: {
-              SelectedBrandKitId: resolution.Item.ID,
-              SelectedBrandKitName: resolution.Item.Name,
-            },
-          };
-        },
-      },
-      {
-        Name: 'SetStudioFormats',
-        Description:
-          'Set the output video aspect-ratio formats in the Video Studio brief (e.g. ["16:9", "9:16"]).',
-        ParameterSchema: {
-          type: 'object',
-          properties: {
-            formats: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Array of format codes from 16:9, 9:16, 1:1, 4:5',
-            },
-          },
-          required: ['formats'],
-        },
-        Handler: async (params: Record<string, unknown>) => {
-          // SAFETY BOUNDARY: Mutates local brief form state only.
-          const rawFormats = params?.['formats'];
-          const brief = this.CopilotPanel?.BriefComponent;
-          if (brief) {
-            return brief.ApplyClientToolFormats(rawFormats);
-          }
-          const list: string[] = Array.isArray(rawFormats)
-            ? rawFormats.filter((v): v is string => typeof v === 'string')
-            : typeof rawFormats === 'string'
-              ? rawFormats.split(',')
-              : [];
-          const allowed = new Set<string>(STUDIO_VIDEO_FORMATS);
-          const valid: string[] = [];
-          for (const item of list) {
-            const cleaned = item.trim();
-            if (allowed.has(cleaned) && !valid.includes(cleaned)) {
-              valid.push(cleaned);
-            }
-          }
-          if (valid.length === 0) {
-            return {
-              Success: false,
-              ErrorMessage: `Specify at least one valid format (${STUDIO_VIDEO_FORMATS.join(', ')}).`,
-            };
-          }
-          this.BriefSelectedFormats = valid;
-          this.CopilotAppContext = this.buildCopilotAppContext();
-          this.syncAgentContext();
-          this.cdr.markForCheck();
-          return { Success: true, Data: { SelectedFormats: [...this.BriefSelectedFormats] } };
-        },
-      },
-      {
-        Name: 'SetStudioTopic',
-        Description:
-          'Set the topic description in the Video Studio brief without starting production.',
-        ParameterSchema: {
-          type: 'object',
-          properties: {
-            topic: {
-              type: 'string',
-              description: 'Topic or prompt description for the video',
-            },
-          },
-          required: ['topic'],
-        },
-        Handler: async (params: Record<string, unknown>) => {
-          // SAFETY BOUNDARY: Mutates local brief form state only.
-          const topic = typeof params?.['topic'] === 'string' ? params['topic'] : '';
-          const brief = this.CopilotPanel?.BriefComponent;
-          if (brief) {
-            return brief.ApplyClientToolTopic(topic);
-          }
-          this.BriefTopic = topic;
-          this.syncAgentContext();
-          this.cdr.markForCheck();
-          return { Success: true, Data: { Topic: this.BriefTopic } };
-        },
-      },
+      }),
     ]);
   }
 
@@ -1284,7 +1235,7 @@ export class VideoStudioProductionsResourceComponent
     this.cdr.markForCheck();
   }
 
-  private syncAgentContext(): void {
+  private buildProductionsContext(): Record<string, unknown> {
     const availableArchetypes = Array.from(
       new Set(this.AllProductions.map((p) => p.Archetype).filter((a) => Boolean(a))),
     );
@@ -1309,7 +1260,7 @@ export class VideoStudioProductionsResourceComponent
       )?.CompanyName ??
       null;
 
-    const context = BuildProductionsAgentContext({
+    return BuildProductionsAgentContext({
       TotalCount: this.AllProductions.length,
       FilteredCards: this.FilteredProductions,
       Filters: this.currentFilterState(),
@@ -1321,6 +1272,13 @@ export class VideoStudioProductionsResourceComponent
       AvailableCompanyNames: availableCompanyNames,
       IsLoading: this.IsLoading,
     });
+  }
+
+  private syncAgentContext(): void {
+    const context = this.buildProductionsContext();
+    this.CopilotAppContext = this.buildCopilotAppContext();
     this.navigationService.SetAgentContext(this, context);
+    this.registerAgentClientTools();
   }
 }
+

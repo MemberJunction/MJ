@@ -1,24 +1,26 @@
 <aside class="vs-copilot-panel" data-testid="vs-copilot-panel">
-  <header class="vs-copilot-panel__header">
-    <div class="vs-copilot-panel__title">
-      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-      <span>{{ HeaderTitle }}</span>
-    </div>
-    @if (ShowCloseButton) {
-      <button
-        type="button"
-        mjButton
-        Variant="icon"
-        Size="sm"
-        [AriaLabel]="'Close Video Studio'"
-        data-testid="vs-copilot-close-button"
-        title="Close Video Studio"
-        (click)="OnCloseClick()"
-      >
-        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-      </button>
-    }
-  </header>
+  @if (IsResolvingAgent || AgentMissing || !VideoStudioAgentId || !EffectiveCurrentUser) {
+    <header class="vs-copilot-panel__header">
+      <div class="vs-copilot-panel__title" data-testid="vs-copilot-header-title">
+        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        <span>{{ HeaderTitle }}</span>
+      </div>
+      @if (ShowCloseButton) {
+        <button
+          type="button"
+          mjButton
+          Variant="icon"
+          Size="sm"
+          [AriaLabel]="'Close Video Studio'"
+          data-testid="vs-copilot-close-button"
+          title="Close Video Studio"
+          (click)="OnCloseClick()"
+        >
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      }
+    </header>
+  }
 
   <div class="vs-copilot-panel__body">
     @if (IsResolvingAgent) {
@@ -61,12 +63,57 @@
         (PendingArtifactConsumed)="OnPendingArtifactConsumed()"
         (navigationRequest)="OnNavigationRequest($event)"
       >
+        <ng-template mjChatSlot="headerActions" let-conversation>
+          @if (!conversation) {
+            <span class="vs-copilot-panel__title" data-testid="vs-copilot-header-title">
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+              <span>{{ HeaderTitle }}</span>
+            </span>
+          }
+          @if (IsSetupAllOk) {
+            <button
+              type="button"
+              mjButton
+              Variant="icon"
+              Size="sm"
+              class="vs-copilot-panel__icon-btn vs-copilot-panel__setup-ok-btn"
+              [class.vs-copilot-panel__setup-ok-btn--active]="ShowHealthySetupDetails"
+              [AriaLabel]="'Setup OK'"
+              [attr.aria-expanded]="ShowHealthySetupDetails"
+              data-testid="vs-setup-ok-header-button"
+              title="Setup OK"
+              (click)="ToggleHealthySetupDetails()"
+            >
+              <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+            </button>
+          }
+          @if (ShowCloseButton) {
+            <button
+              type="button"
+              mjButton
+              Variant="icon"
+              Size="sm"
+              class="vs-copilot-panel__icon-btn vs-copilot-panel__close-btn"
+              [AriaLabel]="'Close Video Studio'"
+              data-testid="vs-copilot-close-button"
+              title="Close Video Studio"
+              (click)="OnCloseClick()"
+            >
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+          }
+        </ng-template>
         <ng-template mjChatSlot="emptyState">
           <vs-production-brief
             #briefComponent
             [Provider]="ProviderToUse"
             [IsStarting]="IsStartingBrief"
             [StartError]="BriefStartError"
+            [SetupHealthResult]="SetupHealthResult"
+            [IsCheckingSetupHealth]="IsCheckingSetupHealth"
+            [ShowHealthySetupDetails]="ShowHealthySetupDetails"
+            (ShowHealthySetupDetailsChange)="OnBriefShowHealthySetupDetailsChange($event)"
+            (SetupHealthChange)="OnBriefSetupHealthChange($event)"
             (StateChange)="OnBriefStateChange($event)"
             (StartRequested)="OnBriefStartRequested($event)"
           ></vs-production-brief>

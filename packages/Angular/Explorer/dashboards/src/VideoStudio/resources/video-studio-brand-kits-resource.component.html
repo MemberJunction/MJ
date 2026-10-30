@@ -1,9 +1,10 @@
-<mj-page-layout>
-  <mj-page-header
-    Title="Brand Kits"
-    Icon="fa-solid fa-palette"
-    Subtitle="Configure palettes, typography, logos, soundtracks, and generation policies for video productions"
-  >
+<div class="vs-resource-shell" [class.vs-resource-shell--slidein-open]="IsCopilotSlideInOpen">
+  <mj-page-layout class="vs-resource-shell__page">
+    <mj-page-header
+      Title="Brand Kits"
+      Icon="fa-solid fa-palette"
+      Subtitle="Configure palettes, typography, logos, soundtracks, and generation policies for video productions"
+    >
     <div meta>
       <mj-stat-badge
         [Count]="FilteredCount"
@@ -198,4 +199,19 @@
       </div>
     }
   </mj-page-body>
-</mj-page-layout>
+  </mj-page-layout>
+
+  <vs-studio-slide-in
+    #studioSlideIn
+    [Provider]="ProviderToUse"
+    [CurrentUser]="CurrentUser"
+    [EnvironmentId]="EnvironmentId"
+    [ApplicationId]="ApplicationId"
+    [AppContext]="CopilotAppContext"
+    [HeaderTitle]="'Video Studio'"
+    (OpenChange)="OnSlideInOpenChange($event)"
+    (ConversationCreated)="OnSlideInConversationCreated($event)"
+    (PendingArtifactConsumed)="OnSlideInPendingArtifactConsumed()"
+    (BriefStateChange)="OnBriefStateChange($event)"
+  ></vs-studio-slide-in>
+</div>

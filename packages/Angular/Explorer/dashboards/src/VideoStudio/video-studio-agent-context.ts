@@ -507,6 +507,7 @@ export function BuildBrandKitsAgentContext(
 
     const context: Record<string, unknown> = {
         Surface: 'VideoStudioBrandKits',
+        SuppressChatOverlay: true,
         TotalBrandKitCount: input.AllCards.length,
         FilteredBrandKitCount: input.FilteredCards.length,
         ActiveBrandKitCount: activeCount,
@@ -824,6 +825,7 @@ export function BuildArchetypesAgentContext(
 
     const context: Record<string, unknown> = {
         Surface: 'VideoStudioArchetypes',
+        SuppressChatOverlay: true,
         TotalArchetypeCount: input.AllCards.length,
         FilteredArchetypeCount: input.FilteredCards.length,
         ShippedArchetypeCount: shippedCount,
@@ -1018,6 +1020,219 @@ export function BuildStudioAppContext(
                 : {}),
         },
     };
+}
+
+/**
+ * Result returned by a Studio brief client tool handler.
+ */
+export interface StudioBriefClientToolResult {
+    Success: boolean;
+    Message?: string;
+    ErrorMessage?: string;
+    Data?: Record<string, unknown>;
+}
+
+/**
+ * Structural handle for `VSProductionBriefComponent` when mounted inside the slide-in.
+ */
+export interface StudioBriefComponentHandle {
+    ApplyClientToolArchetype(raw: string): StudioBriefClientToolResult;
+    ApplyClientToolBrandKit(raw: string): StudioBriefClientToolResult;
+    ApplyClientToolFormats(rawFormats: unknown): StudioBriefClientToolResult;
+    ApplyClientToolTopic(topic: string): StudioBriefClientToolResult;
+}
+
+/**
+ * Adapter passed to {@link BuildStudioBriefClientTools} so all three Video Studio
+ * pages register the same four brief form-fill client tools without duplicating
+ * handler logic.
+ */
+export interface StudioBriefClientToolAdapter {
+    GetBriefComponent?: () => StudioBriefComponentHandle | null | undefined;
+    GetArchetypes?: () => readonly ArchetypeCardSnapshot[];
+    GetBrandKits?: () => readonly BrandKitCardSnapshot[];
+    OnArchetypeSelected?: (
+        archetype: ArchetypeCardSnapshot,
+        formats: StudioVideoFormat[],
+        durationSeconds: number,
+    ) => void;
+    OnBrandKitSelected?: (brandKit: BrandKitCardSnapshot | null) => void;
+    OnFormatsSelected?: (formats: StudioVideoFormat[]) => void;
+    OnTopicChanged?: (topic: string) => void;
+}
+
+/**
+ * Client tool definition compatible with `NavigationService.SetAgentClientTools`.
+ */
+export interface StudioBriefClientToolDefinition {
+    Name: string;
+    Description: string;
+    ParameterSchema: Record<string, unknown>;
+    Handler: (params: Record<string, unknown>) => Promise<StudioBriefClientToolResult>;
+}
+
+/**
+ * Build the four reversible Studio brief form-fill client tools
+ * (`SelectStudioArchetype`, `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`)
+ * shared across Productions, Brand Kits, and Archetypes while the brief is showing.
+ */
+export function BuildStudioBriefClientTools(
+    adapter: StudioBriefClientToolAdapter,
+): StudioBriefClientToolDefinition[] {
+    return [
+        {
+            Name: 'SelectStudioArchetype',
+            Description:
+                'Select a video archetype in the Video Studio brief by ID or name. Prefills default formats and duration bounds.',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    archetype: {
+                        type: 'string',
+                        description: 'Archetype ID or name to select',
+                    },
+                },
+                required: ['archetype'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const raw = typeof params?.['archetype'] === 'string' ? params['archetype'] : '';
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolArchetype(raw);
+                }
+                const archetypes = adapter.GetArchetypes?.() ?? [];
+                const resolution = ResolveVideoStudioItem(raw, archetypes, 'archetype');
+                if (!resolution.Ok) {
+                    return { Success: false, ErrorMessage: resolution.Error };
+                }
+                const formats = ParseArchetypeDefaultFormats(resolution.Item.DefaultFormats);
+                const durationSeconds = ClampStudioDuration(
+                    resolution.Item.DefaultDurationSeconds,
+                    resolution.Item.MinDurationSeconds,
+                    resolution.Item.MaxDurationSeconds,
+                );
+                adapter.OnArchetypeSelected?.(resolution.Item, formats, durationSeconds);
+                return {
+                    Success: true,
+                    Data: {
+                        SelectedArchetypeId: resolution.Item.ID,
+                        SelectedArchetypeName: resolution.Item.Name,
+                    },
+                };
+            },
+        },
+        {
+            Name: 'SelectStudioBrandKit',
+            Description:
+                'Select a Brand Kit in the Video Studio brief by ID or name (or pass "none" to clear the selection).',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    brandKit: {
+                        type: 'string',
+                        description: 'Brand Kit ID or name to select, or "none" to clear',
+                    },
+                },
+                required: ['brandKit'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const raw = typeof params?.['brandKit'] === 'string' ? params['brandKit'].trim() : '';
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolBrandKit(raw);
+                }
+                if (!raw || raw.toLowerCase() === 'none') {
+                    adapter.OnBrandKitSelected?.(null);
+                    return { Success: true, Data: { SelectedBrandKitId: null } };
+                }
+                const kits = adapter.GetBrandKits?.() ?? [];
+                const resolution = ResolveVideoStudioItem(raw, kits, 'brand kit');
+                if (!resolution.Ok) {
+                    return { Success: false, ErrorMessage: resolution.Error };
+                }
+                adapter.OnBrandKitSelected?.(resolution.Item);
+                return {
+                    Success: true,
+                    Data: {
+                        SelectedBrandKitId: resolution.Item.ID,
+                        SelectedBrandKitName: resolution.Item.Name,
+                    },
+                };
+            },
+        },
+        {
+            Name: 'SetStudioFormats',
+            Description:
+                'Set the output video aspect-ratio formats in the Video Studio brief (e.g. ["16:9", "9:16"]).',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    formats: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Array of format codes from 16:9, 9:16, 1:1, 4:5',
+                    },
+                },
+                required: ['formats'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const rawFormats = params?.['formats'];
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolFormats(rawFormats);
+                }
+                const list: string[] = Array.isArray(rawFormats)
+                    ? rawFormats.filter((v): v is string => typeof v === 'string')
+                    : typeof rawFormats === 'string'
+                      ? rawFormats.split(',')
+                      : [];
+                const allowed = new Set<string>(STUDIO_VIDEO_FORMATS);
+                const valid: StudioVideoFormat[] = [];
+                for (const item of list) {
+                    const cleaned = item.trim() as StudioVideoFormat;
+                    if (allowed.has(cleaned) && !valid.includes(cleaned)) {
+                        valid.push(cleaned);
+                    }
+                }
+                if (valid.length === 0) {
+                    return {
+                        Success: false,
+                        ErrorMessage: `Specify at least one valid format (${STUDIO_VIDEO_FORMATS.join(', ')}).`,
+                    };
+                }
+                adapter.OnFormatsSelected?.(valid);
+                return { Success: true, Data: { SelectedFormats: [...valid] } };
+            },
+        },
+        {
+            Name: 'SetStudioTopic',
+            Description:
+                'Set the topic description in the Video Studio brief without starting production.',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    topic: {
+                        type: 'string',
+                        description: 'Topic or prompt description for the video',
+                    },
+                },
+                required: ['topic'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const topic = typeof params?.['topic'] === 'string' ? params['topic'] : '';
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolTopic(topic);
+                }
+                adapter.OnTopicChanged?.(topic);
+                return { Success: true, Data: { Topic: topic } };
+            },
+        },
+    ];
 }
 
 

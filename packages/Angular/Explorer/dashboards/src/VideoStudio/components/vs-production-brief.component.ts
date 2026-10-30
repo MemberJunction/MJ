@@ -93,12 +93,17 @@ export interface VSProductionBriefStateSnapshot {
   IsLoading: boolean;
 }
 
+export interface VSProductionBriefSetupHealthEvent {
+  Result: VideoStudioSetupHealthOutput | null;
+  Loading: boolean;
+}
+
 /**
  * Video Studio production brief (`vs-production-brief`).
  *
  * Renders inside the Video Studio right slide-in before the first conversation message
  * (via `<ng-template mjChatSlot="emptyState">`), guiding the user through:
- * 1. Setup health
+ * 1. Setup health (shown on warning/error, or when Setup OK details are toggled from the header)
  * 2. What's it about?
  * 3. Shape (archetype cards with beat strip and m:ss range)
  * 4. Where it plays (format toggles with frame glyph + length numeric input)
@@ -132,6 +137,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
 
   @Input() SetupHealthResult: VideoStudioSetupHealthOutput | null = null;
   @Input() IsCheckingSetupHealth = false;
+  @Input() ShowHealthySetupDetails = false;
 
   @Input() AllArchetypes: ArchetypeCardSnapshot[] = [];
   @Input() AllBrandKits: BrandKitCardSnapshot[] = [];
@@ -151,6 +157,8 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
 
   @Output() StateChange = new EventEmitter<VSProductionBriefStateSnapshot>();
   @Output() StartRequested = new EventEmitter<VSProductionBriefStartEvent>();
+  @Output() SetupHealthChange = new EventEmitter<VSProductionBriefSetupHealthEvent>();
+  @Output() ShowHealthySetupDetailsChange = new EventEmitter<boolean>();
 
   @ViewChildren(MJButtonDirective)
   private buttonDirectives?: QueryList<MJButtonDirective>;
@@ -168,6 +176,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     if (this.AllArchetypes.length > 0 && !this.SelectedArchetype) {
       this.SelectArchetype(this.AllArchetypes[0]);
     }
+    this.emitSetupHealthChange();
     if (!this.AutoLoad) {
       this.emitStateChange();
       return;
@@ -180,6 +189,30 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     } else {
       this.emitStateChange();
     }
+  }
+
+  public get IsAllSetupOk(): boolean {
+    return Boolean(
+      this.SetupHealthResult &&
+        this.SetupHealthResult.Healthy &&
+        (this.SetupHealthResult.Checks ?? []).every((check) => check.Status === 'OK'),
+    );
+  }
+
+  public get ShouldShowSetupHealthCard(): boolean {
+    if (!this.SetupHealthResult) {
+      return false;
+    }
+    if (this.IsAllSetupOk) {
+      return this.ShowHealthySetupDetails;
+    }
+    return true;
+  }
+
+  public OnSetupHealthExpandedChange(expanded: boolean): void {
+    this.ShowHealthySetupDetails = expanded;
+    this.ShowHealthySetupDetailsChange.emit(expanded);
+    this.cdr.markForCheck();
   }
 
   public FormatTime(seconds: number): string {
@@ -291,6 +324,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
 
   public async CheckSetupHealth(): Promise<void> {
     this.IsCheckingSetupHealth = true;
+    this.emitSetupHealthChange();
     this.cdr.markForCheck();
     try {
       const res = await new VideoStudioSetupHealthOperation().Execute(
@@ -327,6 +361,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       };
     } finally {
       this.IsCheckingSetupHealth = false;
+      this.emitSetupHealthChange();
       this.cdr.markForCheck();
     }
   }
@@ -723,6 +758,13 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       CaptionsMode: this.CaptionsMode,
       AppContext: this.BuildCurrentAppContext(),
       IsLoading: this.IsLoading,
+    });
+  }
+
+  private emitSetupHealthChange(): void {
+    this.SetupHealthChange.emit({
+      Result: this.SetupHealthResult,
+      Loading: this.IsCheckingSetupHealth,
     });
   }
 

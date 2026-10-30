@@ -8,6 +8,7 @@ import { ArtifactPermissionService } from '@memberjunction/ng-conversations';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
+import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioProductionsResourceComponent } from './video-studio-productions-resource.component';
 
 function createNavigationServiceStub(): {
@@ -516,11 +517,14 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
       providers: [
         { provide: NavigationService, useValue: navStub },
         { provide: ArtifactPermissionService, useValue: permStub },
+        { provide: VSStudioSlideInStateService, useFactory: () => new VSStudioSlideInStateService() },
       ],
     });
 
     await flushAsync();
     fixture.detectChanges();
+
+    expect(query(fixture, '.vs-resource-shell > vs-studio-slide-in')).not.toBeNull();
 
     const card = query(fixture, '[data-testid^="production-card-"]');
     expect(card).not.toBeNull();
@@ -531,6 +535,8 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
 
     const instance = fixture.componentInstance;
     expect(instance.SelectedProductionConversationId).toBe('conv-777');
+    expect(instance.IsIterateFocusMode).toBe(false);
+    expect(query(fixture, '[data-testid="productions-grid"]')).not.toBeNull();
 
     const iterateBtn = query(fixture, '[data-testid="production-iterate-button"]');
     expect(iterateBtn).not.toBeNull();
@@ -540,11 +546,21 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     fixture.detectChanges();
 
     expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(instance.IsIterateFocusMode).toBe(true);
+    expect(query(fixture, '[data-testid="productions-grid"]')).toBeNull();
     expect(instance.SlideInConversationId).toBe('conv-777');
     expect(instance.SlideInPendingArtifactId).toBe('prod-iter-1');
     expect(instance.SlideInPendingArtifactVersionNumber).toBe(3);
     expect(query(fixture, '[data-testid="production-iterate-copilot"]')).toBeNull();
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
+
+    // Clicking "All productions" in the viewer toolbar restores the grid while keeping the viewer and slide-in open
+    const allProdsBtn = query(fixture, '[data-testid="production-all-productions-button"]');
+    expect(allProdsBtn).not.toBeNull();
+    allProdsBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsIterateFocusMode).toBe(false);
+    expect(query(fixture, '[data-testid="productions-grid"]')).not.toBeNull();
 
     const copilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
     expect(copilotDebug).not.toBeNull();
@@ -753,6 +769,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
       providers: [
         { provide: NavigationService, useValue: navStub },
         { provide: ArtifactPermissionService, useValue: permStub },
+        { provide: VSStudioSlideInStateService, useFactory: () => new VSStudioSlideInStateService() },
       ],
     });
 
@@ -811,6 +828,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
       providers: [
         { provide: NavigationService, useValue: navStub },
         { provide: ArtifactPermissionService, useValue: permStub },
+        { provide: VSStudioSlideInStateService, useFactory: () => new VSStudioSlideInStateService() },
       ],
     });
 

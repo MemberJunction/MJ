@@ -1,10 +1,13 @@
 import { CommonModule } from '@angular/common';
 import {
   Component,
+  ContentChildren,
   Directive,
   EventEmitter,
   Input,
   Output,
+  QueryList,
+  TemplateRef,
   provideZonelessChangeDetection,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -53,18 +56,29 @@ import { VSCopilotPanelComponent } from './vs-copilot-panel.component';
 
 @Directive({
   standalone: true,
-  selector: '[mjChatSlot]',
+  selector: 'ng-template[mjChatSlot]',
 })
 class ChatSlotStubDirective {
   @Input() mjChatSlot = '';
+  constructor(public readonly templateRef: TemplateRef<unknown>) {}
 }
 
 @Component({
   standalone: true,
+  imports: [CommonModule],
   selector: 'mj-conversation-chat-area',
-  template: '',
+  template: `
+    @for (slot of slots; track slot.mjChatSlot) {
+      @if (slot.mjChatSlot === 'headerActions') {
+        <div data-testid="stub-header-actions-slot">
+          <ng-container *ngTemplateOutlet="slot.templateRef; context: { $implicit: Conversation }"></ng-container>
+        </div>
+      }
+    }
+  `,
 })
 class ConversationChatAreaStubComponent {
+  @ContentChildren(ChatSlotStubDirective) slots!: QueryList<ChatSlotStubDirective>;
   @Input() Provider: IMetadataProvider | null = null;
   @Input() EnvironmentId = '';
   @Input() CurrentUser: UserInfo | null = null;
@@ -392,4 +406,63 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     const startedWhenBlank = await component.StartConversation('   ');
     expect(startedWhenBlank).toBe(false);
   });
+
+  it('projects Video Studio title, Setup OK icon button, and Close button into mjChatSlot="headerActions" without a duplicate .vs-copilot-panel__header bar', async () => {
+    component.ConversationId = null;
+    component.ShowCloseButton = true;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rootEl = fixture.nativeElement as HTMLElement;
+    expect(rootEl.querySelector('.vs-copilot-panel__header')).toBeNull();
+
+    const headerActionsSlot = rootEl.querySelector('[data-testid="stub-header-actions-slot"]');
+    expect(headerActionsSlot).not.toBeNull();
+    expect(headerActionsSlot?.textContent).toContain('Video Studio');
+
+    const closeBtn = rootEl.querySelector('[data-testid="vs-copilot-close-button"]') as HTMLButtonElement | null;
+    expect(closeBtn).not.toBeNull();
+    expect(closeBtn?.getAttribute('aria-label')).toBe('Close Video Studio');
+
+    let closeCount = 0;
+    component.CloseRequested.subscribe(() => {
+      closeCount += 1;
+    });
+    closeBtn!.click();
+    expect(closeCount).toBe(1);
+
+    // Before SetupHealthResult is reported, vs-setup-ok-header-button is absent
+    expect(rootEl.querySelector('[data-testid="vs-setup-ok-header-button"]')).toBeNull();
+
+    // When all setup checks are OK on the brief, vs-setup-ok-header-button renders in headerActions
+    component.OnBriefSetupHealthChange({
+      Result: {
+        Healthy: true,
+        Checks: [
+          { Key: 'Render', Status: 'OK', Title: 'Render Worker', Message: 'Chromium ready' },
+        ],
+      },
+      Loading: false,
+    });
+    fixture.detectChanges();
+
+    const setupOkBtn = rootEl.querySelector('[data-testid="vs-setup-ok-header-button"]') as HTMLButtonElement | null;
+    expect(setupOkBtn).not.toBeNull();
+    expect(setupOkBtn?.getAttribute('aria-label')).toBe('Setup OK');
+    expect(setupOkBtn?.getAttribute('title')).toBe('Setup OK');
+    expect(component.ShowHealthySetupDetails).toBe(false);
+
+    setupOkBtn!.click();
+    fixture.detectChanges();
+    expect(component.ShowHealthySetupDetails).toBe(true);
+    expect(setupOkBtn?.getAttribute('aria-expanded')).toBe('true');
+
+    setupOkBtn!.click();
+    fixture.detectChanges();
+    expect(component.ShowHealthySetupDetails).toBe(false);
+    expect(setupOkBtn?.getAttribute('aria-expanded')).toBe('false');
+  });
 });
+
+

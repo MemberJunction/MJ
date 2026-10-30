@@ -30,16 +30,53 @@
 }
 
 .vs-copilot-panel__title {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--mj-space-2);
-  font-size: var(--mj-text-sm);
+  gap: var(--mj-space-1);
+  order: -1;
+  margin-right: 0;
+  font-size: var(--mj-text-xs);
   font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .vs-copilot-panel__title i {
   color: var(--mj-brand-primary);
+}
+
+.vs-copilot-panel__icon-btn {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.vs-copilot-panel__setup-ok-btn {
+  color: var(--mj-status-success);
+}
+
+.vs-copilot-panel__setup-ok-btn--active {
+  background: var(--mj-bg-surface-sunken);
+}
+
+@media (max-width: 1180px) {
+  .vs-copilot-panel__title i {
+    display: none;
+  }
+
+  .vs-copilot-panel__icon-btn {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    margin-left: -4px;
+  }
 }
 
 .vs-copilot-panel__body {

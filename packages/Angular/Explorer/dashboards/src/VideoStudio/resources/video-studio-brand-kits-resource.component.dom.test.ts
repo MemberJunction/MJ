@@ -9,6 +9,7 @@ import {
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
+import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioBrandKitsResourceComponent } from './video-studio-brand-kits-resource.component';
 
 function createNavigationServiceStub(): {
@@ -33,7 +34,7 @@ async function flushAsync(): Promise<void> {
 }
 
 describe('VideoStudioBrandKitsResourceComponent DOM', () => {
-  it('renders brand kit cards with AssetType logo thumbnails, palette swatches, and asset counts, filters, deletes kits after child assets, calls NotifyLoadComplete once, and publishes agent context', async () => {
+  it('renders brand kit cards with AssetType logo thumbnails, palette swatches, and asset counts, filters, deletes kits after child assets, calls NotifyLoadComplete once, publishes SuppressChatOverlay agent context, and mounts the shared slide-in with brief client tools', async () => {
     const navStub = createNavigationServiceStub();
     const confirmStub = {
       ConfirmDelete: vi.fn().mockResolvedValue(true),
@@ -179,6 +180,7 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
       providers: [
         { provide: NavigationService, useValue: navStub },
         { provide: MJConfirmService, useValue: confirmStub },
+        { provide: VSStudioSlideInStateService, useFactory: () => new VSStudioSlideInStateService() },
       ],
     });
 
@@ -204,14 +206,43 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     expect(defaultStar!.classList.contains('mj-badge')).toBe(true);
     expect(defaultStar!.classList.contains('mj-badge-neutral')).toBe(true);
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);
+    const registeredTools = navStub.SetAgentClientTools.mock.calls.at(-1)?.[1] as Array<{ Name: string }>;
+    const toolNames = registeredTools.map((t) => t.Name);
+    expect(toolNames).toEqual(
+      expect.arrayContaining([
+        'SearchBrandKits',
+        'FilterBrandKits',
+        'ClearBrandKitFilters',
+        'OpenBrandKit',
+        'RefreshBrandKits',
+        'SelectStudioArchetype',
+        'SelectStudioBrandKit',
+        'SetStudioFormats',
+        'SetStudioTopic',
+      ]),
+    );
     expect(navStub.SetAgentContext).toHaveBeenCalledWith(
       instance,
       expect.objectContaining({
         Surface: 'VideoStudioBrandKits',
+        SuppressChatOverlay: true,
         TotalBrandKitCount: 2,
         FilteredBrandKitCount: 2,
       }),
     );
+
+    // Shared slide-in sits beside mj-page-layout inside .vs-resource-shell; edge strip opens it
+    expect(query(fixture, '.vs-resource-shell > vs-studio-slide-in')).not.toBeNull();
+    expect(instance.IsCopilotSlideInOpen).toBe(false);
+    const stripBtn = query(fixture, '[data-testid="productions-copilot-strip"]') as HTMLElement | null;
+    expect(stripBtn).not.toBeNull();
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).toBeNull();
+
+    stripBtn!.click();
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
+    expect(queryAll(fixture, 'vs-copilot-panel')).toHaveLength(1);
 
     // Pressing Enter on the Delete button does NOT bubble to the card and call OpenEntityRecord
     const deleteBtn = query(fixture, '[data-testid="brand-kit-delete-kit-default"]') as HTMLElement | null;

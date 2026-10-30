@@ -33,10 +33,10 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 export class VSSetupHealthCardComponent {
   @Input() Result: VideoStudioSetupHealthOutput | null = null;
   @Input() Loading = false;
+  @Input() Expanded = false;
 
   @Output() Recheck = new EventEmitter<void>();
-
-  public Expanded = false;
+  @Output() ExpandedChange = new EventEmitter<boolean>();
 
   public get Checks(): VideoStudioSetupHealthCheck[] {
     return this.Result?.Checks ?? [];
@@ -52,6 +52,7 @@ export class VSSetupHealthCardComponent {
 
   public ToggleExpanded(): void {
     this.Expanded = !this.Expanded;
+    this.ExpandedChange.emit(this.Expanded);
   }
 
   public OnRecheckClick(): void {

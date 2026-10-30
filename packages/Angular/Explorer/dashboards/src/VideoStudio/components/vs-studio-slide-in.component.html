@@ -1,0 +1,44 @@
+@if (!IsOpen) {
+  <button
+    type="button"
+    class="vs-copilot-strip"
+    data-testid="productions-copilot-strip"
+    title="Open Video Studio"
+    aria-label="Open Video Studio"
+    (click)="Reopen()"
+  >
+    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+    <span class="vs-copilot-strip__label">Video Studio</span>
+  </button>
+}
+
+@if (IsOpen) {
+  <aside
+    class="vs-copilot-slidein"
+    data-testid="productions-copilot-slidein"
+    role="complementary"
+    aria-label="Video Studio"
+  >
+    <div class="vs-copilot-slidein__body">
+      <vs-copilot-panel
+        #copilotPanel
+        [Provider]="ProviderToUse"
+        [CurrentUser]="EffectiveCurrentUser"
+        [EnvironmentId]="EnvironmentId"
+        [ApplicationId]="ApplicationId"
+        [ConversationId]="ConversationId"
+        [PendingArtifactId]="PendingArtifactId"
+        [PendingArtifactVersionNumber]="PendingArtifactVersionNumber"
+        [AppContext]="EffectiveAppContext"
+        [HeaderTitle]="HeaderTitle"
+        [ShowCloseButton]="true"
+        (ConversationCreated)="OnConversationCreated($event)"
+        (PendingArtifactConsumed)="OnPendingArtifactConsumed()"
+        (BriefStateChange)="OnBriefStateChange($event)"
+        (BriefStartRequested)="OnBriefStartRequested($event)"
+        (NavigationRequest)="OnNavigationRequest($event)"
+        (CloseRequested)="Close()"
+      ></vs-copilot-panel>
+    </div>
+  </aside>
+}

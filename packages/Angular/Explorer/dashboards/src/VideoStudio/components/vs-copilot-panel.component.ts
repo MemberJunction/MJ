@@ -15,6 +15,8 @@ import { LogError, UserInfo } from '@memberjunction/core';
 import {
   MJConversationEntity,
   MJEnvironmentEntityExtended,
+  VideoStudioSetupHealthOperation,
+  VideoStudioSetupHealthOutput,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
@@ -28,6 +30,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
   VSProductionBriefComponent,
+  VSProductionBriefSetupHealthEvent,
   VSProductionBriefStartEvent,
   VSProductionBriefStateSnapshot,
 } from './vs-production-brief.component';
@@ -48,7 +51,8 @@ export interface VSCopilotConversationCreatedEvent {
 /**
  * Shared Video Studio slide-in panel wrapping `<mj-conversation-chat-area>` pinned
  * to the `'Video Studio'` orchestrator agent, with `<vs-production-brief>` projected
- * into the `emptyState` slot before the first message.
+ * into the `emptyState` slot before the first message and header controls projected
+ * into `mjChatSlot="headerActions"`.
  */
 @Component({
   standalone: true,
@@ -87,6 +91,7 @@ export class VSCopilotPanelComponent
   @Input() AppContext: Record<string, unknown> | null = null;
   @Input() HeaderTitle = 'Video Studio';
   @Input() ShowCloseButton = false;
+  @Input() SetupHealthResult: VideoStudioSetupHealthOutput | null = null;
 
   @Output() ConversationCreated = new EventEmitter<VSCopilotConversationCreatedEvent>();
   @Output() PendingMessageConsumed = new EventEmitter<void>();
@@ -109,16 +114,71 @@ export class VSCopilotPanelComponent
   public ChatIsNewConversation = true;
   public IsStartingBrief = false;
   public BriefStartError: string | null = null;
+  public IsCheckingSetupHealth = false;
+  public ShowHealthySetupDetails = false;
 
   private readonly cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
     this.syncConversationMode();
+    if (
+      !this.SetupHealthResult &&
+      this.ProviderToUse &&
+      'ExecuteGQL' in (this.ProviderToUse as object)
+    ) {
+      void this.CheckSetupHealth();
+    }
     await this.ResolveVideoStudioAgent();
   }
 
+  public get IsSetupAllOk(): boolean {
+    return Boolean(
+      this.SetupHealthResult &&
+        this.SetupHealthResult.Healthy &&
+        (this.SetupHealthResult.Checks ?? []).every((check) => check.Status === 'OK'),
+    );
+  }
+
+  public async CheckSetupHealth(): Promise<void> {
+    this.IsCheckingSetupHealth = true;
+    this.cdr.markForCheck();
+    try {
+      const res = await new VideoStudioSetupHealthOperation().Execute(
+        {},
+        { provider: this.ProviderToUse },
+      );
+      if (res.Success && res.Output) {
+        this.SetupHealthResult = res.Output;
+      }
+    } catch {
+      // Handled by brief when rendered
+    } finally {
+      this.IsCheckingSetupHealth = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnBriefSetupHealthChange(event: VSProductionBriefSetupHealthEvent): void {
+    this.SetupHealthResult = event.Result;
+    this.IsCheckingSetupHealth = event.Loading;
+    if (!this.IsSetupAllOk) {
+      this.ShowHealthySetupDetails = false;
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnBriefShowHealthySetupDetailsChange(expanded: boolean): void {
+    this.ShowHealthySetupDetails = expanded;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleHealthySetupDetails(): void {
+    this.ShowHealthySetupDetails = !this.ShowHealthySetupDetails;
+    this.cdr.markForCheck();
+  }
+
   public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
-    this.AppContext = snapshot.AppContext;
+    this.AppContext = { ...(this.AppContext ?? {}), ...snapshot.AppContext };
     this.BriefStateChange.emit(snapshot);
     this.cdr.markForCheck();
   }
@@ -126,7 +186,7 @@ export class VSCopilotPanelComponent
   public async OnBriefStartRequested(event: VSProductionBriefStartEvent): Promise<void> {
     this.IsStartingBrief = true;
     this.BriefStartError = null;
-    this.AppContext = event.AppContext;
+    this.AppContext = { ...(this.AppContext ?? {}), ...event.AppContext };
     this.BriefStartRequested.emit(event);
     this.cdr.detectChanges();
 

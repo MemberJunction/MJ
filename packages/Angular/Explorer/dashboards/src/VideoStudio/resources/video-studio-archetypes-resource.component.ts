@@ -4,10 +4,13 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  ViewChild,
   inject,
 } from '@angular/core';
-import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { Subscription } from 'rxjs';
+import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
+  MJEnvironmentEntityExtended,
   MJVideoArchetypeEntity,
   ResourceData,
   VideoStudioEngine,
@@ -16,6 +19,10 @@ import { RegisterClass } from '@memberjunction/global';
 import { FormatVideoTime, FormatVideoTimeRange } from '@memberjunction/ng-artifacts';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
+import { VSProductionBriefStateSnapshot } from '../components/vs-production-brief.component';
+import { VSStudioSlideInComponent } from '../components/vs-studio-slide-in.component';
+import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import {
   ARCHETYPE_CATEGORIES,
   ArchetypeCardSnapshot,
@@ -140,18 +147,105 @@ export class VideoStudioArchetypesResourceComponent
   public IsCloning = false;
   public CloneError: string | null = null;
 
+  @ViewChild('studioSlideIn')
+  public StudioSlideIn?: VSStudioSlideInComponent;
+
+  public get CopilotPanel(): VSCopilotPanelComponent | undefined {
+    return this.StudioSlideIn?.CopilotPanel;
+  }
+
   private companiesLoadError: string | null = null;
+  private slideInSub: Subscription | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
+  public readonly SlideInState = inject(VSStudioSlideInStateService);
+
+  public CopilotAppContext: Record<string, unknown> = this.buildCopilotAppContext();
+
+  public get IsCopilotSlideInOpen(): boolean {
+    return this.SlideInState.IsOpen;
+  }
+  public set IsCopilotSlideInOpen(value: boolean) {
+    if (value) {
+      this.SlideInState.Reopen();
+    } else {
+      this.SlideInState.Close();
+    }
+  }
+
+  public get SlideInConversationId(): string | null {
+    return this.SlideInState.ConversationId;
+  }
+  public set SlideInConversationId(value: string | null) {
+    this.SlideInState.SetConversationId(value);
+  }
+
+  public get CurrentUser(): UserInfo | null {
+    return this.ProviderToUse?.CurrentUser ?? null;
+  }
+
+  public get EnvironmentId(): string {
+    return (
+      (this.Data?.Configuration?.['environmentId'] as string | undefined) ||
+      MJEnvironmentEntityExtended.DefaultEnvironmentID
+    );
+  }
+
+  public get ApplicationId(): string {
+    return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? '';
+  }
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.slideInSub = this.SlideInState.State$.subscribe(() => {
+      this.CopilotAppContext = this.buildCopilotAppContext();
+      this.cdr.markForCheck();
+    });
     this.registerAgentTools();
     await this.LoadArchetypes(false);
     this.NotifyLoadComplete();
   }
 
   override ngOnDestroy(): void {
+    this.slideInSub?.unsubscribe();
+    this.slideInSub = null;
     super.ngOnDestroy();
+  }
+
+  public ReopenCopilotSlideIn(): void {
+    this.SlideInState.Reopen();
+    this.CopilotAppContext = this.buildCopilotAppContext();
+    this.syncAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public CloseCopilotSlideIn(): void {
+    this.SlideInState.Close();
+    this.syncAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideInOpenChange(_isOpen: boolean): void {
+    this.CopilotAppContext = this.buildCopilotAppContext();
+    this.syncAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
+    this.SlideInState.ApplyBriefSnapshot(snapshot);
+    this.CopilotAppContext = this.buildCopilotAppContext();
+    this.syncAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideInConversationCreated(event: { conversation: { ID: string } }): void {
+    this.SlideInState.SetConversationId(event.conversation.ID);
+    this.syncAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideInPendingArtifactConsumed(): void {
+    this.SlideInState.ClearPendingArtifact();
+    this.cdr.markForCheck();
   }
 
   public async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -198,6 +292,12 @@ export class VideoStudioArchetypesResourceComponent
       await engine.Config(forceRefresh, undefined, this.ProviderToUse);
       const archetypes = engine.Archetypes;
       this.AllArchetypes = archetypes.map((arch) => this.mapArchetypeToCard(arch));
+      if (this.SlideInState.BriefArchetypes.length === 0 && this.AllArchetypes.length > 0) {
+        this.SlideInState.BriefArchetypes = [...this.AllArchetypes];
+        if (!this.SlideInState.BriefSelectedArchetype) {
+          this.SlideInState.BriefSelectedArchetype = this.AllArchetypes[0];
+        }
+      }
       await this.loadAvailableCompanies();
       this.applyFiltersAndSync();
     } catch (err: unknown) {
@@ -473,14 +573,26 @@ export class VideoStudioArchetypesResourceComponent
     this.cdr.markForCheck();
   }
 
-  private syncAgentContext(): void {
-    const context = BuildArchetypesAgentContext({
+  private buildArchetypesContext(): Record<string, unknown> {
+    return BuildArchetypesAgentContext({
       AllCards: this.AllArchetypes,
       FilteredCards: this.FilteredArchetypes,
       Filters: this.currentFilterState(),
       SelectedArchetype: this.SelectedArchetype,
       IsLoading: this.IsLoading,
     });
+  }
+
+  private buildCopilotAppContext(): Record<string, unknown> {
+    return this.SlideInState.BuildCombinedAppContext(
+      this.buildArchetypesContext(),
+      null,
+    );
+  }
+
+  private syncAgentContext(): void {
+    const context = this.buildArchetypesContext();
+    this.CopilotAppContext = this.buildCopilotAppContext();
     this.navigationService.SetAgentContext(this, context);
   }
 
@@ -627,6 +739,15 @@ export class VideoStudioArchetypesResourceComponent
           };
         },
       },
+      ...this.SlideInState.BuildBriefClientTools({
+        GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
+        GetFallbackArchetypes: () => this.AllArchetypes,
+        OnBriefMutated: () => {
+          this.CopilotAppContext = this.buildCopilotAppContext();
+          this.syncAgentContext();
+          this.cdr.markForCheck();
+        },
+      }),
     ]);
   }
 }

@@ -5,6 +5,7 @@ import {
   MJBrandKitEntity,
   MJVideoArchetypeEntity,
   VideoStudioEngine,
+  VideoStudioSetupHealthOperation,
 } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
@@ -18,19 +19,7 @@ function createGraphQLProviderStub(): IMetadataProvider {
     writable: true,
   });
   Object.defineProperty(provider, 'ExecuteGQL', {
-    value: vi.fn().mockResolvedValue({
-      ExecuteMJAction: {
-        Success: true,
-        ResultCode: 'SUCCESS',
-        Message: JSON.stringify({
-          Healthy: true,
-          Driver: 'LocalWorker',
-          FfmpegVersion: '7.1',
-          ChromiumReady: true,
-          ActiveJobs: 0,
-        }),
-      },
-    }),
+    value: vi.fn().mockResolvedValue({}),
     configurable: true,
     writable: true,
   });
@@ -45,6 +34,16 @@ async function flushAsync(): Promise<void> {
 describe('VSProductionBriefComponent DOM', () => {
   it('renders dynamic formats (including 4:5) and new archetype rows without template changes, shows beat strip, toggles audio options, updates summary line, emits StartRequested, and applies client tools', async () => {
     const customProvider = createGraphQLProviderStub();
+
+    vi.spyOn(VideoStudioSetupHealthOperation.prototype, 'Execute').mockResolvedValue({
+      Success: true,
+      Output: {
+        Healthy: true,
+        Checks: [
+          { Key: 'Render', Status: 'OK', Title: 'Render Worker', Message: 'Chromium ready' },
+        ],
+      },
+    });
 
     const fakeArchetypes: Partial<MJVideoArchetypeEntity>[] = [
       {
@@ -167,10 +166,41 @@ describe('VSProductionBriefComponent DOM', () => {
     await flushAsync();
     fixture.detectChanges();
 
+    // Setup OK takes no row in the brief when all checks are OK and ShowHealthySetupDetails is false
+    expect(fixture.componentInstance.IsAllSetupOk).toBe(true);
+    expect(query(fixture, '[data-testid="vs-setup-health-card"]')).toBeNull();
+
+    // Toggling ShowHealthySetupDetails = true from header shows the expanded Setup health card with details and Recheck
+    fixture.componentRef.setInput('ShowHealthySetupDetails', true);
+    fixture.detectChanges();
+    expect(query(fixture, '[data-testid="vs-setup-health-card"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="vs-setup-health-expanded-details"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="vs-setup-health-recheck"]')).not.toBeNull();
+
+    // Toggling ShowHealthySetupDetails back to false hides the card again
+    fixture.componentRef.setInput('ShowHealthySetupDetails', false);
+    fixture.detectChanges();
+    expect(query(fixture, '[data-testid="vs-setup-health-card"]')).toBeNull();
+
+    // When a check is Warning or Error, the full card shows at the top of the brief automatically
+    fixture.componentInstance.SetupHealthResult = {
+      Healthy: true,
+      Checks: [
+        { Key: 'Render', Status: 'Warning', Title: 'TTS provider', Message: 'Missing API key' },
+      ],
+    };
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(query(fixture, '[data-testid="vs-setup-health-card"]')).not.toBeNull();
+
     // 1. Both archetypes (including dynamically added arch-2) and all 4 formats (including 4:5) render
     const archetypeCards = queryAll(fixture, '[data-testid^="vs-brief-archetype-"]');
     expect(archetypeCards.length).toBe(2);
     expect(query(fixture, '[data-testid="vs-brief-format-4:5"]')).not.toBeNull();
+
+    // Topic textarea uses rows="2"
+    const topicInput = query(fixture, '[data-testid="vs-brief-topic-input"]');
+    expect(topicInput?.getAttribute('rows')).toBe('2');
 
     // 2. Beat strip renders for the selected archetype
     const beatStrip = query(fixture, '[data-testid^="vs-brief-archetype-"] mj-video-beat-strip');
@@ -226,6 +256,8 @@ describe('VSProductionBriefComponent DOM', () => {
     // 5. Clicking Start emits StartRequested with composed message and AppContext
     const startBtn = query(fixture, '[data-testid="vs-brief-start-button"]');
     expect(startBtn).not.toBeNull();
+    expect(startBtn?.getAttribute('Size')).toBe('md');
+    expect(startBtn?.classList.contains('mj-btn--lg')).toBe(false);
     expect(startBtn?.hasAttribute('disabled')).toBe(false);
     startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
@@ -245,3 +277,4 @@ describe('VSProductionBriefComponent DOM', () => {
     vi.restoreAllMocks();
   });
 });
+

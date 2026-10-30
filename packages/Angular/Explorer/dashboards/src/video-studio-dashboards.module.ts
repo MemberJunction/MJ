@@ -30,6 +30,7 @@ import { VSAudioOptionsComponent } from './VideoStudio/components/vs-audio-optio
 import { VSCopilotPanelComponent } from './VideoStudio/components/vs-copilot-panel.component';
 import { VSProductionBriefComponent } from './VideoStudio/components/vs-production-brief.component';
 import { VSSetupHealthCardComponent } from './VideoStudio/components/vs-setup-health-card.component';
+import { VSStudioSlideInComponent } from './VideoStudio/components/vs-studio-slide-in.component';
 import { VideoStudioArchetypesResourceComponent } from './VideoStudio/resources/video-studio-archetypes-resource.component';
 import { VideoStudioBrandKitsResourceComponent } from './VideoStudio/resources/video-studio-brand-kits-resource.component';
 import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources/video-studio-productions-resource.component';
@@ -57,6 +58,7 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     VSAudioOptionsComponent,
     VSProductionBriefComponent,
     VSCopilotPanelComponent,
+    VSStudioSlideInComponent,
     VSSetupHealthCardComponent,
     MJAlertComponent,
     MJButtonDirective,
@@ -83,6 +85,7 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     VSAudioOptionsComponent,
     VSProductionBriefComponent,
     VSCopilotPanelComponent,
+    VSStudioSlideInComponent,
     VSSetupHealthCardComponent,
   ],
 })
@@ -95,6 +98,7 @@ export {
   VSAudioOptionsComponent,
   VSProductionBriefComponent,
   VSCopilotPanelComponent,
+  VSStudioSlideInComponent,
   VSSetupHealthCardComponent,
 };
 

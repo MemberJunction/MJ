@@ -4,6 +4,7 @@ import { IMetadataProvider, RunView } from '@memberjunction/core';
 import { MJVideoArchetypeEntity, VideoStudioEngine } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioArchetypesResourceComponent } from './video-studio-archetypes-resource.component';
 
 function createNavigationServiceStub(): {
@@ -26,8 +27,9 @@ async function flushAsync(): Promise<void> {
 }
 
 describe('VideoStudioArchetypesResourceComponent DOM', () => {
-  it('groups archetypes by category, renders proportional beat timeline blocks, opens slide-out preview, supports Clone for shipped archetypes and Edit Record for company archetypes, calls NotifyLoadComplete once, and publishes agent context', async () => {
+  it('groups archetypes by category, renders proportional beat timeline blocks, opens slide-out preview, supports Clone for shipped archetypes and Edit Record for company archetypes, calls NotifyLoadComplete once, publishes SuppressChatOverlay agent context, and mounts the shared slide-in with brief client tools', async () => {
     const navStub = createNavigationServiceStub();
+    const sharedSlideInState = new VSStudioSlideInStateService();
     const currentUser = { ID: 'user-clone-1', Name: 'Producer' };
     const clonedEntities: Record<string, unknown>[] = [];
     let shouldSaveSucceed = false;
@@ -138,7 +140,10 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
 
     const fixture = renderComponentFixture(VideoStudioArchetypesResourceComponent, {
       inputs: { Provider: customProvider },
-      providers: [{ provide: NavigationService, useValue: navStub }],
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: VSStudioSlideInStateService, useValue: sharedSlideInState },
+      ],
     });
 
     await flushAsync();
@@ -153,16 +158,46 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     expect(query(fixture, '[data-testid="archetype-duration-badge"]')?.textContent).toContain('1:00');
     expect(query(fixture, '[data-testid="archetype-duration-badge"]')?.textContent).toContain('0:30–1:30');
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);
+    const registeredTools = navStub.SetAgentClientTools.mock.calls.at(-1)?.[1] as Array<{ Name: string }>;
+    const toolNames = registeredTools.map((t) => t.Name);
+    expect(toolNames).toEqual(
+      expect.arrayContaining([
+        'SearchArchetypes',
+        'FilterArchetypes',
+        'ClearArchetypeFilters',
+        'SelectArchetype',
+        'OpenArchetype',
+        'RefreshArchetypes',
+        'SelectStudioArchetype',
+        'SelectStudioBrandKit',
+        'SetStudioFormats',
+        'SetStudioTopic',
+      ]),
+    );
     expect(navStub.SetAgentContext).toHaveBeenCalledWith(
       instance,
       expect.objectContaining({
         Surface: 'VideoStudioArchetypes',
+        SuppressChatOverlay: true,
         TotalArchetypeCount: 2,
         FilteredArchetypeCount: 2,
         ShippedArchetypeCount: 1,
         CompanyArchetypeCount: 1,
       }),
     );
+
+    // Shared slide-in sits beside mj-page-layout inside .vs-resource-shell; edge strip opens it
+    expect(query(fixture, '.vs-resource-shell > vs-studio-slide-in')).not.toBeNull();
+    expect(instance.IsCopilotSlideInOpen).toBe(false);
+    const stripBtn = query(fixture, '[data-testid="productions-copilot-strip"]') as HTMLElement | null;
+    expect(stripBtn).not.toBeNull();
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).toBeNull();
+
+    stripBtn!.click();
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
+    expect(queryAll(fixture, 'vs-copilot-panel')).toHaveLength(1);
 
     // Click shipped archetype card to open slide-out preview (read-only + Clone button)
     const shippedCard = query(fixture, '[data-testid="archetype-card-arch-briefing"]') as HTMLElement | null;
@@ -246,8 +281,10 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 
-  it('surfaces company load failures inside the Clone dialog when MJ: Companies view fails', async () => {
+  it('surfaces company load failures inside the Clone dialog when MJ: Companies view fails, and preserves open slide-in state across pages', async () => {
     const navStub = createNavigationServiceStub();
+    const sharedSlideInState = new VSStudioSlideInStateService();
+    sharedSlideInState.OpenIterate('conv-persisted-88', 'art-88', 1);
 
     vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue({
       Config: vi.fn().mockResolvedValue(undefined),
@@ -272,13 +309,21 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     } as unknown as RunView);
 
     const fixture = renderComponentFixture(VideoStudioArchetypesResourceComponent, {
-      providers: [{ provide: NavigationService, useValue: navStub }],
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: VSStudioSlideInStateService, useValue: sharedSlideInState },
+      ],
     });
 
     await flushAsync();
     fixture.detectChanges();
 
     const instance = fixture.componentInstance;
+    // Open slide-in and ConversationId from previous page survive mounting Archetypes
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(instance.SlideInConversationId).toBe('conv-persisted-88');
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
+
     instance.OpenCloneDialog(instance.AllArchetypes[0]);
     fixture.detectChanges();
 
@@ -291,3 +336,4 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 });
+
