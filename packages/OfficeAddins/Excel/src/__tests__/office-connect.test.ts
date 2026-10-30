@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { EncodeBase64Url } from '@memberjunction/excel-addin';
-import { BuildOfficeHandoffUrl, BuildOfficeSignInOptions, DisplayNameForUser, ReadOfficeConnectRequest } from './office-connect.logic';
+import { EncodeBase64Url } from '../handoff';
+import {
+    BuildOfficeHandoffUrl,
+    BuildOfficeSignInOptions,
+    DisplayNameForUser,
+    ReadOfficeConnectRequest,
+} from '../office-connect';
 
-const encodeJson = (value: unknown) => EncodeBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+const encodeJson = (value: Record<string, string>) => EncodeBase64Url(new TextEncoder().encode(JSON.stringify(value)));
 const PUBLIC_KEY = encodeJson({ kty: 'RSA', n: 'sXch', e: 'AQAB', alg: 'RSA-OAEP-256' });
 const STATE = 'aGVsbG8td29ybGQ';
 
@@ -12,6 +17,7 @@ describe('ReadOfficeConnectRequest', () => {
     });
 
     it('refuses a missing or malformed value', () => {
+        expect(ReadOfficeConnectRequest(null)).toBeNull();
         expect(ReadOfficeConnectRequest({ state: STATE })).toBeNull();
         expect(ReadOfficeConnectRequest({ pk: PUBLIC_KEY })).toBeNull();
         expect(ReadOfficeConnectRequest({ pk: 'not base64url!', state: STATE })).toBeNull();
@@ -51,8 +57,14 @@ describe('BuildOfficeSignInOptions', () => {
     });
 
     it('never sends the user off-site', () => {
-        expect(BuildOfficeSignInOptions('https://evil.example/x')).toEqual({ appState: { target: '/office/connect' }, targetUrl: '/office/connect' });
-        expect(BuildOfficeSignInOptions('//evil.example/x')).toEqual({ appState: { target: '/office/connect' }, targetUrl: '/office/connect' });
+        expect(BuildOfficeSignInOptions('https://evil.example/x')).toEqual({
+            appState: { target: '/office/connect' },
+            targetUrl: '/office/connect',
+        });
+        expect(BuildOfficeSignInOptions('//evil.example/x')).toEqual({
+            appState: { target: '/office/connect' },
+            targetUrl: '/office/connect',
+        });
     });
 });
 

@@ -163,13 +163,19 @@ that can't create `MJ: API Keys` can't connect Excel, and the connect page says 
 | "Your role isn't allowed to create API keys" | Grant the role create permission on `MJ: API Keys`, or have someone who has it connect |
 | The sign-in window shows Explorer's home page instead of the connect page | Some identity providers return to the app root after sign-in. Close the window and choose **Sign in** again |
 
-## 8. Packages
+## 8. Packages & Custom Angular Hosts
 
 | Package | Holds |
 |---|---|
-| [`@memberjunction/excel-addin`](../packages/OfficeAddins/Excel/README.md) | The workbook contract, the typed Remote Operations, the sign-in handoff, the client helper, and the pane |
-| [`@memberjunction/excel-addin-server`](../packages/OfficeAddins/ExcelServer/README.md) | The Server Extension, the manifest and workbook builders, and the operations' server bodies |
+| [`@memberjunction/excel-addin`](../packages/OfficeAddins/Excel/README.md) | The workbook contract, typed Remote Operations, RSA-OAEP sign-in handoff, pure `/office/connect` helpers (`OFFICE_CONNECT_ROUTE_PATH`, `ReadOfficeConnectRequest`, `BuildOfficeHandoffUrl`, `BuildOfficeSignInOptions`), client helper, and esbuild pane |
+| [`@memberjunction/excel-addin-server`](../packages/OfficeAddins/ExcelServer/README.md) | The Server Extension, manifest and workbook builders, catalog & source resolution, and the operations' server bodies |
+| `@memberjunction/ng-export-service` | Generic, router-free `<mj-office-connect-panel>` consent & key-handoff component (`packages/Angular/Generic/export-service`, `"mjUILayer": "widgets"`) |
 
-The buttons live in `@memberjunction/ng-entity-viewer` and `@memberjunction/ng-query-viewer`; the
-connect page is `office/connect` in `@memberjunction/ng-explorer-core`, which `@memberjunction/ng-explorer-app`
-renders on its own (no shell, no login screen), as it does the OAuth callback.
+The unified **Export ▾** (`Open in Excel` + `Export Snapshot...`) toolbar menus live in `@memberjunction/ng-entity-viewer` and `@memberjunction/ng-query-viewer`.
+
+In **MJ Explorer**, `@memberjunction/ng-explorer-core` mounts a thin `OfficeConnectComponent` route wrapper at `office/connect` (`OFFICE_CONNECT_ROUTE_PATH`), and `@memberjunction/ng-explorer-app` renders it standalone (no shell, no login screen) like `/oauth/callback`.
+
+**Serving `/office/connect` in a custom (non-Explorer) Angular app:**
+Any Angular application using `packages/Angular/Generic/` components can serve `/office/connect` without importing `@memberjunction/ng-explorer-core`:
+1. Mount a public (un-guarded, shell-free) route at `OFFICE_CONNECT_ROUTE_PATH` (`'office/connect'`) that renders `<mj-office-connect-panel [QueryParams]="queryParams" (SignInRequested)="onSignIn()">` from `@memberjunction/ng-export-service`.
+2. Set `ExcelAddinServerExtension` `Settings.ExplorerUrl` in `mj.config.cjs` to that application's origin.

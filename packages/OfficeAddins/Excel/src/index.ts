@@ -12,4 +12,5 @@ export * from './contract';
 export * from './catalog-types';
 export * from './operations';
 export * from './handoff';
+export * from './office-connect';
 export * from './client';

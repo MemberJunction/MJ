@@ -2,6 +2,7 @@
 "@memberjunction/excel-addin": patch
 "@memberjunction/excel-addin-server": patch
 "@memberjunction/ng-entity-viewer": patch
+"@memberjunction/ng-export-service": patch
 "@memberjunction/ng-query-viewer": patch
 "@memberjunction/ng-explorer-core": patch
 "@memberjunction/ng-explorer-app": patch

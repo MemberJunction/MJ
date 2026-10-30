@@ -8,7 +8,7 @@ import {
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { OfficeConnectComponent } from './lib/office/office-connect.component';
-import { OFFICE_CONNECT_ROUTE_PATH } from './lib/office/office-connect.logic';
+import { OFFICE_CONNECT_ROUTE_PATH } from '@memberjunction/excel-addin';
 import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
