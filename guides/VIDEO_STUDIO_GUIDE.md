@@ -379,7 +379,7 @@ When the serialized snapshot fits within `SNAPSHOT_INLINE_MAX_BYTES = 65536` (`6
 
 ## 9. Brand kits and generation policy
 
-Organization brand identity and generative AI guardrails are stored in `MJ: Brand Kits` (`MJBrandKitEntity`) and `MJ: Brand Kit Assets` (`MJBrandKitAssetEntity`), created by [`migrations/v6/V202610291204__v6.2.x__Brand_Kits_And_Video_Archetypes.sql`](../migrations/v6/V202610291204__v6.2.x__Brand_Kits_And_Video_Archetypes.sql).
+Organization brand identity and generative AI guardrails are stored in `MJ: Brand Kits` (`MJBrandKitEntity`) and `MJ: Brand Kit Assets` (`MJBrandKitAssetEntity`), created by [`migrations/v6/V202610301713__v6.2.x__Brand_Kits_And_Video_Archetypes.sql`](../migrations/v6/V202610301713__v6.2.x__Brand_Kits_And_Video_Archetypes.sql).
 
 ### `BrandKitEngine` and `VideoStudioEngine` (`@memberjunction/core-entities`)
 
@@ -397,7 +397,7 @@ Both metadata cache engines live in `@memberjunction/core-entities`:
 
 1. **One default kit per `CompanyID` scope (`MJBrandKitEntityServer.ValidateAsync` in [`packages/MJCoreEntitiesServer/src/custom/MJBrandKitEntityServer.server.ts`](../packages/MJCoreEntitiesServer/src/custom/MJBrandKitEntityServer.server.ts)):**
    - When `IsDefault` is `true`, `ValidateAsync` runs a `RunView` over `MJ: Brand Kits` in the same `CompanyID` scope (`CompanyID = '<id>'` when set, or `CompanyID IS NULL` for org-wide kits, regardless of `Status`, excluding the current `ID` on update) and adds a validation error on `IsDefault` if another default kit already exists in that scope.
-2. **Visual-only generation references (`CK_BrandKitAsset_GenerationReference` in `V202610291204__v6.2.x__Brand_Kits_And_Video_Archetypes.sql`):**
+2. **Visual-only generation references (`CK_BrandKitAsset_GenerationReference` in `V202610301713__v6.2.x__Brand_Kits_And_Video_Archetypes.sql`):**
    - `BrandKitAsset` enforces `IsGenerationReference = 0 OR AssetType IN (N'Image', N'Screenshot', N'Logo', N'LogoMark', N'Video')` so non-visual assets (`Font`, `Music`, `SoundEffect`, `Other`) cannot be flagged as visual generation references.
 
 ### `GenerationPolicy` defaults and fail-closed parsing
