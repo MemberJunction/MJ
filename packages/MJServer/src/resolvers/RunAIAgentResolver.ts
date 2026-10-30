@@ -1555,7 +1555,9 @@ export class RunAIAgentResolver extends ResolverBase {
         /** History floor: only rows written at or after it are loaded, and no summary is used. */
         historyFrom?: Date,
         /** The branch whose path to load; null reads the trunk. */
-        branchId?: string | null
+        branchId?: string | null,
+        /** Speaker attribution mode forwarded to `ConversationEngine.AssembleContextWindow`. */
+        speakerAttribution?: 'off' | 'auto' | 'always'
     ): Promise<ChatMessage[]> {
         // Context windowing (summary boundary + raw tail, or legacy last-N when no
         // summary exists) shares ONE fold implementation with all other callers —
@@ -1576,7 +1578,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const window = ConversationEngine.AssembleContextWindow(rows, {
             maxTailMessages: maxMessages,
             excludeDetailIds,
-            historyFrom
+            historyFrom,
+            speakerAttribution
         });
 
         // Batch load input artifacts for the windowed messages. Since the backfill migration

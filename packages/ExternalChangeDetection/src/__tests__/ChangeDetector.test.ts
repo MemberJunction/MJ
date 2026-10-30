@@ -9,6 +9,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
+/** Every `RunQuery` call the detection queries make, with an empty successful result. */
+const { mockRunQuery } = vi.hoisted(() => ({
+  mockRunQuery: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+}));
+
 vi.mock('@memberjunction/core', () => {
   class FakeCompositeKey {
     KeyValuePairs: { FieldName: string; Value: unknown }[];
@@ -82,6 +87,9 @@ vi.mock('@memberjunction/core', () => {
     },
     RunView: class {
       RunView = vi.fn();
+    },
+    RunQuery: class {
+      RunQuery = mockRunQuery;
     },
     UpdateCurrentConsoleLine: vi.fn(),
     UpdateCurrentConsoleProgress: vi.fn(),
@@ -278,6 +286,43 @@ describe('ExternalChangeDetectorEngine - buildDetectionParams uses correct PK', 
     expect(params.creation.PrimaryKeyJoin).toContain('[Name]');
     expect(params.update.PrimaryKeyOrderBy).toBe('ot.[PersonID], ot.[Name]');
     expect(params.deletion.PrimaryKeyIsNull).toBe('ot.[PersonID] IS NULL AND ot.[Name] IS NULL');
+  });
+});
+
+describe('ExternalChangeDetectorEngine - DetectChangesForEntity passes server-set parameters', () => {
+  beforeEach(() => mockRunQuery.mockClear());
+
+  it('sends every detection value as ServerParameters, never as caller Parameters', async () => {
+    const engine = new ExternalChangeDetectorEngine();
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+    const entityInfo = {
+      ID: 'entity-1',
+      Name: 'Event Tickets',
+      SchemaName: 'ym',
+      BaseView: 'vwEventTickets',
+      PrimaryKeys: [{ Name: 'TicketId', IsPrimaryKey: true }],
+    };
+    (engine as unknown as Record<string, unknown[]>)['_EligibleEntities'] = [entityInfo];
+    (engine as unknown as Record<string, string[]>)['_IneligibleEntities'] = [];
+
+    const result = await engine.DetectChangesForEntity(entityInfo as never);
+
+    expect(result.Success).toBe(true);
+    const calls = mockRunQuery.mock.calls.map(([params]) => params as Record<string, unknown>);
+    expect(calls.map(c => c.QueryName)).toEqual([
+      'ExternalChangeDetection_DetectCreations',
+      'ExternalChangeDetection_DetectUpdates',
+      'ExternalChangeDetection_DetectDeletions',
+    ]);
+    for (const call of calls) {
+      expect(call.Parameters).toBeUndefined();
+      expect(call.ServerParameters).toMatchObject({ EntityID: 'entity-1', SchemaName: 'ym', BaseView: 'vwEventTickets' });
+    }
+    expect(calls[2].ServerParameters).toMatchObject({ PrimaryKeyIsNull: 'ot.[TicketId] IS NULL' });
   });
 });
 

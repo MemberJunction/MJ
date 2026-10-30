@@ -4796,6 +4796,9 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.2.0-edge.6
         version: link:../../Generic/notifications
+      '@memberjunction/ng-query-viewer':
+        specifier: 6.2.0-edge.6
+        version: link:../../Generic/query-viewer
       '@memberjunction/ng-record-clone':
         specifier: 6.2.0-edge.6
         version: link:../../Generic/record-clone
@@ -12331,6 +12334,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.6
         version: link:../MJCoreEntities
+      '@memberjunction/core-entities-server':
+        specifier: 6.2.0-edge.6
+        version: link:../MJCoreEntitiesServer
       '@memberjunction/db-auto-doc':
         specifier: 6.2.0-edge.6
         version: link:../DBAutoDoc
@@ -14925,6 +14931,10 @@ importers:
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SQLDialect:
+    dependencies:
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.6
+        version: link:../MJGlobal
     devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
@@ -16467,6 +16477,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.2.0-edge.6
         version: link:../../Encryption
+      '@memberjunction/external-data-sources':
+        specifier: 6.2.0-edge.6
+        version: link:../../ExternalDataSources/Engine
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0-edge.6
         version: link:../../AI/Knowledge/FeaturePipelines
