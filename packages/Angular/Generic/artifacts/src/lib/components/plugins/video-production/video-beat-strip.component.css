@@ -75,7 +75,6 @@
   display: block;
   max-height: calc(2em * var(--mj-leading-tight));
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: normal;
   hyphens: auto;
   overflow-wrap: normal;
