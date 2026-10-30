@@ -130,7 +130,7 @@ Stop only when: goal complete OR unrecoverable failure.
 - `taskComplete`: true only when **ENTIRE** user request fulfilled
 - `payloadChangeRequest`: Include only changes (new/update/remove)
 - `terminateAfter`: Usually false - review sub-agent results before completing
-- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever
+- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: Extract and store any unmapped loop results in the payload immediately after loop completion, or they're lost forever (fields mapped via `steps[].outputMapping` are already in the payload — do **not** re-write or re-append them via `newElements`)
 - No sub-agents available
 - No actions available
 
@@ -200,7 +200,7 @@ When you have an array in the payload and need to perform the same operation on 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items).
 
 - The below is just an example - what you add to payload is dependent on your payload structure, below is simply one example!
 
@@ -306,6 +306,44 @@ Note the difference:
 - `"city.name"` → whole-value reference, resolves to the raw value (string, number, or object)
 - `"company in {{city.name}}"` → inline template, interpolates `{{}}` expressions into the surrounding text
 
+#### Chaining Multiple Actions per Iteration (`steps[]`)
+
+When each item requires 2+ dependent actions (for example compute → transform → store), use `steps` instead of `action` (both `ForEach` and `While` support `steps`). Give upstream steps an `id` and reference their outputs via `{{steps.<id>.<OutputField>}}`, gate optional steps with `condition`, and fold outputs into the payload with `outputMapping` (`[]` appends across iterations):
+
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Chain two calculations per line item in a single ForEach turn without intermediate LLM round-trips",
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "lineItems",
+      "itemVariable": "line",
+      "steps": [
+        {
+          "id": "subtotal",
+          "name": "Calculate Expression",
+          "params": {
+            "Expression": "{{line.qty}} * {{line.unitPrice}}"
+          }
+        },
+        {
+          "id": "withTax",
+          "name": "Calculate Expression",
+          "condition": "steps.subtotal.Result > 0",
+          "params": {
+            "Expression": "{{steps.subtotal.Result}} * 1.08"
+          },
+          "outputMapping": "{\"Result\": \"lineTotals[]\"}"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Note on `steps[].outputMapping`:** Fields mapped via `outputMapping` (including `[]` array appends like `"lineTotals[]"`) are **already written directly into your shared payload** during loop execution — check `<mj-runtime-state>` on the next turn and do **not** re-append those values again via `payloadChangeRequest`, `payload_change_request`, or `complete_task`.
+
 
 
 
@@ -344,7 +382,7 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response. After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items). After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
 
 
 
@@ -387,11 +425,11 @@ Static values need no syntax: `"Welcome!"`
     "type": "ForEach",
     "forEach": {
       "collectionPath": "items",
+      "itemVariable": "item",
       "action": { "name": "Process Item", "params": { "id": "item.id" } }
     }
   }
 }
-// All 10 items processed, results in payload.forEachResults
 ```
 
 

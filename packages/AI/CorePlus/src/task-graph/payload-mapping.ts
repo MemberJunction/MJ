@@ -154,6 +154,165 @@ export function ResolveMappedInput(value: unknown, ctx: PayloadMappingContext): 
 }
 
 /**
+ * Walks an object path with `name[index]` array indexing and exact-first, case-insensitive-fallback
+ * property lookup so loop step outputs (`steps.s1.Result` vs `steps.s1.result`) resolve reliably.
+ */
+function getLoopPathValue(obj: unknown, path: string): unknown {
+    const exact = GetValueFromPath(obj, path);
+    if (exact !== undefined) return exact;
+
+    let current: unknown = obj;
+    for (const part of path.split('.')) {
+        if (!part) continue;
+
+        const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+        if (arrayMatch) {
+            const [, arrayName, rawIndex] = arrayMatch;
+            if (!isRecord(current) || Array.isArray(current)) return undefined;
+            const actualKey = arrayName in current
+                ? arrayName
+                : Object.keys(current).find((k) => k.toLowerCase() === arrayName.toLowerCase());
+            if (!actualKey) return undefined;
+            const arr = current[actualKey];
+            const index = parseInt(rawIndex, 10);
+            if (!Array.isArray(arr) || index < 0 || index >= arr.length) return undefined;
+            current = arr[index];
+        } else {
+            if (!isRecord(current) || Array.isArray(current)) return undefined;
+            const actualKey = part in current
+                ? part
+                : Object.keys(current).find((k) => k.toLowerCase() === part.toLowerCase());
+            if (!actualKey) return undefined;
+            current = current[actualKey];
+        }
+    }
+    return current;
+}
+
+/**
+ * Evaluates a single loop expression (`item.email`, `steps.s1.Result`, `payload.companyName`, etc.)
+ * against the iteration's explicit bindings and payload/data/context roots.
+ */
+function resolveLoopExpression(
+    expression: string,
+    bindings: Record<string, unknown>,
+    ctx: PayloadMappingContext,
+): unknown {
+    const trimmed = expression.trim();
+    if (!trimmed) return undefined;
+    const lower = trimmed.toLowerCase();
+
+    if (lower === 'payload') return ctx.payload;
+    if (lower.startsWith('payload.')) return getLoopPathValue(ctx.payload, trimmed.substring(trimmed.indexOf('.') + 1));
+    if (lower === 'data' && ctx.data !== undefined) return ctx.data;
+    if (lower.startsWith('data.') && ctx.data !== undefined) {
+        return getLoopPathValue(ctx.data, trimmed.substring(trimmed.indexOf('.') + 1));
+    }
+    if (lower === 'context' && ctx.context !== undefined) return ctx.context;
+    if (lower.startsWith('context.') && ctx.context !== undefined) {
+        return getLoopPathValue(ctx.context, trimmed.substring(trimmed.indexOf('.') + 1));
+    }
+
+    const fromBindings = getLoopPathValue(bindings, trimmed);
+    if (fromBindings !== undefined) return fromBindings;
+
+    return getLoopPathValue(ctx.payload, trimmed);
+}
+
+/**
+ * Resolves one loop-body parameter value, supporting BOTH the Flow/TaskGraph input-mapping dialect
+ * (`payload.*`, `data.*`, `context.*`, `static:*`) AND the Loop Agent template dialect
+ * (`"{{item.field}}"`, `"company in {{city.name}}"`, `"{{steps.s1.Result}}"`, and unbraced
+ * `<bindingKey>.<path>` such as `"item.email"` or `"steps.s1.Result"`).
+ */
+function resolveLoopBodyValue(
+    value: unknown,
+    bindings: Record<string, unknown>,
+    ctx: PayloadMappingContext,
+): unknown {
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        const lower = trimmed.toLowerCase();
+
+        if (ctx.isConversationReference?.(trimmed) && ctx.resolveConversationReference) {
+            return ctx.resolveConversationReference(trimmed);
+        }
+        if (lower.startsWith('static:')) return value.substring(value.indexOf(':') + 1);
+
+        // Pure single-token template `{{expr}}` preserves raw value type (number, boolean, object, array).
+        if (trimmed.startsWith('{{') && trimmed.endsWith('}}') && !trimmed.slice(2, -2).includes('{{')) {
+            return resolveLoopExpression(trimmed.slice(2, -2), bindings, ctx);
+        }
+
+        // Inline template interpolation: `"({{item.x}} * 2) + {{steps.s1.Result}}"`.
+        if (trimmed.includes('{{') && trimmed.includes('}}')) {
+            return value.replace(/\{\{([^}]+)\}\}/g, (match, inner: string) => {
+                const resolved = resolveLoopExpression(inner, bindings, ctx);
+                if (resolved === undefined) return match;
+                if (resolved === null) return '';
+                if (typeof resolved === 'object') return JSON.stringify(resolved);
+                return String(resolved);
+            });
+        }
+
+        if (lower.startsWith('payload.')) {
+            return getLoopPathValue(ctx.payload, trimmed.substring(trimmed.indexOf('.') + 1));
+        }
+        if (lower.startsWith('data.') && ctx.data !== undefined) {
+            return getLoopPathValue(ctx.data, trimmed.substring(trimmed.indexOf('.') + 1));
+        }
+        if (lower.startsWith('context.') && ctx.context !== undefined) {
+            return getLoopPathValue(ctx.context, trimmed.substring(trimmed.indexOf('.') + 1));
+        }
+
+        // Unbraced explicit loop binding reference: e.g. `item.email`, `city.name`, `steps.s1.Result`,
+        // `item[0].id`, or exact binding variable name (`city`, `index`).
+        const rootMatch = trimmed.match(/^([A-Za-z_$][A-Za-z0-9_$]*)(?:[.[].*)?$/);
+        if (rootMatch) {
+            const rootName = rootMatch[1];
+            if (Object.prototype.hasOwnProperty.call(bindings, rootName)) {
+                const hasTail = trimmed.length > rootName.length;
+                if (hasTail) {
+                    return getLoopPathValue(bindings, trimmed);
+                }
+                return bindings[rootName];
+            }
+        }
+
+        return value;
+    }
+
+    if (Array.isArray(value)) return value.map((entry) => resolveLoopBodyValue(entry, bindings, ctx));
+
+    if (isRecord(value)) {
+        const resolved: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(value)) {
+            resolved[key] = resolveLoopBodyValue(val, bindings, ctx);
+        }
+        return resolved;
+    }
+
+    return value;
+}
+
+/**
+ * Resolves an action or loop-step parameter map for one pass of a `ForEach` or `While` loop.
+ *
+ * Bridges the two historical loop parameter dialects (`ResolveMappedInput`'s `payload.*`/`static:*`
+ * and `BaseAgent`'s `{{item.field}}` / `steps.<id>.<field>`) into one deterministic pure function
+ * shared by `TaskGraphDispatcher` and `BaseAgent`.
+ */
+export function ResolveLoopBodyParams(
+    params: Record<string, unknown> | undefined,
+    bindings: Record<string, unknown>,
+    ctx: PayloadMappingContext,
+): Record<string, unknown> {
+    if (!params || !isRecord(params)) return {};
+    const resolved = resolveLoopBodyValue(params, bindings, ctx);
+    return isRecord(resolved) ? resolved : {};
+}
+
+/**
  * Builds a step's parameters from its input mapping.
  *
  * A missing or unparseable mapping yields no parameters and an error, never a throw — a step with a

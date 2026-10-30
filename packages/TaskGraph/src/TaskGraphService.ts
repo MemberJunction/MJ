@@ -44,7 +44,7 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
-import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { AgentDecisionService, SanitizeToolName } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
@@ -440,10 +440,21 @@ export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
     return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
-/** Every action name a node references, including the action a loop repeats. */
+/** Every action name a node references, including the action(s) a loop repeats. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
-    const names = [ConfigOf(node, 'Action')?.actionName, LoopOperationOf(node)?.action?.name];
+    const loopOp = LoopOperationOf(node);
+    const names = [
+        ConfigOf(node, 'Action')?.actionName,
+        loopOp?.action?.name,
+        ...(loopOp?.steps?.map((s) => s.name) ?? []),
+    ];
     return names.filter((n): n is string => !!n);
+}
+
+/** True when a name looks like a sanitized native tool name (`calculate_expression`, `delegate_to_sage`). */
+function looksLikeSanitizedToolName(name: string): boolean {
+    const trimmed = name.trim();
+    return trimmed.length > 0 && (trimmed.includes('_') || trimmed === trimmed.toLowerCase());
 }
 
 /**
@@ -1366,7 +1377,34 @@ export class TaskGraphService {
             }
             found.set(r.Name, r.ID);
         }
-        const missing = names.filter((n) => !found.has(n));
+        let missing = names.filter((n) => !found.has(n));
+        if (missing.length > 0 && missing.some(looksLikeSanitizedToolName)) {
+            try {
+                const fallback = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
+                    { EntityName: 'MJ: AI Agents', ExtraFilter: `Status='Active'`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+                    context.ContextUser,
+                );
+                for (const rawName of missing) {
+                    const stripped = rawName.toLowerCase().startsWith('delegate_to_')
+                        ? rawName.slice('delegate_to_'.length)
+                        : rawName;
+                    const targetSanitized = SanitizeToolName(stripped);
+                    if (!targetSanitized) continue;
+                    const matches = (fallback.Results ?? []).filter((r) => SanitizeToolName(r.Name) === targetSanitized);
+                    if (matches.length === 1) {
+                        const candidate = matches[0];
+                        if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                            const permitted = await AIEngine.Instance.CanUserRunAgent(candidate.ID, context.ContextUser);
+                            if (!permitted) continue;
+                        }
+                        found.set(rawName, candidate.ID);
+                    }
+                }
+            } catch {
+                // Minimal test providers may only mock the primary Name IN (...) lookup; fall through cleanly.
+            }
+            missing = names.filter((n) => !found.has(n));
+        }
         if (missing.length > 0) {
             return {
                 Success: false,
@@ -1432,7 +1470,26 @@ export class TaskGraphService {
         );
 
         const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
-        const missing = names.filter((n) => !found.has(n));
+        let missing = names.filter((n) => !found.has(n));
+        if (missing.length > 0 && missing.some(looksLikeSanitizedToolName)) {
+            try {
+                const fallback = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
+                    { EntityName: 'MJ: Actions', ExtraFilter: `Status='Active'`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+                    context.ContextUser,
+                );
+                for (const rawName of missing) {
+                    const targetSanitized = SanitizeToolName(rawName);
+                    if (!targetSanitized) continue;
+                    const matches = (fallback.Results ?? []).filter((r) => SanitizeToolName(r.Name) === targetSanitized);
+                    if (matches.length === 1) {
+                        found.set(rawName, matches[0].ID);
+                    }
+                }
+            } catch {
+                // Minimal test providers may only mock the primary Name IN (...) lookup; fall through cleanly.
+            }
+            missing = names.filter((n) => !found.has(n));
+        }
         if (missing.length > 0) {
             return {
                 Success: false,
@@ -1643,15 +1700,17 @@ export class TaskGraphService {
                         // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
                         // reference a real foreign key — joinable, constrained, rename-proof — instead
                         // of a name buried in JSON, and CK_Task_Assignment still holds because a loop
-                        // body is exactly one thing.
+                        // body is exactly one thing (for multi-step action bodies, steps[0]'s ActionID
+                        // anchors the FK while stepActionIds in Configuration carries the full step map).
                         const op = LoopOperationOf(node);
                         if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
+                        else if (op?.steps?.length) task.ActionID = actionIDsByName.get(op.steps[0].name)!;
                         else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
                         else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
                         else {
                             throw new Error(
                                 `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
-                                `a prompt, or a sub-agent for it to run on each pass.`,
+                                `steps, a prompt, or a sub-agent for it to run on each pass.`,
                             );
                         }
                         break;
@@ -1675,7 +1734,19 @@ export class TaskGraphService {
                 // run in. A graph that has not started yet has no timestamps to sort by, so its
                 // structure is the only order available, and it is available from the moment it is
                 // compiled.
-                const configuration = { ...buildStepConfiguration(node), sequence: ranks.get(node.tempId) };
+                const loopOp = LoopOperationOf(node);
+                const stepActionIds = loopOp?.steps?.length
+                    ? Object.fromEntries(
+                        loopOp.steps
+                            .map((s) => [s.name, actionIDsByName.get(s.name)])
+                            .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0),
+                    )
+                    : undefined;
+                const configuration: TaskStepConfiguration = {
+                    ...buildStepConfiguration(node),
+                    ...(stepActionIds && Object.keys(stepActionIds).length > 0 ? { stepActionIds } : {}),
+                    sequence: ranks.get(node.tempId),
+                };
                 task.Configuration = JSON.stringify(configuration);
 
                 // Input rides in its own column; Description stays human-readable.

@@ -61,7 +61,7 @@ const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
  * this stays silent rather than guessing, which keeps the check sound in the direction that matters
  * — it may miss a typo, it will never invent one.
  */
-export function UnknownConditionRoots(expression: string): string[] {
+export function UnknownConditionRoots(expression: string, extraRoots?: ReadonlySet<string>): string[] {
     if (!expression || expression.includes('=>')) return [];
 
     // Strings first: `payload.status === 'approved'` must not report `approved` as a root.
@@ -71,7 +71,7 @@ export function UnknownConditionRoots(expression: string): string[] {
     // Lookbehind excludes both property access (`.includes`) and identifier tails, including the
     // exponent in a numeric literal (`2e5`), which is otherwise indistinguishable from a name.
     for (const [name] of code.matchAll(/(?<![A-Za-z0-9_$.])[A-Za-z_$][A-Za-z0-9_$]*/g)) {
-        if (LANGUAGE_NAMES.has(name) || SAFE_EXPRESSION_GLOBALS.has(name) || CONDITION_ROOTS.has(name)) continue;
+        if (LANGUAGE_NAMES.has(name) || SAFE_EXPRESSION_GLOBALS.has(name) || CONDITION_ROOTS.has(name) || extraRoots?.has(name)) continue;
         unknown.add(name);
     }
     return [...unknown];

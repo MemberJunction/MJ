@@ -14,7 +14,7 @@ import { PipeValue } from '../pipeline.types';
  * work on real action payloads (e.g. a RunView that returns its rows as a JSON string).
  */
 export function StructureActionResult(result: ActionResult): PipeValue {
-    const outputs = (result.Params ?? []).filter((p) => p.Type === 'Output');
+    const outputs = (result.Params ?? []).filter((p) => p.Type === 'Output' || p.Type === 'Both');
     if (outputs.length === 1) {
         return coerceMaybeJson(outputs[0].Value);
     }
@@ -24,7 +24,7 @@ export function StructureActionResult(result: ActionResult): PipeValue {
             return acc;
         }, {});
     }
-    return result.Message ?? null;
+    return result.Message != null ? coerceMaybeJson(result.Message) : null;
 }
 
 /** @deprecated Use {@link StructureActionResult}. */

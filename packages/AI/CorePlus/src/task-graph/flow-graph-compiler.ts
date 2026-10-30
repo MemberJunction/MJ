@@ -30,7 +30,7 @@ import {
     type NodeLayout,
     type TaskNodeBase,
 } from './task-graph-spec';
-import type { ForEachOperation } from '../foreach-operation';
+import type { ForEachOperation, LoopBodyActionStep } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
 
 /**
@@ -574,14 +574,30 @@ function parseLoopConfig(step: FlowCompilerStep, errors: FlowCompileError[]): Lo
     }
 }
 
-/** Loop body → the operation's `action` / `subAgent` arm, shared by ForEach and While. */
+/** Loop body → the operation's `action` / `steps` / `subAgent` / `prompt` arm, shared by ForEach and While. */
 function buildLoopBody(
     step: FlowCompilerStep,
     options: FlowCompilerOptions,
     errors: FlowCompileError[],
-): Pick<ForEachOperation, 'action' | 'subAgent' | 'prompt'> {
+): Pick<ForEachOperation, 'action' | 'steps' | 'subAgent' | 'prompt'> {
     switch (step.LoopBodyType) {
         case 'Action': {
+            const rawConfig = parseJSONObject(step.Configuration);
+            if (Array.isArray(rawConfig['steps']) && rawConfig['steps'].length > 0) {
+                const parsedSteps = rawConfig['steps'].filter(
+                    (entry): entry is LoopBodyActionStep =>
+                        Boolean(
+                            entry &&
+                            typeof entry === 'object' &&
+                            !Array.isArray(entry) &&
+                            typeof (entry as Record<string, unknown>)['name'] === 'string' &&
+                            ((entry as Record<string, unknown>)['name'] as string).trim().length > 0,
+                        ),
+                );
+                if (parsedSteps.length > 0) {
+                    return { steps: parsedSteps };
+                }
+            }
             const actionName = step.ActionID ? options.ResolveActionName(step.ActionID) : null;
             if (!actionName) break;
             return {

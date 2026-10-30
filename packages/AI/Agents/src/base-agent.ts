@@ -139,7 +139,10 @@ import {
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
     type AgentRunAudience,
+    ApplyOutputMapping,
     ConfigOf,
+    ResolveLoopBodyParams,
+    type LoopBodyActionStep,
     type TaskGraphSpec,
     type TaskGraphSpecNode
 } from '@memberjunction/ai-core-plus';
@@ -1332,7 +1335,7 @@ export class BaseAgent {
         return this._agentTypeState;
     }
 
-    private _agentTypeInstance: BaseAgentType;
+    protected _agentTypeInstance: BaseAgentType;
     /**
      * Accessor for the agent's type instance
      */
@@ -1376,7 +1379,7 @@ export class BaseAgent {
      */
     protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
 
-    private _agentRun: MJAIAgentRunEntityExtended | null = null;
+    protected _agentRun: MJAIAgentRunEntityExtended | null = null;
 
     /**
      * The prefix of the abort reason the wall-clock guard in {@link Execute} raises when a run
@@ -7068,14 +7071,21 @@ export class BaseAgent {
         for (const req of requested) {
             const name = req?.name;
             const normalizedName = name?.trim().toLowerCase();
-            const directSubAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName);
+            const directSubAgent =
+                curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName)
+                ?? (name ? this.matchNamedBySanitizedToolName(name, curAgentSubAgents, true).match : undefined);
+            const activeCatalogAgents = allowFoldedTaskGraphTarget
+                ? AIEngine.Instance.Agents.filter(a => a.Status === 'Active')
+                : [];
             const catalogSubAgent =
-                !directSubAgent && allowFoldedTaskGraphTarget && normalizedName
-                    ? AIEngine.Instance.Agents.find(
-                          a => a.Status === 'Active' && a.Name.trim().toLowerCase() === normalizedName
-                      )
+                !directSubAgent && allowFoldedTaskGraphTarget && name
+                    ? (activeCatalogAgents.find(a => a.Name.trim().toLowerCase() === normalizedName)
+                        ?? this.matchNamedBySanitizedToolName(name, activeCatalogAgents, true).match)
                     : undefined;
             const subAgent = directSubAgent ?? catalogSubAgent;
+            if (subAgent && req && req.name !== subAgent.Name) {
+                req.name = subAgent.Name;
+            }
             const hasRunPermission =
                 subAgent && catalogSubAgent && params.contextUser
                     ? await AIAgentPermissionHelper.HasPermission(subAgent.ID, params.contextUser, 'run')
@@ -7128,6 +7138,42 @@ export class BaseAgent {
     }
 
     /**
+     * Strips an optional `delegate_to_` native sub-agent tool prefix when a model running
+     * with native tool calling references a sub-agent by its declared tool name inside an
+     * envelope primitive (`Sub-Agent`, `ForEach`, `While`, or `Tasks`).
+     */
+    protected stripSubAgentToolPrefix(rawName: string): string {
+        const trimmed = rawName.trim();
+        return trimmed.toLowerCase().startsWith(SUB_AGENT_TOOL_PREFIX)
+            ? trimmed.slice(SUB_AGENT_TOOL_PREFIX.length)
+            : trimmed;
+    }
+
+    /**
+     * Resolves a unique entity from `pool` whose sanitized native tool name matches `rawName`.
+     * Returns `{ ambiguous }` when multiple entities collide on the same sanitized name.
+     */
+    protected matchNamedBySanitizedToolName<T extends { Name?: string | null }>(
+        rawName: string,
+        pool: readonly T[],
+        stripSubAgentPrefix = false
+    ): { match?: T; ambiguous?: T[] } {
+        const candidate = stripSubAgentPrefix ? this.stripSubAgentToolPrefix(rawName) : rawName.trim();
+        const sanitized = SanitizeToolName(candidate);
+        if (!sanitized) {
+            return {};
+        }
+        const matches = pool.filter(item => item.Name && SanitizeToolName(item.Name) === sanitized);
+        if (matches.length === 1) {
+            return { match: matches[0] };
+        }
+        if (matches.length > 1) {
+            return { ambiguous: matches };
+        }
+        return {};
+    }
+
+    /**
      * Builds a compact hint listing the current user's permitted runnable agents when a
      * task-graph or folded sub-agent step references an unknown or inaccessible agent name.
      */
@@ -7147,11 +7193,9 @@ export class BaseAgent {
      * Validates a `'Tasks'` next step before `executeTasksStep` submits the graph.
      *
      * Verifies that every referenced `Agent` (including `ForEach`/`While` loop sub-agents) is
-     * active and runnable by `params.contextUser`, and that every referenced `Action` is active.
-     * When an agent or action name is unknown or inaccessible, converts the step to a self-correcting
-     * `Retry` with the user's permitted runnable agent list instead of letting `TaskGraphService.Submit`
-     * terminate the entire agent run as `Failed`. Never reveals whether an invalid agent name was
-     * nonexistent versus restricted by permissions.
+     * active and runnable by `params.contextUser`, and that every referenced `Action` (including
+     * multi-step `steps[]` loop bodies) is active. Accepts sanitized native tool names
+     * (`calculate_expression`, `delegate_to_query_builder`) and canonicalizes them in place.
      */
     protected async validateTasksNextStep<P>(
         params: ExecuteAgentParams,
@@ -7173,7 +7217,11 @@ export class BaseAgent {
         };
         const extractNodeActionNames = (node: TaskGraphSpecNode): string[] => {
             const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
-            return [ConfigOf(node, 'Action')?.actionName, loopOp?.action?.name].filter(
+            return [
+                ConfigOf(node, 'Action')?.actionName,
+                loopOp?.action?.name,
+                ...(loopOp?.steps?.map((s) => s.name) ?? [])
+            ].filter(
                 (n): n is string => typeof n === 'string' && n.trim().length > 0
             );
         };
@@ -7181,14 +7229,15 @@ export class BaseAgent {
         const referencedAgents = [...new Set(spec.tasks.flatMap(extractNodeAgentNames))];
         const referencedActions = [...new Set(spec.tasks.flatMap(extractNodeActionNames))];
 
+        const canonicalAgentByInput = new Map<string, string>();
         const invalidAgents: string[] = [];
-        const allAgents = AIEngine.Instance?.Agents ?? [];
-        if (referencedAgents.length > 0 && allAgents.length > 0) {
+        const activeAgents = (AIEngine.Instance?.Agents ?? []).filter(a => a.Status === 'Active');
+        if (referencedAgents.length > 0 && activeAgents.length > 0) {
             for (const agentName of referencedAgents) {
                 const normalized = agentName.trim().toLowerCase();
-                const matched = allAgents.find(
-                    a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === normalized
-                );
+                const matched =
+                    activeAgents.find(a => a.Name?.trim().toLowerCase() === normalized)
+                    ?? this.matchNamedBySanitizedToolName(agentName, activeAgents, true).match;
                 const permitted = matched
                     ? params.contextUser
                         ? await AIAgentPermissionHelper.HasPermission(matched.ID, params.contextUser, 'run')
@@ -7196,25 +7245,54 @@ export class BaseAgent {
                     : false;
                 if (!matched || !permitted) {
                     invalidAgents.push(agentName);
+                } else if (matched.Name) {
+                    canonicalAgentByInput.set(agentName, matched.Name);
                 }
             }
         }
 
+        const canonicalActionByInput = new Map<string, string>();
         const invalidActions: string[] = [];
-        const allActions = ActionEngineServer.Instance?.Actions ?? [];
-        if (referencedActions.length > 0 && allActions.length > 0) {
+        const activeActions = (ActionEngineServer.Instance?.Actions ?? []).filter(act => act.Status === 'Active');
+        if (referencedActions.length > 0 && activeActions.length > 0) {
             for (const actionName of referencedActions) {
                 const normalized = actionName.trim().toLowerCase();
-                const matched = allActions.find(
-                    act => act.Status === 'Active' && act.Name?.trim().toLowerCase() === normalized
-                );
+                const matched =
+                    activeActions.find(act => act.Name?.trim().toLowerCase() === normalized)
+                    ?? this.matchNamedBySanitizedToolName(actionName, activeActions).match;
                 if (!matched) {
                     invalidActions.push(actionName);
+                } else if (matched.Name) {
+                    canonicalActionByInput.set(actionName, matched.Name);
                 }
             }
         }
 
         if (invalidAgents.length === 0 && invalidActions.length === 0) {
+            for (const node of spec.tasks) {
+                const agentCfg = ConfigOf(node, 'Agent');
+                if (agentCfg?.agentName && canonicalAgentByInput.has(agentCfg.agentName)) {
+                    agentCfg.agentName = canonicalAgentByInput.get(agentCfg.agentName)!;
+                }
+                const actionCfg = ConfigOf(node, 'Action');
+                if (actionCfg?.actionName && canonicalActionByInput.has(actionCfg.actionName)) {
+                    actionCfg.actionName = canonicalActionByInput.get(actionCfg.actionName)!;
+                }
+                const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
+                if (loopOp?.subAgent?.name && canonicalAgentByInput.has(loopOp.subAgent.name)) {
+                    loopOp.subAgent.name = canonicalAgentByInput.get(loopOp.subAgent.name)!;
+                }
+                if (loopOp?.action?.name && canonicalActionByInput.has(loopOp.action.name)) {
+                    loopOp.action.name = canonicalActionByInput.get(loopOp.action.name)!;
+                }
+                if (Array.isArray(loopOp?.steps)) {
+                    for (const step of loopOp.steps) {
+                        if (step.name && canonicalActionByInput.has(step.name)) {
+                            step.name = canonicalActionByInput.get(step.name)!;
+                        }
+                    }
+                }
+            }
             return nextStep;
         }
 
@@ -7279,7 +7357,23 @@ export class BaseAgent {
             const exactMatch = effectiveActions.find(a =>
                 a.Name.trim().toLowerCase() === actionName
             );
-            if (exactMatch) return false;  // Found exact match, not missing
+            if (exactMatch) {
+                action.name = exactMatch.Name;
+                return false;  // Found exact match, not missing
+            }
+
+            // Try sanitized native tool-name match (e.g. "calculate_expression" -> "Calculate Expression")
+            const sanitizedMatch = this.matchNamedBySanitizedToolName(action.name, effectiveActions);
+            if (sanitizedMatch.match) {
+                const correctedName = sanitizedMatch.match.Name;
+                this.logStatus(`Action native tool name matched: '${action.name}' → '${correctedName}'`, true, params);
+                action.name = correctedName;
+                return false;
+            }
+            if (sanitizedMatch.ambiguous) {
+                this.logStatus(`Ambiguous action tool name '${action.name}' matches ${sanitizedMatch.ambiguous.length} actions: ${sanitizedMatch.ambiguous.map(a => a.Name).join(', ')}`, true, params);
+                return true;
+            }
 
             // Fallback: Try CONTAINS search for partial matches
             const containsMatches = effectiveActions.filter(a =>
@@ -18087,8 +18181,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
             // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
-            const effectiveActions = this._effectiveActions.length > 0
-                ? this._effectiveActions
+            const validationEffectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
+            const effectiveActions = validationEffectiveActions.length > 0
+                ? validationEffectiveActions
                 : (actionEngine.Actions || []).filter(a =>
                     agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
                   );
@@ -18119,13 +18214,21 @@ The context is now within limits. Please retry your request with the recovered c
             const actionPromises = actions.map(async (aa) => {
                 // Find action entity from the effective actions (which includes runtime changes),
                 // or from actions referenced directly by this agent's Flow steps (AIAgentStep.ActionID)
-                let actionEntity = effectiveActions.find(a => a.Name === aa.name);
+                let actionEntity =
+                    effectiveActions.find(a => a.Name === aa.name)
+                    ?? effectiveActions.find(a => a.Name.trim().toLowerCase() === aa.name.trim().toLowerCase())
+                    ?? this.matchNamedBySanitizedToolName(aa.name, effectiveActions).match;
                 if (!actionEntity && Array.isArray(actionEngine?.Actions)) {
                     const agentSteps = AIEngine.Instance.GetAgentSteps?.(params.agent.ID) || [];
                     const stepActionIds = new UUIDSet(agentSteps.map(s => s.ActionID));
-                    actionEntity = actionEngine.Actions.find(
-                        a => a.Name === aa.name && stepActionIds.Has(a.ID)
-                    );
+                    const flowStepActions = actionEngine.Actions.filter(a => stepActionIds.Has(a.ID));
+                    actionEntity =
+                        flowStepActions.find(a => a.Name === aa.name)
+                        ?? flowStepActions.find(a => a.Name.trim().toLowerCase() === aa.name.trim().toLowerCase())
+                        ?? this.matchNamedBySanitizedToolName(aa.name, flowStepActions).match;
+                }
+                if (actionEntity && aa.name !== actionEntity.Name) {
+                    aa.name = actionEntity.Name;
                 }
                 if (!actionEntity) {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}". Available actions: ${effectiveActions.map(a => a.Name).join(', ')}`);
@@ -19768,9 +19871,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Executes a ForEach loop with actual for loop
-     * @private
      */
-    private async executeForEachLoop(
+    protected async executeForEachLoop(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
@@ -19782,10 +19884,11 @@ The context is now within limits. Please retry your request with the recovered c
             return this.createFailedStep('ForEach configuration missing', previousDecision);
         }
 
+        const primaryActionName = forEach.action?.name ?? forEach.steps?.[0]?.name;
         const validationMessage = this.validateForEachOperation(forEach);
         if (validationMessage) {
             return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${validationMessage}`,
-                                                     previousDecision, params, forEach.action?.name);
+                                                     previousDecision, params, primaryActionName);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -19793,7 +19896,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (!collection) {
             return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `Collection path "${forEach.collectionPath}" not an array`,
-                                                     previousDecision, params, forEach.action?.name);
+                                                     previousDecision, params, primaryActionName);
         }
 
         const loopStepEntity = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
@@ -19810,17 +19913,7 @@ The context is now within limits. Please retry your request with the recovered c
             return 'Item variable is required';
         }
 
-        // now validate the action or sub-agent
-        if (whileOp.action) {
-            return this.validateActionInAgent(whileOp.action.name);
-        }
-        else if (whileOp.subAgent) {
-            // check to make sure sub-agent is valid
-            return this.validateSubAgentInAgent(whileOp.subAgent.name);
-        }
-
-        // if we get here, all good
-        return null;
+        return this.validateLoopBodyOperation(whileOp);
     }
 
     private validateForEachOperation(forEach: ForEachOperation): string | null {
@@ -19832,15 +19925,78 @@ The context is now within limits. Please retry your request with the recovered c
             return 'Collection path is required';
         }
 
-        if (forEach.action) {
-            return this.validateActionInAgent(forEach.action.name);
-        }
-        else if (forEach.subAgent) {
-            // check to make sure sub-agent is valid
-            return this.validateSubAgentInAgent(forEach.subAgent.name);
+        return this.validateLoopBodyOperation(forEach);
+    }
+
+    /**
+     * Validates the loop body arm (`action` | `steps` | `subAgent`) shared by `ForEach` and `While`.
+     */
+    private validateLoopBodyOperation(op: ForEachOperation | WhileOperation): string | null {
+        const armCount = (op.action ? 1 : 0) + (op.steps !== undefined ? 1 : 0) + (op.subAgent ? 1 : 0);
+        if (armCount > 1) {
+            return 'Specify only one of action, steps, or subAgent';
         }
 
-        // if we get here, all good
+        if (op.action) {
+            return this.validateActionInAgent(op.action.name);
+        }
+
+        if (op.steps !== undefined) {
+            if (!Array.isArray(op.steps) || op.steps.length === 0) {
+                return 'steps must contain at least one action step';
+            }
+            const seenIds = new Set<string>();
+            const evaluator = new SafeExpressionEvaluator();
+            for (let i = 0; i < op.steps.length; i++) {
+                const step = op.steps[i];
+                if (!step || typeof step.name !== 'string' || step.name.trim() === '') {
+                    return `Step ${i + 1} in steps[] must specify a non-empty action name`;
+                }
+                const actionErr = this.validateActionInAgent(step.name);
+                if (actionErr) {
+                    return actionErr;
+                }
+                if (step.id !== undefined) {
+                    const trimmedId = step.id.trim();
+                    if (!trimmedId) {
+                        return `Step ${i + 1} in steps[] has an empty id`;
+                    }
+                    if (seenIds.has(trimmedId)) {
+                        return `Duplicate step id '${trimmedId}' in steps[]`;
+                    }
+                    seenIds.add(trimmedId);
+                }
+                if (step.outputMapping !== undefined && step.outputMapping.trim() !== '') {
+                    try {
+                        const parsed: unknown = JSON.parse(step.outputMapping);
+                        if (!IsPlainObject(parsed)) {
+                            return `Step '${step.id || step.name}' outputMapping must be a JSON object`;
+                        }
+                    } catch {
+                        return `Step '${step.id || step.name}' has invalid outputMapping JSON`;
+                    }
+                }
+                if (step.condition !== undefined && step.condition.trim() !== '') {
+                    const verdict = evaluator.validateSyntax(step.condition.trim());
+                    if (!verdict.Valid && !verdict.Undecidable) {
+                        return `Step '${step.id || step.name}' condition cannot be parsed: ${verdict.Error}`;
+                    }
+                }
+            }
+            return null;
+        }
+
+        if (op.subAgent) {
+            const err = this.validateSubAgentInAgent(op.subAgent.name);
+            if (!err) {
+                const resolved = this.resolveCanonicalSubAgentNameInAgent(op.subAgent.name);
+                if (resolved) {
+                    op.subAgent.name = resolved;
+                }
+            }
+            return err;
+        }
+
         return null;
     }
 
@@ -19853,6 +20009,15 @@ The context is now within limits. Please retry your request with the recovered c
         const exactMatch = effectiveActions.find(a => a.Name.trim().toLowerCase() === normalizedName);
         if (exactMatch) {
             return null; // Valid
+        }
+
+        // Try sanitized native tool-name match
+        const sanitizedMatch = this.matchNamedBySanitizedToolName(actionName, effectiveActions);
+        if (sanitizedMatch.match) {
+            return null;
+        }
+        if (sanitizedMatch.ambiguous) {
+            return `Ambiguous action '${actionName}' specified. Matches: ${sanitizedMatch.ambiguous.map(a => a.Name).join(', ')}`;
         }
 
         // Try partial/contains match
@@ -19869,33 +20034,81 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
+    private resolveCanonicalSubAgentNameInAgent(subAgentName: string): string | null {
+        if (!this._agentRun?.AgentID) {
+            return null;
+        }
+        const candidate = this.stripSubAgentToolPrefix(subAgentName);
+        const lower = candidate.toLowerCase();
+        const sanitized = SanitizeToolName(candidate);
+
+        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, this._agentRun!.AgentID));
+        const exactRel = relatedAgents.find(ra => ra.SubAgent?.trim().toLowerCase() === lower);
+        if (exactRel?.SubAgent) {
+            return exactRel.SubAgent;
+        }
+        const sanitizedRels = sanitized ? relatedAgents.filter(ra => ra.SubAgent && SanitizeToolName(ra.SubAgent) === sanitized) : [];
+        if (sanitizedRels.length === 1 && sanitizedRels[0].SubAgent) {
+            return sanitizedRels[0].SubAgent;
+        }
+        const partialRels = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(lower));
+        if (partialRels.length === 1 && partialRels[0].SubAgent) {
+            return partialRels[0].SubAgent;
+        }
+
+        const childAgents = AIEngine.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this._agentRun!.AgentID));
+        const exactChild = childAgents.find(ca => ca.Name?.trim().toLowerCase() === lower);
+        if (exactChild?.Name) {
+            return exactChild.Name;
+        }
+        const sanitizedChildren = sanitized ? childAgents.filter(ca => ca.Name && SanitizeToolName(ca.Name) === sanitized) : [];
+        if (sanitizedChildren.length === 1 && sanitizedChildren[0].Name) {
+            return sanitizedChildren[0].Name;
+        }
+        const partialChildren = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(lower));
+        if (partialChildren.length === 1 && partialChildren[0].Name) {
+            return partialChildren[0].Name;
+        }
+        return null;
+    }
+
     protected validateSubAgentInAgent(subAgentName: string): string | null {
         // check to make sure sub-agent is valid
         const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, this._agentRun!.AgentID));
         const childAgents = AIEngine.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this._agentRun!.AgentID));
+        const candidate = this.stripSubAgentToolPrefix(subAgentName);
+        const lower = candidate.toLowerCase();
+        const sanitized = SanitizeToolName(candidate);
 
-        // now check to make sure that subAgentName is either in relatedAgents or childAgents
-        let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+        // Check relatedAgents: exact -> sanitized native tool name -> partial
+        let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === lower);
+        if (subAgent.length === 0 && sanitized) {
+            subAgent = relatedAgents.filter(ra => Boolean(ra.SubAgent && SanitizeToolName(ra.SubAgent) === sanitized));
+        }
+        if (subAgent.length > 1) {
+            return `Ambiguous sub-agent '${subAgentName}' specified`;
+        }
         if (subAgent.length === 0) {
-            // no exact match, try for partial match
-            subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+            subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(lower || ''));
             if (subAgent.length > 1) {
                 return `Ambiguous sub-agent '${subAgentName}' specified`;
-            } 
-            else if (subAgent.length === 0) {
-                // try child agents now
-                let childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+            }
+            if (subAgent.length === 0) {
+                // try child agents: exact -> sanitized native tool name -> partial
+                let childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase() === lower);
+                if (childAgent.length === 0 && sanitized) {
+                    childAgent = childAgents.filter(ca => Boolean(ca.Name && SanitizeToolName(ca.Name) === sanitized));
+                }
+                if (childAgent.length > 1) {
+                    return `Ambiguous child agent '${subAgentName}' specified`;
+                }
                 if (childAgent.length === 0) {
-                    // no exact match, try for partial match
-                    childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+                    childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(lower || ''));
                     if (childAgent.length > 1) {
                         return `Ambiguous child agent '${subAgentName}' specified`;
                     } else if (childAgent.length === 0) {
                         return `No child agent '${subAgentName}' found`;
                     }
-                } 
-                else {
-                    // we have one match, so we're good here
                 }
             }
         }
@@ -20035,7 +20248,13 @@ The context is now within limits. Please retry your request with the recovered c
         // Create batches for parallel processing
         const batches = this.createBatches(collection.slice(0, itemsToProcess), maxConcurrency);
 
-        const allResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }> = [];
+        const allResults: Array<{
+            index: number;
+            result?: BaseAgentNextStep;
+            error?: LoopIterationError;
+            payload?: unknown;
+            appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+        }> = [];
 
         // Process each batch in parallel
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
@@ -20055,7 +20274,8 @@ The context is now within limits. Please retry your request with the recovered c
                     index,
                     result: iterResult.result,
                     error: iterResult.error,
-                    payload: iterResult.payload
+                    payload: iterResult.payload,
+                    appliedFolds: iterResult.appliedFolds
                 }))
             );
 
@@ -20107,15 +20327,21 @@ The context is now within limits. Please retry your request with the recovered c
      * This ensures payload changes are applied in order even when iterations ran in parallel.
      */
     private applyForEachResultsSequentially(
-        sortedResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }>,
-        initialPayload: any,
+        sortedResults: Array<{
+            index: number;
+            result?: BaseAgentNextStep;
+            error?: LoopIterationError;
+            payload?: unknown;
+            appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+        }>,
+        initialPayload: unknown,
         continueOnError: boolean
-    ): { results: BaseAgentNextStep[], errors: any[], finalPayload: any } {
+    ): { results: BaseAgentNextStep[]; errors: LoopIterationError[]; finalPayload: unknown } {
         let currentPayload = initialPayload;
         const results: BaseAgentNextStep[] = [];
-        const errors: any[] = [];
+        const errors: LoopIterationError[] = [];
 
-        for (const { result, error, payload } of sortedResults) {
+        for (const { result, error, payload, appliedFolds } of sortedResults) {
             if (error) {
                 errors.push(error);
                 if (!continueOnError) {
@@ -20123,12 +20349,178 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             } else if (result) {
                 results.push(result);
-                // Apply payload change from this iteration
-                currentPayload = payload || currentPayload;
+                if (appliedFolds && appliedFolds.length > 0) {
+                    for (const fold of appliedFolds) {
+                        currentPayload = this.applyLoopOutputFold(currentPayload, fold.output, fold.mapping);
+                    }
+                } else {
+                    // Apply payload change from this iteration
+                    currentPayload = payload || currentPayload;
+                }
             }
         }
 
         return { results, errors, finalPayload: currentPayload };
+    }
+
+    private extractActionOutputObject(summaries: readonly ActionResultSummary[]): Record<string, unknown> {
+        const out: Record<string, unknown> = {};
+        const resultMessage = summaries[0]?.message;
+        if (typeof resultMessage === 'string') {
+            const trimmed = resultMessage.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed: unknown = JSON.parse(trimmed);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        Object.assign(out, parsed as Record<string, unknown>);
+                    }
+                } catch {
+                    // Non-JSON prose message; ignore.
+                }
+            }
+        }
+        for (const param of summaries[0]?.params ?? []) {
+            if (param.Type === 'Output' || param.Type === 'Both') {
+                out[param.Name] = param.Value;
+            }
+        }
+        if (typeof out.handle === 'string' && out.Handle === undefined) {
+            out.Handle = out.handle;
+        } else if (typeof out.Handle === 'string' && out.handle === undefined) {
+            out.handle = out.Handle;
+        }
+        return out;
+    }
+
+    private applyLoopOutputFold(basePayload: unknown, output: Record<string, unknown>, mapping: string): Record<string, unknown> {
+        const target: Record<string, unknown> = IsPlainObject(basePayload)
+            ? this.cloneSubAgentPayload(basePayload as Record<string, unknown>)
+            : {};
+        const mapped = ApplyOutputMapping(output, mapping, target);
+        return mapped.updates;
+    }
+
+    /**
+     * Executes an ordered sequence of `LoopBodyActionStep` actions inside a single `ForEach` or `While`
+     * iteration, chaining step outputs under `steps.<id>.*` / `steps.step_<index>.*`, evaluating optional
+     * per-step `condition` expressions, folding optional per-step `outputMapping` onto the working payload,
+     * and halting remaining steps in the pass if any step fails.
+     */
+    private async executeLoopStepsIteration(args: {
+        steps: readonly LoopBodyActionStep[];
+        item: unknown;
+        itemVariable: string;
+        index: number;
+        attemptContext?: { attemptNumber: number; totalAttempts: number };
+        currentPayload: unknown;
+        parentStepId: string;
+        params: ExecuteAgentParams;
+    }): Promise<{
+        payload: unknown;
+        result: BaseAgentNextStep;
+        appliedFolds: Array<{ output: Record<string, unknown>; mapping: string }>;
+    }> {
+        const { steps, item, itemVariable, index, attemptContext, currentPayload, parentStepId, params } = args;
+        const stepsOutputs: Record<string, Record<string, unknown>> = {};
+        const appliedFolds: Array<{ output: Record<string, unknown>; mapping: string }> = [];
+        const aggregatedSummaries: ActionResultSummary[] = [];
+        const evaluator = new SafeExpressionEvaluator();
+
+        let workingPayload: Record<string, unknown> = IsPlainObject(currentPayload)
+            ? this.cloneSubAgentPayload(currentPayload as Record<string, unknown>)
+            : {};
+
+        for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
+            const step = steps[stepIdx];
+            const stepKey = step.id?.trim() || `step_${stepIdx}`;
+            const stepBindings: Record<string, unknown> = {
+                ...(attemptContext ? { attemptNumber: attemptContext.attemptNumber, totalAttempts: attemptContext.totalAttempts } : {}),
+                item,
+                [itemVariable]: item,
+                index,
+                steps: stepsOutputs
+            };
+
+            if (step.condition?.trim()) {
+                const conditionScope: Record<string, unknown> = {
+                    ...workingPayload,
+                    ...stepBindings,
+                    payload: { ...workingPayload, ...stepBindings },
+                    steps: stepsOutputs,
+                    index,
+                    iteration: index,
+                    ...(params.data !== undefined ? { data: params.data } : {}),
+                    ...(params.context !== undefined ? { context: params.context } : {})
+                };
+                const evalResult = evaluator.evaluate(step.condition.trim(), conditionScope);
+                if (!evalResult.success) {
+                    throw new Error(
+                        `Loop step "${stepKey}" condition "${step.condition}" could not be evaluated: ${evalResult.error ?? 'unknown error'}`
+                    );
+                }
+                if (!evalResult.value) {
+                    continue;
+                }
+            }
+
+            const matchedAction = this.findAgentActionForLoop(step.name, params.agent.ID, params.agent.Name, params);
+            const stepPayload = { ...workingPayload, ...stepBindings };
+            const resolvedParams = ResolveLoopBodyParams(
+                step.params ?? {},
+                stepBindings,
+                { payload: stepPayload, data: params.data, context: params.context }
+            );
+
+            const actionStep: BaseAgentNextStep = {
+                step: 'Actions',
+                actions: [{ name: matchedAction.Action, params: resolvedParams }],
+                newPayload: workingPayload,
+                previousPayload: workingPayload,
+                terminate: false
+            };
+            const stepResult = await this.executeActionsStep(
+                params,
+                actionStep,
+                parentStepId,
+                false,
+                0,
+                { skipCircuitBreaker: true }
+            );
+            const summaries = Array.isArray(stepResult.priorStepResult)
+                ? (stepResult.priorStepResult as ActionResultSummary[])
+                : [];
+            aggregatedSummaries.push(...summaries);
+
+            const failedSummary = summaries.find((s) => !s.success);
+            if (failedSummary) {
+                throw new Error(
+                    `Loop step "${stepKey}" (${matchedAction.Action}) failed: ${failedSummary.message || failedSummary.resultCode || 'Action failed'}`
+                );
+            }
+
+            const stepOutput = this.extractActionOutputObject(summaries);
+            stepsOutputs[stepKey] = stepOutput;
+            if (stepKey !== `step_${stepIdx}`) {
+                stepsOutputs[`step_${stepIdx}`] ??= stepOutput;
+            }
+
+            if (step.outputMapping?.trim()) {
+                workingPayload = this.applyLoopOutputFold(workingPayload, stepOutput, step.outputMapping);
+                appliedFolds.push({ output: stepOutput, mapping: step.outputMapping });
+            } else if (IsPlainObject(stepResult.newPayload)) {
+                workingPayload = stepResult.newPayload as Record<string, unknown>;
+            }
+        }
+
+        const outPayload: unknown = IsPlainObject(currentPayload) || appliedFolds.length > 0 ? workingPayload : currentPayload;
+        const syntheticStep: BaseAgentNextStep = {
+            step: 'Retry',
+            terminate: false,
+            previousPayload: currentPayload,
+            newPayload: outPayload,
+            priorStepResult: aggregatedSummaries
+        };
+        return { payload: outPayload, result: syntheticStep, appliedFolds };
     }
 
     /**
@@ -20136,22 +20528,39 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async executeSingleForEachIteration(
         forEach: ForEachOperation,
-        item: any,
+        item: unknown,
         index: number,
-        currentPayload: any,
+        currentPayload: unknown,
         parentStepId: string,
         params: ExecuteAgentParams,
-        config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
+        _config: AgentConfiguration
+    ): Promise<{
+        payload?: unknown;
+        error?: LoopIterationError;
+        result?: BaseAgentNextStep;
+        appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+    }> {
         try {
+            if (Array.isArray(forEach.steps) && forEach.steps.length > 0) {
+                return await this.executeLoopStepsIteration({
+                    steps: forEach.steps,
+                    item,
+                    itemVariable: forEach.itemVariable || 'item',
+                    index,
+                    currentPayload,
+                    parentStepId,
+                    params
+                });
+            }
+
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
-                { item, itemVariable: forEach.itemVariable,index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
+                { item, itemVariable: forEach.itemVariable, index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
             );
             let resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
 
             // Execute action, sub-agent, or prompt
-            let result;
+            let result: BaseAgentNextStep;
             if (forEach.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
@@ -20169,7 +20578,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const resolvedAction = {
                     name: matchedAction.Action,
                     params: resolvedParams
-                }
+                };
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
                 // Loop iterations bypass the circuit breaker: the loop does its own per-item accounting and
                 // there is no model between items to act on the breaker's guidance.
@@ -20183,16 +20592,28 @@ The context is now within limits. Please retry your request with the recovered c
                     result as unknown as ExecuteAgentResult
                 );
             } else {
-                throw new Error('ForEach missing action/subAgent');
+                throw new Error('ForEach missing action/steps/subAgent');
             }
 
-            // Apply AfterLoopIteration hook
+            // Apply AfterLoopIteration hook (or ApplyOutputMapping fallback when LoopAgentType has no hook)
             const iterPayload = result.newPayload || currentPayload;
             const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
                 { currentPayload: iterPayload, item, itemVariable: forEach.itemVariable, index, loopContext: { actionOutputMapping: forEach.action?.outputMapping } }
             );
+            if (afterHook) {
+                return { payload: afterHook, result };
+            }
+            if (forEach.action?.outputMapping?.trim() && Array.isArray(result.priorStepResult)) {
+                const stepOutput = this.extractActionOutputObject(result.priorStepResult as ActionResultSummary[]);
+                const folded = this.applyLoopOutputFold(iterPayload, stepOutput, forEach.action.outputMapping);
+                return {
+                    payload: folded,
+                    result,
+                    appliedFolds: [{ output: stepOutput, mapping: forEach.action.outputMapping }]
+                };
+            }
 
-            return { payload: afterHook || iterPayload, result };
+            return { payload: iterPayload, result };
 
         } catch (error) {
             return { error: { index, item, message: error.message } };
@@ -20217,7 +20638,7 @@ The context is now within limits. Please retry your request with the recovered c
                                       loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, forEach.action?.name);
+            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, forEach.action?.name ?? forEach.steps?.[0]?.name);
         }
 
         return {
@@ -20381,9 +20802,9 @@ The context is now within limits. Please retry your request with the recovered c
                 : ActionEngineServer.Instance.Actions.filter(a =>
                     agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
                 );
-            const matchedAction = effectiveActions.find(
-                a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase()
-            );
+            const matchedAction =
+                effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
+                ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match;
 
             if (matchedAction) {
                 const agentAction = agentActions.find(aa => UUIDsEqual(aa.ActionID, matchedAction.ID));
@@ -20430,6 +20851,17 @@ The context is now within limits. Please retry your request with the recovered c
             a.Name.trim().toLowerCase() === normalizedName
         );
 
+        // Try sanitized native tool-name match
+        if (!matchedAction) {
+            const sanitizedMatch = this.matchNamedBySanitizedToolName(actionName, effectiveActions);
+            if (sanitizedMatch.match) {
+                matchedAction = sanitizedMatch.match;
+                this.logStatus(`Action native tool name matched: '${actionName}' → '${matchedAction.Name}'`, true, params);
+            } else if (sanitizedMatch.ambiguous) {
+                throw new Error(`Ambiguous action '${actionName}'. Matches: ${sanitizedMatch.ambiguous.map(a => a.Name).join(', ')}`);
+            }
+        }
+
         // Fallback: CONTAINS search
         if (!matchedAction) {
             const containsMatches = effectiveActions.filter(a =>
@@ -20465,9 +20897,8 @@ The context is now within limits. Please retry your request with the recovered c
  
     /**
      * Executes a While loop with actual while loop
-     * @private
      */
-    private async executeWhileLoop(
+    protected async executeWhileLoop(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
@@ -20479,10 +20910,11 @@ The context is now within limits. Please retry your request with the recovered c
             return this.createFailedStep('While configuration missing', previousDecision);
         }
 
+        const primaryActionName = whileOp.action?.name ?? whileOp.steps?.[0]?.name;
         const validationMessage = this.validateWhileOperation(whileOp);
         if (validationMessage) {
             return this.failLoopBeforeFirstIteration('While', whileOp.condition, `While configuration invalid: ${validationMessage}`,
-                                                     previousDecision, params, whileOp.action?.name);
+                                                     previousDecision, params, primaryActionName);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -20578,14 +21010,28 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async executeSingleWhileIteration(
         whileOp: WhileOperation,
-        attemptContext: any,
+        attemptContext: { attemptNumber: number; totalAttempts: number },
         index: number,
-        currentPayload: any,
+        currentPayload: unknown,
         parentStepId: string,
         params: ExecuteAgentParams,
-        config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: LoopIterationError, result?: BaseAgentNextStep }> {
+        _config: AgentConfiguration
+    ): Promise<{ payload?: unknown; error?: LoopIterationError; result?: BaseAgentNextStep }> {
         try {
+            if (Array.isArray(whileOp.steps) && whileOp.steps.length > 0) {
+                const stepsOutcome = await this.executeLoopStepsIteration({
+                    steps: whileOp.steps,
+                    item: attemptContext,
+                    itemVariable: whileOp.itemVariable || 'attempt',
+                    index,
+                    attemptContext,
+                    currentPayload,
+                    parentStepId,
+                    params
+                });
+                return { payload: stepsOutcome.payload, result: stepsOutcome.result };
+            }
+
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
                 { item: attemptContext, index, itemVariable: whileOp.itemVariable, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} }
@@ -20593,7 +21039,7 @@ The context is now within limits. Please retry your request with the recovered c
             let resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
 
             // Execute action or sub-agent
-            let result;
+            let result: BaseAgentNextStep;
             if (whileOp.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
@@ -20625,16 +21071,24 @@ The context is now within limits. Please retry your request with the recovered c
                     result as unknown as ExecuteAgentResult
                 );
             } else {
-                throw new Error('While missing action/subAgent');
+                throw new Error('While missing action/steps/subAgent');
             }
 
-            // Apply AfterLoopIteration hook
+            // Apply AfterLoopIteration hook (or ApplyOutputMapping fallback when LoopAgentType has no hook)
             const iterPayload = result.newPayload || currentPayload;
             const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
                 { currentPayload: iterPayload, item: attemptContext, itemVariable: whileOp.itemVariable, index, loopContext: { actionOutputMapping: whileOp.action?.outputMapping } }
             );
+            if (afterHook) {
+                return { payload: afterHook, result };
+            }
+            if (whileOp.action?.outputMapping?.trim() && Array.isArray(result.priorStepResult)) {
+                const stepOutput = this.extractActionOutputObject(result.priorStepResult as ActionResultSummary[]);
+                const folded = this.applyLoopOutputFold(iterPayload, stepOutput, whileOp.action.outputMapping);
+                return { payload: folded, result };
+            }
 
-            return { payload: afterHook || iterPayload, result };
+            return { payload: iterPayload, result };
 
         } catch (error) {
             return { error: { index, item: attemptContext, message: error.message } };
@@ -20661,7 +21115,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Inject before the early return below: a Loop agent re-prompts after a Failed step, and the
         // loop-results message (the condition error, under Errors) is the only way the model learns why.
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name);
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name ?? whileOp.steps?.[0]?.name);
         }
 
         // A condition that never evaluated means the loop never ran: fail the step rather than
@@ -22344,7 +22798,7 @@ The context is now within limits. Please retry your request with the recovered c
         // we only do this if the string starts and ends with the {{ }} pattern
         // and we trim whitespace first
         const trimmedValue = value.trim();
-        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
+        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}') && !trimmedValue.slice(2, -2).includes('{{')) {
             // Single-variable case: "{{city.name}}" — strip wrappers, fall through to
             // single-variable resolution below which can return non-string types (objects, numbers)
             value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
