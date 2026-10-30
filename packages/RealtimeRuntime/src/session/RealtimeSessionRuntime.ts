@@ -1389,7 +1389,8 @@ export class RealtimeSessionRuntime {
   /**
    * Sets the baseline deadline a host knows at session start (`null` clears) and arms the alarm. See
    * {@link SessionDeadline$}. By default the runtime ends the call with reason `'deadline'` when it is reached; pass
-   * `{ autoEnd: false }` to own the hang-up (then end with `EndRealtimeSession('deadline')` to stamp `TimeLimit`), and
+   * `{ autoEnd: false }` to own the hang-up (then end with `EndRealtimeSession('deadline')`, which claims `TimeLimit`: the
+   * server keeps it only against the session's stored deadline, so a deadline set here alone records `Explicit`), and
    * `warnBeforeMs` for {@link SessionDeadlineWarning$}. The server's verified deadline (`identity.verified`) also arms the
    * alarm with the current options (default `autoEnd: true`); a host that owns the hang-up calls `SetSessionDeadline(d, { autoEnd: false })`.
    * The runtime never arms this by itself.
@@ -1417,8 +1418,9 @@ export class RealtimeSessionRuntime {
 
   /**
    * Tells the host first, then auto-ends unless the host opted out, already ended the call, or moved the deadline from
-   * inside the event. Reached before the mint adopted a session id (and with no teardown running), the reach is kept
-   * in {@link pendingDeadlineReached} for the mint path to replay.
+   * inside the event. Reached before the call went live (before the mint, or while the microphone and connect are still
+   * in flight) and with no teardown running, the reach is kept in {@link pendingDeadlineReached} for the start to
+   * replay once `SessionStarted$` has fired, so a host never hears of a deadline for a call it was not told started.
    */
   private onSessionDeadlineReached(deadline: Date): void {
     const sessionId = this.liveDeadlineSessionId();
@@ -1442,9 +1444,8 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Replays a deadline reached before the mint, once the mint has adopted the session id. On the next tick, so the
-   * host's `SessionDeadlineReached$` handler runs outside the start and the start's own code after the id finishes
-   * first; the auto-end's teardown then abandons the start at its next await.
+   * Replays a deadline reached before the call went live, once it is live. On the next tick, so the host's
+   * `SessionDeadlineReached$` handler runs outside the start, after the start has finished.
    */
   private replayPendingDeadlineReached(): void {
     const pending = this.pendingDeadlineReached;
@@ -1460,11 +1461,13 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * The session a deadline event belongs to: the minted session, unless it is already being torn down. Not
-   * {@link isSessionLive}: a call that is resuming reads `'connecting'`, and its deadline still holds.
+   * The session a deadline event belongs to: the session once its call went live, unless it is already being torn
+   * down. A start still opening the microphone or connecting has none: a host that owns the hang-up must be able to
+   * speak its goodbye when it hears the deadline. {@link callWentLive}, not {@link isSessionLive}: a call that is
+   * resuming reads `'connecting'`, and its deadline still holds. Warnings due before the call went live are dropped.
    */
   private liveDeadlineSessionId(): string | null {
-    return this.teardownInFlight ? null : this.agentSessionId;
+    return this.teardownInFlight || !this.callWentLive ? null : this.agentSessionId;
   }
 
   /**
@@ -1836,7 +1839,6 @@ export class RealtimeSessionRuntime {
       // `SessionStarted$` — activating after the id is set would announce every channel twice.
       this.applySessionClientPolicy(session);
       this.agentSessionId = session.AgentSessionId;
-      this.replayPendingDeadlineReached();
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
       // it on close, and auto-name it (via the shared naming helper).
@@ -1944,6 +1946,7 @@ export class RealtimeSessionRuntime {
       // the window in which the server needs to be told it is alive.
       this.startLivenessPulse();
       this.callWentLive = true;
+      this.replayPendingDeadlineReached();
     } catch (error) {
       await this.failSessionStart(error);
     }
@@ -2374,7 +2377,9 @@ export class RealtimeSessionRuntime {
    * the server-side agent session. Safe to call when no session is active.
    *
    * @param reason `'deadline'` for a host that owns the hang-up at its deadline (`autoEnd: false`): the end is reported
-   *   as `'deadline'` and the row is claimed as `TimeLimit`. Default `'explicit'`.
+   *   as `'deadline'` and the row is claimed as `TimeLimit`. The server keeps `TimeLimit` only when the session's own
+   *   stored deadline (`Config_.maxSessionDeadlineIso`, stamped at mint, e.g. a widget guest's voice cap) has passed or is
+   *   within a minute; a deadline known only to this browser is recorded as `Explicit`. Default `'explicit'`.
    */
   public async EndRealtimeSession(reason: 'explicit' | 'deadline' = 'explicit'): Promise<void> {
     if (!this.IsActive && !this.agentSessionId) {

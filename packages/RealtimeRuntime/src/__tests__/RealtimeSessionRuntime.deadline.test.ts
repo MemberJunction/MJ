@@ -53,6 +53,15 @@ class Host implements IRealtimeMediaHost {
     }
 }
 
+/** A microphone that takes `delayMs` to open, the way a real `getUserMedia` spans macrotasks. */
+class SlowMicHost implements IRealtimeMediaHost {
+    constructor(private readonly delayMs: number) {}
+    public async AcquireMicrophone(): Promise<MediaStream> {
+        await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+        return { getTracks: () => [], getAudioTracks: () => [] } as unknown as MediaStream;
+    }
+}
+
 /** Records every GraphQL call with its variables, and carries the session-event subscription. */
 class DeadlineProvider {
     public readonly sessionId = 'transport-deadline-1';
@@ -256,6 +265,27 @@ describe('RealtimeSessionRuntime — session deadline alarm', () => {
         expect(order).toEqual([`reached:${SESSION}`, 'ended:deadline']);
         expect(provider.CloseReasons).toEqual(['TimeLimit']);
     });
+
+    // A real microphone and connect take hundreds of ms across macrotasks; the reach must still follow SessionStarted$.
+    for (const [name, deadlineMs] of [['reached before the start', -1000], ['reached while the microphone opens', 20]] as const) {
+        it(`a deadline ${name} is announced only after SessionStarted$, with the call live`, async () => {
+            const runtime = new RealtimeSessionRuntime(new SlowMicHost(80));
+            runtime.Provider = new DeadlineProvider() as unknown as IMetadataProvider;
+            const order: string[] = [];
+            let state = '';
+            runtime.ConnectionState$.subscribe((s) => (state = s));
+            runtime.SessionStarted$.subscribe(() => order.push('started'));
+            runtime.SessionDeadlineReached$.subscribe((e) => order.push(`reached:${e.sessionId}:${state}`));
+            runtime.SessionEnded$.subscribe((e) => order.push(`ended:${e.reason}`));
+            runtime.SetSessionDeadline(inMs(deadlineMs), { autoEnd: false });
+            await sleep(deadlineMs < 0 ? 20 : 0);
+            await runtime.StartRealtimeSessionFromResult(mintedSession());
+            await waitUntil(() => order.some((o) => o.startsWith('reached:')), 'the deadline to be announced');
+            expect(order).toEqual(['started', `reached:${SESSION}:listening`]);
+            expect(runtime.IsActive).toBe(true);
+            await runtime.EndRealtimeSession();
+        });
+    }
 
     it('a deadline set again before the mint drops the pending reach', async () => {
         const runtime = new RealtimeSessionRuntime(new Host());

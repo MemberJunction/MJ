@@ -462,7 +462,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         const thresholdMs = this._config.closeThresholdMinutes * 60_000;
         const closed = await this.sweepAndClose(filter, provider, systemUser, s => ExpiryCloseReason(s, nowMs, thresholdMs));
         if (closed > 0) {
-            LogStatus(`[SessionJanitor] Max-duration sweep closed ${closed} session(s) past their hard duration cap`);
+            LogStatus(`[SessionJanitor] Max-duration sweep closed ${closed} capped session(s) past their deadline or idle threshold`);
         }
         return closed;
     }
