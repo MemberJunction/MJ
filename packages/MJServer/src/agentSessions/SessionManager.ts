@@ -5,6 +5,7 @@ import {
     MJAIAgentSessionChannelEntity,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
+import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
@@ -611,7 +612,9 @@ export class SessionManager {
         session.Status = 'Closed';
         session.ClosedAt = new Date();
         session.CloseReason = closeReason;
-        return this.saveOrLog(session, 'CloseSession');
+        // The session entity refuses a server-only CloseReason from an untrusted save; this is the server's own
+        // (already verified) close, so it saves inside the trusted session-write scope.
+        return RunWithTrustedSessionConfigWrites(() => this.saveOrLog(session, 'CloseSession'));
     }
 
     /** Marks every channel row of the session `Disconnected` (with `DisconnectedAt`), if not already. */

@@ -73,6 +73,7 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 });
 
 import { SessionManager, SessionAuthorizationError } from '../agentSessions/SessionManager.js';
+import { IsTrustedSessionConfigWriteActive } from '@memberjunction/core-entities-server';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /** Minimal fake BaseEntity-shaped record with the fields/methods SessionManager touches. */
@@ -338,6 +339,24 @@ describe('SessionManager.CreateSession', () => {
 });
 
 describe('SessionManager.CloseSession', () => {
+    // The session entity refuses a server-only CloseReason (TimeLimit, Idle, Janitor, Shutdown) from an untrusted save,
+    // so the one server path that stamps it must save inside the trusted session-write scope.
+    it('stamps the close reason inside the trusted session-write scope', async () => {
+        runViewMock.mockResolvedValue({ Success: true, Results: [] });
+        let trustedAtSave: boolean | null = null;
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });
+        session.Save = vi.fn(async () => {
+            trustedAtSave = IsTrustedSessionConfigWriteActive();
+            return true;
+        });
+        const { provider } = makeProvider(() => session);
+
+        expect(await new SessionManager().CloseSession('session-1', makeUser(), provider, 'Janitor')).toBe(true);
+
+        expect(session.CloseReason).toBe('Janitor');
+        expect(trustedAtSave).toBe(true);
+    });
+
     it('sets Closed + ClosedAt, disconnects channels', async () => {
         const channel = makeSessionEntity({ ID: 'chan-1', Status: 'Connected' });
         runViewMock.mockResolvedValue({ Success: true, Results: [channel] });
