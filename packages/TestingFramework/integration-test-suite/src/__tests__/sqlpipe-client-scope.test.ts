@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import type { DatabasePlatform } from '@memberjunction/core';
-import { CLIENT_PATHS, ClientAssignments, ClientDimensions, MatrixScopeOf, PR_PAIRS, TRANSPORT_DIMENSIONS } from '../checks/sqlpipe-dimensions';
+import { CLIENT_PATHS, ClientAssignments, ClientDimensions, MatrixScopeOf, PullRequestPairs, TRANSPORT_DIMENSIONS } from '../checks/sqlpipe-dimensions';
 import { CoveredPairs } from '../checks/sqlpipe-pairwise';
 import type { Assignment, DimensionValue } from '../checks/sqlpipe-pairwise';
 import { BuildQuery, PointOf, ValidPoint } from '../checks/sqlpipe-scenarios';
@@ -75,7 +75,7 @@ describe.each(PLATFORMS)('IT145 scopes on %s', platform => {
     it('pr scope covers every pair over the transport dimensions, and every pair it requires, that the full scope covers', () => {
         const dims = ClientDimensions();
         const prPairs = CoveredPairs(dims, pr);
-        const required = [...CoveredPairs(dims, full)].filter(key => PR_PAIRS(...parsePair(key)));
+        const required = [...CoveredPairs(dims, full)].filter(key => PullRequestPairs(...parsePair(key)));
         expect(required.filter(key => !prPairs.has(key))).toEqual([]);
         const transport = required.filter(key => parsePair(key).every(d => TRANSPORT_DIMENSIONS.includes(d.Dimension)));
         expect(transport.length).toBeGreaterThan(0);

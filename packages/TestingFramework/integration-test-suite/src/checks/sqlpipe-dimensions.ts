@@ -79,7 +79,7 @@ function pick(a: DimensionValue, b: DimensionValue, dimension: string): [Dimensi
  * case; every composition variant with each value case it defines itself (the values are what
  * crosses the wire, and a value case exists only for some variants).
  */
-export const PR_PAIRS: PairFilter = (a: DimensionValue, b: DimensionValue): boolean => {
+export const PullRequestPairs: PairFilter = (a: DimensionValue, b: DimensionValue): boolean => {
     if (isTransport(a) && isTransport(b)) return true;
     if (a.Dimension === 'Path' || b.Dimension === 'Path') return true;
     const values = pick(a, b, 'Values');
@@ -92,5 +92,5 @@ export const PR_PAIRS: PairFilter = (a: DimensionValue, b: DimensionValue): bool
 /** The client assignments of a scope, on a platform. */
 export function ClientAssignments(platform: DatabasePlatform, scope: MatrixScope): PairwiseResult {
     const valid = (a: Assignment): boolean => ValidPoint(platform, a);
-    return scope === 'pr' ? GeneratePairwise(ClientDimensions(), valid, PR_PAIRS) : GeneratePairwise(ClientDimensions(), valid);
+    return scope === 'pr' ? GeneratePairwise(ClientDimensions(), valid, PullRequestPairs) : GeneratePairwise(ClientDimensions(), valid);
 }
