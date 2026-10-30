@@ -39,7 +39,6 @@ import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-history';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
-import type { IHoldoutCarver } from '../snapshot/holdout-carver';
 import type { ITrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import type { IEvaluationProtocolStore } from './evaluation-protocol-store';
 
@@ -247,11 +246,6 @@ export interface TrainingDeps {
    * `Failed`, not as a `refused` envelope) rather than training from rows nothing recorded.
    */
   snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  /**
-   * Assigns each unit row its manifest role and records the carve; defaults to the carver the bound Evaluation
-   * Protocol's holdout declares (`HoldoutCarvers.CarverForProtocol`: date-carved, seeded-random or rolling-origin).
-   */
-  holdoutCarver?: IHoldoutCarver;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
   snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /**

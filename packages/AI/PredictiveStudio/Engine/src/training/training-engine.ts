@@ -412,8 +412,8 @@ export class TrainingEngine {
   }
 
   /**
-   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the holdout carver (the
-   * deps' carver, else the one the bound protocol declares, {@link HoldoutCarvers.CarverForProtocol}); rows the carve
+   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the carver the bound
+   * protocol declares ({@link HoldoutCarvers.CarverForProtocol}); rows the carve
    * leaves out (a date carve's rows on or after `holdoutEnd`) are not in the snapshot. Identical content reuses the
    * snapshot that already holds it. The bound protocol decides the evaluation columns: the incumbent-score column when
    * it declares an incumbent-heuristic baseline and the unit has a rule to score it, and one slice column per subgroup
@@ -426,10 +426,7 @@ export class TrainingEngine {
     loaded: LoadedProtocol, deps: TrainingDeps,
   ): Promise<FrozenSnapshot> {
     const protocol = loaded.Protocol;
-    const carver = deps.holdoutCarver || HoldoutCarvers.CarverForProtocol(protocol, assembly.Unit);
-    const roles = carver.AssignRoles(assembled.Rows, new Map(assembly.UnitRead.Rows.map((r) => [r.RowId, r])));
-    const carve = carver.Summary();
-    if (carve === null) throw new Error('TrainingEngine: the holdout carver assigned roles but recorded no carve summary');
+    const carve = HoldoutCarvers.CarverForProtocol(protocol, assembly.Unit).AssignRoles(assembled.Rows, new Map(assembly.UnitRead.Rows.map((r) => [r.RowId, r])));
     const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
     const snapshot = await new TrainingSnapshotBuilder().Build({
       PipelineID: resolved.pipeline.ID,
@@ -438,7 +435,7 @@ export class TrainingEngine {
       UnitRead: assembly.UnitRead,
       Features: assembly.Features,
       Assembled: assembled,
-      Roles: roles,
+      Roles: carve.Roles,
       EvaluationProtocolID: loaded.RowID,
       IncumbentScore: assembly.Unit.incumbent.kind === 'rule' && protocol.baselines.some((b) => b.kind === 'incumbent-heuristic'),
       SliceFields: protocol.slices.subgroups,
@@ -447,7 +444,7 @@ export class TrainingEngine {
       ContextUser: deps.contextUser,
       ExistingByContentHash: (contentHash) => snapshots.FindByContentHash(contentHash),
     });
-    return { Snapshot: snapshot, Carve: carve };
+    return { Snapshot: snapshot, Carve: carve.Summary };
   }
 
   /**

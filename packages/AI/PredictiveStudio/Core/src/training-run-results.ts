@@ -138,6 +138,7 @@ const carveRefusalSchema: z.ZodType<CarveRefusal> = z.discriminatedUnion('kind',
   z.object({ kind: z.literal('missing-carve-date'), rowId: z.string(), column: z.string() }),
   z.object({ kind: z.literal('no-development-rows'), cutoff: z.string() }),
   z.object({ kind: z.literal('no-holdout-rows'), cutoff: z.string(), holdoutEnd: z.string().nullable() }),
+  z.object({ kind: z.literal('seeded-random-side-empty'), side: z.enum(['development', 'locked-holdout']), fraction: z.number(), rows: z.number().int().nonnegative() }),
   z.object({
     kind: z.literal('too-few-periods'), periods: z.number().int(), origins: z.number().int(), horizonPeriods: z.number().int(),
     gapPeriods: z.number().int(), minTrainPeriods: z.number().int(),

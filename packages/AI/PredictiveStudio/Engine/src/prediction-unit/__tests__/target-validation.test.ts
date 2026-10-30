@@ -4,7 +4,7 @@ import type { UnitRow } from '../unit-row-reader';
 import type { UnitResolutionCounts } from '@memberjunction/predictive-studio-core';
 
 const counts: UnitResolutionCounts = { rowsRead: 10, censoredRowsExcluded: 2, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 8, dataCutoff: '2026-01-01' };
-const rowsWith = (labels: (string | number)[]): UnitRow[] => labels.map((Label, i) => ({ RowId: `r${i}`, EntityKey: `e${i}`, DecisionDate: new Date(0), WindowEnd: new Date(0), GroupKey: null, Period: null, Label, Source: {} }));
+const rowsWith = (labels: (string | number)[]): UnitRow[] => labels.map((Label, i) => ({ RowId: `r${i}`, EntityKey: `e${i}`, DecisionDate: new Date(0), WindowEnd: new Date(0), GroupKey: `e${i}`, Period: null, Label, Source: {} }));
 
 describe('ValidateUnitTargets', () => {
   it('refuses a one-class binary target before training', () => {

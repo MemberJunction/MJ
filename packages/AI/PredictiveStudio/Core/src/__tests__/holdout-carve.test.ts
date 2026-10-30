@@ -189,6 +189,10 @@ describe('HoldoutCarve.DescribeCarveRefusal', () => {
       .toBe('30 periods cannot hold 5 origins of 3 periods and a gap of 0 periods after 24 training periods.');
     expect(HoldoutCarve.DescribeCarveRefusal({ kind: 'missing-carve-date', rowId: 'r1', column: 'StartDate' }))
       .toBe('Row r1 has no StartDate; the holdout is carved on that column.');
+    expect(HoldoutCarve.DescribeCarveRefusal({ kind: 'seeded-random-side-empty', side: 'locked-holdout', fraction: 0.1, rows: 3 }))
+      .toBe('A seeded-random holdout of fraction 0.1 puts none of the 3 rows in the holdout; there is nothing to test on. Choose a larger fraction or train on more rows.');
+    expect(HoldoutCarve.DescribeCarveRefusal({ kind: 'seeded-random-side-empty', side: 'development', fraction: 0.9, rows: 2 }))
+      .toBe('A seeded-random holdout of fraction 0.9 puts all 2 rows in the holdout; nothing would be left to train on. Choose a smaller fraction or train on more rows.');
   });
 });
 

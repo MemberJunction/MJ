@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { TrainingKeys } from '../training-keys';
+import { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
+import { SnapshotIntegrityError } from '../../snapshot/snapshot-manifest';
 
 type Canned = { readonly Success: boolean; readonly Results: ReadonlyArray<Record<string, string | null>>; readonly ErrorMessage: string };
 
@@ -24,5 +27,18 @@ describe('TrainingKeys.LoadTrainingRowIds', () => {
     await expect(TrainingKeys.LoadTrainingRowIds('m-1', failedSnapshot, user)).rejects.toThrow('Loading Training Snapshot S-1 of model m-1 failed: timeout');
     const missing = provider({ 'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]), 'MJ: Training Snapshots': ok([]) });
     await expect(TrainingKeys.LoadTrainingRowIds('m-1', missing, user)).rejects.toThrow('Training Snapshot S-1 of model m-1 was not found');
+  });
+
+  it("returns exactly the development row ids of the model's verified snapshot manifest, and refuses a manifest whose SHA-256 differs", async () => {
+    const line = (rowId: string, role: SnapshotRowKey['role']): SnapshotRowKey => ({ rowId, entityKey: `E-${rowId}`, decisionDate: '2024-01-01', groupKey: `e-${rowId}`, period: null, role });
+    const files = new InMemorySnapshotFileStore('p');
+    const bytes = new TextEncoder().encode(`${[line('DEV-1', 'development'), line('HOLD-1', 'locked-holdout')].map((l) => JSON.stringify(l)).join('\n')}\n`);
+    const f = await files.Put('k/manifest.jsonl', 'manifest', bytes);
+    const withSha = (sha256: string): IMetadataProvider => provider({
+      'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]),
+      'MJ: Training Snapshots': ok([{ RowManifestFileID: f.FileID, RowManifestSha256: sha256 }]),
+    });
+    expect([...(await TrainingKeys.LoadTrainingRowIds('m-1', withSha(f.Sha256), user, files))]).toEqual(['DEV-1']);
+    await expect(TrainingKeys.LoadTrainingRowIds('m-1', withSha('0'.repeat(64)), user, files)).rejects.toBeInstanceOf(SnapshotIntegrityError);
   });
 });

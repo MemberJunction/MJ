@@ -9,7 +9,7 @@ import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjun
 import { EscapeSQLString } from '@memberjunction/global';
 import { HoldoutCarve } from '@memberjunction/predictive-studio-core';
 import { SnapshotManifest, type SnapshotManifestRef } from '../snapshot/snapshot-manifest';
-import { StorageProviderSnapshotFileStore } from '../snapshot/snapshot-file-store';
+import { StorageProviderSnapshotFileStore, type ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { MetadataEntityFactory } from '../training/seams';
 
 /** Training-membership lookups for scoring (static members on one owner). */
@@ -20,14 +20,19 @@ export class TrainingKeys {
    * locked-holdout rows, or none, did not. Empty for a model whose training run has no snapshot (a model trained
    * without a Prediction Unit).
    *
+   * @param files where the manifest file is read; default the storage-provider store on `provider`
    * @throws Error naming the model when a read fails or the snapshot row is missing
    * @throws SnapshotIntegrityError when the stored manifest no longer matches its SHA-256
    */
-  public static async LoadTrainingRowIds(modelId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<ReadonlySet<string>> {
+  public static async LoadTrainingRowIds(
+    modelId: string,
+    provider: IMetadataProvider,
+    user: UserInfo | undefined,
+    files: ISnapshotFileStore = new StorageProviderSnapshotFileStore(new MetadataEntityFactory(provider), provider, user),
+  ): Promise<ReadonlySet<string>> {
     const snapshotId = await TrainingKeys.snapshotIdOf(modelId, provider, user);
     if (snapshotId === null) return new Set<string>();
     const snapshot = await TrainingKeys.manifestRefOf(snapshotId, modelId, provider, user);
-    const files = new StorageProviderSnapshotFileStore(new MetadataEntityFactory(provider), provider, user);
     return HoldoutCarve.TrainingRowIds(await SnapshotManifest.ReadSnapshotManifest(snapshot, files));
   }
 

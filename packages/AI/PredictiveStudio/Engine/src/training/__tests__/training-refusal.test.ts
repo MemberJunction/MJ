@@ -27,6 +27,14 @@ describe('TrainingRefusedError.DescribeTrainingRefusal', () => {
         Sentence: 'Refused (no-holdout-rows): No row is dated on or after the cutoff 2024-01-01 and before 2025-01-01; there is nothing to test on. Choose an earlier cutoff.',
       },
       {
+        Reason: { kind: 'seeded-random-side-empty', side: 'locked-holdout', fraction: 0.1, rows: 3 },
+        Sentence: 'Refused (seeded-random-side-empty): A seeded-random holdout of fraction 0.1 puts none of the 3 rows in the holdout; there is nothing to test on. Choose a larger fraction or train on more rows.',
+      },
+      {
+        Reason: { kind: 'seeded-random-side-empty', side: 'development', fraction: 0.9, rows: 2 },
+        Sentence: 'Refused (seeded-random-side-empty): A seeded-random holdout of fraction 0.9 puts all 2 rows in the holdout; nothing would be left to train on. Choose a smaller fraction or train on more rows.',
+      },
+      {
         Reason: { kind: 'too-few-periods', periods: 30, origins: 5, horizonPeriods: 3, gapPeriods: 2, minTrainPeriods: 24 },
         Sentence: 'Refused (too-few-periods): 30 periods cannot hold 5 origins of 3 periods and a gap of 2 periods after 24 training periods.',
       },

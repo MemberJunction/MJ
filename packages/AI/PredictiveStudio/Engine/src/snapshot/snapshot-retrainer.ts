@@ -8,10 +8,11 @@
  * run that logged no trainer request is refused.
  */
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import { UtcDay,
+import {
   PredictionUnit,
   TrainerContract,
   TrainingRunResultsParser,
+  UtcDay,
   type EvaluationProtocolSpec,
   type PredictionUnitSpec,
   type StoredTrainerResult,

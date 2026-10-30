@@ -14,7 +14,7 @@
  * date, then compute recency/aggregate features only over the surviving rows.
  */
 
-import type { AsOfStrategy } from '@memberjunction/predictive-studio-core';
+import { MS_PER_DAY, type AsOfStrategy } from '@memberjunction/predictive-studio-core';
 import type { SourceRow } from './data-access';
 
 /** A single dated event/activity row scoped to a target record. */
@@ -152,9 +152,6 @@ export function ActivityCountAsOf(rows: DatedRow[], asOfDate: Date | null): numb
 export function activityCountAsOf(rows: DatedRow[], asOfDate: Date | null): number {
   return ActivityCountAsOf(rows, asOfDate);
 }
-
-/** Milliseconds in one day. */
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Coerces a loosely-typed source value into a `Date`, or `null` when it cannot

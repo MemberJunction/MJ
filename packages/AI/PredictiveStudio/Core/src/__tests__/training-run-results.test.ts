@@ -75,6 +75,11 @@ describe('TrainingRunResultsParser', () => {
     expect(ok.Ok && ok.Value.status === 'refused' ? ok.Value.refusal : null).toEqual({ stage: 'carve', reason });
     const noHoldout = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'no-holdout-rows', cutoff: '2024-01-01', holdoutEnd: null }));
     expect(noHoldout.Ok).toBe(true);
+    const seededEmpty = { kind: 'seeded-random-side-empty', side: 'locked-holdout', fraction: 0.1, rows: 3 };
+    const seeded = TrainingRunResultsParser.ParseTrainingRunResults(envelope(seededEmpty));
+    expect(seeded.Ok && seeded.Value.status === 'refused' ? seeded.Value.refusal : null).toEqual({ stage: 'carve', reason: seededEmpty });
+    const wrongSide = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...seededEmpty, side: 'test' }));
+    expect(wrongSide.Ok ? null : wrongSide.Errors.join('\n')).toMatch(/refusal\.reason/);
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'cutoff-in-the-future', cutoff: '2030-01-01' }));
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.kind/);
   });

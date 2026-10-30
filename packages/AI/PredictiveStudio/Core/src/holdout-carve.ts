@@ -90,6 +90,10 @@ export type CarveRefusal =
   | { readonly kind: 'no-development-rows'; readonly cutoff: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'no-holdout-rows'; readonly cutoff: string; readonly holdoutEnd: string | null }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly kind: 'seeded-random-side-empty'; readonly side: 'development' | 'locked-holdout';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly fraction: number; readonly rows: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+    }
+  | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly kind: 'too-few-periods'; readonly periods: number; readonly origins: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
     };
@@ -198,6 +202,9 @@ export class HoldoutCarve {
       case 'missing-carve-date': return `Row ${r.rowId} has no ${r.column}; the holdout is carved on that column.`;
       case 'no-development-rows': return `No row is dated before the cutoff ${r.cutoff}; nothing would be left to train on. Choose a later cutoff.`;
       case 'no-holdout-rows': return `No row is dated on or after the cutoff ${r.cutoff}${r.holdoutEnd === null ? '' : ` and before ${r.holdoutEnd}`}; there is nothing to test on. Choose an earlier cutoff.`;
+      case 'seeded-random-side-empty': return r.side === 'development'
+        ? `A seeded-random holdout of fraction ${r.fraction} puts all ${r.rows} rows in the holdout; nothing would be left to train on. Choose a smaller fraction or train on more rows.`
+        : `A seeded-random holdout of fraction ${r.fraction} puts none of the ${r.rows} rows in the holdout; there is nothing to test on. Choose a larger fraction or train on more rows.`;
       case 'too-few-periods': return `${r.periods} periods cannot hold ${r.origins} origins of ${r.horizonPeriods} periods and a gap of ${r.gapPeriods} periods after ${r.minTrainPeriods} training periods.`;
     }
   }
@@ -219,7 +226,7 @@ export class HoldoutCarve {
     }
     const earliest = times.reduce((m, t) => (t < m ? t : m), Number.POSITIVE_INFINITY);
     if (best <= earliest) throw new RangeError('The cutoff would leave no training rows.');
-    return HoldoutCarve.iso(best);
+    return UtcDay.UtcDayIso(new Date(best));
   }
 
   /**
@@ -334,11 +341,11 @@ export class HoldoutCarve {
     const y = date.getUTCFullYear();
     const m = date.getUTCMonth();
     switch (period) {
-      case 'day': return HoldoutCarve.iso(Date.UTC(y, m, date.getUTCDate()));
-      case 'week': return HoldoutCarve.iso(Date.UTC(y, m, date.getUTCDate() - ((date.getUTCDay() + 6) % 7)));
-      case 'month': return HoldoutCarve.iso(Date.UTC(y, m, 1));
-      case 'quarter': return HoldoutCarve.iso(Date.UTC(y, m - (m % 3), 1));
-      case 'year': return HoldoutCarve.iso(Date.UTC(y, 0, 1));
+      case 'day': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m, date.getUTCDate())));
+      case 'week': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m, date.getUTCDate() - ((date.getUTCDay() + 6) % 7))));
+      case 'month': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m, 1)));
+      case 'quarter': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m - (m % 3), 1)));
+      case 'year': return UtcDay.UtcDayIso(new Date(Date.UTC(y, 0, 1)));
     }
   }
 
@@ -378,9 +385,5 @@ export class HoldoutCarve {
     const day = UtcDay.ToUtcDay(text);
     if (day === null) throw new HoldoutCarveDateError(text);
     return day.getTime();
-  }
-
-  private static iso(time: number): string {
-    return new Date(time).toISOString().slice(0, 10);
   }
 }

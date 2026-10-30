@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TRAINING_RUN_RESULTS_SCHEMA, type TrainerRequest, type TrainerResult } from '@memberjunction/predictive-studio-core';
+import { MS_PER_DAY, TRAINING_RUN_RESULTS_SCHEMA, type TrainerRequest, type TrainerResult } from '@memberjunction/predictive-studio-core';
 import { SnapshotRetrainer } from '../snapshot-retrainer';
 import { SnapshotIntegrityError } from '../snapshot-manifest';
 import type { ITrainerEvaluator } from '../../training/types';
@@ -71,6 +71,17 @@ describe('SnapshotRetrainer.Retrain', () => {
     expect(trainer.CallCount).toBe(1);
   });
 
+  it('refuses a snapshot whose stored provenance file no longer matches its SHA-256, naming the provenance file', async () => {
+    // Provenance is outside the content hash, so its own SHA-256 column is its only check.
+    const trainer = new DeterministicTrainer();
+    const { deps, run, snapshots, files } = await trainedUnitRun(trainer);
+    const stored = files.Saved.get(snapshots[0].ProvenanceFileID);
+    if (!stored) throw new Error('the provenance file was not stored');
+    stored.Bytes[stored.Bytes.length - 2] ^= 1;
+    await expect(new SnapshotRetrainer().Retrain(run.ID, deps)).rejects.toMatchObject({ name: 'SnapshotIntegrityError', File: 'provenance' });
+    expect(trainer.CallCount).toBe(1);
+  });
+
   it('refuses a snapshot whose stored content hash was overwritten, naming the content', async () => {
     const trainer = new DeterministicTrainer();
     const { deps, run, snapshots } = await trainedUnitRun(trainer);
@@ -83,7 +94,7 @@ describe('SnapshotRetrainer.Retrain', () => {
     const trainer = new DeterministicTrainer();
     const { deps, run, snapshots } = await trainedUnitRun(trainer);
     const s = snapshots[0];
-    s.DataCutoff = new Date(s.DataCutoff.getTime() + 86_400_000);
+    s.DataCutoff = new Date(s.DataCutoff.getTime() + MS_PER_DAY);
     await expect(new SnapshotRetrainer().Retrain(run.ID, deps)).rejects.toMatchObject({ name: 'SnapshotIntegrityError', File: 'content', Expected: s.ContentHash });
     expect(trainer.CallCount).toBe(1);
   });

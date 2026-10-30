@@ -29,7 +29,7 @@
  */
 
 import { LogError, type UserInfo } from '@memberjunction/core';
-import { MetricDirections } from '@memberjunction/predictive-studio-core';
+import { MS_PER_DAY, MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLModelEntity,
   MJMLModelScoringBindingEntity,
@@ -53,8 +53,6 @@ import type {
 } from './types';
 import { DEFAULT_RETRAINING_POLICY, MaintenanceSystemClock } from './types';
 import { ResolveComparisonMetric, ReadMetric } from './metrics';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Maintenance orchestrator. Stateless across calls; construct once and reuse. The

@@ -22,6 +22,7 @@ import type {
   RetrainingPolicy,
   MaintenanceBindingMode,
 } from '../types';
+import { MS_PER_DAY } from '@memberjunction/predictive-studio-core';
 import { DEFAULT_RETRAINING_POLICY } from '../types';
 import type { TrainingEngine } from '../../training';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training';
@@ -46,7 +47,6 @@ import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../trai
 // strongly-typed properties below — never .Get()/.Set()).
 // ---------------------------------------------------------------------------
 
-const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-06-27T00:00:00.000Z');
 
 class FakeBinding {
@@ -216,7 +216,7 @@ describe('MaintenanceEngine.DetectStaleness', () => {
     const { deps } = buildDeps();
     const binding = new FakeBinding('b1', 'm1');
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 40 * DAY); // 40 days old
+    model.TrainedAt = new Date(NOW.getTime() - 40 * MS_PER_DAY); // 40 days old
     model.TrainingRowCount = 1000;
     deps.rowCounter && ((deps.rowCounter as FakeRowCounter).count = 1000); // no data-volume growth
 
@@ -230,7 +230,7 @@ describe('MaintenanceEngine.DetectStaleness', () => {
     const { deps } = buildDeps();
     const binding = new FakeBinding('b1', 'm1');
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 5 * DAY); // 5 days old
+    model.TrainedAt = new Date(NOW.getTime() - 5 * MS_PER_DAY); // 5 days old
     model.TrainingRowCount = 1000;
     (deps.rowCounter as FakeRowCounter).count = 1010; // 1% growth, under threshold
 
@@ -244,7 +244,7 @@ describe('MaintenanceEngine.DetectStaleness', () => {
     const { deps } = buildDeps();
     const binding = new FakeBinding('b1', 'm1');
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 5 * DAY); // fresh by cadence
+    model.TrainedAt = new Date(NOW.getTime() - 5 * MS_PER_DAY); // fresh by cadence
     model.TrainingRowCount = 1000;
     (deps.rowCounter as FakeRowCounter).count = 1400; // 40% growth
 
@@ -272,9 +272,9 @@ describe('MaintenanceEngine.DetectStaleness', () => {
   it('uses lastScored anchor when policy.cadenceAnchor = lastScored', async () => {
     const { deps } = buildDeps();
     const binding = new FakeBinding('b1', 'm1');
-    binding.LastScoredAt = new Date(NOW.getTime() - 50 * DAY);
+    binding.LastScoredAt = new Date(NOW.getTime() - 50 * MS_PER_DAY);
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 1 * DAY); // fresh by trained, but stale by scored
+    model.TrainedAt = new Date(NOW.getTime() - 1 * MS_PER_DAY); // fresh by trained, but stale by scored
 
     const result = await engine.DetectStaleness(
       asBinding(binding),
@@ -293,7 +293,7 @@ describe('MaintenanceEngine.DetectStaleness', () => {
     const binding = new FakeBinding('b1', 'm1');
     binding.LastRowCount = 1234;
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 1 * DAY); // fresh by cadence
+    model.TrainedAt = new Date(NOW.getTime() - 1 * MS_PER_DAY); // fresh by cadence
 
     const result = await engine.DetectStaleness(
       asBinding(binding),
@@ -314,7 +314,7 @@ describe('MaintenanceEngine.DetectStaleness', () => {
     const { deps } = buildDeps({ driftDetector: drift });
     const binding = new FakeBinding('b1', 'm1');
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 1 * DAY);
+    model.TrainedAt = new Date(NOW.getTime() - 1 * MS_PER_DAY);
 
     const result = await engine.DetectStaleness(
       asBinding(binding),
@@ -502,7 +502,7 @@ describe('MaintenanceEngine.RunMaintenancePass (+ free-function entry)', () => {
     const binding = new FakeBinding('b1', 'm1');
     binding.Mode = 'Scheduled';
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 1 * DAY); // fresh by cadence; stale by volume
+    model.TrainedAt = new Date(NOW.getTime() - 1 * MS_PER_DAY); // fresh by cadence; stale by volume
     model.HoldoutMetrics = JSON.stringify({ roc_auc: 0.8 });
     loader.bindings.set('b1', binding);
     loader.models.set('m1', model);
@@ -552,7 +552,7 @@ describe('MaintenanceEngine.RunMaintenancePass (+ free-function entry)', () => {
     const good = new FakeBinding('b-good', 'm-good');
     good.Mode = 'OnDemand';
     const goodModel = new FakeModel('m-good');
-    goodModel.TrainedAt = new Date(NOW.getTime() - 1 * DAY);
+    goodModel.TrainedAt = new Date(NOW.getTime() - 1 * MS_PER_DAY);
     loader.bindings.set('b-good', good);
     loader.models.set('m-good', goodModel);
 
@@ -576,7 +576,7 @@ describe('MaintenanceEngine.RunMaintenancePass (+ free-function entry)', () => {
     const binding = new FakeBinding('b1', 'm1');
     binding.Mode = 'OnDemand';
     const model = new FakeModel('m1');
-    model.TrainedAt = new Date(NOW.getTime() - 1 * DAY);
+    model.TrainedAt = new Date(NOW.getTime() - 1 * MS_PER_DAY);
     loader.bindings.set('b1', binding);
     loader.models.set('m1', model);
 

@@ -55,7 +55,8 @@ import type {
 import type {
   MJMLModelEntity,
 } from '@memberjunction/core-entities';
-import { UtcDay,
+import {
+  UtcDay,
   resolveOutcomeConfig,
   resolveScoreBand,
   resolveOutcomeStyle,

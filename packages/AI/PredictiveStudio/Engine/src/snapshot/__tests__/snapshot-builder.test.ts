@@ -6,10 +6,9 @@ import type { BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/co
 import type { MJFileStorageProviderEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine, LocalFileSystemStorage } from '@memberjunction/storage';
-import type { FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
+import type { FeatureColumnSpec, PredictionUnitSpec, SnapshotRowRole } from '@memberjunction/predictive-studio-core';
 import { TrainingSnapshotBuilder, type SnapshotBuildInput } from '../snapshot-builder';
 import { InMemorySnapshotFileStore, StorageProviderSnapshotFileStore } from '../snapshot-file-store';
-import type { SnapshotRowRole } from '@memberjunction/predictive-studio-core';
 import { SnapshotHash } from '../snapshot-hash';
 import { SnapshotFiles } from '../snapshot-serialization';
 import type { IEntityFactory } from '../../training/types';
@@ -43,7 +42,7 @@ const features: FeatureColumnSpec[] = [{
 
 const day = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
 const unitRow = (id: string, decided: string, label: string, visits: number): UnitRow => ({
-  RowId: id, EntityKey: `Y-${id}`, DecisionDate: day(decided), WindowEnd: day(decided), GroupKey: null, Period: null,
+  RowId: id, EntityKey: `Y-${id}`, DecisionDate: day(decided), WindowEnd: day(decided), GroupKey: `y-${id}`, Period: null,
   Label: label, Source: { ID: `Y-${id}`, PriorVisits: visits, Region: 'North' },
 });
 

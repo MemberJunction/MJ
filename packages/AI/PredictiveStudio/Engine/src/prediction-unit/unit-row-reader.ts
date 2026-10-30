@@ -21,7 +21,8 @@ export interface UnitRow {
   readonly EntityKey: string;
   readonly DecisionDate: Date;
   readonly WindowEnd: Date;
-  readonly GroupKey: string | null;
+  /** The row's group: its value of the unit's group key field, or its entity key when the unit declares none (lower-cased). */
+  readonly GroupKey: string;
   readonly Period: Date | null;
   readonly Label: CanonicalLabelValue;
   readonly Source: SourceRow;

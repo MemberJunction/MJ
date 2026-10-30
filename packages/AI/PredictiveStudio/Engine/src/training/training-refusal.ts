@@ -48,6 +48,7 @@ export class TrainingRefusedError extends Error {
       case 'missing-carve-date':
       case 'no-development-rows':
       case 'no-holdout-rows':
+      case 'seeded-random-side-empty':
       case 'too-few-periods': return `Refused (${reason.kind}): ${HoldoutCarve.DescribeCarveRefusal(reason)}`;
     }
   }

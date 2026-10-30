@@ -9,10 +9,23 @@
 import type { UserInfo } from '@memberjunction/core';
 import { OrdinalCompare } from '@memberjunction/global';
 import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import { UtcDay,
-  IncumbentExpressions, TaskTypeRules, LABEL_COLUMN, INCUMBENT_SCORE_COLUMN, SLICE_COLUMN_PREFIX, SNAPSHOT_MATRIX_FORMAT,
-  type ClassBalanceEntry, type FeatureColumnSpec, type PredictionUnitSpec, type SnapshotCell, type SnapshotFeatureColumn,
-  type SnapshotFeatureColumnHeader, type SnapshotMatrixHeader, type SnapshotRowKey, type SnapshotRowRole,
+import {
+  IncumbentExpressions,
+  TaskTypeRules,
+  LABEL_COLUMN,
+  INCUMBENT_SCORE_COLUMN,
+  SLICE_COLUMN_PREFIX,
+  SNAPSHOT_MATRIX_FORMAT,
+  UtcDay,
+  type ClassBalanceEntry,
+  type FeatureColumnSpec,
+  type PredictionUnitSpec,
+  type SnapshotCell,
+  type SnapshotFeatureColumn,
+  type SnapshotFeatureColumnHeader,
+  type SnapshotMatrixHeader,
+  type SnapshotRowKey,
+  type SnapshotRowRole,
 } from '@memberjunction/predictive-studio-core';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix } from '../feature-assembly/as-of/as-of-assembler';
