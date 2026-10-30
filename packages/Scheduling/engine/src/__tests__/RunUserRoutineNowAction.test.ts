@@ -63,6 +63,11 @@ function params(user: unknown, routineID: string | null, provider: unknown): Run
 }
 
 describe('RunUserRoutineNowAction', () => {
+    it('declares AuthorizesCaller on its own class, so a UI-role user can run it from Wake Now without an Action Authorization', () => {
+        // It checks the authorization itself: the caller must be able to read the routine and own it.
+        expect(Object.getOwnPropertyDescriptor(RunUserRoutineNowAction, 'AuthorizesCaller')?.value).toBe(true);
+    });
+
     beforeEach(() => { runNow.mockClear(); pollingUser.value = SYSTEM; });
 
     it('runs an owned routine under the scheduler system user and leaves NextRunAt alone', async () => {

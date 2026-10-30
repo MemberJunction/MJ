@@ -16,6 +16,8 @@ import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDri
  * one-shot keeps its time and a recurring routine keeps its cadence.
  *
  * Security:
+ * - Declares `AuthorizesCaller`: the ownership check below is the authorization, so no
+ *   `MJ: Action Authorizations` row is needed for a user to run their own routine.
  * - Runs under `params.ContextUser`; a non-Owner-type user may run only routines they own.
  * - Bookkeeping (run row, routine roll-up) is saved as the scheduler's system user when the engine
  *   is polling in this process, exactly as a scheduled run would be; the target still executes as
@@ -26,6 +28,13 @@ import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDri
  */
 @RegisterClass(BaseAction, 'Run User Routine Now')
 export class RunUserRoutineNowAction extends BaseAction {
+    /**
+     * The action authorizes its caller itself: it loads the routine with the caller's own read
+     * permission and runs only a routine the caller owns (or any routine for an Owner-type user).
+     * Without this marker a UI-role user's Wake Now is refused for lack of an Action Authorization.
+     */
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const contextUser = params.ContextUser;
         if (!contextUser?.ID) {
