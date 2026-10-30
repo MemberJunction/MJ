@@ -1,6 +1,6 @@
 import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec, SetBaseViewExclusionsPermitted, BaseViewExclusionsPermitted } from './codeGenDatabaseProvider';
-import { AnalyzeQueryForMaterialization, DetectAggregationKeyColumns, DetectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
+import { AnalyzeQueryForMaterialization, ChooseMaterializationRefreshStrategy, DetectAggregationKeyColumns, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
 import { EvaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
 import { ClassifyQueryParameters, BuildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
 import { BuildBroadRowFilterSQL } from './materializationBroadRender';
@@ -679,7 +679,35 @@ export class ManageMetadataBase {
       const key = this.fieldKey(entityID, name);
       if (key) {
          this._newFieldSet.add(key);
+         this.RegisterFieldShapeChange({ EntityID: entityID });
       }
+   }
+
+   private static _fieldShapeChangedEntityIDs = new Set<string>();
+   private static _fieldShapeChangedEntityNames = new Set<string>();
+
+   /**
+    * Records that an entity's columns changed shape during this run: a field was added or
+    * dropped, or its type, length, precision, scale or nullability changed. The saved queries
+    * that read such an entity are re-bound after the run's field sync. Give the entity by ID or
+    * by name.
+    */
+   public static RegisterFieldShapeChange(entity: { EntityID?: string | null; EntityName?: string | null }): void {
+      const id = (entity.EntityID ?? '').trim().toLowerCase();
+      const name = (entity.EntityName ?? '').trim();
+      if (id) this._fieldShapeChangedEntityIDs.add(id);
+      if (name) this._fieldShapeChangedEntityNames.add(name);
+   }
+
+   /** The entities whose fields changed shape during this run, by ID (lower-cased) and by name. */
+   public static get FieldShapeChangedEntities(): { IDs: readonly string[]; Names: readonly string[] } {
+      return { IDs: [...this._fieldShapeChangedEntityIDs], Names: [...this._fieldShapeChangedEntityNames] };
+   }
+
+   /** Forgets the entities {@link RegisterFieldShapeChange} recorded. */
+   public static ClearFieldShapeChanges(): void {
+      this._fieldShapeChangedEntityIDs.clear();
+      this._fieldShapeChangedEntityNames.clear();
    }
 
    /** @deprecated Use {@link RegisterNewField}. */
@@ -2192,13 +2220,7 @@ export class ManageMetadataBase {
          // Joins/multi-table sources can't be localized by one watermark → keep FullRebuild (§10 bias).
          // Among eligible ones, a PURELY ADDITIVE aggregation (only SUM/COUNT) uses the MERGE-upsert
          // 'Incremental' path (in-place, no row churn); non-additive uses 'DirtyGroupRecompute' (delete+insert).
-         const isKeyedSingleSource =
-            isKeyed && !!detectSQL && SQLParser.ExtractTableRefs(detectSQL, matDialect).length === 1;
-         const refreshStrategy: 'FullRebuild' | 'DirtyGroupRecompute' | 'Incremental' = !isKeyedSingleSource
-            ? 'FullRebuild'
-            : DetectAdditiveMeasures(detectSQL)
-              ? 'Incremental'
-              : 'DirtyGroupRecompute';
+         const refreshStrategy = ChooseMaterializationRefreshStrategy({ sql: detectSQL, dialect: matDialect, isKeyed });
 
          // RLS downgrade gate (§6.2, ships day one) — a materialized query entity does NOT inherit its
          // source entities' row-level security. Refuse to materialize when RLS-safety cannot be proven, to
@@ -6507,6 +6529,9 @@ export class ManageMetadataBase {
             ManageMetadataBase.addNewEntitiesToModifiedList(changes.map(c => c.entityName));
             for (const c of changes) {
                ManageMetadataBase.registerFieldChange(c.entityID, c.fieldName, c.reasons);
+               if (c.reasons.some(r => TYPE_REOPEN_REASONS.has(r))) {
+                  ManageMetadataBase.RegisterFieldShapeChange({ EntityID: c.entityID });
+               }
                ManageMetadataBase._changedFieldReport.push({
                   entityName: c.entityName,
                   fieldName: c.fieldName,
@@ -6827,6 +6852,9 @@ export class ManageMetadataBase {
          const prunedEntityNames = this.distinctPrunedEntityNames(result);
          if (prunedEntityNames.length > 0) {
             ManageMetadataBase.addNewEntitiesToModifiedList(prunedEntityNames);
+            for (const entityName of prunedEntityNames) {
+               ManageMetadataBase.RegisterFieldShapeChange({ EntityName: entityName });
+            }
          }
          return { success: true, prunedEntityNames };
       }
@@ -8279,7 +8307,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
             if (!ref.TableName) continue;
             const refSchema = (ref.SchemaName ?? '').trim().toLowerCase();
             // Skip CTE self-references (only unqualified / dbo-defaulted refs can be a CTE name).
-            if ((refSchema === '' || refSchema === 'dbo') && cteNames.has(ref.TableName.trim().toLowerCase())) continue;
+            if (this.isUnqualifiedRefSchema(refSchema) && cteNames.has(ref.TableName.trim().toLowerCase())) continue;
             // Refuse ANY under-linked entity source, not only RLS-protected ones. Both the RLS-safety check above
             // AND the read-grant role intersection (addMaterializedQueryEntityPermissions) are computed over the
             // LINKED set only, so a source query-analysis did NOT link is invisible to both: an RLS source would
@@ -8306,7 +8334,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
    /** Maps a physical (schema, table/view) reference to the MJ entities backed by it — by BaseView or BaseTable,
     *  case/whitespace-insensitive. Returns ALL candidates so the P1 guard can fail closed on an AMBIGUOUS ref.
     *  Resolution: an explicit, non-default schema yields only that schema's exact matches; an empty schema OR the
-    *  parser-default `'dbo'` — which {@link SQLParser.ExtractTableRefs} assigns to every UNQUALIFIED ref, while MJ
+    *  parser-default schema (`'dbo'`, or `'public'` on PostgreSQL) — which {@link SQLParser.ExtractTableRefs} assigns to every UNQUALIFIED ref, while MJ
     *  core/app entities live in `__mj`/app schemas (never `dbo`) — is treated as unqualified and yields every
     *  schema-agnostic name match. That way an unqualified reference to a `__mj`/app-schema entity is still caught,
     *  and a same-base-name collision across schemas surfaces every candidate rather than just the first (so the
@@ -8319,12 +8347,20 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          const bt = (e.BaseTable ?? '').trim().toLowerCase();
          return bv === t || bt === t;
       };
-      if (s && s !== 'dbo') {
+      if (!this.isUnqualifiedRefSchema(s)) {
          // Explicit, non-default schema → only that schema's entity qualifies (no cross-schema ambiguity).
          return md.Entities.filter((e) => (e.SchemaName ?? '').trim().toLowerCase() === s && nameMatch(e));
       }
-      // Empty schema / parser-default 'dbo' (i.e. UNQUALIFIED) → every name match across schemas is a candidate.
+      // Empty schema / parser-default schema (i.e. UNQUALIFIED) → every name match across schemas is a candidate.
       return md.Entities.filter(nameMatch);
+   }
+
+   /** Whether a parsed table ref's schema (lower case) can stand for an unqualified name: empty, `dbo`, or the
+    *  platform's default schema (`public` on PostgreSQL), which {@link SQLParser.ExtractTableRefs} fills in for
+    *  every unqualified ref. Reading such a ref as unqualified widens the candidate set, the fail-closed direction. */
+   protected isUnqualifiedRefSchema(schema: string): boolean {
+      const platformDefault = (this.dialect.Grammar.DefaultSchema ?? '').toLowerCase();
+      return schema === '' || schema === 'dbo' || (platformDefault !== '' && schema === platformDefault);
    }
 
    /**
