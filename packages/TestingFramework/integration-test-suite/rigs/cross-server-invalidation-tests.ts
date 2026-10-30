@@ -681,14 +681,22 @@ async function main(): Promise<void> {
             if (evt.Category === CacheCategory.RunViewCache && (evt.CacheKey ?? '').toLowerCase().startsWith('mj: queries|')) seen.push(evt);
         });
         /**
-         * Only an unfiltered, unordered, unlimited, non-aggregate, non-search slot is maintained in
-         * place on a save (LocalCacheManager's slot-maintenance matrix); every other slot is
-         * invalidated and lawfully repopulated by its next reader with a full 'set'. Fingerprint
-         * layout: EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|...].
+         * Only an unfiltered, unordered, unlimited, non-aggregate, non-search slot whose trailing
+         * segments are all allowlisted (`imr:1`, `f:*`, the connection identity) is maintained in
+         * place on a save — LocalCacheManager's slot-maintenance matrix plus its deny-by-default
+         * `hasNarrowingSegment`. Every other slot (filtered, ordered, windowed, `bin:1`, `ds:`,
+         * `abv:`, ...) is invalidated and lawfully repopulated by its next reader with a full 'set'.
+         * Fingerprint layout: EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|...].
+         *
+         * Note for QueryEngine specifically: its `MJ: Queries` slot carries `bin:1` (the binary
+         * vector column), so it is invalidated + reloaded today, not row_delta-maintained. That is
+         * the pre-existing allowlist, not something this rig can change; XS11 proves the delta on
+         * the plain slot and tolerates the binary-width slot's full repopulation.
          */
         const isMaintainableSlot = (key: string | undefined): boolean => {
             const seg = (key ?? '').split('|');
-            return seg[1] === '_' && seg[2] === '_' && seg[3] === '-1' && seg[4] === '0' && seg[5] === '_' && seg[6] === '_';
+            if (!(seg[1] === '_' && seg[2] === '_' && seg[3] === '-1' && seg[4] === '0' && seg[5] === '_' && seg[6] === '_')) return false;
+            return seg.slice(7).every(x => !x || x.startsWith('imr:') || x === 'f:*' || x.includes('://'));
         };
         const describe = (e: { Action?: string; CacheKey?: string; Data?: string }): string =>
             `${e.Action} ${(e.Data ?? '').length}B ${(e.CacheKey ?? '').slice(0, 90)}`;
@@ -709,6 +717,9 @@ async function main(): Promise<void> {
             const deltas = seen.filter(e => e.Action === 'row_delta');
             const notices = seen.filter(e => e.Action === 'set' && !e.Data);
             Assert(deltas.length + notices.length > 0, `expected a row_delta (full mode) or a bare set notice (notice mode); saw actions ${seen.map(e => e.Action).join(',')}`);
+            if (deltas.length > 0) {
+                Assert(deltas.some(d => isMaintainableSlot(d.CacheKey)), `the row_delta must be for the maintained slot; saw ${deltas.map(describe).join('; ')}`);
+            }
             for (const d of deltas) {
                 const payload = JSON.parse(d.Data ?? '{}') as { upsertedRows?: unknown[]; deletedPrimaryKeys?: unknown[]; rowCount?: number; primaryKeyFields?: string[] };
                 Assert(Array.isArray(payload.upsertedRows) && payload.upsertedRows.length === 1, `a one-row save carries exactly one upserted row (got ${payload.upsertedRows?.length})`);
