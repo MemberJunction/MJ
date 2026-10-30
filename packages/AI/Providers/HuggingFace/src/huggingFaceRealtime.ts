@@ -80,6 +80,14 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsParallelToolCalls: false,
     supportsMcpTools: false,
     supportsVoiceOutput: true,
+    audioControlsPlacement: 'audioBlock',
+    // The cascade's own VAD stage governs turn taking; there is no idle timer, speed control,
+    // ASR hint/keyterm channel or provider-hosted tool on the compat layer.
+    supportsIdleTimeout: false,
+    voiceSpeedRange: null,
+    supportsTranscriptionLanguageHint: false,
+    transcriptionKeyterms: null,
+    providerToolReservedNames: {},
     // The compat layer has no create_response gating — no live turn-mode reconfiguration.
     supportsLiveReconfigure: false,
     // Self-hosted speech-to-speech compat layers use fixed toolsets declared at session start.

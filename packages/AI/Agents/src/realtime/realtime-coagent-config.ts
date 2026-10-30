@@ -395,6 +395,25 @@ export interface RealtimeSessionTuningConfig {
      */
     transcriptionLanguages?: string[];
     /**
+     * Domain terms the provider should bias user-speech recognition toward — product names, people,
+     * jargon (e.g. `["MemberJunction", "Skip"]`). Providers with a keyterm channel (xAI Grok Voice:
+     * `audio.input.transcription.keyterms`) apply it within their own limits; others scrub it.
+     */
+    transcriptionKeyterms?: string[];
+    /**
+     * Playback-speed multiplier for the agent's voice (1.0 = normal). Providers that support it
+     * (OpenAI Realtime, xAI Grok Voice: `audio.output.speed`) clamp it to their own range; others
+     * scrub it.
+     */
+    voiceSpeed?: number;
+    /**
+     * Provider-HOSTED tools in the provider's own wire shape — tools the provider runs itself, with no
+     * MJ round-trip (xAI Grok Voice: `{ "type": "web_search" }`, `{ "type": "x_search" }`,
+     * `{ "type": "file_search", "vector_store_ids": [...] }`). Each driver keeps only the types its
+     * provider documents and drops the rest; a provider without hosted tools scrubs the key.
+     */
+    providerTools?: JSONObjectLike[];
+    /**
      * Normalized turn-detection override (mode/eagerness/threshold/silence). Layers ABOVE the
      * model catalog's `ModelConfiguration.Realtime.TurnDetection` default and BELOW the runtime
      * bag — agents/apps refine what the catalog declares. Profiles translate the normalized
@@ -421,7 +440,8 @@ export interface RealtimeSessionTuningConfig {
 /**
  * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
  * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
- * `inputTranscriptionModel`, `transcriptionLanguages`). Returns `null` when the section is absent or contributes nothing —
+ * `inputTranscriptionModel`, `transcriptionLanguages`, `transcriptionKeyterms`, `voiceSpeed`,
+ * `providerTools`). Returns `null` when the section is absent or contributes nothing —
  * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
  *
  * @param config The effective configuration.
@@ -445,9 +465,19 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
     if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
         bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
     }
-    const languages = readLanguageCodes(tuning.transcriptionLanguages);
+    const languages = readNonBlankStrings(tuning.transcriptionLanguages);
     if (languages) {
         bag['transcriptionLanguages'] = languages;
+    }
+    const keyterms = readNonBlankStrings(tuning.transcriptionKeyterms);
+    if (keyterms) {
+        bag['transcriptionKeyterms'] = keyterms;
+    }
+    if (typeof tuning.voiceSpeed === 'number' && Number.isFinite(tuning.voiceSpeed) && tuning.voiceSpeed > 0) {
+        bag['voiceSpeed'] = tuning.voiceSpeed;
+    }
+    if (Array.isArray(tuning.providerTools) && tuning.providerTools.length > 0) {
+        bag['providerTools'] = tuning.providerTools;
     }
     if (isPlainObject(tuning.turnDetection)) {
         bag['turnDetection'] = { ...tuning.turnDetection } as JSONObjectLike;
@@ -1125,9 +1155,24 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.inputTranscriptionModel = itModel.trim();
     }
 
-    const languages = readLanguageCodes(raw['transcriptionLanguages']);
+    const languages = readNonBlankStrings(raw['transcriptionLanguages']);
     if (languages) {
         tuning.transcriptionLanguages = languages;
+    }
+
+    const keyterms = readNonBlankStrings(raw['transcriptionKeyterms']);
+    if (keyterms) {
+        tuning.transcriptionKeyterms = keyterms;
+    }
+
+    const voiceSpeed = raw['voiceSpeed'];
+    if (typeof voiceSpeed === 'number' && Number.isFinite(voiceSpeed) && voiceSpeed > 0) {
+        tuning.voiceSpeed = voiceSpeed;
+    }
+
+    const providerTools = raw['providerTools'];
+    if (Array.isArray(providerTools) && providerTools.length > 0 && providerTools.every(isPlainObject)) {
+        tuning.providerTools = providerTools as JSONObjectLike[];
     }
 
     const turnDetection = normalizeTurnDetection(raw['turnDetection']);
@@ -1148,7 +1193,7 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
 }
 
 /** The non-blank strings of an array, trimmed — or `undefined` when none remain (a lone string is not a list). */
-function readLanguageCodes(value: unknown): string[] | undefined {
+function readNonBlankStrings(value: unknown): string[] | undefined {
     if (!Array.isArray(value)) {
         return undefined;
     }
@@ -1185,6 +1230,10 @@ function normalizeTurnDetection(raw: unknown): RealtimeTurnDetectionSettings | u
     }
     if (typeof raw['SilenceDurationMs'] === 'number' && Number.isFinite(raw['SilenceDurationMs'])) {
         result.SilenceDurationMs = raw['SilenceDurationMs'];
+    }
+    const idleTimeoutMs = readPositiveInteger(raw['IdleTimeoutMs']);
+    if (idleTimeoutMs !== undefined) {
+        result.IdleTimeoutMs = idleTimeoutMs;
     }
     return Object.keys(result).length > 0 ? result : undefined;
 }
