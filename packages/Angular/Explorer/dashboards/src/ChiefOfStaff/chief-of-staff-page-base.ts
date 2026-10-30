@@ -348,6 +348,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                 ExtraFilter: `Name = '${EscapeSQLString(actionName)}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             });
             if (result.Success && result.Results && result.Results.length > 0) {

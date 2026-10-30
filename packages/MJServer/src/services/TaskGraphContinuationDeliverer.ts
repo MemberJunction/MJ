@@ -491,6 +491,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                     Fields: ['ID'],
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     BypassCache: true,
                 },

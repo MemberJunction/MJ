@@ -385,6 +385,7 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
                 ExtraFilter: `ID='${EscapeSQLString(id)}'`,
                 ResultType: 'entity_object',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, contextUser ?? source?.CurrentUser);
             if (!result.Success) {
                 LogError(`InteractiveFormsEngine: component lookup failed for ${id}: ${result.ErrorMessage ?? 'unknown error'}`);

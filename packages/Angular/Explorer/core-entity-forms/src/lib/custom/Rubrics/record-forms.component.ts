@@ -87,10 +87,10 @@ export class MJRubricEvaluationScoreFormComponentExtended extends MJRubricEvalua
         await super.ngOnInit();
         const view = RunView.FromMetadataProvider(this.ProviderToUse);
         const user = this.ProviderToUse.CurrentUser;
-        const criteria = await view.RunView({ EntityName: 'MJ: Rubric Criteria', ExtraFilter: `ID='${this.record.CriterionID}'`, ResultType: 'simple', MaxRows: 1 }, user);
+        const criteria = await view.RunView({ EntityName: 'MJ: Rubric Criteria', ExtraFilter: `ID='${this.record.CriterionID}'`, ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true }, user);
         const criterion = (criteria.Results ?? [])[0] as Record<string, unknown> | undefined;
         if (!criterion) return;
-        const versions = await view.RunView({ EntityName: 'MJ: Rubric Versions', ExtraFilter: `ID='${criterion.RubricVersionID}'`, ResultType: 'simple', MaxRows: 1 }, user);
+        const versions = await view.RunView({ EntityName: 'MJ: Rubric Versions', ExtraFilter: `ID='${criterion.RubricVersionID}'`, ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true }, user);
         const version = (versions.Results ?? [])[0] as Record<string, unknown> | undefined;
         this.Policy = String(criterion.NotApplicablePolicy || version?.NotApplicablePolicy || '');
         if (!criterion.ScaleID) return;

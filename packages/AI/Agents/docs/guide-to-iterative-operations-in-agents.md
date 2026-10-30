@@ -294,6 +294,49 @@ Loop agents can **request** ForEach/While operations in their LLM response, elim
 }
 ```
 
+### Multi-Step Action Loop Bodies (`steps[]`)
+
+Both `ForEach` and `While` (in-turn in `BaseAgent`, durable in `TaskGraphSpec`, and compiled from Flow agents) support an ordered `steps?: LoopBodyActionStep[]` array when each iteration needs to chain multiple Actions in memory without extra LLM turns:
+
+```json
+{
+    "taskComplete": false,
+    "message": "Computing subtotal and tax-adjusted total for each line item",
+    "nextStep": {
+        "type": "ForEach",
+        "forEach": {
+            "collectionPath": "lineItems",
+            "itemVariable": "line",
+            "indexVariable": "idx",
+            "executionMode": "sequential",
+            "steps": [
+                {
+                    "id": "subtotal",
+                    "name": "Calculate Expression",
+                    "params": {
+                        "Expression": "{{line.qty}} * {{line.unitPrice}}"
+                    }
+                },
+                {
+                    "id": "withTax",
+                    "name": "Calculate Expression",
+                    "condition": "steps.subtotal.details.result > 50",
+                    "params": {
+                        "Expression": "{{steps.subtotal.details.result}} * 1.08"
+                    },
+                    "outputMapping": "{\"details.result\": \"taxedTotals[]\"}"
+                }
+            ]
+        }
+    }
+}
+```
+
+- **`id` & `steps.<id>.*` chaining**: Each step's structured output (from `Output`/`Both` `ActionResult.Params` and any JSON-object `ActionResult.Message`) is stored under `steps[step.id ?? "step_" + stepIndex]`. Downstream steps in the same iteration can reference `{{steps.<id>.<field>}}` in `params` and `steps.<id>.<field>` in `condition`.
+- **Per-step `condition`**: Optional safe boolean expression evaluated against `{ payload, data, context, steps, index, [itemVariable], [indexVariable] }`. When `false`, that step is skipped for the current iteration.
+- **Per-step `outputMapping`**: Optional JSON mapping string folding selected fields into the running payload (`"taxedTotals[]"` appends per iteration, including safely under `executionMode: "parallel"`).
+- **Native tool-calling compatibility**: Both canonical MJ Action names (`"Calculate Expression"`) and sanitized native tool identifiers (`"calculate_expression"`) resolve automatically. When running on a native tool-calling model, emit no native tool call on that turn and return the `LoopAgentResponse` JSON envelope directly.
+
 ### After Iteration Completes
 
 Loop agents receive results in the payload:

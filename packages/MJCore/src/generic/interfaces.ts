@@ -299,6 +299,21 @@ export interface IEntityDataProvider {
     FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
 
     /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked automatically for large batches).
+     *
+     * @param entityInfo The parent entity's EntityInfo (whose `ChildEntities` are probed)
+     * @param recordPKValues Primary key values to probe across child views
+     * @param contextUser Optional context user for server-side operations
+     * @returns Map keyed by canonical lowercased primary-key string to ordered matching child entity names
+     */
+    FindISAChildEntitiesBatch?(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>>;
+
+    /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
      *
      * `true` for server-side database providers (`DatabaseProviderBase` and subclasses); `false`
@@ -791,6 +806,19 @@ export interface LocalStorageWriteOptions {
      * {@link ILocalStorageProvider.GetIndexGroupKeys} without listing the whole category.
      */
     IndexGroup?: string;
+
+    /**
+     * Optional override for the pub/sub notification action emitted by distributed storage
+     * providers (such as `RedisLocalStorageProvider` in `'full'` publish mode). When set to
+     * `'row_delta'` alongside {@link pubSubData}, the storage key still stores the full `value`,
+     * while pub/sub broadcasts only the compact row-delta payload.
+     */
+    pubSubAction?: 'set' | 'row_delta';
+
+    /**
+     * Compact JSON payload broadcast over pub/sub when {@link pubSubAction} is `'row_delta'`.
+     */
+    pubSubData?: string;
 }
 
 /**
@@ -1215,8 +1243,12 @@ export type RunViewResult<T = any> = {
      * Total number of rows that match the view criteria, not just the number returned in the Results[] array
      * This number will only be different when the view is configured to have a UserViewMaxRows value and the criteria of the view in question
      * has more than that # of rows. Otherwise it will be the same value as RowCount.
+     *
+     * A number here is always a real total. It is `undefined` only when the caller passed
+     * `SkipTotalRowCount: true`, which asks the provider not to count; a call without that flag
+     * always gets a number. `ResultType: 'count_only'` ignores the flag and always counts.
      */
-    TotalRowCount: number;
+    TotalRowCount?: number;
     /**
      * Time elapsed in executing the view (in milliseconds)
      */

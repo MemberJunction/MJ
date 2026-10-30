@@ -2570,7 +2570,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           BypassCache: true
         })));
         countResults.forEach((res, idx) => {
-          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount ?? 0 : 0);
         });
       }
 

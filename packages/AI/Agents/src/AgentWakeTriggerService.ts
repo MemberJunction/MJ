@@ -499,6 +499,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 EntityName: 'MJ: AI Bridge Agent Identities',
                 ExtraFilter: `IsActive=1 AND IdentityType='Email' AND LOWER(IdentityValue)='${safeEmail}'${providerClause}`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             },
             contextUser

@@ -256,6 +256,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
                     EntityName: 'MJ: AI Agent User Policies',
                     ExtraFilter: `AgentID='${safeAgentId}' AND UserID='${safeUserId}'`,
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                 },
                 contextUser
