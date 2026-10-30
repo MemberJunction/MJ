@@ -24,6 +24,9 @@ import {
     type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
 import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
+import { EntityLifecyclePolicyEngine, type IEntityLifecyclePolicy } from "./entityLifecyclePolicy"
+import { DocumentNumberingEngine, type IDocumentNumberPolicy } from "./documentNumberingEngine"
+import { CrossEntityPolicyEngine, type IDeclarativeParentStateLockPolicy } from "./crossEntityPolicyEngine"
 
 /**
  * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
@@ -3562,6 +3565,28 @@ export class EntityInfo extends BaseInfo {
      */
     get CloneConfig(): IEntityCloneConfiguration | null {
         return this.ConfigurationObject?.Clone ?? null;
+    }
+
+    /**
+     * Effective declarative + programmatic lifecycle policy (state machine, field-freeze, and
+     * `WriteAuthority`) resolved for this entity, or `null` when none is configured.
+     */
+    get LifecyclePolicy(): IEntityLifecyclePolicy | null {
+        return EntityLifecyclePolicyEngine.Instance.ResolvePolicy(this);
+    }
+
+    /**
+     * Effective declarative + programmatic document auto-numbering policies resolved for this entity.
+     */
+    get AutoNumberPolicies(): ReadonlyArray<IDocumentNumberPolicy> {
+        return DocumentNumberingEngine.Instance.ResolvePolicies(this);
+    }
+
+    /**
+     * Effective declarative cross-entity parent-state lock policies resolved for this entity.
+     */
+    get CrossEntityPolicies(): ReadonlyArray<IDeclarativeParentStateLockPolicy> {
+        return CrossEntityPolicyEngine.Instance.ResolveDeclarativePolicies(this);
     }
 
     /**

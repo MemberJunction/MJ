@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { AssertClientInputWritableForUser, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
 import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -114,6 +114,7 @@ export class TransactionResolver extends ResolverBase {
     @Arg('group', () => TransactionInputType ) group: TransactionInputType,
     @Ctx() context: AppContext
     ) {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         // SECURITY (bug-register B1 / catalog SEC1): route every transaction item through the same
         // API-key scope gate the singular CRUD resolvers use, BEFORE any entity work happens.
         // Without this pre-pass, a restricted API key (e.g. view:run-only) could Create/Update/
@@ -244,6 +245,7 @@ export class TransactionResolver extends ResolverBase {
             LogError(err);
             throw new Error('TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + err);
         }
+        });
     }
 
     /**

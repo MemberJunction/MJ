@@ -1,6 +1,6 @@
 import { 
     AssertClientInputWritableForUser, BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
-    EntitySaveOptions, LogError, Metadata, UserInfo 
+    EntitySaveOptions, LogError, Metadata, ServerOperationScopeManager, UserInfo 
 } from '@memberjunction/core';
 import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
@@ -13,6 +13,7 @@ export class EntityCRUDHandler {
      * Create a new entity
      */
     static async CreateEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -80,6 +81,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link CreateEntity}. */
@@ -135,6 +137,7 @@ export class EntityCRUDHandler {
      * Update an existing entity
      */
     static async UpdateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -219,6 +222,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link UpdateEntity}. */
@@ -230,6 +234,7 @@ export class EntityCRUDHandler {
      * Delete an entity
      */
     static async DeleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -273,6 +278,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link DeleteEntity}. */

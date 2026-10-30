@@ -1,5 +1,7 @@
 import { Subject } from "rxjs";
 import { BaseEntity } from "./baseEntity";
+import { CrossEntityPolicyEngine, type CrossEntityBatchItem } from "./crossEntityPolicyEngine";
+import type { IMetadataProvider } from "./interfaces";
 import { LogError, LogStatus } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 
@@ -340,6 +342,8 @@ export abstract class TransactionGroupBase {
             await this.waitForPreprocessing();
 
             if (this._pendingTransactions.length > 0) {
+                await this.preEvaluateCrossEntityPolicies();
+
                 // subclass handles the actual submit implementation whatever that does
                 let results: TransactionResult[] = await this.HandleSubmit();
 
@@ -369,6 +373,9 @@ export abstract class TransactionGroupBase {
             this.notifyTransactionStatus(false, undefined, err);
             this._status = 'Failed';
             return false;
+        }
+        finally {
+            CrossEntityPolicyEngine.Instance.ClearTransactionGroupScope(this);
         }
     }
 
@@ -427,6 +434,41 @@ export abstract class TransactionGroupBase {
             }
         }
         return [...providers];
+    }
+
+    /**
+     * Runs batch cross-entity policy pre-evaluation across all pending items grouped by provider,
+     * throwing before `HandleSubmit()` executes SQL if any policy vetoes the batch.
+     */
+    private async preEvaluateCrossEntityPolicies(): Promise<void> {
+        const grouped = new Map<IMetadataProvider, { items: CrossEntityBatchItem[]; user: BaseEntity['ContextCurrentUser'] }>();
+        for (const pending of this._pendingTransactions) {
+            const entity = pending.BaseEntity;
+            if (!entity?.ProviderToUse) {
+                continue;
+            }
+            const mdProvider = entity.ProviderToUse as object as IMetadataProvider;
+            let bucket = grouped.get(mdProvider);
+            if (!bucket) {
+                bucket = { items: [], user: entity.ContextCurrentUser };
+                grouped.set(mdProvider, bucket);
+            }
+            bucket.items.push({
+                Entity: entity,
+                Operation: pending.OperationType,
+            });
+        }
+        for (const [provider, bucket] of grouped.entries()) {
+            const refusal = await CrossEntityPolicyEngine.Instance.PreEvaluateBatch(
+                bucket.items,
+                provider,
+                bucket.user,
+                this,
+            );
+            if (refusal) {
+                throw new Error(refusal);
+            }
+        }
     }
 
     /**
