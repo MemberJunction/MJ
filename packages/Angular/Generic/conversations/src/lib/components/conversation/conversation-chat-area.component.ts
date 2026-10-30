@@ -39,6 +39,7 @@ import { ConversationStreamingService } from '../../services/conversation-stream
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
+import type { SessionEndReason } from '@memberjunction/realtime-runtime';
 import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { UserHoldsAuthorization } from '../../services/user-authorization';
@@ -3235,12 +3236,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // runtime itself, which closes the call surface with it: say why, or the call just vanishes.
     this.RealtimeSession.SessionEnded$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((ended) => {
-        if (ended.reason === 'error') {
-          const notice = DescribeCallFailureNotice(this.RealtimeSession.LastStartError, this.RealtimeSession.LastSessionError);
-          MJNotificationService.Instance.CreateSimpleNotification(notice, 'error', 6000);
-        }
-      });
+      .subscribe((ended) => this.notifyIfCallFailed(ended.reason));
     let voiceWasActive = false;
     this.RealtimeSession.Active$
       .pipe(takeUntil(this.destroy$))
@@ -4581,6 +4577,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           this.streamingService.ClearRecentCompletion(message.ID);
         }
       }
+    } else if (this.isSettled(message)) {
+      // The final frame of a reply can arrive as a plain send; it leaves the in-flight list here.
+      this.dropSettledFromInFlight();
     }
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
@@ -6345,6 +6344,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!finished && completionId) {
         this.handledCompletionIds?.delete(completionId);
       }
+      // The row was loaded above whatever happened after; if it settled, it is no longer in flight.
+      this.dropSettledFromInFlight();
     }
   }
 
@@ -8302,6 +8303,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Says why a call ended only when it ended over a failure. A `'deadline'` end (the runtime's time-limit auto-end) is
+   * a normal end: the call surface closes on its own and the visitor needs no error toast.
+   */
+  private notifyIfCallFailed(reason: SessionEndReason): void {
+    if (reason !== 'error') {
+      return;
+    }
+    const notice = DescribeCallFailureNotice(this.RealtimeSession.LastStartError, this.RealtimeSession.LastSessionError);
+    MJNotificationService.Instance.CreateSimpleNotification(notice, 'error', 6000);
+  }
+
+  /**
    * Post-call hook. Two responsibilities:
    *  1. Reload the ACTIVE conversation's timeline so the session that just ended — whose
    *     session-stamped `MJ: Conversation Details` were persisted server-side during the
@@ -9202,6 +9215,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Drops every in-flight ID whose loaded row has settled. A settled reply is never in flight:
+   * the list drives the composer's Stop slot and its ticker, and every reconcile path scans the
+   * rows for `In-Progress`, so an ID left behind after its row settled would never be looked at
+   * again (the overlay's Stop button ticked for hours after Regenerate-as-fork this way). An ID
+   * with no loaded row is kept; the row may simply not be on screen yet.
+   */
+  private dropSettledFromInFlight(): void {
+    const ids = this.InProgressMessageIds;
+    if (ids.length === 0) {
+      return;
+    }
+    const byID = IndexByUUID(this.messages ?? []);
+    const stillInFlight = ids.filter((id) => {
+      const row = byID.Get(id);
+      return !row || !this.isSettled(row);
+    });
+    if (stillInFlight.length !== ids.length) {
+      this.InProgressMessageIds = stillInFlight;
+    }
+  }
+
+  /**
    * Where the viewport goes on a streamed delta, in the same frame as the DOM change so growth and
    * scroll paint together. Without ReadReplyFromTop, or for a turn this component never saw open
    * (a reload mid-stream), a reader at the bottom is followed there. With it, the turn's top is
@@ -9622,6 +9657,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Reconnect to in-progress agent runs whose completion events were missed.
    */
   private async reconnectInProgressRuns(conversationId: string, loadToken: number): Promise<void> {
+    // An ID whose row settled while its completion was missed would never be found by the scan below.
+    this.dropSettledFromInFlight();
     const inProgressMessages = this.messages.filter(
       m => m.Status === 'In-Progress' && m.Role === 'AI'
     );

@@ -81,6 +81,15 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private _pollingContextUser?: UserInfo;
 
+    /**
+     * The user this engine runs jobs as (the configured scheduler system user), once polling has
+     * started; undefined before that or when scheduled jobs are off in this process. Lets a request
+     * handler that runs a routine out of schedule do the same bookkeeping the sweep does.
+     */
+    public get PollingContextUser(): UserInfo | undefined {
+        return this._pollingContextUser;
+    }
+
     /** Job IDs we have already warned about for sub-threshold run frequency. */
     private highFrequencyWarnedJobIds: Set<string> = new Set();
 

@@ -88,6 +88,8 @@ describe('RealtimeSessionTimelineCardComponent — status', () => {
     expect(card(group(), meta({ CloseReason: 'Explicit' })).StatusChip).toBe('Ended');
     expect(card(group(), meta({ CloseReason: 'Janitor' })).StatusChip).toBe('Timed out');
     expect(card(group(), meta({ CloseReason: 'Shutdown' })).StatusChip).toBe('Interrupted');
+    expect(card(group(), meta({ CloseReason: 'TimeLimit' })).StatusChip).toBe('Time limit');
+    expect(card(group(), meta({ CloseReason: 'Idle' })).StatusChip).toBe('Idle — no activity');
     expect(card(group(), meta({ CloseReason: 'Error' })).StatusChip).toBe('Error');
   });
 

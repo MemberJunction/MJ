@@ -24,7 +24,7 @@ function buildRoutine(): MJUserRoutineEntity {
         LastResultHash: null,
         WakeConfiguration: null,
         WakeConfigurationObject: {
-            watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+            watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
             wakeGate: {},
         },
     } as unknown as MJUserRoutineEntity;
@@ -60,7 +60,7 @@ describe('WakeGateEvaluator — default watermark collector', () => {
         expect(params[1].MaxRows).toBe(1);
         expect(params[1].SkipTotalRowCount).toBeUndefined();
 
-        const snapshot = result.watermarks['tasks'];
+        const snapshot = result.watermarks['requests'];
         expect(snapshot.totalMatchingCount).toBe(42);
         expect(snapshot.changedCount).toBe(1);
         expect(snapshot.maxUpdatedAt).toBe('2026-10-17T11:30:00.000Z');

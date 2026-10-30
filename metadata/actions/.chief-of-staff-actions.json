@@ -75,7 +75,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ISO-8601 timestamp for when the agent should wake next",
+            "Description": "ISO-8601 time of a OneShot or Adaptive wake. Same as WakeAtISO.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -93,9 +93,8 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Minutes from now to schedule the next wake when NextWakeAt is omitted (default: 60)",
-            "IsRequired": false,
-            "DefaultValue": "60"
+            "Description": "Minutes from now for a OneShot or Adaptive wake when no time is given. Same as WakeInMinutes.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
@@ -229,6 +228,91 @@
           "sync": {
             "lastModified": "2026-10-20T23:18:47.108Z",
             "checksum": "c88da0673b4c395f70847563008fd990d08f207bcca092cabe2a11b3cc81dfeb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Names the workstream this wake belongs to (for example 'daily-briefing' or 'reminder-call-mom'). One routine per agent, user and key: scheduling the same key again updates that routine. Default 'default'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9FE16909-5870-4EE3-8921-F985FE364717"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Timezone",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "IANA time zone the CronExpression runs in (for example 'America/Chicago'). Pass the user's time zone for a Recurring wake so '0 9 * * 1-5' means 9:00 AM where the user is. Default 'UTC'.",
+            "IsRequired": false,
+            "DefaultValue": "UTC"
+          },
+          "primaryKey": {
+            "ID": "FF79AC6D-8457-4A3A-AD37-523D08B38DDF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeAtISO",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 time of a OneShot or Adaptive wake. Same as NextWakeAt.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8170C89D-A68B-46EC-B0A3-89D1DBE7B717"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeInMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minutes from now for a OneShot or Adaptive wake when no time is given. Same as DelayMinutes.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF909886-4213-4EC3-AC46-8D76DF0C6B80"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WatchedEntities",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON array of entities the wake gate watches for changes, for example [{ \"entityName\": \"MJ: AI Agent Requests\", \"filter\": \"Status = 'Requested'\", \"trackChangesOnly\": true }].",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CCE6483B-4FB7-4E0C-B7B8-008BC363A8D0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeGate",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON object with the wake gate: tier1Expression (a deterministic expression), tier2DecisionQuestion (a yes/no question for the decision model) and skipIfUnchanged.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0DB63D82-4B48-44E6-9F13-0825C3B078D4"
           }
         }
       ],
@@ -604,7 +688,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional related entity name (e.g., 'MJ_BizApps_Tasks: Tasks' or 'MJ_BizApps_Issues: Issues')",
+            "Description": "Optional related entity name (e.g., 'MJ: AI Agent Requests' or 'MJ: User Routines')",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1424,16 +1508,12 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Reply', or 'Forward'",
+            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Send' (a new outbound email), 'Reply', or 'Forward'. Sending operations under SendAsAgent/SendAsUser with RequireApprovalForExternalComms return APPROVAL_REQUIRED first; call again with ConfirmedApprovalRequestID once the request is approved.",
             "IsRequired": true,
             "DefaultValue": "ListMessages"
           },
           "primaryKey": {
             "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
-          },
-          "sync": {
-            "lastModified": "2026-10-20T23:18:47.682Z",
-            "checksum": "2fcc703eeb47bc055926d3775a6d275fbdfb3cbe6a403243e60e0e4a602a904b"
           }
         },
         {
@@ -1561,6 +1641,34 @@
             "lastModified": "2026-10-20T23:18:47.758Z",
             "checksum": "54b76aefa901b2d69d905cf887aaab5e53a3c41e2bb8ca99483c647e8b561924"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the approved MJ: AI Agent Requests row for this exact send. Pass it when acting on an approval; the action then delivers instead of queueing another approval.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8C2765D7-80F7-4D6C-A74C-AAADB385A9BE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovalRequestID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the approval request queued when the result is APPROVAL_REQUIRED",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A35539C-9CC3-4C54-BE40-A1BCD60620DA"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -1592,6 +1700,39 @@
           "sync": {
             "lastModified": "2026-10-20T23:18:47.771Z",
             "checksum": "cc73a66eadb25a08a098fa200aedcfce4ec3f67afe0e042a728ef721e562d015"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "APPROVAL_REQUIRED",
+            "IsSuccess": true,
+            "Description": "An approval request was queued for the user; nothing was sent. Call again with ConfirmedApprovalRequestID after approval."
+          },
+          "primaryKey": {
+            "ID": "C70D5FCC-AA24-44CA-BD86-7C9A496036AB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_EMAIL_PROVIDER",
+            "IsSuccess": false,
+            "Description": "No active communication provider can act for this mailbox; the email cannot be delivered"
+          },
+          "primaryKey": {
+            "ID": "F533C36E-A634-4417-99BC-DEBFC80D1035"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_OPERATION",
+            "IsSuccess": false,
+            "Description": "The Operation parameter is not one this action supports; nothing was read, drafted or sent"
+          },
+          "primaryKey": {
+            "ID": "8CD94F21-DDB1-4F62-86FD-1B266519C082"
           }
         }
       ]

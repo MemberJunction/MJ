@@ -836,19 +836,34 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // which conversation the workspace is viewing
     this.bridge.SetActiveFromWorkspace(conversationId);
 
-    // Load the conversation entity from data service
+    // Load the conversation entity from the engine's list; an unlisted one is loaded below.
     const conversation = this.engine.GetConversation(conversationId);
-    if (conversation) {
-      this.SelectedConversation = conversation;
-    } else {
-      // Conversation might not be loaded yet - the chat area will handle loading
-      this.SelectedConversation = null;
-    }
+    this.SelectedConversation = conversation ?? null;
 
     // Update URL if not skipping
     if (!this.skipUrlUpdate) {
       this.updateUrl();
     }
+
+    if (!conversation) {
+      await this.loadUnlistedConversation(conversationId);
+    }
+  }
+
+  /**
+   * Loads a selected conversation the engine's list does not hold. The list carries only Global
+   * and Both scope; an application-scoped conversation (a routine's wake thread, a cockpit chat)
+   * is reachable only by deep link, and without its entity the chat shows no title and no pinned
+   * agent. Applied only while the same conversation is still selected.
+   */
+  private async loadUnlistedConversation(conversationId: string): Promise<void> {
+    const loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
+    if (!loaded || !UUIDsEqual(this.SelectedConversationId, conversationId)) {
+      return;
+    }
+    this.SelectedConversation = loaded;
+    this.updateTabTitle();
+    this.cdr.detectChanges();
   }
 
   /**
