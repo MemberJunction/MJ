@@ -32,6 +32,7 @@
     "@memberjunction/ai-bridge-livekit-native": "6.2.0-edge.6",
     "@memberjunction/communication-sendgrid": "6.2.0-edge.6",
     "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/excel-addin-server": "6.2.0-edge.6",
     "@memberjunction/global": "6.2.0-edge.6",
     "@memberjunction/messaging-adapters": "6.2.0-edge.6",
     "@memberjunction/server": "6.2.0-edge.6",

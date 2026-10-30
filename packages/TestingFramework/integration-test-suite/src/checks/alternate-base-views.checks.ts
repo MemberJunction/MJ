@@ -26,7 +26,7 @@ import {
 } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext, SkipCheck } from '@memberjunction/testing-integration';
 
 /**
  * ABV1: Verify `MJ: Entity Alternate Base Views` and `MJ: Query Entities.AlternateBaseViewID`
@@ -119,8 +119,7 @@ async function checkPhysicalCatalogConstraints(ctx: IntegrationCheckContext): Pr
             `);
             foundLower = new Set(rows.map(r => String(r.name).toLowerCase()));
         } else {
-            console.log(`      → ABV2 SKIPPED (no assertions ran): no catalog access on this run path`);
-            return;
+            SkipCheck('no catalog access on this run path: needs an mssql pool or a PostgreSQL provider with ExecuteSQL');
         }
     }
     for (const name of expected) {
