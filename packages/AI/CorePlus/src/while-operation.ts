@@ -47,7 +47,7 @@ export interface WhileOperation {
     /**
      * Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
      * Mutually exclusive with `action`, `subAgent`, and `prompt`.
-     * @since 5.29.0
+     * @since 6.2.0
      */
     steps?: LoopBodyActionStep[];
 

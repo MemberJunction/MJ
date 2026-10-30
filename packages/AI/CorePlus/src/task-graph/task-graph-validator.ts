@@ -13,7 +13,9 @@
  * @module @memberjunction/ai-core-plus
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
-import { CONDITION_ROOTS, UnknownConditionRoots } from './condition-roots';
+import type { ForEachOperation } from '../foreach-operation';
+import type { WhileOperation } from '../while-operation';
+import { CONDITION_ROOTS, LoopStepReferencesIn, UnknownConditionRoots } from './condition-roots';
 import {
     DecisionChoiceTestOf,
     DecisionReferencesIn,
@@ -631,11 +633,14 @@ function checkLoopConfiguration(
         'index',
         'iteration',
         'attempt',
+        'attemptNumber',
+        'totalAttempts',
         ...(typeof config['itemVariable'] === 'string' && config['itemVariable'].trim() ? [config['itemVariable'].trim()] : []),
         ...(typeof config['indexVariable'] === 'string' && config['indexVariable'].trim() ? [config['indexVariable'].trim()] : []),
     ]);
 
     const seenIds = new Set<string>();
+    const priorStepHandles = new Set<string>();
     rawSteps.forEach((rawStep: unknown, idx: number) => {
         if (!rawStep || typeof rawStep !== 'object' || Array.isArray(rawStep)) {
             errors.push({
@@ -643,6 +648,7 @@ function checkLoopConfiguration(
                 Message: `Task "${label}" step[${idx}] must be an object with at least a name and params.`,
                 TempId: task.tempId,
             });
+            priorStepHandles.add(`step_${idx}`);
             return;
         }
         const step = rawStep as Record<string, unknown>;
@@ -656,6 +662,7 @@ function checkLoopConfiguration(
         }
 
         const stepId = step['id'];
+        let validTrimmedId: string | null = null;
         if (stepId !== undefined) {
             if (typeof stepId !== 'string' || stepId.trim().length === 0) {
                 errors.push({
@@ -670,7 +677,8 @@ function checkLoopConfiguration(
                     TempId: task.tempId,
                 });
             } else {
-                seenIds.add(stepId.trim());
+                validTrimmedId = stepId.trim();
+                seenIds.add(validTrimmedId);
             }
         }
 
@@ -681,6 +689,22 @@ function checkLoopConfiguration(
                 Message: `Task "${label}" step[${idx}] params must be a JSON object.`,
                 TempId: task.tempId,
             });
+        } else if (params && typeof params === 'object') {
+            const paramStepRefs = new Set<string>();
+            collectLoopStepRefsFromParamValue(params, paramStepRefs);
+            for (const refStepId of paramStepRefs) {
+                if (!priorStepHandles.has(refStepId)) {
+                    const availableSteps = priorStepHandles.size > 0
+                        ? [...priorStepHandles].join(', ')
+                        : '(none — this is the first step)';
+                    const stepDisplay = validTrimmedId ?? `step_${idx}`;
+                    errors.push({
+                        Code: 'InvalidConfiguration',
+                        Message: `Task "${label}" loop step "${stepDisplay}" params read "steps.${refStepId}", which has not run before step[${idx}]. Available prior step ids: ${availableSteps}.`,
+                        TempId: task.tempId,
+                    });
+                }
+            }
         }
 
         const outputMapping = step['outputMapping'];
@@ -729,28 +753,127 @@ function checkLoopConfiguration(
                         Message: `Task "${label}" has ${where} that cannot be parsed: ${verdict.Error}. The condition was: ${condition}`,
                         TempId: task.tempId,
                     });
-                    return;
+                } else {
+                    const unknown = UnknownConditionRoots(condition, loopRoots);
+                    if (unknown.length > 0) {
+                        const available = [...new Set([...CONDITION_ROOTS, ...loopRoots])].filter((r) => r !== 'decisions').sort();
+                        errors.push({
+                            Code: 'InvalidCondition',
+                            Message: `Task "${label}" has ${where} referring to ${unknown.map((u) => `"${u}"`).join(' and ')}, `
+                                + `which a loop step condition cannot see. Available: ${available.join(', ')}. `
+                                + `The condition was: ${condition}`,
+                            TempId: task.tempId,
+                        });
+                    }
+                    for (const refStepId of LoopStepReferencesIn(condition)) {
+                        if (!priorStepHandles.has(refStepId)) {
+                            const availableSteps = priorStepHandles.size > 0
+                                ? [...priorStepHandles].join(', ')
+                                : '(none — this is the first step)';
+                            errors.push({
+                                Code: 'InvalidCondition',
+                                Message: `Task "${label}" has ${where} reading "steps.${refStepId}", which has not run before step[${idx}]. `
+                                    + `Available prior step ids: ${availableSteps}. The condition was: ${condition}`,
+                                TempId: task.tempId,
+                            });
+                        }
+                    }
+                    checkDecisionReferences(
+                        condition,
+                        { Label: label, Where: where, TempId: task.tempId, IsLoopCondition: true },
+                        decisions,
+                        errors,
+                    );
                 }
-                const unknown = UnknownConditionRoots(condition, loopRoots);
-                if (unknown.length > 0) {
-                    const available = [...new Set([...CONDITION_ROOTS, ...loopRoots])].filter((r) => r !== 'decisions').sort();
-                    errors.push({
-                        Code: 'InvalidCondition',
-                        Message: `Task "${label}" has ${where} referring to ${unknown.map((u) => `"${u}"`).join(' and ')}, `
-                            + `which a loop step condition cannot see. Available: ${available.join(', ')}. `
-                            + `The condition was: ${condition}`,
-                        TempId: task.tempId,
-                    });
-                }
-                checkDecisionReferences(
-                    condition,
-                    { Label: label, Where: where, TempId: task.tempId, IsLoopCondition: true },
-                    decisions,
-                    errors,
-                );
             }
         }
+
+        priorStepHandles.add(`step_${idx}`);
+        if (validTrimmedId) {
+            priorStepHandles.add(validTrimmedId);
+        }
     });
+}
+
+/**
+ * Extracts `steps.<id>` / `payload.steps.<id>` references from a `LoopBodyActionStep.params` value:
+ * - Inline `{{...}}` placeholders (scanned in linear `O(n)` time without regex backtracking)
+ * - Whole-value unbraced binding paths (`"steps.s1.Result"` or `"payload.steps.s1.Result"`, excluding `static:...`)
+ */
+function collectLoopStepRefsFromParamValue(value: unknown, out: Set<string>): void {
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.length === 0 || trimmed.toLowerCase().startsWith('static:')) {
+            return;
+        }
+        if (trimmed.includes('{{')) {
+            let cursor = 0;
+            while (cursor < trimmed.length) {
+                const openIdx = trimmed.indexOf('{{', cursor);
+                if (openIdx === -1) break;
+                const braceIdx = trimmed.indexOf('}', openIdx + 2);
+                if (braceIdx === -1 || braceIdx + 1 >= trimmed.length) break;
+                if (trimmed[braceIdx + 1] !== '}' || braceIdx === openIdx + 2) {
+                    cursor = braceIdx + 1;
+                    continue;
+                }
+                for (const ref of LoopStepReferencesIn(trimmed.slice(openIdx + 2, braceIdx))) {
+                    out.add(ref);
+                }
+                cursor = braceIdx + 2;
+            }
+            return;
+        }
+        const wholeValueMatch = /^(?:payload\.)?steps\.([A-Za-z_$][A-Za-z0-9_$]*)(?:$|\.|\[)/.exec(trimmed);
+        if (wholeValueMatch) {
+            out.add(wholeValueMatch[1]);
+        }
+        return;
+    }
+    if (Array.isArray(value)) {
+        for (const el of value) {
+            collectLoopStepRefsFromParamValue(el, out);
+        }
+        return;
+    }
+    if (value && typeof value === 'object') {
+        for (const v of Object.values(value as Record<string, unknown>)) {
+            collectLoopStepRefsFromParamValue(v, out);
+        }
+    }
+}
+
+/**
+ * Validates the structural configuration of an in-turn or durable `ForEach` / `While` loop
+ * operation (mutual exclusion of `action` / `steps` / `subAgent` / `prompt`, non-empty `steps[]`,
+ * unique `step.id`, JSON-object `step.outputMapping`, and `step.condition` syntax, roots, and
+ * prior-step references `steps.<prevId>`).
+ *
+ * Shared by `ValidateTaskGraphSpec` and `BaseAgent` so both engines enforce one identical contract.
+ *
+ * @since 6.2.0
+ */
+export function ValidateLoopOperationStructure(
+    kind: 'ForEach' | 'While',
+    op: ForEachOperation | WhileOperation,
+    label: string = kind,
+): TaskGraphValidationError[] {
+    const errors: TaskGraphValidationError[] = [];
+    const syntheticNode: TaskGraphSpecNode = {
+        tempId: label,
+        name: label,
+        description: '',
+        kind,
+        configuration: op as unknown as TaskGraphSpecNode['configuration'],
+        dependsOn: [],
+    };
+    const emptyDecisions: DecisionContext = {
+        Steps: new Map(),
+        Order: buildStepOrder([]),
+        NameOf: (tempId: string): string => tempId,
+    };
+    checkLoopConfiguration(syntheticNode, emptyDecisions, errors);
+    return errors;
 }
 
 /** Reports a node whose `configuration` is missing something its `kind` needs. */

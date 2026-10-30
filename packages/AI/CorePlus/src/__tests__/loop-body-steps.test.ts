@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
+    ApplyOutputMapping,
+    BuildActionOutputObject,
     CompileFlowToTaskGraph,
     ConfigOf,
     ConvertTaskGraphToAgentSpec,
+    LoopStepReferencesIn,
     ResolveLoopBodyParams,
     TaskNode,
     UnknownConditionRoots,
+    ValidateLoopOperationStructure,
     ValidateTaskGraphSpec,
     type FlowCompilerPath,
     type FlowCompilerStep,
@@ -329,5 +333,91 @@ describe('Multi-step loop round-trip: TaskGraphSpec → AgentSpec (Flow) → Tas
         );
         expect(typeof resolved.text).toBe('string');
         expect(Date.now() - start).toBeLessThan(500);
+    });
+
+    it('blocks prototype-chain reads and writes (__proto__, constructor, prototype) in ResolveLoopBodyParams and ApplyOutputMapping', () => {
+        const resolved = ResolveLoopBodyParams(
+            {
+                ctor: '{{item.constructor}}',
+                proto: '{{item.__proto__}}',
+                inlineProto: 'x {{item.__proto__}} y',
+                skipAttempt: '{{payload.__proto__.secret}}',
+                bracketAttempt: '{{item.constructor[0]}}',
+            },
+            { item: {} },
+            { payload: { secret: 42 } },
+        );
+
+        expect(resolved.ctor).toBeUndefined();
+        expect(resolved.proto).toBeUndefined();
+        expect(resolved.inlineProto).toBe('x {{item.__proto__}} y');
+        expect(resolved.skipAttempt).toBeUndefined();
+        expect(resolved.bracketAttempt).toBeUndefined();
+
+        const target: Record<string, unknown> = {};
+        const mapped = ApplyOutputMapping({ ok: 1 }, '{"ok": "__proto__.polluted", "constructor": "leaked"}', target);
+        expect(mapped.errors.some((e) => e.includes('Forbidden target path'))).toBe(true);
+        expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+        expect(target['leaked']).toBeUndefined();
+    });
+
+    it('enforces prior-step ordering on steps.<prevId> references in loop step conditions and shares ValidateLoopOperationStructure', () => {
+        expect(LoopStepReferencesIn("steps.fetch.ok && payload.steps.step_0.score > 1 && 'steps.ignored.x' !== ''")).toEqual([
+            'fetch',
+            'step_0',
+        ]);
+
+        // Valid backward references (by explicit id and positional step_0)
+        const validErrors = ValidateLoopOperationStructure('ForEach', {
+            collectionPath: 'items',
+            itemVariable: 'item',
+            steps: [
+                { id: 'fetch', name: 'Fetch', params: {} },
+                { id: 'enrich', name: 'Enrich', condition: 'steps.fetch.found && steps.step_0.ok', params: {} },
+            ],
+        });
+        expect(validErrors).toEqual([]);
+
+        // Forward reference (step[0] reading steps.enrich.ok) and self-reference (step[1] reading steps.enrich.ok)
+        const forwardAndSelfErrors = ValidateLoopOperationStructure('ForEach', {
+            collectionPath: 'items',
+            itemVariable: 'item',
+            steps: [
+                { id: 'fetch', name: 'Fetch', condition: 'steps.enrich.ok === true', params: {} },
+                { id: 'enrich', name: 'Enrich', condition: 'steps.enrich.ok === true', params: {} },
+            ],
+        });
+        expect(forwardAndSelfErrors).toHaveLength(2);
+        expect(forwardAndSelfErrors[0].Code).toBe('InvalidCondition');
+        expect(forwardAndSelfErrors[0].Message).toContain('reading "steps.enrich", which has not run before step[0]');
+        expect(forwardAndSelfErrors[1].Code).toBe('InvalidCondition');
+        expect(forwardAndSelfErrors[1].Message).toContain('reading "steps.enrich", which has not run before step[1]');
+    });
+
+    it('projects Output, Both, and JSON-object Message consistently via BuildActionOutputObject without special-case field aliases', () => {
+        const out = BuildActionOutputObject(
+            [
+                { Name: 'InputOnly', Value: 'ignored', Type: 'Input' },
+                { Name: 'Score', Value: 99, Type: 'Output' },
+                { Name: 'Cursor', Value: 'page-2', Type: 'Both' },
+            ],
+            '{"handle": "doc-1", "Score": 10}',
+        );
+        expect(out).toEqual({
+            handle: 'doc-1',
+            Score: 99, // explicit Output param overlays Message JSON
+            Cursor: 'page-2',
+        });
+        expect(Object.prototype.hasOwnProperty.call(out, 'Handle')).toBe(false);
+
+        // Case-insensitive consumers (`ApplyOutputMapping` and `ResolveLoopBodyParams`) still resolve `Handle` cleanly
+        const mapped = ApplyOutputMapping(out, '{"Handle": "docHandles[]"}', {});
+        expect(mapped.updates).toEqual({ docHandles: ['doc-1'] });
+        const paramResolved = ResolveLoopBodyParams(
+            { docId: '{{steps.createDoc.Handle}}' },
+            { steps: { createDoc: out } },
+            { payload: {} },
+        );
+        expect(paramResolved).toEqual({ docId: 'doc-1' });
     });
 });

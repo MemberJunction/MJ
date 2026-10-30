@@ -36,6 +36,7 @@ import { ChatMessageRole } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import {
+    BuildActionOutputObject,
     CompileFlowToTaskGraph,
     ConvertTaskGraphToAgentSpec,
     type FlowCompilerPath,
@@ -142,36 +143,13 @@ export class RealIntegrationTaskActionRunner implements TaskActionRunner {
         if (result.LogEntry?.ID) {
             this.logSink.push(result.LogEntry.ID);
         }
-        const output = this.projectOutput(result.Params ?? [], result.Message);
+        const output = BuildActionOutputObject(result.Params, result.Message);
         return {
             Success: result.Success,
             Output: output,
             ErrorMessage: result.Success ? undefined : (result.Message ?? 'Action failed'),
             ActionLogID: result.LogEntry?.ID,
         };
-    }
-
-    private projectOutput(actionParams: ActionParam[], resultMessage?: string | null): Record<string, unknown> {
-        const output: Record<string, unknown> = {};
-        if (typeof resultMessage === 'string') {
-            const trimmed = resultMessage.trim();
-            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                try {
-                    const parsed: unknown = JSON.parse(trimmed);
-                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                        Object.assign(output, parsed as Record<string, unknown>);
-                    }
-                } catch {
-                    // Ignore non-JSON message text
-                }
-            }
-        }
-        for (const p of actionParams ?? []) {
-            if (p.Type === 'Output' || p.Type === 'Both') {
-                output[p.Name] = p.Value;
-            }
-        }
-        return output;
     }
 }
 
@@ -611,7 +589,6 @@ export const AgentExecutionPrimitivesChecks: NamedCheck[] = [
     {
         Id: 'agent-execution-primitives.AEP4',
         Name: 'AEP4: durable TaskGraphService.Submit + TaskGraphDispatcher executes multi-step ForEach (steps[]) and While (steps[]) against SQL Server and ActionEngineServer',
-        RequiresMutation: true,
         Fn: async (ctx) => {
             const envID = await EnsureTaskTypeAndEnvironment(ctx, fx().CreatedTaskTypeIDs);
             const calcAction = ActionEngineServer.Instance.Actions.find((a) => a.Name === ACTION_NAME);
@@ -717,7 +694,6 @@ export const AgentExecutionPrimitivesChecks: NamedCheck[] = [
     {
         Id: 'agent-execution-primitives.AEP5',
         Name: 'AEP5: native tool-calling agent emits nextStep.type = Tasks -> parks run in Paused -> TaskGraphDispatcher runs multi-step ForEach + XOR exclusiveGroup Action fork and settles run to Completed',
-        RequiresMutation: true,
         Fn: async (ctx) => {
             await EnsureTaskTypeAndEnvironment(ctx, fx().CreatedTaskTypeIDs);
 
@@ -860,7 +836,6 @@ export const AgentExecutionPrimitivesChecks: NamedCheck[] = [
     {
         Id: 'agent-execution-primitives.AEP6',
         Name: 'AEP6: Flow graduation round-trip (ConvertTaskGraphToAgentSpec -> CompileFlowToTaskGraph -> TaskGraphService.Submit) preserves multi-step ForEach and While steps[]',
-        RequiresMutation: true,
         Fn: async (ctx) => {
             const envID = await EnsureTaskTypeAndEnvironment(ctx, fx().CreatedTaskTypeIDs);
             const calcAction = ActionEngineServer.Instance.Actions.find((a) => a.Name === ACTION_NAME);

@@ -213,7 +213,7 @@ Stop only when: goal complete OR unrecoverable failure.
 - {% if _IMPLICIT %}`complete_task`: only when the **ENTIRE** user request is fulfilled{% else %}`taskComplete`: true only when **ENTIRE** user request fulfilled{% endif %}
 - {% if _IMPLICIT %}Payload writes{% else %}`payloadChangeRequest`{% endif %}: Include only changes (new/update/remove)
 - `terminateAfter`: Usually false - review sub-agent results before completing
-{% if __agentTypePromptParams.includeForEachDocs != false or __agentTypePromptParams.includeWhileDocs != false %}- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: Extract and store any unmapped loop results in the payload immediately after loop completion, or they're lost forever (fields mapped via `steps[].outputMapping` are already in the payload — do **not** re-write or re-append them via `newElements`){% endif %}
+{% if __agentTypePromptParams.includeForEachDocs != false or __agentTypePromptParams.includeWhileDocs != false %}- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: Extract and store any unmapped loop results in the payload immediately after loop completion, or they're lost forever (fields mapped via `action.outputMapping` or `steps[].outputMapping` are already in the payload — do **not** re-write or re-append them via `newElements`){% endif %}
 {% if subAgentCount == 0 %}- No sub-agents available{% endif %}
 {% if actionCount == 0 %}- No actions available{% endif %}
 {% if planModeActive and not planApproved %}- **⚠️ Plan mode is active: you MUST present a plan (`type: "Plan"`) and get it approved before using `type: "Actions"` or `type: "Sub-Agent"`**{% endif %}
@@ -283,7 +283,7 @@ When you have an array in the payload and need to perform the same operation on 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via {% if _IMPLICIT %}`payload_change_request` on your immediate next turn{% else %}`payloadChangeRequest` in your immediate next response{% endif %} (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items).
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `action.outputMapping` or `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via {% if _IMPLICIT %}`payload_change_request` on your immediate next turn{% else %}`payloadChangeRequest` in your immediate next response{% endif %} (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items).
 
 - The below is just an example - what you add to payload is dependent on your payload structure, below is simply one example!
 
@@ -426,7 +426,7 @@ When each item requires 2+ dependent actions (for example compute → transform 
 }
 ```
 
-**Note on `steps[].outputMapping`:** Fields mapped via `outputMapping` (including `[]` array appends like `"lineTotals[]"`) are **already written directly into your shared payload** during loop execution — check `<mj-runtime-state>` on the next turn and do **not** re-append those values again via `payloadChangeRequest`, `payload_change_request`, or `complete_task`.
+**Note on `action.outputMapping` and `steps[].outputMapping`:** Fields mapped via `outputMapping` (including `[]` array appends like `"lineTotals[]"`) are **already written directly into your shared payload** during loop execution — check `<mj-runtime-state>` on the next turn and do **not** re-append those values again via `payloadChangeRequest`, `payload_change_request`, or `complete_task`.
 {% endraw %}
 {% endif %}
 
@@ -466,7 +466,7 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via {% if _IMPLICIT %}`payload_change_request` on your immediate next turn{% else %}`payloadChangeRequest` in your immediate next response{% endif %} (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items). After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `action.outputMapping` or `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via {% if _IMPLICIT %}`payload_change_request` on your immediate next turn{% else %}`payloadChangeRequest` in your immediate next response{% endif %} (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items). After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
 {% endif %}
 
 {% if __agentTypePromptParams.includeVariableRefsDocs != false %}

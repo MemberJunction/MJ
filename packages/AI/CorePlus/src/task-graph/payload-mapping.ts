@@ -173,21 +173,31 @@ function parseArrayAccessSegment(part: string): { arrayName: string; index: numb
 }
 
 /**
+ * True when a single path segment (or its bracketed base name, e.g. `constructor[0]`) targets an
+ * `Object.prototype` slot (`__proto__`, `constructor`, `prototype`).
+ */
+function isForbiddenSegment(part: string): boolean {
+    if (FORBIDDEN_PATH_KEYS.has(part)) return true;
+    const bracketIdx = part.indexOf('[');
+    if (bracketIdx > 0 && FORBIDDEN_PATH_KEYS.has(part.slice(0, bracketIdx))) return true;
+    return false;
+}
+
+/**
  * Walks an object path with `name[index]` array indexing and exact-first, case-insensitive-fallback
- * property lookup so loop step outputs (`steps.s1.Result` vs `steps.s1.result`) resolve reliably.
+ * own-property lookup so loop step outputs (`steps.s1.Result` vs `steps.s1.result`) resolve reliably
+ * without ever reading `Object.prototype` members.
  */
 function getLoopPathValue(obj: unknown, path: string): unknown {
-    const exact = GetValueFromPath(obj, path);
-    if (exact !== undefined) return exact;
-
     let current: unknown = obj;
-    for (const part of path.split('.')) {
-        if (!part || FORBIDDEN_PATH_KEYS.has(part)) continue;
+    const segments = path.split('.');
+    for (const part of segments) {
+        if (!part) continue;
+        if (isForbiddenSegment(part)) return undefined;
 
         const arrayAccess = parseArrayAccessSegment(part);
         if (arrayAccess) {
             const { arrayName, index } = arrayAccess;
-            if (FORBIDDEN_PATH_KEYS.has(arrayName)) return undefined;
             if (!isRecord(current) || Array.isArray(current)) return undefined;
             const actualKey = Object.prototype.hasOwnProperty.call(current, arrayName)
                 ? arrayName
@@ -465,12 +475,78 @@ export function ResolveMappedOutput(result: Record<string, unknown>, outputParam
 
     let current: unknown = result;
     for (const part of outputParam.split('.')) {
+        if (FORBIDDEN_PATH_KEYS.has(part)) return undefined;
         if (!isRecord(current) || Array.isArray(current)) return undefined;
-        const actualKey = Object.keys(current).find((k) => k.toLowerCase() === part.toLowerCase());
-        if (!actualKey) return undefined;
+        const actualKey = Object.prototype.hasOwnProperty.call(current, part)
+            ? part
+            : Object.keys(current).find((k) => k.toLowerCase() === part.toLowerCase());
+        if (!actualKey || FORBIDDEN_PATH_KEYS.has(actualKey)) return undefined;
         current = current[actualKey];
     }
     return current;
+}
+
+/**
+ * Minimal structural shape of an `ActionParam` (`@memberjunction/actions-base`) so `@memberjunction/ai-core-plus`
+ * stays dependency-free while sharing one exact action-output projection across `BaseAgent` and `TaskGraphActionRunner`.
+ *
+ * @since 6.2.0
+ */
+export interface ActionOutputParamLike {
+    Name: string;
+    Value?: unknown;
+    Type?: string | null;
+}
+
+/**
+ * Projects an action's `Params` and optional `Message` into the flat output object exposed to
+ * `steps.<id>.*` references and `outputMapping` rules in both in-turn (`BaseAgent`) and durable
+ * (`TaskGraphActionRunner`) execution.
+ *
+ * Parses a structured JSON-object `resultMessage` first (so actions returning JSON metadata in
+ * `Message` expose their fields directly) and overlays declared `Output` and `Both` parameters on top.
+ *
+ * @since 6.2.0
+ */
+export function BuildActionOutputObject(
+    actionParams: readonly ActionOutputParamLike[] | null | undefined,
+    resultMessage?: string | null,
+): Record<string, unknown> {
+    const output: Record<string, unknown> = {};
+    if (typeof resultMessage === 'string') {
+        const trimmed = resultMessage.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            try {
+                const parsed: unknown = JSON.parse(trimmed);
+                if (isRecord(parsed) && !Array.isArray(parsed)) {
+                    for (const [k, v] of Object.entries(parsed)) {
+                        if (!FORBIDDEN_PATH_KEYS.has(k)) {
+                            output[k] = v;
+                        }
+                    }
+                }
+            } catch {
+                // Non-JSON prose message; ignore.
+            }
+        }
+    }
+    for (const param of actionParams ?? []) {
+        if ((param.Type === 'Output' || param.Type === 'Both') && !FORBIDDEN_PATH_KEYS.has(param.Name)) {
+            output[param.Name] = param.Value;
+        }
+    }
+    return output;
+}
+
+/**
+ * One recorded per-step `outputMapping` fold from a `steps[]` loop iteration, ready to be replayed
+ * onto the loop's shared payload in deterministic iteration-index order.
+ *
+ * @since 6.2.0
+ */
+export interface LoopStepFold {
+    Output: Record<string, unknown>;
+    Mapping: string;
 }
 
 /**
@@ -525,10 +601,17 @@ export function ApplyOutputMapping(
         }
 
         const parts = payloadPath.split('.');
+        const cleanSegments = parts.map((p) => (p.endsWith('[]') ? p.slice(0, -2) : p));
+        if (cleanSegments.some((seg) => !seg || FORBIDDEN_PATH_KEYS.has(seg))) {
+            errors.push(`Forbidden target path '${payloadPath}' in output mapping.`);
+            continue;
+        }
         let current = updates;
         for (let i = 0; i < parts.length - 1; i++) {
-            const cleanPart = parts[i].endsWith('[]') ? parts[i].slice(0, -2) : parts[i];
-            if (!isRecord(current[cleanPart])) current[cleanPart] = {};
+            const cleanPart = cleanSegments[i];
+            if (!Object.prototype.hasOwnProperty.call(current, cleanPart) || !isRecord(current[cleanPart])) {
+                current[cleanPart] = {};
+            }
             current = current[cleanPart] as Record<string, unknown>;
         }
         try {

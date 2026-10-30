@@ -40,6 +40,7 @@ import {
     ResolveMappedInput,
     type ForEachOperation,
     type LoopBodyActionStep,
+    type LoopStepFold,
     type WhileOperation,
 
     LoadAgentRunTree,
@@ -82,7 +83,7 @@ import {
     type TaskDecisionStepConfiguration,
     type TaskStepConfiguration,
 } from './decision-node';
-import { SanitizeToolName } from '@memberjunction/ai-agents';
+import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
@@ -3871,6 +3872,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Bounds what the trace's payloads may cost. The pointers are never budgeted — those are the
         // durable record of the work and must survive whatever the payloads do.
         const budget = new IterationPayloadBudget();
+        const isParallelForEach =
+            task.StepType === 'ForEach' && (op as ForEachOperation).executionMode === 'parallel';
+        const deferredFoldsByIndex = new Map<number, LoopStepFold[]>();
 
         const invokeBody: LoopBodyInvoker = async ({ Index, Bindings }) => {
             if (multiSteps && stepActionIds) {
@@ -3883,6 +3887,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     bindings: Bindings,
                     getLivePayload: () => livePayload,
                     setLivePayload: (next) => { livePayload = next; },
+                    deferLivePayloadFold: isParallelForEach,
+                    deferredFoldsByIndex,
                     dependencyOutputs,
                     provider,
                     executionUser: graphContext.ExecutionUser,
@@ -3893,9 +3899,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
-            // current item the same way it reaches anything else: `payload.<itemVariable>` or `{{item.field}}`.
+            // current item the same way it reaches anything else: `payload.<itemVariable>`.
+            // Legacy single-arm durable loops (`action` / `subAgent` / `prompt`) keep `ResolveMappedInput`
+            // so existing unprefixed strings remain literal unless explicitly prefixed (`payload.`, `data.`, `context.`, `static:`).
             const iterationPayload = { ...livePayload, ...Bindings };
-            const resolved = ResolveLoopBodyParams(bodyMapping, Bindings, { payload: iterationPayload, ...graphContext.Invocation });
+            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload, ...graphContext.Invocation }) as Record<string, unknown>;
 
             /**
              * Folds an iteration's output into the running payload the next pass will see, and
@@ -4014,6 +4022,18 @@ export class TaskGraphDispatcher implements IShutdownable {
                 invokeBody,
             );
 
+        if (isParallelForEach) {
+            // Replay parallel multi-step ForEach folds in deterministic ascending collection-index
+            // order (0 .. N-1) rather than completion order, matching BaseAgent.executeForEachLoop.
+            const orderedIndices = [...deferredFoldsByIndex.keys()].sort((a, b) => a - b);
+            for (const idx of orderedIndices) {
+                for (const fold of deferredFoldsByIndex.get(idx) ?? []) {
+                    livePayload = this.foldIterationOutput(task, livePayload, fold.Output, fold.Mapping);
+                }
+            }
+            iterationTrace.sort((a, b) => a.index - b.index);
+        }
+
         return {
             Success: outcome.Success,
             AgentRunID: null,
@@ -4042,44 +4062,25 @@ export class TaskGraphDispatcher implements IShutdownable {
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
         const map = new Map<string, string>(Object.entries(preResolved ?? {}));
         if (primaryActionId && steps.length > 0 && !map.has(steps[0].name)) {
-            const distinctNames = new Set(steps.map((s) => s.name));
-            if (distinctNames.size === 1) {
-                map.set(steps[0].name, primaryActionId);
-            }
+            map.set(steps[0].name, primaryActionId);
         }
 
         const missing = [...new Set(steps.map((s) => s.name).filter((n) => !map.has(n)))];
         if (missing.length > 0) {
-            try {
-                const quoted = missing.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
-                const exact = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Name: string }>(
-                    { EntityName: 'MJ: Actions', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-                    contextUser,
-                );
-                for (const r of exact.Results ?? []) {
-                    map.set(r.Name, r.ID);
-                }
-
-                const stillMissing = missing.filter((n) => !map.has(n));
-                if (stillMissing.length > 0) {
-                    const allActive = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Name: string }>(
-                        { EntityName: 'MJ: Actions', ExtraFilter: `Status='Active'`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-                        contextUser,
-                    );
-                    for (const rawName of stillMissing) {
-                        const target = SanitizeToolName(rawName);
-                        if (!target) continue;
-                        const matches = (allActive.Results ?? []).filter((r) => SanitizeToolName(r.Name) === target);
-                        if (matches.length === 1) {
-                            map.set(rawName, matches[0].ID);
-                        }
-                    }
-                }
-            } catch {
-                // Fall back to primaryActionId for steps[0] when running against a stub provider with no RunView.
+            const resolved = await ResolveRecordsByNameOrToolName({
+                EntityName: 'MJ: Actions',
+                Names: missing,
+                Provider: provider,
+                ContextUser: contextUser,
+            });
+            if (!resolved.Success || !resolved.Map) {
+                return {
+                    Success: false,
+                    ErrorMessage: resolved.ErrorMessage ?? 'Failed to resolve loop step actions.',
+                };
             }
-            if (primaryActionId && !map.has(steps[0].name)) {
-                map.set(steps[0].name, primaryActionId);
+            for (const [name, id] of resolved.Map.entries()) {
+                map.set(name, id);
             }
         }
 
@@ -4107,6 +4108,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         bindings: Record<string, unknown>;
         getLivePayload: () => Record<string, unknown>;
         setLivePayload: (next: Record<string, unknown>) => void;
+        deferLivePayloadFold: boolean;
+        deferredFoldsByIndex: Map<number, LoopStepFold[]>;
         dependencyOutputs: Map<string, unknown>;
         provider: IMetadataProvider;
         executionUser: UserInfo;
@@ -4116,18 +4119,17 @@ export class TaskGraphDispatcher implements IShutdownable {
     }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; ActionLogID?: string }> {
         const {
             task, op, steps, stepActionIds, index, bindings,
-            getLivePayload, setLivePayload, dependencyOutputs,
-            provider, executionUser, invocation, iterationTrace, budget,
+            getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,
+            dependencyOutputs, provider, executionUser, invocation, iterationTrace, budget,
         } = args;
 
         const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
         const stepsOutputs: Record<string, Record<string, unknown>> = {};
         const stepInputsTrace: Record<string, unknown> = {};
-        const executedFolds: Array<{ output: Record<string, unknown>; mapping: string | undefined }> = [];
-        const anyStepHasOutputMapping = steps.some((s) => Boolean(s.outputMapping?.trim()));
+        const executedFolds: LoopStepFold[] = [];
 
-        // Working copy for intra-iteration step chaining; committed atomically onto shared livePayload
-        // once all steps in this pass succeed so parallel ForEach passes never clobber sibling appends.
+        // Working copy for intra-iteration step chaining; committed onto shared livePayload only via
+        // explicit per-step `outputMapping` declarations (matching BaseAgent.executeLoopStepsIteration).
         let workingPayload: Record<string, unknown> = structuredClone(getLivePayload());
         let lastActionLogID: string | undefined;
         let lastStepOutput: Record<string, unknown> | undefined;
@@ -4218,23 +4220,22 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
             lastStepOutput = stepOutput;
 
-            if (step.outputMapping?.trim()) {
-                workingPayload = this.foldIterationOutput(task, workingPayload, stepOutput, step.outputMapping);
-                executedFolds.push({ output: stepOutput, mapping: step.outputMapping });
+            const trimmedMapping = step.outputMapping?.trim();
+            if (trimmedMapping) {
+                workingPayload = this.foldIterationOutput(task, workingPayload, stepOutput, trimmedMapping);
+                executedFolds.push({ Output: stepOutput, Mapping: trimmedMapping });
             }
         }
 
-        // Replay folds synchronously onto shared livePayload so concurrent parallel ForEach passes
-        // preserve all array appends (`results[]`) without clobbering sibling passes.
-        let updatedLive = getLivePayload();
-        if (anyStepHasOutputMapping) {
+        if (deferLivePayloadFold) {
+            deferredFoldsByIndex.set(index, executedFolds);
+        } else if (executedFolds.length > 0) {
+            let updatedLive = getLivePayload();
             for (const fold of executedFolds) {
-                updatedLive = this.foldIterationOutput(task, updatedLive, fold.output, fold.mapping);
+                updatedLive = this.foldIterationOutput(task, updatedLive, fold.Output, fold.Mapping);
             }
-        } else if (lastStepOutput) {
-            updatedLive = this.foldIterationOutput(task, updatedLive, lastStepOutput, undefined);
+            setLivePayload(updatedLive);
         }
-        setLivePayload(updatedLive);
 
         const combinedOutput: Record<string, unknown> = {
             ...(lastStepOutput ?? {}),

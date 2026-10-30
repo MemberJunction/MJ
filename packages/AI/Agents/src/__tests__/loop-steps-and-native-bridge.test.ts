@@ -14,25 +14,36 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
+import { BaseAgentType } from '../agent-types/base-agent-type';
+import { FlowAgentType, FlowExecutionState } from '../agent-types/flow-agent-type';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
 import { PipelineToolRegistry } from '../pipeline/pipeline-registry';
+import { StructureActionResult } from '../pipeline/providers/serialize';
 import type { PipelineInvocable } from '../pipeline/pipeline.types';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
+import { MJGlobal } from '@memberjunction/global';
 import type { ChatResult } from '@memberjunction/ai';
 import type { UserInfo } from '@memberjunction/core';
+import type { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
-import type {
-    AgentConfiguration,
-    AgentAction,
-    AIPromptRunResult,
-    BaseAgentNextStep,
-    ExecuteAgentParams,
-    ForEachOperation,
-    MJAIAgentEntityExtended,
-    MJAIAgentRunEntityExtended,
-    MJAIAgentRunStepEntityExtended,
-    TaskGraphSpec,
-    WhileOperation,
+import {
+    ConvertTaskGraphToAgentSpec,
+    TaskGraphSubmitter,
+    TASK_GRAPH_SUBMITTER_KEY,
+    TaskNode,
+    type AgentConfiguration,
+    type AgentAction,
+    type AIPromptRunResult,
+    type BaseAgentNextStep,
+    type ExecuteAgentParams,
+    type ForEachOperation,
+    type MJAIAgentEntityExtended,
+    type MJAIAgentRunEntityExtended,
+    type MJAIAgentRunStepEntityExtended,
+    type TaskGraphSpec,
+    type TaskGraphSubmitOutcome,
+    type TaskGraphSubmitRequest,
+    type WhileOperation,
 } from '@memberjunction/ai-core-plus';
 
 const PARENT_AGENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -67,6 +78,9 @@ const MOCK_RELATIONSHIPS = [
     },
 ];
 
+let mockFlowSteps: MJAIAgentStepEntity[] = [];
+let mockFlowPaths: MJAIAgentStepPathEntity[] = [];
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
@@ -74,7 +88,11 @@ vi.mock('@memberjunction/aiengine', () => ({
                 Agents: MOCK_SUB_AGENTS,
                 AgentRelationships: MOCK_RELATIONSHIPS,
                 AgentActions: [],
-                GetAgentSteps: () => [],
+                Prompts: [],
+                GetAgentSteps: (agentId: string, status?: string) =>
+                    mockFlowSteps.filter((s) => s.AgentID === agentId && (!status || s.Status === status)),
+                GetAgentStepByID: (id: string) => mockFlowSteps.find((s) => s.ID === id) ?? null,
+                GetPathsFromStep: (id: string) => mockFlowPaths.filter((p) => p.OriginStepID === id),
             };
         },
     },
@@ -128,24 +146,53 @@ interface RecordedStep {
     Save: () => Promise<boolean>;
 }
 
+type ResolvedTemplateValue = string | number | boolean | Record<string, string | number | boolean | null> | null | undefined;
+
 class TestableBaseAgent extends BaseAgent {
     public readonly CreatedSteps: RecordedStep[] = [];
     public readonly ActionCalls: Array<{ name: string; params: Record<string, unknown> }> = [];
     private stepCounter = 0;
+    private readonly testAgentType: BaseAgentType;
+    private readonly testRun: MJAIAgentRunEntityExtended;
+    private testAgentTypeState: FlowExecutionState | null = null;
 
     public constructor(
         private readonly effectiveActions: MJActionEntityExtended[],
         private readonly effectiveSubAgents: MJAIAgentEntityExtended[],
-        private readonly actionHandler?: (name: string, params: Record<string, unknown>) => Promise<ActionResult>
+        private readonly actionHandler?: (name: string, params: Record<string, unknown>) => Promise<ActionResult>,
+        agentTypeInstance: BaseAgentType = new LoopAgentType()
     ) {
         super();
-        this._agentTypeInstance = new LoopAgentType();
+        this.testAgentType = agentTypeInstance;
         const runStub: Pick<MJAIAgentRunEntityExtended, 'ID' | 'AgentID' | 'Steps'> = {
             ID: 'run-1',
             AgentID: PARENT_AGENT_ID,
             Steps: [],
         };
-        this._agentRun = runStub as MJAIAgentRunEntityExtended;
+        this.testRun = runStub as MJAIAgentRunEntityExtended;
+    }
+
+    public override get AgentTypeInstance(): BaseAgentType {
+        return this.testAgentType;
+    }
+
+    public override get AgentRun(): MJAIAgentRunEntityExtended | null {
+        return this.testRun;
+    }
+
+    protected override get AgentTypeState(): FlowExecutionState | null {
+        return this.testAgentTypeState;
+    }
+
+    public SetAgentTypeState(state: FlowExecutionState | null): void {
+        this.testAgentTypeState = state;
+    }
+
+    private makeAgentConfig(): AgentConfiguration {
+        const cfg: Pick<AgentConfiguration, 'agentType'> = {
+            agentType: { Name: this.testAgentType instanceof FlowAgentType ? 'Flow' : 'Loop' } as AgentConfiguration['agentType'],
+        };
+        return cfg as AgentConfiguration;
     }
 
     protected override getEffectiveActionsForValidation(_agentId: string): MJActionEntityExtended[] {
@@ -165,20 +212,21 @@ class TestableBaseAgent extends BaseAgent {
         payloadAtStart?: object;
         payloadAtEnd?: object;
         parentId?: string;
+        completed?: { success: boolean; errorMessage?: string; outputData?: object };
     }): Promise<MJAIAgentRunStepEntityExtended> {
         const rec: RecordedStep = {
             ID: `step-${++this.stepCounter}`,
             StepType: stepParams.stepType,
             StepName: stepParams.stepName,
             ParentID: stepParams.parentId ?? null,
-            Status: 'Running',
+            Status: stepParams.completed ? (stepParams.completed.success ? 'Success' : 'Failed') : 'Running',
             TargetLogID: null,
             StepNumber: this.stepCounter,
             PayloadAtStart: stepParams.payloadAtStart ? JSON.stringify(stepParams.payloadAtStart) : null,
             PayloadAtEnd: stepParams.payloadAtEnd ? JSON.stringify(stepParams.payloadAtEnd) : null,
             PayloadAtEndSourceStepID: null,
-            ErrorMessage: null,
-            OutputData: null,
+            ErrorMessage: stepParams.completed?.errorMessage ?? null,
+            OutputData: stepParams.completed?.outputData ? JSON.stringify(stepParams.completed.outputData) : null,
             Save: async () => true,
         };
         this.CreatedSteps.push(rec);
@@ -217,12 +265,16 @@ class TestableBaseAgent extends BaseAgent {
         };
     }
 
+    public RunStep<P>(params: ExecuteAgentParams, decision: BaseAgentNextStep<P> | null): Promise<BaseAgentNextStep<P>> {
+        return this.executeNextStep(params, this.makeAgentConfig(), decision);
+    }
+
     public RunForEach(params: ExecuteAgentParams, decision: BaseAgentNextStep): Promise<BaseAgentNextStep> {
-        return this.executeForEachLoop(params, {} as AgentConfiguration, decision);
+        return this.executeNextStep(params, this.makeAgentConfig(), decision);
     }
 
     public RunWhile(params: ExecuteAgentParams, decision: BaseAgentNextStep): Promise<BaseAgentNextStep> {
-        return this.executeWhileLoop(params, {} as AgentConfiguration, decision);
+        return this.executeNextStep(params, this.makeAgentConfig(), decision);
     }
 
     public ValidateActions<P>(params: ExecuteAgentParams, nextStep: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P>> {
@@ -230,7 +282,7 @@ class TestableBaseAgent extends BaseAgent {
             params,
             nextStep,
             {} as P,
-            this._agentRun!,
+            this.testRun,
             {} as MJAIAgentRunStepEntityExtended
         );
     }
@@ -240,7 +292,7 @@ class TestableBaseAgent extends BaseAgent {
             params,
             nextStep,
             {} as P,
-            this._agentRun!,
+            this.testRun,
             {} as MJAIAgentRunStepEntityExtended
         );
     }
@@ -250,21 +302,21 @@ class TestableBaseAgent extends BaseAgent {
             params,
             nextStep,
             {} as P,
-            this._agentRun!,
+            this.testRun,
             {} as MJAIAgentRunStepEntityExtended
         );
     }
 
     public CheckActionInAgent(name: string): string | null {
-        return this.validateActionInAgent(name);
+        return this.validateActionInAgent(name, PARENT_AGENT_ID);
     }
 
     public CheckSubAgentInAgent(name: string): string | null {
-        return this.validateSubAgentInAgent(name);
+        return this.validateSubAgentInAgent(name, PARENT_AGENT_ID);
     }
 
-    public ResolveTemplateValue(value: string, context: Record<string, unknown>, itemVariable: string): unknown {
-        return this.resolveValueFromContext(value, context, itemVariable);
+    public ResolveTemplateValue(value: string, context: Record<string, unknown>, itemVariable: string): ResolvedTemplateValue {
+        return this.resolveValueFromContext(value, context, itemVariable) as ResolvedTemplateValue;
     }
 }
 
@@ -486,6 +538,8 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
     let subAgents: MJAIAgentEntityExtended[];
 
     beforeEach(() => {
+        mockFlowSteps = [];
+        mockFlowPaths = [];
         actions = MOCK_ACTIONS.map((a) => ({ ...a }) as MJActionEntityExtended);
         subAgents = MOCK_SUB_AGENTS.map((a) => ({ ...a }) as MJAIAgentEntityExtended);
     });
@@ -669,6 +723,63 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
         expect(agent.ActionCalls).toHaveLength(6);
     });
 
+    it('folds single-arm action.outputMapping into payload for both parallel ForEach and While under LoopAgentType', async () => {
+        const agent = new TestableBaseAgent(actions, subAgents, async (_name, stepParams) => {
+            const expr = String(stepParams['Expression'] ?? '');
+            if (expr.startsWith('1 ')) {
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            const val = evalSimpleMath(expr);
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Message: 'OK',
+                Params: [{ Name: 'Result', Value: val, Type: 'Both' }],
+            };
+        });
+
+        const fePayload = { nums: [1, 2, 3], count: 1 };
+        const feNext = await agent.RunForEach(makeExecuteParams(fePayload), {
+            step: 'ForEach',
+            terminate: false,
+            previousPayload: fePayload,
+            newPayload: fePayload,
+            forEach: {
+                collectionPath: 'nums',
+                itemVariable: 'n',
+                executionMode: 'parallel',
+                maxConcurrency: 3,
+                action: {
+                    name: 'calculate_expression',
+                    params: { Expression: '{{n}} * 10' },
+                    outputMapping: '{"Result": "scaled[]"}',
+                },
+            },
+        });
+        expect(feNext.step).toBe('Retry');
+        expect((feNext.newPayload as { scaled?: number[] }).scaled).toEqual([10, 20, 30]);
+
+        const whilePayload = feNext.newPayload as { nums: number[]; count: number; scaled: number[] };
+        const whileNext = await agent.RunWhile(makeExecuteParams(whilePayload), {
+            step: 'While',
+            terminate: false,
+            previousPayload: whilePayload,
+            newPayload: whilePayload,
+            while: {
+                condition: 'payload.count < 8',
+                itemVariable: 'attempt',
+                maxIterations: 5,
+                action: {
+                    name: 'calculate_expression',
+                    params: { Expression: '{{payload.count}} * 2' },
+                    outputMapping: '{"Result": "count"}',
+                },
+            },
+        });
+        expect(whileNext.step).toBe('Retry');
+        expect((whileNext.newPayload as { count: number }).count).toBe(8);
+    });
+
     it('rejects invalid multi-step loop configurations before running any iterations', async () => {
         const agent = new TestableBaseAgent(actions, subAgents);
         const params = makeExecuteParams({ items: [1] });
@@ -686,7 +797,7 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
             },
         });
         expect(conflict.step).toBe('Failed');
-        expect(conflict.errorMessage).toContain('Specify only one of action, steps, or subAgent');
+        expect(conflict.errorMessage).toContain('multiple loop bodies');
 
         // 2. Duplicate step.id
         const dupId = await agent.RunForEach(params, {
@@ -703,7 +814,7 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
             },
         });
         expect(dupId.step).toBe('Failed');
-        expect(dupId.errorMessage).toContain("Duplicate step id 'dup'");
+        expect(dupId.errorMessage).toContain('duplicate loop step id "dup"');
 
         // 3. Invalid outputMapping JSON
         const badMapping = await agent.RunForEach(params, {
@@ -717,7 +828,7 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
             },
         });
         expect(badMapping.step).toBe('Failed');
-        expect(badMapping.errorMessage).toContain('invalid outputMapping JSON');
+        expect(badMapping.errorMessage).toContain('outputMapping is not valid JSON');
 
         // 4. Unparseable step.condition
         const badCond = await agent.RunForEach(params, {
@@ -731,36 +842,76 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
             },
         });
         expect(badCond.step).toBe('Failed');
-        expect(badCond.errorMessage).toContain('condition cannot be parsed');
+        expect(badCond.errorMessage).toContain('cannot be parsed');
+
+        // 5. Forward / self steps.<prevId> reference
+        const forwardRef = await agent.RunForEach(params, {
+            step: 'ForEach',
+            terminate: false,
+            previousPayload: { items: [1] },
+            forEach: {
+                collectionPath: 'items',
+                itemVariable: 'item',
+                steps: [
+                    { id: 's1', name: 'Calculate Expression', params: { Expression: '{{steps.s2.Result}} + 1' } },
+                    { id: 's2', name: 'Format Currency', params: {} },
+                ],
+            },
+        });
+        expect(forwardRef.step).toBe('Failed');
+        expect(forwardRef.errorMessage).toContain('has not run before step');
+
+        // 6. Durable-only prompt arm refused cleanly on in-turn execution
+        const promptArm = await agent.RunForEach(params, {
+            step: 'ForEach',
+            terminate: false,
+            previousPayload: { items: [1] },
+            forEach: {
+                collectionPath: 'items',
+                itemVariable: 'item',
+                prompt: { name: 'Summarize Item', params: {} },
+            },
+        });
+        expect(promptArm.step).toBe('Failed');
+        expect(promptArm.errorMessage).toContain('Prompt loop bodies are only supported in durable TaskGraph execution');
     });
 
-    it('normalizes sanitized native tool names across Actions, Sub-Agent, ForEach/While, and Tasks validators', async () => {
-        const agent = new TestableBaseAgent(actions, subAgents);
+    it('accepts sanitized native tool names without mutating caller inputs and canonicalizes at execution time', async () => {
+        const agent = new TestableBaseAgent(actions, subAgents, async (name, stepParams) => ({
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Message: `${name}:${String(stepParams['Expression'] ?? '')}`,
+            Params: [{ Name: 'Result', Value: 2, Type: 'Output' }],
+        }));
         const params = makeExecuteParams();
 
-        // 1. validateActionsNextStep
+        // 1. validateActionsNextStep does NOT mutate caller input; executeActionsStep invokes canonical name
         const actionsStep: BaseAgentNextStep = {
             step: 'Actions',
             terminate: false,
             actions: [{ name: 'calculate_expression', params: { Expression: '1 + 1' } }],
         };
         const validatedActions = await agent.ValidateActions(params, actionsStep);
-        expect(validatedActions.step).toBe('Actions');
-        expect(validatedActions.actions?.[0].name).toBe('Calculate Expression');
+        expect(validatedActions).toBe(actionsStep);
+        expect(actionsStep.actions?.[0].name).toBe('calculate_expression');
 
-        // 2. validateSubAgentNextStep & validateSubAgentInAgent
+        await agent.RunStep(params, actionsStep);
+        expect(actionsStep.actions?.[0].name).toBe('calculate_expression');
+        expect(agent.ActionCalls[0]?.name).toBe('Calculate Expression');
+
+        // 2. validateSubAgentNextStep & validateSubAgentInAgent do NOT mutate caller input
         const subAgentStep: BaseAgentNextStep = {
             step: 'Sub-Agent',
             terminate: false,
             subAgent: { name: 'delegate_to_query_builder', message: 'Find top customers', terminateAfter: false },
         };
         const validatedSub = await agent.ValidateSubAgents(params, subAgentStep);
-        expect(validatedSub.step).toBe('Sub-Agent');
-        expect(validatedSub.subAgent?.name).toBe('Query Builder');
+        expect(validatedSub).toBe(subAgentStep);
+        expect(subAgentStep.subAgent?.name).toBe('delegate_to_query_builder');
         expect(agent.CheckSubAgentInAgent('delegate_to_query_builder')).toBeNull();
         expect(agent.CheckActionInAgent('format_currency')).toBeNull();
 
-        // 3. validateTasksNextStep (canonicalizes Action, Agent, and ForEach.steps[] in place)
+        // 3. validateTasksNextStep leaves caller spec untouched; executeTasksStep submits canonicalized copy
         const spec: TaskGraphSpec = {
             workflowName: 'Normalized Graph',
             tasks: [
@@ -790,16 +941,191 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
             ],
         };
         const tasksStep: BaseAgentNextStep = {
-            step: 'Tasks',
+            step: 'Tasks' as BaseAgentNextStep['step'],
             terminate: false,
             taskGraph: { spec },
         };
         const validatedTasks = await agent.ValidateTasks(params, tasksStep);
-        expect(validatedTasks.step).toBe('Tasks');
-        const loopCfg = spec.tasks[0].configuration as ForEachOperation;
-        expect(loopCfg.steps?.[0].name).toBe('Calculate Expression');
-        expect(loopCfg.steps?.[1].name).toBe('Format Currency');
-        expect((spec.tasks[1].configuration as { agentName: string }).agentName).toBe('Query Builder');
+        expect(validatedTasks).toBe(tasksStep);
+        const callerLoopCfg = spec.tasks[0].configuration as ForEachOperation;
+        expect(callerLoopCfg.steps?.[0].name).toBe('calculate_expression');
+        expect(callerLoopCfg.steps?.[1].name).toBe('format_currency');
+        expect((spec.tasks[1].configuration as { agentName: string }).agentName).toBe('delegate_to_query_builder');
+
+        const submitted: TaskGraphSubmitRequest[] = [];
+        class CapturingSubmitter extends TaskGraphSubmitter {
+            public async Submit(req: TaskGraphSubmitRequest): Promise<TaskGraphSubmitOutcome> {
+                submitted.push(req);
+                return { Success: true, ParentTaskID: 'parent-task-1', TaskIDByTempId: { loop: 't1', report: 't2' } };
+            }
+        }
+        class EmptySubmitter extends CapturingSubmitter {
+            public override Submit!: (req: TaskGraphSubmitRequest) => Promise<TaskGraphSubmitOutcome>;
+        }
+        MJGlobal.Instance.ClassFactory.Register(TaskGraphSubmitter, CapturingSubmitter, TASK_GRAPH_SUBMITTER_KEY);
+        try {
+            const submittedOutcome = await agent.RunStep(params, tasksStep);
+            expect(submittedOutcome.step).toBe('Success');
+            expect(submitted).toHaveLength(1);
+            const submittedLoop = submitted[0].Spec.tasks[0].configuration as ForEachOperation;
+            expect(submittedLoop.steps?.[0].name).toBe('Calculate Expression');
+            expect(submittedLoop.steps?.[1].name).toBe('Format Currency');
+            expect((submitted[0].Spec.tasks[1].configuration as { agentName: string }).agentName).toBe('Query Builder');
+            // Caller spec remained completely untouched
+            expect(callerLoopCfg.steps?.[0].name).toBe('calculate_expression');
+            expect((spec.tasks[1].configuration as { agentName: string }).agentName).toBe('delegate_to_query_builder');
+        } finally {
+            MJGlobal.Instance.ClassFactory.Register(TaskGraphSubmitter, EmptySubmitter, TASK_GRAPH_SUBMITTER_KEY, 10);
+        }
+    });
+
+    it('executes graduated multi-step ForEach and While workflows in-run under FlowAgentType without dropping steps[1..N]', async () => {
+        // Graduate a 2-node TaskGraphSpec (multi-step ForEach -> multi-step While, each chaining
+        // TWO DISTINCT actions: Calculate Expression -> Format Currency, and omitting While.itemVariable)
+        // via ConvertTaskGraphToAgentSpec, then run it through FlowAgentType (executionMode: 'inRun').
+        const graduatedGraph: TaskGraphSpec = {
+            workflowName: 'Graduated Multi-Step Loops',
+            tasks: [
+                TaskNode.ForEach(
+                    { tempId: 'fe', name: 'Price Line Items', description: 'Compute & format line items', dependsOn: [] },
+                    {
+                        collectionPath: 'payload.quantities',
+                        itemVariable: 'qty',
+                        steps: [
+                            { id: 'calc', name: 'Calculate Expression', params: { Expression: '{{qty}} * 5' } },
+                            {
+                                id: 'fmt',
+                                name: 'Format Currency',
+                                params: { Amount: '{{steps.calc.Result}}' },
+                                outputMapping: '{"Formatted": "formattedPrices[]"}',
+                            },
+                        ],
+                    }
+                ),
+                TaskNode.While(
+                    { tempId: 'wh', name: 'Accumulate Bonus', description: 'Double bonus and record badge', dependsOn: ['fe'] },
+                    {
+                        condition: 'payload.bonus < 4',
+                        maxIterations: 5,
+                        steps: [
+                            {
+                                id: 'grow',
+                                name: 'Calculate Expression',
+                                params: { Expression: '{{payload.bonus}} * 2' },
+                                outputMapping: '{"Result": "bonus"}',
+                            },
+                            {
+                                id: 'label',
+                                name: 'Format Currency',
+                                params: { Amount: '{{steps.grow.Result}}' },
+                                outputMapping: '{"Formatted": "bonusHistory[]"}',
+                            },
+                        ],
+                    }
+                ),
+            ],
+        };
+
+        let idSeq = 0;
+        const converted = ConvertTaskGraphToAgentSpec(graduatedGraph, {
+            AgentID: PARENT_AGENT_ID,
+            ResolveAgentID: (name) => `agent-${name}`,
+            ResolveActionID: (name) =>
+                name === 'Calculate Expression' ? CALC_ACTION_ID : name === 'Format Currency' ? FORMAT_ACTION_ID : null,
+            NextID: () => `grad-id-${++idSeq}`,
+        });
+        expect(converted.Success).toBe(true);
+        expect(converted.Losses).toEqual([]);
+        // ConvertTaskGraphToAgentSpec sets LoopBodyType='Action' and ActionID=steps[0] (CALC_ACTION_ID)
+        expect(converted.Spec?.Steps?.[0].LoopBodyType).toBe('Action');
+        expect(converted.Spec?.Steps?.[0].ActionID).toBe(CALC_ACTION_ID);
+
+        mockFlowSteps = (converted.Spec?.Steps ?? []).map(
+            (s) =>
+                ({
+                    ID: s.ID,
+                    AgentID: PARENT_AGENT_ID,
+                    Name: s.Name,
+                    Description: s.Description ?? null,
+                    StepType: s.StepType,
+                    StartingStep: s.StartingStep,
+                    Status: 'Active',
+                    ActionID: s.ActionID ?? null,
+                    SubAgentID: s.SubAgentID ?? null,
+                    PromptID: s.PromptID ?? null,
+                    ActionInputMapping: s.ActionInputMapping ?? null,
+                    ActionOutputMapping: s.ActionOutputMapping ?? null,
+                    LoopBodyType: s.LoopBodyType ?? null,
+                    Configuration: typeof s.Configuration === 'string' ? s.Configuration : JSON.stringify(s.Configuration),
+                }) as MJAIAgentStepEntity
+        );
+        mockFlowPaths = (converted.Spec?.Paths ?? []).map(
+            (p) =>
+                ({
+                    ID: p.ID,
+                    OriginStepID: p.OriginStepID,
+                    DestinationStepID: p.DestinationStepID,
+                    Condition: p.Condition ?? null,
+                    Priority: p.Priority ?? 0,
+                    Description: p.Description ?? null,
+                }) as MJAIAgentStepPathEntity
+        );
+
+        const flowType = new FlowAgentType();
+        // Pass empty effectiveActions (`[]`) so BaseAgent MUST resolve BOTH Calculate Expression AND
+        // Format Currency from Flow AIAgentStep + Configuration.steps[] via getFlowStepActions!
+        const agent = new TestableBaseAgent(
+            [],
+            subAgents,
+            async (name, stepParams) => {
+                if (name === 'Calculate Expression') {
+                    const val = evalSimpleMath(stepParams['Expression']);
+                    return {
+                        Success: true,
+                        ResultCode: 'SUCCESS',
+                        Message: 'OK',
+                        Params: [{ Name: 'Result', Value: val, Type: 'Output' }],
+                    };
+                }
+                if (name === 'Format Currency') {
+                    return {
+                        Success: true,
+                        ResultCode: 'SUCCESS',
+                        Message: 'OK',
+                        Params: [{ Name: 'Formatted', Value: `USD ${String(stepParams['Amount'])}`, Type: 'Output' }],
+                    };
+                }
+                return { Success: false, ResultCode: 'ERR', Message: `Unexpected action ${name}`, Params: [] };
+            },
+            flowType
+        );
+
+        const initialPayload = { quantities: [2, 4], bonus: 1 };
+        const params: ExecuteAgentParams = {
+            ...makeExecuteParams(initialPayload),
+            agentTypeParams: { executionMode: 'inRun' },
+        };
+        const flowState = await flowType.InitializeAgentTypeState<FlowExecutionState>(params);
+        agent.SetAgentTypeState(flowState);
+
+        let decision: BaseAgentNextStep | null = null;
+        let safetyCounter = 0;
+        do {
+            decision = await agent.RunStep(params, decision);
+            safetyCounter++;
+        } while (!decision.terminate && safetyCounter < 12);
+
+        expect(decision.terminate).toBe(true);
+        expect(decision.step).toBe('Success');
+        const finalPayload = decision.newPayload as {
+            quantities: number[];
+            bonus: number;
+            formattedPrices?: string[];
+            bonusHistory?: string[];
+        };
+        expect(finalPayload.formattedPrices).toEqual(['USD 10', 'USD 20']);
+        expect(finalPayload.bonus).toBe(4);
+        expect(finalPayload.bonusHistory).toEqual(['USD 2', 'USD 4']);
     });
 
     it('resolves multi-placeholder inline templates starting and ending with {{...}} without corrupting inner braces', () => {
@@ -811,5 +1137,50 @@ describe('BaseAgent — multi-step ForEach and While (`steps[]`) & native tool-n
 
         expect(agent.ResolveTemplateValue('{{user.firstName}} {{user.lastName}}', ctx, 'user')).toBe('Ada Lovelace');
         expect(agent.ResolveTemplateValue('{{user.age}}', ctx, 'user')).toBe(36);
+    });
+});
+
+describe('StructureActionResult — Pipeline action output adapter (`Output` | `Both` & JSON container Message)', () => {
+    it('includes both Output and Both params, excludes Input params, and coerces JSON container strings', () => {
+        const multi = StructureActionResult({
+            Success: true,
+            ResultCode: 'OK',
+            Message: 'ignored when params exist',
+            Params: [
+                { Name: 'Expression', Value: '2 * 3', Type: 'Input' },
+                { Name: 'Result', Value: 6, Type: 'Both' },
+                { Name: 'Meta', Value: '{"unit":"USD"}', Type: 'Output' },
+            ],
+        });
+        expect(multi).toEqual({ Result: 6, Meta: { unit: 'USD' } });
+
+        const singleBoth = StructureActionResult({
+            Success: true,
+            ResultCode: 'OK',
+            Message: 'OK',
+            Params: [
+                { Name: 'Expression', Value: '10 + 5', Type: 'Input' },
+                { Name: 'Result', Value: 15, Type: 'Both' },
+            ],
+        });
+        expect(singleBoth).toBe(15);
+    });
+
+    it('parses unambiguous JSON object/array Message when no Output/Both params exist and leaves prose untouched', () => {
+        const jsonMsg = StructureActionResult({
+            Success: true,
+            ResultCode: 'OK',
+            Message: '{"handle":"doc-42","rows":[1,2]}',
+            Params: [{ Name: 'Title', Value: 'Q3 Report', Type: 'Input' }],
+        });
+        expect(jsonMsg).toEqual({ handle: 'doc-42', rows: [1, 2] });
+
+        const proseMsg = StructureActionResult({
+            Success: true,
+            ResultCode: 'OK',
+            Message: '[Note: document queued for indexing]',
+            Params: [],
+        });
+        expect(proseMsg).toBe('[Note: document queued for indexing]');
     });
 });

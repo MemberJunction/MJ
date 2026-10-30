@@ -522,9 +522,6 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_MUTATION_TESTS=1 arms the nightly mutation rig.
     const EXPECTED_MUTATION_GATED: string[] = [
         'actions-pipeline.AP2',
-        'agent-execution-primitives.AEP4',
-        'agent-execution-primitives.AEP5',
-        'agent-execution-primitives.AEP6',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
         'binary-fields.BF4',

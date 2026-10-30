@@ -43,9 +43,10 @@ import {
     type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
-import { UUIDsEqual } from '@memberjunction/global';
-import { AgentDecisionService, SanitizeToolName } from '@memberjunction/ai-agents';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
+import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
@@ -449,12 +450,6 @@ function actionNamesIn(node: TaskGraphSpecNode): string[] {
         ...(loopOp?.steps?.map((s) => s.name) ?? []),
     ];
     return names.filter((n): n is string => !!n);
-}
-
-/** True when a name looks like a sanitized native tool name (`calculate_expression`, `delegate_to_sage`). */
-function looksLikeSanitizedToolName(name: string): boolean {
-    const trimmed = name.trim();
-    return trimmed.length > 0 && (trimmed.includes('_') || trimmed === trimmed.toLowerCase());
 }
 
 /**
@@ -1360,51 +1355,24 @@ export class TaskGraphService {
         const names = [...new Set(spec.tasks.flatMap(agentNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Agents', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-            context.ContextUser,
-        );
-
-        const found = new Map<string, string>();
         const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
-        for (const r of result.Results ?? []) {
-            if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
-                const permitted = await AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
-                if (!permitted) {
-                    continue;
+        const resolved = await ResolveRecordsByNameOrToolName({
+            EntityName: 'MJ: AI Agents',
+            Names: names,
+            Provider: context.Provider,
+            ContextUser: context.ContextUser,
+            StripSubAgentPrefix: true,
+            AllowCandidate: async (r) => {
+                if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                    return AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
                 }
-            }
-            found.set(r.Name, r.ID);
+                return true;
+            },
+        });
+        if (!resolved.Success || !resolved.Map) {
+            return { Success: false, ErrorMessage: resolved.ErrorMessage };
         }
-        let missing = names.filter((n) => !found.has(n));
-        if (missing.length > 0 && missing.some(looksLikeSanitizedToolName)) {
-            try {
-                const fallback = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-                    { EntityName: 'MJ: AI Agents', ExtraFilter: `Status='Active'`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-                    context.ContextUser,
-                );
-                for (const rawName of missing) {
-                    const stripped = rawName.toLowerCase().startsWith('delegate_to_')
-                        ? rawName.slice('delegate_to_'.length)
-                        : rawName;
-                    const targetSanitized = SanitizeToolName(stripped);
-                    if (!targetSanitized) continue;
-                    const matches = (fallback.Results ?? []).filter((r) => SanitizeToolName(r.Name) === targetSanitized);
-                    if (matches.length === 1) {
-                        const candidate = matches[0];
-                        if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
-                            const permitted = await AIEngine.Instance.CanUserRunAgent(candidate.ID, context.ContextUser);
-                            if (!permitted) continue;
-                        }
-                        found.set(rawName, candidate.ID);
-                    }
-                }
-            } catch {
-                // Minimal test providers may only mock the primary Name IN (...) lookup; fall through cleanly.
-            }
-            missing = names.filter((n) => !found.has(n));
-        }
+        const missing = resolved.Missing ?? [];
         if (missing.length > 0) {
             return {
                 Success: false,
@@ -1413,16 +1381,9 @@ export class TaskGraphService {
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
-        return { Success: true, Map: found };
+        return { Success: true, Map: resolved.Map };
     }
 
-    /**
-     * Maps every referenced action name to its ID, or reports all unresolvable names at once.
-     *
-     * Deliberately a mirror of {@link resolveAgents} rather than a generalization of it: the two
-     * read different entities and produce different error prose, and the shared shape is three
-     * lines. Collapsing them would trade a readable failure message for a parameterized lookup.
-     */
     /**
      * Maps every referenced prompt name to its ID.
      *
@@ -1436,11 +1397,16 @@ export class TaskGraphService {
         const names = [...new Set(spec.tasks.flatMap(promptNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
+        const quoted = names.map((n) => `'${EscapeSQLString(n)}'`).join(',');
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
             { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
             context.ContextUser,
         );
+        if (!result.Success) {
+            const reason = result.ErrorMessage || 'RunView on "MJ: AI Prompts" failed';
+            LogError(`[TaskGraph] Failed to resolve "MJ: AI Prompts" by name: ${reason}`);
+            return { Success: false, ErrorMessage: reason };
+        }
 
         const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
         const missing = names.filter((n) => !found.has(n));
@@ -1459,37 +1425,20 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        // Includes a loop's repeated action — see the note in resolveAgents.
+        // Includes a loop's repeated action(s) — see the note in resolveAgents.
         const names = [...new Set(spec.tasks.flatMap(actionNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: Actions', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-            context.ContextUser,
-        );
-
-        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
-        let missing = names.filter((n) => !found.has(n));
-        if (missing.length > 0 && missing.some(looksLikeSanitizedToolName)) {
-            try {
-                const fallback = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-                    { EntityName: 'MJ: Actions', ExtraFilter: `Status='Active'`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-                    context.ContextUser,
-                );
-                for (const rawName of missing) {
-                    const targetSanitized = SanitizeToolName(rawName);
-                    if (!targetSanitized) continue;
-                    const matches = (fallback.Results ?? []).filter((r) => SanitizeToolName(r.Name) === targetSanitized);
-                    if (matches.length === 1) {
-                        found.set(rawName, matches[0].ID);
-                    }
-                }
-            } catch {
-                // Minimal test providers may only mock the primary Name IN (...) lookup; fall through cleanly.
-            }
-            missing = names.filter((n) => !found.has(n));
+        const resolved = await ResolveRecordsByNameOrToolName({
+            EntityName: 'MJ: Actions',
+            Names: names,
+            Provider: context.Provider,
+            ContextUser: context.ContextUser,
+        });
+        if (!resolved.Success || !resolved.Map) {
+            return { Success: false, ErrorMessage: resolved.ErrorMessage };
         }
+        const missing = resolved.Missing ?? [];
         if (missing.length > 0) {
             return {
                 Success: false,
@@ -1498,7 +1447,7 @@ export class TaskGraphService {
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
-        return { Success: true, Map: found };
+        return { Success: true, Map: resolved.Map };
     }
 
     /**

@@ -18,7 +18,7 @@
  * (or `steps.step_<index>.*` when `id` is omitted), alongside the loop's item/index bindings and
  * `payload.*`.
  *
- * @since 5.29.0
+ * @since 6.2.0
  */
 export interface LoopBodyActionStep {
     /**
@@ -97,7 +97,7 @@ export interface ForEachOperation {
     /**
      * Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
      * Mutually exclusive with `action`, `subAgent`, and `prompt`.
-     * @since 5.29.0
+     * @since 6.2.0
      */
     steps?: LoopBodyActionStep[];
 

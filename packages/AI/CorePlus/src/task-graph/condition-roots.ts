@@ -107,3 +107,78 @@ export function UnknownConditionRoots(expression: string, extraRoots?: ReadonlyS
     }
     return [...unknown];
 }
+
+function isIdentStart(code: number): boolean {
+    return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || code === 36;
+}
+
+function isIdentPart(code: number): boolean {
+    return isIdentStart(code) || (code >= 48 && code <= 57);
+}
+
+/**
+ * Extracts every step identifier referenced via `steps.<stepId>` or `payload.steps.<stepId>` inside
+ * a loop step condition in a single linear `O(n)` pass (with string literals stripped first).
+ *
+ * Used at validation time to reject forward references (`step[0]` reading `steps.step2.ok`),
+ * self-references, and typos in `steps.<prevId>` before the loop executes.
+ */
+export function LoopStepReferencesIn(expression: string): string[] {
+    if (!expression) return [];
+    const code = stripQuotedStringLiterals(expression);
+    const refs = new Set<string>();
+    let i = 0;
+
+    while (i < code.length) {
+        if (!isIdentStart(code.charCodeAt(i))) {
+            i++;
+            continue;
+        }
+        const prevCode = i > 0 ? code.charCodeAt(i - 1) : -1;
+        const precededByPropertyDot = prevCode === 46; // '.'
+        const start = i;
+        i++;
+        while (i < code.length && isIdentPart(code.charCodeAt(i))) {
+            i++;
+        }
+        const ident = code.slice(start, i);
+
+        // Match top-level `steps.<id>` or top-level `payload.steps.<id>`
+        let cursor = i;
+        let sawStepsRoot = false;
+        if (!precededByPropertyDot && ident === 'steps') {
+            sawStepsRoot = true;
+        } else if (!precededByPropertyDot && ident === 'payload') {
+            while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+            if (cursor < code.length && code[cursor] === '.') {
+                cursor++;
+                while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+                if (cursor < code.length && isIdentStart(code.charCodeAt(cursor))) {
+                    const subStart = cursor;
+                    cursor++;
+                    while (cursor < code.length && isIdentPart(code.charCodeAt(cursor))) cursor++;
+                    if (code.slice(subStart, cursor) === 'steps') {
+                        sawStepsRoot = true;
+                    }
+                }
+            }
+        }
+
+        if (sawStepsRoot) {
+            while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+            if (cursor < code.length && code[cursor] === '.') {
+                cursor++;
+                while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+                if (cursor < code.length && isIdentStart(code.charCodeAt(cursor))) {
+                    const idStart = cursor;
+                    cursor++;
+                    while (cursor < code.length && isIdentPart(code.charCodeAt(cursor))) cursor++;
+                    refs.add(code.slice(idStart, cursor));
+                    i = cursor;
+                }
+            }
+        }
+    }
+
+    return [...refs];
+}
