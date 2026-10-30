@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Self-test migration ID determinism detector
         # Runs on EVERY PR (even those with no migrations, like the one that introduced
@@ -75,12 +75,12 @@ jobs:
           fi
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Set up node
         # Unconditional, unlike the migration-specific steps below: the CodeGen-tail check
         # runs on every PR (see that step for why) and it needs node.
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           # No dependency cache here on purpose: this job never runs `pnpm install`
@@ -384,7 +384,7 @@ jobs:
         # step summary from the step above still fire, so the signal isn't lost.
         if: steps.check_migrations.outputs.has_migrations == 'true' && steps.id_determinism.outputs.found == 'true'
         continue-on-error: true
-        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4 (current v2 branch head), SHA-pinned
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: migration-id-determinism
           path: ${{ runner.temp }}/id-determinism-comment.md
@@ -397,7 +397,7 @@ jobs:
         # check failed. Best-effort (continue-on-error) — a no-op if there's no comment.
         if: ${{ !cancelled() && steps.id_determinism.outputs.found != 'true' }}
         continue-on-error: true
-        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4 (current v2 branch head), SHA-pinned
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: migration-id-determinism
           delete: true

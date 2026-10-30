@@ -45,14 +45,14 @@ jobs:
       BRANCH: chore/bizapps-guide-refresh
     steps:
       - name: Checkout next
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: next
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 

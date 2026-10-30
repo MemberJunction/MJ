@@ -75,7 +75,7 @@ jobs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: blob:none
@@ -222,7 +222,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Full history is needed for the base-ref diffs below, but the blobless partial clone
@@ -508,7 +508,7 @@ jobs:
       has_tests: ${{ steps.plan.outputs.has_tests }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -532,7 +532,7 @@ jobs:
       # Restore-only here; the matching save runs after the build, and ONLY on the backstop
       # events. See the save step for why PRs deliberately don't write their own entry.
       - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           # Exact key so a re-run of the SAME commit is a perfect hit; the prefix key falls
@@ -687,7 +687,7 @@ jobs:
           fi
 
       - name: Upload generated host artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: generated-host-artifacts
           path: generated-host-artifacts.tar.gz
@@ -714,7 +714,7 @@ jobs:
       # every PR's build restores from. run_attempt is in the key so a re-run rebuilds rather
       # than reading a half-written entry from the attempt that failed.
       - name: Save turbo cache for the test shards
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -765,7 +765,7 @@ jobs:
       # is independent of whether the suite passed, and re-running shouldn't pay for a cold build.
       - name: Save turbo build cache
         if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -821,7 +821,7 @@ jobs:
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -831,7 +831,7 @@ jobs:
 
       - name: Restore the build job's turbo cache
         id: shard_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -847,7 +847,7 @@ jobs:
       # The gitignored class-registration manifests the root postbuild writes into the SOURCE
       # tree. See the build job's packaging step for why the turbo cache cannot carry these.
       - name: Download generated host artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: generated-host-artifacts
 
@@ -937,7 +937,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -946,7 +946,7 @@ jobs:
       - uses: ./.github/actions/mj-setup
 
       - name: Restore the build job's turbo cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -1071,7 +1071,7 @@ jobs:
       # comment on it nor close it. A red line push still shows as a red run, and line PRs gate first.
       - name: Checkout repo
         if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -1210,7 +1210,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           filter: blob:none
@@ -1220,7 +1220,7 @@ jobs:
       # Restore-only: this job never writes cache entries (the backstop's save is the
       # canonical writer). A warm restore makes the build below a near-total cache replay.
       - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -1266,7 +1266,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage/

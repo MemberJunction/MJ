@@ -214,7 +214,7 @@ describe('test.yml — checkout cost', () => {
     // job pays it. A checkout that loses `filter: blob:none` silently re-adds minutes to every
     // lane at once.
     it('every checkout uses a blobless partial clone', () => {
-        const checkouts = WORKFLOW_TEXT.split(/uses: actions\/checkout@v4/).slice(1);
+        const checkouts = WORKFLOW_TEXT.split(/uses: actions\/checkout@\S+/).slice(1);
         expect(checkouts.length).toBeGreaterThanOrEqual(5);
         for (const [i, block] of checkouts.entries()) {
             const withBlock = block.split(/\n {6}- /)[0];
