@@ -658,6 +658,56 @@ async function main(): Promise<void> {
         }
     });
 
+    suite.Test("XS11: a single-row save through A publishes a compact row_delta for the maintained slot, never the whole cached array", async () => {
+        // Pre-row_delta, maintaining an unfiltered slot in place re-published the ENTIRE cached
+        // array as a 'set' payload on every single-row save — megabytes per mutation, times every
+        // subscriber. The slot write now asks for a 'row_delta' broadcast carrying only the mutated
+        // rows (full publish mode) or a bare 'set' notice (notice mode). Either is acceptable; a
+        // 'set' that carries a results array for this category is the regression.
+        const redisUrl = process.env.REDIS_URL;
+        const keyPrefix = process.env.REDIS_KEY_PREFIX ?? 'mj';
+        if (!redisUrl) {
+            console.log('      → skipped: needs REDIS_URL (the servers\' own)');
+            return;
+        }
+        // Warm A's unfiltered MJ: Queries slot so the save maintains it in place (XS5's precondition).
+        Assert((await a.RunView({ EntityName: 'MJ: Queries', ResultType: 'simple' }, userA)).Success, 'warm read of MJ: Queries in A failed');
+
+        const subscriber = new Redis(redisUrl);
+        const seen: Array<{ Action?: string; Category?: string; CacheKey?: string; Data?: string }> = [];
+        await subscriber.subscribe(`${keyPrefix}:__pubsub__`);
+        subscriber.on('message', (_channel: string, message: string) => {
+            const evt = JSON.parse(message) as { Action?: string; Category?: string; CacheKey?: string; Data?: string };
+            if (evt.Category === CacheCategory.RunViewCache && (evt.CacheKey ?? '').toLowerCase().startsWith('mj: queries|')) seen.push(evt);
+        });
+        const marker = `xs11-${Date.now()}`;
+        const restore = await publishQueriesChangeFromA(marker);
+        try {
+            const arrived = await waitUntil(async () => seen.length > 0, PAYLOAD_WATCH_MS);
+            Assert(arrived !== null, 'A\'s save must publish a RunViewCache event for its maintained MJ: Queries slot');
+            await sleep(SETTLE_MS); // let any trailing events for the same save land
+            const fullSets = seen.filter(e => e.Action === 'set' && typeof e.Data === 'string' && /"results"\s*:\s*\[/.test(e.Data));
+            AssertEqual(fullSets.length, 0,
+                `a single-row save must not re-broadcast the whole cached array (saw ${fullSets.length} full 'set' payload(s), ` +
+                `largest ${Math.max(0, ...fullSets.map(e => e.Data!.length))} bytes)`);
+            const deltas = seen.filter(e => e.Action === 'row_delta');
+            const notices = seen.filter(e => e.Action === 'set' && !e.Data);
+            Assert(deltas.length + notices.length > 0, `expected a row_delta (full mode) or a bare set notice (notice mode); saw actions ${seen.map(e => e.Action).join(',')}`);
+            for (const d of deltas) {
+                const payload = JSON.parse(d.Data ?? '{}') as { upsertedRows?: unknown[]; deletedPrimaryKeys?: unknown[]; rowCount?: number; primaryKeyFields?: string[] };
+                Assert(Array.isArray(payload.upsertedRows) && payload.upsertedRows.length === 1, `a one-row save carries exactly one upserted row (got ${payload.upsertedRows?.length})`);
+                AssertEqual(payload.deletedPrimaryKeys?.length ?? 0, 0, 'a save deletes nothing');
+                Assert(typeof payload.rowCount === 'number' && payload.rowCount > 0, 'rowCount carries the authoritative post-mutation slot size');
+                AssertEqual((payload.primaryKeyFields ?? []).join(','), 'ID', 'primaryKeyFields names the entity key');
+                Assert((d.Data ?? '').length < 64 * 1024, `row_delta payload must be compact (got ${(d.Data ?? '').length} bytes)`);
+            }
+            console.log(`      → ${deltas.length} row_delta, ${notices.length} notice, 0 full-array set events for A's single-row save`);
+        } finally {
+            await restore();
+            await subscriber.quit().catch(() => undefined);
+        }
+    });
+
     const failures = await suite.Run();
     await cleanupDefinitionFixture();
     process.exit(failures > 0 ? 1 : 0);

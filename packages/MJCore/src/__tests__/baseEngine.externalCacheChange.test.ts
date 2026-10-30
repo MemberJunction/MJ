@@ -476,6 +476,110 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         expect(engine._items).toHaveLength(1);
     });
 
+    it('applies a composite-primary-key row_delta (two key columns) in place', async () => {
+        const engine = new TestEngine();
+        const provider = makeDeltaProvider();
+        engine.SetProviderForTest(provider);
+        const config = makeConfig();
+        engine.SetConfigsForTest([config]);
+
+        await engine.OnExternalCacheChangeForTest(
+            config,
+            makeEvent([
+                { OrderID: 'o1', LineNo: 1, Qty: 1 },
+                { OrderID: 'o1', LineNo: 2, Qty: 1 },
+                { OrderID: 'o2', LineNo: 1, Qty: 1 },
+            ])
+        );
+        const untouched = (engine._items as MockEntity[])[2];
+
+        await engine.OnExternalCacheChangeForTest(
+            config,
+            makeDeltaEvent({
+                kind: 'row_delta',
+                primaryKeyFields: ['OrderID', 'LineNo'],
+                upsertedRows: [{ OrderID: 'o1', LineNo: 2, Qty: 5 }],
+                deletedPrimaryKeys: [{ OrderID: 'o1', LineNo: 1 }],
+                rowCount: 2,
+                maxUpdatedAt: '2026-10-29T00:00:05.000Z',
+            })
+        );
+
+        const after = engine._items as MockEntity[];
+        expect(after.map(r => `${r.data.OrderID}/${r.data.LineNo}:${r.data.Qty}`)).toEqual(['o1/2:5', 'o2/1:1']);
+        expect(after[1]).toBe(untouched);
+        expect(engine.loadSingleConfigCalls).toBe(0);
+    });
+
+    it('reloads instead of applying a row_delta to an OrderBy config (in-place upsert cannot honor the sort)', async () => {
+        const engine = new TestEngine();
+        const provider = makeDeltaProvider();
+        engine.SetProviderForTest(provider);
+        const config = makeConfig({ OrderBy: 'Note ASC' });
+        engine.SetConfigsForTest([config]);
+        await engine.OnExternalCacheChangeForTest(config, makeEvent([{ ID: 'r1', Note: 'a' }, { ID: 'r2', Note: 'b' }]));
+
+        await engine.OnExternalCacheChangeForTest(
+            config,
+            makeDeltaEvent({
+                kind: 'row_delta',
+                upsertedRows: [{ ID: 'r3', Note: '0-first' }],
+                deletedPrimaryKeys: [],
+                rowCount: 3,
+                maxUpdatedAt: '2026-10-29T00:00:06.000Z',
+            })
+        );
+        expect(engine.loadSingleConfigCalls).toBe(1);
+        expect(provider.GetEntityObject).toHaveBeenCalledTimes(2); // only the seed rows were ever materialized here
+    });
+
+    it('reloads instead of applying a row_delta written under a different schema hash', async () => {
+        const engine = new TestEngine();
+        const provider = makeDeltaProvider();
+        engine.SetProviderForTest(provider);
+        const config = makeConfig();
+        engine.SetConfigsForTest([config]);
+        await engine.OnExternalCacheChangeForTest(config, makeEvent([{ ID: 'r1', Note: 'a' }]));
+        vi.spyOn(LocalCacheManager.Instance, 'ComputeSchemaHash').mockReturnValue('current-hash');
+
+        await engine.OnExternalCacheChangeForTest(
+            config,
+            makeDeltaEvent({
+                kind: 'row_delta',
+                upsertedRows: [{ ID: 'r1', Note: 'b' }],
+                deletedPrimaryKeys: [],
+                rowCount: 1,
+                maxUpdatedAt: '2026-10-29T00:00:07.000Z',
+                schemaHash: 'other-hash',
+            })
+        );
+        expect(engine.loadSingleConfigCalls).toBe(1);
+        expect((engine._items as MockEntity[]).map(r => r.data.Note)).toEqual(['a']); // untouched; the reload owns the update
+    });
+
+    it('does not touch a permission-constrained engine on row_delta', async () => {
+        const engine = new TestEngine();
+        const provider = makeDeltaProvider();
+        engine.SetProviderForTest(provider);
+        const config = makeConfig();
+        engine.SetConfigsForTest([config]);
+        (engine as unknown as { _isPermissionConstrained: boolean })._isPermissionConstrained = true;
+
+        await engine.OnExternalCacheChangeForTest(
+            config,
+            makeDeltaEvent({
+                kind: 'row_delta',
+                upsertedRows: [{ ID: 'r1', Note: 'a' }],
+                deletedPrimaryKeys: [],
+                rowCount: 1,
+                maxUpdatedAt: '2026-10-29T00:00:08.000Z',
+            })
+        );
+        expect(engine._items).toEqual([]);
+        expect(engine.loadSingleConfigCalls).toBe(0);
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+
     it('falls back to full reload when rowCount drifts from expected length', async () => {
         const engine = new TestEngine();
         const provider = makeDeltaProvider();
