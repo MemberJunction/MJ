@@ -8,7 +8,7 @@
  */
 
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
-import { SQLCodeGenBase } from './Database/sql_codegen';
+import { SQLCodeGenBase, EntitiesNotInExcludedSchemas } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { ApplyIncludeSchemaScope } from './Database/schema-scope';
@@ -31,6 +31,7 @@ import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ReconcileFieldLevelSecurity } from './Database/reconcileFieldLevelSecurity';
+import { RunQueryRebindPass } from './Database/queryRebindPass';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
@@ -68,6 +69,14 @@ export function CountDistinctValidators(validators: ReadonlyArray<{ entityName: 
 
 export class RunCodeGenBase {
   /**
+   * The entities the post-run CRUD validator expects routines for: IncludeInAPI and in scope. An
+   * out-of-scope schema's routines belong to another run (#3384).
+   */
+  public static CRUDValidationBaseline<T extends { IncludeInAPI: boolean; SchemaName: string }>(entities: T[], excludeSchemas: string[] | undefined): T[] {
+    return EntitiesNotInExcludedSchemas(entities.filter(e => e.IncludeInAPI), excludeSchemas ?? []);
+  }
+
+  /**
    * Every step failure captured during a pipeline run: BEFORE/AFTER commands, SQL scripts,
    * metadata management, the SQL pass, validators, file generation and integrity checks.
    * The pipeline runs every step to the end, then fails (success=false, non-zero exit) with
@@ -80,6 +89,21 @@ export class RunCodeGenBase {
     this.commandFailures.push({ context, message });
     logError(`${context}: ${message}`);
     CodeGenReporter.Instance.note(`${context}: ${message}`);
+  }
+
+  /**
+   * True when a CORE file-generation pass has no in-scope entities, so it must not run (#3384). Those
+   * passes rewrite whole files from the entity list, so running one on an empty list (the core schema
+   * left out of `includeSchemas`, or excluded) would empty its output. The skip is logged as a warning.
+   * @param passLabel name of the pass, for the log
+   * @param entities the pass's scope-narrowed entity list
+   */
+  public static SkipEmptyCorePass(passLabel: string, entities: ReadonlyArray<MJ.EntityInfo>): boolean {
+    if (entities.length > 0) {
+      return false;
+    }
+    LogWarning(`Skipping ${passLabel}: no in-scope core entities (the core schema is excluded or not in includeSchemas); existing output left unchanged`);
+    return true;
   }
 
   /**
@@ -252,12 +276,15 @@ export class RunCodeGenBase {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
       ManageMetadataBase.clearFieldTracking();
+      ManageMetadataBase.ClearFieldShapeChanges();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
       reporter.mark('platform', DbPlatform());
       reporter.mark('skipDB', skipDatabaseGeneration || GetSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
       this.commandFailures = [];
+      // Saved queries the re-bind pass could not refresh. Warnings only: never a step failure.
+      let queryRebindWarnings: readonly string[] = [];
 
      try {
       const md = await reporter.phase('loadMetadata', async () => {
@@ -375,6 +402,18 @@ export class RunCodeGenBase {
           WarnSpinner('SQL output directory NOT found in config file, skipping...');
         }
 
+        // Saved queries that read an entity whose columns changed shape in this run are re-bound
+        // once the field sync (both passes) is complete; their SQL is never edited. The pass never
+        // fails the run (nor does the metadata refresh it needs): what it could not refresh comes
+        // back as warnings, repeated beside the final summary.
+        const shapeChanges = ManageMetadataBase.FieldShapeChangedEntities;
+        if (sqlGenerationSucceeded && shapeChanges.IDs.length + shapeChanges.Names.length > 0) {
+          const rebind = await reporter.phase('queryRebind', () =>
+            RunQueryRebindPass(provider, currentUser, () => this.refreshMetadataAfterManageMetadata(provider)),
+          );
+          queryRebindWarnings = rebind.Warnings;
+        }
+
         // ── Post-run CRUD validator ─────────────────────────────────────────
         // Runs UNCONDITIONALLY even when the SQL pipeline reported failure so
         // we always surface the runtime impact: which entities are about to
@@ -395,8 +434,9 @@ export class RunCodeGenBase {
           StartSpinner('Validating expected CRUD routines exist in database...');
           try {
             // Use the same baseline filter as manageSQLScriptsAndExecution: only
-            // entities flagged IncludeInAPI=true are expected to have routines.
-            const baseline = md.Entities.filter(e => e.IncludeInAPI);
+            // entities flagged IncludeInAPI=true and in scope (not in an excluded schema) are
+            // expected to have routines. An out-of-scope schema's routines are another run's (#3384).
+            const baseline = RunCodeGenBase.CRUDValidationBaseline(md.Entities, configInfo.excludeSchemas);
             let missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
 
             // Self-heal pass: when the validator finds missing routines, the
@@ -664,6 +704,7 @@ export class RunCodeGenBase {
         this.commandFailures.push({ context: 'PIPELINE', message: 'CodeGen pipeline reported a failure — see the log output above for detail.' });
       }
       pipelineSuccess = this.commandFailures.length === 0;
+      if (queryRebindWarnings.length > 0) WarnSpinner(queryRebindWarnings.join('\n'));
       if (pipelineSuccess) {
         SucceedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
         logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
@@ -795,7 +836,7 @@ export class RunCodeGenBase {
       if (!isVerbose) StartSpinner('Generating TypeScript code...');
 
       const graphQLCoreResolversOutputDir = OutputDir('GraphQLCoreEntityResolvers', false);
-      if (graphQLCoreResolversOutputDir) {
+      if (graphQLCoreResolversOutputDir && !RunCodeGenBase.SkipEmptyCorePass('CORE GraphQL resolvers', coreEntities)) {
         if (isVerbose) StartSpinner('Generating CORE Entity GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         const ok = await reporter.phase('generateGraphQLCore', async () =>
@@ -850,7 +891,7 @@ export class RunCodeGenBase {
       } else if (isVerbose) WarnSpinner('GraphQL server output directory NOT found in config file, skipping...');
 
       const coreEntitySubClassOutputDir = OutputDir('CoreEntitySubClasses', false)!;
-      if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0) {
+      if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0 && !RunCodeGenBase.SkipEmptyCorePass('CORE entity subclasses', coreEntities)) {
         if (isVerbose) StartSpinner('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
         const ok = await reporter.phase('generateEntitySubclassesCore', () =>
@@ -902,7 +943,7 @@ export class RunCodeGenBase {
       } else if (isVerbose) WarnSpinner('Entity subclass output directory NOT found in config file, skipping...');
 
       const angularCoreEntitiesOutputDir = OutputDir('AngularCoreEntities', false);
-      if (angularCoreEntitiesOutputDir) {
+      if (angularCoreEntitiesOutputDir && !RunCodeGenBase.SkipEmptyCorePass('Angular CORE entity forms', coreEntities)) {
         if (isVerbose) StartSpinner('Generating Angular CORE Entities Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
         const ok = await reporter.phase('generateAngularCore', () =>

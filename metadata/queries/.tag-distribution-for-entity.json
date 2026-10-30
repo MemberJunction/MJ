@@ -14,12 +14,137 @@
       "UsesTemplate": true
     },
     "relatedEntities": {},
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "entityName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "Inquiry",
+            "Description": "The display name of the entity to filter tagged items by (e.g., 'Inquiry', 'Customer').",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "660B35B6-5400-482D-806F-DADE4D420F76"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "TagID",
+            "Description": "Unique identifier for the tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A0A66349-315E-4485-BF42-0969A568D502"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagDisplayName",
+            "Description": "Display name of the tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "27312D93-0D30-4A3E-9DC7-C98C1D2E7F25"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagDescription",
+            "Description": "Description of the tag's purpose or meaning",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "851C3801-653B-4C08-9814-2A1C0BC1D4B3"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagParentID",
+            "Description": "Identifier for the parent tag, if this is a sub-tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C6C213D3-AA4E-44EC-B054-50540857EBD6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentTagDisplayName",
+            "Description": "Display name of the parent tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AE2B7F61-A4C0-4ECF-9D0A-F6828D167E7C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecordCount",
+            "Description": "Total number of records associated with this tag for the specified entity",
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) aggregate across grouped tags",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B9471632-8C7F-474E-8545-B880315AADB4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AvgWeight",
+            "Description": "The average weight assigned to this tag across all items",
+            "IsSummary": true,
+            "ComputationDescription": "AVG(ti.Weight) aggregate from Tagged Items",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "921D0F28-8FDF-4D78-9B12-34FAE9E7301B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EarliestTaggedAt",
+            "Description": "The timestamp of the first time this tag was applied to a record",
+            "IsSummary": true,
+            "ComputationDescription": "MIN(ti.__mj_CreatedAt) aggregate from Tagged Items",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "231172FB-F42D-4BD7-89E3-9EF41EA317A2"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatestTaggedAt",
+            "Description": "The timestamp of the most recent time this tag was applied to a record",
+            "IsSummary": true,
+            "ComputationDescription": "MAX(ti.__mj_CreatedAt) aggregate from Tagged Items",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5CF0A7F1-DFF1-4097-9D36-0AF08196167D"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "FEEC35FC-384F-40A1-B49E-2133A6930202"
     },
     "sync": {
-      "lastModified": "2026-04-12T22:09:01.256Z",
-      "checksum": "b9692a27499c459a0cfac235acb4b6a988a7a0992fc680299e2a629653359ff8"
+      "lastModified": "2026-10-28T22:14:02.291Z",
+      "checksum": "5fb2d0d38f72d9f1117b0f7e9c746fd6c07fe690ee0865860292e5243a8f8134"
     }
   }
 ]

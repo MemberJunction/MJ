@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RunView } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RelatedRecordCollection, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import * as fs from 'fs';
 import fse from 'fs-extra';
@@ -2280,7 +2280,7 @@ export class ValidationService {
         continue;
       }
 
-      const resolved = ResolveCollectionRelationship(entityInfo, colName);
+      const resolved = ResolveCollectionRelationship(entityInfo, colName) ?? (await this.resolveDeclaredCollection(entityInfo, colName));
       if (!resolved) {
         this.addError({
           type: 'entity',
@@ -2326,6 +2326,26 @@ export class ValidationService {
           { entity: entityInfo.Name }
         );
       }
+    }
+  }
+
+  /**
+   * Resolves a collection the entity's registered class declares in code (with
+   * `DeclareRelatedRecords`) rather than through relationship metadata, the way push finds it: by
+   * the companion's name on an entity object.
+   *
+   * @returns The related entity, or `null` when the class declares no collection by that name.
+   */
+  private async resolveDeclaredCollection(entityInfo: EntityInfo, colName: string): Promise<{ relatedEntity: string } | null> {
+    try {
+      const entity = await this.metadata.GetEntityObject(entityInfo.Name, GetSystemUser());
+      const target = colName.trim().toLowerCase();
+      const collection = entity.Companions.find(
+        (c): c is RelatedRecordCollection => c instanceof RelatedRecordCollection && c.Name.toLowerCase() === target
+      );
+      return collection ? { relatedEntity: collection.RelatedEntityName } : null;
+    } catch {
+      return null;
     }
   }
 
