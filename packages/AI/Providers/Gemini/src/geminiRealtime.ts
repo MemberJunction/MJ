@@ -1125,7 +1125,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     private static applyActivityDetection(config: LiveConnectConfig, settings: RealtimeTurnDetectionSettings | undefined, model: string): void {
         if (settings?.Mode === 'serverVad' || settings?.Mode === 'semanticVad') {
-            console.warn(`[GeminiRealtime] Turn-detection Mode "${settings.Mode}" has no Gemini Live equivalent for ${model}; Gemini always uses its own activity detection. SilenceDurationMs, Eagerness and Threshold still apply.`);
+            console.warn(`[GeminiRealtime] Turn-detection Mode "${settings.Mode}" has no Gemini Live equivalent for ${model}; Gemini ignores Mode; its own activity detection decides turns. SilenceDurationMs, Eagerness and Threshold still apply.`);
         }
         const mapped = MapGeminiActivityDetection(settings);
         if (Object.keys(mapped).length === 0) {

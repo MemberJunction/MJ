@@ -42,8 +42,9 @@
  * @author MemberJunction.com
  */
 
-// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
-// module keeps its framework-free / pure-transformation contract.
+// From the pure @memberjunction/ai model layer: the type import is erased at runtime, and the one value
+// import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
+// pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
 import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {

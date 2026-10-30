@@ -57,8 +57,10 @@ export function ExpiryCloseReason(
 
 /**
  * How far ahead of a stored deadline a browser's `TimeLimit` claim is still believed. The browser's
- * alarm runs on its own clock and a skewed or throttled tab may fire a little early; a minute covers that
- * without letting a client end a session meant to run for minutes more.
+ * alarm runs on its own clock: when it extends to a server ISO deadline it anchors that time against its
+ * own `Date.now()`, so a client clock running ahead of the server fires early by the difference (a throttled
+ * tab only fires late). A minute absorbs that skew without letting a client end a session meant to run for
+ * minutes more.
  */
 export const DEADLINE_CLAIM_SKEW_MS = 60_000;
 

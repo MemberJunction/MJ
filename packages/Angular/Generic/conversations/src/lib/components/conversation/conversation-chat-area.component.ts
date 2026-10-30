@@ -39,6 +39,7 @@ import { ConversationStreamingService } from '../../services/conversation-stream
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
+import type { SessionEndReason } from '@memberjunction/realtime-runtime';
 import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { UserHoldsAuthorization } from '../../services/user-authorization';
@@ -8026,7 +8027,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Says why a call ended only when it ended over a failure. A `'deadline'` end (the runtime's time-limit auto-end) is
    * a normal end: the call surface closes on its own and the visitor needs no error toast.
    */
-  private notifyIfCallFailed(reason: 'explicit' | 'error' | 'deadline'): void {
+  private notifyIfCallFailed(reason: SessionEndReason): void {
     if (reason !== 'error') {
       return;
     }

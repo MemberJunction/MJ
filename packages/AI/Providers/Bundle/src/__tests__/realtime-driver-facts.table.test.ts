@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BaseRealtimeModel, type RealtimeDriverFacts, type TurnSettingFidelity, type RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+import { BaseRealtimeModel, type RealtimeDriverFacts, type SupportedTurnSettingsMap } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import { OpenAIRealtime, OpenAILiveRealtime } from '@memberjunction/ai-openai';
 import { xAIRealtime } from '@memberjunction/ai-xai';
@@ -28,14 +28,12 @@ const EXPECTED: ReadonlyArray<readonly [DriverWithFacts, number | undefined]> = 
     [InworldRealtime, undefined],
 ];
 
-type Supported = Readonly<Partial<Record<keyof RealtimeTurnDetectionSettings, TurnSettingFidelity>>>;
-
-const OPENAI_FAMILY_SETTINGS: Supported = { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' };
-const GEMINI_SETTINGS: Supported = { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' };
+const OPENAI_FAMILY_SETTINGS: SupportedTurnSettingsMap = { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' };
+const GEMINI_SETTINGS: SupportedTurnSettingsMap = { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' };
 
 // Second column: which normalized turn settings each driver honours, and how faithfully. `undefined` =
 // the driver maps none (declares no key at all).
-const EXPECTED_TURN_SETTINGS: ReadonlyArray<readonly [DriverWithFacts, Supported | undefined]> = [
+const EXPECTED_TURN_SETTINGS: ReadonlyArray<readonly [DriverWithFacts, SupportedTurnSettingsMap | undefined]> = [
     [OpenAIRealtime, OPENAI_FAMILY_SETTINGS],
     [OpenAILiveRealtime, undefined],
     [xAIRealtime, { Mode: 'exact', Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' }],
