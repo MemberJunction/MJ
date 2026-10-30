@@ -383,7 +383,11 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     private async completeCreateAsync(provider: DatabaseProviderBase, input: CreateQuerySystemUserInput, record: MJQueryEntityServer, user: UserInfo): Promise<QueryMutationResultType> {
         await this.AfterCreate(provider, input); // fire event
         if (input.Permissions && input.Permissions.length > 0) {
-            await this.createPermissions(provider, input.Permissions, record.ID, user);
+            try {
+                await this.createPermissions(provider, input.Permissions, record.ID, user);
+            } catch (e) {
+                return { Success: false, ErrorMessage: `Query '${record.Name}' (ID ${record.ID}) was created, but its permissions were not: ${e instanceof Error ? e.message : String(e)}` };
+            }
         }
         return this.buildSuccessResult(record, user, provider);
     }
@@ -523,15 +527,41 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryPermission_);
     }
 
+    /**
+     * Saves one `MJ: Query Permissions` row per input role for the query.
+     *
+     * @throws Error naming the role and the save's own message when a row is not saved
+     */
     protected async createPermissions(p: DatabaseProviderBase, permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<void> {
         for (const perm of permissions) {
             const permissionEntity = await p.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', contextUser);
             if (permissionEntity) {
                 permissionEntity.QueryID = queryID;
                 permissionEntity.RoleID = perm.RoleID;
-                await permissionEntity.Save();
+                if (!await permissionEntity.Save()) {
+                    throw new Error(MJQueryResolverExtended.permissionWriteError('save', perm.RoleID, permissionEntity));
+                }
             }
         }
+    }
+
+    /**
+     * Deletes every `MJ: Query Permissions` row of the query.
+     *
+     * @throws Error naming the role and the delete's own message when a row is not deleted
+     */
+    protected async deletePermissions(queryID: string): Promise<void> {
+        for (const perm of QueryEngine.Instance.GetQueryPermissions(queryID)) {
+            if (!await perm.Delete()) {
+                throw new Error(MJQueryResolverExtended.permissionWriteError('delete', perm.RoleID, perm));
+            }
+        }
+    }
+
+    /** The message for a permission row that was not saved or deleted, with the entity's own reason. */
+    private static permissionWriteError(action: 'save' | 'delete', roleID: string, entity: MJQueryPermissionEntity): string {
+        const reason = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || `the ${action} reported no reason`;
+        return `Failed to ${action} the query permission for role ${roleID}: ${reason}`;
     }
 
     /**
@@ -619,14 +649,13 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
             // Handle permissions update if provided
             if (input.Permissions !== undefined) {
-                // Delete existing permissions (read from QueryEngine cache)
-                const existingPermissions = QueryEngine.Instance.GetQueryPermissions(queryID);
-                for (const perm of existingPermissions) {
-                    await perm.Delete();
+                // Replace the existing permissions (read from the QueryEngine cache); a failed write stops the update with its reason
+                try {
+                    await this.deletePermissions(queryID);
+                    await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
+                } catch (e) {
+                    return { Success: false, ErrorMessage: `Failed to update query permissions: ${e instanceof Error ? e.message : String(e)}` };
                 }
-
-                // Create new permissions
-                await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
             }
 
             return await this.buildSuccessResult(queryEntity, context.userPayload.userRecord, provider);
