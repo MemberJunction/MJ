@@ -18,8 +18,9 @@ import {
 } from '@memberjunction/core';
 import { JsonParse, MetricDirections } from '@memberjunction/predictive-studio-core';
 
-import { TrainingEngine } from '../training';
-import type { TrainingDeps } from '../training';
+import { TrainingEngine, TrainingRefusedError } from '../training';
+import type { TrainingDeps, TrainModelInput, TrainModelResult } from '../training';
+import { TrainingAttemptFailedError } from './budget';
 import type {
   IClock,
   IExperimentEntityFactory,
@@ -102,16 +103,20 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
     private readonly engine: TrainingEngine = new TrainingEngine(),
   ) {}
 
-  /** @inheritdoc */
+  /**
+   * @inheritdoc
+   * The session's remaining compute seconds become the run's timeout (the engine takes the smaller of them and the
+   * protocol's compute budget); a session with no seconds bound leaves the protocol's.
+   *
+   * @throws TrainingAttemptFailedError when the trainer stopped (`trainer-failed`), carrying the compute seconds it spent
+   */
   public async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
     const pipelineId = await this.pipelineResolver.resolvePipelineId(input);
-    const { model, run } = await this.engine.trainModel(
-      {
-        pipelineId,
-        experimentSessionIterationId: input.iterationId,
-      },
-      this.trainingDeps,
-    );
+    const { model, run } = await this.trainPipeline({
+      pipelineId,
+      experimentSessionIterationId: input.iterationId,
+      ...(input.timeoutSeconds === null ? {} : { timeoutSeconds: input.timeoutSeconds }),
+    });
     return {
       model,
       run,
@@ -119,8 +124,31 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
       // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
+      ComputeSeconds: run.ComputeSeconds ?? 0,
       TokensUsed: 0,
     };
+  }
+
+  /**
+   * Train through the engine. A run the trainer stopped is refused `trainer-failed`, and the refusal the engine throws is
+   * the one it stores on the run; it becomes a {@link TrainingAttemptFailedError} carrying that refusal's compute seconds,
+   * so the session charges the failed attempt what it spent. Every other error passes through unchanged.
+   */
+  private async trainPipeline(trainInput: TrainModelInput): Promise<TrainModelResult> {
+    try {
+      return await this.engine.trainModel(trainInput, this.trainingDeps);
+    } catch (err) {
+      const spent = TrainingEngineExperimentTrainer.failedTrainerSeconds(err);
+      if (spent !== null && err instanceof Error) throw new TrainingAttemptFailedError(err.message, spent);
+      throw err;
+    }
+  }
+
+  /** The compute seconds of a `trainer-failed` refusal, or null for any other error (`unknown`: a caught value has no narrower type). */
+  private static failedTrainerSeconds(err: unknown): number | null {
+    if (!(err instanceof TrainingRefusedError)) return null;
+    const refusal = err.Refusal;
+    return refusal.stage === 'trainer' && refusal.reason.kind === 'trainer-failed' ? refusal.reason.computeSeconds : null;
   }
 }
 

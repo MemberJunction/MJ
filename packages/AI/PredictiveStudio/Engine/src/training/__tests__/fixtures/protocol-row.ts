@@ -4,7 +4,7 @@
  * is date-carved on the decision date at 2025-01-01, so the unit-years world's 2024 cycle is development and its 2025
  * cycle the locked holdout.
  */
-import { ALLOWED_OUTCOMES, type EvaluationProtocolColumns } from '@memberjunction/predictive-studio-core';
+import { ALLOWED_OUTCOMES, EvaluationProtocol, type EvaluationProtocolColumns, type EvaluationProtocolSpec } from '@memberjunction/predictive-studio-core';
 
 /** A typed `MJ: Evaluation Protocols` row for tests (static members on one owner). */
 export class ProtocolRowFixture {
@@ -37,5 +37,16 @@ export class ProtocolRowFixture {
       AuthoredBy: JSON.stringify({ kind: 'human', userId: 'U1' }),
       ...overrides,
     };
+  }
+
+  /**
+   * The parsed protocol of {@link Row} with the same overrides.
+   *
+   * @throws Error listing the problems when the row does not parse
+   */
+  public static Spec(overrides: Partial<EvaluationProtocolColumns> = {}): EvaluationProtocolSpec {
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row(overrides));
+    if (parsed.Ok === false) throw new Error(`ProtocolRowFixture.Spec: the row does not parse: ${parsed.Errors.join('; ')}`);
+    return parsed.Value;
   }
 }

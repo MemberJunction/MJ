@@ -65,6 +65,7 @@ import {
 import { RankLeaderboard, BestEntry, SelectPrunedIterationIds } from './leaderboard';
 import { RunBounded } from './concurrency';
 import { PlanOrderWaveStrategist } from './wave-strategist';
+import { ExperimentBudget, TrainingAttemptFailedError } from './budget';
 
 /**
  * A budget check result — whether the session may continue and, if not, why.
@@ -79,15 +80,22 @@ interface IterationOutcome {
   iterationId: string;
   /** The normalized holdout score; null when the train failed or its holdout did not measure the success metric (never on the leaderboard). */
   score: number | null;
+  /** USD the attempt spent. */
   computeCost: number;
+  /** Compute seconds the attempt spent, failed or completed. */
+  computeSeconds: number;
   /** The model the train produced; null when it failed. */
   model: MJMLModelEntity | null;
 }
 
 /** Running budget accounting carried across waves. */
 interface BudgetState {
+  /** Attempts so far, failed or completed. */
   runs: number;
+  /** USD every attempt so far spent. */
   computeCost: number;
+  /** Compute seconds every attempt so far spent. */
+  computeSeconds: number;
   startedAtMs: number;
 }
 
@@ -123,7 +131,7 @@ export class ExperimentOrchestrator {
     const leaderboard: LeaderboardEntry[] = [];
     const modelsByIteration = new Map<string, MJMLModelEntity>();
     const remaining = [...plan.ProposedExperiments];
-    const budgetState: BudgetState = { runs: 0, computeCost: 0, startedAtMs: deps.clock.now() };
+    const budgetState: BudgetState = { runs: 0, computeCost: 0, computeSeconds: 0, startedAtMs: deps.clock.now() };
 
     let stopReason: SessionStopReason = 'completed';
     let sequence = 0;
@@ -212,16 +220,17 @@ export class ExperimentOrchestrator {
     return experiment;
   }
 
-  /** Budget = explicit override, else the plan's `ProposedBudget` (both optional). */
+  /**
+   * Budget = explicit override, else the plan's `ProposedBudget` (both optional), tightened by the bound protocol's
+   * trainer budgets when the session runs under one.
+   */
   private resolveBudget(plan: ModelingPlanSpec, options: ExperimentRunOptions): Budget {
-    if (options.budget) {
-      return options.budget;
-    }
-    return {
+    const planBudget: Budget = options.budget || {
       MaxComputeCost: plan.ProposedBudget?.MaxComputeCost,
       MaxRuns: plan.ProposedBudget?.MaxRuns,
       MaxWallclockMinutes: plan.ProposedBudget?.MaxWallclockMinutes,
     };
+    return ExperimentBudget.EffectiveBudget(planBudget, options.protocolBudgets || null);
   }
 
   /**
@@ -294,10 +303,12 @@ export class ExperimentOrchestrator {
     const foldOutcome = (outcome: IterationOutcome): void => {
       if (outcome.model) {
         modelsByIteration.set(outcome.iterationId, outcome.model);
-        // A completed train counts against the budget whether or not its holdout measured the success metric.
-        budgetState.runs += 1;
-        budgetState.computeCost += outcome.computeCost;
       }
+      // Every attempt counts against the budget: a failed one, and a completed one whether or not its holdout measured
+      // the success metric. A failed attempt spends the compute seconds its trainer reported.
+      budgetState.runs += 1;
+      budgetState.computeCost += outcome.computeCost;
+      budgetState.computeSeconds += outcome.computeSeconds;
       if (outcome.score !== null) {
         leaderboard.push({ IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID });
       }
@@ -308,7 +319,7 @@ export class ExperimentOrchestrator {
     };
 
     const tasks = created.map(({ iteration, experiment }) => async () => {
-      const outcome = await this.trainIteration(iteration, experiment, plan, session, deps);
+      const outcome = await this.trainIteration(iteration, experiment, plan, session, deps, budget, budgetState);
       foldOutcome(outcome);
       return outcome;
     });
@@ -340,9 +351,10 @@ export class ExperimentOrchestrator {
   }
 
   /**
-   * Train one iteration: mark it `Running`, call the trainer, link the run to the
-   * iteration, set the normalized Score + costs, and mark it `Completed` (or
-   * `Failed`). Returns a small outcome record for leaderboard/budget folding.
+   * Train one iteration: mark it `Running`, call the trainer with the compute seconds the session has left as its
+   * timeout, link the run to the iteration, set the normalized Score + costs, and mark it `Completed` (or `Failed`).
+   * Returns a small outcome record for leaderboard/budget folding; a failed attempt carries the compute seconds its
+   * trainer reported ({@link TrainingAttemptFailedError}), any other failure none.
    */
   private async trainIteration(
     iteration: MJExperimentSessionIterationEntity,
@@ -350,6 +362,8 @@ export class ExperimentOrchestrator {
     plan: ModelingPlanSpec,
     session: MJExperimentSessionEntity,
     deps: ExperimentDeps,
+    budget: Budget,
+    budgetState: BudgetState,
   ): Promise<IterationOutcome> {
     iteration.Status = 'Running';
     await this.saveOrThrow(iteration, 'mark iteration Running');
@@ -362,6 +376,7 @@ export class ExperimentOrchestrator {
         sessionId: session.ID,
         contextUser: deps.contextUser,
         provider: deps.provider,
+        timeoutSeconds: ExperimentBudget.RemainingComputeSeconds(budget, budgetState.computeSeconds),
       });
 
       const computeCost = result.ComputeCost ?? 0;
@@ -370,10 +385,11 @@ export class ExperimentOrchestrator {
       iteration.TokensUsed = result.TokensUsed ?? 0;
       iteration.Status = 'Completed';
       await this.saveOrThrow(iteration, 'finalize iteration');
-      return { iterationId: iteration.ID, score: result.Score, computeCost, model: result.model };
+      return { iterationId: iteration.ID, score: result.Score, computeCost, computeSeconds: result.ComputeSeconds ?? 0, model: result.model };
     } catch (err) {
       await this.failIteration(iteration, err);
-      return { iterationId: iteration.ID, score: null, computeCost: 0, model: null };
+      const computeSeconds = err instanceof TrainingAttemptFailedError ? err.ComputeSeconds : 0;
+      return { iterationId: iteration.ID, score: null, computeCost: 0, computeSeconds, model: null };
     }
   }
 
@@ -481,14 +497,18 @@ export class ExperimentOrchestrator {
   }
 
   /**
-   * Evaluate the session budget (§8.4): MaxRuns, MaxComputeCost, and
-   * MaxWallclockMinutes (via the injected clock). Returns the first bound hit.
+   * Evaluate the session budget: MaxRuns, MaxComputeCost (USD), MaxComputeSeconds and
+   * MaxWallclockMinutes (via the injected clock). Returns the first bound hit; either compute bound stops the session
+   * as `budget-maxComputeCost`.
    */
   private checkBudget(budget: Budget, state: BudgetState, deps: ExperimentDeps): BudgetGateResult {
     if (budget.MaxRuns != null && state.runs >= budget.MaxRuns) {
       return { exceeded: true, reason: 'budget-maxRuns' };
     }
     if (budget.MaxComputeCost != null && state.computeCost >= budget.MaxComputeCost) {
+      return { exceeded: true, reason: 'budget-maxComputeCost' };
+    }
+    if (budget.MaxComputeSeconds !== undefined && state.computeSeconds >= budget.MaxComputeSeconds) {
       return { exceeded: true, reason: 'budget-maxComputeCost' };
     }
     if (budget.MaxWallclockMinutes != null) {

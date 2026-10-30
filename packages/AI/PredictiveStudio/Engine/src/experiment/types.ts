@@ -19,6 +19,7 @@ import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/co
 import type {
   ModelingPlanSpec,
   Budget,
+  Budgets,
   LeaderboardEntry,
 } from '@memberjunction/predictive-studio-core';
 import type {
@@ -104,6 +105,11 @@ export interface TrainExperimentInput {
   contextUser?: UserInfo;
   /** Optional provider for multi-provider correctness. */
   provider?: IMetadataProvider;
+  /**
+   * Compute seconds the session has left: the attempt's trainer timeout is at most this. Null when the session has no
+   * compute-seconds bound.
+   */
+  timeoutSeconds: number | null;  // case-violation-ok-legacy-back-compat: matches the existing TrainExperimentInput member casing
 }
 
 /**
@@ -118,8 +124,10 @@ export interface TrainExperimentResult {
   run: MJMLTrainingRunEntity;
   /** Normalized holdout metric for the plan's `SuccessMetric` — drives the leaderboard; null when the holdout did not measure it. */
   Score: number | null;
-  /** Compute cost attributed to this attempt (defaults to 0 when unknown). */
+  /** Compute cost attributed to this attempt, in USD (defaults to 0 when unknown). */
   ComputeCost?: number;
+  /** Compute seconds the attempt spent (defaults to 0 when unknown); the session's compute-seconds bound sums these. */
+  ComputeSeconds?: number;
   /** LLM tokens used by this attempt (defaults to 0 when unknown). */
   TokensUsed?: number;
 }
@@ -198,6 +206,12 @@ export interface ExperimentRunOptions {
    * omitted, the orchestrator creates a new durable Experiment definition.
    */
   experimentID?: string;
+  /**
+   * The trainer budgets of the Evaluation Protocol the session's pipeline is bound to
+   * (`ExperimentBudget.ProtocolBudgetsFor`). They tighten the session budget: at most `maxCandidates` attempts and
+   * `maxComputeSeconds` compute seconds in total, failed attempts included. Omitted when the session runs under no protocol.
+   */
+  protocolBudgets?: Budgets;  // case-violation-ok-legacy-back-compat: matches the existing ExperimentRunOptions member casing
 }
 
 /**
@@ -228,7 +242,7 @@ export interface ExperimentDeps {
 export type SessionStopReason =
   | 'completed' // all proposed experiments executed (or strategist ended the loop)
   | 'budget-maxRuns' // MaxRuns budget reached → Paused
-  | 'budget-maxComputeCost' // MaxComputeCost budget reached → Paused
+  | 'budget-maxComputeCost' // MaxComputeCost (USD) or MaxComputeSeconds budget reached → Paused
   | 'budget-maxWallclock'; // MaxWallclockMinutes budget reached → Paused
 
 /**
