@@ -1,5 +1,6 @@
 ---
 "@memberjunction/core": minor
+"@memberjunction/core-entities": minor
 "@memberjunction/ai-core-plus": minor
 "@memberjunction/task-graph": minor
 "@memberjunction/ai-agents": minor

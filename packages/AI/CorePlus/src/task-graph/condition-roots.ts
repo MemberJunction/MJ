@@ -61,11 +61,42 @@ const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
  * this stays silent rather than guessing, which keeps the check sound in the direction that matters
  * — it may miss a typo, it will never invent one.
  */
+/**
+ * Replaces single- and double-quoted string literals with empty `''` placeholders in a single
+ * linear pass (`O(n)`), honoring backslash escapes without regex backtracking.
+ */
+function stripQuotedStringLiterals(expression: string): string {
+    let out = '';
+    let i = 0;
+    while (i < expression.length) {
+        const ch = expression[i];
+        if (ch === "'" || ch === '"') {
+            const quote = ch;
+            i++;
+            while (i < expression.length && expression[i] !== quote) {
+                if (expression[i] === '\\' && i + 1 < expression.length) {
+                    i += 2;
+                } else {
+                    i++;
+                }
+            }
+            if (i < expression.length) {
+                i++; // consume closing quote
+            }
+            out += "''";
+        } else {
+            out += ch;
+            i++;
+        }
+    }
+    return out;
+}
+
 export function UnknownConditionRoots(expression: string, extraRoots?: ReadonlySet<string>): string[] {
     if (!expression || expression.includes('=>')) return [];
 
     // Strings first: `payload.status === 'approved'` must not report `approved` as a root.
-    const code = expression.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, "''");
+    const code = stripQuotedStringLiterals(expression);
 
     const unknown = new Set<string>();
     // Lookbehind excludes both property access (`.includes`) and identifier tails, including the

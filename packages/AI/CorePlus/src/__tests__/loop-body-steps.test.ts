@@ -5,6 +5,7 @@ import {
     ConvertTaskGraphToAgentSpec,
     ResolveLoopBodyParams,
     TaskNode,
+    UnknownConditionRoots,
     ValidateTaskGraphSpec,
     type FlowCompilerPath,
     type FlowCompilerStep,
@@ -311,5 +312,22 @@ describe('Multi-step loop round-trip: TaskGraphSpec → AgentSpec (Flow) → Tas
                 Detail: expect.stringContaining('Add Offset'),
             }),
         ]);
+    });
+
+    it('processes pathological unclosed quotes and repeated {{ tokens in linear O(n) time without ReDoS', () => {
+        const start = Date.now();
+        const unclosedSingleQuotes = "'" + "\\'".repeat(25_000);
+        const unclosedDoubleQuotes = '"' + '\\"'.repeat(25_000);
+        expect(UnknownConditionRoots(unclosedSingleQuotes)).toEqual([]);
+        expect(UnknownConditionRoots(unclosedDoubleQuotes)).toEqual([]);
+
+        const pathologicalTemplate = '{{{{|'.repeat(10_000) + '}}';
+        const resolved = ResolveLoopBodyParams(
+            { text: pathologicalTemplate },
+            { item: 'ok' },
+            { payload: {} },
+        );
+        expect(typeof resolved.text).toBe('string');
+        expect(Date.now() - start).toBeLessThan(500);
     });
 });

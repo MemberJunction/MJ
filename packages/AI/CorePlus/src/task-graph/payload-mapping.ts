@@ -153,6 +153,25 @@ export function ResolveMappedInput(value: unknown, ctx: PayloadMappingContext): 
     return value;
 }
 
+const FORBIDDEN_PATH_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Parses an array-indexed path segment (`items[0]`) without regex backtracking.
+ */
+function parseArrayAccessSegment(part: string): { arrayName: string; index: number } | null {
+    if (!part.endsWith(']')) return null;
+    const bracketIdx = part.indexOf('[');
+    if (bracketIdx <= 0 || bracketIdx >= part.length - 2) return null;
+    const arrayName = part.slice(0, bracketIdx);
+    if (arrayName.includes('[')) return null;
+    const rawDigits = part.slice(bracketIdx + 1, -1);
+    for (let i = 0; i < rawDigits.length; i++) {
+        const code = rawDigits.charCodeAt(i);
+        if (code < 48 || code > 57) return null;
+    }
+    return { arrayName, index: parseInt(rawDigits, 10) };
+}
+
 /**
  * Walks an object path with `name[index]` array indexing and exact-first, case-insensitive-fallback
  * property lookup so loop step outputs (`steps.s1.Result` vs `steps.s1.result`) resolve reliably.
@@ -163,26 +182,26 @@ function getLoopPathValue(obj: unknown, path: string): unknown {
 
     let current: unknown = obj;
     for (const part of path.split('.')) {
-        if (!part) continue;
+        if (!part || FORBIDDEN_PATH_KEYS.has(part)) continue;
 
-        const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
-        if (arrayMatch) {
-            const [, arrayName, rawIndex] = arrayMatch;
+        const arrayAccess = parseArrayAccessSegment(part);
+        if (arrayAccess) {
+            const { arrayName, index } = arrayAccess;
+            if (FORBIDDEN_PATH_KEYS.has(arrayName)) return undefined;
             if (!isRecord(current) || Array.isArray(current)) return undefined;
-            const actualKey = arrayName in current
+            const actualKey = Object.prototype.hasOwnProperty.call(current, arrayName)
                 ? arrayName
                 : Object.keys(current).find((k) => k.toLowerCase() === arrayName.toLowerCase());
-            if (!actualKey) return undefined;
+            if (!actualKey || FORBIDDEN_PATH_KEYS.has(actualKey)) return undefined;
             const arr = current[actualKey];
-            const index = parseInt(rawIndex, 10);
             if (!Array.isArray(arr) || index < 0 || index >= arr.length) return undefined;
             current = arr[index];
         } else {
             if (!isRecord(current) || Array.isArray(current)) return undefined;
-            const actualKey = part in current
+            const actualKey = Object.prototype.hasOwnProperty.call(current, part)
                 ? part
                 : Object.keys(current).find((k) => k.toLowerCase() === part.toLowerCase());
-            if (!actualKey) return undefined;
+            if (!actualKey || FORBIDDEN_PATH_KEYS.has(actualKey)) return undefined;
             current = current[actualKey];
         }
     }
@@ -219,6 +238,77 @@ function resolveLoopExpression(
     return getLoopPathValue(ctx.payload, trimmed);
 }
 
+function isIdentifierStartCode(code: number): boolean {
+    return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || code === 36;
+}
+
+function isIdentifierPartCode(code: number): boolean {
+    return isIdentifierStartCode(code) || (code >= 48 && code <= 57);
+}
+
+/**
+ * Extracts the leading identifier root from an unbraced binding reference (`item`, `item.email`,
+ * `steps.s1.Result`, `item[0].id`), or `null` when the string is not a binding path.
+ */
+function extractBindingRoot(trimmed: string): string | null {
+    if (trimmed.length === 0 || !isIdentifierStartCode(trimmed.charCodeAt(0))) return null;
+    let end = 1;
+    while (end < trimmed.length && isIdentifierPartCode(trimmed.charCodeAt(end))) {
+        end++;
+    }
+    if (end === trimmed.length || trimmed[end] === '.' || trimmed[end] === '[') {
+        return trimmed.slice(0, end);
+    }
+    return null;
+}
+
+/**
+ * Interpolates inline `{{expr}}` placeholders in a single linear `O(n)` pass without regex
+ * backtracking (preventing polynomial ReDoS on pathological `{{{{...` strings).
+ */
+function interpolateLoopTemplates(
+    template: string,
+    bindings: Record<string, unknown>,
+    ctx: PayloadMappingContext,
+): string {
+    let result = '';
+    let cursor = 0;
+    while (cursor < template.length) {
+        const openIdx = template.indexOf('{{', cursor);
+        if (openIdx === -1) {
+            result += template.slice(cursor);
+            break;
+        }
+        const braceIdx = template.indexOf('}', openIdx + 2);
+        if (braceIdx === -1 || braceIdx + 1 >= template.length) {
+            result += template.slice(cursor);
+            break;
+        }
+        if (template[braceIdx + 1] !== '}' || braceIdx === openIdx + 2) {
+            // A lone `}` or empty `{{}}` cannot close a `{{[^}]+}}` token; jump past `braceIdx`
+            // so no character before it is ever rescanned.
+            result += template.slice(cursor, braceIdx + 1);
+            cursor = braceIdx + 1;
+            continue;
+        }
+        // Span `[openIdx + 2, braceIdx)` contains zero `}` characters and closes at `}}`.
+        const inner = template.slice(openIdx + 2, braceIdx);
+        result += template.slice(cursor, openIdx);
+        const resolved = resolveLoopExpression(inner, bindings, ctx);
+        if (resolved === undefined) {
+            result += template.slice(openIdx, braceIdx + 2);
+        } else if (resolved === null) {
+            // append empty string
+        } else if (typeof resolved === 'object') {
+            result += JSON.stringify(resolved);
+        } else {
+            result += String(resolved);
+        }
+        cursor = braceIdx + 2;
+    }
+    return result;
+}
+
 /**
  * Resolves one loop-body parameter value, supporting BOTH the Flow/TaskGraph input-mapping dialect
  * (`payload.*`, `data.*`, `context.*`, `static:*`) AND the Loop Agent template dialect
@@ -240,19 +330,18 @@ function resolveLoopBodyValue(
         if (lower.startsWith('static:')) return value.substring(value.indexOf(':') + 1);
 
         // Pure single-token template `{{expr}}` preserves raw value type (number, boolean, object, array).
-        if (trimmed.startsWith('{{') && trimmed.endsWith('}}') && !trimmed.slice(2, -2).includes('{{')) {
+        if (
+            trimmed.startsWith('{{') &&
+            trimmed.endsWith('}}') &&
+            !trimmed.slice(2, -2).includes('{{') &&
+            !trimmed.slice(2, -2).includes('}}')
+        ) {
             return resolveLoopExpression(trimmed.slice(2, -2), bindings, ctx);
         }
 
         // Inline template interpolation: `"({{item.x}} * 2) + {{steps.s1.Result}}"`.
         if (trimmed.includes('{{') && trimmed.includes('}}')) {
-            return value.replace(/\{\{([^}]+)\}\}/g, (match, inner: string) => {
-                const resolved = resolveLoopExpression(inner, bindings, ctx);
-                if (resolved === undefined) return match;
-                if (resolved === null) return '';
-                if (typeof resolved === 'object') return JSON.stringify(resolved);
-                return String(resolved);
-            });
+            return interpolateLoopTemplates(value, bindings, ctx);
         }
 
         if (lower.startsWith('payload.')) {
@@ -267,16 +356,13 @@ function resolveLoopBodyValue(
 
         // Unbraced explicit loop binding reference: e.g. `item.email`, `city.name`, `steps.s1.Result`,
         // `item[0].id`, or exact binding variable name (`city`, `index`).
-        const rootMatch = trimmed.match(/^([A-Za-z_$][A-Za-z0-9_$]*)(?:[.[].*)?$/);
-        if (rootMatch) {
-            const rootName = rootMatch[1];
-            if (Object.prototype.hasOwnProperty.call(bindings, rootName)) {
-                const hasTail = trimmed.length > rootName.length;
-                if (hasTail) {
-                    return getLoopPathValue(bindings, trimmed);
-                }
-                return bindings[rootName];
+        const rootName = extractBindingRoot(trimmed);
+        if (rootName && Object.prototype.hasOwnProperty.call(bindings, rootName)) {
+            const hasTail = trimmed.length > rootName.length;
+            if (hasTail) {
+                return getLoopPathValue(bindings, trimmed);
             }
+            return bindings[rootName];
         }
 
         return value;
@@ -287,6 +373,7 @@ function resolveLoopBodyValue(
     if (isRecord(value)) {
         const resolved: Record<string, unknown> = {};
         for (const [key, val] of Object.entries(value)) {
+            if (FORBIDDEN_PATH_KEYS.has(key)) continue;
             resolved[key] = resolveLoopBodyValue(val, bindings, ctx);
         }
         return resolved;

@@ -12,13 +12,11 @@ import {
     DecisionReferencesIn,
     ResolveDecisionStepAnswers,
     type EdgeConditionOutcome,
-    type ForEachOperation,
     type GraphDecisions,
     type HeldDecisionAnswer,
     type TaskGraphDecisionAnswer,
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
-    type WhileOperation,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { ParseConditionOutput } from './condition-gate';
@@ -44,11 +42,7 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
  * generated from a metadata JSONType. Everything else in the bag is read and written through the
  * generated type unchanged.
  */
-export type TaskStepConfiguration = Omit<MJTaskEntity_ITaskStepConfiguration, 'forEach' | 'while'> & {
-    /** The loop definition for a ForEach step, widened with `steps[]` until CodeGen regenerates __mj.ts. */
-    forEach?: ForEachOperation;
-    /** The loop definition for a While step, widened with `steps[]` until CodeGen regenerates __mj.ts. */
-    while?: WhileOperation;
+export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     /** Pre-resolved ActionIDs by action name for multi-step loop bodies (`steps[]`), stamped at submit time. */
     stepActionIds?: Record<string, string>;
     /** Settings for a Decision step. The decision prompt itself is `Task.PromptID`. */
