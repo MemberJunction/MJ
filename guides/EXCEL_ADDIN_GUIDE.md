@@ -152,4 +152,5 @@ that can't create `MJ: API Keys` can't connect Excel, and the connect page says 
 | [`@memberjunction/excel-addin-server`](../packages/OfficeAddins/ExcelServer/README.md) | The Server Extension, the manifest and workbook builders, and the operations' server bodies |
 
 The buttons live in `@memberjunction/ng-entity-viewer` and `@memberjunction/ng-query-viewer`; the
-connect page is `office/connect` in `@memberjunction/ng-explorer-core`.
+connect page is `office/connect` in `@memberjunction/ng-explorer-core`, which `@memberjunction/ng-explorer-app`
+renders on its own (no shell, no login screen), as it does the OAuth callback.
