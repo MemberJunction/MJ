@@ -116,8 +116,14 @@ const RESULT_SUMMARY_MAX_LENGTH = 4000;
 /** Normalized outcome of executing a routine's target, independent of target type. */
 interface RoutineTargetOutcome {
     Success: boolean;
-    /** Raw result content — summarized (capped) into ResultSummary and hashed for OnChange detection. */
+    /** Raw result content — hashed for OnChange detection, and the ResultSummary when there is no {@link Summary}. */
     ResultContent: string;
+    /**
+     * Human-readable result, preferred over ResultContent for the run's ResultSummary (and so the
+     * notification body). For an Agent target it is the agent's final message: the payload is
+     * often just the wake state the agent was handed.
+     */
+    Summary?: string | null;
     ErrorMessage: string | null;
     AgentRunID: string | null;
     PromptRunID: string | null;
@@ -640,8 +646,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
 
     /** Compact, capped text describing the outcome — the run row's human-readable summary. */
     private buildResultSummary(outcome: RoutineTargetOutcome): string {
+        const text = outcome.Summary?.trim() || outcome.ResultContent.trim();
         const base = outcome.Success
-            ? (outcome.ResultContent.trim().length > 0 ? outcome.ResultContent.trim() : 'Completed successfully.')
+            ? (text.length > 0 ? text : 'Completed successfully.')
             : `Failed: ${outcome.ErrorMessage ?? 'unknown error'}`;
         return base.length > RESULT_SUMMARY_MAX_LENGTH ? `${base.substring(0, RESULT_SUMMARY_MAX_LENGTH - 1)}…` : base;
     }
@@ -729,13 +736,20 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         };
 
         const conversationId = await this.EnsureRoutineConversation(routine, contextUser);
+        // A wake's payload is the wake state it was handed (workstream, reason, resume state), not
+        // something the user asked for, so it is not turned into a "<Agent> Payload" artifact.
+        // Files and media the run generates are still saved.
+        const conversationOptions = routine.RoutineType === 'AgentWake'
+            ? { conversationId, userMessage, createArtifacts: false }
+            : { conversationId, userMessage };
         const result = conversationId
-            ? (await runner.RunAgentInConversation(baseParams, { conversationId, userMessage })).agentResult
+            ? (await runner.RunAgentInConversation(baseParams, conversationOptions)).agentResult
             : await runner.RunAgent(baseParams);
 
         return {
             Success: result.success,
             ResultContent: result.payload != null ? JSON.stringify(result.payload) : '',
+            Summary: result.agentRun?.Message ?? null,
             ErrorMessage: result.agentRun?.ErrorMessage ?? null,
             AgentRunID: result.agentRun?.ID ?? null,
             PromptRunID: null,

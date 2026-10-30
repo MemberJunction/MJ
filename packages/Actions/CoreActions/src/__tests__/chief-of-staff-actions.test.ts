@@ -246,6 +246,73 @@ describe('Chief of Staff Actions Suite', () => {
         });
     });
 
+    describe('ScheduleNextAgentWakeAction — the declared parameter names', () => {
+        // The action's metadata declares NextWakeAt and DelayMinutes, and an agent that reads the
+        // declared parameters sends those. The code read only WakeAtISO / WakeInMinutes, so such a
+        // call failed with VALIDATION_ERROR and the agent had to guess the other names.
+        function routineStub() {
+            return {
+                ID: 'routine-777', UserID: '', Name: '', Description: null as string | null,
+                Status: 'Active' as MJUserRoutineEntity['Status'],
+                RoutineType: 'Standard' as MJUserRoutineEntity['RoutineType'],
+                ScheduleMode: 'OneShot' as MJUserRoutineEntity['ScheduleMode'],
+                TargetType: 'Agent' as MJUserRoutineEntity['TargetType'], TargetID: '', Timezone: 'UTC',
+                CronExpression: null as string | null, InitialMessage: null as string | null,
+                StartingPayload: null as string | null,
+                WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
+                NextRunAt: null as Date | null, ConversationID: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+        }
+        function run(paramsIn: ActionParam[]) {
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'], ContextUser: makeUser('user-abc'), Filters: [], Params: paramsIn,
+            };
+            return { params, result: invokeAction(new ScheduleNextAgentWakeAction(), params) };
+        }
+
+        it('accepts NextWakeAt as the wake time and reports ScheduledWakeTime', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+            const { params, result } = run([
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'OneShot' },
+                { Name: 'NextWakeAt', Type: 'Input', Value: '2026-11-02T15:00:00.000Z' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Remind Alice' },
+            ]);
+            expect((await result).Success).toBe(true);
+            expect(stub.NextRunAt?.toISOString()).toBe('2026-11-02T15:00:00.000Z');
+            expect(params.Params.find((p) => p.Name === 'ScheduledWakeTime')?.Value).toBe('2026-11-02T15:00:00.000Z');
+        });
+
+        it('accepts DelayMinutes as minutes from now', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+            const before = Date.now();
+            const { result } = run([
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'OneShot' },
+                { Name: 'DelayMinutes', Type: 'Input', Value: 10 },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Check back' },
+            ]);
+            expect((await result).Success).toBe(true);
+            const delta = (stub.NextRunAt?.getTime() ?? 0) - before;
+            expect(delta).toBeGreaterThanOrEqual(10 * 60_000 - 1000);
+            expect(delta).toBeLessThanOrEqual(10 * 60_000 + 5000);
+        });
+
+        it('stores the Timezone a recurring wake is given', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+            const { result } = run([
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                { Name: 'Timezone', Type: 'Input', Value: 'America/Chicago' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Daily briefing' },
+            ]);
+            expect((await result).Success).toBe(true);
+            expect(stub.Timezone).toBe('America/Chicago');
+        });
+    });
+
     describe('ConfigureAgentUserPolicyAction', () => {
         it('upserts the caller policy, stamps OnboardedAt, and refreshes AgentUserPolicyEngine cache', async () => {
             const policyStub = {
