@@ -43,6 +43,7 @@ export interface OrderByAnalysis {
  * @param sql - SQL to analyze (may contain MJ template tokens)
  * @param parserDialect - node-sql-parser dialect ('TransactSQL' or 'PostgresQL')
  * @returns Full analysis including positions, stripped SQL, and CTE legality
+ * @deprecated Use `SqlDocument.Parse(sql, dialect).TopLevelOrderBy()` and the `StripOrderBy` transform.
  */
 export function AnalyzeTopLevelOrderBy(
     sql: string,
@@ -70,6 +71,7 @@ export function AnalyzeTopLevelOrderBy(
 /**
  * Checks whether the given SQL has any top-level ORDER BY clause.
  * Convenience wrapper around {@link AnalyzeTopLevelOrderBy}.
+ * @deprecated Use `SqlDocument.Parse(sql, dialect).TopLevelOrderBy()`.
  */
 export function HasTopLevelOrderBy(sql: string, dialect: SQLParserDialect): boolean {
     return AnalyzeTopLevelOrderBy(sql, dialect).Positions.length > 0;
@@ -78,6 +80,7 @@ export function HasTopLevelOrderBy(sql: string, dialect: SQLParserDialect): bool
 /**
  * Extracts the ORDER BY clause and returns SQL without it.
  * Convenience wrapper around {@link AnalyzeTopLevelOrderBy}.
+ * @deprecated Use `SqlDocument.Parse(sql, dialect).TopLevelOrderBy()`; its `Span` gives the clause text.
  */
 export function ExtractOrderBy(
     sql: string,
@@ -340,6 +343,7 @@ function skipQuotedIdentifier(text: string, start: number, close: string): numbe
  * Walks the `_next` chain (UNION/EXCEPT/INTERSECT) to find the statement
  * that carries the ORDER BY clause. This is the single shared implementation
  * replacing the duplicated versions in both engines.
+ * @deprecated Reads a node-sql-parser tree. Use `SqlDocument.Parse(sql, dialect).TopLevelOrderBy()`.
  */
 export function FindOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
     if (stmt.orderby) return stmt;
@@ -355,6 +359,7 @@ export function findOrderByStatement(stmt: Record<string, unknown>): Record<stri
 /**
  * Checks AST properties to determine if ORDER BY is legal in a CTE context.
  * TOP, OFFSET/LIMIT, or FOR XML make ORDER BY legal inside a CTE.
+ * @deprecated Reads a node-sql-parser tree. Use `SqlDocument.Parse(sql, dialect)` (row caps and tail clauses) with the dialect grammar's `AllowsOrderByInCTE`.
  */
 export function IsOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     if (stmt.top) return true;

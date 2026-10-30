@@ -1156,7 +1156,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (65 classes)
+// @memberjunction/core-entities-server (66 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1223,6 +1223,7 @@ import {
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
 // @memberjunction/core-actions (165 classes)
@@ -2374,6 +2375,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
