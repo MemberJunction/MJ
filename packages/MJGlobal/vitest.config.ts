@@ -23,6 +23,7 @@ export default mergeConfig(
         'src/__tests__/UUIDCompliance.test.ts',
         'src/__tests__/MultiProviderCompliance.test.ts',
         'src/__tests__/FieldSecurityEgressCompliance.test.ts',
+        'src/__tests__/PlatformStringCompliance.test.ts',
       ],
     },
   })

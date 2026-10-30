@@ -60,8 +60,8 @@ import {
     QueryGridStateChangedEvent,
     QuerySelectionChangedEvent,
     QueryExportOptions,
-    BuildColumnsFromQueryFields,
-    BuildColumnsFromData,
+    BuildColumnsForResult,
+    ResultColumnNames,
     GetQueryGridStateKey
 } from './models/query-grid-types';
 import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
@@ -144,9 +144,11 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
     @Input()
     set ColumnConfigs(value: QueryGridColumnConfig[] | null) {
         this._columnConfigs = value;
+        this._resultColumnsSignature = null;
         if (value && value.length > 0) {
             this.Columns = value;
             this.buildColumnDefs();
+            this.syncConfiguredColumnsToResult();
             this.cdr.markForCheck();
         }
     }
@@ -181,10 +183,11 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
             }
         }
 
-        // If we have data but no columns from metadata or explicit configs, build from data
-        if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
-            this.Columns = BuildColumnsFromData(this._data);
-            this.buildColumnDefs();
+        // Columns follow the columns the result actually carries.
+        if (this._columnConfigs) {
+            this.syncConfiguredColumnsToResult();
+        } else {
+            this.syncColumnsToResult();
         }
 
         if (this.GridApi) {
@@ -456,27 +459,62 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
             return;
         }
 
-        // Build columns from query fields
-        this.Columns = BuildColumnsFromQueryFields(this._queryInfo.QueryFields, this.ProviderToUse);
-
-        // Apply initial state if provided via prop (takes precedence)
-        if (this.InitialGridState) {
-            this.applyColumnStateFromGridState(this.InitialGridState);
-        } else {
-            // Otherwise try to load from User Settings
-            this.loadPersistedState();
+        // Columns come from the result, not from the query's field metadata: a column the
+        // server left out (for example one the user may not read) must not appear. Until rows
+        // arrive there are no columns; the fields only format and link the columns present.
+        this._resultColumnsSignature = null;
+        this.Columns = [];
+        this.ColumnDefs = [];
+        if (!this._columnConfigs) {
+            this.syncColumnsToResult();
         }
+        this.cdr.markForCheck();
+    }
 
-        // Build AG Grid column definitions
+    /** The column names the current columns were built from, so a new page of the same shape keeps the user's layout. */
+    private _resultColumnsSignature: string | null = null;
+
+    /**
+     * Rebuilds the columns when the result's columns differ from the ones shown: the columns the
+     * rows carry, in the server's order, formatted and linked by the query's field metadata where a
+     * field describes them. Then the saved or initial grid state is applied.
+     */
+    private syncColumnsToResult(): void {
+        if (this._data.length === 0) return;
+        const signature = ResultColumnNames(this._data).join('\u0000');
+        if (signature === this._resultColumnsSignature && this.Columns.length > 0) return;
+        this._resultColumnsSignature = signature;
+        this.Columns = BuildColumnsForResult(this._data, this._queryInfo?.QueryFields ?? [], this.ProviderToUse);
+        this.applyStartingGridState();
         this.buildColumnDefs();
-
-        // If grid is already initialized and we have pending state, apply it now
         if (this.GridApi && this._pendingState) {
             this.applyFullGridState(this._pendingState);
             this._pendingState = null;
         }
+    }
 
-        this.cdr.markForCheck();
+    /**
+     * With explicit column configs, a configured column the result does not carry is not shown
+     * once rows arrive; the column definitions are rebuilt when the result's columns change.
+     */
+    private syncConfiguredColumnsToResult(): void {
+        if (this._data.length === 0) return;
+        const signature = ResultColumnNames(this._data).join('\u0000');
+        if (signature === this._resultColumnsSignature) return;
+        this._resultColumnsSignature = signature;
+        const present = new Set(ResultColumnNames(this._data));
+        this.Columns = (this._columnConfigs ?? []).filter(c => present.has(c.field));
+        this.buildColumnDefs();
+    }
+
+    /** The initial state passed in takes precedence over the user's saved state. */
+    private applyStartingGridState(): void {
+        if (!this._queryInfo) return;
+        if (this.InitialGridState) {
+            this.applyColumnStateFromGridState(this.InitialGridState);
+        } else {
+            this.loadPersistedState();
+        }
     }
 
     private applyColumnStateFromGridState(state: QueryGridState): void {

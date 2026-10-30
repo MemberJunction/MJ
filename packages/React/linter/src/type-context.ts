@@ -6,6 +6,7 @@
  * type information for data-driven type checking.
  */
 
+import * as t from '@babel/types';
 import { EntityInfo, EntityFieldInfo, UserInfo, Metadata } from '@memberjunction/core';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 
@@ -31,6 +32,76 @@ export interface TypeInfo {
   fromMetadata?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For constant literals, the actual value (e.g., '' for empty string, '2024-01-01' for date literal) */
   literalValue?: string | number | boolean | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+}
+
+/**
+ * The name a function's scope is recorded under, given the function and its parent node.
+ * A named function (or an arrow assigned to a variable) uses that name; an anonymous one
+ * uses its position in the source, so the same name can be rebuilt from the AST after
+ * inference has finished (see {@link TypeContext.GetVariableTypeInScope}).
+ */
+export function FunctionScopeName(node: t.Function, parent: t.Node | null | undefined): string {
+  if ((t.isFunctionDeclaration(node) || t.isFunctionExpression(node)) && node.id) return node.id.name;
+  if (t.isArrowFunctionExpression(node) && parent && t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+    return parent.id.name;
+  }
+  const kind = t.isArrowFunctionExpression(node) ? 'anon_arrow' : t.isFunctionExpression(node) ? 'anon_func_expr' : 'anon_func';
+  const start = node.loc?.start;
+  return start ? `${kind}@L${start.line}C${start.column}` : kind;
+}
+
+/**
+ * Whether `type` holds RunView/RunQuery rows: a row itself, or an array of rows. Field
+ * validation depends on knowing this, so inference should not trade such a type for a
+ * vaguer one.
+ */
+export function CarriesRowType(type: TypeInfo | undefined): boolean {
+  if (!type) return false;
+  const isRow = (t: TypeInfo | undefined) => t?.type === 'entity-row' || t?.type === 'query-row';
+  return isRow(type) || (type.type === 'array' && isRow(type.arrayElementType));
+}
+
+/** Array methods the type rules check: calling one on a value known not to be an array is reported. */
+const ARRAY_METHODS = new Set([
+  'push', 'pop', 'shift', 'unshift', 'splice', 'slice',
+  'map', 'filter', 'reduce', 'reduceRight', 'forEach',
+  'find', 'findIndex', 'some', 'every', 'flat', 'flatMap',
+  'sort', 'reverse', 'concat', 'join', 'fill', 'copyWithin',
+  'includes', 'indexOf', 'lastIndexOf', 'at',
+]);
+
+/** Other inferred types that have an array method of the same name and meaning. */
+const ARRAY_METHOD_OTHER_OWNERS: Readonly<Record<string, readonly string[]>> = {
+  forEach: ['Map', 'Set', 'NodeList'],
+  slice: ['string'],
+  concat: ['string'],
+  includes: ['string'],
+  indexOf: ['string'],
+  lastIndexOf: ['string'],
+  at: ['string'],
+};
+
+/**
+ * Whether calling `methodName` on a value of `type` is an array method used on something
+ * that is not an array. False when the type is unknown or an array, and false when the type
+ * has that method too: `Map#forEach`, `Set#forEach` and `String#slice` are all correct.
+ */
+export function IsArrayMethodMisuse(methodName: string, type: TypeInfo): boolean {
+  if (!ARRAY_METHODS.has(methodName)) return false;
+  if (type.type === 'unknown' || type.type === 'array') return false;
+  return !(ARRAY_METHOD_OTHER_OWNERS[methodName]?.includes(type.type) ?? false);
+}
+
+/**
+ * Whether two types that may hold rows hold rows of the same entity or query. Two arrays are
+ * otherwise "compatible", so without this check `tab === 'a' ? agentRuns : promptRuns` would
+ * be typed as agent runs and every prompt-run field read from it would look misnamed.
+ */
+export function HaveSameRowTarget(a: TypeInfo, b: TypeInfo): boolean {
+  const rowOf = (t: TypeInfo) => (t.type === 'array' ? t.arrayElementType : t);
+  const rowA = rowOf(a);
+  const rowB = rowOf(b);
+  return rowA?.type === rowB?.type && rowA?.entityName === rowB?.entityName && rowA?.queryName === rowB?.queryName;
 }
 
 /**
@@ -331,6 +402,40 @@ export class TypeContext {
   /** @deprecated Use {@link SetVariableType}. */
   setVariableType(name: string, type: TypeInfo): void {
     return this.SetVariableType(name, type);
+  }
+
+  /**
+   * Look a variable up as JavaScript resolves it: in the innermost of `scopePath` first, then
+   * each enclosing scope, then the global scope. `scopePath` lists the scope names from the
+   * outermost function inward (see {@link FunctionScopeName}). Unlike {@link GetVariableType},
+   * this never falls back to a same-named variable in an unrelated scope.
+   */
+  GetVariableTypeInScope(name: string, scopePath: string[]): TypeInfo | undefined {
+    for (let i = scopePath.length; i >= 0; i--) {
+      const prefix = i > 0 ? scopePath.slice(0, i).join('/') + ':' : '';
+      const type = this.variableTypes.get(`${prefix}${name}`);
+      if (type) return type;
+    }
+    return undefined;
+  }
+
+  /**
+   * Record a new type for an existing variable in the scope that declared it, as an
+   * assignment does. {@link SetVariableType} records it in the current scope, which is lost
+   * when that scope exits: a React state setter called inside an effect's async function
+   * would otherwise never change the type the render code sees. A variable not declared in
+   * any enclosing scope is recorded in the current one.
+   */
+  UpdateVariableType(name: string, type: TypeInfo): void {
+    for (let i = this.scopeStack.length; i >= 0; i--) {
+      const prefix = i > 0 ? this.scopeStack.slice(0, i).join('/') + ':' : '';
+      const key = `${prefix}${name}`;
+      if (this.variableTypes.has(key)) {
+        this.variableTypes.set(key, type);
+        return;
+      }
+    }
+    this.SetVariableType(name, type);
   }
 
   /**
