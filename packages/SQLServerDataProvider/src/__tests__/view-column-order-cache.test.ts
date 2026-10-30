@@ -182,4 +182,34 @@ describe('SQLServerDataProvider - per-pool view column order cache', () => {
     expect(rwAfter.executeSpy).toHaveBeenCalledTimes(1);
     expect(otherAfter.executeSpy).not.toHaveBeenCalled();
   });
+
+  it('never shares a scan across pools with different logins on the same database (sys.columns is permission-filtered)', async () => {
+    // sys.columns lists only objects the login can see. A scan through the read-only or CodeGen
+    // login may lack views the read-write login can see; serving it to the RW pool would send
+    // save-capture for those views back to metadata order — the #3102 misrouting this cache
+    // exists to prevent. Same server+database+login still shares one scan.
+    const rwPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd', user: 'MJ_Connect' } };
+    const rwPoolAgain = { config: { server: 'SQL.MJ.INTERNAL', port: 1433, database: 'mjprod', user: 'mj_connect' } };
+    const roPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd', user: 'MJ_ReadOnly' } };
+    for (const p of [rwPool, roPool]) {
+      SQLServerDataProvider.InvalidateViewColumnOrderCache(p as object as sql.ConnectionPool);
+    }
+
+    const rw = makeProvider(rwPool, SAMPLE_ROWS);
+    const rwAgain = makeProvider(rwPoolAgain, SAMPLE_ROWS);
+    const ro = makeProvider(roPool, SAMPLE_ROWS.filter(r => r.ViewName !== 'vwRoles')); // RO login cannot see vwRoles
+
+    await Promise.all([rw.provider.loadViewColumnOrderCache(), rwAgain.provider.loadViewColumnOrderCache(), ro.provider.loadViewColumnOrderCache()]);
+
+    expect(rw.executeSpy.mock.calls.length + rwAgain.executeSpy.mock.calls.length).toBe(1); // same login → shared
+    expect(ro.executeSpy).toHaveBeenCalledTimes(1);                                          // different login → own scan
+    expect(rw.provider._viewColumnOrderCache.get('__mj.vwroles')).toEqual(['ID', 'RoleName']);
+    expect(ro.provider._viewColumnOrderCache.has('__mj.vwroles')).toBe(false);
+
+    // Invalidating through the RO pool must not drop the RW pool's scan.
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(roPool as object as sql.ConnectionPool);
+    const rwAfter = makeProvider(rwPool, SAMPLE_ROWS);
+    await rwAfter.provider.loadViewColumnOrderCache();
+    expect(rwAfter.executeSpy).not.toHaveBeenCalled();
+  });
 });

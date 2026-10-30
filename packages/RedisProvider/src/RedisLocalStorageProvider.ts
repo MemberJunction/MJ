@@ -1043,11 +1043,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             // a compact row-delta override (`pubSubAction: 'row_delta'`), Redis still stores the
             // full serialized snapshot at `redisKey`, while pub/sub broadcasts only the delta.
             const writeOpts = typeof options === 'object' && options !== null ? options : undefined;
-            const pubAction: CacheChangedEvent['Action'] = writeOpts?.pubSubAction ?? 'set';
-            const pubPayload =
-                pubAction === 'row_delta' && writeOpts?.pubSubData !== undefined
-                    ? writeOpts.pubSubData
-                    : serialized;
+            // A 'row_delta' is only meaningful with its compact payload; without one, receivers would
+            // reject the shape and reload, so publish the ordinary full 'set' instead.
+            const hasRowDelta = writeOpts?.pubSubAction === 'row_delta' && typeof writeOpts.pubSubData === 'string';
+            const pubAction: CacheChangedEvent['Action'] = hasRowDelta ? 'row_delta' : 'set';
+            const pubPayload = hasRowDelta ? writeOpts.pubSubData! : serialized;
             this.publishChange(key, cat, pubAction, pubPayload);
         } catch (err) {
             if (this._enableLogging) {

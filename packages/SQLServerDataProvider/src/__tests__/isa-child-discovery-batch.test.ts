@@ -87,7 +87,37 @@ describe('DatabaseProviderBase.FindISAChildEntitiesBatch (via SQLServerDataProvi
     const sent = executeSpy.mock.calls.map(c => c[0] as string);
     expect(sent[0].match(/'K\d+'/g)).toHaveLength(500);
     expect(sent[2].match(/'K\d+'/g)).toHaveLength(200);
+    // Every unique key appears exactly once across the three statements — no duplicate probing.
+    const allKeys = sent.flatMap(q => q.match(/'K\d+'/g) ?? []);
+    expect(new Set(allKeys).size).toBe(1200);
+    expect(allKeys).toHaveLength(1200);
     expect(result.size).toBe(0); // the stub returned no rows
+  });
+
+  it('falls back to the child declaration order when a dialect omits the Priority column', async () => {
+    const { provider, executeSpy } = makeProvider();
+    executeSpy.mockResolvedValueOnce([
+      { EntityName: 'Publications', RecordPK: 'abc' }, // no Priority → declaration order decides
+      { EntityName: 'Meetings', RecordPK: 'abc' },
+    ]);
+    const result = await provider.FindISAChildEntitiesBatch(
+      parent([child('Meetings', 'vwMeetings', 'ID'), child('Publications', 'vwPublications', 'ID')]),
+      ['abc']
+    );
+    expect(result.get('abc')).toEqual(['Meetings', 'Publications']);
+  });
+
+  it('merges matches for one key across chunks into a single ordered list', async () => {
+    const { provider, executeSpy } = makeProvider();
+    // 501 keys → two chunks; the stub answers the first chunk only, for a key in that chunk.
+    executeSpy
+      .mockResolvedValueOnce([{ EntityName: 'Meetings', RecordPK: 'K0', Priority: 1 }])
+      .mockResolvedValueOnce([]);
+    const keys = Array.from({ length: 501 }, (_, i) => `K${i}`);
+    const result = await provider.FindISAChildEntitiesBatch(parent([child('Meetings', 'vwMeetings', 'ID')]), keys);
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+    expect(result.get('k0')).toEqual(['Meetings']);
+    expect(result.size).toBe(1);
   });
 
   it('keys the result by the lower-cased pk and orders multi-subtype matches by child priority', async () => {

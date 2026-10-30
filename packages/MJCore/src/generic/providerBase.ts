@@ -3700,11 +3700,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entityCheckTime = performance.now() - entityCheckStart;
 
         // Save the caller's original Fields request for post-cache filtering.
-        // When widening happens (full-row read, explicit CacheLocal: true, or entity_object),
-        // we fetch every field this user's permission class may read so the cache entry is a
-        // superset for that class. For ad-hoc narrow Fields reads without CacheLocal: true,
-        // we check any already-warm superset slot first (0-SQL hit), and on a miss preserve
-        // the caller's narrow SQL projection without writing partial rows into the cache.
+        // When widening happens (full-row read, a cache-eligible read on the server, explicit
+        // CacheLocal: true, or entity_object), we fetch every field this user's permission class
+        // may read so the cache entry is a superset for that class, and project the result back to
+        // the caller's Fields. A narrow Fields read first checks any already-warm superset slot
+        // (0-SQL hit). Only CacheLocal: false or BypassCache: true keep the caller's narrow SQL
+        // projection on a miss, and then nothing is written to the cache.
         const entityLookupStart = performance.now();
         const rawCallerRequestedFields = params.Fields && params.Fields.length > 0
             ? params.Fields.map(f => f.trim().toLowerCase())

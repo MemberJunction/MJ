@@ -1777,5 +1777,28 @@ describe('RedisLocalStorageProvider', () => {
                 await pubProvider.Disconnect();
             }
         });
+
+        it('publishes an ordinary full set when pubSubAction is row_delta but no compact pubSubData was supplied', async () => {
+            // A row_delta without its payload is unusable to receivers (they fail the shape check and
+            // reload), so the provider must not label the full snapshot as a delta.
+            const pubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                publishModes: { RunViewCache: 'full' },
+            });
+            try {
+                const publishSpy = pubProvider.Client.publish as ReturnType<typeof vi.fn>;
+                publishSpy.mockClear();
+                const fullValue = JSON.stringify({ results: [{ ID: '1', Name: 'Alice' }] });
+                await pubProvider.SetItem('Users|_|_|-1|0|_|_', fullValue, 'RunViewCache', { pubSubAction: 'row_delta' });
+                expect(publishSpy).toHaveBeenCalledTimes(1);
+                const published = JSON.parse(publishSpy.mock.calls[0][1] as string) as { Action: string; Data?: string };
+                expect(published.Action).toBe('set');
+                // an ordinary 'set' carries the stored (serialized) value, exactly as a plain SetItem does
+                expect(JSON.parse(published.Data as string)).toBe(fullValue);
+            } finally {
+                await pubProvider.Disconnect();
+            }
+        });
     });
 });

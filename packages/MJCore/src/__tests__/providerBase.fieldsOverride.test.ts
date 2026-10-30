@@ -411,8 +411,8 @@ describe('ProviderBase Fields-Override Gate — PreRunViews', () => {
     it('Batch with one BypassCache=true item under server mode: only that item keeps narrow Fields', async () => {
         provider.trustLocalCache = true;
         await provider.RunViews([
-            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, CacheLocal: true },                      // explicit CacheLocal → override
-            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, CacheLocal: true, BypassCache: true },   // bypassed → no override
+            { EntityName: 'Cacheable', Fields: NARROW_FIELDS },                                         // server mode default → override
+            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, BypassCache: true },                     // bypassed → no override
         ]);
         expect(capturedFieldsAt(provider,0)).toEqual(FULL_FIELDS);
         expect(capturedFieldsAt(provider,1)).toEqual(NARROW_FIELDS);
@@ -1109,10 +1109,10 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
         expect(rowKeys(result)).toEqual([...FULL_FIELDS].sort());
     });
 
-    it('Batch RunViews: each CacheLocal=true MISS is projected to its OWN param’s Fields (per-index callerFieldsMap)', async () => {
+    it('Batch RunViews: each MISS is projected to its OWN param’s Fields (per-index callerFieldsMap)', async () => {
         const [r1, r2] = await provider.RunViews([
-            { EntityName: 'Cacheable', Fields: ['ID', 'Name'], ExtraFilter: "Status='Active'", CacheLocal: true },
-            { EntityName: 'Cacheable', Fields: ['Description'], ExtraFilter: "Status='Inactive'", CacheLocal: true },
+            { EntityName: 'Cacheable', Fields: ['ID', 'Name'], ExtraFilter: "Status='Active'" },
+            { EntityName: 'Cacheable', Fields: ['Description'], ExtraFilter: "Status='Inactive'" },
         ]);
 
         // Both reached the DB widened (two distinct fingerprints → two misses)
@@ -1132,7 +1132,7 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
             // Same fingerprint as the warmed entry (Fields excluded from fingerprint) → HIT even without CacheLocal!
             { EntityName: 'Cacheable', Fields: ['ID', 'Status'] },
             // Different filter → different fingerprint → MISS with CacheLocal=true
-            { EntityName: 'Cacheable', Fields: ['Name'], ExtraFilter: "Status='Active'", CacheLocal: true },
+            { EntityName: 'Cacheable', Fields: ['Name'], ExtraFilter: "Status='Active'" },
         ]);
 
         // Only the miss reached the DB

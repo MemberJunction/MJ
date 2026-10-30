@@ -515,6 +515,7 @@ export class SQLServerDataProvider
           server?: string;
           port?: number;
           database?: string;
+          user?: string;
           options?: { instanceName?: string };
         };
       } | null | undefined
@@ -532,7 +533,13 @@ export class SQLServerDataProvider
           ? `/${cfg.options.instanceName.trim().toLowerCase()}`
           : '';
       const db = cfg.database.trim().toLowerCase();
-      return `mssql://${host}:${port}${instance}/${db}`;
+      // The login is part of the identity: sys.columns only lists objects the login can see, so a
+      // scan made through the read-only or CodeGen login must never be served to the read-write
+      // pool (or vice versa) — a view missing from the map falls back to metadata order, the very
+      // misrouting this cache exists to prevent (#3102). Pools sharing server, database AND login
+      // still share one scan.
+      const user = typeof cfg.user === 'string' && cfg.user.trim().length > 0 ? cfg.user.trim().toLowerCase() : '';
+      return `mssql://${user}@${host}:${port}${instance}/${db}`;
     }
     return null;
   }
