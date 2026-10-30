@@ -974,15 +974,19 @@ export function ComposeStudioFirstMessage(input: StudioFirstMessageInput): strin
         input.Formats && input.Formats.length > 0
             ? input.Formats.map((f) => f.trim()).filter((f) => f.length > 0).join(', ')
             : '16:9';
-    const brandKit = (input.BrandKitName ?? '').trim() || 'none';
+    const rawBrandKit = (input.BrandKitName ?? '').trim();
+    const brandKitClause =
+        rawBrandKit.length > 0 && rawBrandKit.toLowerCase() !== 'none'
+            ? `, brand kit ${rawBrandKit}`
+            : '';
     const queriesList = (input.QueryNames ?? [])
         .map((q) => q.trim())
-        .filter((q) => q.length > 0);
-    const queriesText = queriesList.length > 0 ? queriesList.join(', ') : 'none';
+        .filter((q) => q.length > 0 && q.toLowerCase() !== 'none');
+    const dataClause = queriesList.length > 0 ? `, data from ${queriesList.join(', ')}` : '';
     const narrationClause =
         input.NarrationEnabled === false ? ', without voiceover narration' : '';
 
-    return `Make a ${archetype} video, about ${topic}, ${duration} seconds, formats ${formats}, brand kit ${brandKit}, data from ${queriesText}${narrationClause}.`;
+    return `Make a ${archetype} video, about ${topic}, ${duration} seconds, formats ${formats}${brandKitClause}${dataClause}${narrationClause}.`;
 }
 
 /**

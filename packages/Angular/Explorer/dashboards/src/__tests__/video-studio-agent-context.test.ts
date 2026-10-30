@@ -396,7 +396,7 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
         );
     });
 
-    it('composes deterministic plain-text first message naming archetype, topic, duration, formats, brand kit, and queries', () => {
+    it('composes deterministic plain-text first message and omits brand kit or data clauses when None/empty', () => {
         const message = ComposeStudioFirstMessage({
             ArchetypeName: 'Executive Briefing',
             Topic: 'Q3 revenue growth and customer expansion',
@@ -410,6 +410,20 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
             'Make a Executive Briefing video, about Q3 revenue growth and customer expansion, 60 seconds, formats 16:9, 9:16, brand kit Acme Primary Brand, data from Quarterly ARR By Segment, Top Customer Renewals.',
         );
 
+        const withBrandKitNoQueries = ComposeStudioFirstMessage({
+            ArchetypeName: 'Product Launch',
+            Topic: 'New winter release',
+            DurationSeconds: 25,
+            Formats: ['16:9'],
+            BrandKitName: 'Acme Primary Brand',
+            QueryNames: [],
+        });
+
+        expect(withBrandKitNoQueries).toBe(
+            'Make a Product Launch video, about New winter release, 25 seconds, formats 16:9, brand kit Acme Primary Brand.',
+        );
+        expect(withBrandKitNoQueries).not.toContain('data from none');
+
         const minimal = ComposeStudioFirstMessage({
             ArchetypeName: 'Social Reel',
             Topic: 'New feature launch',
@@ -420,7 +434,22 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
         });
 
         expect(minimal).toBe(
-            'Make a Social Reel video, about New feature launch, 15 seconds, formats 9:16, brand kit none, data from none.',
+            'Make a Social Reel video, about New feature launch, 15 seconds, formats 9:16.',
+        );
+        expect(minimal).not.toContain('brand kit');
+        expect(minimal).not.toContain('data from');
+
+        const explicitNoneBrandKit = ComposeStudioFirstMessage({
+            ArchetypeName: 'Social Reel',
+            Topic: 'New feature launch',
+            DurationSeconds: 15,
+            Formats: ['9:16'],
+            BrandKitName: 'None',
+            QueryNames: ['Q1 Signups'],
+        });
+
+        expect(explicitNoneBrandKit).toBe(
+            'Make a Social Reel video, about New feature launch, 15 seconds, formats 9:16, data from Q1 Signups.',
         );
     });
 
@@ -564,14 +593,42 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
         expect(service.BriefTopic).toBe('Q3 ARR growth');
         expect(publishedContexts.length).toBe(4);
 
-        const archetypesCombined = service.BuildCombinedAppContext({
-            Surface: 'VideoStudioArchetypes',
-            SuppressChatOverlay: true,
+        // ApplyBriefSnapshot preserves queries, duration, narration, captions, and explicit None brand kit across Close/reopen
+        service.ApplyBriefSnapshot({
+            AllArchetypes: [sampleArchetype],
+            AllBrandKits: [sampleKit],
+            SelectedArchetype: sampleArchetype,
+            SelectedBrandKit: null,
+            SelectedBrandKitExplicitNone: true,
+            SelectedFormats: ['16:9', '9:16'],
+            DurationSeconds: 45,
+            Topic: 'Q3 ARR growth',
+            SelectedQueries: [{ ID: 'q-arr-1', Name: 'Quarterly ARR' }],
+            NarrationEnabled: false,
+            CaptionsMode: 'None',
+            AppContext: {},
+            IsLoading: false,
         });
+        service.Close();
+        expect(service.IsOpen).toBe(false);
+        expect(service.BriefTopic).toBe('Q3 ARR growth');
+        expect(service.BriefSelectedQueries).toEqual([{ ID: 'q-arr-1', Name: 'Quarterly ARR' }]);
+        expect(service.BriefSelectedBrandKit).toBeNull();
+        expect(service.BriefSelectedBrandKitExplicitNone).toBe(true);
+
+        // Even with a fallbackBrandKitId provided, explicit "None" stays null and QueryIDs are preserved
+        const archetypesCombined = service.BuildCombinedAppContext(
+            {
+                Surface: 'VideoStudioArchetypes',
+                SuppressChatOverlay: true,
+            },
+            'kit-org-1',
+        );
         expect(archetypesCombined['Surface']).toBe('VideoStudioArchetypes');
         expect(archetypesCombined['SuppressChatOverlay']).toBe(true);
         expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['ArchetypeID']).toBe('arch-kpi-1');
-        expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['BrandKitID']).toBe('kit-org-1');
+        expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['BrandKitID']).toBeNull();
+        expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['QueryIDs']).toEqual(['q-arr-1']);
         expect((archetypesCombined['VideoStudio'] as Record<string, unknown>)['Formats']).toEqual(['16:9', '9:16']);
 
         // Also test BuildStudioBriefClientTools directly with a mounted brief handle

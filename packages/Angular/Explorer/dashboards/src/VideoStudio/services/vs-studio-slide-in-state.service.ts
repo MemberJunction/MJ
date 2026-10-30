@@ -19,6 +19,7 @@ import {
   StudioAppContextPayload,
   StudioBriefClientToolDefinition,
   StudioBriefComponentHandle,
+  StudioSavedQueryItem,
   StudioVideoFormat,
 } from '../video-studio-agent-context';
 
@@ -29,9 +30,11 @@ export interface VSStudioSlideInStateSnapshot {
   PendingArtifactVersionNumber: number | null;
   BriefSelectedArchetype: ArchetypeCardSnapshot | null;
   BriefSelectedBrandKit: BrandKitCardSnapshot | null;
+  BriefSelectedBrandKitExplicitNone: boolean;
   BriefSelectedFormats: string[];
   BriefDurationSeconds: number;
   BriefTopic: string;
+  BriefSelectedQueries: StudioSavedQueryItem[];
   NarrationEnabled: boolean;
   CaptionsMode: VideoCaptionMode;
 }
@@ -59,9 +62,11 @@ export class VSStudioSlideInStateService {
 
   public BriefSelectedArchetype: ArchetypeCardSnapshot | null = null;
   public BriefSelectedBrandKit: BrandKitCardSnapshot | null = null;
+  public BriefSelectedBrandKitExplicitNone = false;
   public BriefSelectedFormats: string[] = ['16:9'];
   public BriefDurationSeconds = 30;
   public BriefTopic = '';
+  public BriefSelectedQueries: StudioSavedQueryItem[] = [];
   public NarrationEnabled = true;
   public CaptionsMode: VideoCaptionMode = 'Burned';
 
@@ -78,7 +83,7 @@ export class VSStudioSlideInStateService {
 
   /**
    * Opens the slide-in on a brand-new conversation (`ConversationId = null`),
-   * displaying `<vs-production-brief>` in the chat area's `emptyState` slot.
+   * displaying `<vs-production-brief>` in the chat area's `composerExtra` slot.
    */
   public OpenNewProduction(): void {
     this.ConversationId = null;
@@ -154,11 +159,17 @@ export class VSStudioSlideInStateService {
   }
 
   public ApplyBriefSnapshot(snapshot: VSProductionBriefStateSnapshot): void {
-    this.BriefSelectedArchetype = snapshot.SelectedArchetype;
+    if (snapshot.SelectedArchetype !== null || !snapshot.IsLoading) {
+      this.BriefSelectedArchetype = snapshot.SelectedArchetype;
+    }
     this.BriefSelectedBrandKit = snapshot.SelectedBrandKit;
+    this.BriefSelectedBrandKitExplicitNone = Boolean(
+      snapshot.SelectedBrandKitExplicitNone,
+    );
     this.BriefSelectedFormats = [...snapshot.SelectedFormats];
     this.BriefDurationSeconds = snapshot.DurationSeconds;
     this.BriefTopic = snapshot.Topic;
+    this.BriefSelectedQueries = [...snapshot.SelectedQueries];
     this.NarrationEnabled = snapshot.NarrationEnabled;
     this.CaptionsMode = snapshot.CaptionsMode;
     this.emitState();
@@ -167,13 +178,16 @@ export class VSStudioSlideInStateService {
   public BuildStudioAppContextPayload(
     fallbackBrandKitId: string | null = null,
   ): { VideoStudio: StudioAppContextPayload } {
+    const resolvedBrandKitId = this.BriefSelectedBrandKitExplicitNone
+      ? null
+      : (this.BriefSelectedBrandKit?.ID ?? fallbackBrandKitId);
     return BuildStudioAppContext({
       ArchetypeID: this.BriefSelectedArchetype?.ID ?? null,
-      BrandKitID: this.BriefSelectedBrandKit?.ID ?? fallbackBrandKitId,
+      BrandKitID: resolvedBrandKitId,
       Formats:
         this.BriefSelectedFormats.length > 0 ? this.BriefSelectedFormats : ['16:9'],
       DurationSeconds: this.BriefDurationSeconds,
-      QueryIDs: [],
+      QueryIDs: this.BriefSelectedQueries.map((q) => q.ID),
       NarrationEnabled: this.NarrationEnabled ? undefined : false,
       CaptionsMode: this.CaptionsMode === 'Burned' ? undefined : this.CaptionsMode,
     });
@@ -223,6 +237,7 @@ export class VSStudioSlideInStateService {
       },
       OnBrandKitSelected: (brandKit: BrandKitCardSnapshot | null) => {
         this.BriefSelectedBrandKit = brandKit;
+        this.BriefSelectedBrandKitExplicitNone = brandKit === null;
         this.emitState();
         options.OnBriefMutated?.();
       },
@@ -246,9 +261,11 @@ export class VSStudioSlideInStateService {
     this.PendingArtifactVersionNumber = null;
     this.BriefSelectedArchetype = null;
     this.BriefSelectedBrandKit = null;
+    this.BriefSelectedBrandKitExplicitNone = false;
     this.BriefSelectedFormats = ['16:9'];
     this.BriefDurationSeconds = 30;
     this.BriefTopic = '';
+    this.BriefSelectedQueries = [];
     this.NarrationEnabled = true;
     this.CaptionsMode = 'Burned';
     this.emitState();
@@ -330,9 +347,11 @@ export class VSStudioSlideInStateService {
       PendingArtifactVersionNumber: this.PendingArtifactVersionNumber,
       BriefSelectedArchetype: this.BriefSelectedArchetype,
       BriefSelectedBrandKit: this.BriefSelectedBrandKit,
+      BriefSelectedBrandKitExplicitNone: this.BriefSelectedBrandKitExplicitNone,
       BriefSelectedFormats: [...this.BriefSelectedFormats],
       BriefDurationSeconds: this.BriefDurationSeconds,
       BriefTopic: this.BriefTopic,
+      BriefSelectedQueries: [...this.BriefSelectedQueries],
       NarrationEnabled: this.NarrationEnabled,
       CaptionsMode: this.CaptionsMode,
     };

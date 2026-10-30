@@ -4,8 +4,10 @@ import {
   Component,
   EventEmitter,
   Input,
+  OnChanges,
   OnInit,
   Output,
+  SimpleChanges,
   ViewChild,
   inject,
 } from '@angular/core';
@@ -25,12 +27,19 @@ import { PendingAttachment } from '@memberjunction/ng-composer';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { VideoCaptionMode } from '@memberjunction/video-studio-core';
+import {
+  ArchetypeCardSnapshot,
+  BrandKitCardSnapshot,
+  StudioSavedQueryItem,
+} from '../video-studio-agent-context';
 import {
   VSProductionBriefComponent,
   VSProductionBriefSetupHealthEvent,
   VSProductionBriefStartEvent,
   VSProductionBriefStateSnapshot,
 } from './vs-production-brief.component';
+import { VSSetupHealthCardComponent } from './vs-setup-health-card.component';
 
 /** Canonical AI agent name for the Video Studio orchestrator. */
 export const VIDEO_STUDIO_AGENT_NAME = 'Video Studio';
@@ -43,6 +52,24 @@ export interface VSCopilotConversationCreatedEvent {
   conversation: MJConversationEntity;
   pendingMessage?: string;
   pendingAttachments?: PendingAttachment[];
+}
+
+interface ChatAreaArtifactHandle {
+  initialDraftSnapshots?: Map<string, string | null>;
+  ShowImageViewer?: boolean;
+  IsProcessing?: boolean;
+  SelectedArtifactId?: string | null;
+  SelectedVersionNumber?: number;
+  ShowArtifactPanel?: boolean;
+  ArtifactsByDetailId?: Map<
+    string,
+    Array<{
+      artifactId: string;
+      artifactVersionId?: string;
+      versionNumber?: number;
+    }>
+  >;
+  OnArtifactClicked?: (data: { artifactId: string; versionId?: string }) => Promise<void>;
 }
 
 /**
@@ -60,6 +87,7 @@ export interface VSCopilotConversationCreatedEvent {
     SharedGenericModule,
     MJButtonDirective,
     VSProductionBriefComponent,
+    VSSetupHealthCardComponent,
   ],
   templateUrl: './vs-copilot-panel.component.html',
   styleUrls: ['./vs-copilot-panel.component.css'],
@@ -67,7 +95,7 @@ export interface VSCopilotConversationCreatedEvent {
 })
 export class VSCopilotPanelComponent
   extends BaseAngularComponent
-  implements OnInit
+  implements OnInit, OnChanges
 {
   private _conversationId: string | null = null;
 
@@ -90,6 +118,16 @@ export class VSCopilotPanelComponent
   @Input() ShowCloseButton = false;
   @Input() SetupHealthResult: VideoStudioSetupHealthOutput | null = null;
 
+  @Input() BriefSelectedArchetype: ArchetypeCardSnapshot | null = null;
+  @Input() BriefSelectedBrandKit: BrandKitCardSnapshot | null = null;
+  @Input() BriefSelectedBrandKitExplicitNone = false;
+  @Input() BriefSelectedFormats: string[] = ['16:9'];
+  @Input() BriefDurationSeconds = 30;
+  @Input() BriefTopic = '';
+  @Input() BriefSelectedQueries: StudioSavedQueryItem[] = [];
+  @Input() BriefNarrationEnabled = true;
+  @Input() BriefCaptionsMode: VideoCaptionMode = 'Burned';
+
   @Output() ConversationCreated = new EventEmitter<VSCopilotConversationCreatedEvent>();
   @Output() PendingMessageConsumed = new EventEmitter<void>();
   @Output() PendingArtifactConsumed = new EventEmitter<void>();
@@ -99,7 +137,7 @@ export class VSCopilotPanelComponent
   @Output() BriefStartRequested = new EventEmitter<VSProductionBriefStartEvent>();
 
   @ViewChild('chatArea')
-  private chatArea?: { initialDraftSnapshots?: Map<string, string | null> };
+  private chatArea?: ChatAreaArtifactHandle;
 
   @ViewChild('briefComponent')
   public BriefComponent?: VSProductionBriefComponent;
@@ -110,7 +148,7 @@ export class VSCopilotPanelComponent
   public ActiveConversation: MJConversationEntity | null = null;
   public ChatIsNewConversation = true;
   public ComposerDraft: string | null = null;
-  public IsBriefCollapsed = false;
+  public IsBriefCollapsed = true;
   public BriefSummaryLine = '';
   public IsCheckingSetupHealth = false;
   public ShowHealthySetupDetails = false;
@@ -121,12 +159,82 @@ export class VSCopilotPanelComponent
     this.syncConversationMode();
     if (
       !this.SetupHealthResult &&
+      !this.IsCheckingSetupHealth &&
       this.ProviderToUse &&
       'ExecuteGQL' in (this.ProviderToUse as object)
     ) {
       void this.CheckSetupHealth();
     }
     await this.ResolveVideoStudioAgent();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (
+      changes['PendingArtifactId'] &&
+      this.PendingArtifactId &&
+      !changes['ConversationId'] &&
+      this.ConversationId
+    ) {
+      this.OpenIterateArtifact(
+        this.PendingArtifactId,
+        this.PendingArtifactVersionNumber,
+      );
+    }
+  }
+
+  public get IsImageViewerOpen(): boolean {
+    return Boolean(this.chatArea?.ShowImageViewer);
+  }
+
+  public get IsCreatingConversation(): boolean {
+    return (
+      (this.ChatIsNewConversation && Boolean(this.chatArea?.IsProcessing)) ||
+      Boolean(this.PendingMessage)
+    );
+  }
+
+  /**
+   * Opens an artifact directly on the active `<mj-conversation-chat-area>` when
+   * `Iterate` is clicked for a production whose conversation is already loaded.
+   */
+  public OpenIterateArtifact(
+    artifactId: string,
+    versionNumber: number | null = null,
+  ): boolean {
+    const trimmedId = (artifactId ?? '').trim();
+    if (!trimmedId || !this.chatArea) {
+      return false;
+    }
+    let versionId: string | undefined;
+    if (versionNumber != null && this.chatArea.ArtifactsByDetailId) {
+      for (const list of this.chatArea.ArtifactsByDetailId.values()) {
+        for (const info of list) {
+          if (
+            UUIDsEqual(info.artifactId, trimmedId) &&
+            info.versionNumber === versionNumber &&
+            info.artifactVersionId
+          ) {
+            versionId = info.artifactVersionId;
+            break;
+          }
+        }
+        if (versionId) {
+          break;
+        }
+      }
+    }
+    if (typeof this.chatArea.OnArtifactClicked === 'function') {
+      void this.chatArea.OnArtifactClicked({
+        artifactId: trimmedId,
+        ...(versionId ? { versionId } : {}),
+      });
+      if (versionNumber != null) {
+        this.chatArea.SelectedVersionNumber = versionNumber;
+      }
+      this.OnPendingArtifactConsumed();
+      return true;
+    }
+    return false;
   }
 
   public get IsBriefVisible(): boolean {
@@ -144,6 +252,16 @@ export class VSCopilotPanelComponent
         this.SetupHealthResult.Healthy &&
         (this.SetupHealthResult.Checks ?? []).every((check) => check.Status === 'OK'),
     );
+  }
+
+  public get ShouldShowCollapsedSetupHealth(): boolean {
+    if (!this.IsBriefCollapsed || !this.SetupHealthResult) {
+      return false;
+    }
+    if (this.IsSetupAllOk) {
+      return this.ShowHealthySetupDetails;
+    }
+    return true;
   }
 
   public async CheckSetupHealth(): Promise<void> {
@@ -186,7 +304,8 @@ export class VSCopilotPanelComponent
 
   public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
     this.AppContext = { ...(this.AppContext ?? {}), ...snapshot.AppContext };
-    this.BriefSummaryLine = this.BriefComponent?.SummaryLine ?? '';
+    const hasTopic = (snapshot.Topic ?? this.BriefComponent?.Topic ?? '').trim().length > 0;
+    this.BriefSummaryLine = hasTopic ? (this.BriefComponent?.SummaryLine ?? '') : '';
     this.BriefStateChange.emit(snapshot);
     this.cdr.markForCheck();
   }
@@ -297,7 +416,7 @@ export class VSCopilotPanelComponent
       }
     } else {
       if (!this.ChatIsNewConversation) {
-        this.IsBriefCollapsed = false;
+        this.IsBriefCollapsed = true;
       }
       this.ChatIsNewConversation = true;
       this.ActiveConversation = null;

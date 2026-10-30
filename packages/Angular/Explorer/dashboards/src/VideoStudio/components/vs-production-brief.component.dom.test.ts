@@ -302,5 +302,130 @@ describe('VSProductionBriefComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('preserves pre-populated brief inputs (topic, archetype, explicit None brand kit, formats, duration, queries, audio) across LoadBriefData and omits brand kit / data clauses when None/empty', async () => {
+    const customProvider = createGraphQLProviderStub();
+
+    const fakeArchetypes: Partial<MJVideoArchetypeEntity>[] = [
+      {
+        ID: 'arch-1',
+        Name: 'KPI Briefing',
+        Description: 'Executive KPI summary',
+        Category: 'Briefing',
+        Status: 'Active',
+        CompanyID: null,
+        DefaultDurationSeconds: 60,
+        MinDurationSeconds: 30,
+        MaxDurationSeconds: 90,
+        DefaultFormats: '["16:9", "9:16"]',
+        BeatTemplateObject: [],
+      },
+      {
+        ID: 'arch-2',
+        Name: 'Custom Social Spotlight',
+        Description: 'Vertical & portrait social promo',
+        Category: 'Social',
+        Status: 'Active',
+        CompanyID: 'comp-1',
+        Company: 'Acme Corp',
+        DefaultDurationSeconds: 30,
+        MinDurationSeconds: 15,
+        MaxDurationSeconds: 60,
+        DefaultFormats: '["4:5", "9:16"]',
+        BeatTemplateObject: [],
+      },
+    ];
+
+    const fakeBrandKits: Partial<MJBrandKitEntity>[] = [
+      {
+        ID: 'kit-default',
+        Name: 'Org Default Kit',
+        Description: 'Org-wide kit',
+        CompanyID: null,
+        IsDefault: true,
+        Status: 'Active',
+      },
+    ];
+
+    vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      Archetypes: fakeArchetypes as MJVideoArchetypeEntity[],
+    } as unknown as VideoStudioEngine);
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: fakeBrandKits as MJBrandKitEntity[],
+      GetAssets: vi.fn().mockReturnValue([]),
+    } as unknown as BrandKitEngine);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [{ ID: 'q-saved-1', Name: 'Saved Revenue Query' }],
+      }),
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VSProductionBriefComponent, {
+      inputs: {
+        Provider: customProvider,
+        AutoCheckSetupHealth: false,
+        Topic: 'Preserved topic across reopen',
+        SelectedArchetype: {
+          ID: 'arch-2',
+          Name: 'Custom Social Spotlight',
+          Description: 'Vertical & portrait social promo',
+          Category: 'Social',
+          Status: 'Active',
+          CompanyID: 'comp-1',
+          CompanyName: 'Acme Corp',
+          IsShipped: false,
+          DefaultDurationSeconds: 30,
+          MinDurationSeconds: 15,
+          MaxDurationSeconds: 60,
+          DefaultFormats: '["4:5", "9:16"]',
+          BeatCount: 0,
+          BeatLabels: [],
+        },
+        SelectedBrandKit: null,
+        SelectedBrandKitExplicitNone: true,
+        SelectedFormats: ['9:16'],
+        DurationSeconds: 45,
+        SelectedQueries: [{ ID: 'q-saved-1', Name: 'Saved Revenue Query' }],
+        NarrationEnabled: false,
+        CaptionsMode: 'None',
+      },
+    });
+
+    await flushAsync();
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    expect(instance.Topic).toBe('Preserved topic across reopen');
+    expect(instance.SelectedArchetype?.ID).toBe('arch-2');
+    expect(instance.SelectedBrandKit).toBeNull();
+    expect(instance.SelectedBrandKitExplicitNone).toBe(true);
+    expect(instance.SelectedFormats).toEqual(['9:16']);
+    expect(instance.DurationSeconds).toBe(45);
+    expect(instance.SelectedQueries).toEqual([{ ID: 'q-saved-1', Name: 'Saved Revenue Query' }]);
+    expect(instance.NarrationEnabled).toBe(false);
+    expect(instance.CaptionsMode).toBe('None');
+
+    const startEvents: VSProductionBriefStartEvent[] = [];
+    const sub = instance.StartRequested.subscribe((ev) => startEvents.push(ev));
+    instance.OnStartClick();
+    expect(startEvents.length).toBe(1);
+    expect(startEvents[0].Message).toBe(
+      'Make a Custom Social Spotlight video, about Preserved topic across reopen, 45 seconds, formats 9:16, data from Saved Revenue Query, without voiceover narration.',
+    );
+    expect((startEvents[0].AppContext['VideoStudio'] as Record<string, unknown>)['BrandKitID']).toBeNull();
+    expect((startEvents[0].AppContext['VideoStudio'] as Record<string, unknown>)['QueryIDs']).toEqual([
+      'q-saved-1',
+    ]);
+
+    sub.unsubscribe();
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
 

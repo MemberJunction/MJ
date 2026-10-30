@@ -232,6 +232,13 @@ test.describe('Video Studio — Right-Side Copilot Slide-In & Iterate (VS-UX-2)'
     const slideInDrawer = page.getByTestId('productions-copilot-slidein');
     await expect(slideInDrawer).toBeVisible({ timeout: 30_000 });
 
+    // Guided start drawer starts collapsed; click header to open it
+    const briefToggle = slideInDrawer.getByTestId('vs-copilot-brief-toggle');
+    await expect(briefToggle).toBeVisible();
+    await expect(briefToggle).toHaveAttribute('aria-expanded', 'false');
+    await briefToggle.click();
+    await expect(briefToggle).toHaveAttribute('aria-expanded', 'true');
+
     // Verify optional voiceover narration toggle inside the guided production brief
     const narrationToggle = slideInDrawer
       .getByTestId('vs-audio-voiceover-switch')

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   HostListener,
   Input,
@@ -17,6 +18,7 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -57,14 +59,39 @@ export class VSStudioSlideInComponent
   extends BaseAngularComponent
   implements OnInit, OnChanges, OnDestroy
 {
+  private _pageContext: Record<string, unknown> | null = null;
+  private _appContext: Record<string, unknown> | null = null;
+  private _fallbackBrandKitId: string | null = null;
+
   @Input() CurrentUser: UserInfo | null = null;
   @Input() EnvironmentId: string = MJEnvironmentEntityExtended.DefaultEnvironmentID;
   @Input() ApplicationId = '';
   @Input() PageSource: BaseResourceComponent | null = null;
-  @Input() PageContext: Record<string, unknown> | null = null;
-  @Input() AppContext: Record<string, unknown> | null = null;
+  @Input()
+  set PageContext(value: Record<string, unknown> | null) {
+    this._pageContext = value;
+    this.rebuildEffectiveAppContext();
+  }
+  get PageContext(): Record<string, unknown> | null {
+    return this._pageContext;
+  }
+  @Input()
+  set AppContext(value: Record<string, unknown> | null) {
+    this._appContext = value;
+    this.rebuildEffectiveAppContext();
+  }
+  get AppContext(): Record<string, unknown> | null {
+    return this._appContext;
+  }
   @Input() PageTools: StudioBriefClientToolDefinition[] = [];
-  @Input() FallbackBrandKitId: string | null = null;
+  @Input()
+  set FallbackBrandKitId(value: string | null) {
+    this._fallbackBrandKitId = value;
+    this.rebuildEffectiveAppContext();
+  }
+  get FallbackBrandKitId(): string | null {
+    return this._fallbackBrandKitId;
+  }
   @Input() HeaderTitle = 'Video Studio';
 
   @Output() OpenChange = new EventEmitter<boolean>();
@@ -78,18 +105,35 @@ export class VSStudioSlideInComponent
   public CopilotPanel?: VSCopilotPanelComponent;
 
   public readonly SlideInState = inject(VSStudioSlideInStateService);
+  private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly navigationService = inject(NavigationService, { optional: true });
   private readonly cdr = inject(ChangeDetectorRef);
   private stateSub: Subscription | null = null;
   private lastBriefShowingState: boolean | null = null;
 
+  public EffectiveAppContext: Record<string, unknown> =
+    this.SlideInState.BuildCombinedAppContext(null, null);
+
   ngOnInit(): void {
     this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
+    this.rebuildEffectiveAppContext();
     this.registerCombinedClientTools();
-    this.stateSub = this.SlideInState.State$.subscribe(() => {
+    this.stateSub = this.SlideInState.State$.subscribe((snapshot) => {
+      this.rebuildEffectiveAppContext();
       if (this.lastBriefShowingState !== this.SlideInState.IsBriefShowing) {
         this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
         this.registerCombinedClientTools();
+      }
+      if (
+        snapshot.PendingArtifactId &&
+        snapshot.ConversationId &&
+        this.CopilotPanel &&
+        UUIDsEqual(snapshot.ConversationId, this.CopilotPanel.ConversationId)
+      ) {
+        this.CopilotPanel.OpenIterateArtifact(
+          snapshot.PendingArtifactId,
+          snapshot.PendingArtifactVersionNumber,
+        );
       }
       this.cdr.markForCheck();
     });
@@ -98,6 +142,13 @@ export class VSStudioSlideInComponent
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['PageTools'] && !changes['PageTools'].firstChange) {
       this.registerCombinedClientTools();
+    }
+    if (
+      changes['PageContext'] ||
+      changes['AppContext'] ||
+      changes['FallbackBrandKitId']
+    ) {
+      this.rebuildEffectiveAppContext();
     }
   }
 
@@ -126,13 +177,6 @@ export class VSStudioSlideInComponent
     return this.CurrentUser ?? this.ProviderToUse?.CurrentUser ?? null;
   }
 
-  public get EffectiveAppContext(): Record<string, unknown> {
-    return this.SlideInState.BuildCombinedAppContext(
-      this.PageContext ?? this.AppContext,
-      this.FallbackBrandKitId,
-    );
-  }
-
   public OpenNewProduction(): void {
     this.SlideInState.OpenNewProduction();
     this.OpenChange.emit(true);
@@ -151,9 +195,27 @@ export class VSStudioSlideInComponent
     this.cdr.markForCheck();
   }
 
-  @HostListener('document:keydown.escape', ['$event'])
+  @HostListener('keydown.escape', ['$event'])
   public OnEscapeKeydown(event: Event): void {
     if (!this.IsOpen || event.defaultPrevented) {
+      return;
+    }
+    const target = event.target instanceof Node ? event.target : null;
+    if (!target || !this.elementRef.nativeElement.contains(target)) {
+      return;
+    }
+    if (
+      target instanceof Element &&
+      target.closest(
+        'mj-image-viewer, .image-viewer-backdrop, mj-dialog, [role="dialog"], .mj-calendar',
+      )
+    ) {
+      return;
+    }
+    if (
+      this.CopilotPanel?.IsImageViewerOpen ||
+      this.CopilotPanel?.IsCreatingConversation
+    ) {
       return;
     }
     this.Close();
@@ -186,6 +248,13 @@ export class VSStudioSlideInComponent
     this.NavigationRequest.emit(event);
   }
 
+  private rebuildEffectiveAppContext(): void {
+    this.EffectiveAppContext = this.SlideInState.BuildCombinedAppContext(
+      this._pageContext ?? this._appContext,
+      this._fallbackBrandKitId,
+    );
+  }
+
   private registerCombinedClientTools(): void {
     if (!this.navigationService || !this.PageSource) {
       return;
@@ -194,6 +263,7 @@ export class VSStudioSlideInComponent
       Provider: this.ProviderToUse,
       GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
       OnBriefMutated: () => {
+        this.rebuildEffectiveAppContext();
         this.cdr.markForCheck();
       },
     });

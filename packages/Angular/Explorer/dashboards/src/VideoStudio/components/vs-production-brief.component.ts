@@ -85,6 +85,7 @@ export interface VSProductionBriefStateSnapshot {
   AllBrandKits: BrandKitCardSnapshot[];
   SelectedArchetype: ArchetypeCardSnapshot | null;
   SelectedBrandKit: BrandKitCardSnapshot | null;
+  SelectedBrandKitExplicitNone?: boolean;
   SelectedFormats: string[];
   DurationSeconds: number;
   Topic: string;
@@ -104,7 +105,7 @@ export interface VSProductionBriefSetupHealthEvent {
  * Video Studio production brief (`vs-production-brief`).
  *
  * Renders inside the Video Studio right slide-in before the first conversation message
- * (via `<ng-template mjChatSlot="emptyState">`), guiding the user through:
+ * (via `<ng-template mjChatSlot="composerExtra">`), guiding the user through:
  * 1. Setup health (shown on warning/error, or when Setup OK details are toggled from the header)
  * 2. What's it about?
  * 3. Shape (archetype cards with beat strip and m:ss range)
@@ -136,6 +137,8 @@ export interface VSProductionBriefSetupHealthEvent {
 })
 export class VSProductionBriefComponent extends BaseAngularComponent implements OnInit {
   @Input() AutoLoad = true;
+  @Input() AutoCheckSetupHealth = true;
+  @Input() ShowSetupHealthCard = true;
 
   @Input() SetupHealthResult: VideoStudioSetupHealthOutput | null = null;
   @Input() IsCheckingSetupHealth = false;
@@ -149,6 +152,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
   @Input() SelectedArchetype: ArchetypeCardSnapshot | null = null;
   @Input() SelectedCompanyId = 'all';
   @Input() SelectedBrandKit: BrandKitCardSnapshot | null = null;
+  @Input() SelectedBrandKitExplicitNone = false;
   @Input() SelectedFormats: string[] = ['16:9'];
   @Input() DurationSeconds: number = DEFAULT_STUDIO_DURATION_SECONDS;
   @Input() Topic = '';
@@ -184,7 +188,11 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       this.emitStateChange();
       return;
     }
-    if (!this.SetupHealthResult) {
+    if (
+      this.AutoCheckSetupHealth &&
+      !this.SetupHealthResult &&
+      !this.IsCheckingSetupHealth
+    ) {
       void this.CheckSetupHealth();
     }
     if (this.AllArchetypes.length === 0) {
@@ -203,7 +211,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
   }
 
   public get ShouldShowSetupHealthCard(): boolean {
-    if (!this.SetupHealthResult) {
+    if (!this.ShowSetupHealthCard || !this.SetupHealthResult) {
       return false;
     }
     if (this.IsAllSetupOk) {
@@ -399,7 +407,30 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       this.AllBrandKits = activeKits.map((k) => this.mapBrandKitToCard(k, bkEngine));
       this.applyCompanyBrandKitFilter();
 
-      if (!this.SelectedArchetype && this.AllArchetypes.length > 0) {
+      if (this.SelectedBrandKit) {
+        const matchedKit = this.AllBrandKits.find((k) =>
+          UUIDsEqual(k.ID, this.SelectedBrandKit?.ID),
+        );
+        if (matchedKit) {
+          this.SelectedBrandKit = matchedKit;
+        }
+      }
+
+      if (this.SelectedArchetype) {
+        const matchedArch = this.AllArchetypes.find((a) =>
+          UUIDsEqual(a.ID, this.SelectedArchetype?.ID),
+        );
+        if (matchedArch) {
+          this.SelectedArchetype = matchedArch;
+        }
+        if (
+          !this.SelectedBrandKit &&
+          !this.SelectedBrandKitExplicitNone &&
+          this.FilteredBrandKits.length > 0
+        ) {
+          this.selectDefaultBrandKitForArchetype(this.SelectedArchetype);
+        }
+      } else if (this.AllArchetypes.length > 0) {
         this.SelectArchetype(this.AllArchetypes[0]);
       }
 
@@ -423,6 +454,14 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       card.MinDurationSeconds,
       card.MaxDurationSeconds,
     );
+    if (!this.SelectedBrandKitExplicitNone) {
+      this.selectDefaultBrandKitForArchetype(card);
+    }
+    this.emitStateChange();
+    this.cdr.markForCheck();
+  }
+
+  private selectDefaultBrandKitForArchetype(card: ArchetypeCardSnapshot): void {
     if (card.CompanyID) {
       this.SelectedCompanyId = card.CompanyID;
       this.applyCompanyBrandKitFilter();
@@ -443,8 +482,6 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
         this.FilteredBrandKits[0] ??
         null;
     }
-    this.emitStateChange();
-    this.cdr.markForCheck();
   }
 
   public OnCompanyFilterChange(companyId: string): void {
@@ -464,9 +501,11 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     const trimmed = (brandKitId ?? '').trim();
     if (!trimmed) {
       this.SelectedBrandKit = null;
+      this.SelectedBrandKitExplicitNone = true;
     } else {
       this.SelectedBrandKit =
         this.AllBrandKits.find((k) => UUIDsEqual(k.ID, trimmed)) ?? null;
+      this.SelectedBrandKitExplicitNone = false;
     }
     this.emitStateChange();
     this.cdr.markForCheck();
@@ -821,6 +860,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       AllBrandKits: this.AllBrandKits,
       SelectedArchetype: this.SelectedArchetype,
       SelectedBrandKit: this.SelectedBrandKit,
+      SelectedBrandKitExplicitNone: this.SelectedBrandKitExplicitNone,
       SelectedFormats: [...this.SelectedFormats],
       DurationSeconds: this.DurationSeconds,
       Topic: this.Topic,

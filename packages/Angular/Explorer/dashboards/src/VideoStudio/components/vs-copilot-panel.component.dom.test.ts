@@ -65,14 +65,38 @@ class ChatSlotStubDirective {
 
 @Component({
   standalone: true,
+  selector: 'vs-setup-health-card',
+  template: '<div data-testid="stub-setup-health-card"></div>',
+})
+class SetupHealthCardStubComponent {
+  @Input() Result: unknown = null;
+  @Input() Loading = false;
+  @Input() Expanded = false;
+  @Output() ExpandedChange = new EventEmitter<boolean>();
+  @Output() Recheck = new EventEmitter<void>();
+}
+
+@Component({
+  standalone: true,
   selector: 'vs-production-brief',
   template: '<div data-testid="stub-production-brief"></div>',
 })
 class ProductionBriefStubComponent {
   @Input() Provider: IMetadataProvider | null = null;
+  @Input() AutoCheckSetupHealth = true;
+  @Input() ShowSetupHealthCard = true;
   @Input() SetupHealthResult: unknown = null;
   @Input() IsCheckingSetupHealth = false;
   @Input() ShowHealthySetupDetails = false;
+  @Input() SelectedArchetype: unknown = null;
+  @Input() SelectedBrandKit: unknown = null;
+  @Input() SelectedBrandKitExplicitNone = false;
+  @Input() SelectedFormats: string[] = ['16:9'];
+  @Input() DurationSeconds = 30;
+  @Input() Topic = '';
+  @Input() SelectedQueries: unknown[] = [];
+  @Input() NarrationEnabled = true;
+  @Input() CaptionsMode = 'Burned';
   @Output() ShowHealthySetupDetailsChange = new EventEmitter<boolean>();
   @Output() SetupHealthChange = new EventEmitter<unknown>();
   @Output() StateChange = new EventEmitter<unknown>();
@@ -149,6 +173,8 @@ class ConversationChatAreaStubComponent {
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
   public OnEmptyStateMessageSent = vi.fn();
+  public OnArtifactClicked = vi.fn().mockResolvedValue(undefined);
+  public SelectedVersionNumber?: number;
 }
 
 @Component({
@@ -182,6 +208,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
         VSCopilotPanelComponent,
         ConversationChatAreaStubComponent,
         ProductionBriefStubComponent,
+        SetupHealthCardStubComponent,
         LoadingStubComponent,
         ChatSlotStubDirective,
         MJButtonDirective,
@@ -194,6 +221,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
             CommonModule,
             ConversationChatAreaStubComponent,
             ProductionBriefStubComponent,
+            SetupHealthCardStubComponent,
             LoadingStubComponent,
             ChatSlotStubDirective,
             MJButtonDirective,
@@ -208,7 +236,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     component.CurrentUser = fakeUser;
   });
 
-  it('on first open renders message input (SuppressNewConversationEmptyState=true) and collapsible brief via composerExtra, then hides brief after first message', async () => {
+  it('on first open renders message input (SuppressNewConversationEmptyState=true) and starts Guided start collapsed with compass icon and subtitle, opens on click, shows setup warning while collapsed, and hides after first message', async () => {
     component.ConversationId = null;
     component.PendingMessage = null;
     component.PendingArtifactId = 'art-456';
@@ -260,21 +288,50 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(rootEl.querySelector('[data-testid="vs-copilot-brief-drawer"]')).not.toBeNull();
     expect(rootEl.querySelector('[data-testid="stub-production-brief"]')).not.toBeNull();
 
-    // Collapsing the brief hides the body while keeping BriefComponent available for form-fill tools
+    // Brief drawer starts collapsed on a new conversation with "Guided start", compass icon, and muted subtitle
     const briefToggle = rootEl.querySelector('[data-testid="vs-copilot-brief-toggle"]') as HTMLButtonElement;
+    const briefSubtitle = rootEl.querySelector('[data-testid="vs-copilot-brief-subtitle"]') as HTMLElement;
     const briefBody = rootEl.querySelector('[data-testid="vs-copilot-brief-drawer-body"]') as HTMLElement;
-    expect(briefToggle.getAttribute('aria-expanded')).toBe('true');
-    expect(briefBody.hidden).toBe(false);
-
-    briefToggle.click();
-    fixture.detectChanges();
+    expect(component.IsBriefCollapsed).toBe(true);
     expect(briefToggle.getAttribute('aria-expanded')).toBe('false');
     expect(briefBody.hidden).toBe(true);
+    expect(briefToggle.querySelector('.fa-compass')).not.toBeNull();
+    expect(briefToggle.textContent).toContain('Guided start');
+    expect(briefSubtitle.textContent?.trim()).toBe(
+      'Not sure where to begin? Pick a shape, format and sound step by step.',
+    );
+    expect(briefToggle.textContent).not.toContain('Add a topic to start');
+
+    // BriefComponent is still mounted and reachable by client tools while collapsed, with AutoCheckSetupHealth=false
     expect(component.BriefComponent).toBeDefined();
+    expect(
+      (component.BriefComponent as unknown as ProductionBriefStubComponent).AutoCheckSetupHealth,
+    ).toBe(false);
     expect(component.BriefComponent?.ApplyClientToolArchetype('KPI Briefing')).toEqual({
       Success: true,
       Data: { ArchetypeName: 'KPI Briefing' },
     });
+
+    // A setup warning or error still shows above the message box even while the guide is closed
+    component.OnBriefSetupHealthChange({
+      Result: {
+        Healthy: true,
+        Checks: [
+          { Key: 'Render', Status: 'Warning', Title: 'ElevenLabs', Message: 'API key missing' },
+        ],
+      },
+      Loading: false,
+    });
+    fixture.detectChanges();
+    expect(rootEl.querySelector('[data-testid="vs-copilot-collapsed-setup-health"]')).not.toBeNull();
+
+    // Clicking anywhere on the header opens the guide
+    briefToggle.click();
+    fixture.detectChanges();
+    expect(component.IsBriefCollapsed).toBe(false);
+    expect(briefToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(briefBody.hidden).toBe(false);
+    expect(rootEl.querySelector('[data-testid="vs-copilot-collapsed-setup-health"]')).toBeNull();
 
     // When a typed first message creates the conversation, the brief disappears
     const createdConv = { ID: 'conv-created-999', Name: 'Launch Teaser Chat' } as unknown as MJConversationEntity;
@@ -310,7 +367,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
 
     const briefMessage =
-      'Make a KPI Briefing video, about Q4 ARR growth, 12 seconds, formats 16:9 and 9:16, voiceover on, captions burned in.';
+      'Make a KPI Briefing video, about Q4 ARR growth, 12 seconds, formats 16:9, 9:16.';
     component.OnBriefStartRequested({
       Message: briefMessage,
       AppContext: { Surface: 'VideoStudioProductions', SuppressChatOverlay: true },
@@ -353,7 +410,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(component.ComposerDraft).toBeNull();
   });
 
-  it('ConversationId setter flips ChatIsNewConversation both ways when updated after initial render', async () => {
+  it('ConversationId setter flips ChatIsNewConversation both ways and starts every new conversation with the guide collapsed, and OpenIterateArtifact opens artifacts on the active conversation', async () => {
     component.ConversationId = null;
     fixture.detectChanges();
     await fixture.whenStable();
@@ -362,20 +419,28 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     const chatDebugEl = fixture.debugElement.query(By.directive(ConversationChatAreaStubComponent));
     const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
     expect(component.ChatIsNewConversation).toBe(true);
+    expect(component.IsBriefCollapsed).toBe(true);
     expect(chatStub.IsNewConversation).toBe(true);
 
-    component.IsBriefCollapsed = true;
+    // User opens the guide, then switches to an existing conversation
+    component.IsBriefCollapsed = false;
     component.ConversationId = 'conv-after-render-42';
     fixture.detectChanges();
     expect(component.ChatIsNewConversation).toBe(false);
     expect(chatStub.IsNewConversation).toBe(false);
     expect(chatStub.ConversationId).toBe('conv-after-render-42');
 
-    // Resetting ConversationId to null returns to new conversation mode with brief expanded
+    // Clicking Iterate on a production in the already-open conversation opens the artifact directly via chatArea.OnArtifactClicked
+    const opened = component.OpenIterateArtifact('art-same-conv-7', 3);
+    expect(opened).toBe(true);
+    expect(chatStub.OnArtifactClicked).toHaveBeenCalledWith({ artifactId: 'art-same-conv-7' });
+    expect(chatStub.SelectedVersionNumber).toBe(3);
+
+    // Resetting ConversationId to null returns to new conversation mode with the guide collapsed again
     component.ConversationId = null;
     fixture.detectChanges();
     expect(component.ChatIsNewConversation).toBe(true);
-    expect(component.IsBriefCollapsed).toBe(false);
+    expect(component.IsBriefCollapsed).toBe(true);
     expect(chatStub.IsNewConversation).toBe(true);
     expect(chatStub.ConversationId).toBeNull();
   });

@@ -115,8 +115,28 @@ export class VideoStudioProductionsResourceComponent
   public StatusFilter = '';
   public BrandKitFilter = '';
   public CompanyFilter = '';
-  public DateFrom = '';
-  public DateTo = '';
+  private _dateFrom = '';
+  private _dateTo = '';
+  public DateFromDate: Date | null = null;
+  public DateToDate: Date | null = null;
+
+  public get DateFrom(): string {
+    return this._dateFrom;
+  }
+  public set DateFrom(value: string) {
+    const formatted = this.formatDateFilterInput(value);
+    this._dateFrom = formatted;
+    this.DateFromDate = this.parseLocalDateFilter(formatted);
+  }
+
+  public get DateTo(): string {
+    return this._dateTo;
+  }
+  public set DateTo(value: string) {
+    const formatted = this.formatDateFilterInput(value);
+    this._dateTo = formatted;
+    this.DateToDate = this.parseLocalDateFilter(formatted);
+  }
 
   public FilterFields: FilterFieldConfig[] = [];
   public FilterValues: Record<string, unknown> = {
@@ -376,6 +396,10 @@ export class VideoStudioProductionsResourceComponent
       return '';
     }
     if (typeof value === 'string') {
+      const parsed = this.parseLocalDateFilter(value.trim());
+      if (parsed) {
+        return this.formatDateFilterInput(parsed);
+      }
       return value.trim();
     }
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -385,6 +409,27 @@ export class VideoStudioProductionsResourceComponent
       return `${year}-${month}-${day}`;
     }
     return '';
+  }
+
+  private parseLocalDateFilter(value: string | null | undefined): Date | null {
+    const trimmed = (value ?? '').trim();
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (!match) {
+      return null;
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(year, month - 1, day);
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+    return date;
   }
 
   public ClearAllFilters(): void {

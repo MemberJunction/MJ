@@ -876,6 +876,196 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
       '4:5',
     ]);
 
+    // Closing the slide-in and running brief client tools while closed updates the service state and survives reopen
+    instance.CloseCopilotSlideIn();
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(false);
+    expect(instance.SlideInState.BriefTopic).toBe('Q4 board highlights');
+    expect(instance.SlideInState.BriefSelectedFormats).toEqual(['16:9', '4:5']);
+
+    await setTopicTool.Handler({ topic: 'Updated while closed' });
+    instance.ReopenCopilotSlideIn();
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(instance.SlideInState.BriefTopic).toBe('Updated while closed');
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('under TZ=America/Chicago picking Oct 5 in the Productions date filter shows Oct 5 (not the day before)', async () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = 'America/Chicago';
+    try {
+      const navStub = createNavigationServiceStub();
+      const customProvider = createGraphQLProviderStub('user-1');
+      const permStub = {
+        Provider: null,
+        GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+        GetUserPermissions: vi.fn().mockResolvedValue({
+          canRead: true,
+          canEdit: true,
+          canShare: true,
+        }),
+      };
+
+      vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+        Config: vi.fn().mockResolvedValue(undefined),
+        BrandKits: [],
+      } as unknown as BrandKitEngine);
+
+      vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+        RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+        RunViews: vi.fn().mockResolvedValue([]),
+      } as unknown as RunView);
+
+      const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+        inputs: { Provider: customProvider },
+        providers: [
+          { provide: NavigationService, useValue: navStub },
+          { provide: ArtifactPermissionService, useValue: permStub },
+          { provide: VSStudioSlideInStateService, useFactory: () => new VSStudioSlideInStateService() },
+        ],
+      });
+
+      await flushAsync();
+      fixture.detectChanges();
+
+      const instance = fixture.componentInstance;
+      const filterTrigger = query(fixture, 'mj-filter-popover button');
+      filterTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      // Pick Oct 5, 2026 in local time (America/Chicago)
+      const pickedOct5 = new Date(2026, 9, 5);
+      instance.OnDateFromChange(pickedOct5);
+      fixture.detectChanges();
+      await flushAsync();
+      fixture.detectChanges();
+
+      expect(instance.DateFrom).toBe('2026-10-05');
+      expect(instance.DateFromDate).not.toBeNull();
+      expect(instance.DateFromDate!.getFullYear()).toBe(2026);
+      expect(instance.DateFromDate!.getMonth()).toBe(9);
+      expect(instance.DateFromDate!.getDate()).toBe(5);
+
+      const dateFromInput = document.querySelector(
+        '[data-testid="productions-date-from"] input.mj-datepicker-input',
+      ) as HTMLInputElement | null;
+      expect(dateFromInput).not.toBeNull();
+      expect(dateFromInput!.value).toBe('10/05/2026');
+
+      fixture.destroy();
+      vi.restoreAllMocks();
+    } finally {
+      if (previousTz === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = previousTz;
+      }
+    }
+  });
+
+  it('handles Escape only when dispatched inside the slide-in (never from outside or during conversation creation) and opens the artifact when Iterate is clicked on the already-open conversation', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+      RunViews: vi.fn().mockResolvedValue([]),
+    } as unknown as RunView);
+
+    const slideInState = new VSStudioSlideInStateService();
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+        { provide: VSStudioSlideInStateService, useValue: slideInState },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    instance.OpenNewProductionCopilot();
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+
+    const copilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
+    expect(copilotDebug).not.toBeNull();
+    const copilotPanel = copilotDebug.componentInstance as VSCopilotPanelComponent;
+
+    // 1. Escape on document.body (outside the slide-in) does NOT close the slide-in
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+
+    // 2. Escape inside the slide-in while a conversation is being created (PendingMessage set on panel) does NOT close the slide-in
+    copilotPanel.PendingMessage = 'Creating conversation...';
+    fixture.detectChanges();
+    const slideInAside = query(fixture, '[data-testid="productions-copilot-slidein"]')!;
+    slideInAside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+
+    // 3. Once PendingMessage is cleared, Escape inside the slide-in closes it
+    copilotPanel.PendingMessage = null;
+    fixture.detectChanges();
+    slideInAside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsCopilotSlideInOpen).toBe(false);
+
+    // 4. Iterate when the panel already shows that production's conversation calls OpenIterateArtifact on the panel
+    slideInState.OpenIterate('conv-already-open-1', 'prod-initial', 1);
+    fixture.detectChanges();
+
+    const reopenedCopilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
+    expect(reopenedCopilotDebug).not.toBeNull();
+    const reopenedCopilotPanel = reopenedCopilotDebug.componentInstance as VSCopilotPanelComponent;
+    const openIterateSpy = vi.spyOn(reopenedCopilotPanel, 'OpenIterateArtifact').mockReturnValue(true);
+
+    instance.SelectedProduction = {
+      ID: 'prod-same-conv-2',
+      Name: 'Second Production In Same Conversation',
+      Description: '',
+      VersionID: 'ver-2',
+      VersionNumber: 4,
+      PosterFileID: null,
+      PosterUrl: null,
+      Status: 'Delivered',
+      Archetype: 'Product Launch',
+      BrandKitID: null,
+      BrandKitName: null,
+      CompanyID: null,
+      CompanyName: null,
+      DurationSeconds: 25,
+      AspectRatio: '16:9',
+      SceneCount: 4,
+      UpdatedAt: new Date(),
+    };
+    instance.SelectedProductionConversationId = 'conv-already-open-1';
+
+    instance.StartIterate();
+    fixture.detectChanges();
+
+    expect(openIterateSpy).toHaveBeenCalledWith('prod-same-conv-2', 4);
+
     fixture.destroy();
     vi.restoreAllMocks();
   });

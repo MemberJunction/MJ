@@ -117,6 +117,20 @@
         >
           @if (!conversation && !slotConversationId && IsBriefVisible) {
             <div class="vs-copilot-brief-drawer" data-testid="vs-copilot-brief-drawer">
+              @if (ShouldShowCollapsedSetupHealth) {
+                <div
+                  class="vs-copilot-brief-drawer__health"
+                  data-testid="vs-copilot-collapsed-setup-health"
+                >
+                  <vs-setup-health-card
+                    [Result]="SetupHealthResult"
+                    [Loading]="IsCheckingSetupHealth"
+                    [Expanded]="IsSetupAllOk && ShowHealthySetupDetails"
+                    (ExpandedChange)="OnBriefShowHealthySetupDetailsChange($event)"
+                    (Recheck)="CheckSetupHealth()"
+                  ></vs-setup-health-card>
+                </div>
+              }
               <button
                 type="button"
                 class="vs-copilot-brief-drawer__header"
@@ -124,23 +138,32 @@
                 [attr.aria-expanded]="!IsBriefCollapsed"
                 (click)="ToggleBriefCollapsed()"
               >
-                <span class="vs-copilot-brief-drawer__title">
-                  <i
-                    class="fa-solid"
-                    [class.fa-chevron-down]="!IsBriefCollapsed"
-                    [class.fa-chevron-right]="IsBriefCollapsed"
-                    aria-hidden="true"
-                  ></i>
-                  <span>Brief</span>
-                </span>
-                @if (BriefSummaryLine) {
-                  <span
-                    class="vs-copilot-brief-drawer__summary"
-                    data-testid="vs-copilot-brief-toggle-summary"
-                  >
-                    {{ BriefSummaryLine }}
+                <span class="vs-copilot-brief-drawer__lead">
+                  <span class="vs-copilot-brief-drawer__title">
+                    <i class="fa-solid fa-compass" aria-hidden="true"></i>
+                    <span>Guided start</span>
                   </span>
-                }
+                  <span
+                    class="vs-copilot-brief-drawer__subtitle"
+                    data-testid="vs-copilot-brief-subtitle"
+                  >
+                    Not sure where to begin? Pick a shape, format and sound step by step.
+                  </span>
+                  @if (BriefSummaryLine) {
+                    <span
+                      class="vs-copilot-brief-drawer__summary"
+                      data-testid="vs-copilot-brief-toggle-summary"
+                    >
+                      {{ BriefSummaryLine }}
+                    </span>
+                  }
+                </span>
+                <i
+                  class="fa-solid vs-copilot-brief-drawer__chevron"
+                  [class.fa-chevron-down]="!IsBriefCollapsed"
+                  [class.fa-chevron-right]="IsBriefCollapsed"
+                  aria-hidden="true"
+                ></i>
               </button>
               <div
                 class="vs-copilot-brief-drawer__body"
@@ -150,9 +173,20 @@
                 <vs-production-brief
                   #briefComponent
                   [Provider]="ProviderToUse"
+                  [AutoCheckSetupHealth]="false"
+                  [ShowSetupHealthCard]="!IsBriefCollapsed"
                   [SetupHealthResult]="SetupHealthResult"
                   [IsCheckingSetupHealth]="IsCheckingSetupHealth"
                   [ShowHealthySetupDetails]="ShowHealthySetupDetails"
+                  [SelectedArchetype]="BriefSelectedArchetype"
+                  [SelectedBrandKit]="BriefSelectedBrandKit"
+                  [SelectedBrandKitExplicitNone]="BriefSelectedBrandKitExplicitNone"
+                  [SelectedFormats]="BriefSelectedFormats"
+                  [DurationSeconds]="BriefDurationSeconds"
+                  [Topic]="BriefTopic"
+                  [SelectedQueries]="BriefSelectedQueries"
+                  [NarrationEnabled]="BriefNarrationEnabled"
+                  [CaptionsMode]="BriefCaptionsMode"
                   (ShowHealthySetupDetailsChange)="OnBriefShowHealthySetupDetailsChange($event)"
                   (SetupHealthChange)="OnBriefSetupHealthChange($event)"
                   (StateChange)="OnBriefStateChange($event)"
