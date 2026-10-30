@@ -1,5 +1,5 @@
 /**
- * server-cache.checks.ts — the 'server-cache' bundle (S1–S31, plus the security pin S31b).
+ * server-cache.checks.ts — the 'server-cache' bundle (S1–S34, plus the security pin S31b).
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/server-cache-tests.ts.
  * Each check's body, its UniqueFilter tags (S1/S2/S3 share 's1'), and its display
@@ -8,18 +8,20 @@
  * suite.Test). Both the IntegrationTestDriver and the transitional tsx script
  * resolve these from the one registry (single source of truth).
  *
- * The mutation checks (S17/S23/S24/S29/S30/S31b) carry `RequiresMutation: true` instead of
+ * The mutation checks (S17/S23/S24/S29/S30/S31b/S34) carry `RequiresMutation: true` instead of
  * the original `if (process.env.RUN_MUTATION_TESTS === '1')` registration gate; the
  * driver/script filter them out unless the run opts into mutation. Checks are
  * registered in numeric order; order is load-bearing only for the S1→S2→S3 shared
  * 's1' slot, which numeric order preserves.
  */
 import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } from '@memberjunction/core';
+import type { CacheRowDeltaPayload, EntityInfo } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys, SkipCheck } from '@memberjunction/testing-integration';
-import { UniqueFilter } from '@memberjunction/testing-integration';
+import { UniqueFilter, Settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck } from '@memberjunction/testing-integration';
@@ -27,6 +29,54 @@ import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
+/** Small, unfiltered, always-present and writable by the test user: the slot S23/S34 maintain in place. */
+const ROW_DELTA_ENTITY = 'MJ: User Settings';
+
+/** The saved record's primary-key values by field name, taken before `Delete()` resets the instance. */
+function KeyValuesOf(entity: BaseEntity): Record<string, string> {
+    return Object.fromEntries(entity.PrimaryKey.KeyValuePairs.map(kv => [kv.FieldName, String(kv.Value)]));
+}
+
+/** Polls for at least one recorded `row_delta` write up to `timeoutMs` so fast local runs finish in ~25 ms instead of sleeping the full timeout. */
+async function WaitForRowDeltaWrite(ctx: IntegrationCheckContext, timeoutMs: number = 2000): Promise<void> {
+    const pollIntervalMs = 25;
+    let elapsed = 0;
+    while (ctx.Storage.RowDeltaWrites().length === 0 && elapsed < timeoutMs) {
+        await Settle(pollIntervalMs);
+        elapsed += pollIntervalMs;
+    }
+}
+
+/** The most recent write that asked for a `row_delta` broadcast, parsed; throws (fails the check) when there is none. */
+function LastRowDeltaWrite(ctx: IntegrationCheckContext, label: string): { payload: CacheRowDeltaPayload; bytes: number } {
+    const writes = ctx.Storage.RowDeltaWrites();
+    Assert(writes.length >= 1, `${label}: the in-place slot maintenance must write the slot with pubSubAction 'row_delta' (saw ${ctx.Storage.Writes.length} write(s), none row_delta)`);
+    const data = writes[writes.length - 1].Options?.pubSubData;
+    Assert(typeof data === 'string', `${label}: a row_delta write must carry pubSubData`);
+    return { payload: JSON.parse(data as string) as CacheRowDeltaPayload, bytes: (data as string).length };
+}
+
+/** A record-shaped payload row names the saved record when every primary-key field matches. */
+function RowIsRecord(row: Record<string, unknown>, entityInfo: EntityInfo, key: Record<string, string>): boolean {
+    return entityInfo.PrimaryKeys.every(pk => UUIDsEqual(String(row[pk.Name]), key[pk.Name]));
+}
+
+function AssertUpsertDelta(payload: CacheRowDeltaPayload, entityInfo: EntityInfo, savedKey: Record<string, string>, baselineCount: number): void {
+    AssertEqual(payload.upsertedRows.length, 1, 'S34: the delta must carry exactly the one upserted row');
+    Assert(RowIsRecord(payload.upsertedRows[0], entityInfo, savedKey), 'S34: the upserted row must be the saved record');
+    AssertEqual(payload.deletedPrimaryKeys.length, 0, 'S34: a save deletes nothing');
+    AssertEqual(payload.primaryKeyFields.join(','), entityInfo.PrimaryKeys.map(pk => pk.Name).join(','), 'S34: primaryKeyFields names the entity key');
+    AssertEqual(payload.rowCount, baselineCount + 1, 'S34: rowCount is the authoritative post-mutation slot size');
+    Assert(typeof payload.maxUpdatedAt === 'string' && payload.maxUpdatedAt.length > 0, 'S34: maxUpdatedAt is carried');
+}
+
+function AssertRemovalDelta(payload: CacheRowDeltaPayload, entityInfo: EntityInfo, savedKey: Record<string, string>, baselineCount: number): void {
+    AssertEqual(payload.upsertedRows.length, 0, 'S34: a delete upserts nothing');
+    AssertEqual(payload.deletedPrimaryKeys.length, 1, 'S34: the delta names exactly the one deleted key');
+    Assert(RowIsRecord(payload.deletedPrimaryKeys[0], entityInfo, savedKey), 'S34: the deleted key is the removed record');
+    AssertEqual(payload.rowCount, baselineCount, 'S34: rowCount returns to the baseline after the delete');
+}
+
 
 /** The ordered server-cache bundle. Numeric order is intentional and load-bearing. */
 /**
@@ -995,6 +1045,113 @@ export const ServerCacheChecks: NamedCheck[] = [
                     `ViewID cache path (cache-hit=${bWarm.ExecutionTime === 0}) after user '${A.Email}' warmed it`);
             } finally {
                 await view.Delete().catch(() => undefined);
+            }
+        }
+    },
+    {
+        Id: 'server-cache.S32',
+        Name: 'S32: CacheLocal:false on a narrow-Fields miss keeps the narrow SQL projection and writes nothing — and does not poison the full-width slot',
+        Fn: async (ctx): Promise<void> => {
+            // Server mode widens a cache-eligible narrow miss to the entity superset and stores it so
+            // later Fields subsets hit (S1 -> S2 -> S3). CacheLocal:false is the explicit opt-out: the
+            // caller's narrow SELECT reaches the database as written and no partial row set is stored
+            // where a later full-width reader could be served it.
+            const rv = new RunView();
+            const filter = UniqueFilter('Name', 's32');
+            const setsBefore = ctx.Storage.SetCount('RunViewCache');
+            const narrow = await rv.RunView({
+                EntityName: ENTITY,
+                ExtraFilter: filter,
+                Fields: ['Name'],
+                ResultType: 'simple',
+                CacheLocal: false,
+            }, ctx.User);
+            Assert(narrow.Success && narrow.Results.length > 0, `S32 narrow read failed: ${narrow.ErrorMessage}`);
+            // Direct SQL path: requested fields + PK, never widened (same contract as S7 / S24).
+            AssertRowShape(narrow.Results[0], ['ID', 'Name'], 'S32: CacheLocal:false narrow shape (requested fields + PK)');
+            AssertEqual(ctx.Storage.SetCount('RunViewCache'), setsBefore, 'S32: CacheLocal:false must not write the RunView cache');
+
+            const full = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'simple' }, ctx.User);
+            Assert(full.Success && full.Results.length > 0, `S32 full read failed: ${full.ErrorMessage}`);
+            Assert(RowKeys(full.Results[0]).length > 20,
+                `S32: a full-width read after a CacheLocal:false narrow read must come back full width, not from a narrow slot (got ${RowKeys(full.Results[0]).length} columns)`);
+        }
+    },
+    {
+        Id: 'server-cache.S33',
+        Name: 'S33: batch RunViews honors CacheLocal:false per param — the opted-out index stays narrow and unwritten while its sibling widens and caches',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            ctx.Storage.ResetCounts();
+            const [optedOut, defaulted] = await rv.RunViews([
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33a'), Fields: ['Name'], ResultType: 'simple', CacheLocal: false },
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33b'), Fields: ['Name'], ResultType: 'simple' },
+            ], ctx.User);
+            Assert(optedOut.Success && optedOut.Results.length > 0, `S33 opted-out index failed: ${optedOut.ErrorMessage}`);
+            Assert(defaulted.Success && defaulted.Results.length > 0, `S33 default index failed: ${defaulted.ErrorMessage}`);
+            // Both indexes MISS, so both come back in the direct-SQL shape (requested Fields + PK, the S9
+            // contract). What distinguishes them is the cache: the default index widened its SELECT and
+            // stored the superset slot; the CacheLocal:false index wrote nothing.
+            AssertRowShape(optedOut.Results[0], ['ID', 'Name'], 'S33: opted-out index keeps the direct-SQL narrow shape');
+            AssertRowShape(defaulted.Results[0], ['ID', 'Name'], 'S33: default index miss shape (requested Fields + PK)');
+            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 1,
+                'S33: exactly one cache write — the default index populates its superset slot, the CacheLocal:false index writes nothing');
+            // And the default index's slot really is the widened superset: a full-width re-read of its
+            // filter is served from cache (0 ms), while the opted-out filter has nothing to serve.
+            const [reDefault, reOptedOut] = await rv.RunViews([
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33b'), ResultType: 'simple' },
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33a'), ResultType: 'simple' },
+            ], ctx.User);
+            Assert(reDefault.Success && reOptedOut.Success, 'S33 re-reads must succeed');
+            AssertEqual(reDefault.ExecutionTime, 0, 'S33: the default index left a superset slot that serves a full-width re-read from cache');
+            Assert(RowKeys(reOptedOut.Results[0]).length > 20, `S33: the opted-out filter's full-width re-read is full width (got ${RowKeys(reOptedOut.Results[0]).length} columns)`);
+        }
+    },
+    {
+        Id: 'server-cache.S34',
+        Name: 'S34 (mutation): in-place slot maintenance writes the slot with a compact row_delta broadcast — only the changed row, never the full array',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            // A save of a row in an unfiltered auto-maintained slot upserts the cached array in place
+            // (S23). The write that persists that upsert must ask the storage provider to broadcast a
+            // `row_delta` carrying only the mutated row, so distributed peers (Redis 'full' mode)
+            // apply O(Δ) instead of re-materializing all N cached rows from a full 'set' payload.
+            // The in-memory store has no pub/sub, so the instrumented provider's recorded write
+            // options are the observable here.
+            const rv = new RunView();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const entityInfo = md.EntityByName(ROW_DELTA_ENTITY);
+            Assert(!!entityInfo, `${ROW_DELTA_ENTITY} must exist`);
+            const makeParams = () => ({ EntityName: ROW_DELTA_ENTITY, Fields: [...entityInfo!.PrimaryKeys.map(pk => pk.Name), 'Setting'], ResultType: 'simple' as const });
+            const baseline = await rv.RunView(makeParams(), ctx.User);
+            Assert(baseline.Success, `S34 baseline failed: ${baseline.ErrorMessage}`);
+            const baselineCount = baseline.Results.length;
+            const slotBytes = JSON.stringify(baseline.Results).length;
+
+            const setting = await md.GetEntityObject<MJUserSettingEntity>(ROW_DELTA_ENTITY, ctx.User);
+            setting.UserID = ctx.User.ID;
+            setting.Setting = `mj.integrationtest.rowdelta.${Date.now()}`;
+            setting.Value = 'integration-test';
+            ctx.Storage.ResetCounts();
+            Assert(await setting.Save(), `S34 save failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            // Delete() resets the instance, so hold the saved key's values for the later assertions.
+            const savedKey = KeyValuesOf(setting);
+            let deleted = false;
+            try {
+                await WaitForRowDeltaWrite(ctx);
+                const { payload, bytes } = LastRowDeltaWrite(ctx, 'S34 upsert');
+                AssertUpsertDelta(payload, entityInfo!, savedKey, baselineCount);
+                Assert(bytes < slotBytes + 2000, 'S34: the broadcast payload must be compact (one row), not the whole cached array');
+
+                ctx.Storage.ResetCounts();
+                deleted = await setting.Delete();
+                Assert(deleted, `S34 delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                await WaitForRowDeltaWrite(ctx);
+                AssertRemovalDelta(LastRowDeltaWrite(ctx, 'S34 removal').payload, entityInfo!, savedKey, baselineCount);
+            } finally {
+                if (!deleted) {
+                    await setting.Delete().catch(() => undefined); // best-effort cleanup; never masks the real failure
+                }
             }
         }
     }

@@ -147,7 +147,7 @@ describe('IntegrationCheckRegistry', () => {
 
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
-        ['server-cache', ServerCacheChecks, 32],
+        ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
@@ -272,9 +272,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         });
     }
 
-    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b as RequiresMutation', () => {
+    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b/S34 as RequiresMutation', () => {
         const mutating = ServerCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
+        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b', 'server-cache.S34']);
     });
 
     it('client-cache marks exactly C10 and C14 as RequiresMutation', () => {
@@ -436,7 +436,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'search-provider-trust': 2,
         'search-scope-bound': 3,
         'self-avatar-client': 6,
-        'server-cache': 32,
+        'server-cache': 35,
         'shipped-agents-live': 4,
         'sqlpipe-extraction-fixtures': 40,
         'sqlpipe-matrix': 2,
@@ -828,6 +828,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'server-cache.S29',
         'server-cache.S30',
         'server-cache.S31b',
+        'server-cache.S34',
         'task-graph-execution.TX1',
         'task-graph-execution.TX10',
         'task-graph-execution.TX11',

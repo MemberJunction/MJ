@@ -14,10 +14,10 @@ import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
 import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
-import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
+import { CacheChangedEvent, CachePrimaryKeyValue, CacheRowDeltaPayload, CacheRowValue, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
-import { TransformSimpleObjectToEntityObject } from "./util";
+import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
@@ -451,6 +451,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
      */
     private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
+
+    /**
+     * Per-property count of in-flight full refreshes (`LoadSingleEntityConfig` or full `'set'`
+     * cache payload materialization). When positive, incoming `row_delta` events defer to a
+     * coalesced full reload rather than racing an in-progress snapshot replacement.
+     */
+    private _inFlightFullRefreshCount: Map<string, number> = new Map();
+
+    /**
+     * Per-property promise chain serializing `row_delta` applications so back-to-back row deltas
+     * for distinct rows apply in arrival order without dropping earlier mutations.
+     */
+    private _rowDeltaQueues: Map<string, Promise<void>> = new Map();
 
     /**
      * The least time, in milliseconds, between the end of one reload from
@@ -2296,9 +2309,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // UserInfoEngine's per-user '_UserApplications') apply out of initiation-order and the
         // cache ends up "one operation behind". See _configRefreshGeneration.
         const generation = this.beginConfigRefresh(config.PropertyName);
-        const p = this.RunViewProviderToUse;
-        const rv = new RunView(p);
-        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
+        this.incrementInFlightFullRefresh(config.PropertyName);
+        let result: RunViewResult;
+        try {
+            const p = this.RunViewProviderToUse;
+            const rv = new RunView(p);
+            result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
+        } finally {
+            this.decrementInFlightFullRefresh(config.PropertyName);
+        }
 
         // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
         // rather than clobber the newer one. The newer refresh owns the assignment, the
@@ -2452,14 +2471,33 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
-            const p = this.RunViewProviderToUse;
-            const rv = new RunView(p);
-            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
-            const results = await rv.RunViews(viewConfigs, contextUser);
+            // Same protocol as LoadSingleEntityConfig, per property: claim a refresh generation and
+            // mark a full refresh in flight BEFORE the awaited RunViews. Without it a `row_delta`
+            // that arrives mid-flight is applied to the held array and then overwritten by this
+            // (pre-delta) snapshot when the batch lands; with it the delta path defers to a
+            // coalesced reload instead, and a newer per-property refresh supersedes our slot.
+            const generations = configs.map(c => this.beginConfigRefresh(c.PropertyName));
+            for (const c of configs) {
+                this.incrementInFlightFullRefresh(c.PropertyName);
+            }
+            let results: RunViewResult[];
+            try {
+                const p = this.RunViewProviderToUse;
+                const rv = new RunView(p);
+                const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
+                results = await rv.RunViews(viewConfigs, contextUser);
+            } finally {
+                for (const c of configs) {
+                    this.decrementInFlightFullRefresh(c.PropertyName);
+                }
+            }
 
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
+                if (!this.isLatestConfigRefresh(configs[i].PropertyName, generations[i])) {
+                    continue; // a newer refresh of this property owns the assignment
+                }
                 this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
@@ -2739,14 +2777,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // overlapping cache events (or an event racing a full reload) can resolve out
                     // of order and the stale result would be the one that assigns last.
                     const generation = this.beginConfigRefresh(config.PropertyName);
-                    // A burst of payloads for one slot usually arrives together. Let the rest of the
-                    // burst claim its generations first, so only the newest payload is materialized
-                    // instead of every one of them (receive side).
-                    await yieldToEventLoop();
-                    if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
-                        return;
+                    this.incrementInFlightFullRefresh(config.PropertyName);
+                    let rows: Array<BaseEntity> | Array<Record<string, unknown>> | null = null;
+                    try {
+                        // A burst of payloads for one slot usually arrives together. Let the rest of the
+                        // burst claim its generations first, so only the newest payload is materialized
+                        // instead of every one of them (receive side).
+                        await yieldToEventLoop();
+                        if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+                            return;
+                        }
+                        rows = await this.materializeCacheEventRows(config, parsed.results);
+                    } finally {
+                        this.decrementInFlightFullRefresh(config.PropertyName);
                     }
-                    const rows = await this.materializeCacheEventRows(config, parsed.results);
                     if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
                         return; // superseded while materializing — the newer refresh owns the property
                     }
@@ -2784,8 +2828,347 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // turning into a database reload.
                 LogWarning(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`, 'Cache');
             }
+        } else if (event.Data && event.Action === 'row_delta') {
+            const outcome = await this.applyExternalRowDelta(config, event.Data);
+            if (outcome === 'applied' || outcome === 'superseded') {
+                return;
+            }
         }
         await this.reloadAfterExternalChange(config);
+    }
+
+    private incrementInFlightFullRefresh(propertyName: string): void {
+        this._inFlightFullRefreshCount.set(propertyName, (this._inFlightFullRefreshCount.get(propertyName) ?? 0) + 1);
+    }
+
+    private decrementInFlightFullRefresh(propertyName: string): void {
+        const next = (this._inFlightFullRefreshCount.get(propertyName) ?? 1) - 1;
+        if (next <= 0) {
+            this._inFlightFullRefreshCount.delete(propertyName);
+        } else {
+            this._inFlightFullRefreshCount.set(propertyName, next);
+        }
+    }
+
+    /**
+     * Applies a compact `row_delta` pub/sub event in $O(\Delta)$ without re-materializing
+     * untouched sibling rows. Falls back to `'reload'` whenever schema hash, ordering, or
+     * row-count invariants indicate the engine cannot prove local delta equivalence.
+     */
+    private async applyExternalRowDelta(
+        config: BaseEnginePropertyConfig,
+        rawDeltaJson: string
+    ): Promise<'applied' | 'superseded' | 'reload'> {
+        let delta: CacheRowDeltaPayload;
+        try {
+            delta = JSON.parse(rawDeltaJson) as CacheRowDeltaPayload;
+        } catch (e) {
+            LogWarning(`BaseEngine.OnExternalCacheChange: row_delta payload for '${config.PropertyName}' could not be parsed (${e instanceof Error ? e.message : String(e)}) — falling back to reload`, 'Cache');
+            return 'reload';
+        }
+
+        if (
+            !delta ||
+            !Array.isArray(delta.upsertedRows) ||
+            !Array.isArray(delta.deletedPrimaryKeys) ||
+            !Array.isArray(delta.primaryKeyFields) ||
+            delta.primaryKeyFields.length === 0 ||
+            typeof delta.rowCount !== 'number'
+        ) {
+            return 'reload';
+        }
+
+        if (this.payloadSchemaDiffers(config, delta.schemaHash)) {
+            LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: row_delta for '${config.PropertyName}' was written under a different schema — reloading instead`, verboseOnly: true });
+            return 'reload';
+        }
+
+        // Ordered configs rely on database collation ordering; reload from the warm Redis slot (0 SQL).
+        if (config.OrderBy && delta.upsertedRows.length > 0) {
+            return 'reload';
+        }
+
+        let stepOutcome: 'applied' | 'superseded' | 'reload' = 'reload';
+        const priorQueue = this._rowDeltaQueues.get(config.PropertyName) ?? Promise.resolve();
+        const currentStep = priorQueue.then(async () => {
+            try {
+                stepOutcome = await this.applyExternalRowDeltaSerialized(config, delta);
+            } catch (e) {
+                LogWarning(`BaseEngine.OnExternalCacheChange: row_delta application for '${config.PropertyName}' failed (${e instanceof Error ? e.message : String(e)}) — falling back to reload`, 'Cache');
+                stepOutcome = 'reload';
+            }
+        });
+        const settled = currentStep.catch(() => undefined);
+        this._rowDeltaQueues.set(config.PropertyName, settled);
+        await currentStep;
+        if (this._rowDeltaQueues.get(config.PropertyName) === settled) {
+            this._rowDeltaQueues.delete(config.PropertyName);
+        }
+        return stepOutcome;
+    }
+
+    private async applyExternalRowDeltaSerialized(
+        config: BaseEnginePropertyConfig,
+        delta: CacheRowDeltaPayload
+    ): Promise<'applied' | 'superseded' | 'reload'> {
+        if ((this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0) {
+            return 'reload';
+        }
+
+        const heldRows = this.getHeldRowsForDelta(config);
+        if (!heldRows) {
+            return 'reload';
+        }
+
+        const entityInfo = config.EntityName ? this.ProviderToUse?.EntityByName?.(config.EntityName) : undefined;
+        const pkFields = delta.primaryKeyFields;
+        const isUuidPk = pkFields.map(fieldName =>
+            Boolean(entityInfo?.FieldByName(fieldName)?.IsUniqueIdentifier)
+        );
+
+        const heldIndexByKey = this.indexHeldRowsForDelta(heldRows, pkFields, isUuidPk);
+        if (!heldIndexByKey) {
+            return 'reload';
+        }
+
+        const keyPlan = this.planRowDeltaKeys(delta, heldRows.length, heldIndexByKey, pkFields, isUuidPk);
+        if (!keyPlan) {
+            return 'reload';
+        }
+
+        // Echo / duplicate delta suppression: when no rows are added or removed and every
+        // upserted row's __mj_UpdatedAt matches the held row, skip materialization & emit churn.
+        if (
+            keyPlan.matchedDeleteKeys.size === 0 &&
+            keyPlan.netNewInserts === 0 &&
+            this.upsertsMatchHeldTimestamps(heldRows, heldIndexByKey, delta.upsertedRows, keyPlan.upsertKeys, entityInfo)
+        ) {
+            LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds row_delta versions — skipped`, verboseOnly: true });
+            return 'applied';
+        }
+
+        const generationBefore = this._configRefreshGeneration.get(config.PropertyName) ?? 0;
+        const materializedUpserts =
+            delta.upsertedRows.length > 0
+                ? await this.materializeCacheEventRows(config, delta.upsertedRows)
+                : [];
+        if (materializedUpserts === null) {
+            return 'reload';
+        }
+        if (
+            (this._configRefreshGeneration.get(config.PropertyName) ?? 0) !== generationBefore ||
+            (this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0
+        ) {
+            return 'superseded';
+        }
+
+        const nextRows = this.mergeMaterializedDeltaRows(
+            heldRows,
+            pkFields,
+            isUuidPk,
+            keyPlan.matchedDeleteKeys,
+            keyPlan.upsertKeys,
+            materializedUpserts as Array<BaseEntity | Record<string, CacheRowValue>>
+        );
+
+        this.HandleSingleViewResult(config, {
+            Success: true,
+            Results: nextRows,
+            RowCount: nextRows.length,
+            TotalRowCount: delta.totalRowCount ?? nextRows.length,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            UserViewRunID: '',
+        });
+        await this.RebuildDerivedState(this._contextUser);
+        this.emitPropertyChange(config.PropertyName);
+        return 'applied';
+    }
+
+    private indexHeldRowsForDelta(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): Map<string, number> | null {
+        const heldIndexByKey = new Map<string, number>();
+        for (let i = 0; i < heldRows.length; i++) {
+            const key = this.canonicalHeldRowPkKey(heldRows[i], pkFields, isUuidPk);
+            if (key === null) {
+                return null;
+            }
+            heldIndexByKey.set(key, i);
+        }
+        return heldIndexByKey.size === heldRows.length ? heldIndexByKey : null;
+    }
+
+    private planRowDeltaKeys(
+        delta: CacheRowDeltaPayload,
+        heldRowCount: number,
+        heldIndexByKey: Map<string, number>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): { matchedDeleteKeys: Set<string>; upsertKeys: string[]; netNewInserts: number } | null {
+        const matchedDeleteKeys = new Set<string>();
+        for (const delPk of delta.deletedPrimaryKeys) {
+            const key = this.canonicalPlainRecordPkKey(delPk, pkFields, isUuidPk);
+            if (key === null) {
+                return null;
+            }
+            if (heldIndexByKey.has(key)) {
+                matchedDeleteKeys.add(key);
+            }
+        }
+
+        const upsertKeys: string[] = [];
+        const seenUpsertKeys = new Set<string>();
+        let netNewInserts = 0;
+        for (const upRow of delta.upsertedRows) {
+            const key = this.canonicalPlainRecordPkKey(upRow, pkFields, isUuidPk);
+            if (key === null || seenUpsertKeys.has(key)) {
+                return null;
+            }
+            seenUpsertKeys.add(key);
+            upsertKeys.push(key);
+            if (!heldIndexByKey.has(key) || matchedDeleteKeys.has(key)) {
+                netNewInserts++;
+            }
+        }
+
+        // Strict cardinality verification: detects uninitialized state, missed pub/sub messages,
+        // or filtered-slot membership divergence and falls back to reading the warm cache slot.
+        const expectedNextLength = heldRowCount - matchedDeleteKeys.size + netNewInserts;
+        if (expectedNextLength !== delta.rowCount) {
+            return null;
+        }
+        return { matchedDeleteKeys, upsertKeys, netNewInserts };
+    }
+
+    private mergeMaterializedDeltaRows(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        pkFields: string[],
+        isUuidPk: boolean[],
+        matchedDeleteKeys: ReadonlySet<string>,
+        upsertKeys: ReadonlyArray<string>,
+        materializedUpserts: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>
+    ): Array<BaseEntity | Record<string, CacheRowValue>> {
+        const upsertByKey = new Map<string, BaseEntity | Record<string, CacheRowValue>>();
+        for (let i = 0; i < upsertKeys.length; i++) {
+            upsertByKey.set(upsertKeys[i], materializedUpserts[i]);
+        }
+
+        const consumedUpsertKeys = new Set<string>();
+        const nextRows: Array<BaseEntity | Record<string, CacheRowValue>> = [];
+        for (let i = 0; i < heldRows.length; i++) {
+            const existingRow = heldRows[i];
+            const key = this.canonicalHeldRowPkKey(existingRow, pkFields, isUuidPk)!;
+            if (upsertByKey.has(key)) {
+                nextRows.push(upsertByKey.get(key)!);
+                consumedUpsertKeys.add(key);
+            } else if (!matchedDeleteKeys.has(key)) {
+                nextRows.push(existingRow);
+            }
+        }
+        for (let i = 0; i < upsertKeys.length; i++) {
+            const key = upsertKeys[i];
+            if (!consumedUpsertKeys.has(key)) {
+                nextRows.push(upsertByKey.get(key)!);
+            }
+        }
+        return nextRows;
+    }
+
+    private getHeldRowsForDelta(
+        config: BaseEnginePropertyConfig
+    ): Array<BaseEntity | Record<string, CacheRowValue>> | null {
+        const entry = this._dataMap.get(config.PropertyName);
+        if (entry && entry.loadedSuccessfully === false) {
+            return null;
+        }
+        if (entry?.loadedSuccessfully && Array.isArray(entry.data)) {
+            return entry.data as Array<BaseEntity | Record<string, CacheRowValue>>;
+        }
+        const propVal = Reflect.get(this, config.PropertyName) as CacheRowValue;
+        if (Array.isArray(propVal) && (propVal.length > 0 || Boolean(entry))) {
+            return propVal as Array<BaseEntity | Record<string, CacheRowValue>>;
+        }
+        return null;
+    }
+
+    private readHeldRowField(row: BaseEntity | Record<string, CacheRowValue>, fieldName: string): CacheRowValue {
+        if (row instanceof BaseEntity) {
+            return row.Get(fieldName) as CacheRowValue;
+        }
+        if (fieldName in row) {
+            return row[fieldName];
+        }
+        const nestedData = row['data'];
+        if (typeof nestedData === 'object' && nestedData !== null && fieldName in nestedData) {
+            return (nestedData as Record<string, CacheRowValue>)[fieldName];
+        }
+        return undefined;
+    }
+
+    private canonicalHeldRowPkKey(
+        row: BaseEntity | Record<string, CacheRowValue>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): string | null {
+        const parts: string[] = [];
+        for (let i = 0; i < pkFields.length; i++) {
+            const val = this.readHeldRowField(row, pkFields[i]);
+            if (val === null || val === undefined) {
+                return null;
+            }
+            const str = String(val);
+            parts.push(CanonicalPrimaryKeyValue(str, isUuidPk[i]));
+        }
+        return parts.join('\u001f');
+    }
+
+    private canonicalPlainRecordPkKey(
+        record: Record<string, CacheRowValue | CachePrimaryKeyValue>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): string | null {
+        const parts: string[] = [];
+        for (let i = 0; i < pkFields.length; i++) {
+            const val = record[pkFields[i]];
+            if (val === null || val === undefined) {
+                return null;
+            }
+            const str = String(val);
+            parts.push(CanonicalPrimaryKeyValue(str, isUuidPk[i]));
+        }
+        return parts.join('\u001f');
+    }
+
+    private upsertsMatchHeldTimestamps(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        heldIndexByKey: Map<string, number>,
+        upsertedRows: ReadonlyArray<Record<string, CacheRowValue>>,
+        upsertKeys: ReadonlyArray<string>,
+        entityInfo: EntityInfo | undefined
+    ): boolean {
+        if (!entityInfo || !entityInfo.Fields.some(f => f.IsUpdatedAtField)) {
+            return false;
+        }
+        for (let i = 0; i < upsertedRows.length; i++) {
+            const heldIdx = heldIndexByKey.get(upsertKeys[i]);
+            if (heldIdx === undefined) {
+                return false;
+            }
+            const heldRaw = this.readHeldRowField(heldRows[heldIdx], EntityInfo.UpdatedAtFieldName);
+            const incomingRaw = upsertedRows[i][EntityInfo.UpdatedAtFieldName];
+            if (heldRaw == null || incomingRaw == null) {
+                return false;
+            }
+            const heldMs = heldRaw instanceof Date ? heldRaw.getTime() : new Date(String(heldRaw)).getTime();
+            const incomingMs = incomingRaw instanceof Date ? incomingRaw.getTime() : new Date(String(incomingRaw)).getTime();
+            if (Number.isNaN(heldMs) || Number.isNaN(incomingMs) || heldMs !== incomingMs) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
