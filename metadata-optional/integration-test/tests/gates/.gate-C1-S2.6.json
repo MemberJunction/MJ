@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "C1 -> S2.6",
-    "Description": "Gate G2.25 (phase 2, dataset C1, criterion S2.6): in new-entity mode 0 member keys are shared between training and holdout (the reference: sharedKeys=0 on 2,268 / 367 rows), and 0 between inner-CV folds. The C1 protocol holds out the newest 15% of members whole from 2024-01-01 with no holdout end, so the stored manifest holds every carved row; the shared keys are measured from the manifest's PersonID group keys and the run's report must equal that partition (the reference holds out a seeded 30% of members instead, so its row counts differ). It fails when new-entity mode carves rows instead of entities (shared member keys > 0).",
+    "Description": "Gate G2.25 (phase 2, dataset C1, criterion S2.6): in new-entity mode 0 member keys are shared between training and holdout (the reference: sharedKeys=0 on 2,268 / 367 rows), and 0 between inner-CV folds. The C1 protocol holds out the newest 15% of members whole from 2024-01-01 with no holdout end, so the stored manifest holds every carved row (the reference holds out a seeded 30% of members instead, so its row counts differ). The run stores, with its new-entity report, SHA-256 hashes of the held-out group keys and of the groups it trains on (distinct keys, ordinal sort, newline-joined). The gate rebuilds both sets itself from the stored manifest's group keys and decision dates (the newest 15% of members by first decision date, held out whole from the cutoff; the other members train on their development-role rows), requires the stored hashes to equal the rebuilt sets' hashes (membership verified), measures the held members among the verified training members (must be 0, and the report's sharedEntityKeys must equal it), and requires the report's counts to equal the rebuilt ones; the fold half is the pytest nodes tests/test_folds.py::test_grouped_folds_share_zero_keys_and_repeat and ::test_blocked_time_folds_keep_gap_and_groups. It fails when new-entity mode carves rows instead of entities (the held set's hash differs and shared member keys > 0).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.25\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S2.6\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "0 member keys shared between training and the new-entity holdout, the report equal to the manifest's partition, and 0 across inner folds (2 of 2 pytest cases)."
+      "summary": "The stored held and training member sets equal the ones the manifest gives, they share 0 members, the report agrees, and inner folds share 0 keys (2 of 2 pytest cases)."
     },
     "Configuration": {
       "tier": "mutation",

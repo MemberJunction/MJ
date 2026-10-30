@@ -146,6 +146,8 @@ def test_W2_S6_5_noise_publish() -> None:
 def test_W2_S5_2_winner_optimism() -> None:
     with ProcessPoolExecutor(WORKERS) as ex:
         out = list(ex.map(w2_run, limited(list(range(100, 160)))))
+    # Unlimited, the gate's claim is over all 60 seeds; PS_SEED_LIMIT is a reduced run and may stop short of them.
+    assert SEED_LIMIT > 0 or len(out) == 60, f"the optimism gate ran {len(out)} seeds, not 60"
     optimism = float(np.mean([rep - fresh for _, rep, fresh in out]))
     assert optimism < 0.0104, f"mean winner optimism {optimism:+.5f} over {len(out)} seeds"
 

@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "T2p -> S2.6",
-    "Description": "Gate G2.24 (phase 2, dataset T2p, criterion S2.6): in new-entity mode 0 entity keys are shared between training and holdout (the reference: sharedKeys=0 on 7,000 / 600 rows), and 0 between inner-CV training and validation folds. The T2p unit declares EntityKey as its group key (2,000 entities over 12,000 rows); the shared keys are measured from the stored manifest's group keys (the newest 30% of entities held out whole from the year cutoff), and the run's new-entity report must equal that partition; the fold half is the pytest nodes tests/test_folds.py::test_grouped_folds_share_zero_keys_and_repeat and ::test_blocked_time_folds_keep_gap_and_groups. It fails when new-entity mode carves rows instead of entities (shared entity keys > 0).",
+    "Description": "Gate G2.24 (phase 2, dataset T2p, criterion S2.6): in new-entity mode 0 entity keys are shared between training and holdout (the reference: sharedKeys=0 on 7,000 / 600 rows), and 0 between inner-CV training and validation folds. The T2p unit declares EntityKey as its group key (2,000 entities over 12,000 rows). The run stores, with its new-entity report, SHA-256 hashes of the held-out group keys and of the groups it trains on (distinct keys, ordinal sort, newline-joined). The gate rebuilds both sets itself from the stored manifest's group keys and decision dates (the newest 30% of entities by first decision date, held out whole from the cutoff; the other entities train on their development-role rows), requires the stored hashes to equal the rebuilt sets' hashes (membership verified), measures the held entities among the verified training entities (must be 0, and the report's sharedEntityKeys must equal it), and requires the report's counts to equal the rebuilt ones; the fold half is the pytest nodes tests/test_folds.py::test_grouped_folds_share_zero_keys_and_repeat and ::test_blocked_time_folds_keep_gap_and_groups. It fails when new-entity mode carves rows instead of entities (the held set's hash differs and shared entity keys > 0).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.24\",\"owner:PR3\",\"phase:2\",\"dataset:T2p\",\"criterion:S2.6\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "0 entity keys shared between training and the new-entity holdout, the report equal to the manifest's partition, and 0 across inner folds (2 of 2 pytest cases)."
+      "summary": "The stored held and training entity sets equal the ones the manifest gives, they share 0 entities, the report agrees, and inner folds share 0 keys (2 of 2 pytest cases)."
     },
     "Configuration": {
       "tier": "mutation",

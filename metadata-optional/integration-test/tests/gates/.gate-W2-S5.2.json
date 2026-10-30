@@ -2,13 +2,13 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W2 -> S5.2",
-    "Description": "Gate G2.4 (phase 2, dataset W2, criterion S5.2): over W2-noise's t2 seed set, the mean of (winner's reported holdout AUC - fresh AUC) is below +0.0104 (T13; +0.0416 today, 19 of 20 above fresh). A statistical gate: the pytest node tests/gates/test_seeds400.py::test_W2_S5_2_winner_optimism runs one search per seed of the set (PS_SEED_LIMIT lowers the count for a reduced run, and the check does not assert how many seeds ran); it runs once on the final head. The node is Python, so the mutation is a substitute: it fails when the sidecar chooses its finalist by holdout AUC instead of the inner-CV rule (mean optimism >= +0.0104).",
+    "Description": "Gate G2.4 (phase 2, dataset W2, criterion S5.2): over W2-noise s100-s159, the mean of (winner's reported holdout AUC - fresh AUC) is below +0.0104 (T13; +0.0416 today, 19 of 20 above fresh). A statistical gate: the pytest node tests/gates/test_seeds400.py::test_W2_S5_2_winner_optimism runs one search per seed and asserts that all 60 ran; PS_SEED_LIMIT lowers the count for a reduced run, which skips that assertion. It runs once on the final head. The node is Python, so the mutation is a substitute: it fails when the sidecar chooses its finalist by holdout AUC instead of the inner-CV rule (mean optimism >= +0.0104 over the 60 seeds; at 20 seeds the substitute stays below the bound).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.4\",\"owner:PR3\",\"phase:2\",\"dataset:W2\",\"criterion:S5.2\"]",
     "MaxExecutionTimeMS": 600000,
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "Mean winner optimism over the W2-noise t2 seed set is below +0.0104 (1 of 1 pytest case)."
+      "summary": "Mean winner optimism over W2-noise s100-s159 (60 seeds, asserted) is below +0.0104 (1 of 1 pytest case)."
     },
     "Configuration": {
       "tier": "mutation",

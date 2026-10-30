@@ -1,7 +1,8 @@
 /**
- * Gate G2.24 "T2p → S2.6": in new-entity mode the stored manifest's group keys give 0 entity keys shared between
- * training and the held-out newest entities, the run's report counts equal that partition, and the inner folds share 0
- * keys (pytest nodes).
+ * Gate G2.24 "T2p → S2.6": in new-entity mode the run stores hashes of its held-out and training group sets; the gate
+ * rebuilds both sets of entities from the stored manifest, verifies the hashes (membership), measures 0 held groups
+ * among the verified training groups, requires the report to agree (shared keys and counts), and runs the inner-fold
+ * pytest nodes.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { PsGate } from './ps-gates/ps-gate-fixture';

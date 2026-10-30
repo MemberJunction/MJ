@@ -2,7 +2,7 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W1 -> S5.1",
-    "Description": "Gate G2.29 (phase 2, dataset W1, criterion S5.1): every W1-signal s42 training run references a protocol row created before its first candidate started, 100%, and a search with no protocol is refused, 1 of 1. The refusal is read as the operation's result code PROTOCOL_REQUIRED, with no run row. It fails when ProtocolSearchGuard.RequireProtocolForSearch accepts a null protocol (refusedWithoutProtocol false).",
+    "Description": "Gate G2.29 (phase 2, dataset W1, criterion S5.1): every W1-signal s42 training run references a protocol row created before (or at) the run row, 100%, and a search with no protocol is refused, 1 of 1. The refusal is read as the operation's result code PROTOCOL_REQUIRED, with no run row. The fixture saves the protocol before it trains, so the ordering half holds by construction; the refusal half carries the gate's power. It fails when ProtocolSearchGuard.RequireProtocolForSearch accepts a null protocol (refusedWithoutProtocol false).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.29\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S5.1\"]",
     "InputDefinition": {},

@@ -160,7 +160,9 @@ const HOLDOUT_KINDS = ['date-carved', 'rolling-origin', 'seeded-random'] as cons
 const holdoutKindsComplete: ListsEveryMember<HoldoutSplit['kind'], (typeof HOLDOUT_KINDS)[number]> = true;
 void holdoutKindsComplete;
 const nonNegativeCount = z.number().int().nonnegative();
-const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary> = z.object({
+// The input type is left open (`unknown`) because the new-entity hashes may be absent on read (a summary stored before
+// they existed) while the parsed value always has them (absent reads as null).
+const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary, z.ZodTypeDef, unknown> = z.object({
   kind: z.enum(HOLDOUT_KINDS),
   cutoff: z.string().nullable(),
   holdoutEnd: z.string().nullable(),
@@ -172,6 +174,9 @@ const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary> = z.object({
   newEntity: z.object({
     holdoutEntityKeys: nonNegativeCount, trainingRowCount: nonNegativeCount, holdoutRowCount: nonNegativeCount,
     excludedRowCount: nonNegativeCount, sharedEntityKeys: nonNegativeCount,
+    // Absent on a summary stored before the hashes existed: read as null.
+    heldGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/).nullable().default(null),
+    trainingGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/).nullable().default(null),
   }).nullable(),
 });
 const trainingRefusalSchema: z.ZodType<TrainingRefusal> = z.discriminatedUnion('stage', [

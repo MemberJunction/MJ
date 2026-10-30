@@ -1,8 +1,7 @@
 /**
- * Gate G2.4 "W2 → S5.2": over the W2-noise t2 seed set the mean of (winner's reported holdout AUC − fresh AUC) is
- * below +0.0104. A statistical gate: the node trains one search per seed of the set (PS_SEED_LIMIT lowers the count
- * for a reduced run; the node reports the count only when it fails, so the check does not assert it); the full set
- * runs once, on the final head.
+ * Gate G2.4 "W2 → S5.2": over W2-noise s100–s159 the mean of (winner's reported holdout AUC − fresh AUC) is below
+ * +0.0104. A statistical gate: the node trains one search per seed and asserts that all 60 ran; PS_SEED_LIMIT lowers
+ * the count for a reduced run and skips that assertion. The full count runs once, on the final head.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { PsGate } from './ps-gates/ps-gate-fixture';
@@ -10,7 +9,7 @@ import { PsGatePytest } from './ps-gates/ps-gate-pytest';
 
 export const PsGateW2S52Checks: NamedCheck[] = [
   {
-    Id: 'ps-gate-w2-s5-2.G2.4', Name: 'G2.4 W2 → S5.2: over the W2-noise t2 seed set the mean winner optimism is below +0.0104', RequiresMutation: true,
+    Id: 'ps-gate-w2-s5-2.G2.4', Name: 'G2.4 W2 → S5.2: over W2-noise s100–s159 the mean winner optimism is below +0.0104', RequiresMutation: true,
     Fn: async () => {
       const nodes = ['tests/gates/test_seeds400.py::test_W2_S5_2_winner_optimism'] as const;
       const expectedCases = 1;   // one unparametrized node: one case

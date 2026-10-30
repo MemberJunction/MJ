@@ -2,7 +2,7 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "C1 -> S6.1",
-    "Description": "Gate G2.6 (phase 2, dataset C1, criterion S6.1): the C1 holdout is carved by decision date after the declared cutoff; 100% of stored holdout keys fall after it, 0 are in training, and at the reference's cutoff they equal its 1,205 test keys. The protocol declares 2024-01-01 to 2025-01-01; the keys are the snapshot manifest's locked-holdout rows, compared with fixtures/c1-corpus/c1_reference_test_keys.csv. It fails when DateCarvedCarver carves the trailing fraction in read order (holdout keys before the cutoff > 0).",
+    "Description": "Gate G2.6 (phase 2, dataset C1, criterion S6.1): the C1 holdout is carved by decision date after the declared cutoff; 100% of stored holdout keys fall after it, 0 are in training, and at the reference's cutoff they equal its 1,205 test keys. The protocol declares 2024-01-01 to 2025-01-01; the keys are the snapshot manifest's locked-holdout rows, compared with fixtures/c1-corpus/c1_reference_test_keys.csv. The unit reader returns rows sorted by decision date, so a trailing fraction in read order equals the date carve on C1 and cannot fail this gate; the mutation is a substitute: it fails when DateCarvedCarver holds out the trailing fraction in row-id order instead of carving by date (holdout keys before the cutoff > 0).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.6\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S6.1\"]",
     "InputDefinition": {},

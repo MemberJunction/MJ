@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import { HoldoutCarve, type EvaluationProtocolSpec, type HoldoutSplit, type SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { DateCarvedCarver, HoldoutCarvers, RollingOriginCarver, SeededRandomCarver } from '../holdout-carver';
@@ -12,6 +13,7 @@ type DateCarved = Extract<HoldoutSplit, { readonly kind: 'date-carved' }>;
 type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
 
 const day = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
+const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 /** A unit row decided on `decision`, whose own `StartDate` field is `start`, in group `group`. */
 const unitRow = (id: string, decision: string, start: string | null, group = `p-${id}`, label = '1', period: Date | null = null): UnitRow => ({
   RowId: id, EntityKey: id, DecisionDate: day(decision), WindowEnd: day(decision), GroupKey: group, Period: period, Label: label, Source: { ID: id, StartDate: start },
@@ -61,6 +63,8 @@ describe('DateCarvedCarver', () => {
     if (expected.Ok === false || expected.NewEntity === null) throw new Error('expected a new-entity carve');
     expect(summary.newEntity).toEqual({
       holdoutEntityKeys: 3, trainingRowCount: expected.NewEntity.TrainingRowIds.length, holdoutRowCount: 6, excludedRowCount: expected.NewEntity.ExcludedRowCount, sharedEntityKeys: 0,
+      // The stored membership: the held members and the trained-on members, each sorted and joined with '\n'.
+      heldGroupKeysSha256: sha256('e7\ne8\ne9'), trainingGroupKeysSha256: sha256(['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6'].join('\n')),
     });
   });
 

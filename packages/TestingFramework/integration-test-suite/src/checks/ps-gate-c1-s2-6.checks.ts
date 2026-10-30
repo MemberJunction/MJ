@@ -1,7 +1,8 @@
 /**
- * Gate G2.25 "C1 → S2.6": the same on C1's members: the stored manifest's PersonID group keys give 0 members shared
- * between training and the held-out newest members, the report counts equal that partition, and the inner folds share
- * 0 keys.
+ * Gate G2.25 "C1 → S2.6": in new-entity mode the run stores hashes of its held-out and training group sets; the gate
+ * rebuilds both sets of C1 members from the stored manifest, verifies the hashes (membership), measures 0 held groups
+ * among the verified training groups, requires the report to agree (shared keys and counts), and runs the inner-fold
+ * pytest nodes.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { PsGate } from './ps-gates/ps-gate-fixture';

@@ -58,7 +58,10 @@ describe('TrainingRunResultsParser', () => {
     const carve = {
       kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: '2025-01-01', developmentRowCount: 20, holdoutRowCount: 4, excludedAfterHoldoutEnd: 4,
       holdoutClassCounts: { Renewed: 3, Lapsed: 1 }, holdoutPeriods: ['2024-01-01'],
-      newEntity: { holdoutEntityKeys: 3, trainingRowCount: 12, holdoutRowCount: 3, excludedRowCount: 5, sharedEntityKeys: 0 },
+      newEntity: {
+        holdoutEntityKeys: 3, trainingRowCount: 12, holdoutRowCount: 3, excludedRowCount: 5, sharedEntityKeys: 0,
+        heldGroupKeysSha256: 'a'.repeat(64), trainingGroupKeysSha256: 'b'.repeat(64),
+      },
     };
     const envelope = (c: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: c });
     const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(carve));
@@ -67,6 +70,18 @@ describe('TrainingRunResultsParser', () => {
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/carve\.kind/);
     const negative = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, holdoutRowCount: -1 }));
     expect(negative.Ok ? null : negative.Errors.join('\n')).toMatch(/carve\.holdoutRowCount/);
+    const badHash = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, newEntity: { ...carve.newEntity, heldGroupKeysSha256: 'not-a-hash' } }));
+    expect(badHash.Ok ? null : badHash.Errors.join('\n')).toMatch(/carve\.newEntity\.heldGroupKeysSha256/);
+  });
+  it('reads a new-entity summary stored before its group-key hashes existed with both hashes as null', () => {
+    const older = {
+      kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: null, developmentRowCount: 20, holdoutRowCount: 4, excludedAfterHoldoutEnd: 0,
+      holdoutClassCounts: null, holdoutPeriods: ['2024-01-01'],
+      newEntity: { holdoutEntityKeys: 3, trainingRowCount: 12, holdoutRowCount: 3, excludedRowCount: 5, sharedEntityKeys: 0 },
+    };
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: older }));
+    const ne = r.Ok && r.Value.status === 'completed' ? r.Value.carve?.newEntity : undefined;
+    expect(ne).toEqual({ ...older.newEntity, heldGroupKeysSha256: null, trainingGroupKeysSha256: null });
   });
   it('reads a carve refusal and refuses one of an unknown kind', () => {
     const envelope = (reason: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'carve', reason } });

@@ -3,12 +3,13 @@
  * (`h.Train`, PredictiveStudio.TrainModel) and reads the stored rows: the run, its snapshot and manifest, its `carve`
  * and `trainer`. Each returns a GateMeasurement.
  */
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { RunView } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { JsonParse, StoreSchemas, TrainingRunResultsParser, type ClassBalanceEntry, type HoldoutCarveSummary, type SnapshotRowKey, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import { SnapshotManifest, StorageProviderSnapshotFileStore } from '@memberjunction/predictive-studio';
-import { EscapeSQLString, OrdinalCompare, UUIDMap } from '@memberjunction/global';
+import { EscapeSQLString, OrdinalCompare, UUIDMap, UUIDSet } from '@memberjunction/global';
 import { C1CorpusFixture, C1_CORPUS_DIR, ContainmentProbe, UnitFixtures, type GateMeasurement, type ProvisionedUnitPipeline, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGatePytest, type PytestRunResult } from './ps-gate-pytest';
 
@@ -20,18 +21,33 @@ type DuesPeriod = { ID: string; PersonID: string; PeriodIndex: number };
 interface StoredRun { readonly Results: Completed; readonly Snapshot: MJTrainingSnapshotEntity; readonly Manifest: readonly SnapshotRowKey[] }
 
 /**
- * The new-entity partition the gate derives from the stored manifest's group keys: the newest `fraction` of groups (by
- * first decision date, ties by key), held out whole from the cutoff on; every other group trains on its rows before it.
+ * The new-entity measurement read from a stored manifest and the run's report. The gate rebuilds the held set itself from
+ * the manifest's group keys and decision dates (the newest `fraction` of groups by first decision date, ties by key, held
+ * out whole from the cutoff on), then checks it against the stored membership hashes.
  */
-interface ManifestNewEntityPartition {
+export interface NewEntityManifestMeasurement {
   readonly Groups: number;
   readonly HeldGroups: number;
+  /** Development-role rows of groups outside the held set: the rows the report must train on. */
   readonly TrainingRows: number;
+  /** Rows of held groups on or after the cutoff: the report's holdout rows. */
   readonly HoldoutRows: number;
   readonly ExcludedRows: number;
-  /** Groups with a row on both sides of the partition. */
-  readonly SharedGroups: number;
+  /** The stored held-group hash equals the hash of the held set the gate rebuilt. */
+  readonly HeldMembershipMatches: boolean;
+  /** The stored training-group hash equals the hash of the groups the gate expects to train. */
+  readonly TrainingMembershipMatches: boolean;
+  /**
+   * Held groups among the run's training groups, measured once both stored hashes verify the two sets; -1 when a hash
+   * does not verify (the stored sets are then unknown, and the gate fails).
+   */
+  readonly SharedEntityKeys: number;
+  /** The report's counts (held groups, training, holdout and excluded rows) equal the rebuilt ones. */
+  readonly CountsMatch: boolean;
 }
+
+/** The stored new-entity report the measurement checks. */
+export type NewEntityReport = NonNullable<HoldoutCarveSummary['newEntity']>;
 
 const W_FEATURES = ['Year', 'Plan', 'EventsAttended', 'IncomeK', 'AutoRenew', 'Region', 'Noise1', 'Noise2', 'Noise3', 'Noise4', 'Noise5'] as const;
 const W1_FEATURES = ['EventsAttended', 'AutoRenew', 'IncomeK'] as const;
@@ -41,6 +57,11 @@ const C1_CUTOFF = '2024-01-01';
 const C1_REFERENCE_TEST_KEYS = 1205;
 const T2P_NEW_ENTITY_FRACTION = 0.3;
 const C1_NEW_ENTITY_FRACTION = 0.15;
+/**
+ * G2.41's bias bound. The reference's +0.164 came from the legacy pipeline's L2 penalty on unstandardised features; a
+ * standardised logistic regression on the same rows gives +0.1487, so the bound is +0.14.
+ */
+const W6_MIN_BIAS = 0.14;
 
 /** Evaluation Protocol gate bodies (static members on one owner, coding standards §2). */
 export class EvaluationProtocolGates {
@@ -84,7 +105,7 @@ export class EvaluationProtocolGates {
   private static async protocolCreatedAt(h: TruthHarness, ids: readonly string[]): Promise<UUIDMap<Date> | string> {
     const out = new UUIDMap<Date>();
     if (ids.length === 0) return out;
-    const list = [...new Set(ids)].map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const list = [...new UUIDSet(ids)].map((id) => `'${EscapeSQLString(id)}'`).join(',');
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJEvaluationProtocolEntity, 'ID' | '__mj_CreatedAt'>>({ EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID IN (${list})`, Fields: ['ID', '__mj_CreatedAt'], ResultType: 'simple' }, h.User);
     if (!r.Success) return `protocol rows could not be read: ${r.ErrorMessage}`;
     for (const p of r.Results) out.Set(p.ID, new Date(p.__mj_CreatedAt));
@@ -101,7 +122,11 @@ export class EvaluationProtocolGates {
     }).length;
   }
 
-  /** W1 → S5.1: every run references a protocol row created before it; a search with no protocol is refused. */
+  /**
+   * W1 → S5.1: every run references a protocol row created before (or at) the run row; a search with no protocol is
+   * refused. The fixture saves the protocol before it trains, so the ordering half holds by construction; the refusal
+   * half (PROTOCOL_REQUIRED, no run row) carries the gate's power.
+   */
   public static async MeasureW1ProtocolPrecedesRuns(h: TruthHarness): Promise<GateMeasurement> {
     await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionWorldRenewalPipeline(h, 'W1-signal', { Features: [...W1_FEATURES] });
@@ -150,9 +175,9 @@ export class EvaluationProtocolGates {
     const s = await EvaluationProtocolGates.trainAndRead(h, pipeline);
     if (typeof s === 'string') return EvaluationProtocolGates.fail(s);
     const holdout = s.Manifest.filter((k) => k.role === 'locked-holdout');
-    const development = new Set(s.Manifest.filter((k) => k.role === 'development').map((k) => k.rowId.toLowerCase()));
+    const development = new UUIDSet(s.Manifest.filter((k) => k.role === 'development').map((k) => k.rowId));
     const afterCutoff = holdout.filter((k) => k.decisionDate >= C1_CUTOFF).length;
-    const inTraining = holdout.filter((k) => development.has(k.rowId.toLowerCase())).length;
+    const inTraining = holdout.filter((k) => development.Has(k.rowId)).length;
     const actual = await EvaluationProtocolGates.c1KeysOf(h, holdout);
     if (typeof actual === 'string') return EvaluationProtocolGates.fail(actual);
     const expected = await EvaluationProtocolGates.referenceC1TestKeys();
@@ -172,7 +197,10 @@ export class EvaluationProtocolGates {
     return n === 0 ? Number.NaN : bins.reduce((t, b) => t + b.n * (b.meanPredicted - b.observedRate), 0) / n;
   }
 
-  /** W6 → S6.1: out_of_time on StartDate at 2024-01-01 — 6,950 holdout rows, AUC within 0.02 of 0.6447, bias ≥ +0.15. */
+  /**
+   * W6 → S6.1: out_of_time on StartDate at 2024-01-01 — 6,950 holdout rows (the snapshot's count and the manifest's
+   * locked-holdout rows), AUC within 0.02 of 0.6447, mean predicted minus observed ≥ +0.14.
+   */
   public static async MeasureW6OutOfTime(h: TruthHarness): Promise<GateMeasurement> {
     await h.EnsureLoaded({ Kind: 'world', ID: 'W6-drift', Seed: 42 });
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionWorldRenewalPipeline(h, 'W6-drift', {
@@ -186,10 +214,11 @@ export class EvaluationProtocolGates {
     // `??`: an AUC of 0 is a legitimate value; a missing one is NaN, which fails the band.
     const auc = [trainer.holdout.primary, ...trainer.holdout.secondary].find((m) => m.metric === 'auc')?.value ?? Number.NaN;
     const drift = EvaluationProtocolGates.calibrationBias(trainer);
+    const manifestHoldout = s.Manifest.filter((k) => k.role === 'locked-holdout').length;
     return {
-      Passed: s.Snapshot.HoldoutRowCount === 6950 && Math.abs(auc - 0.6447) <= 0.02 && drift >= 0.15,
-      Measured: { holdoutRows: s.Snapshot.HoldoutRowCount, auc, meanPredictedMinusObserved: drift },
-      Detail: `holdout ${s.Snapshot.HoldoutRowCount} rows, AUC ${auc.toFixed(4)}, predicted − observed ${drift.toFixed(3)}`,
+      Passed: s.Snapshot.HoldoutRowCount === 6950 && manifestHoldout === 6950 && Math.abs(auc - 0.6447) <= 0.02 && drift >= W6_MIN_BIAS,
+      Measured: { holdoutRows: s.Snapshot.HoldoutRowCount, manifestHoldoutRows: manifestHoldout, auc, meanPredictedMinusObserved: drift },
+      Detail: `holdout ${s.Snapshot.HoldoutRowCount} rows (manifest ${manifestHoldout}), AUC ${auc.toFixed(4)}, predicted − observed ${drift.toFixed(4)} (bound +${W6_MIN_BIAS})`,
     };
   }
 
@@ -212,11 +241,24 @@ export class EvaluationProtocolGates {
 
   /** Locked-holdout rows whose row id is also a development row of the same manifest. */
   private static sharedRowIds(manifest: readonly SnapshotRowKey[]): number {
-    const dev = new Set(manifest.filter((k) => k.role === 'development').map((k) => k.rowId.toLowerCase()));
-    return manifest.filter((k) => k.role === 'locked-holdout' && dev.has(k.rowId.toLowerCase())).length;
+    const dev = new UUIDSet(manifest.filter((k) => k.role === 'development').map((k) => k.rowId));
+    return manifest.filter((k) => k.role === 'locked-holdout' && dev.Has(k.rowId)).length;
   }
 
-  /** C2 → S2.5: holdout positive rate inside the population interval; resampling only in-fold; 0 row ids shared. */
+  /** How many of the given scenario rows have Target 1, read from the scenario table in one read; a message on a failed read. */
+  private static async scenarioPositives(h: TruthHarness, scenario: string, rowIds: readonly string[]): Promise<number | string> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<{ ID: string; Target: number | null }>(
+      { EntityName: UnitFixtures.TruthEntityName(h, `Scn_${scenario}`), Fields: ['ID', 'Target'], ResultType: 'simple', IgnoreMaxRows: true }, h.User);
+    if (!r.Success) return `Scn_${scenario} could not be read: ${r.ErrorMessage}`;
+    const wanted = new UUIDSet(rowIds);
+    return r.Results.filter((row) => wanted.Has(row.ID) && row.Target === 1).length;
+  }
+
+  /**
+   * C2 → S2.5: holdout positive rate inside the population interval; resampling only in-fold; 0 row ids shared. The
+   * holdout is the manifest's locked-holdout rows and its positives are read from the scenario table; the stored carve
+   * summary must agree with both.
+   */
   public static async MeasureC2HoldoutRate(h: TruthHarness): Promise<GateMeasurement> {
     await h.EnsureLoaded({ Kind: 'scenario', ID: 'C2', Seed: UnitFixtures.ScenarioBaseSeed('C2') });
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionScenarioUnitPipeline(h, 'C2', { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 1 }, { DateColumn: null, GroupKey: null, Protocol: { Kind: 'seeded-random', Fraction: 0.25 } });
@@ -226,17 +268,29 @@ export class EvaluationProtocolGates {
     if (typeof balance === 'string') return EvaluationProtocolGates.fail(balance);
     const population = balance.reduce((t, b) => t + b.rows, 0);
     const popRate = (balance.find((b) => b.label === '1')?.rows ?? 0) / population;
-    const holdRows = s.Results.carve?.holdoutRowCount ?? 0;
-    const holdRate = (s.Results.carve?.holdoutClassCounts?.['1'] ?? 0) / holdRows;
+    const holdIds = s.Manifest.filter((k) => k.role === 'locked-holdout').map((k) => k.rowId);
+    const positives = await EvaluationProtocolGates.scenarioPositives(h, 'C2', holdIds);
+    if (typeof positives === 'string') return EvaluationProtocolGates.fail(positives);
+    const holdRows = holdIds.length;
+    const holdRate = positives / holdRows;
+    const carveAgrees = s.Results.carve?.holdoutRowCount === holdRows && (s.Results.carve?.holdoutClassCounts?.['1'] ?? 0) === positives;
     const [lo, hi] = EvaluationProtocolGates.wilson(popRate, holdRows);
     const shared = EvaluationProtocolGates.sharedRowIds(s.Manifest);
     const inFoldRun = await PsGatePytest.Run([IN_FOLD_RESAMPLING_NODE]);
     const inFold = EvaluationProtocolGates.pytestPassed(inFoldRun);
     return {
-      Passed: holdRows > 0 && holdRate >= lo && holdRate <= hi && shared === 0 && inFold,
-      Measured: { populationRows: population, populationRate: popRate, holdoutRows: holdRows, holdoutRate: holdRate, lower: lo, upper: hi, sharedRowIds: shared, inFoldResampling: inFold },
-      Detail: `holdout rate ${holdRate.toFixed(4)} in [${lo.toFixed(4)}, ${hi.toFixed(4)}]; ${shared} shared row ids; in-fold node ${inFoldRun.Passed} of ${inFoldRun.Collected} passed`,
+      Passed: holdRows > 0 && holdRate >= lo && holdRate <= hi && shared === 0 && inFold && carveAgrees,
+      Measured: {
+        populationRows: population, populationRate: popRate, holdoutRows: holdRows, holdoutPositives: positives, holdoutRate: holdRate, lower: lo, upper: hi,
+        sharedRowIds: shared, inFoldResampling: inFold, carveAgreesWithManifest: carveAgrees,
+      },
+      Detail: `holdout ${positives} of ${holdRows} manifest rows positive, rate ${holdRate.toFixed(4)} in [${lo.toFixed(4)}, ${hi.toFixed(4)}]; carve summary agrees=${carveAgrees}; ${shared} shared row ids; in-fold node ${inFoldRun.Passed} of ${inFoldRun.Collected} passed`,
     };
+  }
+
+  /** SHA-256 hex of a group-key set as the new-entity summary documents it: distinct keys, ordinal sort, `\n`-joined, UTF-8. */
+  private static groupKeysSha256(keys: readonly string[]): string {
+    return createHash('sha256').update([...new Set(keys)].sort(OrdinalCompare).join('\n'), 'utf8').digest('hex');
   }
 
   /** The newest `fraction` of groups by first decision date (ties by key, at least one), from the manifest rows. */
@@ -252,31 +306,42 @@ export class EvaluationProtocolGates {
   }
 
   /**
-   * The new-entity partition read from the stored manifest's group keys and decision dates. It is exact only when the
-   * manifest holds every row the carve read, i.e. the holdout has no end (rows on or after an end are left out).
+   * Measures a new-entity report against a stored manifest (no holdout end, so the manifest holds every carved row):
+   * rebuilds the held set and the training groups from the manifest, verifies both against the report's stored hashes
+   * (the documented encoding, computed here independently of the product), measures the held groups among the verified
+   * training groups, and compares the report's counts.
    */
-  private static manifestNewEntityPartition(manifest: readonly SnapshotRowKey[], cutoff: string, fraction: number): ManifestNewEntityPartition {
+  public static MeasureNewEntityFromManifest(manifest: readonly SnapshotRowKey[], cutoff: string, fraction: number, report: NewEntityReport): NewEntityManifestMeasurement {
     const { Groups: groups, Held: held } = EvaluationProtocolGates.newestGroups(manifest, fraction);
     const trainingGroups = new Set<string>();
-    const holdoutGroups = new Set<string>();
     let training = 0;
     let holdout = 0;
     for (const k of manifest) {
       const key = k.groupKey ?? '';
-      const inWindow = k.decisionDate >= cutoff;
-      if (held.has(key) && inWindow) { holdout++; holdoutGroups.add(key); }
-      else if (!held.has(key) && !inWindow) { training++; trainingGroups.add(key); }
+      if (held.has(key)) { if (k.decisionDate >= cutoff) holdout++; }
+      else if (k.role === 'development') { training++; trainingGroups.add(key); }
     }
-    const shared = [...holdoutGroups].filter((g) => trainingGroups.has(g)).length;
-    return { Groups: groups, HeldGroups: held.size, TrainingRows: training, HoldoutRows: holdout, ExcludedRows: manifest.length - training - holdout, SharedGroups: shared };
+    const heldOk = EvaluationProtocolGates.groupKeysSha256([...held]) === report.heldGroupKeysSha256;
+    const trainingOk = EvaluationProtocolGates.groupKeysSha256([...trainingGroups]) === report.trainingGroupKeysSha256;
+    const excluded = manifest.length - training - holdout;
+    return {
+      Groups: groups, HeldGroups: held.size, TrainingRows: training, HoldoutRows: holdout, ExcludedRows: excluded,
+      HeldMembershipMatches: heldOk, TrainingMembershipMatches: trainingOk,
+      SharedEntityKeys: heldOk && trainingOk ? [...held].filter((g) => trainingGroups.has(g)).length : -1,
+      CountsMatch: report.holdoutEntityKeys === held.size && report.trainingRowCount === training && report.holdoutRowCount === holdout && report.excludedRowCount === excluded,
+    };
   }
 
-  /** Whether the run's new-entity report counts equal the partition the manifest gives. */
-  private static reportMatches(report: NonNullable<HoldoutCarveSummary['newEntity']>, p: ManifestNewEntityPartition): boolean {
-    return report.holdoutEntityKeys === p.HeldGroups && report.trainingRowCount === p.TrainingRows && report.holdoutRowCount === p.HoldoutRows && report.excludedRowCount === p.ExcludedRows;
+  /** Whether a measurement passes: both memberships verified, 0 shared keys, the report agreeing, groups not rows. */
+  public static NewEntityPassed(m: NewEntityManifestMeasurement, report: NewEntityReport, manifestRows: number): boolean {
+    return m.Groups < manifestRows && m.HeldMembershipMatches && m.TrainingMembershipMatches && m.SharedEntityKeys === 0
+      && report.sharedEntityKeys === m.SharedEntityKeys && m.CountsMatch && m.HoldoutRows > 0 && m.TrainingRows > 0;
   }
 
-  /** The new-entity gate body shared by T2p and C1: the manifest's partition, the report's counts and the fold nodes. */
+  /**
+   * The new-entity gate body shared by T2p and C1: the manifest measurement (membership verified by the stored hashes,
+   * shared keys measured on the verified sets, counts compared) and the inner-fold pytest nodes.
+   */
   private static async newEntityGate(h: TruthHarness, fraction: number, provision: () => Promise<ProvisionedUnitPipeline>): Promise<GateMeasurement> {
     const { Pipeline: pipeline } = await provision();
     const s = await EvaluationProtocolGates.trainAndRead(h, pipeline);
@@ -286,22 +351,22 @@ export class EvaluationProtocolGates {
     if (carve === null || report === null || carve.cutoff === null) return EvaluationProtocolGates.fail('the stored carve has no new-entity report');
     if (carve.holdoutEnd !== null) return EvaluationProtocolGates.fail(`the carve has a holdout end (${carve.holdoutEnd}): the manifest does not hold every carved row`);
     if (s.Manifest.some((k) => k.groupKey === null)) return EvaluationProtocolGates.fail('a manifest row has no group key');
-    const p = EvaluationProtocolGates.manifestNewEntityPartition(s.Manifest, carve.cutoff, fraction);
+    const m = EvaluationProtocolGates.MeasureNewEntityFromManifest(s.Manifest, carve.cutoff, fraction, report);
     const foldRun = await PsGatePytest.Run(FOLD_NODES);
     const folds = EvaluationProtocolGates.pytestPassed(foldRun) && foldRun.Collected === FOLD_NODES.length;
-    const matches = EvaluationProtocolGates.reportMatches(report, p);
     return {
-      Passed: p.Groups < s.Manifest.length && p.SharedGroups === 0 && report.sharedEntityKeys === 0 && matches && p.HoldoutRows > 0 && p.TrainingRows > 0 && folds,
+      Passed: EvaluationProtocolGates.NewEntityPassed(m, report, s.Manifest.length) && folds,
       Measured: {
-        manifestRows: s.Manifest.length, groups: p.Groups, heldGroups: p.HeldGroups, sharedEntityKeys: p.SharedGroups, trainingRows: p.TrainingRows, holdoutRows: p.HoldoutRows,
-        excludedRows: p.ExcludedRows, reportHoldoutEntityKeys: report.holdoutEntityKeys, reportTrainingRows: report.trainingRowCount, reportHoldoutRows: report.holdoutRowCount,
-        reportExcludedRows: report.excludedRowCount, reportSharedEntityKeys: report.sharedEntityKeys, reportMatchesManifest: matches, innerFoldsDisjoint: folds,
+        manifestRows: s.Manifest.length, groups: m.Groups, heldGroups: m.HeldGroups, heldMembershipMatches: m.HeldMembershipMatches,
+        trainingMembershipMatches: m.TrainingMembershipMatches, sharedEntityKeys: m.SharedEntityKeys, reportSharedEntityKeys: report.sharedEntityKeys,
+        trainingRows: m.TrainingRows, holdoutRows: m.HoldoutRows, excludedRows: m.ExcludedRows, reportTrainingRows: report.trainingRowCount,
+        reportHoldoutRows: report.holdoutRowCount, reportCountsMatch: m.CountsMatch, innerFoldsDisjoint: folds,
       },
-      Detail: `manifest: ${p.Groups} groups over ${s.Manifest.length} rows, ${p.HeldGroups} held out whole, ${p.TrainingRows} / ${p.HoldoutRows} rows, ${p.SharedGroups} shared keys; report ${report.trainingRowCount} / ${report.holdoutRowCount} rows, ${report.sharedEntityKeys} shared, matches=${matches}; fold nodes ${foldRun.Passed} of ${foldRun.Collected} passed`,
+      Detail: `held set rebuilt from the manifest: ${m.HeldGroups} of ${m.Groups} groups (${s.Manifest.length} rows), stored membership held=${m.HeldMembershipMatches} training=${m.TrainingMembershipMatches}; ${m.SharedEntityKeys} held groups among the training groups (report ${report.sharedEntityKeys}); rows ${m.TrainingRows} / ${m.HoldoutRows}, report counts match=${m.CountsMatch}; fold nodes ${foldRun.Passed} of ${foldRun.Collected} passed`,
     };
   }
 
-  /** T2p → S2.6: new-entity mode shares 0 entity keys with training, and inner folds 0 across a boundary. */
+  /** T2p → S2.6: the stored held and training entity sets verified against the manifest, 0 shared, inner folds disjoint. */
   public static async MeasureT2pNewEntity(h: TruthHarness): Promise<GateMeasurement> {
     await h.EnsureLoaded({ Kind: 'scenario', ID: 'T2p', Seed: UnitFixtures.ScenarioBaseSeed('T2p') });
     return EvaluationProtocolGates.newEntityGate(h, T2P_NEW_ENTITY_FRACTION, () => UnitFixtures.ProvisionScenarioUnitPipeline(h, 'T2p', { kind: 'continuous' }, {

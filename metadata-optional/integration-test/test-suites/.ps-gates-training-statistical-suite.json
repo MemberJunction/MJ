@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Training (statistical)",
-      "Description": "The three statistical training gates (G2.35 and G2.13 at 400 seeds; G2.4 over W2-noise's t2 seed set); each member row's MaxExecutionTimeMS is set from a measured run, and the suite runs and passes once on the final head before merge. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training (statistical)\"",
+      "Description": "The three statistical training gates (G2.35 and G2.13 at 400 seeds; G2.4 over W2-noise s100–s159, 60 seeds); each member row's MaxExecutionTimeMS is set from a measured run, and the suite runs and passes once on the final head before merge. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training (statistical)\"",
       "Status": "Active"
     },
     "relatedEntities": {

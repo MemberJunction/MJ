@@ -124,6 +124,14 @@ export interface HoldoutCarveNewEntitySummary {
   readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly excludedRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly sharedEntityKeys: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * SHA-256 (lower-case hex) of the held-out group keys: each key as the carve groups rows (the unit row's group key
+   * value, lower-cased by the row reader), sorted with `OrdinalCompare`, joined with `\n` (no trailing newline), UTF-8.
+   * Null on a summary stored before it existed.
+   */
+  readonly heldGroupKeysSha256: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** SHA-256 of the distinct group keys of the report's training rows, encoded as `heldGroupKeysSha256`; null on an older summary. */
+  readonly trainingGroupKeysSha256: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** The carve as stored on the run (`ValidationResults.carve`), read by the gates (holdout class counts, periods) and the UI. */

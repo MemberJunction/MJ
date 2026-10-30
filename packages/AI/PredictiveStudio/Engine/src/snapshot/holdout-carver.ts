@@ -18,9 +18,11 @@ import {
   type PredictionUnitSpec,
   type SnapshotRowRole,
 } from '@memberjunction/predictive-studio-core';
+import { OrdinalCompare } from '@memberjunction/global';
 import type { AssembledRow } from '../feature-assembly/as-of/as-of-assembler';
 import type { UnitRow } from '../prediction-unit/unit-row-reader';
 import { TrainingRefusedError } from '../training/training-refusal';
+import { SnapshotHash } from './snapshot-hash';
 
 type DateCarved = Extract<HoldoutSplit, { readonly kind: 'date-carved' }>;
 type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
@@ -78,9 +80,19 @@ export class DateCarvedCarver implements IHoldoutCarver {
       newEntity: ne === null ? null : {
         holdoutEntityKeys: ne.HoldoutEntityKeys.length, trainingRowCount: ne.TrainingRowIds.length, holdoutRowCount: ne.HoldoutRowIds.length,
         excludedRowCount: ne.ExcludedRowCount, sharedEntityKeys: ne.SharedEntityKeys,
+        heldGroupKeysSha256: DateCarvedCarver.GroupKeysSha256(ne.HoldoutEntityKeys),
+        trainingGroupKeysSha256: DateCarvedCarver.GroupKeysSha256(ne.TrainingRowIds.map((id) => HoldoutCarvers.UnitRowOf(unitRows, id).GroupKey)),
       },
     };
     return { Roles: new Map(d.Rows.map((r): [string, SnapshotRowRole] => [r.RowId, r.Role])), Summary: summary };
+  }
+
+  /**
+   * SHA-256 (lower-case hex) of a set of group keys as the new-entity summary stores it: the distinct keys (the unit row's
+   * group key, as the carve groups rows), sorted with `OrdinalCompare`, joined with `\n`, UTF-8.
+   */
+  public static GroupKeysSha256(keys: readonly string[]): string {
+    return SnapshotHash.Sha256Hex([...new Set(keys)].sort(OrdinalCompare).join('\n'));
   }
 
   /** The unit row as the date carve reads it; a row whose carve column is empty or names no day is refused. */
