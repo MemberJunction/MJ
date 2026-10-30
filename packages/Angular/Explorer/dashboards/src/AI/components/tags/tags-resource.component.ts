@@ -1454,8 +1454,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
-            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
-            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount ?? 0 : 0;
 
             // Load Scheduled Job entities referenced by sources so cron descriptions are available
             await this.loadScheduledJobsForSources();

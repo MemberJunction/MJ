@@ -296,7 +296,7 @@ export class DatasetLoader {
       ctx.User,
     );
     if (!res.Success) throw new Error(`count ${entity.Name}: ${res.ErrorMessage}`);
-    return res.TotalRowCount;
+    return res.TotalRowCount ?? 0;
   }
 
   /** `<id>/seed-<seed>[/origin-<origin>]#<sha>`; a row source's sha is prefixed so it never equals a generated one. */

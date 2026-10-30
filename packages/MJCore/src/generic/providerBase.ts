@@ -1401,6 +1401,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         params.OnDataChanged
                     );
                 }
+                ProviderBase.clearSkippedTotalRowCount(params, preResult.cachedResult);
                 return preResult.cachedResult;
             }
 
@@ -1410,6 +1411,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // PostRunView copies any hook-supplied replacement onto `result` in place, so this
             // reference reflects the hook chain's output.
             await this.PostRunView(result, params, preResult, contextUser);
+            ProviderBase.clearSkippedTotalRowCount(params, result);
             return result;
         }
 
@@ -1583,11 +1585,33 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Keeps the `TotalRowCount` contract on every way out of the pipeline: a caller that passed
+     * `SkipTotalRowCount` gets `undefined`, never a number. Cache hits, the smart-cache check and
+     * the GraphQL wire each rebuild a result and each have a reason to fill in a row count, so the
+     * contract is applied once here rather than at each of those sites.
+     */
+    private static clearSkippedTotalRowCount<T>(params: RunViewParams, result: RunViewResult<T>): void {
+        if (result && params.SkipTotalRowCount === true && params.ResultType !== 'count_only') {
+            result.TotalRowCount = undefined;
+        }
+    }
+
+    /**
+     * Runs a RunViews batch of the views the field-security predicate gate admitted, and applies
+     * the `TotalRowCount` contract to whichever stage produced each result.
+     */
+    private async runAdmittedViews<T>(params: RunViewParams[], preResult: typeof this._preRunViewsResultType, contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const results = await this.runAdmittedViewStages<T>(params, preResult, contextUser);
+        params.forEach((param, i) => ProviderBase.clearSkippedTotalRowCount(param, results[i]));
+        return results;
+    }
+
+    /**
      * The cache, database and post-processing stages of a RunViews batch, for the views the
      * field-security predicate gate admitted. `params` and every index map in `preResult`
      * describe the same admitted views.
      */
-    private async runAdmittedViews<T>(params: RunViewParams[], preResult: typeof this._preRunViewsResultType, contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    private async runAdmittedViewStages<T>(params: RunViewParams[], preResult: typeof this._preRunViewsResultType, contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Check for smart cache check mode
         if (preResult.useSmartCacheCheck && preResult.smartCacheCheckParams) {
             return this.executeSmartCacheCheck<T>(params, preResult, contextUser);

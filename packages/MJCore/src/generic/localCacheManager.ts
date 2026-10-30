@@ -1591,7 +1591,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        totalRowCount: number,
+        totalRowCount: number | undefined,
         provider?: IMetadataProvider,
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) {

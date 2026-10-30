@@ -1387,7 +1387,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 const rows = result.Results as { __mj_UpdatedAt: string }[];
                 const lastDate = rows.length > 0 ? new Date(rows[0].__mj_UpdatedAt) : null;
                 this.erdStats.set(this.entityDocuments[i].ID, {
-                    vectorCount: result.TotalRowCount,
+                    vectorCount: result.TotalRowCount ?? 0,
                     lastSynced: lastDate,
                 });
             }
@@ -1955,7 +1955,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         });
 
         if (result.Success) {
-            row.VectorCount = result.TotalRowCount;
+            row.VectorCount = result.TotalRowCount ?? 0;
             row.LastSynced = result.Results.length > 0 ? new Date(result.Results[0].__mj_UpdatedAt) : (row.LastSynced ?? new Date());
             row.Status = row.VectorCount > 0 ? 'Synced' : 'Pending';
             row.PercentComplete = 100;

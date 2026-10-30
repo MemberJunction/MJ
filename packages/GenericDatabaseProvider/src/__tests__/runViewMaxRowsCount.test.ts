@@ -5,18 +5,14 @@
  * real total with a second, SEQUENTIAL `COUNT(*)` — that is what makes Explorer's "100 of 299"
  * correct, and it must keep working.
  *
- * The one case where it cannot be worth anything is `MaxRows:1`: those callers are asking "does
- * a row exist / give me the one row" (a record-map lookup, a single-key resolve) and never read
- * TotalRowCount. On a live tenant those probes were 1,321 extra round trips and 9,760 ms — 11.4%
- * of all SQL time in a 120-second window — for a number nothing looked at.
+ * That count fires on every limit, `MaxRows:1` included: the provider never infers from the value
+ * of MaxRows that a caller does not want a total. A single-row probe that only reads `Results`
+ * opts out with `SkipTotalRowCount` (see skipTotalRowCount.test.ts). On a live tenant those probes
+ * were 1,321 extra round trips and 9,760 ms — 11.4% of all SQL time in a 120-second window — for
+ * a number nothing looked at, which is why the call sites pass the flag.
  *
- * These tests pin both halves: the `MaxRows:1` probe issues ONE query, and everything above 1
- * still issues the count.
- *
- * The one observable difference for `MaxRows:1` is asserted rather than glossed: a hit now reports
- * `TotalRowCount: 1` (the fallback `rowCount ?? retData.length`) instead of the whole view's row
- * count. The fixture's COUNT(*) answers with a total far from 1 precisely so that a leaked count
- * can never pass for the fallback.
+ * The fixture's COUNT(*) answers with a total far from the row count, so that a leaked data-row
+ * fallback can never pass for the count.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -204,25 +200,24 @@ function setup(rowCount: number): { provider: RowCountTestProvider; user: UserIn
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MaxRows:1 — the existence probe pays for one query, not two
+// MaxRows:1 — counted like every other limit
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('InternalRunView — MaxRows:1 row count', () => {
-    it('issues exactly ONE query for a MaxRows:1 probe that hits, and reports TotalRowCount 1', async () => {
+    it('counts a MaxRows:1 read that hits, and reports the real total', async () => {
         const { provider, user } = setup(1);
 
         const result = await provider.runView({ EntityName: 'Widgets', MaxRows: 1 }, user);
 
         expect(result.Success).toBe(true);
-        expect(provider.executed.length).toBe(1);
-        expect(provider.countStatements).toEqual([]);
-        expect(result.TotalRowCount).toBe(1);
-        expect(result.TotalRowCount).not.toBe(TOTAL_IN_VIEW); // the view total was never asked for
+        expect(provider.executed.length).toBe(2);
+        expect(provider.countStatements.length).toBe(1);
+        expect(result.TotalRowCount).toBe(TOTAL_IN_VIEW);
         expect(result.RowCount).toBe(1);
         expect(result.Results.length).toBe(1);
     });
 
-    it('issues exactly ONE query for a MaxRows:1 probe that MISSES', async () => {
+    it('issues exactly ONE query for a MaxRows:1 read that MISSES (an empty page is the real total)', async () => {
         const { provider, user } = setup(0);
 
         const result = await provider.runView({ EntityName: 'Widgets', MaxRows: 1 }, user);
@@ -237,7 +232,7 @@ describe('InternalRunView — MaxRows:1 row count', () => {
 // MaxRows > 1 — the Explorer "N of M" count is UNCHANGED
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('InternalRunView — the truncation count is preserved above MaxRows:1', () => {
+describe('InternalRunView — the truncation count at larger limits', () => {
     it('still issues the COUNT when a MaxRows:100 read comes back full, and reports the real total', async () => {
         const { provider, user } = setup(100);
 
