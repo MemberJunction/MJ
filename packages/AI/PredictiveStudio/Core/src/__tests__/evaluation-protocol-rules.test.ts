@@ -164,6 +164,23 @@ describe('ValidateProtocolForUnit', () => {
     ]);
   });
 
+  it('refuses a new-entity report grouped by a key other than the unit\'s group key, compared without case', () => {
+    const grouped = unit(binary, null, columnRows, 'HouseholdID');
+    const report = (groupKey: string): HoldoutSplit => ({ ...dateCarved, newEntityReport: { groupKey, holdoutFraction: 0.2 } });
+    const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(protocol(draftFor(grouped, report('PersonID'))), grouped);
+    expect(refusals).toEqual([{ Kind: 'new-entity-group-key-mismatch', ReportGroupKey: 'PersonID', UnitGroupKey: 'HouseholdID' }]);
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
+      'The new-entity report holds out whole groups by "PersonID", but the Prediction Unit groups its rows by "HouseholdID"; the report would not hold out the groups the protocol names.',
+    );
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol(draftFor(grouped, report(' householdid '))), grouped)).toEqual([]);
+    const ungrouped = unit(binary);
+    const unnamed = EvaluationProtocolRules.ValidateProtocolForUnit(protocol(draftFor(ungrouped, report('PersonID'))), ungrouped);
+    expect(unnamed).toEqual([{ Kind: 'new-entity-group-key-mismatch', ReportGroupKey: 'PersonID', UnitGroupKey: null }]);
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(unnamed[0])).toBe(
+      'The new-entity report holds out whole groups by "PersonID", but the Prediction Unit has no group key (its rows are grouped by their entity key); the report would not hold out the groups the protocol names.',
+    );
+  });
+
   describe('a forecast unit', () => {
     const forecastProtocol = (changes: Partial<EvaluationProtocolDraft>): EvaluationProtocolSpec => protocol({ ...draftFor(series, rolling(5)), ...changes });
     const only = (p: EvaluationProtocolSpec, u: PredictionUnitSpec = series): readonly ProtocolRefusal[] => EvaluationProtocolRules.ValidateProtocolForUnit(p, u);

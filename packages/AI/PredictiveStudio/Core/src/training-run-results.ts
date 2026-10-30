@@ -6,11 +6,14 @@
  * counts and one of two records of the training, so a later training of the same snapshot can call the trainer the
  * same way: a run trained under an Evaluation Protocol stores the trainer's result (`trainer`, artifacts as stored file
  * references, never bytes) and the request settings (`trainerRequest`); any other unit run stores the trainer's
- * metrics and row counts (`legacy`) and the request settings (`legacyRequest`). An envelope written before trainer
- * results were stored has no `trainer`/`trainerRequest` members and reads them as null.
+ * metrics and row counts (`legacy`) and the request settings (`legacyRequest`). A completed run also stores the
+ * locked-holdout carve its protocol declared (`carve`). An envelope written before trainer results or the carve were
+ * stored has no `trainer`/`trainerRequest`/`carve` members and reads them as null.
  */
 import { z } from 'zod';
 import type { AssemblyRefusal } from './assembly-contract';
+import type { HoldoutSplit } from './evaluation-protocol';
+import type { CarveRefusal, HoldoutCarveSummary } from './holdout-carve';
 import type { UnitRefusal } from './prediction-unit';
 import { TASK_KINDS } from './task-type';
 import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
@@ -34,7 +37,8 @@ export type TrainingRefusal =
   | { readonly stage: 'pipeline'; readonly reason: PipelineRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly stage: 'unit'; readonly reason: UnitRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly stage: 'assembly'; readonly reason: AssemblyRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'trainer'; readonly reason: TrainerRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'trainer'; readonly reason: TrainerRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'carve'; readonly reason: CarveRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
 export interface UnitResolutionCounts {
   readonly rowsRead: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -80,6 +84,8 @@ export type TrainingRunResults =
       readonly legacyRequest: LegacyRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly trainer: StoredTrainerResult | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly trainerRequest: TrainerRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      /** The locked-holdout carve the protocol declared; null for a run without one and for an envelope stored before it existed. */
+      readonly carve: HoldoutCarveSummary | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
     };
 
 // The stored envelope is parsed with zod, never `JSON.parse(...) as T`: the column is text any writer
@@ -117,11 +123,39 @@ const trainerRefusalSchema: z.ZodType<TrainerRefusal> = z.discriminatedUnion('ki
   z.object({ kind: z.literal('trainer-failed'), stage: TrainerResultSchemas.TrainerFailureStage, message: z.string(), computeSeconds: z.number().nonnegative() }),
   z.object({ kind: z.literal('lineage-incomplete'), gaps: z.array(z.string()) }),
 ]);
+const carveRefusalSchema: z.ZodType<CarveRefusal> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('unparseable-cutoff'), value: z.string() }),
+  z.object({ kind: z.literal('unparseable-carve-date'), rowId: z.string(), value: z.string() }),
+  z.object({ kind: z.literal('missing-carve-date'), rowId: z.string(), column: z.string() }),
+  z.object({ kind: z.literal('no-development-rows'), cutoff: z.string() }),
+  z.object({ kind: z.literal('no-holdout-rows'), cutoff: z.string(), holdoutEnd: z.string().nullable() }),
+  z.object({
+    kind: z.literal('too-few-periods'), periods: z.number().int(), origins: z.number().int(), horizonPeriods: z.number().int(),
+    gapPeriods: z.number().int(), minTrainPeriods: z.number().int(),
+  }),
+]);
+const HOLDOUT_KINDS = ['date-carved', 'rolling-origin', 'seeded-random'] as const satisfies readonly HoldoutSplit['kind'][];
+const nonNegativeCount = z.number().int().nonnegative();
+const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary> = z.object({
+  kind: z.enum(HOLDOUT_KINDS),
+  cutoff: z.string().nullable(),
+  holdoutEnd: z.string().nullable(),
+  developmentRowCount: nonNegativeCount,
+  holdoutRowCount: nonNegativeCount,
+  excludedAfterHoldoutEnd: nonNegativeCount,
+  holdoutClassCounts: z.record(nonNegativeCount).nullable(),
+  holdoutPeriods: z.array(z.string()),
+  newEntity: z.object({
+    holdoutEntityKeys: nonNegativeCount, trainingRowCount: nonNegativeCount, holdoutRowCount: nonNegativeCount,
+    excludedRowCount: nonNegativeCount, sharedEntityKeys: nonNegativeCount,
+  }).nullable(),
+});
 const trainingRefusalSchema: z.ZodType<TrainingRefusal> = z.discriminatedUnion('stage', [
   z.object({ stage: z.literal('pipeline'), reason: pipelineRefusalSchema }),
   z.object({ stage: z.literal('unit'), reason: unitRefusalSchema }),
   z.object({ stage: z.literal('assembly'), reason: assemblyRefusalSchema }),
   z.object({ stage: z.literal('trainer'), reason: trainerRefusalSchema }),
+  z.object({ stage: z.literal('carve'), reason: carveRefusalSchema }),
 ]);
 const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
   rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
@@ -145,8 +179,8 @@ const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
     random_state: z.number().int().optional(),
   }),
 });
-// The input type is left open (`unknown`) because `trainer` and `trainerRequest` may be absent on read (an envelope
-// written before they existed) while the parsed value always has them (absent reads as null).
+// The input type is left open (`unknown`) because `trainer`, `trainerRequest` and `carve` may be absent on read (an
+// envelope written before they existed) while the parsed value always has them (absent reads as null).
 const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unknown> = z.discriminatedUnion('status', [
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('refused'), refusal: trainingRefusalSchema }),
   z.object({
@@ -157,6 +191,7 @@ const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unkn
     legacyRequest: legacyRequestConfigSchema.nullable(),
     trainer: TrainerResultSchemas.StoredTrainerResult.nullable().default(null),
     trainerRequest: TrainerResultSchemas.TrainerRequestConfig.nullable().default(null),
+    carve: holdoutCarveSummarySchema.nullable().default(null),
   }),
 ]);
 

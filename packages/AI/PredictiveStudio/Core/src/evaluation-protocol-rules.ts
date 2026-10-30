@@ -32,6 +32,7 @@ export type ProtocolRefusal =
   | { readonly Kind: 'horizon-mismatch'; readonly ProtocolHorizonPeriods: number; readonly UnitHorizonPeriods: number }
   | { readonly Kind: 'inner-gap-below-horizon'; readonly GapPeriods: number; readonly HorizonPeriods: number }
   | { readonly Kind: 'group-key-mismatch'; readonly ProtocolGroupKey: string; readonly UnitGroupKey: string | null }
+  | { readonly Kind: 'new-entity-group-key-mismatch'; readonly ReportGroupKey: string; readonly UnitGroupKey: string | null }
   | { readonly Kind: 'primary-score-family-mismatch'; readonly Declared: ProperScore['family']; readonly UnitTask: TaskKind }
   | { readonly Kind: 'holdout-kind-mismatch'; readonly Holdout: HoldoutSplit['kind']; readonly UnitTask: TaskKind }
   | { readonly Kind: 'forecast-prediction-intervals'; readonly Method: PredictionIntervalSpec['method'] }
@@ -115,6 +116,7 @@ export class EvaluationProtocolRules {
       ...EvaluationProtocolRules.checkHoldout(p.holdout, unit),
       ...EvaluationProtocolRules.checkInnerGap(p.innerValidation, p.holdout, unit),
       ...EvaluationProtocolRules.checkGroupKey(p.innerValidation, unit),
+      ...EvaluationProtocolRules.checkNewEntityGroupKey(p.holdout, unit),
       ...EvaluationProtocolRules.checkFamily(p.primaryScore, unit.label.outcome),
       ...EvaluationProtocolRules.checkForecast(p, unit),
     ];
@@ -137,7 +139,9 @@ export class EvaluationProtocolRules {
       case 'inner-gap-below-horizon':
         return `Blocked-time inner folds need a gap of at least the horizon (${r.HorizonPeriods} periods); this protocol declares ${r.GapPeriods}.`;
       case 'group-key-mismatch':
-        return `The protocol groups its inner validation by "${r.ProtocolGroupKey}", but the Prediction Unit ${r.UnitGroupKey === null ? 'has no group key (its rows are grouped by their entity key)' : `groups its rows by "${r.UnitGroupKey}"`}; the folds would not be grouped the way the protocol says.`;
+        return `The protocol groups its inner validation by "${r.ProtocolGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the folds would not be grouped the way the protocol says.`;
+      case 'new-entity-group-key-mismatch':
+        return `The new-entity report holds out whole groups by "${r.ReportGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the report would not hold out the groups the protocol names.`;
       case 'primary-score-family-mismatch':
         return `The primary score is a ${r.Declared} score but the Prediction Unit's task is ${r.UnitTask}; candidates may only be ranked by a ${r.UnitTask} score.`;
       case 'holdout-kind-mismatch':
@@ -286,9 +290,30 @@ export class EvaluationProtocolRules {
    */
   private static checkGroupKey(inner: InnerValidation, unit: PredictionUnitSpec): ProtocolRefusal[] {
     const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
-    if (protocolKey === null) return [];
-    if (unit.groupKey !== null && unit.groupKey.trim().toLowerCase() === protocolKey.trim().toLowerCase()) return [];
+    if (protocolKey === null || EvaluationProtocolRules.isUnitGroupKey(unit, protocolKey)) return [];
     return [{ Kind: 'group-key-mismatch', ProtocolGroupKey: protocolKey, UnitGroupKey: unit.groupKey }];
+  }
+
+  /**
+   * The new-entity report holds out whole groups by the row's value of the unit's group key (that is the key the carve
+   * reads), so a report naming any other key would hold out groups the protocol does not name. A unit without a group
+   * key never matches: its rows are grouped by their entity key, which no field name states.
+   */
+  private static checkNewEntityGroupKey(holdout: HoldoutSplit, unit: PredictionUnitSpec): ProtocolRefusal[] {
+    if (holdout.kind !== 'date-carved' || holdout.newEntityReport === null) return [];
+    const reportKey = holdout.newEntityReport.groupKey;
+    if (EvaluationProtocolRules.isUnitGroupKey(unit, reportKey)) return [];
+    return [{ Kind: 'new-entity-group-key-mismatch', ReportGroupKey: reportKey, UnitGroupKey: unit.groupKey }];
+  }
+
+  /** Whether a field name is the unit's group key, compared without case or surrounding space; never for a unit without one. */
+  private static isUnitGroupKey(unit: PredictionUnitSpec, key: string): boolean {
+    return unit.groupKey !== null && unit.groupKey.trim().toLowerCase() === key.trim().toLowerCase();
+  }
+
+  /** How the unit groups its rows, in words, for a refusal sentence. */
+  private static unitGrouping(unitGroupKey: string | null): string {
+    return unitGroupKey === null ? 'has no group key (its rows are grouped by their entity key)' : `groups its rows by "${unitGroupKey}"`;
   }
 
   private static checkFamily(primary: ProperScore, task: TaskType): ProtocolRefusal[] {

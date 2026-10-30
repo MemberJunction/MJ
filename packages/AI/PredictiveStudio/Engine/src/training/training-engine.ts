@@ -482,6 +482,8 @@ export class TrainingEngine {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
       legacy: null, legacyRequest: null,
       trainer: TrainerContract.ToStoredTrainerResult(result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
+      // The protocol's holdout carve summary is written here once the protocol carvers replace the trailing carve.
+      carve: null,
     };
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(snapshot.Content.Header.featureSchema.map((f) => f.Name));
@@ -758,6 +760,8 @@ export class TrainingEngine {
       legacy: { metrics: response.metrics ?? {}, holdoutMetrics: response.holdout_metrics ?? null, trainingRowCount: split.TrainingRowCount, holdoutRowCount: split.HoldoutRowCount },
       legacyRequest: request,
       trainer: null, trainerRequest: null,
+      // The protocol's holdout carve summary is written here once the protocol carvers replace the trailing carve.
+      carve: null,
     };
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));

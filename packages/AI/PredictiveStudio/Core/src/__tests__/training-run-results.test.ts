@@ -33,6 +33,36 @@ describe('TrainingRunResultsParser', () => {
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope('warm-up'));
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.stage/);
   });
+  it('reads a completed envelope written before the carve was stored with carve as null', () => {
+    // The shape a unit run stored before the carve member existed (legacy and trainer members, no carve key).
+    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: { metrics: { auc: 0.71 }, holdoutMetrics: null, trainingRowCount: 8, holdoutRowCount: 1 }, legacyRequest: null, trainer: null, trainerRequest: null });
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
+    expect(r.Ok && r.Value.status === 'completed' ? r.Value.carve : 'not read').toBeNull();
+  });
+  it('reads back a stored carve summary and refuses one with a wrong-typed member', () => {
+    const carve = {
+      kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: '2025-01-01', developmentRowCount: 20, holdoutRowCount: 4, excludedAfterHoldoutEnd: 4,
+      holdoutClassCounts: { Renewed: 3, Lapsed: 1 }, holdoutPeriods: ['2024-01-01'],
+      newEntity: { holdoutEntityKeys: 3, trainingRowCount: 12, holdoutRowCount: 3, excludedRowCount: 5, sharedEntityKeys: 0 },
+    };
+    const envelope = (c: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: c });
+    const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(carve));
+    expect(ok.Ok && ok.Value.status === 'completed' ? ok.Value.carve : null).toEqual(carve);
+    const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, kind: 'trailing-fraction' }));
+    expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/carve\.kind/);
+    const negative = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, holdoutRowCount: -1 }));
+    expect(negative.Ok ? null : negative.Errors.join('\n')).toMatch(/carve\.holdoutRowCount/);
+  });
+  it('reads a carve refusal and refuses one of an unknown kind', () => {
+    const envelope = (reason: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'carve', reason } });
+    const reason = { kind: 'too-few-periods', periods: 30, origins: 5, horizonPeriods: 3, gapPeriods: 0, minTrainPeriods: 24 };
+    const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(reason));
+    expect(ok.Ok && ok.Value.status === 'refused' ? ok.Value.refusal : null).toEqual({ stage: 'carve', reason });
+    const noHoldout = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'no-holdout-rows', cutoff: '2024-01-01', holdoutEnd: null }));
+    expect(noHoldout.Ok).toBe(true);
+    const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'cutoff-in-the-future', cutoff: '2030-01-01' }));
+    expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.kind/);
+  });
   it('reports a pre-v2 blob as not an envelope', () => {
     expect(TrainingRunResultsParser.ParseTrainingRunResults('{"accuracy":0.9}')).toEqual({ Ok: false, Errors: ['ValidationResults is not a ps-run-results/v2 envelope'] });
   });

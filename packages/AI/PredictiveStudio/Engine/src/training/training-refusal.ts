@@ -4,7 +4,7 @@
  * A training run refused before (or instead of) fitting; the run row records `refusal` and the operation surfaces the
  * sentence.
  */
-import type { TrainingRefusal } from '@memberjunction/predictive-studio-core';
+import { HoldoutCarve, type TrainingRefusal } from '@memberjunction/predictive-studio-core';
 
 /** A training run refused before (or instead of) fitting. Callers identify it by `Refusal`, never by the message. */
 export class TrainingRefusedError extends Error {
@@ -39,6 +39,12 @@ export class TrainingRefusedError extends Error {
       case 'unsupported-step-kind': return `Refused (unsupported-step-kind): step ${reason.stepId} is a ${reason.stepKind} step, which has no as-of reading.`;
       case 'trainer-failed': return `Refused (trainer-failed): the trainer stopped at stage ${reason.stage} after ${reason.computeSeconds}s: ${reason.message}`;
       case 'lineage-incomplete': return `Refused (lineage-incomplete): the trainer's CodeVersion lacks ${reason.gaps.join(', ')}.`;
+      case 'unparseable-cutoff':
+      case 'unparseable-carve-date':
+      case 'missing-carve-date':
+      case 'no-development-rows':
+      case 'no-holdout-rows':
+      case 'too-few-periods': return `Refused (${reason.kind}): ${HoldoutCarve.DescribeCarveRefusal(reason)}`;
     }
   }
 }
