@@ -645,4 +645,157 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
             );
         });
     });
+
+    describe('ManageMyEmailInboxAction — provider choice skips providers this server cannot load', () => {
+        it('falls through to the next active provider when the preferred one has no loaded class', async () => {
+            // Gmail is Active in metadata and preferred, but its provider package is not loaded here;
+            // SendGrid is. The draft must land in SendGrid, not fail with NO_EMAIL_PROVIDER.
+            mockProvidersList.push(buildProviderEntity({ Name: 'Gmail' }), buildProviderEntity({ Name: 'SendGrid', SupportsCalendar: false }));
+            const mockCreateDraft = vi.fn().mockResolvedValue({ Success: true, DraftID: 'draft-1' });
+            mockGetProvider.mockImplementation((name: string) => {
+                if (name === 'Gmail') throw new Error('Provider Gmail not found.');
+                return {
+                    supportsOperation: () => true,
+                    VerifyMailboxAccess: vi.fn().mockResolvedValue({ Success: true, Identifier: 'alice@bluecypress.io', CanReadMail: true, CanReadCalendar: true }),
+                    CreateDraft: mockCreateDraft,
+                };
+            });
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction']({
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'Operation', Value: 'CreateDraft', Type: 'Input' },
+                    { Name: 'To', Value: 'amith@bluecypress.io', Type: 'Input' },
+                    { Name: 'Subject', Value: 'Q4', Type: 'Input' },
+                    { Name: 'Body', Value: 'On track.', Type: 'Input' },
+                ],
+            } as unknown as RunActionParams);
+
+            expect(res.ResultCode).toBe('SUCCESS');
+            expect(mockCreateDraft).toHaveBeenCalledTimes(1);
+            expect(mockGetProvider).toHaveBeenCalledWith('Gmail');
+            expect(mockGetProvider).toHaveBeenCalledWith('SendGrid');
+        });
+
+        it('reports NO_EMAIL_PROVIDER only when no active provider can be loaded at all', async () => {
+            mockProvidersList.push(buildProviderEntity({ Name: 'Gmail' }));
+            mockGetProvider.mockImplementation(() => { throw new Error('Provider Gmail not found.'); });
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction']({
+                ContextUser: aliceUser,
+                Params: [{ Name: 'Operation', Value: 'CreateDraft', Type: 'Input' }, { Name: 'To', Value: 'a@b.io', Type: 'Input' }],
+            } as unknown as RunActionParams);
+
+            expect(res.ResultCode).toBe('NO_EMAIL_PROVIDER');
+            expect(res.Message).toContain('Gmail');
+        });
+    });
+
+    describe('ManageMyEmailInboxAction — approval comes before transport', () => {
+        function sendParams(extra: Array<{ Name: string; Value: unknown }> = [], operation = 'Send'): RunActionParams {
+            return {
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'Operation', Value: operation, Type: 'Input' },
+                    { Name: 'To', Value: 'amith@bluecypress.io', Type: 'Input' },
+                    { Name: 'Subject', Value: 'Q4 OKR status', Type: 'Input' },
+                    { Name: 'Body', Value: 'Launch Revised Platform is on track.', Type: 'Input' },
+                    ...extra.map((e) => ({ ...e, Type: 'Input' })),
+                ],
+            } as unknown as RunActionParams;
+        }
+
+        function allowingProvider(send = vi.fn().mockResolvedValue({ Success: true, Error: '' })) {
+            mockProvidersList.push(buildProviderEntity());
+            mockGetProvider.mockReturnValue({
+                supportsOperation: () => true,
+                VerifyMailboxAccess: vi.fn().mockResolvedValue({ Success: true, Identifier: 'alice@bluecypress.io', CanReadMail: true, CanReadCalendar: true }),
+                SendSingleMessage: send,
+            });
+            return send;
+        }
+
+        it('queues the approval for a new email even when no mail provider exists, so the user can approve before delivery is possible', async () => {
+            // No providers at all: this is a tenant with the mailbox blocked, or nothing configured yet.
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](sendParams());
+
+            expect(res.Success).toBe(true);
+            expect(res.ResultCode).toBe('APPROVAL_REQUIRED');
+            expect(savedApprovalRequests.length).toBe(1);
+            expect(mockGetProvider).not.toHaveBeenCalled();
+        });
+
+        it("accepts the prompt's older operation names (SendEmail, ReplyToMessage, ForwardMessage)", async () => {
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](sendParams([], 'SendEmail'));
+
+            expect(res.ResultCode).toBe('APPROVAL_REQUIRED');
+            expect(savedApprovalRequests.length).toBe(1);
+        });
+
+        it('sends through the provider once the approved request ID comes back, and does not queue a second approval', async () => {
+            const send = allowingProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](
+                sendParams([{ Name: 'ConfirmedApprovalRequestID', Value: 'approval-req-123' }])
+            );
+
+            expect(res.Success).toBe(true);
+            expect(res.ResultCode).toBe('SUCCESS');
+            expect(savedApprovalRequests.length).toBe(0);
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(send.mock.calls[0][0]).toEqual(expect.objectContaining({ To: 'amith@bluecypress.io', Subject: 'Q4 OKR status', From: 'alice@bluecypress.io' }));
+        });
+
+        it('after approval, a missing provider fails at delivery time with a plain reason', async () => {
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](
+                sendParams([{ Name: 'ConfirmedApprovalRequestID', Value: 'approval-req-123' }])
+            );
+
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('NO_EMAIL_PROVIDER');
+            expect(savedApprovalRequests.length).toBe(0);
+        });
+
+        it('sends without an approval when the policy allows sending and the approval flag is off', async () => {
+            const send = allowingProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: false }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](sendParams());
+
+            expect(res.ResultCode).toBe('SUCCESS');
+            expect(savedApprovalRequests.length).toBe(0);
+            expect(send).toHaveBeenCalledTimes(1);
+        });
+
+        it('rejects an unrecognised operation instead of silently treating it as a read', async () => {
+            // An agent typo like 'SendMail' used to fall through to ListMessages and report success.
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](sendParams([], 'SendMail'));
+
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('INVALID_OPERATION');
+            expect(res.Message).toContain('SendMail');
+            expect(savedApprovalRequests.length).toBe(0);
+            expect(mockGetProvider).not.toHaveBeenCalled();
+        });
+
+        it('still refuses to send under DraftOnly, before any approval is considered', async () => {
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](sendParams());
+
+            expect(res.ResultCode).toBe('POLICY_DENIED');
+            expect(savedApprovalRequests.length).toBe(0);
+        });
+    });
 });
