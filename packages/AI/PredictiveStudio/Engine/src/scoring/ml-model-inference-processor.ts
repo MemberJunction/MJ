@@ -750,7 +750,7 @@ export function MatrixToFeatureRows(
     const obj: Record<string, string | number | boolean | null> = {};
     for (const name of schemaNames) {
       const idx = colIndex.get(name);
-      obj[name] = idx != null ? row[idx] : null;
+      obj[name] = (idx !== null && idx !== undefined) ? row[idx] : null;
     }
     return obj;
   });
@@ -758,7 +758,7 @@ export function MatrixToFeatureRows(
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (raw == null || raw.trim().length === 0) {
+  if ((raw === null || raw === undefined) || raw.trim().length === 0) {
     return fallback;
   }
   try {

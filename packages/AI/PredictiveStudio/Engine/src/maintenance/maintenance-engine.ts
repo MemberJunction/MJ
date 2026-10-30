@@ -141,7 +141,7 @@ export class MaintenanceEngine {
     if (policy.dataVolumeGrowthThreshold <= 0) {
       return;
     }
-    if (trainedRowCount == null || trainedRowCount <= 0 || currentRowCount == null) {
+    if ((trainedRowCount === null || trainedRowCount === undefined) || trainedRowCount <= 0 || (currentRowCount === null || currentRowCount === undefined)) {
       return;
     }
     const growth = (currentRowCount - trainedRowCount) / trainedRowCount;
@@ -323,7 +323,7 @@ export class MaintenanceEngine {
     // promote decision uses `improvement`, computed in the metric's NATURAL
     // direction: for error metrics (RMSE/MAE/logloss) lower is better, so an
     // improvement means the incumbent's value minus the challenger's.
-    const delta = incumbentValue != null && challengerValue != null ? challengerValue - incumbentValue : null;
+    const delta = (incumbentValue !== null && incumbentValue !== undefined) && (challengerValue !== null && challengerValue !== undefined) ? challengerValue - incumbentValue : null;
     const improvement = this.metricImprovement(metric, incumbentValue, challengerValue);
     const recommendation = this.recommendPromotion(improvement, policy.promotionMargin);
 
@@ -345,7 +345,7 @@ export class MaintenanceEngine {
    * for higher-is-better metrics → improvement = challenger − incumbent.
    */
   private metricImprovement(metric: string, incumbentValue: number | null, challengerValue: number | null): number | null {
-    if (incumbentValue == null || challengerValue == null) {
+    if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
       return null;
     }
     return MetricDirections.IsErrorMetric(metric) ? incumbentValue - challengerValue : challengerValue - incumbentValue;
@@ -353,7 +353,7 @@ export class MaintenanceEngine {
 
   /** Decide promote-vs-hold from the directional improvement + margin (hold when unknown). */
   private recommendPromotion(improvement: number | null, margin: number): PromotionRecommendation {
-    if (improvement == null) {
+    if ((improvement === null || improvement === undefined)) {
       return 'hold';
     }
     return improvement >= margin ? 'promote' : 'hold';
@@ -368,9 +368,9 @@ export class MaintenanceEngine {
     margin: number,
     recommendation: PromotionRecommendation,
   ): string {
-    if (incumbentValue == null || challengerValue == null) {
+    if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
       return (
-        `Could not compare on "${metric}" — ${incumbentValue == null ? 'the current model' : 'the new model'} ` +
+        `Could not compare on "${metric}" — ${incumbentValue === null || incumbentValue === undefined ? 'the current model' : 'the new model'} ` +
         `has no holdout value for it. Recommending HOLD until a human reviews. No promotion was performed.`
       );
     }
@@ -531,7 +531,7 @@ export function RunMaintenancePass(
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (raw == null || raw.trim().length === 0) {
+  if ((raw === null || raw === undefined) || raw.trim().length === 0) {
     return fallback;
   }
   try {

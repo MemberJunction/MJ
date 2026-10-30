@@ -723,7 +723,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     const loScore = (lo.ResultPayload as { score: number; class?: string | null }).score;
     // Regression → no class (null/undefined); numeric value; higher engagement →
     // higher predicted satisfaction.
-    expect((hi.ResultPayload as { class?: string | null }).class == null).toBe(true);
+    const cls = (hi.ResultPayload as { class?: string | null }).class;
+    expect(cls === null || cls === undefined).toBe(true);
     expect(hiScore).toBeGreaterThan(loScore);
 
     // eslint-disable-next-line no-console

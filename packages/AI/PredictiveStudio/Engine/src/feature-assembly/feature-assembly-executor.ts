@@ -662,7 +662,7 @@ export class FeatureAssemblyExecutor {
       for (const row of res.Rows) {
         const fk = row[ds.ForeignKeyField];
         const dateVal = row[ds.DateField];
-        if (fk == null || dateVal == null) {
+        if ((fk === null || fk === undefined) || (dateVal === null || dateVal === undefined)) {
           continue;
         }
         const date = new Date(dateVal as string | number);

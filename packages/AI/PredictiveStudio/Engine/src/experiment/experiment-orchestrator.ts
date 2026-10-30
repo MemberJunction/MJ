@@ -541,7 +541,7 @@ export class ExperimentOrchestrator {
    * overrun, §8.4).
    */
   private trimWaveToBudget(wave: ProposedExperiment[], budget: Budget, state: BudgetState): ProposedExperiment[] {
-    if (budget.MaxRuns == null) {
+    if ((budget.MaxRuns === null || budget.MaxRuns === undefined)) {
       return wave;
     }
     const remainingRuns = Math.max(0, budget.MaxRuns - state.runs);
@@ -554,16 +554,16 @@ export class ExperimentOrchestrator {
    * as `budget-maxComputeCost`.
    */
   private checkBudget(budget: Budget, state: BudgetState, deps: ExperimentDeps): BudgetGateResult {
-    if (budget.MaxRuns != null && state.runs >= budget.MaxRuns) {
+    if ((budget.MaxRuns !== null && budget.MaxRuns !== undefined) && state.runs >= budget.MaxRuns) {
       return { exceeded: true, reason: 'budget-maxRuns' };
     }
-    if (budget.MaxComputeCost != null && state.computeCost >= budget.MaxComputeCost) {
+    if ((budget.MaxComputeCost !== null && budget.MaxComputeCost !== undefined) && state.computeCost >= budget.MaxComputeCost) {
       return { exceeded: true, reason: 'budget-maxComputeCost' };
     }
     if (budget.MaxComputeSeconds !== undefined && state.computeSeconds >= budget.MaxComputeSeconds) {
       return { exceeded: true, reason: 'budget-maxComputeCost' };
     }
-    if (budget.MaxWallclockMinutes != null) {
+    if ((budget.MaxWallclockMinutes !== null && budget.MaxWallclockMinutes !== undefined)) {
       const elapsedMin = (deps.clock.now() - state.startedAtMs) / 60000;
       if (elapsedMin >= budget.MaxWallclockMinutes) {
         return { exceeded: true, reason: 'budget-maxWallclock' };

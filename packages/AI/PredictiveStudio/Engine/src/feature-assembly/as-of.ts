@@ -55,7 +55,7 @@ export function ResolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, label
       return parsed;
     }
     case 'offset': {
-      if (strategy.OffsetDays == null) {
+      if ((strategy.OffsetDays === null || strategy.OffsetDays === undefined)) {
         throw new Error(`AsOfStrategy.Mode='offset' requires OffsetDays.`);
       }
       if (!labelEventDate) {

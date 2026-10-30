@@ -99,7 +99,7 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
      */
     private parseLeakageGuard(result: ValidationResult): LeakageGuard | null {
         const raw = this.LeakageGuard;
-        if (raw == null || raw.trim().length === 0) {
+        if ((raw === null || raw === undefined) || raw.trim().length === 0) {
             return { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
         }
 
@@ -180,7 +180,7 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
     /** Parse the `SourceBindings` JSON column, tolerating null/blank/garbage. */
     private parseSourceBindings(): SourceBinding[] {
         const raw = this.SourceBindings;
-        if (raw == null || raw.trim().length === 0) return [];
+        if ((raw === null || raw === undefined) || raw.trim().length === 0) return [];
         try {
             const parsed = JSON.parse(raw) as SourceBinding[];
             return Array.isArray(parsed) ? parsed : [];

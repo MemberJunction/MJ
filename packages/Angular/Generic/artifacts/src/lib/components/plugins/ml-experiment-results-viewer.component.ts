@@ -186,7 +186,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   // ─── Base-class contract ─────────────────────────────────────────
 
   public override get hasDisplayContent(): boolean {
-    return this.Spec != null;
+    return (this.Spec !== null && this.Spec !== undefined);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -240,7 +240,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   /** Headline best score (the winning row's primary score), formatted. */
   public get HeadlineScore(): string | null {
     const score = this.WinningRow?.score;
-    return score != null ? this.FormatScore(score) : null;
+    return (score !== null && score !== undefined) ? this.FormatScore(score) : null;
   }
 
   public get WinningAlgorithm(): string {
@@ -253,7 +253,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
       parts.push(this.WinningRow.featureSet);
     }
     const version = this.Spec?.BestModel?.Version ?? this.Spec?.report?.bestModelVersion;
-    if (version != null && `${version}`.trim()) {
+    if ((version !== null && version !== undefined) && `${version}`.trim()) {
       parts.push(`${version}`);
     }
     return parts.join(' · ');
@@ -267,7 +267,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     }
     // Synthesize a single metric from the headline score when nothing explicit was provided.
     const row = this.WinningRow;
-    if (row?.score != null) {
+    if (row?.score !== null && row?.score !== undefined) {
       return [{ label: row.metricName || this.firstMetricName() || 'Score', value: this.FormatScore(row.score) }];
     }
     return [];
@@ -279,7 +279,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** Whether we have a resolvable model ID to drill through to. */
   public get HasDrillThroughTarget(): boolean {
-    return this.resolveBestModelId() != null;
+    return this.resolveBestModelId() !== null;
   }
 
   public get LeaderboardSize(): number {
@@ -368,7 +368,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** Format a numeric score for display (3 decimals, trimmed). */
   public FormatScore(value: number | null): string {
-    if (value == null) {
+    if ((value === null || value === undefined)) {
       return '—';
     }
     // Scores in [0,1] (AUC/F1) look best at 3 decimals; larger metrics (RMSE) at 2.

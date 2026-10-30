@@ -241,7 +241,7 @@ class SaveFailingPruneFactory extends FakeFactory {
   // Label is assigned by the orchestrator after creation; we gate the failure on it
   // inside StatusSaveFailingIteration only for the failLabels set.
   public shouldFail(label: string | null): boolean {
-    return label != null && this.failLabels.has(label);
+    return (label !== null && label !== undefined) && this.failLabels.has(label);
   }
 }
 
@@ -259,7 +259,7 @@ class SaveFailingFailFactory extends FakeFactory {
     return super.getEntityObject<T>(entityName, u);
   }
   public shouldFail(label: string | null): boolean {
-    return label != null && this.failLabels.has(label);
+    return (label !== null && label !== undefined) && this.failLabels.has(label);
   }
 }
 
