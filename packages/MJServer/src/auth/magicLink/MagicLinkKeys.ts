@@ -10,10 +10,27 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
-import { LogStatusEx } from '@memberjunction/core';
+import { LogStatusEx, LogWarning } from '@memberjunction/core';
 import { createPrivateKey, createPublicKey, generateKeyPairSync, createHash, type KeyObject } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import type { MagicLinkJWTClaims } from './types.js';
+
+/**
+ * True when the process is NOT running with `NODE_ENV=production`. This is the same
+ * production/local-dev line MJServer already uses to forbid local dev auth in production.
+ */
+export function IsMagicLinkLocalDevEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV?.trim().toLowerCase() !== 'production';
+}
+
+/** Warning logged when a non-local-dev server falls back to an ephemeral keypair. */
+export const EPHEMERAL_MAGIC_LINK_KEY_WARNING =
+  '[MagicLink] No rsaPrivateKey configured and NODE_ENV=production — generated an EPHEMERAL RS256 keypair. ' +
+  'Magic-link session tokens signed with it will stop validating when this process restarts, and they will not ' +
+  'validate on any other MJAPI instance behind the same load balancer, because each process generates its own key. ' +
+  'To fix, generate one RSA private key (e.g. `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`) and set it ' +
+  'as magicLink.rsaPrivateKey in mj.config.cjs or as MJ_MAGIC_LINK_PRIVATE_KEY (raw or base64-encoded PEM), ' +
+  'using the same key on every instance.';
 
 /** A single JSON Web Key plus the metadata jwks-rsa needs to match it. */
 interface PublishedJWK extends JsonWebKey {
@@ -34,6 +51,7 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   private publicKey?: KeyObject;
   private _kid = '';
   private _initialized = false;
+  private _isEphemeral = false;
 
   // Public to satisfy BaseSingleton.getInstance's `this: new () => T` constraint
   // (matches the AuthProviderFactory singleton pattern).
@@ -49,6 +67,15 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     return this._initialized;
   }
 
+  /**
+   * True when no private key was configured and the keypair was generated for this process
+   * only. Tokens signed with an ephemeral key do not survive a restart and do not validate on
+   * other instances. Downstream code should ask this rather than reading the raw config value.
+   */
+  public get IsEphemeral(): boolean {
+    return this._isEphemeral;
+  }
+
   public get Kid(): string {
     return this._kid;
   }
@@ -56,8 +83,11 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   /**
    * Initializes the keypair from a provided PEM (raw or base64-encoded) or, if
    * none is supplied, generates an ephemeral 2048-bit RSA keypair. Idempotent.
+   *
+   * @param env - process environment used to decide whether the ephemeral fallback is a local-dev
+   *   default (verbose-only notice) or a production misconfiguration (warning). Defaults to `process.env`.
    */
-  public Initialize(privateKeyPem?: string): void {
+  public Initialize(privateKeyPem?: string, env: NodeJS.ProcessEnv = process.env): void {
     if (this._initialized) {
       return;
     }
@@ -69,17 +99,8 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     } else {
       const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
       priv = privateKey;
-      // Verbose-only: on dev boxes with no configured key this fires on EVERY boot, and the
-      // ephemeral fallback is the designed behavior there — not a condition worth a log line in
-      // the default startup output. Deployments that care set the key; operators diagnosing
-      // magic-link session loss can re-run with verbose logging.
-      LogStatusEx({
-        message:
-          '[MagicLink] No rsaPrivateKey configured — generated an EPHEMERAL RS256 keypair. ' +
-          'Outstanding magic-link sessions will be invalidated on restart. Set magicLink.rsaPrivateKey ' +
-          '(or MJ_MAGIC_LINK_PRIVATE_KEY) for stable production keys.',
-        verboseOnly: true
-      });
+      this._isEphemeral = true;
+      this.reportEphemeralKey(env);
     }
 
     this.privateKeyPem = priv.export({ type: 'pkcs8', format: 'pem' }) as string;
@@ -104,6 +125,25 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     this.ensureInitialized();
     const jwk = this.publicKey!.export({ format: 'jwk' });
     return { keys: [{ ...jwk, kid: this._kid, use: 'sig', alg: 'RS256' }] };
+  }
+
+  /**
+   * Local dev (NODE_ENV not 'production'): the ephemeral fallback is the designed behavior and
+   * fires on every boot, so the notice stays verbose-only. Otherwise it is a data-loss-on-restart
+   * misconfiguration, so it is a warning in the default output.
+   */
+  private reportEphemeralKey(env: NodeJS.ProcessEnv): void {
+    if (!IsMagicLinkLocalDevEnvironment(env)) {
+      LogWarning(EPHEMERAL_MAGIC_LINK_KEY_WARNING);
+      return;
+    }
+    LogStatusEx({
+      message:
+        '[MagicLink] No rsaPrivateKey configured — generated an EPHEMERAL RS256 keypair. ' +
+        'Outstanding magic-link sessions will be invalidated on restart. Set magicLink.rsaPrivateKey ' +
+        '(or MJ_MAGIC_LINK_PRIVATE_KEY) for stable production keys.',
+      verboseOnly: true
+    });
   }
 
   private ensureInitialized(): void {
