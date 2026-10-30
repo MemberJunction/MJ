@@ -18,6 +18,8 @@ import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '.
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
+import { ClassifySQLServerDefaultValue } from './sqlServerDefaultValues';
+import { DescribeSQLBatchObject, NormalizeSQLServerRoutineDefinition, SplitSQLServerBatches } from './sqlServerScriptText';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -36,6 +38,9 @@ const ssDialect = new SQLServerDialect();
  */
 @RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
+    /** Widest key SQL Server accepts for a nonclustered index without failing later writes. */
+    private static readonly MAX_NONCLUSTERED_INDEX_KEY_BYTES = 1700;
+
     /** @inheritdoc */
     get Dialect(): SQLDialect {
         return ssDialect;
@@ -249,6 +254,10 @@ ${this.trimStatementTerminator(selectSQL)}`;
         const identityKey = entity.PrimaryKeys.find(k => k.AutoIncrement);
         const efString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, spName, 'Create');
+        // Expression defaults (#4000) are resolved into their parameters ahead of every INSERT
+        // branch below. Empty for the common case, which keeps those procedures byte-identical.
+        const assignmentSQL = this.GeneratePreInsertDefaultAssignments(entity);
+        const defaultAssignments = assignmentSQL.length > 0 ? `${assignmentSQL}\n    ` : '';
 
         let preInsertCode = '';
         let outputCode = '';
@@ -390,7 +399,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${preInsertCode}${insertBlock}
+    ${defaultAssignments}${preInsertCode}${insertBlock}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
@@ -642,6 +651,21 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
      */
     protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
         return f.Length !== -1;
+    }
+
+    /**
+     * SQL Server refuses an unbounded column as an index key (error 1919), so the statement fails
+     * on every run. A key wider than 1,700 bytes is created with only a warning (1945), and any
+     * later insert or update of a longer value then fails. `Length` is in bytes for `nvarchar`.
+     */
+    protected ForeignKeyIndexSkipReason(f: EntityFieldInfo): string | null {
+        if (!this.isIndexableKeyColumn(f)) {
+            return 'unbounded, which SQL Server cannot use as an index key';
+        }
+        if (f.Length > SQLServerCodeGenProvider.MAX_NONCLUSTERED_INDEX_KEY_BYTES) {
+            return `${f.Length} bytes, over SQL Server's ${SQLServerCodeGenProvider.MAX_NONCLUSTERED_INDEX_KEY_BYTES}-byte index key limit`;
+        }
+        return null;
     }
 
     protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
@@ -1173,7 +1197,11 @@ GO
      *  - **Unrestrictable targets** (PKs, `__mj_` columns, the security/identity entities) are
      *    filtered defensively even though save-time guards should make such rows impossible.
      */
-    private generateFieldSecurityDenies(entity: EntityInfo): string {
+    private generateFieldSecurityDenies(
+        entity: EntityInfo,
+        targetSchemaName: string = entity.SchemaName,
+        targetViewName: string = entity.BaseView,
+    ): string {
         const context = this._fieldSecurityRunContext;
         if (!context) return '';
         if (!entity.EnableFieldLevelSecurity) return ''; // rules retained but inactive — mirror nothing
@@ -1203,27 +1231,58 @@ GO
         }
         let sOutput = '';
         for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => ordinalCompare(a, b))) {
-            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${entity.SchemaName}].[${entity.BaseView}] TO [${sqlName}]`;
+            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${targetSchemaName}].[${targetViewName}] TO [${sqlName}]`;
         }
         return sOutput;
     }
 
     /** @inheritdoc */
-    generateViewPermissions(entity: EntityInfo): string {
+    override GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                sOutput += (sOutput === '' ? `GRANT SELECT ON [${targetSchemaName}].[${targetViewName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
             } else {
                 this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
         // Order matters: wipe (REVOKE within the managed scope) → assert grants → assert
         // field-security DENYs. The whole body executes every run via applyPermissions.
-        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, entity.BaseView);
+        const revokes = this.generateManagedPermissionRevokes(targetSchemaName, targetViewName);
         const grants = (sOutput === '' ? '' : '\n') + sOutput;
-        const denies = this.generateFieldSecurityDenies(entity);
+        const denies = this.generateFieldSecurityDenies(entity, targetSchemaName, targetViewName);
         return revokes + grants + denies;
+    }
+
+    /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const revokes = this.generateManagedPermissionRevokes(targetSchemaName, targetViewName);
+        if (revokes.trim().length > 0) {
+            return revokes;
+        }
+        const roles: string[] = [];
+        for (const ep of entity.Permissions) {
+            if (ep.RoleSQLName && ep.RoleSQLName.length > 0 && !roles.includes(ep.RoleSQLName)) {
+                roles.push(ep.RoleSQLName);
+            }
+        }
+        if (roles.length === 0) {
+            return '';
+        }
+        return `\nREVOKE SELECT ON [${targetSchemaName}].[${targetViewName}] FROM ${roles.map((r) => `[${r}]`).join(', ')}`;
+    }
+
+    /** @inheritdoc */
+    generateViewPermissions(entity: EntityInfo): string {
+        return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, entity.BaseView);
     }
 
     /**
@@ -1510,46 +1569,52 @@ WHERE s.name IN (${inList})`;
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
     /**
-     * Formats a raw default value string for embedding in generated SQL. Recognizes common
-     * SQL Server functions (`NEWID()`, `NEWSEQUENTIALID()`, `GETDATE()`, `GETUTCDATE()`,
-     * `SYSDATETIME()`, `SYSDATETIMEOFFSET()`, `CURRENT_TIMESTAMP`, `USER_NAME()`,
-     * `SUSER_NAME()`, `SYSTEM_USER`) and strips wrapping parentheses from them. For literal
-     * values, strips surrounding single quotes and re-applies them only if `needsQuotes`
-     * is true. Returns `'NULL'` for empty or whitespace-only inputs.
+     * Formats a column default for embedding in generated SQL. The value is classified by
+     * {@link ClassifySQLServerDefaultValue}: literals keep the long-standing quoting rule
+     * (`needsQuotes`), inline-safe functions such as `GETUTCDATE()` are emitted verbatim, a
+     * bare `NEWSEQUENTIALID()` becomes `NEWID()` (it is legal only in a DEFAULT constraint), and
+     * expressions are emitted verbatim rather than string-quoted. Returns `'NULL'` for empty or
+     * whitespace-only inputs.
      */
     formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
-        if (!defaultValue || defaultValue.trim().length === 0) {
-            return 'NULL';
-        }
+        return ClassifySQLServerDefaultValue(defaultValue, needsQuotes).SQL;
+    }
 
-        let trimmedValue = defaultValue.trim();
-        const lowerValue = trimmedValue.toLowerCase();
+    /**
+     * An expression default (`NEXT VALUE FOR`, string concatenation, most function calls) is
+     * resolved into its parameter before the INSERT: T-SQL rejects `NEXT VALUE FOR` inside the
+     * `ISNULL`/`CASE` wrap the value list otherwise uses (#4000).
+     */
+    protected override isPreInsertDefault(ef: EntityFieldInfo): boolean {
+        return ClassifySQLServerDefaultValue(ef.DefaultValue, ef.NeedsQuotes).Kind === 'Expression';
+    }
 
-        const sqlFunctions = [
-            'newid()', 'newsequentialid()', 'getdate()', 'getutcdate()',
-            'sysdatetime()', 'sysdatetimeoffset()', 'current_timestamp',
-            'user_name()', 'suser_name()', 'system_user'
-        ];
-
-        for (const func of sqlFunctions) {
-            if (lowerValue.includes(func)) {
-                if (trimmedValue.startsWith('(') && trimmedValue.endsWith(')')) {
-                    trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
-                }
-                return trimmedValue;
+    /**
+     * Emits `IF @P IS NULL SET @P = <expr>;` for every create-routine parameter whose default is an
+     * expression. Mirrors the value-list branches of {@link GenerateInsertFieldString}: a NOT NULL
+     * uniqueidentifier also treats the empty GUID as "not supplied", and a nullable column skips the
+     * default when the caller set its `_Clear` companion.
+     */
+    override GeneratePreInsertDefaultAssignments(entity: EntityInfo): string {
+        const lines: string[] = [];
+        for (const ef of entity.Fields) {
+            if (ef.IsPrimaryKey || ef.IsVirtual || !ef.AllowUpdateAPI || ef.AutoIncrement || ef.IsSpecialDateField) {
+                continue;
             }
+            if (!ef.HasDefaultValue || !this.isPreInsertDefault(ef)) {
+                continue;
+            }
+            const param = `@${ef.CodeName}`;
+            const expr = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+            let condition = `${param} IS NULL`;
+            if (!ef.AllowsNull && ef.IsUniqueIdentifier) {
+                condition = `(${param} IS NULL OR ${param} = ${this.Dialect.EmptyUUIDLiteral()})`;
+            } else if (ef.AllowsNull && this.needsClearCompanion(ef)) {
+                condition = `${param} IS NULL AND ISNULL(@${ef.CodeName}_Clear, 0) = 0`;
+            }
+            lines.push(`IF ${condition} SET ${param} = ${expr};`);
         }
-
-        let cleanValue = trimmedValue;
-        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
-            cleanValue = cleanValue.substring(1, cleanValue.length - 1);
-        }
-
-        if (needsQuotes) {
-            return `'${cleanValue}'`;
-        }
-
-        return cleanValue;
+        return lines.join('\n    ');
     }
 
     /**
@@ -1854,6 +1919,19 @@ ORDER BY
     }
 
     /** @inheritdoc */
+    override getViewDependenciesSQL(schema: string, viewName: string): string {
+        const escapedSchema = EscapeSQLString(schema);
+        const escapedView = EscapeSQLString(viewName);
+        return `SELECT
+    COALESCE(OBJECT_SCHEMA_NAME(d.referenced_id), d.referenced_schema_name, '${escapedSchema}') AS ReferencedSchema,
+    COALESCE(OBJECT_NAME(d.referenced_id), d.referenced_entity_name) AS ReferencedObject,
+    COALESCE(o.type_desc, 'UNKNOWN') AS ReferencedType
+FROM sys.sql_expression_dependencies d
+LEFT JOIN sys.objects o ON o.object_id = d.referenced_id
+WHERE d.referencing_id = OBJECT_ID('[${escapedSchema}].[${escapedView}]')`;
+    }
+
+    /** @inheritdoc */
     generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string {
         // sp_executesql rather than the statements inline: the guarded body includes GRANT, and
         // routing everything through one dynamic-SQL call keeps the emitted shape uniform no matter
@@ -2109,39 +2187,53 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
     /**
-     * Executes a SQL file against SQL Server using the `sqlcmd` command-line utility. Reads
-     * connection details (server, port, instance, user, password, database) from the shared
-     * `sqlConfig` object. On Windows, converts file paths containing spaces to 8.3 short
-     * format to avoid quoting issues with `sqlcmd`. Spawns the process with `QUOTED_IDENTIFIER`
-     * enabled (`-I`) and severity threshold 17 (`-V 17`). Optionally adds `-C` for
-     * `trustServerCertificate`. Returns `true` on successful execution, `false` on failure.
+     * Executes a SQL file against SQL Server over the shared in-process mssql pool, one `GO`
+     * batch at a time. Every batch runs even after one fails, so a single run reports the
+     * complete set of broken objects; each failure is logged as an error naming the object the
+     * batch acts on (`CREATE PROCEDURE [s].[spX]`, `GRANT ON [s].[vwX]`). Returns `false` when
+     * any batch failed or the file could not be read, `true` otherwise. A failed batch used to be
+     * logged as a warning with the file still reported as successful, which hid procedures that
+     * had been dropped and never recreated (#4000).
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
+        let sql: string;
         try {
-            const sql = fs.readFileSync(filePath, 'utf-8');
-            if (!sql.trim()) return true;
+            sql = fs.readFileSync(filePath, 'utf-8');
+        } catch (e) {
+            logError(`[CodeGen] Failed to read SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
+            return false;
+        }
+        if (!sql.trim()) return true;
 
-            const batches = sql
-                .split(/^\s*GO\s*$/gim)
-                .map(b => b.trim())
-                .filter(b => b.length > 0);
-
+        try {
             const pool = await MSSQLConnection();
-
-            for (const batch of batches) {
+            const failures: Array<{ Object: string; Message: string }> = [];
+            for (const batch of SplitSQLServerBatches(sql)) {
                 try {
                     await pool.request().query(batch);
                 } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    LogWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    failures.push({
+                        Object: DescribeSQLBatchObject(batch),
+                        Message: err instanceof Error ? err.message : String(err),
+                    });
                 }
             }
 
+            if (failures.length > 0) {
+                const list = failures.map(f => `  - ${f.Object}: ${f.Message.substring(0, 400)}`).join('\n');
+                logError(`[CodeGen] ${failures.length} SQL batch(es) failed in ${path.basename(filePath)}:\n${list}`);
+                return false;
+            }
             return true;
         } catch (e) {
             logError(`[CodeGen] Failed to execute SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
             return false;
         }
+    }
+
+    /** @inheritdoc */
+    override NormalizeRoutineDefinitionForComparison(definition: string): string | null {
+        return NormalizeSQLServerRoutineDefinition(definition);
     }
 
 }

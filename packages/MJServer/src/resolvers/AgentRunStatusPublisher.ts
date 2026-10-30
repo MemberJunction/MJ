@@ -14,8 +14,10 @@ import type {
     AgentExecutionStreamingCallback,
     ExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
+import type { EntityInfo } from '@memberjunction/core';
 import type { UserPayload } from '../types.js';
-import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
+import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
@@ -25,7 +27,8 @@ interface StatusRun {
     ConversationDetailID?: string;
     ErrorMessage?: string;
     Steps?: Array<{ StepName?: string }>;
-    GetAll?: () => unknown;
+    EntityInfo?: EntityInfo | null;
+    GetAll?: () => Record<string, unknown>;
 }
 
 export class AgentRunStatusPublisher {
@@ -71,7 +74,7 @@ export class AgentRunStatusPublisher {
                 agentRunId: agentRun.ID,
                 type: 'progress',
                 ...this.replyRow(),
-                agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
+                agentRun: this.runValues(agentRun),
                 progress: {
                     currentStep: progress.step,
                     percentage: progress.percentage,
@@ -99,7 +102,7 @@ export class AgentRunStatusPublisher {
                 agentRunId: agentRun.ID,
                 type: 'streaming',
                 ...this.replyRow(),
-                agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
+                agentRun: this.runValues(agentRun),
                 streaming: {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
@@ -149,8 +152,9 @@ export class AgentRunStatusPublisher {
     }
 
     /**
-     * Completion for a failure that has no run. The fire-and-forget path uses this when
-     * `executeAIAgent` rejects. A host uses it the same way: when the turn throws
+     * Completion for a failure that has no run result. `executeAIAgent` sends it when the run
+     * throws (the agent could not start, the run failed, or its reply could not be saved), so a
+     * fire-and-forget client learns the reason. A host uses it the same way: when the turn throws
      * instead of returning a result, call `PublishFailure` with the reply row's id
      * and the error. That completion is what tells the chat the reply finished.
      */
@@ -172,10 +176,22 @@ export class AgentRunStatusPublisher {
         return this.conversationDetailId ? { conversationDetailId: this.conversationDetailId } : {};
     }
 
+    /**
+     * The run's field values as the recipient may read them. The run object comes from the agent
+     * engine, which is not bound to this session's user, so it is projected here.
+     */
+    private runValues(agentRun: StatusRun): unknown {
+        if (!agentRun.GetAll) {
+            return agentRun;
+        }
+        const getAll = agentRun.GetAll;
+        return ProjectEntityObjectForCaller({ EntityInfo: agentRun.EntityInfo, GetAll: () => getAll.call(agentRun) }, this.userPayload?.userRecord);
+    }
+
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {
         PublishStatusUpdate(this.pubSub, {
             sessionId: this.userPayload.sessionId,
-            ownerUserId: this.userPayload?.userRecord?.ID ?? '',
+            ownerUserId: StatusUpdateOwnerID(this.userPayload),
             message: JSON.stringify({
                 resolver: 'RunAIAgentResolver',
                 type,

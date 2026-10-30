@@ -78,6 +78,7 @@ vi.mock('@memberjunction/templates', () => ({
 vi.mock('@memberjunction/templates-base-types', () => ({}));
 
 import { EntityVectorSyncer } from '../models/entityVectorSync';
+import { EntityInfo } from '@memberjunction/core';
 
 /* ------------------------------------------------------------------ */
 /*  Helper: expose private methods for testing via subclass            */
@@ -458,6 +459,33 @@ describe('EntityDocumentConfiguration', () => {
       expect(metadata['Status']).toBe('Active');
     });
 
+    it('stores a date-only display field as its day and timestamps as ISO 8601, not Date.toString()', () => {
+      // A `date` column arrives as a Date at UTC midnight; String() of it was the previous day west of UTC (#6055).
+      const displayFields = [makeField({ Name: 'DateOfBirth', Type: 'date' })];
+      const item = makeEmbeddingItem({
+        DateOfBirth: new Date('1964-04-24T00:00:00.000Z'),
+        __mj_UpdatedAt: new Date('2026-10-22T18:53:06.123Z'),
+      });
+      const metadata = syncer.testBuildVectorMetadata(item, entityDocument, templateContent, entityInfo, displayFields);
+
+      expect(metadata['DateOfBirth']).toBe('1964-04-24');
+      expect(metadata['__mj_UpdatedAt']).toBe('2026-10-22T18:53:06.123Z');
+    });
+
+    it('stores a temporal field configured storeAs "number" as epoch milliseconds, not dropping it', () => {
+      // The normalized text ("1964-04-24", ISO) is NaN to Number(); the field used to vanish.
+      const displayFields = [makeField({ Name: 'DateOfBirth', Type: 'date' }), makeField({ Name: 'LastSeenAt', Type: 'datetime2' })];
+      const item = makeEmbeddingItem({
+        DateOfBirth: new Date('1964-04-24T00:00:00.000Z'),
+        LastSeenAt: new Date('2026-10-22T18:53:06.123Z'),
+      });
+      const config = { fields: { DateOfBirth: { storeAs: 'number' }, LastSeenAt: { storeAs: 'number' } } } as EntityDocumentMetadataConfig;
+      const metadata = syncer.testBuildVectorMetadata(item, entityDocument, templateContent, entityInfo, displayFields, config);
+
+      expect(metadata['DateOfBirth']).toBe(Date.UTC(1964, 3, 24));
+      expect(metadata['LastSeenAt']).toBe(Date.UTC(2026, 9, 22, 18, 53, 6, 123));
+    });
+
     it('should keep system keys under "include" strategy (back-compat)', () => {
       const config: EntityDocumentMetadataConfig = {
         fieldStrategy: 'include',
@@ -650,6 +678,39 @@ describe('EntityDocumentConfiguration', () => {
       expect(metadata['RecordID']).toBe('ID|abc');
       expect(metadata['TemplateID']).toBe('TPL-1');
       expect(metadata['__mj_UpdatedAt']).toBe('2026-01-01T00:00:00Z');
+    });
+  });
+
+  /* ---- field-level security in getDisplayFields ---- */
+  describe('getDisplayFields under field-level security', () => {
+    const HR = 'A0000000-0000-0000-0000-000000000001';
+    const STAFF = 'A0000000-0000-0000-0000-000000000002';
+    const rules = (staffRead: string) => [
+      { ID: `p-hr-${staffRead}`, RoleID: HR, ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+      { ID: `p-st-${staffRead}`, RoleID: STAFF, ReadAccess: staffRead, UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+    ];
+    const field = (name: string, staffRead: string, isPK = false) => ({
+      ID: `F-${name}`, EntityID: 'E-1', Name: name, Entity: 'Employees', Type: 'nvarchar', IsPrimaryKey: isPK,
+      MaxLength: 100, EntityFieldPermissions: rules(staffRead),
+    });
+    const employees = new EntityInfo({
+      ID: 'E-1', Name: 'Employees', EnableFieldLevelSecurity: true, Permissions: [],
+      Fields: [field('ID', 'Allow', true), field('Name', 'Allow'), field('Salary', 'Deny'), field('Review', 'No Access')],
+    });
+
+    it('never stores a field restricted for any role in vector metadata (default strategy)', () => {
+      const names = syncer.testGetDisplayFields(employees as unknown as { Fields: MockField[] }).map((f: MockField) => f.Name);
+      expect(names).toEqual(['Name']);
+    });
+
+    it('refuses an explicit inclusion of a restricted field, with a logged error', async () => {
+      const core = await import('@memberjunction/core');
+      const names = syncer.testGetDisplayFields(employees as unknown as { Fields: MockField[] }, {
+        fieldStrategy: 'include',
+        fields: { Name: { included: true }, Salary: { included: true } },
+      }).map((f: MockField) => f.Name);
+      expect(names).toEqual(['Name']);
+      expect(core.LogError).toHaveBeenCalledWith(expect.stringContaining('Salary'));
     });
   });
 });

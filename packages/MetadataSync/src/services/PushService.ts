@@ -35,11 +35,17 @@ import { EnvVariableNotSetError, OptionalEnvMissingError, OptionalEnvSkipMessage
 import { RecordStartLine } from '../lib/json-record-lines';
 import { EnvDisplayMask, EnvSourceLabel, ENV_HIDDEN_VALUE, MaskedError } from '../lib/env-display';
 import { EnvSqlLog, AddSkippedOptionalEnvField } from '../lib/env-sql-redactor';
+import { ComposeStatementTransforms, LookupSqlLog } from '../lib/lookup-sql';
+import { ResolveSchemaPlaceholders } from '../lib/schema-placeholders';
+import { DatabaseNaturalKeyReader, NaturalKeyConflictMessage, NaturalKeyPreflight, UniqueKeyColumns } from '../lib/natural-key-preflight';
 import { CreatedRecordKeyFields, IsKeyReference, KeyFieldValue } from '../lib/created-record-key';
 import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 import { DEFAULT_RECORD_FILE_PATTERN, RECORD_FILE_GLOB_OPTIONS } from '../lib/record-file-glob';
+import { FileMayHaveDeletions, RecordsHaveDeletions, TextHasInclude } from '../lib/deletion-prescan';
+import { ResolveSqlLogFilter } from '../lib/sql-log-filters';
 import { resolveCollectionRelationship } from '@memberjunction/record-graph';
+import { CollectionPromotionResolver } from '../lib/collection-promotion';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Atomic pushes (the default) run one JSON-root graph at a time on the host provider, inside
@@ -272,6 +278,13 @@ export class PushService {
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
   private confirmedCollections: Set<string> = new Set<string>();
+  /** Decides which relatedEntities groups are saved as collection items; created on first use. */
+  private collectionPromotionResolver: CollectionPromotionResolver | null = null;
+  /**
+   * Promoted relatedEntities items created by a save, waiting for it to succeed so their new keys
+   * can be written back into the item, the same way a separately saved related record gets its key.
+   */
+  private pendingPromotedKeys = new Map<RecordData, Array<{ Item: RecordData; Child: BaseEntity }>>();
   /** Write mode per entity directory, resolved once at the start of the push. */
   private directoryModes: Map<string, PushWriteMode> = new Map();
   /** The directory being processed right now, and how it writes. */
@@ -283,6 +296,10 @@ export class PushService {
   private sqlLogFilePath: string | undefined;
   /** The open SQL log's redactor and lookup-create hook; null when no log is open. */
   private envSqlLog: EnvSqlLog | null = null;
+  /** The open SQL log's `@lookup` → subquery rewriter and lookup-create hook; null when no log is open. */
+  private lookupSqlLog: LookupSqlLog | null = null;
+  /** Unique keys of each entity's table read for the create pre-flight (#4400), by entity name. */
+  private uniqueKeyCache = new Map<string, Promise<UniqueKeyColumns[]>>();
   /** Composition child fields waiting for their owner's save, by the owner record's resolution collector. */
   private pendingEnvSqlChildFields = new WeakMap<SyncResolutionCollector, PendingEnvSqlChildField[]>();
   /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
@@ -623,17 +640,26 @@ export class PushService {
         // Create the SQL logging session
         this.sqlLogFilePath = filepath;
         this.envSqlLog = new EnvSqlLog(this.syncEngine);
+        this.lookupSqlLog = new LookupSqlLog(this.syncEngine);
+        const schemaPlaceholders = ResolveSchemaPlaceholders(this.syncConfig, configManager.GetMJConfig());
+        const logFilter = ResolveSqlLogFilter(this.syncConfig?.sqlLogging);
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-          TransformStatement: this.envSqlLog.Redactor.Transform,
+          // Env values are left out first, then lookup IDs become subqueries; the logger's schema
+          // placeholder rewrite runs after both, so the subqueries' schema names become placeholders.
+          TransformStatement: ComposeStatementTransforms(this.envSqlLog.Redactor.Transform, this.lookupSqlLog.Rewriter.Transform),
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
+          schemaPlaceholders,
+          // Escaping is tied to migration output, never to whether placeholder rules exist
+          escapeFlywaySyntax: this.syncConfig?.sqlLogging?.formatAsMigration === true || this.syncConfig?.sqlLogging?.escapeFlywaySyntax === true,
           description: 'MetadataSync push operation',
           statementTypes: "mutations",
           prettyPrint: true,
           // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
           // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
-          filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
-          filterType: this.syncConfig?.sqlLogging?.filterType,
+          filterPatterns: logFilter.Patterns,
+          filterType: logFilter.FilterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+          variableBatchThreshold: this.syncConfig?.sqlLogging?.variableBatchThreshold ?? 200,
         });
         
         if (options.verbose) {
@@ -715,6 +741,8 @@ export class PushService {
   private closeEnvSqlRedactor(): void {
     this.envSqlLog?.Close();
     this.envSqlLog = null;
+    this.lookupSqlLog?.Close();
+    this.lookupSqlLog = null;
   }
 
   /**
@@ -1146,13 +1174,14 @@ export class PushService {
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
 
-        // Compute checksum on the RESOLVED content (after @include preprocessing)
-        // so that changes to included files are properly detected.
+        // Compute checksum on the RESOLVED content (after @include preprocessing), with the content
+        // of each @file: target folded in, so a change to an included or referenced file is
+        // detected (#4190). @file: paths resolve against the entity folder, as push resolves them.
         let cachedChecksum: string | undefined;
 
         if (options.incremental && this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
-          cachedChecksum = this.syncEngine.calculateChecksum(fileData);
+          cachedChecksum = await this.syncEngine.CalculateChecksumWithFileContent(fileData, entityDir);
           if (!this.stateManager.hasFileChanged(relativePath, cachedChecksum)) {
             const recordCount = Array.isArray(rawFileData) ? rawFileData.length : 1;
             if (options.verbose) {
@@ -1167,7 +1196,9 @@ export class PushService {
         
         // Analyze dependencies and get sorted records
         const analyzer = new RecordDependencyAnalyzer();
-        const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+        const promotions = this.collectionPromotions();
+        await promotions.Prepare(records, entityConfig.entity);
+        const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity, promotions);
         for (const flattened of analysisResult.sortedRecords) {
           flattened.FilePath = filePath;
         }
@@ -1267,7 +1298,7 @@ export class PushService {
         // Uses resolved content (after @include) so included-file changes are tracked.
         if (this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
-          const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
+          const checksum = cachedChecksum ?? (await this.syncEngine.CalculateChecksumWithFileContent(fileData, entityDir));
           this.pendingChecksums.set(relativePath, checksum);
         }
       } catch (fileError) {
@@ -1537,7 +1568,10 @@ export class PushService {
     // silent no-ops when seeding a fresh DB from JSON files that already
     // carry stored checksums from another environment.
     // The deferred retry (allowDefer false) never takes this shortcut: the first pass left fields unsaved
-    if (allowDefer && options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
+    // A record whose relatedEntities are saved as collection items never takes the shortcut: its
+    // checksum does not cover those items, so an edit to one would be skipped.
+    const hasPromotedGroups = this.collectionPromotions().PromotedGroups(entityName, record).length > 0;
+    if (allowDefer && options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord && !hasPromotedGroups) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
       // checksum was also computed with file content and composition payloads, so the comparison is apples-to-apples.
@@ -1575,7 +1609,7 @@ export class PushService {
     // Check if record exists
     // Process primaryKey values through processFieldValue to resolve @lookup, @parent, etc.
     // Create a resolution collector to track @lookup and @parent resolutions
-    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map(), LookupSources: new Map() };
     // Reads the same EnvFields map, so fields recorded later are masked too
     const envMask = new EnvDisplayMask(resolutionCollector.EnvFields);
 
@@ -1919,6 +1953,12 @@ export class PushService {
       };
     }
 
+    // A literal key that missed can still collide on a unique key with a row this database made
+    // under another ID: report that row instead of a constraint violation (#4400).
+    if (isNew && resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
+      await this.checkNaturalKey(entity, resolvedPrimaryKey, envMask, recordProvider);
+    }
+
     // A dry run stops here, after the same change detection a real push uses, so an
     // in-sync record reports unchanged above rather than "would update" (#4529).
     if (options.dryRun) {
@@ -1950,6 +1990,8 @@ export class PushService {
     
     this.registerEnvSqlFields(entity, resolutionCollector.EnvFields, isNew || alwaysPush);
     this.registerPendingEnvSqlChildFields(resolutionCollector);
+    // Key and foreign-key values from @lookup are logged as subqueries on the natural key (#5626)
+    this.lookupSqlLog?.Rewriter.RegisterEntityLookups(entity, resolutionCollector.LookupSources);
 
     // Save the record with detailed error logging
     const keyBeforeSave = new Map(entity.PrimaryKeys.map((pk) => [pk.Name, entity.Get(pk.Name)]));
@@ -2132,6 +2174,8 @@ export class PushService {
       // Return 'deferred' status - it's saved but incomplete
       // We don't return early here because we still want to update primaryKey and sync metadata
     }
+
+    this.writeBackPromotedKeys(record);
 
     // Update primaryKey for new records
     if (isNew) {
@@ -2365,7 +2409,9 @@ export class PushService {
     const keyCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
     const resolvedKey = await this.resolveEnvKeyValues(record.primaryKey, entityDir, keyCollector);
     const keyMask = new EnvDisplayMask(keyCollector.EnvFields);
-    const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedKey);
+    // Read through the push transaction's provider, not the preload cache: a row an earlier delete's
+    // cascade removed in this push is still in the cache until commit (#4935).
+    const existingEntity = await this.syncEngine.LoadEntityFromDatabase(entityName, resolvedKey, this.transactionProvider());
 
     // Check if the deletion has already been processed
     if (record.deleteRecord?.deletedAt) {
@@ -2386,22 +2432,7 @@ export class PushService {
     }
     
     if (!existingEntity) {
-      const pkDisplay = Object.entries(record.primaryKey)
-        .map(([key, value]) => `${key}=${this.fileKeyText(value)}`)
-        .join(', ');
-      
-      const warning = `Record not found for deletion: ${entityName} with primaryKey {${pkDisplay}}`;
-      this.warnings.push(warning);
-      callbacks?.onWarn?.(warning);
-      
-      // Mark as deleted anyway since it doesn't exist
-      if (!record.deleteRecord) {
-        record.deleteRecord = { delete: true };
-      }
-      record.deleteRecord.deletedAt = undefined; // Indicate it was not found
-      record.deleteRecord.notFound = true;
-      
-      return { status: 'skipped', isDuplicate: false };
+      return this.skipMissingDelete(flattenedRecord, 'Record not found for deletion', callbacks);
     }
     
     // Key values and free error text can hold a value of any variable push resolved
@@ -2458,6 +2489,10 @@ export class PushService {
       const deleteResult = await existingEntity.Delete();
       
       if (!deleteResult) {
+        // A row already gone (removed by an earlier delete's cascade) is the intended end state
+        if (!(await this.rowStillExists(entityName, resolvedKey))) {
+          return this.skipMissingDelete(flattenedRecord, 'Record was already gone when it was deleted (an earlier delete in this push may have cascaded to it)', callbacks);
+        }
         // Check the LatestResult for error details
         const errorMessage = errorTextMask.MaskText(existingEntity.LatestResult?.CompleteMessage || 'Unknown error');
         const errorDetails = errorTextMask.MaskText(existingEntity.LatestResult?.Errors?.map(err => 
@@ -2506,6 +2541,9 @@ export class PushService {
       return { status: 'deleted', isDuplicate: false };
       
     } catch (deleteError: any) {
+      if (!(await this.rowStillExists(entityName, resolvedKey))) {
+        return this.skipMissingDelete(flattenedRecord, 'Record was already gone when it was deleted (an earlier delete in this push may have cascaded to it)', callbacks);
+      }
       console.error(`\n❌ DELETE EXCEPTION for ${entityName}`);
       console.error(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
       console.error(`   Error: ${errorTextMask.MaskText(String(deleteError.message || deleteError))}`);
@@ -2522,6 +2560,74 @@ export class PushService {
     }
   }
   
+  /**
+   * A delete whose row is not in the database: a warning, the record marked not found, and a skip.
+   * The database is already in the state the delete asks for.
+   */
+  private skipMissingDelete(
+    flattenedRecord: FlattenedRecord,
+    reason: string,
+    callbacks?: PushCallbacks
+  ): { status: 'skipped'; isDuplicate: boolean } {
+    const { record, entityName } = flattenedRecord;
+    const pkDisplay = Object.entries(record.primaryKey ?? {})
+      .map(([key, value]) => `${key}=${this.fileKeyText(value)}`)
+      .join(', ');
+    const warning = `${reason}: ${entityName} with primaryKey {${pkDisplay}}`;
+    this.warnings.push(warning);
+    callbacks?.onWarn?.(warning);
+
+    // Mark as deleted anyway since it doesn't exist
+    if (!record.deleteRecord) {
+      record.deleteRecord = { delete: true };
+    }
+    record.deleteRecord.deletedAt = undefined; // Indicate it was not found
+    record.deleteRecord.notFound = true;
+    return { status: 'skipped', isDuplicate: false };
+  }
+
+  /**
+   * True when the row is still in the database, read through the push transaction. A failed read
+   * counts as present, so the original delete error is reported.
+   */
+  private async rowStillExists(entityName: string, primaryKey: Record<string, unknown>): Promise<boolean> {
+    try {
+      return (await this.syncEngine.LoadEntityFromDatabase(entityName, primaryKey, this.transactionProvider())) !== null;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Throws when creating `entity` with the key the record declares would collide on a unique key
+   * with an existing row, naming that row's key. See natural-key-preflight.ts.
+   */
+  private async checkNaturalKey(
+    entity: BaseEntity,
+    resolvedPrimaryKey: Record<string, unknown>,
+    envMask: EnvDisplayMask,
+    recordProvider?: IMetadataProvider
+  ): Promise<void> {
+    const host = this.hostProvider();
+    if (typeof host?.ExecuteSQL !== 'function') {
+      return; // no SQL provider, so no catalog to read unique keys from
+    }
+    // Rows are found on the record's provider, so the lookup sees what its transaction wrote
+    const reader = new DatabaseNaturalKeyReader(host, this.contextUser, recordProvider ?? this.transactionProvider(), this.uniqueKeyCache);
+    const conflict = await new NaturalKeyPreflight(reader).Check(entity);
+    if (conflict) {
+      const recordKey = Object.entries(resolvedPrimaryKey)
+        .map(([field, value]) => `${field}=${envMask.NewValue(field, String(value))}`)
+        .join(', ');
+      throw new Error(NaturalKeyConflictMessage(entity.EntityInfo.Name, recordKey, conflict));
+    }
+  }
+
+  /** The provider that owns the push transaction, as the metadata provider a read joins it through. */
+  private transactionProvider(): IMetadataProvider {
+    return this.hostProvider();
+  }
+
   /**
    * Prompt user for confirmation before proceeding with push operation
    * This happens after deletion audit but before any database operations
@@ -2637,21 +2743,14 @@ export class PushService {
         ignore: ['**/node_modules/**', '**/.mj-*.json']
       });
 
-      // Quick scan for delete directives without full processing
+      // Quick scan for delete markers at any depth. A file that uses @include falls through to
+      // the full audit, which expands includes before looking.
       for (const filePath of files) {
         try {
           const content = await fs.readFile(filePath, 'utf-8');
-          // Fast string check for delete directives
-          if (content.includes('"delete"') && content.includes('true')) {
-            // More precise check - parse JSON to confirm
-            const data = JSON.parse(content);
-            const records = Array.isArray(data) ? data : [data];
-
-            const hasDelete = records.some((r: RecordData) => r.deleteRecord?.delete === true);
-            if (hasDelete) {
-              hasAnyDeletions = true;
-              break;
-            }
+          if (FileMayHaveDeletions(content)) {
+            hasAnyDeletions = true;
+            break;
           }
         } catch (error) {
           // Ignore errors in quick scan
@@ -2703,10 +2802,7 @@ export class PushService {
 
           // Handle @include directives if present
           let fileData = rawFileData;
-          const jsonString = JSON.stringify(rawFileData);
-          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
-          if (hasIncludes) {
+          if (TextHasInclude(JSON.stringify(rawFileData))) {
             const jsonPreprocessor = new JsonPreprocessor();
             fileData = await jsonPreprocessor.processFile(filePath);
           }
@@ -2867,25 +2963,7 @@ export class PushService {
    * Recursively check if any records in an array (including nested relatedEntities) have deletions
    */
   private hasAnyDeletions(records: RecordData[]): boolean {
-    for (const record of records) {
-      // Check this record
-      if (record.deleteRecord?.delete === true) {
-        return true;
-      }
-
-      // Check nested related entities recursively
-      if (record.relatedEntities) {
-        for (const relatedRecords of Object.values(record.relatedEntities)) {
-          if (Array.isArray(relatedRecords)) {
-            if (this.hasAnyDeletions(relatedRecords)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-
-    return false;
+    return RecordsHaveDeletions(records);
   }
 
   /**
@@ -3172,10 +3250,11 @@ export class PushService {
       ? resolutionCollector
       : { notes: resolutionCollector.notes, fieldPrefix: resolutionCollector.fieldPrefix, EnvFields: new Map() };
     try {
+      // `@parent:` in a composition child refers to its owner, as it does for a related record.
       const value = await this.syncEngine.processFieldValue(
         rawValue,
         entityDir,
-        null,
+        ownerRecord,
         null,
         0,
         batchContext,
@@ -3258,6 +3337,62 @@ export class PushService {
   private addEnvSqlWarnings(sqlLogPath: string, callbacks?: PushCallbacks): void {
     for (const warning of this.envSqlLog?.Redactor.Warnings(sqlLogPath) ?? []) {
       this.addWarning(warning, callbacks);
+    }
+    for (const warning of this.lookupSqlLog?.Rewriter.Warnings() ?? []) {
+      this.addWarning(warning, callbacks);
+    }
+  }
+
+  /** The resolver deciding which relatedEntities groups are saved as collection items. */
+  private collectionPromotions(): CollectionPromotionResolver {
+    if (!this.collectionPromotionResolver) {
+      this.collectionPromotionResolver = new CollectionPromotionResolver(() => this.syncEngine.GetProvider(), this.contextUser);
+    }
+    return this.collectionPromotionResolver;
+  }
+
+  /**
+   * The collections to apply to a record: its own `collections`, plus, for a flattened record
+   * (depth 0), the `relatedEntities` groups promoted to collection items. The record itself is not
+   * changed, so its file keeps the format the author wrote.
+   *
+   * @returns The collections and the set of promoted items among them, or `null` when there are none.
+   */
+  private collectionsToApply(
+    record: RecordData,
+    entityName: string,
+    depth: number
+  ): { Collections: Record<string, RecordData[]>; PromotedItems: Set<RecordData> } | null {
+    const collections: Record<string, RecordData[]> =
+      record.collections && typeof record.collections === 'object' ? { ...record.collections } : {};
+    const promotedItems = new Set<RecordData>();
+    if (depth === 0) {
+      for (const group of this.collectionPromotions().PromotedGroups(entityName, record)) {
+        const name = group.Promotion.CollectionName;
+        collections[name] = [...(collections[name] ?? []), ...group.Items];
+        group.Items.forEach((item) => promotedItems.add(item));
+      }
+    }
+    return Object.keys(collections).length > 0 ? { Collections: collections, PromotedItems: promotedItems } : null;
+  }
+
+  /** Remembers a promoted item created without a key, to receive its key once the save succeeds. */
+  private queuePromotedKey(record: RecordData, item: RecordData, child: BaseEntity): void {
+    const pending = this.pendingPromotedKeys.get(record) ?? [];
+    pending.push({ Item: item, Child: child });
+    this.pendingPromotedKeys.set(record, pending);
+  }
+
+  /** Writes the saved keys of a record's new promoted items back into the items. */
+  private writeBackPromotedKeys(record: RecordData): void {
+    const pending = this.pendingPromotedKeys.get(record);
+    this.pendingPromotedKeys.delete(record);
+    for (const { Item, Child } of pending ?? []) {
+      const primaryKey: Record<string, unknown> = {};
+      for (const pk of Child.EntityInfo.PrimaryKeys) {
+        primaryKey[pk.Name] = Child.Get(pk.Name);
+      }
+      Item.primaryKey = primaryKey;
     }
   }
 
@@ -3350,8 +3485,9 @@ export class PushService {
     }
 
     // 2. Collections: owner.Lines.Create() (or load existing by PK into the collection), recurse apply on child entity
-    if (record.collections && typeof record.collections === 'object') {
-      for (const [colName, colItems] of Object.entries(record.collections)) {
+    const collectionsToApply = this.collectionsToApply(record, entityName, depth);
+    if (collectionsToApply) {
+      for (const [colName, colItems] of Object.entries(collectionsToApply.Collections)) {
         if (!Array.isArray(colItems)) {
           throw new Error(
             `Collection "${colName}" in ${entityName} must be an array of records. ` +
@@ -3464,6 +3600,9 @@ export class PushService {
               targetChild = await col.Create();
               for (const [pkK, pkV] of Object.entries(childKey ?? {})) {
                 targetChild.Set(pkK, pkV);
+              }
+              if (collectionsToApply.PromotedItems.has(itemData) && !childKey) {
+                this.queuePromotedKey(record, itemData, targetChild);
               }
             } else {
               matchedItemSet.add(targetChild);

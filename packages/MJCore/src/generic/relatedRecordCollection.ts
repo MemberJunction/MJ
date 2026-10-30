@@ -33,7 +33,9 @@ import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
+import type { UserInfo } from './securityInfo';
 import { LogError } from './logging';
+import { AssertClientInputWritableForUser, OmitFieldsUnreadableByActiveUser } from './entityValueFieldSecurity';
 
 /**
  * When a child collection populates itself from the database.
@@ -222,6 +224,8 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     private items: T[] = [];
     private removed: T[] = [];
     private loaded = false;
+    /** True while {@link items} are an engine's own cached instances rather than records this collection owns. */
+    private sharesEngineInstances = false;
     private readonly options: RelatedRecordCollectionOptions;
 
     /**
@@ -287,6 +291,14 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     /** When this collection populates itself. */
     public get LoadMode(): RelatedRecordLoadMode {
         return this.options.Load ?? 'explicit';
+    }
+
+    /**
+     * The automatic sequence numbering this collection applies, if declared. When set, every
+     * `Add`/`Create`/`Remove` renumbers the children's sequence field from their position.
+     */
+    public get SequenceOptions(): Readonly<RelatedRecordSequence> | undefined {
+        return this.options.Sequence;
     }
 
     /** What removal means for this collection. */
@@ -539,7 +551,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (this.Source === 'cache') {
             const cached = this.findCachedRecords();
             if (cached) {
-                this.SetLoadedItems(this.IsReadOnly ? cached : await this.copyRecords(cached));
+                await this.adoptCachedRecords(cached);
                 return;
             }
         }
@@ -567,9 +579,12 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             );
         }
 
-        this.items = result.Results ?? [];
+        // A copy: a RunView served from a cache slot can hand back a frozen array, and the
+        // collection appends to and removes from its own list.
+        this.items = [...(result.Results ?? [])];
         this.removed = [];
         this.loaded = true;
+        this.sharesEngineInstances = false;
     }
 
     /** @inheritdoc */
@@ -588,9 +603,39 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @param items - The children belonging to this parent.
      */
     public SetLoadedItems(items: T[]): void {
-        this.items = items ?? [];
+        this.items = [...(items ?? [])];
         this.removed = [];
         this.loaded = true;
+        this.sharesEngineInstances = false;
+    }
+
+    /** Fills the collection from an engine's cached records: shared when read-only, copied otherwise. */
+    private async adoptCachedRecords(cached: T[]): Promise<void> {
+        if (this.IsReadOnly) {
+            this.adoptEngineInstances(cached);
+        } else {
+            this.SetLoadedItems(await this.copyRecords(cached));
+        }
+    }
+
+    /** Fills the collection with an engine's own instances, which it must never change. */
+    private adoptEngineInstances(records: T[]): void {
+        this.SetLoadedItems(records);
+        this.sharesEngineInstances = true;
+    }
+
+    /**
+     * Gives every loaded child, and every child pending removal, the owner's new user, which
+     * narrows what each holds to that user. A read-only cache collection's children are the
+     * engine's own instances, shared with every other reader, so they are left as they are.
+     */
+    public override OnOwnerContextUserChanged(user: UserInfo): void {
+        if (this.sharesEngineInstances) {
+            return;
+        }
+        for (const child of [...this.items, ...this.removed]) {
+            child.ContextCurrentUser = user;
+        }
     }
 
     /**
@@ -646,7 +691,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (!cached) {
             return false;
         }
-        this.SetLoadedItems(this.IsReadOnly ? cached : await this.copyRecords(cached));
+        await this.adoptCachedRecords(cached);
         return true;
     }
 
@@ -696,7 +741,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         const mine = records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
         this.cacheDonor.array = records as unknown[];
         this.cacheDonor.length = records.length;
-        this.SetLoadedItems(this.sortLikeOrderBy(mine));
+        this.adoptEngineInstances(this.sortLikeOrderBy(mine));
     }
 
     /**
@@ -814,7 +859,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (!cached) {
             return false;
         }
-        this.SetLoadedItems(cached);
+        this.adoptEngineInstances(cached);
         return true;
     }
 
@@ -1151,7 +1196,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             const companions = i.HasCompanions ? await i.SerializeCompanions(mode) : [];
             items.push({
                 EntityName: i.EntityInfo?.Name ?? this.RelatedEntityName,
-                Fields: i.GetAll(),
+                // Without the fields the child's user may not read: the receiving tier refuses a
+                // restricted caller's input that names one.
+                Fields: OmitFieldsUnreadableByActiveUser(i, i.GetAll()),
                 IsNew: !i.IsSaved,
                 Companions: companions.length > 0 ? companions : null,
             });
@@ -1178,6 +1225,8 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         // is simply absent from it.
         this.removed = mode === 'request' ? await this.rehydrateRemovals(provider, data?.Removed ?? []) : [];
         this.loaded = true;
+        // The rehydrated children are this collection's own, never an engine's shared instances.
+        this.sharesEngineInstances = false;
     }
 
     /**
@@ -1214,6 +1263,10 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 out.push(child);
                 continue;
             }
+
+            // A request carries client input: a caller with any field denial may send only the
+            // fields they can read. A no-op without a context user (no server-side caller).
+            AssertClientInputWritableForUser(child.EntityInfo, row.Fields, this.Owner.ContextCurrentUser);
 
             if (row.IsNew) {
                 child.NewRecord();

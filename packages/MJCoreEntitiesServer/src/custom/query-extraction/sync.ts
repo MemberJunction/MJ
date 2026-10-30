@@ -4,9 +4,9 @@ import {
     MJQueryFieldEntity,
     MJQueryEntityEntity,
     MJQueryDependencyEntity,
-    QueryEngine,
 } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { QueryChildNameKey, QueryEntityKey } from "./declared";
 import type {
     ExtractedField,
     ExtractedParameter,
@@ -90,6 +90,34 @@ function defaultSQLTypesForField(fieldType: string, platform: DatabasePlatform =
 }
 
 // ---------------------------------------------------------------------------
+// Rows extraction leaves alone
+// ---------------------------------------------------------------------------
+
+/**
+ * The names of the parameter or field rows extraction must not add, update or delete: the rows the
+ * same save declared, and every stored row a person authored (`DetectionMethod` `Manual`, as a
+ * metadata file's declared rows are). An authored row keeps its descriptions and other annotations
+ * whichever save triggers extraction, including the re-extraction a dialect variant's save runs,
+ * which declares nothing.
+ *
+ * @param stored - The rows stored for the query.
+ * @param declaredNames - Lower-cased names the same save declared.
+ * @returns Lower-cased names.
+ */
+export function NamesExtractionLeavesAlone(
+    stored: ReadonlyArray<{ Name: string; DetectionMethod: string }>,
+    declaredNames: ReadonlySet<string>
+): Set<string> {
+    const names = new Set<string>(declaredNames);
+    for (const row of stored) {
+        if (row.DetectionMethod === 'Manual') {
+            names.add(QueryChildNameKey(row.Name));
+        }
+    }
+    return names;
+}
+
+// ---------------------------------------------------------------------------
 // SyncParameters
 // ---------------------------------------------------------------------------
 
@@ -97,6 +125,10 @@ function defaultSQLTypesForField(fieldType: string, platform: DatabasePlatform =
  * Synchronizes extracted query parameters with the database.
  * Filters out "query" params (composition token safety net), handles add/update/remove,
  * and maps types to database-supported types.
+ *
+ * @param declaredNames - Lower-cased names of parameters the same save declared. Those rows are the
+ *   caller's: they are never added, updated or deleted here, whatever the SQL says. Stored rows a
+ *   person authored are left alone the same way ({@link NamesExtractionLeavesAlone}).
  */
 export async function SyncParameters(
     queryID: string,
@@ -104,17 +136,21 @@ export async function SyncParameters(
     contextUser: UserInfo,
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    declaredNames: ReadonlySet<string> = new Set<string>()
 ): Promise<void> {
-    // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens, and
-    // the reserved Context object: `{{ Context.UserID }}` reads a server-set value, and a parameter
-    // named Context would shadow it.
-    const filteredParams = extractedParams.filter(p => p.name !== 'query' && !isReservedContextName(p.name));
-
     try {
-        const existingParams = await loadExistingRecords<MJQueryParameterEntity>(
+        const storedParams = await loadExistingRecords<MJQueryParameterEntity>(
             'MJ: Query Parameters', queryID, runViewProvider, contextUser, isSaved
         );
+        const leftAlone = NamesExtractionLeavesAlone(storedParams, declaredNames);
+        const existingParams = storedParams.filter(ep => !leftAlone.has(QueryChildNameKey(ep.Name)));
+
+        // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens, and
+        // the reserved Context object: `{{ Context.UserID }}` reads a server-set value, and a parameter
+        // named Context would shadow it. Declared and authored parameters are left as they are.
+        const filteredParams = extractedParams.filter(p =>
+            p.name !== 'query' && !isReservedContextName(p.name) && !leftAlone.has(QueryChildNameKey(p.name)));
 
         const extractedParamNames = filteredParams.map(p => p.name.toLowerCase());
 
@@ -246,6 +282,8 @@ function updateParameterIfChanged(
  * Synchronizes extracted query fields with the database.
  * Expands wildcards, maps ExtractedField to MJQueryFieldEntity with sqlBaseType/sqlFullType override,
  * handles add/update/remove.
+ *
+ * @param declaredNames - Lower-cased names of fields the same save declared; see {@link SyncParameters}.
  */
 export async function SyncFields(
     queryID: string,
@@ -254,17 +292,23 @@ export async function SyncFields(
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
     isSaved: boolean,
-    platform: DatabasePlatform = 'sqlserver'
+    platform: DatabasePlatform = 'sqlserver',
+    declaredNames: ReadonlySet<string> = new Set<string>()
 ): Promise<void> {
     try {
-        const existingFields = await loadExistingRecords<MJQueryFieldEntity>(
+        // Fields the same save declared, and fields a person authored, are never added, updated or
+        // deleted here.
+        const storedFields = await loadExistingRecords<MJQueryFieldEntity>(
             'MJ: Query Fields', queryID, runViewProvider, contextUser, isSaved
         );
+        const leftAlone = NamesExtractionLeavesAlone(storedFields, declaredNames);
+        const existingFields = storedFields.filter(ef => !leftAlone.has(QueryChildNameKey(ef.Name)));
 
         const fieldNamesToSync = extractedFields.map(f => f.name.toLowerCase());
 
         const fieldsToAdd = extractedFields.filter(
-            f => !existingFields.some(ef => ef.Name.toLowerCase() === f.name.toLowerCase())
+            f => !leftAlone.has(QueryChildNameKey(f.name))
+                && !existingFields.some(ef => ef.Name.toLowerCase() === f.name.toLowerCase())
         );
         const fieldsToUpdate = existingFields.filter(
             ef => extractedFields.some(f => f.name.toLowerCase() === ef.Name.toLowerCase())
@@ -436,9 +480,103 @@ function updateFieldIfChanged(
 // SyncEntities
 // ---------------------------------------------------------------------------
 
+interface ResolvedQueryEntityMapping {
+    extracted: EntityMetadataEntry;
+    entityID: string;
+    entityName: string;
+    alternateBaseViewID: string | null;
+}
+
+function queryEntityPairKey(
+    entityID: string | null | undefined,
+    alternateBaseViewID: string | null | undefined
+): string {
+    return `${NormalizeUUID(entityID ?? '')}|${alternateBaseViewID ? NormalizeUUID(alternateBaseViewID) : ''}`;
+}
+
+function mapExtractedEntitiesToMetadata(
+    entityMetadata: EntityMetadataEntry[],
+    metadataProvider: IMetadataProvider
+): ResolvedQueryEntityMapping[] {
+    const rawMappings = entityMetadata
+        .map(extracted => {
+            const matchingEntity = metadataProvider.Entities.find(
+                e => e.Name === extracted.name &&
+                     (e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase() ||
+                      (extracted.AlternateBaseViewID != null &&
+                       IndexByUUID(e.AlternateBaseViews ?? []).Has(extracted.AlternateBaseViewID)))
+            );
+            return matchingEntity
+                ? {
+                      extracted,
+                      entityID: matchingEntity.ID,
+                      entityName: matchingEntity.Name,
+                      alternateBaseViewID: extracted.AlternateBaseViewID ?? null,
+                  }
+                : null;
+        })
+        .filter((m): m is ResolvedQueryEntityMapping => m !== null);
+
+    const seenPairKeys = new Set<string>();
+    return rawMappings.filter(m => {
+        const pairKey = queryEntityPairKey(m.entityID, m.alternateBaseViewID);
+        if (seenPairKeys.has(pairKey)) {
+            return false;
+        }
+        seenPairKeys.add(pairKey);
+        return true;
+    });
+}
+
+function partitionQueryEntityDiff(
+    entityMappings: ResolvedQueryEntityMapping[],
+    existingEntities: MJQueryEntityEntity[]
+): {
+    entitiesToAdd: ResolvedQueryEntityMapping[];
+    entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }>;
+    entitiesToRemove: MJQueryEntityEntity[];
+} {
+    const matchedExisting = new Set<MJQueryEntityEntity>();
+    const matchedMappings = new Set<ResolvedQueryEntityMapping>();
+
+    for (const mapping of entityMappings) {
+        const mappingKey = queryEntityPairKey(mapping.entityID, mapping.alternateBaseViewID);
+        const exact = existingEntities.find(
+            ee => !matchedExisting.has(ee) && queryEntityPairKey(ee.EntityID, ee.AlternateBaseViewID) === mappingKey
+        );
+        if (exact) {
+            matchedExisting.add(exact);
+            matchedMappings.add(mapping);
+        }
+    }
+
+    const entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }> = [];
+    for (const mapping of entityMappings) {
+        if (matchedMappings.has(mapping)) continue;
+        const normalizedEntityID = NormalizeUUID(mapping.entityID);
+        const sameEntityRecord = existingEntities.find(
+            ee => !matchedExisting.has(ee) && NormalizeUUID(ee.EntityID) === normalizedEntityID
+        );
+        if (sameEntityRecord) {
+            matchedExisting.add(sameEntityRecord);
+            matchedMappings.add(mapping);
+            entitiesToUpdate.push({ record: sameEntityRecord, alternateBaseViewID: mapping.alternateBaseViewID });
+        }
+    }
+
+    return {
+        entitiesToAdd: entityMappings.filter(m => !matchedMappings.has(m)),
+        entitiesToUpdate,
+        entitiesToRemove: existingEntities.filter(ee => !matchedExisting.has(ee)),
+    };
+}
+
 /**
  * Synchronizes extracted entity metadata entries with QueryEntity records in the database.
- * Matches by entity ID, handles add/remove.
+ * Matches by `(EntityID, AlternateBaseViewID)`, handling add, update, and remove.
+ *
+ * @param declaredEntityKeys - Entity links the same save declared, keyed by `QueryEntityKey`; see
+ *   {@link SyncParameters}.
  */
 export async function SyncEntities(
     queryID: string,
@@ -446,34 +584,20 @@ export async function SyncEntities(
     contextUser: UserInfo,
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    declaredEntityKeys: ReadonlySet<string> = new Set<string>()
 ): Promise<void> {
     try {
-        const existingEntities = await loadExistingRecords<MJQueryEntityEntity>(
+        // Entity links the same save declared are the caller's: never added, updated or deleted here.
+        const existingEntities = (await loadExistingRecords<MJQueryEntityEntity>(
             'MJ: Query Entities', queryID, runViewProvider, contextUser, isSaved
+        )).filter(ee => !declaredEntityKeys.has(QueryEntityKey(ee)));
+        const entityMappings = mapExtractedEntitiesToMetadata(entityMetadata, metadataProvider)
+            .filter(m => !declaredEntityKeys.has(QueryEntityKey({ EntityID: m.entityID })));
+        const { entitiesToAdd, entitiesToUpdate, entitiesToRemove } = partitionQueryEntityDiff(
+            entityMappings,
+            existingEntities
         );
-
-        // Map extracted entries to MJ entity IDs
-        const entityMappings = entityMetadata
-            .map(extracted => {
-                const matchingEntity = metadataProvider.Entities.find(
-                    e => e.Name === extracted.name &&
-                         e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase()
-                );
-                if (matchingEntity) {
-                    return { extracted, entityID: matchingEntity.ID, entityName: matchingEntity.Name };
-                }
-                return null;
-            })
-            .filter((m): m is NonNullable<typeof m> => m !== null);
-
-        const entitiesToAdd = entityMappings.filter(
-            mapping => !existingEntities.some(ee => UUIDsEqual(ee.EntityID, mapping.entityID))
-        );
-        const entitiesToRemove = existingEntities.filter(
-            ee => !entityMappings.some(mapping => UUIDsEqual(mapping.entityID, ee.EntityID))
-        );
-
         const factories: (() => Promise<boolean>)[] = [];
 
         for (const mapping of entitiesToAdd) {
@@ -482,11 +606,15 @@ export async function SyncEntities(
             );
             newEntity.QueryID = queryID;
             newEntity.EntityID = mapping.entityID;
+            newEntity.AlternateBaseViewID = mapping.alternateBaseViewID;
             newEntity.DetectionMethod = 'AI';
             newEntity.AutoDetectConfidenceScore = 1.0;
             factories.push(() => newEntity.Save());
         }
-
+        for (const updateItem of entitiesToUpdate) {
+            updateItem.record.AlternateBaseViewID = updateItem.alternateBaseViewID;
+            factories.push(() => updateItem.record.Save());
+        }
         for (const entityToRemove of entitiesToRemove) {
             factories.push(() => entityToRemove.Delete());
         }
@@ -640,7 +768,8 @@ export async function RemoveAllRecords(
         const existingResult = await runViewProvider.RunView({
             EntityName: entityName,
             ExtraFilter: `QueryID='${queryID}'`,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            IgnoreMaxRows: true
         }, contextUser);
 
         if (!existingResult.Success) {
@@ -666,17 +795,15 @@ export async function RemoveAllRecords(
  * Returns an empty array if the query has not been saved yet.
  */
 /**
- * Loads existing child records for a query.
+ * Loads a query's stored child records from the database, never from QueryEngine's cache.
  *
- * Prefers QueryEngine's in-memory cache when it is loaded (long-running MJAPI
- * server): the engine already holds every query child and auto-refreshes via
- * BaseEntity events, so we avoid a redundant RunView per save. When the cache
- * is NOT loaded — typically a short-lived CLI process such as `mj sync push`
- * or `mj codegen`, where QueryEngine was never `Config()`'d — we must read the
- * authoritative state from the database. Trusting the empty cache there
- * misclassifies already-persisted children as new and re-INSERTs them, hitting
- * `UQ_QueryParameter_QueryID_Name` (and the sibling unique constraints), which
- * on PostgreSQL aborts the entire push transaction and rolls back the run.
+ * Extraction often runs inside a transaction the cache does not see yet: an atomic metadata push
+ * saves the query with its declared children, then saves a dialect variant, whose save re-runs
+ * extraction. The cache is updated when the transaction commits, so inside it the cache still holds
+ * the rows from before the push. Syncing against those rows would treat rows the push just wrote as
+ * missing or stale, and saving the cached objects would write their old values back over the new
+ * ones. Reading on the extraction's own provider sees the transaction's writes. (A cold cache in a
+ * short-lived CLI process is the same problem: it would make persisted children look new.)
  */
 async function loadExistingRecords<T extends { QueryID: string }>(
     entityName: string,
@@ -687,28 +814,12 @@ async function loadExistingRecords<T extends { QueryID: string }>(
 ): Promise<T[]> {
     if (!isSaved) return [];
 
-    const qe = QueryEngine.Instance;
-    if (qe.Loaded) {
-        switch (entityName) {
-            case 'MJ: Query Parameters':
-                return qe.GetQueryParameters(queryID) as unknown as T[];
-            case 'MJ: Query Fields':
-                return qe.GetQueryFields(queryID) as unknown as T[];
-            case 'MJ: Query Entities':
-                return qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, queryID)) as unknown as T[];
-            case 'MJ: Query Dependencies':
-                return qe.Dependencies.filter(d => UUIDsEqual(d.QueryID, queryID)) as unknown as T[];
-            default:
-                return [];
-        }
-    }
-
-    // Cache cold — read straight from the DB so the add/update/remove delta is
-    // computed against real persisted state, not an empty cache.
     const result = await runViewProvider.RunView({
         EntityName: entityName,
-        ExtraFilter: `QueryID='${queryID}'`,
-        ResultType: 'entity_object'
+        ExtraFilter: `QueryID='${EscapeSQLString(queryID)}'`,
+        ResultType: 'entity_object',
+        BypassCache: true,
+        IgnoreMaxRows: true,
     }, contextUser);
     if (!result.Success) {
         throw new Error(`Failed to load existing ${entityName} for query ${queryID}: ${result.ErrorMessage}`);

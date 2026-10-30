@@ -1,0 +1,1133 @@
+{
+  "$comment": [
+    "Decision for every foreign key in the MJ core schema that references Entity.ID, applied by spDeleteEntityWithCoreDependencies (migrations/v6/V202610261530__v6.2.x__CodeGen_EntityField_Drift_Repairs.sql).",
+    "action: delete = delete the referencing rows; null = set the column (and any alsoNull columns) to NULL; block = leave the reference and let the proc refuse, naming it.",
+    "references lists the FKs into Entity. dependents lists FKs into tables whose rows the proc deletes, so those rows are cleared first.",
+    "Default: nullable -> null, NOT NULL -> delete. Entries whose reason explains a different choice are deliberate exceptions.",
+    "delete-entity-fk-coverage.test.ts fails when generated metadata gains an FK into Entity, or into a table the proc deletes from, that has no entry here."
+  ],
+  "references": [
+    {
+      "table": "AccessControlRule",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ActionExecutionLog",
+      "column": "TargetEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "AIAgentExample",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope would widen a record-scoped example to every record of the agent."
+    },
+    {
+      "table": "AIAgentNote",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope would widen a record-scoped note to every record of the agent."
+    },
+    {
+      "table": "AIAgentRun",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "AIAgentSession",
+      "column": "LinkedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with LinkedRecordID (both-or-neither CHECK) so the row survives without the entity.",
+      "alsoNull": [
+        "LinkedRecordID"
+      ]
+    },
+    {
+      "table": "ApplicationEntity",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ArchiveConfigurationEntity",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ArchiveRunDetail",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "AuditLog",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "CalendarEventLink",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ClusterAnalysis",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "CompanyIntegrationEntityMap",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "CompanyIntegrationRecordMap",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "CompanyIntegrationRunDetail",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ContentSource",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "Conversation",
+      "column": "LinkedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with LinkedRecordID (both-or-neither CHECK) so the row survives without the entity.",
+      "alsoNull": [
+        "LinkedRecordID"
+      ]
+    },
+    {
+      "table": "DataContextItem",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "DatasetItem",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "DuplicateRun",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityAction",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityAction",
+      "column": "ScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope (and ScopeRecordID, per CK_EntityAction_Scope) would make a record-scoped action fire for every record."
+    },
+    {
+      "table": "EntityAIAction",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityAIAction",
+      "column": "OutputEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "An AI action whose output entity is gone cannot run; the previous proc also deleted these rows."
+    },
+    {
+      "table": "EntityAlternateBaseView",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityCommunicationMessageType",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityDocument",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityField",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityField",
+      "column": "RelatedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "EntityFormContribution",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityFormContribution",
+      "column": "RelatedEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "The contribution exists to claim this related entity; nulling it leaves an empty claim and can violate CK_EntityFormContribution_JoinNeedsRelated."
+    },
+    {
+      "table": "EntityFormOverride",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityOrganicKey",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityOrganicKeyRelatedEntity",
+      "column": "RelatedEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "Entity",
+      "column": "ParentID",
+      "nullable": true,
+      "action": "block",
+      "reason": "Re-parenting or deleting child entities is a metadata decision for the caller; the proc refuses and names the blocker."
+    },
+    {
+      "table": "EntityPermission",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityRecordDocument",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityRelationship",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntityRelationship",
+      "column": "RelatedEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "EntitySetting",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "FileEntityRecordLink",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "FormChromeRule",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "FormChromeRule",
+      "column": "RelatedEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "A Relationship-target rule requires RelatedEntityID (CK_FormChromeRule_TargetShape); the rule has no target once the entity is gone."
+    },
+    {
+      "table": "GeneratedCode",
+      "column": "LinkedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "IdentityClaim",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "IntegrationURLFormat",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "InteractionLink",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "List",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "MaterializedResult",
+      "column": "GeneratedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "MaterializedResult",
+      "column": "SourceEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "MLModelScoringBinding",
+      "column": "TargetEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "MLTrainingPipeline",
+      "column": "TargetEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ProcessRunDetail",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ProcessRun",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "QueryEntity",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "QueryField",
+      "column": "SourceEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "RecommendationItem",
+      "column": "DestinationEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "Recommendation",
+      "column": "SourceEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordChange",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordCloneLogItem",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordCloneLog",
+      "column": "RootEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordGeoCode",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordLink",
+      "column": "SourceEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordLink",
+      "column": "TargetEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordMergeLog",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordProcess",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "RecordProcessWatermark",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ResourceType",
+      "column": "CategoryEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "ResourceType",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "A resource type for a deleted entity is a dead entry users still see; the previous proc also deleted it. Its links, permissions and workspace items go with it."
+    },
+    {
+      "table": "RubricEvaluation",
+      "column": "ContextEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with ContextRecordID (both-or-neither CHECK) so the row survives without the entity.",
+      "alsoNull": [
+        "ContextRecordID"
+      ]
+    },
+    {
+      "table": "RubricEvaluation",
+      "column": "SubjectEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "ScopedNotificationConfig",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope would widen a scoped notification setting to global, and CK_ScopedNotificationConfig_PrimaryScope rejects a record scope without its entity."
+    },
+    {
+      "table": "ScopedPromptConfig",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope would widen a scoped prompt configuration to global."
+    },
+    {
+      "table": "ScopedPromptPart",
+      "column": "PrimaryScopeEntityID",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nulling the scope would widen a scoped prompt part to global."
+    },
+    {
+      "table": "SearchScopeEntity",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "SignatureRequest",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "SystemEvent",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Physical FK on a table that is not an MJ entity, so generated metadata does not list it.",
+      "catalogOnly": true
+    },
+    {
+      "table": "TaggedItem",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "TagScope",
+      "column": "ScopeEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "TemplateParam",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "TestRun",
+      "column": "TargetLogEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "UserApplicationEntity",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "UserFavorite",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "User",
+      "column": "LinkedEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "UserRecordLog",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "UserViewCategory",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "UserView",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "VersionLabel",
+      "column": "EntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "VersionLabelItem",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    }
+  ],
+  "dependents": [
+    {
+      "table": "AIAgentNote",
+      "column": "ConsolidatedIntoNoteID",
+      "references": "AIAgentNote",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a AIAgentNote row this proc deletes; cleared."
+    },
+    {
+      "table": "CompanyIntegrationFieldMap",
+      "column": "EntityMapID",
+      "references": "CompanyIntegrationEntityMap",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a CompanyIntegrationEntityMap row this proc deletes; deleted first."
+    },
+    {
+      "table": "CompanyIntegrationSyncWatermark",
+      "column": "EntityMapID",
+      "references": "CompanyIntegrationEntityMap",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a CompanyIntegrationEntityMap row this proc deletes; deleted first."
+    },
+    {
+      "table": "ErrorLog",
+      "column": "CompanyIntegrationRunDetailID",
+      "references": "CompanyIntegrationRunDetail",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a CompanyIntegrationRunDetail row this proc deletes; cleared."
+    },
+    {
+      "table": "DuplicateRunDetailMatch",
+      "column": "DuplicateRunDetailID",
+      "references": "DuplicateRunDetail",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a DuplicateRunDetail row this proc deletes; deleted first."
+    },
+    {
+      "table": "DuplicateRunDetail",
+      "column": "DuplicateRunID",
+      "references": "DuplicateRun",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a DuplicateRun row this proc deletes; deleted first."
+    },
+    {
+      "table": "ActionExecutionLog",
+      "column": "EntityActionID",
+      "references": "EntityAction",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityAction row this proc deletes; cleared."
+    },
+    {
+      "table": "EntityActionFilter",
+      "column": "EntityActionID",
+      "references": "EntityAction",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityAction row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityActionInvocation",
+      "column": "EntityActionID",
+      "references": "EntityAction",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityAction row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityActionParam",
+      "column": "EntityActionID",
+      "references": "EntityAction",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityAction row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityAlternateBaseView",
+      "column": "ParentID",
+      "references": "EntityAlternateBaseView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityAlternateBaseView row this proc deletes; cleared."
+    },
+    {
+      "table": "QueryEntity",
+      "column": "AlternateBaseViewID",
+      "references": "EntityAlternateBaseView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityAlternateBaseView row this proc deletes; cleared."
+    },
+    {
+      "table": "EntityCommunicationField",
+      "column": "EntityCommunicationMessageTypeID",
+      "references": "EntityCommunicationMessageType",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityCommunicationMessageType row this proc deletes; deleted first."
+    },
+    {
+      "table": "ContentSource",
+      "column": "EntityDocumentID",
+      "references": "EntityDocument",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityDocument row this proc deletes; cleared."
+    },
+    {
+      "table": "DuplicateRun",
+      "column": "EntityDocumentID",
+      "references": "EntityDocument",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityDocument row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityDocumentRun",
+      "column": "EntityDocumentID",
+      "references": "EntityDocument",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityDocument row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityDocumentSetting",
+      "column": "EntityDocumentID",
+      "references": "EntityDocument",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityDocument row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityRecordDocument",
+      "column": "EntityDocumentID",
+      "references": "EntityDocument",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityDocument row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityFieldPermission",
+      "column": "EntityFieldID",
+      "references": "EntityField",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityField row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityFieldValue",
+      "column": "EntityFieldID",
+      "references": "EntityField",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityField row this proc deletes; deleted first."
+    },
+    {
+      "table": "QueryField",
+      "column": "SourceEntityFieldID",
+      "references": "EntityField",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityField row this proc deletes; cleared (the FK is also ON DELETE SET NULL)."
+    },
+    {
+      "table": "EntityOrganicKeyRelatedEntity",
+      "column": "EntityOrganicKeyID",
+      "references": "EntityOrganicKey",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a EntityOrganicKey row this proc deletes; deleted first."
+    },
+    {
+      "table": "ContentItem",
+      "column": "EntityRecordDocumentID",
+      "references": "EntityRecordDocument",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityRecordDocument row this proc deletes; cleared."
+    },
+    {
+      "table": "DuplicateRun",
+      "column": "SourceListID",
+      "references": "List",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a List row this proc deletes; cleared."
+    },
+    {
+      "table": "ListDetail",
+      "column": "ListID",
+      "references": "List",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a List row this proc deletes; deleted first."
+    },
+    {
+      "table": "ListInvitation",
+      "column": "ListID",
+      "references": "List",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a List row this proc deletes; deleted first."
+    },
+    {
+      "table": "ListShare",
+      "column": "ListID",
+      "references": "List",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a List row this proc deletes; deleted first."
+    },
+    {
+      "table": "RecordProcess",
+      "column": "ScopeListID",
+      "references": "List",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a List row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelScoringBinding",
+      "column": "MLModelID",
+      "references": "MLModel",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLTrainingRun",
+      "column": "ResultingModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModel",
+      "column": "PipelineID",
+      "references": "MLTrainingPipeline",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLTrainingRun",
+      "column": "PipelineID",
+      "references": "MLTrainingPipeline",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "ProcessRunDetailID",
+      "references": "ProcessRunDetail",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a ProcessRunDetail row this proc deletes; cleared."
+    },
+    {
+      "table": "RecommendationItem",
+      "column": "RecommendationID",
+      "references": "Recommendation",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a Recommendation row this proc deletes; deleted first."
+    },
+    {
+      "table": "RecordChange",
+      "column": "RestoredFromID",
+      "references": "RecordChange",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a RecordChange row this proc deletes; cleared."
+    },
+    {
+      "table": "VersionLabelItem",
+      "column": "RecordChangeID",
+      "references": "RecordChange",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RecordChange row this proc deletes; deleted first."
+    },
+    {
+      "table": "RecordCloneLogItem",
+      "column": "RecordCloneLogID",
+      "references": "RecordCloneLog",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RecordCloneLog row this proc deletes; deleted first."
+    },
+    {
+      "table": "DuplicateRunDetailMatch",
+      "column": "RecordMergeLogID",
+      "references": "RecordMergeLog",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a RecordMergeLog row this proc deletes; cleared."
+    },
+    {
+      "table": "RecordMergeDeletionLog",
+      "column": "RecordMergeLogID",
+      "references": "RecordMergeLog",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RecordMergeLog row this proc deletes; deleted first."
+    },
+    {
+      "table": "FeaturePipelineVersion",
+      "column": "RecordProcessID",
+      "references": "RecordProcess",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RecordProcess row this proc deletes; deleted first."
+    },
+    {
+      "table": "FeatureValueCache",
+      "column": "RecordProcessID",
+      "references": "RecordProcess",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a RecordProcess row this proc deletes; cleared."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "RecordProcessID",
+      "references": "RecordProcess",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RecordProcess row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLModelScoringBinding",
+      "column": "RecordProcessID",
+      "references": "RecordProcess",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a RecordProcess row this proc deletes; cleared."
+    },
+    {
+      "table": "ProcessRun",
+      "column": "RecordProcessID",
+      "references": "RecordProcess",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a RecordProcess row this proc deletes; cleared."
+    },
+    {
+      "table": "RecordProcessWatermark",
+      "column": "RecordProcessID",
+      "references": "RecordProcess",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RecordProcess row this proc deletes; deleted first."
+    },
+    {
+      "table": "MagicLinkInvite",
+      "column": "ResourceTypeID",
+      "references": "ResourceType",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a ResourceType row this proc deletes; cleared."
+    },
+    {
+      "table": "ResourceLink",
+      "column": "ResourceTypeID",
+      "references": "ResourceType",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a ResourceType row this proc deletes; deleted first."
+    },
+    {
+      "table": "ResourcePermission",
+      "column": "ResourceTypeID",
+      "references": "ResourceType",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a ResourceType row this proc deletes; deleted first."
+    },
+    {
+      "table": "UserNotification",
+      "column": "ResourceTypeID",
+      "references": "ResourceType",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a ResourceType row this proc deletes; cleared."
+    },
+    {
+      "table": "WorkspaceItem",
+      "column": "ResourceTypeID",
+      "references": "ResourceType",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a ResourceType row this proc deletes; deleted first."
+    },
+    {
+      "table": "RubricEvaluationScore",
+      "column": "EvaluationID",
+      "references": "RubricEvaluation",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a RubricEvaluation row this proc deletes; deleted first."
+    },
+    {
+      "table": "RubricEvaluation",
+      "column": "SupersedesEvaluationID",
+      "references": "RubricEvaluation",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a RubricEvaluation row this proc deletes; cleared."
+    },
+    {
+      "table": "UserView",
+      "column": "CategoryID",
+      "references": "UserViewCategory",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserViewCategory row this proc deletes; cleared."
+    },
+    {
+      "table": "UserViewCategory",
+      "column": "ParentID",
+      "references": "UserViewCategory",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserViewCategory row this proc deletes; cleared."
+    },
+    {
+      "table": "DataContextItem",
+      "column": "ViewID",
+      "references": "UserView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserView row this proc deletes; cleared."
+    },
+    {
+      "table": "EntityRelationship",
+      "column": "DisplayUserViewID",
+      "references": "UserView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserView row this proc deletes; cleared."
+    },
+    {
+      "table": "List",
+      "column": "SourceViewID",
+      "references": "UserView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserView row this proc deletes; cleared."
+    },
+    {
+      "table": "RecordProcess",
+      "column": "ScopeViewID",
+      "references": "UserView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserView row this proc deletes; cleared."
+    },
+    {
+      "table": "UserViewRunDetail",
+      "column": "UserViewRunID",
+      "references": "UserViewRun",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a UserViewRun row this proc deletes; deleted first."
+    },
+    {
+      "table": "UserViewRun",
+      "column": "UserViewID",
+      "references": "UserView",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a UserView row this proc deletes; deleted first."
+    }
+  ]
+}

@@ -1539,6 +1539,15 @@ export type RunViewCacheStatus = {
      * Used to detect if any records have been deleted.
      */
     rowCount: number;
+    /**
+     * A hash of the client's field-security key for this request (what it may read on the entity,
+     * and for a saved view its denials everywhere), computed from the client's metadata, or ''
+     * when the user is denied nothing. When it differs from the key the server computes for the
+     * same user, the server answers `stale` with fresh rows even though no row changed: that is
+     * how a browser learns it lost a column. Omitted by older clients, for which the server skips
+     * the check.
+     */
+    fieldSecurityKey?: string;
 }
 
 /**

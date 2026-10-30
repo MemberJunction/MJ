@@ -9,7 +9,7 @@
  *
  * WHAT THIS BUNDLE PROVES — the permission-reality contract the fix rests on, against the real
  * database and the real role-driven permission engine, on BOTH sides of the identity swap:
- *  - SA1: a scoped anonymous principal (synthesized exactly as `buildMagicLinkSessionUser` does —
+ *  - SA1: a scoped anonymous principal (synthesized exactly as `BuildMagicLinkSessionUser` does —
  *    zero roles) is DENIED Create on `MJ: AI Agent Runs` (the premise; if a deployment ever grants
  *    this, the elevation is moot and this fails loudly),
  *  - SA2: the elevation target exists and is sufficient — the real `UserCache` serves a system
@@ -26,7 +26,7 @@
  *    details must NOT be elevated. On a conversation owned by the core-seeded magic-link
  *    Anonymous user, the conversation owner gate (`MJConversationDetailEntityExtended`) refuses
  *    the row written as the system user AND reports why; written as the visitor principal
- *    (Anonymous + a synthesized claimed `UI` role, as `buildMagicLinkSessionUser` builds it), the
+ *    (Anonymous + a synthesized claimed `UI` role, as `BuildMagicLinkSessionUser` builds it), the
  *    same row saves.
  *
  * WHAT IT DOES NOT RE-PROVE — the elevation ROUTING (which resolver/SessionManager seams swap the
@@ -68,7 +68,7 @@ const VISITOR_CLAIMED_ROLE = 'UI';
 
 /**
  * Synthesizes the scoped anonymous magic-link principal exactly as MJServer's
- * `buildMagicLinkSessionUser` does for an `mj_anon` token: a FRESH UserInfo over `base` whose
+ * `BuildMagicLinkSessionUser` does for an `mj_anon` token: a FRESH UserInfo over `base` whose
  * roles are ONLY the token's claimed roles (never the record's DB roles), plus
  * `IsMagicLinkAnonymous` and a `MagicLinkScope`.
  *
@@ -93,7 +93,7 @@ function findMagicLinkAnonymousUser(): UserInfo | undefined {
     return UserCache.Instance.Users.find((u) => u.Email?.trim().toLowerCase() === MAGIC_LINK_ANONYMOUS_EMAIL);
 }
 
-/** A role by name, resolved from `Metadata.Provider.Roles` the way `buildMagicLinkSessionUser` resolves a claim. */
+/** A role by name, resolved from `Metadata.Provider.Roles` the way `BuildMagicLinkSessionUser` resolves a claim. */
 function findRoleByName(name: string): RoleInfo | undefined {
     const md = Metadata.Provider; // global-provider-ok: integration test script — single-provider process by design
     return md?.Roles.find((r) => r.Name?.trim().toLowerCase() === name.trim().toLowerCase());
@@ -384,7 +384,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
          *
          * PRINCIPALS — built the way production builds them, independent of `ctx.User` (which is
          * itself the system user in the standard tier):
-         *  - OWNER: the core-seeded magic-link Anonymous user, synthesized as `buildMagicLinkSessionUser`
+         *  - OWNER: the core-seeded magic-link Anonymous user, synthesized as `BuildMagicLinkSessionUser`
          *    does for an `mj_anon` token claiming core's `UI` role (fresh UserInfo, synthesized role,
          *    `IsMagicLinkAnonymous`, `MagicLinkScope`). `UI` grants Create/Read/Update/Delete on both
          *    `MJ: Conversations` and `MJ: Conversation Details` with no RLS filter, so this one

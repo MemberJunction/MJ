@@ -123,8 +123,10 @@ class TestableService extends RealtimeClientSessionService {
         return this.ResolveModelResult;
     }
     protected override getCoAgentSystemPromptText(): string { return 'CO-AGENT PROMPT BODY'; }
+    /** The co-agent system prompt id the stub resolves; null = the co-agent has no active prompt. */
+    public SystemPromptID: string | null = 'prompt-1';
     protected override resolveCoAgentSystemPrompt(): CoAgentSystemPromptResolution {
-        return { Text: 'CO-AGENT PROMPT BODY', PromptID: 'prompt-1' };
+        return { Text: 'CO-AGENT PROMPT BODY', PromptID: this.SystemPromptID };
     }
     protected override async createCoAgentObservabilityRun(
         coAgent: MJAIAgentEntityExtended,
@@ -267,6 +269,65 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         expect(result.CoAgentRunID).toBeUndefined();
         expect(result.PromptRunID).toBeUndefined();
         expect(result.CoAgentRunStepID).toBeUndefined();
+    });
+
+    describe('logs once at prepare time when the session will have no co-agent prompt run', () => {
+        let errorSpy: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => { errorSpy = vi.spyOn(coreModule, 'LogError').mockImplementation(() => {}); });
+        afterEach(() => { errorSpy.mockRestore(); });
+
+        /** The LogError lines that name the missing co-agent prompt run. */
+        function missingRunLines(): string[] {
+            return errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('no co-agent prompt run'));
+        }
+
+        it('names the co-agent and its missing active prompt when the co-agent has none', async () => {
+            const svc = new TestableService();
+            svc.SystemPromptID = null;
+            svc.ObservabilityResult = { CoAgentRunID: 'co-run-1' };
+
+            const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            expect(result.Success).toBe(true);
+            expect(result.PromptRunID).toBeUndefined();
+            const lines = missingRunLines();
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain("co-agent 'Realtime Co-Agent' (co-1)");
+            expect(lines[0]).toContain("no Active 'MJ: AI Agent Prompts' row");
+            expect(lines[0]).toContain('session session-1');
+        });
+
+        it('says the co-agent run could not be saved when observability creation failed', async () => {
+            const svc = new TestableService();
+            svc.ObservabilityResult = null;
+
+            await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            const lines = missingRunLines();
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain('co-agent run');
+            expect(lines[0]).toContain('could not be saved');
+        });
+
+        it('says the prompt run could not be saved when the co-agent has a prompt but no prompt run came back', async () => {
+            const svc = new TestableService();
+            svc.ObservabilityResult = { CoAgentRunID: 'co-run-1' };
+
+            await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            const lines = missingRunLines();
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain('prompt run');
+            expect(lines[0]).toContain('prompt-1');
+        });
+
+        it('logs nothing when the prompt run exists', async () => {
+            const svc = new TestableService();
+
+            await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            expect(missingRunLines()).toHaveLength(0);
+        });
     });
 
     it('includes caller-supplied extra tools alongside invoke-target', async () => {
@@ -876,6 +937,114 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(store.TokensPrompt).toBe(800);
         expect(store.TokensCompletion).toBe(200);
         expect(store.TokensUsed).toBe(1000);
+    });
+
+    it('does not overwrite Status/CompletedAt/Success when another host or janitor instance finalizes the run before a late usage flush', async () => {
+        const store = {
+            Status: 'Running',
+            CompletedAt: undefined as Date | undefined,
+            Success: undefined as boolean | undefined,
+            Messages: null as string | null,
+            TokensPrompt: 0,
+            TokensCompletion: 0,
+            TokensUsed: 0,
+        };
+        const crossHostProvider: IMetadataProvider = {
+            GetEntityObject: vi.fn(async () => {
+                const entity: Record<string, unknown> = {
+                    Load: async () => {
+                        entity.Status = store.Status;
+                        entity.CompletedAt = store.CompletedAt;
+                        entity.Success = store.Success;
+                        entity.Messages = store.Messages;
+                        entity.TokensPrompt = store.TokensPrompt;
+                        entity.TokensCompletion = store.TokensCompletion;
+                        entity.TokensUsed = store.TokensUsed;
+                        return true;
+                    },
+                    Save: async () => {
+                        store.Status = entity.Status as string;
+                        store.CompletedAt = entity.CompletedAt as Date | undefined;
+                        store.Success = entity.Success as boolean | undefined;
+                        store.Messages = entity.Messages as string | null;
+                        store.TokensPrompt = entity.TokensPrompt as number;
+                        store.TokensCompletion = entity.TokensCompletion as number;
+                        store.TokensUsed = entity.TokensUsed as number;
+                        return true;
+                    },
+                    LatestResult: { CompleteMessage: '' },
+                };
+                return entity;
+            }),
+        } as unknown as IMetadataProvider;
+
+        const hostA = new RealtimeClientSessionService();
+        const hostB = new RealtimeClientSessionService();
+
+        await hostA.AppendPromptRunMessage('pr-cross-host', 'user', 'hello', false, contextUser, crossHostProvider);
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 30, 15, contextUser, crossHostProvider);
+
+        // Host B (or SessionJanitor) reaps/finalizes the prompt run.
+        await hostB.FinalizeCoAgentRun(null, 'pr-cross-host', contextUser, crossHostProvider, true);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+
+        // A post-close usage flush arrives on Host A; it must accumulate tokens without reverting Status to 'Running'.
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 20, 10, contextUser, crossHostProvider);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+        expect(store.TokensPrompt).toBe(50);
+        expect(store.TokensCompletion).toBe(25);
+        expect(store.TokensUsed).toBe(75);
+    });
+
+    it('calls assembleMemoryContext once per PrepareRealtimeSessionParams and puts it in the system prompt', async () => {
+        class CountingPrepService extends TestableService {
+            public MemoryCalls = 0;
+            protected override async assembleMemoryContext(): Promise<string> {
+                this.MemoryCalls++;
+                return 'MEMORY_BLOCK';
+            }
+        }
+        const svc = new CountingPrepService();
+        const prep = await svc.PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(svc.MemoryCalls).toBe(1);
+        expect(prep.SessionParams?.InitialContext).toBe('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+    });
+
+    it('keeps an override written against the original signature working (bizapps-caliber appends a persona this way)', async () => {
+        // The shape of bizapps-caliber's CaliberPersonaClientSessionService override: the original five
+        // parameters, forwarded to super. A protected seam is published API, so this must keep compiling and
+        // receive the caller and provider under their own names.
+        const received: Array<{ ContextUser: unknown; Provider: unknown; EffectiveConfig: unknown }> = [];
+        class OriginalSignatureOverride extends TestableService {
+            protected override async assembleMemoryContext(): Promise<string> {
+                return 'MEMORY_BLOCK';
+            }
+            protected override async buildCompanionSystemPrompt(
+                input: PrepareClientSessionInput,
+                coAgent: MJAIAgentEntityExtended,
+                user: UserInfo,
+                prov: IMetadataProvider,
+                effectiveConfig?: RealtimeCoAgentConfig,
+            ): Promise<string> {
+                received.push({ ContextUser: user, Provider: prov, EffectiveConfig: effectiveConfig });
+                const base = await super.buildCompanionSystemPrompt(input, coAgent, user, prov, effectiveConfig);
+                return `${base}\n\nPERSONA_BLOCK`;
+            }
+        }
+        const prep = await new OriginalSignatureOverride().PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(received).toHaveLength(1);
+        expect(received[0].ContextUser).toBe(contextUser);
+        expect(received[0].Provider).toBe(provider);
+        expect(typeof received[0].EffectiveConfig).toBe('object');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('PERSONA_BLOCK');
     });
 });
 

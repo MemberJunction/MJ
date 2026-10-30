@@ -194,8 +194,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:10.735Z",
-      "checksum": "9caf03339d92d050ab5010b0f7bc5c7b0d00df5f63aaaf818a007dcbaf4ab9ed"
+      "lastModified": "2026-10-28T00:35:28.288Z",
+      "checksum": "4c06850e9eb87846bb6f184d643bbbb4bb09ff56406bdf8dd1ade9c006b627bb"
     }
   },
   {
@@ -1196,7 +1196,7 @@
   {
     "fields": {
       "Name": "SQL Query Parameter Extraction",
-      "Description": "Extracts Nunjucks variables and their types from Query strings",
+      "Description": "Writes descriptions for a saved query's output fields and parameters whose description is still empty. Runs after the query is saved; it never sets names, types or sources, which come from the database server and MJ's template parser.",
       "TemplateText": "@file:templates/system/sql-query-param-extraction.template.md",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "Status": "Active",
@@ -1212,7 +1212,7 @@
       "FailoverMaxAttempts": 3,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "OutputExample": "@file:output/system/template-param-extraction.example.json",
+      "OutputExample": "@file:output/system/sql-query-descriptions.example.json",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "EffortLevel": 1
     },
@@ -1348,8 +1348,8 @@
       "ID": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:49:18.901Z",
-      "checksum": "0803b0d11741a3bf759ef35834ee283d3a4ab6d19753bbf2beaeca563d8c1482"
+      "lastModified": "2026-10-28T22:13:55.596Z",
+      "checksum": "18c266c3b12ea37f75a80ed745eb0db4a7093fccd164db9606167e72fe20aa9e"
     }
   },
   {

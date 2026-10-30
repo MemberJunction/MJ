@@ -34,23 +34,16 @@ import {
     WaitAction,
 } from '@memberjunction/computer-use';
 
+import { NormalizeNavigableUrl } from './dom-inspection';
+
 /**
  * Maps a single Base {@link RemoteBrowserAction} to the computer-use {@link BrowserAction} the adapter
  * executes. Exhaustive over `action.Kind`; lossless — every Base field that the enriched computer-use
  * action can carry (selector, coordinates, deltas, text, key, wait) is propagated.
  *
- * Field-level mapping notes:
- * - `click` → {@link ClickAction}: propagates `Selector` (preferred when present) AND `X`/`Y` so the
- *   adapter can use robust DOM targeting or fall back to a coordinate click — exactly the dual mode the
- *   enriched `ClickAction` supports.
- * - `type` → {@link TypeAction}: carries `Text` and the optional focus `Selector`.
- * - `key` → {@link KeypressAction}: carries the key/combination string.
- * - `scroll` → {@link ScrollAction}: carries `Selector` (scroll-into-view) AND `DeltaX`/`DeltaY`
- *   (delta scroll); the adapter prefers the selector when set.
- * - `navigate` → {@link NavigateAction}: carries the URL.
- * - `back`/`forward` → {@link GoBackAction}/{@link GoForwardAction}.
- * - `wait` → {@link WaitAction}: carries the optional `Selector` (wait-for-element) AND maps `Ms` →
- *   `DurationMs` (fixed sleep); the adapter prefers the selector when set.
+ * `inspect`, `fill` and `getPageText` read or write the DOM directly in
+ * {@link import('./cdp-remote-browser-session').CdpRemoteBrowserSession.ExecuteAction} and have no
+ * adapter action, so mapping one throws. A `click` by `Ref` maps to its `[data-mj-browser-ref]` selector.
  *
  * @param action The Base action to translate; narrow on `action.Kind`.
  * @returns The equivalent computer-use {@link BrowserAction}.
@@ -59,7 +52,7 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
     switch (action.Kind) {
         case 'navigate': {
             const mapped = new NavigateAction();
-            mapped.Url = action.Url;
+            mapped.Url = NormalizeNavigableUrl(action.Url);
             return mapped;
         }
         case 'click': {
@@ -70,6 +63,8 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
             mapped.Y = action.Y ?? 0;
             if (action.Selector !== undefined) {
                 mapped.Selector = action.Selector;
+            } else if (action.Ref !== undefined) {
+                mapped.Selector = `[data-mj-browser-ref="${action.Ref}"]`;
             }
             return mapped;
         }
@@ -111,6 +106,10 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
             }
             return mapped;
         }
+        case 'inspect':
+        case 'fill':
+        case 'getPageText':
+            throw new Error(`'${action.Kind}' has no adapter action; the session runs it in the page.`);
         default:
             // Exhaustive: `action` is `never` here. Adding a new `RemoteBrowserAction` member without
             // handling it above is a compile error, which is exactly what keeps this mapping lossless.

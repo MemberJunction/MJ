@@ -9,10 +9,13 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AgentRunStatusPublisher } from './AgentRunStatusPublisher.js';
+import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
 import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
+import { StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -184,7 +187,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Sanitize ExecuteAgentResult for JSON serialization
      * Removes circular references and non-serializable objects
      */
-    private sanitizeAgentResult(result: ExecuteAgentResult): any {
+    private sanitizeAgentResult(result: ExecuteAgentResult, recipient?: UserInfo): any {
         const sanitized: any = {
             success: result.success,
             payload: result.payload,
@@ -200,8 +203,9 @@ export class RunAIAgentResolver extends ResolverBase {
 
         // Safely extract agent run data using GetAll() for proper serialization
         if (result.agentRun && typeof result.agentRun.GetAll === 'function') {
-            // Use GetAll() to get the full serialized object including extended properties
-            sanitized.agentRun = result.agentRun.GetAll();
+            // GetAll() for the full serialized object including extended properties, projected for
+            // the recipient: the run comes from the agent engine, not from a load bound to them
+            sanitized.agentRun = ProjectEntityObjectForCaller(result.agentRun, recipient);
         }
         else {
             // shouldn't ever get here
@@ -329,6 +333,8 @@ export class RunAIAgentResolver extends ResolverBase {
         // run is not marked Failed — the early-failure case we most want to
         // persist, but we have no run object yet.
         const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
+        // The publisher owns every status message, including the failure completion the catch below sends.
+        const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
 
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
@@ -362,9 +368,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
-            // The publisher owns every status message. The resolver still copies the run into
-            // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
-            const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
+            // The resolver still copies the run into agentRunRef, including noise steps, for the
+            // fire-and-forget liveness pulse.
             const publishProgress = statusPublisher.OnProgress;
 
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
@@ -402,7 +407,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationId: conversationId, // LATENCY OPT #2: pre-resolved to skip redundant load in AgentRunner
                 userMessage: userMessage, // Provide user message when conversationDetailId not provided
                 createArtifacts: createArtifacts || false,
-                sourceArtifactId: sourceArtifactId
+                sourceArtifactId: sourceArtifactId,
+                // A widget guest runs as the system user, but its conversation stays the guest's to write (MJ#4791).
+                ConversationWriter: userPayload.ElevatedFrom,
             });
 
             const result = conversationResult.agentResult;
@@ -465,7 +472,7 @@ export class RunAIAgentResolver extends ResolverBase {
             }
 
             // Create sanitized payload for JSON serialization
-            const sanitizedResult = this.sanitizeAgentResult(result);
+            const sanitizedResult = this.sanitizeAgentResult(result, currentUser);
             const returnResult = JSON.stringify(sanitizedResult);
 
             // Publish final events with enriched result data for fire-and-forget clients
@@ -488,11 +495,18 @@ export class RunAIAgentResolver extends ResolverBase {
         } catch (error) {
             const executionTime = Date.now() - startTime;
             LogError(`AI Agent run failed:`, undefined, error);
-            const errorMessage = (error as Error).message || 'Unknown error occurred';
+            // Never dereference a non-Error throw: this catch must not itself throw, since executeAIAgent resolves on
+            // every failure (executeAgentInBackground relies on it).
+            const errorMessage = (error instanceof Error && error.message) || 'Unknown error occurred';
 
             // Fire-and-forget clients otherwise leave the run Running and the
             // conversation detail In-Progress (Explorer red-pill timer).
             await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage, replyDetail);
+            // A fire-and-forget client has only this message to learn the run ended: without it, it waits out its
+            // idle timeout and then reconciles the run as a success. Published after the rows are closed, so a
+            // client that reloads the reply on this message reads the error. PublishFinal is the try's last step
+            // that can throw, so a run gets one completion or the other, never both.
+            statusPublisher.PublishFailure(conversationDetailId, errorMessage);
 
             const errorResult = {
                 success: false,
@@ -1013,8 +1027,9 @@ export class RunAIAgentResolver extends ResolverBase {
         // AUTHORITATIVELY from the widget instance (never the client-supplied arg) — so a guest needs
         // no grants to WRITE the AI run entities and cannot run an arbitrary agent under elevation.
         // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
-        // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
-        // session resolves to "not found" before any elevated work happens. The reply row is written
+        // own ConversationDetail through its role's RLS filters, and startConversationTurn then checks
+        // the conversation's scope stamp against the visitor (MJ#6032), so a detail id from another
+        // visitor's session is refused before any elevated work happens. The reply row is written
         // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
@@ -1139,7 +1154,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Everything a conversation turn needs before its agent runs: the user's message (read as the caller, so a
-     * message they can't see is "not found"), the conversation history, the optional announcement line, and the reply
+     * message they can't see is "not found", and for an anonymous visitor also checked against the conversation's
+     * scope stamp), the conversation history, the optional announcement line, and the reply
      * row, created last so the history never holds the empty reply. Every row is written as `user`, the person asking,
      * and marked as server-authored by {@link AgentRunner.CreateAgentReplyDetail}.
      */
@@ -1152,6 +1168,15 @@ export class RunAIAgentResolver extends ResolverBase {
         // branch, which are threaded through the call chain rather than reloaded downstream.
         const placement = await this.loadPlacementOf(p, user, request.UserMessageId);
         const conversationId = placement.ConversationId;
+        // Loading the message as the caller is the whole ownership check for a named user. It is not for an
+        // anonymous visitor: every visitor is the one shared Anonymous user, so under a guest role whose row
+        // filters key on UserID another visitor's message loads fine (MJ#6032). The conversation's scope stamp
+        // decides instead, exactly as it does for the realtime gates — and before any row is written.
+        const access = await AuthorizeConversationTurn(conversationId, user, p);
+        if (!access.Allowed) {
+            LogError(`RunAIAgentFromConversationDetail: anonymous visitor ${user.AnonymousVisitorID ?? '(no visitor id)'} refused a turn in conversation ${conversationId} (${access.Reason})`);
+            throw new Error('Not authorized: you do not own this conversation');
+        }
         const branchId = request.ReplyBranchId
             ? await this.validateReplyBranch(p, user, conversationId, placement, request.ReplyBranchId)
             : placement.BranchId;
@@ -1437,9 +1462,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Execute agent in background (fire-and-forget).
-     * Handles errors by publishing error completion events via PubSub,
-     * so the client receives them via WebSocket even though the HTTP response
-     * has already been sent.
+     * The client learns the outcome only from the run's completion status message (executeAIAgent publishes it,
+     * failure included), since the HTTP response has already been sent. A liveness pulse runs until the run ends.
      */
     private executeAgentInBackground(
         p: DatabaseProviderBase,
@@ -1480,14 +1504,15 @@ export class RunAIAgentResolver extends ResolverBase {
         const pulse = StartLivenessPulse({
             pubSub,
             sessionId,
-            ownerUserId: userPayload.userRecord.ID,
+            ownerUserId: StatusUpdateOwnerID(userPayload),
             resolver: 'RunAIAgentResolver',
             readStatus: () => runRef.current
                 ? { runId: runRef.current.ID, status: runRef.current.Status }
                 : undefined,
         });
 
-        // Execute in background - errors are handled within, not propagated
+        // executeAIAgent resolves on every failure and publishes the run's completion itself (PublishFinal, or
+        // PublishFailure from its catch), so nothing here publishes one.
         this.executeAIAgent(
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
@@ -1495,14 +1520,9 @@ export class RunAIAgentResolver extends ResolverBase {
             sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
             conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail
         ).catch((error: unknown) => {
-            // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
-            // so this would only fire for truly unexpected errors).
-            const errorMessage = (error instanceof Error) ? error.message : 'Unknown background execution error';
-            LogError(`🔥 Fire-and-forget background execution failed: ${errorMessage}`, undefined, error);
-
-            // Publish error completion event so the client knows the agent failed.
-            // The publisher is created inside executeAIAgent, which rejected before returning one.
-            new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId).PublishFailure(conversationDetailId, errorMessage);
+            // Only a broken executeAIAgent contract lands here. Logged rather than left as an unhandled rejection;
+            // no completion is published, because executeAIAgent may already have sent one.
+            LogError(`🔥 Fire-and-forget run of agent ${agentId} for session ${sessionId} rejected, which executeAIAgent never should`, undefined, error);
         }).finally(() => pulse.Stop());
     }
 
@@ -1535,7 +1555,9 @@ export class RunAIAgentResolver extends ResolverBase {
         /** History floor: only rows written at or after it are loaded, and no summary is used. */
         historyFrom?: Date,
         /** The branch whose path to load; null reads the trunk. */
-        branchId?: string | null
+        branchId?: string | null,
+        /** Speaker attribution mode forwarded to `ConversationEngine.AssembleContextWindow`. */
+        speakerAttribution?: 'off' | 'auto' | 'always'
     ): Promise<ChatMessage[]> {
         // Context windowing (summary boundary + raw tail, or legacy last-N when no
         // summary exists) shares ONE fold implementation with all other callers —
@@ -1556,7 +1578,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const window = ConversationEngine.AssembleContextWindow(rows, {
             maxTailMessages: maxMessages,
             excludeDetailIds,
-            historyFrom
+            historyFrom,
+            speakerAttribution
         });
 
         // Batch load input artifacts for the windowed messages. Since the backfill migration

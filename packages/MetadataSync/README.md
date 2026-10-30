@@ -197,6 +197,12 @@ The tool is intended for managing business-level metadata such as:
 
 For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGenLib/README.md).
 
+### Entity fields and entity relationships
+
+**Entity field rows (`MJ: Entity Fields`) belong to CodeGen.** The generated `spCreateEntityField` procedure has no `EntityID`, `Name`, `Sequence`, `Type` or `IsVirtual` parameter, so push cannot create a field row; it can only update the business-level columns of one that exists. If a host database built from migrations is missing a field, such as a virtual field from a view, re-run CodeGen against a database with the schema change and fold its full output into the migration, so every install gets the row.
+
+**Entity relationship rows (`MJ: Entity Relationships`) can be created by push.** `spCreateEntityRelationship` takes `EntityID`, `RelatedEntityID` and `RelatedEntityJoinField`, so an app can carry the relationships CodeGen does not infer in its own metadata folder (for example `entity-relationships/`) and push creates them.
+
 ## Performance: Preloading and Caching During Push
 
 The `push` command preloads existing records and caches files/lookups so the
@@ -721,6 +727,116 @@ MetadataSync natively supports three composition axes directly within `RecordDat
 - **`embeds`**: 1:1 peer record embeds keyed by foreign key field name (e.g. `ShipToAddressID`). Peer records are ensured and assigned before parent entity save.
 - **`extension`**: 1:1 IsA subtype extensions (e.g. `Event Order Lines` extending `Order Lines`). Leaf fields only (parent fields in leaf extensions are rejected during validation). Resolved automatically via prospective subtype resolution (`EnsureISAChild()`).
 
+A collection can come from the entity's relationships or be declared in code by the entity class (`DeclareRelatedRecords`). `mj sync validate` accepts both.
+
+#### Declared query children (`MJ: Queries`)
+
+The `MJ: Queries` entity class declares three collections:
+
+| Collection | Child entity | Join field |
+|---|---|---|
+| `Parameters` | `MJ: Query Parameters` | `QueryID` |
+| `Fields` | `MJ: Query Fields` | `QueryID` |
+| `Entities` | `MJ: Query Entities` | `QueryID` |
+
+A query and the child rows it declares in these collections are saved as one graph, in one transaction: the query row first, then the declared children. When a query is saved, the server extracts its parameters, fields and entities from the SQL. That extraction runs after the declared children are written, so it sees them. A declared row wins over extraction for the same name (for an entity link, the same entity):
+
+- In the save that writes it, extraction does not add a row with the same name, change the declared row, or remove it.
+- If extraction created a row with that name earlier, that row is deleted in the same save and the declared row keeps the `primaryKey` the file gives it. A stored row whose `DetectionMethod` is `Manual` is never deleted this way.
+
+Items in a collection leave out the join field (`QueryID`); the collection sets it from the parent. A shipped query, trimmed:
+
+```json
+{
+  "fields": {
+    "Name": "AIUsageHourly",
+    "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+    "SQL": "@file:SQL/ai-usage-hourly.sql",
+    "Status": "Approved",
+    "UsesTemplate": true
+  },
+  "relatedEntities": {
+    "MJ: Query SQLs": [
+      {
+        "fields": {
+          "QueryID": "@parent:ID",
+          "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+          "SQL": "@file:SQL/ai-usage-hourly.pg.sql"
+        },
+        "primaryKey": { "ID": "FA5D47DB-CDAF-4338-86B7-29266623CBE4" }
+      }
+    ]
+  },
+  "collections": {
+    "Parameters": [
+      {
+        "fields": {
+          "Name": "start",
+          "Type": "date",
+          "IsRequired": false,
+          "SampleValue": "2024-01-01",
+          "Description": "Start UTC date/time boundary for filtering AI usage runs.",
+          "DetectionMethod": "Manual"
+        },
+        "primaryKey": { "ID": "673BA86F-96B3-4B7A-A568-0860413146E1" }
+      }
+    ],
+    "Fields": [
+      {
+        "fields": {
+          "Name": "HourBucket",
+          "Description": "The start of the hourly bucket as a DATETIME",
+          "IsSummary": false,
+          "DetectionMethod": "Manual"
+        },
+        "primaryKey": { "ID": "A10488B3-75FF-4E21-8C51-A3C70EE16A6D" }
+      }
+    ]
+  }
+}
+```
+
+`MJ: Query SQLs` (the dialect variants) has no declared collection, so it stays under `relatedEntities` and is saved after the query.
+
+#### `relatedEntities` saved through a declared collection
+
+The older `relatedEntities` format keeps working, and push never rewrites a file into another format. This form of the same parameter is still valid:
+
+```json
+{
+  "fields": {
+    "Name": "AIUsageHourly",
+    "SQL": "@file:SQL/ai-usage-hourly.sql"
+  },
+  "relatedEntities": {
+    "MJ: Query Parameters": [
+      {
+        "fields": {
+          "QueryID": "@parent:ID",
+          "Name": "start",
+          "Type": "date",
+          "DetectionMethod": "Manual"
+        },
+        "primaryKey": { "ID": "673BA86F-96B3-4B7A-A568-0860413146E1" }
+      }
+    ]
+  }
+}
+```
+
+On `mj sync push`, when the parent entity declares a collection for the child entity of a `relatedEntities` group, the group's items are saved through that collection, in the parent's graph save, exactly as if the file had used `collections`. Otherwise push keeps the old behaviour: the children are saved separately, after the parent. A group is saved through the collection only when all of these hold:
+
+- The record is a top-level record in its file (not itself a `relatedEntities` child).
+- The parent declares exactly one collection for that child entity, and the collection is writable, can load, and does not number its items automatically (`SequenceOptions`).
+- No item in the group has `deleteRecord` or its own nested `relatedEntities`.
+- Each item either leaves the join field out or sets it to `@parent:<the parent's key field>`, for example `"QueryID": "@parent:ID"`.
+
+New items saved this way get their keys written back into the file, the same as separately saved related records. A record with a group saved this way is always compared against the database, even with `--incremental`, because its stored checksum does not cover those items.
+
+`mj sync pull` keeps each record's existing format: a record that holds the group under `relatedEntities` keeps it there, and one that holds it under `collections` keeps that. A record new to the file is written in the `collections` format whenever the parent declares a collection for the configured related entity on the configured foreign key; the join field is left out of each item. The queries folder pulls `MJ: Query Parameters` through `relatedEntities` in `.mj-sync.json`, so new query records are written with `collections.Parameters`.
+
+A record's checksum covers its `collections` but not its `relatedEntities`. A record whose children move into `collections` therefore gets a different checksum once, and the next push treats it as changed one time.
+
 
 ### Primary Key Handling
 The tool automatically detects primary key fields from entity metadata:
@@ -1105,6 +1221,7 @@ Skips unchanged files and records using stored checksums, significantly speeding
 - State is stored in `~/.mj/sync-state/` (machine-local, not committed to version control)
 - Combine freely with other flags: `mj sync push --dir ./metadata --incremental --verbose`
 - `--incremental` compares file content only. After you set a variable that `?optional` left out, push once without `--incremental`.
+- A file's checksum includes the content of the `@file:` targets it references. Checksums stored by an earlier version do not, so the first `--incremental` push after upgrading treats every file as changed and processes the whole tree once.
 
 ### Incremental Pull (`--incremental`)
 
@@ -1346,14 +1463,27 @@ SQL logging captures all database operations during push commands for creating m
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | false | Enable SQL logging during push operations |
-| `outputDirectory` | string | "./sql_logging" | Directory for SQL log files |
+| `outputDirectory` | string | "./sql-log-push" | Directory for SQL log files, relative to the sync root |
 | `formatAsMigration` | boolean | false | Format as Flyway migration files |
+| `schemaPlaceholders` | `{ schema, placeholder }[]` | undefined | With `formatAsMigration`, the schema names to rewrite and the Flyway placeholder for each, e.g. an Open App's schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Falls back to `SQLOutput.schemaPlaceholders` in `mj.config.cjs`; without either, `__mj` becomes `${flyway:defaultSchema}`. A schema name followed by `.` is rewritten wherever it appears, string data included |
+| `escapeFlywaySyntax` | boolean | false | Escape `${...}` in captured string data so Flyway does not read it as a placeholder. Always on with `formatAsMigration` |
 | `filterPatterns` | string[] | undefined | Patterns to filter SQL statements |
 | `filterType` | "exclude" or "include" | "exclude" | How to apply filter patterns |
+| `excludeTransactionalDefaults` | boolean | true | Leave out the built-in run and log statements listed below. Applies in exclude mode only |
+| `variableBatchThreshold` | number | 200 | Number of `DECLARE @...` variables to accumulate before emitting a batch separator (avoids SQL Server's 10,000-variable batch limit). `0` emits a separator per statement |
 
 **Filter Pattern Types:**
 - **Regex patterns**: Start with `/` and optionally end with flags (e.g., `/spCreate.*Run/i`)
 - **Simple wildcards**: Use `*` as a wildcard (e.g., `*AIPrompt*`)
+
+**Built-in exclusions:** while a push runs, the server can write run and log records of its own. These rows are activity records, not metadata, so a migration built from the log should not carry them. In exclude mode (the default) push adds patterns that leave out the `spCreate` and `spUpdate` calls for these entities, on top of your own `filterPatterns`:
+
+- `MJ: AI Prompt Runs` (`spCreateAIPromptRun`, `spUpdateAIPromptRun`)
+- `MJ: AI Agent Runs` (`spCreateAIAgentRun`, `spUpdateAIAgentRun`)
+- `MJ: AI Agent Run Steps` (`spCreateAIAgentRunStep`, `spUpdateAIAgentRunStep`)
+- `MJ: Action Execution Logs` (`spCreateActionExecutionLog`, `spUpdateActionExecutionLog`)
+
+Each pattern matches the whole procedure name, so related entities such as `MJ: AI Agent Run Medias` are still logged. Set `"excludeTransactionalDefaults": false` to log these statements. With `"filterType": "include"` the built-in patterns are never added: the log already holds only what your patterns match.
 
 ### User Role Validation
 
@@ -1572,6 +1702,8 @@ Benefits:
 - **Atomic Operations**: Parent and children sync together
 - **Cleaner Organization**: Fewer files to manage
 - **Relationship Clarity**: Visual representation of data relationships
+
+When the parent entity declares a collection for a child entity (for example `MJ: Queries` declares `Parameters`, `Fields` and `Entities`), push saves that `relatedEntities` group through the collection, in the parent's graph save, and pull writes new records with `collections`. See [`relatedEntities` saved through a declared collection](#relatedentities-saved-through-a-declared-collection).
 
 ## Recursive Patterns
 

@@ -8,7 +8,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { MJListDetailEntity, MJListEntity, MJUserViewEntity } from '@memberjunction/core-entities';
+import { MJListDetailEntity, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 
 import {
   ComputeSourceSignature,
@@ -82,7 +82,7 @@ export class ListOperations {
       case 'view':
         return this.resolveViewSource(source.viewId, source.runtimeParams);
       case 'adhoc':
-        return this.resolveAdhocSource(source.entityName, source.extraFilter);
+        return this.resolveAdhocSource(source.entityName, source.extraFilter, source.alternateBaseView);
       default: {
         // Exhaustiveness check — if a new kind is added to ListSource the
         // compiler will reject this branch.
@@ -428,7 +428,8 @@ export class ListOperations {
     runtimeParams: Record<string, unknown> | undefined,
   ): Promise<ResolvedRecordSet> {
     const rv = this.runView();
-    const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewID: viewId }, this.provider ?? null);
+    // As the acting user: the server-side User Views lookup fails unscoped.
+    const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewID: viewId }, this.provider ?? null, this.contextUser);
     if (!entityName) {
       throw new Error(`Could not determine entity for view '${viewId}'`);
     }
@@ -448,6 +449,8 @@ export class ListOperations {
       ViewID: viewId,
       Fields: pkFields,
       ResultType: 'simple',
+      // A list source is every match, not the entity's UserViewMaxRows page.
+      IgnoreMaxRows: true,
     }, this.contextUser);
 
     if (!result.Success) {
@@ -461,7 +464,11 @@ export class ListOperations {
     };
   }
 
-  private async resolveAdhocSource(entityName: string, extraFilter: string): Promise<ResolvedRecordSet> {
+  private async resolveAdhocSource(
+    entityName: string,
+    extraFilter: string,
+    alternateBaseView?: string,
+  ): Promise<ResolvedRecordSet> {
     const entityInfo = this.metadata().EntityByName(entityName);
     if (!entityInfo) {
       throw new Error(`Entity '${entityName}' not found in metadata`);
@@ -475,6 +482,9 @@ export class ListOperations {
       ExtraFilter: extraFilter,
       Fields: pkFields,
       ResultType: 'simple',
+      // A list source is every match, not the entity's UserViewMaxRows page.
+      IgnoreMaxRows: true,
+      ...(alternateBaseView ? { AlternateBaseView: alternateBaseView } : {}),
     }, this.contextUser);
 
     if (!result.Success) {
@@ -865,6 +875,7 @@ export class ListOperations {
       whereClause?: string | null;
       customWhereClause?: string | null;
       smartFilterWhereClause?: string | null;
+      alternateBaseView?: string | null;
     };
     try {
       parsed = JSON.parse(list.SourceFilterSnapshot) as typeof parsed;
@@ -875,9 +886,15 @@ export class ListOperations {
 
     const extraFilter =
       parsed.customWhereClause ?? parsed.whereClause ?? parsed.smartFilterWhereClause ?? null;
-    if (!extraFilter || extraFilter.trim().length === 0) return null;
+    const altBaseView = parsed.alternateBaseView?.trim() || undefined;
+    if ((!extraFilter || extraFilter.trim().length === 0) && !altBaseView) return null;
 
-    return { kind: 'adhoc', entityName: entity.Name, extraFilter };
+    return {
+      kind: 'adhoc',
+      entityName: entity.Name,
+      extraFilter: extraFilter ?? '',
+      ...(altBaseView ? { alternateBaseView: altBaseView } : {}),
+    };
   }
 
   /**
@@ -918,7 +935,7 @@ export class ListOperations {
    */
   private async captureViewFilterSnapshot(viewId: string): Promise<string | null> {
     const md = this.metadata();
-    const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', this.contextUser);
+    const view = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', this.contextUser);
     const loaded = await view.Load(viewId);
     if (!loaded) {
       LogError(`captureViewFilterSnapshot: view ${viewId} not found`);
@@ -929,6 +946,7 @@ export class ListOperations {
       capturedAt: new Date().toISOString(),
       sourceViewId: viewId,
       entityId: view.EntityID,
+      alternateBaseView: view.AlternateBaseView ?? null,
       whereClause: view.WhereClause ?? null,
       customWhereClause: view.CustomWhereClause ?? null,
       filterState: view.FilterState ?? null,

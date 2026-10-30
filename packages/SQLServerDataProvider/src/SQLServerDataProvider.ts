@@ -64,7 +64,10 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, IsTypedQueryParameterList, IsNamedQueryParameterList, TypedQueryParameter, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
+import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import { BindTypedParameters } from './typedParameters';
+import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
@@ -129,7 +132,11 @@ function isStaleConnectionError(error: { message?: string; code?: string }): boo
 }
 
 /**
- * Builds a sql.Request, binds parameters, and processes positional placeholders.
+ * Builds a sql.Request and binds `parameters`:
+ * - a SaveParameter list, a TypedQueryParameter list or a NamedQueryParameter list binds each by name;
+ * - a plain object binds each key by name (`{ name: v }` for `@name`);
+ * - a plain array is the LEGACY positional form: `@p0..@pN`, with every `?` in the statement rewritten,
+ *   including one inside a string literal, quoted identifier or comment. Prefer a named form.
  */
 function buildRequest(
   connectionSource: sql.ConnectionPool | sql.Transaction,
@@ -153,11 +160,26 @@ function buildRequest(
     }
     return { request, processedQuery: query };
   }
+  if (IsTypedQueryParameterList(parameters)) {
+    // Named inputs declared with the types of the columns they are compared with (typedParameters.ts).
+    BindTypedParameters(request, parameters);
+    return { request, processedQuery: query };
+  }
+  if (IsNamedQueryParameterList(parameters)) {
+    // Named inputs whose type the driver infers; the statement already references them by name.
+    for (const p of parameters) {
+      request.input(p.Name, p.Value);
+    }
+    return { request, processedQuery: query };
+  }
 
   let processedQuery = query;
   if (parameters) {
     if (Array.isArray(parameters)) {
-      // Handle positional parameters (legacy TypeORM style)
+      // LEGACY positional form: values bind as @p0..@pN and EVERY `?` in the text is rewritten to the
+      // next @pN, a `?` inside a string literal, quoted identifier or comment included. Kept for
+      // existing callers; MJ's own SQL passes named parameters (an object, NamedQueryParameter or
+      // TypedQueryParameter lists), which leave the text alone.
       parameters.forEach((value, index) => {
         request.input(`p${index}`, value);
       });
@@ -955,9 +977,11 @@ export class SQLServerDataProvider
       return results;
     }
 
-    // Build array of SQL statements for batch execution
+    // Build array of SQL statements for batch execution (recording per-item resolution errors
+    // in `results` without aborting valid sibling items in the batch)
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL, item } of items) {
+    const validItems: Array<{ index: number }> = [];
+    for (const { index, entityInfo, whereSQL, item } of items) {
       // The freshness probe MUST target the same physical view the read targets. For a
       // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
       // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
@@ -967,8 +991,20 @@ export class SQLServerDataProvider
       // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
       // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
       // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
-      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL));
+      try {
+        const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+        sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName));
+        validItems.push({ index });
+      } catch (err) {
+        results.set(index, {
+          success: false,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (sqlStatements.length === 0) {
+      return results;
     }
 
     try {
@@ -976,8 +1012,8 @@ export class SQLServerDataProvider
       const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
 
       // Process each result set and map to the corresponding item index
-      for (let i = 0; i < items.length; i++) {
-        const { index } = items[i];
+      for (let i = 0; i < validItems.length; i++) {
+        const { index } = validItems[i];
         const resultSet = resultSets[i];
 
         if (resultSet && resultSet.length > 0) {
@@ -1013,24 +1049,26 @@ export class SQLServerDataProvider
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
+    schemaNameOverride?: string,
   ): Promise<{ executeViewSQL: string; runID: string }> {
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
-    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
-    // and the entity's live base view otherwise.
+    // read honors DataSource:'Materialized' and AlternateBaseView — effectiveBaseView is the materialized
+    // or alternate view then, and the entity's live base view otherwise.
     //
     // UserViewRunDetail.RecordID is a single NVARCHAR(255) holding ONE bare key value per row, and the
     // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
     // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
     this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
     const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
+    const targetSchema = schemaNameOverride ?? entityInfo.SchemaName;
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${pkName} IN
+    const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -1233,20 +1271,23 @@ export class SQLServerDataProvider
    * @param bNewRecord - Whether this is a new record (create) or existing record (update)
    * @param spName - The stored procedure name to call
    * @param user - The user context for the operation
+   * @param transaction - The transaction the save will run in, when one is already open. A read
+   *   the save's Record Change snapshot needs runs in it, so it sees that transaction's earlier
+   *   writes and never waits on the locks they hold.
    * @returns The full SQL statement for the save operation
    *
    * @security This method handles field-level encryption transparently.
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo): Promise<string> {
+  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo, transaction?: sql.Transaction): Promise<string> {
     // SQLServerTransactionGroup-batched saves regenerate per-item SQL when
     // transaction variables get rebound. `_spName` is preserved for back-compat
     // with that caller; the dialect-driven pipeline derives it from entity
     // metadata via `GetCreateUpdateSPName`. Outside a TransactionGroup,
     // `fullSQL` holds `@p$0` parameter placeholders, so return `literalSQL`
     // for standalone callers.
-    const result = await this.GenerateSaveSQL(entity, bNewRecord, user);
+    const result = await this.GenerateSaveSQLReadingOn(entity, bNewRecord, user, transaction);
     return result.literalSQL ?? result.fullSQL;
   }
 
@@ -2131,7 +2172,7 @@ export class SQLServerDataProvider
     let sSQL: string;
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
-      const oldData = entity.GetAll(true); // get all the OLD values
+      const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
         return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
       }).join(', ');
@@ -2538,7 +2579,10 @@ export class SQLServerDataProvider
    * This method can be used to execute raw SQL statements outside of the MJ infrastructure.
    * *CAUTION* - use this method with great care.
    * @param query
-   * @param parameters
+   * @param parameters - Named parameters: an object (`{ name: value }`, referenced `@name`), or a list of
+   *   `NamedQueryParameter` / `TypedQueryParameter`. A plain array of values is the LEGACY positional form:
+   *   it binds `@p0..@pN` and rewrites every `?` in `query`, a `?` inside a string literal, quoted
+   *   identifier or comment included, so it is only safe for statement text with no other `?`.
    * @returns
    */
   public async ExecuteSQL(
@@ -2571,6 +2615,26 @@ export class SQLServerDataProvider
     } catch (e) {
       // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Describes the first result set of `sqlText` with `sys.dm_exec_describe_first_result_set` (mode 2):
+   * names, order, exact types, nullability and the view or table column each pass-through column
+   * comes from. SQL Server compiles the statement without executing it. A statement the server
+   * cannot compile gives a failure carrying the server's message.
+   */
+  public override async DescribeStatement(sqlText: string, contextUser?: UserInfo): Promise<DescribeStatementResult> {
+    try {
+      const rows: SQLServerDescribeRow[] = await this.ExecuteSQL(
+        SQLSERVER_DESCRIBE_SQL,
+        [new TypedQueryParameter('tsql', 'nvarchar(max)', sqlText)],
+        { description: 'DescribeStatement', ignoreLogging: true },
+        contextUser,
+      );
+      return MapSQLServerDescribeRows(rows);
+    } catch (e) {
+      return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
     }
   }
 

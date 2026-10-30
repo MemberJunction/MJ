@@ -1,5 +1,6 @@
 import { Observable, Subject } from 'rxjs';
 import { UUIDsEqual } from '@memberjunction/global';
+import { WHITEBOARD_WIDGET_STATE_MAX_CHARS } from './whiteboard-widget-protocol';
 
 /**
  * WHITEBOARD — typed board model + state engine.
@@ -73,6 +74,16 @@ export type WhiteboardFontFamily = 'sans' | 'serif' | 'mono';
 
 /** Font weights for text labels / stickies (regular or bold). */
 export type WhiteboardFontWeight = 400 | 700;
+
+/** True when `value` is one of the {@link WhiteboardFontWeight} literals. */
+export function IsWhiteboardFontWeight(value: unknown): value is WhiteboardFontWeight {
+  return value === 400 || value === 700;
+}
+
+/** True when `value` is one of the {@link WhiteboardFontFamily} keys. */
+export function IsWhiteboardFontFamily(value: unknown): value is WhiteboardFontFamily {
+  return value === 'sans' || value === 'serif' || value === 'mono';
+}
 
 /** A point in board (content) coordinates. */
 export interface WhiteboardPoint {
@@ -501,6 +512,22 @@ export interface WhiteboardBoardClearedEventArgs {
 export interface WhiteboardBoardLoadedEventArgs {
   /** How many items the restored board contains (summed across ALL pages). */
   ItemCount: number;
+}
+
+/**
+ * AFTER-event args for {@link WhiteboardState.WidgetStateChanged$} — an HTML widget's saved
+ * runtime state was set or cleared via {@link WhiteboardState.SetWidgetState}, or the whole
+ * side map was replaced by {@link WhiteboardState.LoadWidgetStates} (one event per affected
+ * item). Widget state is runtime data, not board content: this event is NOT a
+ * {@link WhiteboardState.Changed$} emission and nothing is journaled or undoable.
+ */
+export class WhiteboardWidgetStateChangedEventArgs {
+  /** The HTML widget item whose state changed. */
+  public readonly ItemID: string;
+
+  constructor(itemId: string) {
+    this.ItemID = itemId;
+  }
 }
 
 // ────────────────────────────────────────────── pages
@@ -996,6 +1023,22 @@ export class WhiteboardState {
   public readonly PageRemoved$: Observable<WhiteboardPageRemovedEventArgs> = this.pageRemoved.asObservable();
 
   /**
+   * Per-widget runtime state (item ID → opaque JSON string), kept OUTSIDE the board model:
+   * never part of `snapshot()` / `restore()` / {@link ToJSON} / {@link LoadFromJSON}, never
+   * journaled, never on {@link Changed$}. So Undo/Redo don't rewind it, and LiveKit peers and
+   * Save-to-artifact never see it. See {@link SetWidgetState}.
+   */
+  private widgetStates = new Map<string, string>();
+
+  private widgetStateChanged = new Subject<WhiteboardWidgetStateChangedEventArgs>();
+  /**
+   * AFTER event: a widget's runtime state was set, cleared or replaced. Fires per affected
+   * item; never accompanied by a {@link Changed$} emission (no frames, scene deltas or
+   * LiveKit broadcasts per keystroke).
+   */
+  public readonly WidgetStateChanged$: Observable<WhiteboardWidgetStateChangedEventArgs> = this.widgetStateChanged.asObservable();
+
+  /**
    * The MULTI-selection, in selection order (last entry is the primary selection).
    * Selection is volatile UI state — never journaled, never undoable, never persisted,
    * and cleared on page switches and whole-scene restores.
@@ -1272,6 +1315,8 @@ export class WhiteboardState {
     this.beforeMutate();
     const item = { ...adding.Input, ID: this.nextId(adding.Input.Kind), Z: ++this.zCounter, Author: author } as WhiteboardItem;
     WhiteboardState.normalizeTag(item);
+    // restore() resets idCounter, so an undone ID can be re-minted: a fresh item never inherits it
+    this.widgetStates.delete(item.ID);
     this.items.set(item.ID, item);
     this.record('add', item.ID, author, `added ${WhiteboardState.describe(item)}`);
     this.itemAdded.next({ Item: item, Author: author });
@@ -1526,6 +1571,7 @@ export class WhiteboardState {
     }
     const count = this.items.size;
     this.beforeMutate();
+    this.pruneWidgetStates(Array.from(this.items.keys()));
     this.items = new Map<string, WhiteboardItem>();
     this.changeSelection(null);
     this.record('replace', '', author, 'cleared the board');
@@ -1728,6 +1774,7 @@ export class WhiteboardState {
       return false;
     }
     this.beforeMutate();
+    this.pruneWidgetStates(Array.from(target.Items.keys()));
     const index = this.pages.indexOf(target);
     this.pages.splice(index, 1);
     let activated: WhiteboardPageInfo | null = null;
@@ -1741,6 +1788,108 @@ export class WhiteboardState {
     this.record('replace', '', author, `removed page "${target.Name}"`);
     this.pageRemoved.next({ Page: removingInfo, ActivatedPage: activated, Author: author });
     return true;
+  }
+
+  // ────────────────────────────────────────────── widget runtime state
+
+  /**
+   * The saved runtime state of an HTML widget (opaque JSON string), or null when none is
+   * held. Entries survive item removal in memory, so Undo-of-remove gets its state back.
+   */
+  public GetWidgetState(id: string): string | null {
+    return this.widgetStates.get(id) ?? null;
+  }
+
+  /**
+   * Set (or, with `null`, clear) a widget's runtime state and fire
+   * {@link WidgetStateChanged$}. No undo snapshot, no journal, no {@link Changed$}.
+   * Values longer than {@link WHITEBOARD_WIDGET_STATE_MAX_CHARS} are refused (ignored), never
+   * clipped. A no-op (same value, or clearing an absent entry) fires nothing.
+   */
+  public SetWidgetState(id: string, json: string | null): void {
+    if (!id) {
+      return;
+    }
+    if (json === null) {
+      if (this.widgetStates.delete(id)) {
+        this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+      }
+      return;
+    }
+    if (typeof json !== 'string' || json.length > WHITEBOARD_WIDGET_STATE_MAX_CHARS || this.widgetStates.get(id) === json) {
+      return;
+    }
+    this.widgetStates.set(id, json);
+    this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+  }
+
+  /**
+   * The widget states of items that still exist on ANY page, as a plain record (for the
+   * session channel's save payload). Entries for removed items are left out.
+   */
+  public WidgetStatesToJSON(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [id, json] of this.widgetStates) {
+      if (this.itemExistsOnAnyPage(id)) {
+        out[id] = json;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * REPLACE (never merge) every widget state with `record` — typically right after
+   * {@link LoadFromJSON} when a session resumes. Non-string or oversize values are dropped.
+   * Fires {@link WidgetStateChanged$} once per item whose entry was added, changed or removed.
+   */
+  public LoadWidgetStates(record: Record<string, string>): void {
+    const next = WhiteboardState.normalizeWidgetStates(record);
+    const affected = new Set<string>([...this.widgetStates.keys(), ...next.keys()]);
+    const previous = this.widgetStates;
+    this.widgetStates = next;
+    for (const id of affected) {
+      if (previous.get(id) !== next.get(id)) {
+        this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+      }
+    }
+  }
+
+  /** Validate a persisted widget-state record: string keys → strings within the size cap. */
+  private static normalizeWidgetStates(record: Record<string, string>): Map<string, string> {
+    const next = new Map<string, string>();
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return next;
+    }
+    for (const [id, value] of Object.entries(record)) {
+      if (id && typeof value === 'string' && value.length <= WHITEBOARD_WIDGET_STATE_MAX_CHARS) {
+        next.set(id, value);
+      }
+    }
+    return next;
+  }
+
+  /** Drop the widget states of items that are being removed for good (Clear / RemovePage). */
+  private pruneWidgetStates(ids: string[]): void {
+    for (const id of ids) {
+      if (this.widgetStates.delete(id)) {
+        this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+      }
+    }
+  }
+
+  /** True when an item with this ID lives on any page (not just the active one). */
+  private itemExistsOnAnyPage(id: string): boolean {
+    return this.pages.some(page => page.Items.has(id));
+  }
+
+  /**
+   * The page (ID and name) holding the item with this ID, searching EVERY page — not just the
+   * active one — or null when no page holds it. Lets a caller tell "on another page" (switch
+   * pages) from "gone".
+   */
+  public FindItemPage(itemId: string): { ID: string; Name: string } | null {
+    const page = this.pages.find(p => p.Items.has(itemId));
+    return page ? { ID: page.ID, Name: page.Name } : null;
   }
 
   /**
@@ -1958,7 +2107,7 @@ export class WhiteboardState {
           name,
           // additive authorship field — tolerated absent (pre-garnish payloads → 'user')
           author: p['author'] === 'agent' ? 'agent' : 'user',
-          items: Array.isArray(p['items']) ? (p['items'] as WhiteboardItem[]) : []
+          items: Array.isArray(p['items']) ? WhiteboardState.normalizePersistedItems(p['items'] as unknown[]) : []
         });
       }
       if (pages.length === 0) {
@@ -1984,10 +2133,35 @@ export class WhiteboardState {
         zCounter: num(raw['zCounter'], 0),
         pageCounter: 1,
         activePageId: 'page-1',
-        pages: [{ id: 'page-1', name: 'Page 1', items: raw['items'] as WhiteboardItem[] }]
+        pages: [{ id: 'page-1', name: 'Page 1', items: WhiteboardState.normalizePersistedItems(raw['items'] as unknown[]) }]
       };
     }
     return null;
+  }
+
+  /**
+   * Coerce the closed-set item fields of persisted items so hostile values from a shared
+   * board never enter state: `Author` becomes `'agent'` or `'user'`, and a `FontWeight` /
+   * `FontFamily` outside its literal set is dropped (the item falls back to the CSS
+   * default). Non-object entries are dropped (restore would skip them anyway).
+   */
+  private static normalizePersistedItems(entries: unknown[]): WhiteboardItem[] {
+    const items: WhiteboardItem[] = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue;
+      }
+      const item = { ...(entry as Record<string, unknown>) };
+      item['Author'] = item['Author'] === 'agent' ? 'agent' : 'user';
+      if ('FontWeight' in item && !IsWhiteboardFontWeight(item['FontWeight'])) {
+        delete item['FontWeight'];
+      }
+      if ('FontFamily' in item && !IsWhiteboardFontFamily(item['FontFamily'])) {
+        delete item['FontFamily'];
+      }
+      items.push(item as unknown as WhiteboardItem);
+    }
+    return items;
   }
 
   /**

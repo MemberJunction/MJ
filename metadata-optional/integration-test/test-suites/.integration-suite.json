@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Integration Tests",
-      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests — Deterministic' is the credential-free, blocking tier; 'Integration Tests — Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite — mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
+      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests \u2014 Deterministic' is the credential-free, blocking tier; 'Integration Tests \u2014 Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite \u2014 mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
       "Status": "Active"
     },
     "primaryKey": {
@@ -15,9 +15,9 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests — Deterministic",
+      "Name": "Integration Tests \u2014 Deterministic",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
-      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS — they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST — bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
+      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS \u2014 they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST \u2014 bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -1573,6 +1573,196 @@
           "primaryKey": {
             "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT132 - Alternate Base Views",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C855524F-A408-4F8B-BD04-4BE96B59C3C1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT137 - Content Pipeline Lifecycle",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "34786189-124D-43ED-B148-FACFA4446A51"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT133 - FLS Close-out (server)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "37C5581A-9E13-4F9F-A6AB-55A4804195DF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT135 - FLS Close-out (cache segmentation, RunQuery)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DDD6658B-7337-4F0B-95A5-E1BE7676C3B7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT134 - FLS Close-out Over-The-Wire (client transport)",
+            "Sequence": 77,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4A05D640-2DD1-4DC8-A8FC-4F9C48F4550B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT138 - Query Extraction Correctness",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "510C6C04-3845-461E-8DA7-DC343E4BB4FD"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.041Z",
+            "checksum": "eeb05f12c4a4b75a936ab16a1bfe61a038ea3652e441556da666c7e209ba7d72"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT139 - Query Refresh and Re-bind",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3495CE90-529A-437D-A143-54E58E8A218A"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "3b82b78d193c9d819df930d88922368bda569661cad17038d26459232fd13360"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT140 - MetadataSync Declared Query Children",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86466F49-FA5A-4B12-BE14-3277813C886C"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "12dcca7c13fcd56add7219e215c921567a3ebf01425c9a28a0ca158afa7264d7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT141 - Query API Lifecycle over GraphQL",
+            "Sequence": 78,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3FC29331-C6D5-4C8B-8083-7FBAE89C6889"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "7cdbe34f6333fee91549d9d8f4ca6badebe6f4c60273891e6487aeb30ca3a674"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT142 - Query Security",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D5A17CDE-C46C-405A-8156-265CB272B15E"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "6e4e923b1f24de7947df36d5bdbc0765c3af6b318f801db2210794885374a23a"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT143 - SQL Pipeline Scenario Matrix",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5D13057D-F57E-4E7D-A760-1D37B38FC47A"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "d5c31489bd359fb8f2b162106b521eaf3136e23b247da98b10e1d9ae73cdf63a"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT144 - SQL Pipeline Extraction Fixtures",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "13C81E72-03FB-475F-A271-F9DEBD11435F"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "e1d4b3bd05c7ab504e30d9b24871933560dd0185ed40cc6b0495dfd271429378"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99D3FE11-6191-46B9-8990-7B70ED3C9B67"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "0fd2f828efec5ce10bccd2ee3b79557d97a726eb0f245e7f5077d07ed3cf55fe"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT145 - SQL Pipeline Scenario Matrix over GraphQL",
+            "Sequence": 79,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "07B6EF3D-D0FD-4C75-8CB8-9D1BAA7EBE2E"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "4350cf7f90727ee834ebb77f6f0ad7971f0b456d2ee186f56df1ab71bfb7c1b1"
+          }
         }
       ]
     },
@@ -1586,7 +1776,7 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests — Live Model",
+      "Name": "Integration Tests \u2014 Live Model",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
       "Description": "The opt-in integration tier (RUN_AGENT_TESTS=1). Members are prompt/agent deep-verifier checks that incur LLM token cost and are never run by the default CI gate. Each is tier='live-model', so the driver skips-as-Passed unless RUN_AGENT_TESTS is set.",
       "Status": "Active"

@@ -9,7 +9,7 @@ import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService, type SubAgentThreading } from '../../services/conversation-agent.service';
 import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import type { AgentReplyMode, AgentTurnHandler, AgentTurnRequest, AgentTurnResult, AgentTurnTarget } from '../../models/agent-turn.model';
-import { ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import { IsAddressedToHuman, ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
 import {
   ApplyRoutingDecision,
   ArtifactVersionForTurn,
@@ -56,7 +56,7 @@ import {
   PairingsAllowTarget
 } from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
-import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
+import { IndexByUUID, UUIDSet, UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 import { InjectFrameZone } from '../../util/frame-zone';
 
 /** Streamed-delta render cadence where no animation frame will come (hidden tab, no rAF). */
@@ -2315,11 +2315,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Read the candidates before any await. This composer stays cached while the person opens
     // another conversation, and the chat area then rebinds its history and pinned agent, so a
     // read after the routing decision could see another conversation's state (or none).
-    const candidates = this.agentTurnCandidates(this.agentMentionIds(mentionResult));
+    const candidates = this.agentTurnCandidates(
+      this.agentMentionIds(mentionResult),
+      this.userMentionIds(mentionResult),
+      messageDetail.ParentID ?? null,
+      messageDetail.UserID ?? this.CurrentUser?.ID ?? null
+    );
     const routing = await this.decideAgentRouting(messageDetail, candidates, branchId);
-    const target = this.resolveAgentTurnTarget(candidates, routing);
+    const appliedCandidates = ApplyRoutingDecision(candidates, routing);
+    const target = this.resolveAgentTurnTarget(appliedCandidates);
     if (!target) {
-      await this.finishWithoutAgentTurn(messageDetail, 'NoAgent');
+      const reason = IsAddressedToHuman(appliedCandidates) ? 'AddressedToHuman' : 'NoAgent';
+      await this.finishWithoutAgentTurn(messageDetail, reason);
       return;
     }
     const turn = this.announceAgentTurn(messageDetail, target);
@@ -2348,6 +2355,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       Enabled: this.EnableDecisionRouting,
       ReplyMode: this.AgentReplyMode,
       MentionedAgentIds: candidates.MentionedAgentIds,
+      MentionedUserIds: candidates.MentionedUserIds,
+      ReplyParentAgentId: candidates.ReplyParentAgentId,
+      ReplyParentIsHuman: candidates.ReplyParentIsHuman,
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId
     });
@@ -2360,7 +2370,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       if (!CanAskRoutingDecision(input)) {
         return null;
       }
-      input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, branchId, input.Participants);
+      input.ArtifactVersions = this.AgentReplyMode === 'Always'
+        ? await this.loadRoutingArtifactVersions(message.ConversationID, branchId, input.Participants)
+        : [];
       const outcome = await RunRoutingDecision(input, params => this.agentService.RunDecision(params));
       LogStatusEx({
         message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason} (prompt run ${outcome.PromptRunID ?? 'none'})`,
@@ -2378,28 +2390,87 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * have answered within the history floor, the last few turns, and the conversation manager.
    * Artifact versions are added after, once the input is known to be worth asking about.
    *
-   * Participants come only from the '@' list's agents (`GetAvailableAgents`): active, top-level,
-   * unrestricted agents this person has run permission for. An agent that answered here but that
-   * the person can't run (a shared conversation, a revoked permission) is never offered, so routing
-   * can't send the turn to an agent the server would refuse. Before that list has loaded there are
-   * no participants, so no call is made and the message keeps today's routing. Speaker names in
-   * the recent turns still come from the full catalog, since any agent may have spoken.
+   * Participants come only from the '@' list's agents (`GetAvailableAgents`) or restricted agents
+   * the host explicitly granted in `AllowedAgentIDs`. An agent that answered here but that the
+   * person can't run (a shared conversation, a revoked permission) is never offered, so routing
+   * can't send the turn to an agent the server would refuse.
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
-    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
-    const runnable = this.mentionAutocomplete.GetAvailableAgents();
-    const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => runnable.find(a => UUIDsEqual(a.ID, agentId));
+    const findAgent = (agentId: string): MJAIAgentEntityExtended | undefined => AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
+    const runnable = (this.mentionAutocomplete ?? MentionAutocompleteService.Instance).GetAvailableAgents();
+    const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => this.findRoutingRunnableAgent(agentId, runnable, findAgent);
+    const allowNoAgentOption = this.AgentReplyMode === 'MentionOnly';
+    const peopleById = this.MentionPeople?.length ? IndexByUUID(this.MentionPeople) : null;
+    const findPersonName = peopleById
+      ? (userId: string): string | undefined => peopleById.Get(userId)?.Name
+      : undefined;
     const manager = this.ConverationManagerAgent;
+    const managerIdToExclude = this.AgentReplyMode === 'Always' ? (manager?.ID ?? null) : null;
     return {
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId,
-      Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findRunnable),
-      ConversationManager: manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
-      RecentTurns: BuildRecentTurns(history, findAgent),
+      Participants: CollectRoutingParticipants(history, managerIdToExclude, this.AllowedAgentIDs, findRunnable),
+      ConversationManager: this.AgentReplyMode === 'Always' && manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
+      RecentTurns: BuildRecentTurns(history, findAgent, findPersonName),
       ArtifactVersions: [],
-      AllowedAgentIDs: this.AllowedAgentIDs
+      AllowedAgentIDs: this.AllowedAgentIDs,
+      AllowNoAgentOption: allowNoAgentOption
     };
+  }
+
+  private findRoutingRunnableAgent(
+    agentId: string,
+    runnable: readonly MJAIAgentEntityExtended[],
+    findAgent: (id: string) => MJAIAgentEntityExtended | undefined
+  ): RoutingCatalogAgent | undefined {
+    const fromAutocomplete = runnable.find(a => UUIDsEqual(a.ID, agentId));
+    if (fromAutocomplete) {
+      return fromAutocomplete;
+    }
+    if (this.AllowedAgentIDs != null && IsAgentAllowed(agentId, this.AllowedAgentIDs)) {
+      const candidate = findAgent(agentId);
+      if (candidate && this.isRunnableRestrictedAgent(candidate)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * True when a restricted agent (`IsRestricted`) passes the same runnability checks the '@' list
+   * (`MentionAutocomplete._initializeInternal`) applies to unrestricted agents: active, top-level,
+   * not a sub-agent, and runnable by the current user.
+   */
+  private isRunnableRestrictedAgent(candidate: MJAIAgentEntityExtended): boolean {
+    if (!candidate.IsRestricted || candidate.ParentID || candidate.Status !== 'Active' || candidate.InvocationMode === 'Sub-Agent') {
+      return false;
+    }
+    return this.canCurrentUserRunAgent(candidate);
+  }
+
+  private canCurrentUserRunAgent(agent: MJAIAgentEntityExtended): boolean {
+    const user = this.CurrentUser;
+    if (!user) {
+      return false;
+    }
+    if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
+      return true;
+    }
+    try {
+      const agentPermissions = AIEngineBase.Instance.AgentPermissions.filter(p => UUIDsEqual(p.AgentID, agent.ID));
+      if (agentPermissions.length === 0) {
+        return true;
+      }
+      const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+      return agentPermissions.some(
+        p =>
+          (UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.Has(p.RoleID))) &&
+          (p.CanDelete === true || p.CanEdit === true || p.CanRun === true)
+      );
+    } catch {
+      return false;
+    }
   }
 
   /** Every participant's artifact versions on the path of `branchId` in this conversation, for the artifact question. */
@@ -2421,10 +2492,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /** The agent each route would use for this conversation, before the host's rules apply. */
-  private agentTurnCandidates(mentionedAgentIds: readonly string[]): AgentTurnCandidates {
+  private agentTurnCandidates(
+    mentionedAgentIds: string[],
+    mentionedUserIds: string[] = [],
+    parentId: string | null = null,
+    senderUserId: string | null = this.CurrentUser?.ID ?? null
+  ): AgentTurnCandidates {
+    const parentRow = parentId
+      ? this.ConversationHistory.find(row => this.isWithinHistoryFloor(row) && UUIDsEqual(row.ID, parentId))
+      : undefined;
     return {
       MentionedAgentIds: mentionedAgentIds,
-      ContinuityAgentId: this.findLastNonSageAgentId(),
+      MentionedUserIds: mentionedUserIds,
+      ReplyParentAgentId: parentRow?.Role === 'AI' ? (parentRow.AgentID ?? null) : null,
+      ReplyParentIsHuman:
+        parentRow?.Role === 'User' &&
+        !!parentRow.UserID &&
+        (!senderUserId || !UUIDsEqual(parentRow.UserID, senderUserId)),
+      ContinuityAgentId: this.AgentReplyMode === 'MentionOnly' ? this.findLastReplyAgentId() : this.findLastNonSageAgentId(),
       ConversationDefaultAgentId: this.ConversationDefaultAgentId,
       HostDefaultAgentId: this.DefaultAgentId,
       ConversationManagerAgentId: this.ConverationManagerAgent?.ID ?? null
@@ -2433,22 +2518,25 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Picks the agent that answers this message and the route that chose it, or null for no turn.
-   * A routing decision, when there was one, is applied to the candidates first.
    */
-  private resolveAgentTurnTarget(
-    candidates: AgentTurnCandidates,
-    routing: RoutingDecisionOutcome | null
-  ): AgentTurnTarget | null {
+  private resolveAgentTurnTarget(candidates: AgentTurnCandidates): AgentTurnTarget | null {
     return ResolveAgentTurn(
-      ApplyRoutingDecision(candidates, routing),
+      candidates,
       this.agentTurnRules,
-      agentId => this.isKnownAgent(agentId)
+      agentId => this.isKnownAgent(agentId),
+      agentId => this.isRunnableAgent(agentId)
     );
   }
 
   /** The agents a message tags, in the order they appear. */
   private agentMentionIds(mentionResult: MentionParseResult): string[] {
     return mentionResult.mentions.filter(m => m.type === 'agent').map(m => m.id);
+  }
+
+  /** The people a message tags (`@Person`), in the order they appear. */
+  private userMentionIds(mentionResult: MentionParseResult): string[] {
+    const fromMentions = mentionResult.mentions.filter(m => m.type === 'user').map(m => m.id);
+    return fromMentions.length > 0 ? fromMentions : (mentionResult.userMentions ?? []).map(m => m.id);
   }
 
   /**
@@ -2480,11 +2568,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Settles a message that starts no agent turn — `MentionOnly` with no tagged agent, no allowed
-   * agent left, or a turn declined in {@link BeforeAgentTurn}. Nothing new is written; the
-   * person's own row is only confirmed Complete.
+   * Settles a message that starts no agent turn — `MentionOnly` with no tagged agent, a message
+   * addressed to a person, no allowed agent left, or a turn declined in {@link BeforeAgentTurn}.
+   * Nothing new is written; the person's own row is only confirmed Complete.
    */
-  private async finishWithoutAgentTurn(userMessage: MJConversationDetailEntity, reason: 'NoAgent' | 'Declined'): Promise<void> {
+  private async finishWithoutAgentTurn(
+    userMessage: MJConversationDetailEntity,
+    reason: 'NoAgent' | 'Declined' | 'AddressedToHuman'
+  ): Promise<void> {
     // Under the default rules a turn always has somewhere to go, so reaching here with no agent
     // means MJ's conversation manager failed to load. Say so rather than sit silent.
     if (reason === 'NoAgent' && this.AgentReplyMode === 'Always' && this.AllowedAgentIDs == null) {
@@ -2640,6 +2731,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this.findLastNonSageReply()?.AgentID || null;
   }
 
+  /**
+   * The newest reply from any agent (including Sage) within {@link AgentHistoryFrom} — used under
+   * `MentionOnly`, where the conversation manager is not an implicit fallback and is only present
+   * when explicitly tagged.
+   */
+  private findLastReplyAgentId(): string | null {
+    return this.ConversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && !!msg.AgentID && this.isWithinHistoryFloor(msg))?.AgentID || null;
+  }
+
   /** True when a row was written at or after {@link AgentHistoryFrom}; always true without one. */
   private isWithinHistoryFloor(detail: MJConversationDetailEntity): boolean {
     const floor = this.AgentHistoryFrom;
@@ -2653,6 +2756,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** True when the agent is in the client's agent catalog. */
   private isKnownAgent(agentId: string): boolean {
     return AIEngineBase.Instance.ReadableAgents.some(a => UUIDsEqual(a.ID, agentId));
+  }
+
+  /**
+   * True when the current user can run the agent directly in this chat: it is in the '@' list
+   * (`GetAvailableAgents`) or is an allowed restricted agent that passes the same active,
+   * top-level, non-sub-agent, and run-permission checks.
+   */
+  private isRunnableAgent(agentId: string): boolean {
+    const runnable = (this.mentionAutocomplete ?? MentionAutocompleteService.Instance).GetAvailableAgents();
+    const findAgent = (id: string): MJAIAgentEntityExtended | undefined =>
+      AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, id));
+    return this.findRoutingRunnableAgent(agentId, runnable, findAgent) != null;
   }
 
   /** The agent's name, when the client's agent catalog has it. */
@@ -3312,8 +3427,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.showDelegateReply(first.reply, userMessage);
         return;
       }
-      // A post-ACK disconnect means the first run may still be executing — do not start a second run.
-      if (agentFailureDisposition(first.result).status === 'In-Progress') {
+      // Only a genuine failure earns a retry. A post-ACK disconnect means the first run may still
+      // be executing on this detail, and an Awaiting-Input run is parked on the user — re-invoking
+      // in either case starts a second run against a live one, and for the awaiting run it throws
+      // away the question the agent is waiting to have answered.
+      if (agentFailureDisposition(first.result).status !== 'Error') {
         await this.applyAgentFailureToDetail(first.reply, userMessage, agentName, first.result);
         return;
       }
@@ -3890,6 +4008,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * follows the row until the server writes a terminal status. A placeholder the server never
    * acknowledged shows the failure on screen only.
    *
+   * A run in AwaitingFeedback/Paused is not a failure at all — the agent asked this user a
+   * question, or is parked on a workflow. It only reaches here because the envelope says
+   * `success: false`, and because such a run usually carries no ErrorMessage it used to render as
+   * "❌ failed — Unknown error": a verdict the server never returned. That branch surfaces the
+   * agent's question and completes the bubble instead.
+   *
    * Always completes the user message — the user turn finished regardless of what the agent is doing.
    */
   private async applyAgentFailureToDetail(
@@ -3900,6 +4024,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     failedVerb = 'failed',
   ): Promise<void> {
     const disposition = agentFailureDisposition(result);
+    if (disposition.status === 'Awaiting-Input') {
+      // Complete, not Error: the turn is over (the timer must stop) and the agent's question is
+      // the reply. `result` is passed through so any ResponseForm the agent attached to its
+      // question still renders. The user's answer resumes the run, which re-enters
+      // AgentStateService's active set as Running.
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        disposition.message || `**${agentName}** needs more information to continue — please reply with details.`,
+        'Complete',
+        result ?? undefined,
+      );
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      return;
+    }
     if (disposition.status === 'In-Progress' && agentResponseMessage.IsSaved) {
       await agentResponseMessage.Load(agentResponseMessage.ID);
       if (agentResponseMessage.Status === 'In-Progress') {

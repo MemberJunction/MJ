@@ -1,5 +1,76 @@
 # @memberjunction/metadata-sync
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 96c44bf: `mj sync push` writes SQL that works on any database, and handles deletes and `@file:` changes correctly.
+  - A value that came from an `@lookup`, as a primary key or a foreign key, is captured as a subquery on its natural key instead of this database's ID, so Metadata_Sync migrations update the right row everywhere (#5626, #3619).
+  - `--formatAsMigration` rewrites every schema declared in `schemaPlaceholders`, so Open App migrations call core procedures in the core schema (#3618).
+  - Deletes run in true dependency order regardless of file order, and a row a cascade already removed is skipped with a warning (#4935).
+  - `--incremental` notices when only an `@file:` target changed (#4190). Stored checksums predate this, so the first `--incremental` push after upgrading processes the whole tree once.
+  - New `sqlLogging.escapeFlywaySyntax` escapes `${...}` in string data of a plain (non-migration) log; a migration-formatted log always escapes.
+  - A seed whose primary key misses but whose natural key matches an existing row fails with a message naming that row; the CodeGen-granted permission seeds are now keyed by natural key (#4400).
+  - Template parameter extraction never marks `_`-prefixed system variables as required (#5156).
+
+### Patch Changes
+
+- f7d5ab5: Ten small fixes:
+  - Vector indexing treats field names with `pin`, `otp`, `passcode` or `biometric` as sensitive (#5670).
+  - `DropboxFileStorage.ListObjects` no longer makes an extra account call or logs the account email on every listing (#4440).
+  - The folder dialog's "Everyone" hint says a shared folder can't be made private again (#4817), and a stray indent is fixed (#4818).
+  - The entity save inconsistency warning is saved to the error log with a code that fits the column, and a failed save logs why (#6024).
+  - The SQL converter's jsonb guard compares an unquoted schema name in lower case, matching how PostgreSQL stores it (#5864).
+  - CodeGen's built-in feature defaults enable form-layout generation under the name the code checks (#5827), and the validator count no longer counts duplicates (#4376).
+  - `mj sync push` honors `sqlLogging.variableBatchThreshold`, default 200, as watch already did (#5556).
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [cc41d33]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [96c44bf]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [f75f559]
+- Updated dependencies [8ec184d]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [663ff80]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+- Updated dependencies [ced8414]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/core-entities-server@6.2.0-edge.6
+  - @memberjunction/generic-database-provider@6.2.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.6
+  - @memberjunction/sql-dialect@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.6
+  - @memberjunction/network-utils@6.2.0-edge.6
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.6
+  - @memberjunction/record-graph@6.2.0-edge.6
+  - @memberjunction/cli-core@6.2.0-edge.6
+  - @memberjunction/config@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes

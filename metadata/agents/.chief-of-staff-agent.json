@@ -30,9 +30,9 @@
       },
       "RerankerConfiguration": {
         "enabled": true,
-        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v5.0-fast",
         "retrievalMultiplier": 3,
-        "minRelevanceThreshold": 0.5,
+        "minRelevanceThreshold": 0.02,
         "fallbackOnError": true
       },
       "TypeConfiguration": {
@@ -49,8 +49,8 @@
               "Get My Calendar Events and Availability",
               "Manage My Calendar Event",
               "Manage My Email Inbox and Drafts",
-              "Chief of Staff Inter-Agent Request",
-              "Prepare Chief of Staff Outbound Call",
+              "Send Inter-Agent Request",
+              "Prepare Outbound Call Brief",
               "Query Scheduled Jobs",
               "Web Search"
             ]
@@ -200,29 +200,29 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Chief of Staff Inter-Agent Request",
+            "ActionID": "@lookup:MJ: Actions.Name=Send Inter-Agent Request",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E23"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:19:38.164Z",
-            "checksum": "7750fae73eb04a1b7893c15e66aa5657665a08f645ba83cbaa690b5600e91c00"
+            "lastModified": "2026-10-27T15:09:49.220Z",
+            "checksum": "3599880dc4cc7627b079406b7da7804496af814ea28518463ec79d89dcbb6b84"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Prepare Chief of Staff Outbound Call",
+            "ActionID": "@lookup:MJ: Actions.Name=Prepare Outbound Call Brief",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E24"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:19:38.185Z",
-            "checksum": "6e970ae7fde9d28185de6023dd9db71206bac42e1495cbe2f476f6f72db40f0c"
+            "lastModified": "2026-10-27T15:09:49.225Z",
+            "checksum": "dc1a0f612ffc3edda3a3a2d19b2bbed484b5a7497a7e294c24fe5c00bab70c4e"
           }
         },
         {
@@ -504,8 +504,8 @@
       "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:37.963Z",
-      "checksum": "0696b3becf69d23316a8857286c7f79f40e8ebc155d14d193e88c6ecb335b485"
+      "lastModified": "2026-10-27T15:09:49.185Z",
+      "checksum": "79439f8da2483e97467add56fbf51b7454c43914483072a9b71c4a82d6822f45"
     }
   }
 ]

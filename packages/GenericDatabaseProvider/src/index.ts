@@ -31,15 +31,22 @@ export {
 // Side-effect import: registers the startup sweep that reports a system user which has lost
 // field-level access on an FLS-enabled entity.
 export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
-export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
-export { SqlLoggingSessionImpl } from './SqlLogger.js';
+export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
+export { SqlLoggingSessionImpl, SCHEMA_PLACEHOLDER_LOOKBEHIND } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
 export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 export type { RowCapOutcome, RowCapMethod, RowCapResult } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
+export { SafetyGate, QuerySafetyError, IsQuerySafetyError } from './composition/safetyGate.js';
 export { SymbolTable } from './symbolTable.js';
 // Re-export from @memberjunction/sql-parser for backward compatibility
 export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, ParseToIR, RenderIR } from '@memberjunction/sql-parser';
 export type { OrderByAnalysis, QueryIR, CTENode, Fragment, SQLFragment, TemplateExprFragment, BlockFragment, CommentFragment, CompositionRefFragment, CTEOrigin } from '@memberjunction/sql-parser';
+export { DescribeStatementFailure, DescribeStatementSuccess, BaseTypeOf } from './describeStatement.js';
+export type { DescribedColumn, DescribedColumnSource, DescribeStatementResult } from './describeStatement.js';
+export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue, NamedQueryParameter, IsNamedQueryParameterList } from './typedQueryParameter.js';
+export type { TypedQueryParameterValue } from './typedQueryParameter.js';
+export { StatementMemo } from './statementMemo.js';
+export { FindProjectionStars } from './fieldSecurity/projectionStars.js';

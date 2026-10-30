@@ -10,4 +10,6 @@
 export * from './types';
 export * from './artifact-store';
 export * from './seams';
+export * from './as-of-refusal';
+export * from './locked-holdout';
 export * from './training-engine';

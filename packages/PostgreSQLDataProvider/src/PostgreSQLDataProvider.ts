@@ -27,7 +27,12 @@ import {
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
+import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+    DescribeCatalogParameters, DescribeWrapperSQL, FieldDescriptionOf, MapPostgreSQLDescribeFields, POSTGRESQL_DESCRIBE_CATALOG_SQL, POSTGRESQL_DESCRIBE_TIMEOUT_MS,
+    type PostgreSQLDescribeCatalogRow,
+} from './statementDescription.js';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
@@ -507,6 +512,41 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
     }
 
+    /**
+     * Describes the result set of `sqlText`: it runs as `SELECT * FROM (<sql>) _q LIMIT 0` on a
+     * connection of its own, inside a read-only transaction that is always rolled back, with JIT
+     * off and a statement timeout, so no row is read and nothing it does persists. The sources
+     * come from the row description's table and column numbers. The SQL is auto-quoted as
+     * {@link ExecuteSQL} would quote it, so the description is of the statement that would run.
+     */
+    public override async DescribeStatement(sqlText: string, _contextUser?: UserInfo): Promise<DescribeStatementResult> {
+        let client: pg.PoolClient | null = null;
+        try {
+            client = await this._connectionManager.AcquireClient();
+            return await this.describeInReadOnlyTransaction(client, DescribeWrapperSQL(this.AutoQuoteIdentifiers(sqlText)));
+        } catch (e) {
+            return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (client) await this.releaseOwnConnection(client);
+        }
+    }
+
+    /** Runs the describe wrapper and its catalog lookup in a read-only transaction that is rolled back. */
+    private async describeInReadOnlyTransaction(client: pg.PoolClient, wrapper: string): Promise<DescribeStatementResult> {
+        await client.query('BEGIN READ ONLY');
+        try {
+            await client.query('SET LOCAL jit = off');
+            await client.query(`SET LOCAL statement_timeout = ${this.effectiveTimeoutMs(POSTGRESQL_DESCRIBE_TIMEOUT_MS) ?? POSTGRESQL_DESCRIBE_TIMEOUT_MS}`);
+            const fields = (await client.query(wrapper)).fields.map(FieldDescriptionOf);
+            const catalog = fields.length === 0
+                ? { rows: [] as PostgreSQLDescribeCatalogRow[] }
+                : await client.query<PostgreSQLDescribeCatalogRow>(POSTGRESQL_DESCRIBE_CATALOG_SQL, DescribeCatalogParameters(fields));
+            return MapPostgreSQLDescribeFields(fields, catalog.rows);
+        } finally {
+            await client.query('ROLLBACK').catch(() => undefined);
+        }
+    }
+
     // ─── Colocated vector host (IColocatedVectorHost) ────────────────
     // Lets a colocated vector provider (e.g. PgVectorColocated) store and query vectors
     // in THIS database, reusing this connection — and, when a transaction is open, the
@@ -861,9 +901,13 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     /**
      * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
      * when transaction variables require regenerating the SQL instruction.
+     *
+     * @param client - The client whose transaction the save will run in, when one is already
+     *   open. A read the save's Record Change snapshot needs runs on it, so it sees that
+     *   transaction's earlier writes.
      */
-    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
-        return this.GenerateSaveSQL(entity, isNew, user);
+    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo, client?: pg.PoolClient): Promise<SaveSQLResult> {
+        return this.GenerateSaveSQLReadingOn(entity, isNew, user, client);
     }
 
     // GenerateSaveSQL is now inherited from GenericDatabaseProvider — the
@@ -1095,7 +1139,7 @@ SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
         const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
         if (this.ShouldTrackRecordChanges(entityInfo) && options?.SkipRecordChanges !== true) {
-            const oldData = entity.GetAll(false);
+            const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
             const recordID = this.buildRecordIDFromEntity(entity);
             // Delete: newData is null so the payload renders Source/lineage from
             // the entity's RestoreContext (usually NULL — supported for symmetry).

@@ -161,6 +161,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
   private _viewEntity: MJUserViewEntityExtended | null = null;
+  private _alternateBaseView: string | null = null;
   private _initialized = false;
 
   /**
@@ -455,6 +456,37 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
+   * Optional semantic `Name` of a registered alternate base view on the entity (`MJ: Entity Alternate Base Views.Name`).
+   * When provided, takes precedence over `ViewEntity.AlternateBaseView` for all `RunView` / `RunViews` queries.
+   */
+  @Input()
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
+  }
+  set AlternateBaseView(value: string | null) {
+    const normalized = value?.trim() || null;
+    const previous = this._alternateBaseView;
+    this._alternateBaseView = normalized;
+
+    if (this._initialized && normalized !== previous) {
+      this.pushDynamicRendererInputs();
+      if (this._entity && !this._records) {
+        this.resetPaginationState(false);
+        this.deferReload();
+      }
+    }
+  }
+
+  /**
+   * Effective alternate base view semantic name: explicit `[AlternateBaseView]` input wins over
+   * `ViewEntity.AlternateBaseView`.
+   */
+  public get EffectiveAlternateBaseView(): string | null {
+    const raw = this._alternateBaseView ?? this.ViewEntity?.AlternateBaseView ?? null;
+    return raw?.trim() || null;
+  }
+
+  /**
    * Values for the view's declared properties (`MJ: User Views.Properties`), keyed by property
    * name. Used only when the view declares properties: the viewer then runs the view by its ID with
    * these values, so the server applies the view's own filter and every property, including those
@@ -486,7 +518,6 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /** The server's message when a view with properties could not be run (for example, a refused value). */
   public ViewRunError: string | null = null;
-
   private _gridState: ViewGridState | null = null;
 
   /**
@@ -1319,14 +1350,17 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   public BuildViewTargetParams(entity: EntityInfo): RunViewParams {
     const view = this._viewEntity;
+    const altBaseView = this.EffectiveAlternateBaseView || undefined;
+    const abvSpread = altBaseView ? { AlternateBaseView: altBaseView } : {};
     if (!view || !this.ViewHasProperties) {
-      return { EntityName: entity.Name, ExtraFilter: view?.WhereClause || undefined };
+      return { EntityName: entity.Name, ExtraFilter: view?.WhereClause || undefined, ...abvSpread };
     }
     return {
       EntityName: entity.Name,
       ViewID: view.ID,
       ViewEntity: view,
       Properties: { ...(this._properties ?? {}) },
+      ...abvSpread,
       // A stored view returns only its saved columns; ask for what the dynamic run returns, so
       // every view type and the export get the same columns either way.
       Fields: entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => f.Name),
@@ -1450,19 +1484,23 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
           totalCount: total
         });
       } else {
-        if (this.isInitialLoad) {
-          this.InternalRecords = [];
-        }
+        this.InternalRecords = [];
         this.TotalRecordCount = 0;
         this.FilteredRecordCount = 0;
+        this.Pagination.totalRecords = 0;
+        if (result.ErrorMessage) {
+          LogError(`[EntityViewer] Failed to load data for "${entity.Name}": ${result.ErrorMessage}`);
+          MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage, 'error', 5000);
+        }
       }
     } catch (error) {
       this.ViewRunError = this.ViewHasProperties ? (error instanceof Error ? error.message : String(error)) : null;
-      if (this.isInitialLoad) {
-        this.InternalRecords = [];
-      }
+      this.InternalRecords = [];
       this.TotalRecordCount = 0;
       this.FilteredRecordCount = 0;
+      this.Pagination.totalRecords = 0;
+      const errMsg = error instanceof Error ? error.message : String(error);
+      LogError(`[EntityViewer] Exception loading data for "${entity.Name}": ${errMsg}`);
     } finally {
       // Use ngZone.run() to ensure state changes trigger change detection.
       // With es2022 native async/await + zone.js 0.16, the await resumes
@@ -2140,6 +2178,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setDynamicInput(ref, 'page', this.Pagination.currentPage + 1);
     this.setDynamicInput(ref, 'pageSize', this.Pagination.pageSize);
     this.setDynamicInput(ref, 'isLoading', this.IsLoading);
+    this.setDynamicInput(ref, 'alternateBaseView', this.EffectiveAlternateBaseView);
   }
 
   // ========================================
