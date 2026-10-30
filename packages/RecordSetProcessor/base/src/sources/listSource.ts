@@ -8,6 +8,7 @@
 import { CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { IRecordSetSource, SourceDescriptor } from '../interfaces';
 import { ProcessCursor, RecordBatch, RecordRef } from '../types';
+import { ReadSizeForBatch } from './sourceUtil';
 
 /** A source backed by a List (its members, via List Details). */
 export class ListSource implements IRecordSetSource {
@@ -59,7 +60,7 @@ export class ListSource implements IRecordSetSource {
             Fields: ['ID', 'RecordID'],
             OrderBy: 'ID',
             ResultType: 'simple',
-            MaxRows: batchSize,
+            MaxRows: ReadSizeForBatch(batchSize),
             BypassCache: true,
             ...(legacyOffset != null
                 ? { StartRow: legacyOffset }
@@ -68,7 +69,7 @@ export class ListSource implements IRecordSetSource {
         if (!result.Success) {
             throw new Error(`ListSource: failed loading members for list '${this.listID}': ${result.ErrorMessage}`);
         }
-        const rows = (result.Results ?? []) as { ID?: string; RecordID: string }[];
+        const rows = ((result.Results ?? []) as { ID?: string; RecordID: string }[]).slice(0, batchSize);
         const records: RecordRef[] = rows.map((row) => ({ EntityID: entityID, RecordID: String(row.RecordID) }));
         const lastRowId = rows.length > 0 ? rows[rows.length - 1].ID : undefined;
         const lastId = lastRowId != null ? String(lastRowId) : cursor?.Key;

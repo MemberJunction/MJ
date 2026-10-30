@@ -214,7 +214,7 @@
     top: 1px;
     width: 4px;
     height: 9px;
-    border: solid white;
+    border: solid var(--mj-brand-on-primary);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
 }
@@ -250,7 +250,7 @@
 
 .btn-primary {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border-color: var(--mj-brand-primary);
 }
 
