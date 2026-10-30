@@ -3,6 +3,7 @@ import type { HoldoutSplit, SnapshotRowKey } from '../index';
 import {
   DEFAULT_YEAR_CUTOFF_SHARE,
   HoldoutCarve,
+  HoldoutCarveDateError,
   type CarveRow,
 } from '../holdout-carve';
 
@@ -66,6 +67,19 @@ describe('HoldoutCarve.CarveLockedHoldout', () => {
     expect(HoldoutCarve.CarveLockedHoldout(personYears(), holdout('2019-01-01'))).toEqual({ Ok: false, Refusal: { kind: 'no-development-rows', cutoff: '2019-01-01' } });
     expect(HoldoutCarve.CarveLockedHoldout([row('x', 'P1', 'not-a-date')], holdout('2024-01-01'))).toEqual({ Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: 'x', value: 'not-a-date' } });
   });
+  it('carves a zone-less date-time on its own date part, whatever the host time zone', () => {
+    // 20:00 on 31 December is 01:00 on 1 January UTC when read as New York local time; the carve reads the day 2023-12-31.
+    const r = HoldoutCarve.CarveLockedHoldout(
+      [row('a', 'P1', '2023-06-01'), row('b', 'P1', '2023-12-31T20:00:00'), row('c', 'P1', '2024-01-01T00:30:00-05:00')],
+      holdout('2024-01-01'),
+    );
+    if (!r.Ok) throw new Error('expected a carve');
+    expect(r.Deployment.Rows).toEqual([{ RowId: 'a', Role: 'development' }, { RowId: 'b', Role: 'development' }, { RowId: 'c', Role: 'locked-holdout' }]);
+  });
+  it('refuses a carve date that names no calendar day', () => {
+    expect(HoldoutCarve.CarveLockedHoldout([row('x', 'P1', '2024-02-30')], holdout('2024-01-01')))
+      .toEqual({ Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: 'x', value: '2024-02-30' } });
+  });
   it('refuses a window with no holdout rows and an unparseable cutoff or holdout end', () => {
     expect(HoldoutCarve.CarveLockedHoldout(personYears(), holdout('2030-01-01'))).toEqual({ Ok: false, Refusal: { kind: 'no-holdout-rows', cutoff: '2030-01-01', holdoutEnd: null } });
     expect(HoldoutCarve.CarveLockedHoldout(personYears(), holdout('soon'))).toEqual({ Ok: false, Refusal: { kind: 'unparseable-cutoff', value: 'soon' } });
@@ -92,6 +106,17 @@ describe('the new-entity report', () => {
     expect(r.NewEntity.TrainingRowIds.every((id) => Number(id.split(':')[1]) < 2024)).toBe(true);
     expect(r.NewEntity.HoldoutRowIds.every((id) => Number(id.split(':')[1]) >= 2024)).toBe(true);
     expect(r.NewEntity.TrainingRowIds.length + r.NewEntity.HoldoutRowIds.length + r.NewEntity.ExcludedRowCount).toBe(rows.length);
+  });
+  it('excludes and counts the held-out groups\' rows on or after the holdout end', () => {
+    const rows: CarveRow[] = [];
+    for (let e = 0; e < 10; e++) for (let year = 2015 + e; year <= 2025; year++) rows.push(row(`E${e}:${year}`, `E${e}`, `${year}-06-01`));
+    const r = HoldoutCarve.CarveLockedHoldout(rows, holdout('2024-01-01', '2025-01-01', 0.3));
+    if (!r.Ok || r.NewEntity === null) throw new Error('expected a new-entity carve');
+    expect([...r.NewEntity.HoldoutRowIds].sort()).toEqual(['E7:2024', 'E8:2024', 'E9:2024']);
+    // 65 rows: 42 training rows (E0–E6 before 2024) + 3 holdout rows + 20 excluded (E0–E6 from 2024, E7–E9 before 2024 and in 2025).
+    expect([r.NewEntity.TrainingRowIds.length, r.NewEntity.ExcludedRowCount]).toEqual([42, 20]);
+    const used = new Set([...r.NewEntity.TrainingRowIds, ...r.NewEntity.HoldoutRowIds]);
+    expect(rows.filter((x) => x.RowId.endsWith(':2025') && used.has(x.RowId))).toEqual([]);
   });
   it('is null when the protocol declares no new-entity report', () => {
     const r = HoldoutCarve.CarveLockedHoldout(personYears(), holdout('2024-01-01'));
@@ -134,6 +159,9 @@ describe('HoldoutCarve.SeededRandomCarve', () => {
 describe('HoldoutCarve.RollingOriginCarve', () => {
   it('holds out the last origins × horizon periods and refuses too short a series', () => {
     const r = HoldoutCarve.RollingOriginCarve(monthlyRows(60), rolling(5, 3, 0, 24));
+    const unsorted = HoldoutCarve.RollingOriginCarve([...monthlyRows(60)].reverse(), rolling(5, 3, 0, 24));
+    expect(unsorted.Ok && [...unsorted.HoldoutRowIds].sort()).toEqual(Array.from({ length: 15 }, (_, i) => `t${45 + i}`).sort());
+    expect(unsorted.Ok && unsorted.HoldoutPeriods[0]).toBe('2023-10-01');
     if (!r.Ok) throw new Error('expected a carve');
     expect(r.HoldoutRowIds).toHaveLength(15);
     expect(r.HoldoutRowIds[0]).toBe('t45');
@@ -176,6 +204,19 @@ describe('HoldoutCarve.YearCutoff, HoldoutPeriods, TrainingRowIds', () => {
     const eight = ['2020-02-01', '2020-03-01', '2020-04-01', '2020-05-01', '2020-06-01', '2022-01-01', '2023-05-01', '2024-05-01'];
     expect(HoldoutCarve.YearCutoff(eight)).toBe('2023-01-01');
     expect(HoldoutCarve.YearCutoff(eight, 0.2)).toBe('2024-01-01');
+  });
+  it('refuses a cutoff that would leave no row before it, and a date it cannot read', () => {
+    expect(() => HoldoutCarve.YearCutoff(['2024-01-01', '2024-06-01'])).toThrow('The cutoff would leave no training rows.');
+    expect(() => HoldoutCarve.YearCutoff(['2023-03-01', 'soon', '2024-03-01'])).toThrow(HoldoutCarveDateError);
+    expect(() => HoldoutCarve.YearCutoff(['2023-03-01', 'soon', '2024-03-01'])).toThrow('"soon" is not a date (yyyy-mm-dd); the holdout cannot be derived from it.');
+    expect(() => HoldoutCarve.HoldoutPeriods(['2024-01-01', '2024-13-01'], 'month')).toThrow(HoldoutCarveDateError);
+  });
+  it('starts a week on Monday and a quarter on its first month', () => {
+    // 2024-03-10 is a Sunday, 2024-03-11 a Monday.
+    expect(HoldoutCarve.HoldoutPeriods(['2024-03-10', '2024-03-11', '2024-03-17'], 'week')).toEqual(['2024-03-04', '2024-03-11']);
+    expect(HoldoutCarve.HoldoutPeriods(['2024-05-20', '2024-06-30', '2024-08-15', '2024-12-31'], 'quarter')).toEqual(['2024-04-01', '2024-07-01', '2024-10-01']);
+    expect(HoldoutCarve.HoldoutPeriods(['2024-05-20', '2024-05-20T23:59:00'], 'day')).toEqual(['2024-05-20']);
+    expect(HoldoutCarve.HoldoutPeriods(['2023-05-20', '2024-12-31'], 'year')).toEqual(['2023-01-01', '2024-01-01']);
   });
   it('lists each post-cutoff month once, in order', () => {
     expect(HoldoutCarve.HoldoutPeriods(['2024-03-15', '2024-01-02', '2024-03-01', '2024-02-28'], 'month')).toEqual(['2024-01-01', '2024-02-01', '2024-03-01']);

@@ -134,7 +134,13 @@ const carveRefusalSchema: z.ZodType<CarveRefusal> = z.discriminatedUnion('kind',
     gapPeriods: z.number().int(), minTrainPeriods: z.number().int(),
   }),
 ]);
+/** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
+type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
+/** Every holdout kind a stored carve summary may name; `satisfies` refuses a value that is not one. */
 const HOLDOUT_KINDS = ['date-carved', 'rolling-origin', 'seeded-random'] as const satisfies readonly HoldoutSplit['kind'][];
+/** Compile-time completeness: a `HoldoutSplit` kind added without listing it here breaks the build (a stored carve of that kind would otherwise be refused on read). */
+const holdoutKindsComplete: ListsEveryMember<HoldoutSplit['kind'], (typeof HOLDOUT_KINDS)[number]> = true;
+void holdoutKindsComplete;
 const nonNegativeCount = z.number().int().nonnegative();
 const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary> = z.object({
   kind: z.enum(HOLDOUT_KINDS),

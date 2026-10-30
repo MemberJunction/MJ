@@ -9,8 +9,9 @@
  * - seeded-random: a row-hash holdout for units with one fixed decision date (no date to carve on).
  * - rolling-origin: the last `origins × horizonPeriods` periods of a forecast series.
  *
- * Every carve depends only on dates, keys and the protocol, never on the order the rows were read in, so the same rows
- * always give the same holdout. Browser-safe: no node `crypto` (see {@link HoldoutCarve.SeededRandomCarve} for the hash).
+ * Every carve depends only on dates, keys and the protocol, never on the order the rows were read in or on the host's
+ * time zone (every date is read as the UTC day of its `yyyy-mm-dd` date part), so the same rows always give the same
+ * holdout. Browser-safe: no node `crypto` (see {@link HoldoutCarve.SeededRandomCarve} for the hash).
  */
 import { OrdinalCompare } from '@memberjunction/global';
 import type { HoldoutSplit } from './evaluation-protocol';
@@ -26,6 +27,14 @@ type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
  */
 export const DEFAULT_YEAR_CUTOFF_SHARE = 0.25;
 
+/** A date the carve reads (a carve date given to `YearCutoff` or `HoldoutPeriods`) that has no `yyyy-mm-dd` date part. */
+export class HoldoutCarveDateError extends RangeError {
+  constructor(public readonly Value: string) {
+    super(`"${Value}" is not a date (yyyy-mm-dd); the holdout cannot be derived from it.`);
+    this.name = 'HoldoutCarveDateError';
+  }
+}
+
 /** One unit row as the date carve reads it. */
 export interface CarveRow {
   readonly RowId: string;
@@ -35,7 +44,11 @@ export interface CarveRow {
    * folds group by, never the row id of a one-row-per-record unit.
    */
   readonly EntityKey: string;
-  /** ISO date the protocol carves on (the decision date, or the unit row's `dateColumn`). */
+  /**
+   * The date the protocol carves on (the decision date, or the unit row's `dateColumn`): a `yyyy-mm-dd` day, or a
+   * date-time whose date part is that day. The carve reads only the date part, as a UTC day, so a zone-less date-time
+   * never shifts across midnight with the host's time zone.
+   */
   readonly CarveDate: string;
   /** The label as text for classification units; null otherwise. */
   readonly Label: string | null;
@@ -126,6 +139,9 @@ interface DatedRow { readonly Row: CarveRow; readonly Time: number }
 
 interface CarveWindow { readonly Cutoff: number; readonly End: number | null }
 
+/** Where a carve date falls against the holdout window: before the cutoff, inside the window, or on or after its end. */
+type WindowPlace = 'before-cutoff' | 'in-window' | 'after-end';
+
 /**
  * Locked-holdout carves (static members on one owner). Ordering is `OrdinalCompare` from `@memberjunction/global`
  * (locale-independent), so results never depend on the host's locale.
@@ -187,15 +203,16 @@ export class HoldoutCarve {
 
   /**
    * The earliest 1 January whose trailing block (dates on or after it) holds at most `maxShare` of the rows; at least
-   * the last year's 1 January. Throws when no date parses or when that cutoff would leave no row before it.
+   * the last year's 1 January. Throws {@link HoldoutCarveDateError} on a date it cannot read (a dropped date would
+   * shrink the denominator), and a `RangeError` when there is no date or the cutoff would leave no row before it.
    */
   public static YearCutoff(dates: readonly string[], maxShare: number = DEFAULT_YEAR_CUTOFF_SHARE): string {
-    const times = dates.map((d) => Date.parse(d)).filter((t) => !Number.isNaN(t));
+    const times = dates.map((d) => HoldoutCarve.requireUtcDay(d));
     if (times.length === 0) throw new RangeError('YearCutoff needs at least one date.');
     const years = [...new Set(times.map((t) => new Date(t).getUTCFullYear()))].sort((a, b) => a - b);
-    let best = Date.UTC(years[years.length - 1] ?? 0, 0, 1);
+    let best = Date.UTC(years[years.length - 1] || 0, 0, 1);
     for (let i = years.length - 1; i >= 0; i--) {
-      const start = Date.UTC(years[i] ?? 0, 0, 1);
+      const start = Date.UTC(years[i] || 0, 0, 1);
       if (times.filter((t) => t >= start).length / times.length > maxShare) break;
       best = start;
     }
@@ -204,13 +221,14 @@ export class HoldoutCarve {
     return HoldoutCarve.iso(best);
   }
 
-  /** The distinct period starts (ISO dates, UTC) of the given dates, in order: one out-of-time slice per period. */
+  /**
+   * The distinct period starts (ISO dates, UTC) of the given dates, in order: one out-of-time slice per period. Weeks
+   * start on Monday, quarters on 1 January, April, July and October. Throws {@link HoldoutCarveDateError} on a date it
+   * cannot read.
+   */
   public static HoldoutPeriods(dates: readonly string[], period: DecisionSpec['period']): readonly string[] {
     const starts = new Set<string>();
-    for (const d of dates) {
-      const t = Date.parse(d);
-      if (!Number.isNaN(t)) starts.add(HoldoutCarve.periodStart(new Date(t), period));
-    }
+    for (const d of dates) starts.add(HoldoutCarve.periodStart(new Date(HoldoutCarve.requireUtcDay(d)), period));
     return [...starts].sort(OrdinalCompare);
   }
 
@@ -224,11 +242,11 @@ export class HoldoutCarve {
   }
 
   private static parseWindow(holdout: DateCarved): { readonly Ok: true; readonly Window: CarveWindow } | { readonly Ok: false; readonly Refusal: CarveRefusal } {
-    const cutoff = Date.parse(holdout.cutoff);
-    if (Number.isNaN(cutoff)) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.cutoff } };
+    const cutoff = HoldoutCarve.utcDay(holdout.cutoff);
+    if (cutoff === null) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.cutoff } };
     if (holdout.holdoutEnd === null) return { Ok: true, Window: { Cutoff: cutoff, End: null } };
-    const end = Date.parse(holdout.holdoutEnd);
-    if (Number.isNaN(end)) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.holdoutEnd } };
+    const end = HoldoutCarve.utcDay(holdout.holdoutEnd);
+    if (end === null) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.holdoutEnd } };
     return { Ok: true, Window: { Cutoff: cutoff, End: end } };
   }
 
@@ -236,8 +254,8 @@ export class HoldoutCarve {
   private static parseCarveDates(rows: readonly CarveRow[]): { readonly Ok: true; readonly Rows: readonly DatedRow[] } | { readonly Ok: false; readonly Refusal: CarveRefusal } {
     const dated: DatedRow[] = [];
     for (const row of rows) {
-      const time = Date.parse(row.CarveDate);
-      if (Number.isNaN(time)) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowId, value: row.CarveDate } };
+      const time = HoldoutCarve.utcDay(row.CarveDate);
+      if (time === null) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowId, value: row.CarveDate } };
       dated.push({ Row: row, Time: time });
     }
     dated.sort((a, b) => OrdinalCompare(a.Row.RowId, b.Row.RowId));
@@ -249,8 +267,9 @@ export class HoldoutCarve {
     const held: DatedRow[] = [];
     let excluded = 0;
     for (const d of dated) {
-      if (w.End !== null && d.Time >= w.End) excluded++;
-      else if (d.Time >= w.Cutoff) { kept.push({ RowId: d.Row.RowId, Role: 'locked-holdout' }); held.push(d); }
+      const place = HoldoutCarve.windowPlace(w, d.Time);
+      if (place === 'after-end') excluded++;
+      else if (place === 'in-window') { kept.push({ RowId: d.Row.RowId, Role: 'locked-holdout' }); held.push(d); }
       else kept.push({ RowId: d.Row.RowId, Role: 'development' });
     }
     return {
@@ -259,15 +278,24 @@ export class HoldoutCarve {
     };
   }
 
-  /** Holds out the newest `fraction` of groups (by first carve date) whole; at least one group. */
+  /**
+   * Holds out the newest `fraction` of groups (by first carve date) whole, at least one group: their rows inside the
+   * holdout window are the new-entity holdout; every other group's rows before the cutoff are its training rows; every
+   * other row is excluded and counted.
+   *
+   * The reference pipeline (`date_grouped_carve`) holds out a seeded-random 30 % of groups instead. This carve holds out
+   * the newest groups, as the protocol's report is defined here: it measures the model on the groups that appeared most
+   * recently, the ones a deployed model meets first. A gate that compares this report with the reference measures two different
+   * group selections and must read its numbers knowing that.
+   */
   private static carveNewEntities(dated: readonly DatedRow[], w: CarveWindow, fraction: number): NewEntityCarve {
     const held = HoldoutCarve.newestEntityKeys(dated, fraction);
     const training: DatedRow[] = [];
     const holdout: DatedRow[] = [];
     for (const d of dated) {
-      const inWindow = d.Time >= w.Cutoff && (w.End === null || d.Time < w.End);
-      if (held.has(d.Row.EntityKey)) { if (inWindow) holdout.push(d); }
-      else if (d.Time < w.Cutoff) training.push(d);
+      const place = HoldoutCarve.windowPlace(w, d.Time);
+      if (held.has(d.Row.EntityKey)) { if (place === 'in-window') holdout.push(d); }
+      else if (place === 'before-cutoff') training.push(d);
     }
     const trainingKeys = new Set(training.map((d) => d.Row.EntityKey));
     return {
@@ -336,6 +364,32 @@ export class HoldoutCarve {
     h = Math.imul(h, 0xc2b2ae35);
     h ^= h >>> 16;
     return h >>> 0;
+  }
+
+  /** The one holdout window rule both carves read: before the cutoff, on or after it and before `holdoutEnd`, or on or after `holdoutEnd`. */
+  private static windowPlace(w: CarveWindow, time: number): WindowPlace {
+    if (w.End !== null && time >= w.End) return 'after-end';
+    return time >= w.Cutoff ? 'in-window' : 'before-cutoff';
+  }
+
+  /**
+   * The UTC midnight (ms) of a date's `yyyy-mm-dd` date part, read the way the unit row reader reads a date string;
+   * null when the text has no such part or names no calendar day (`2024-02-30`). A time and zone after the date part
+   * are ignored, so the day never depends on the host's time zone.
+   */
+  private static utcDay(text: string): number | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(text.trim());
+    if (m === null) return null;
+    const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const time = Date.UTC(year, month - 1, day);
+    const back = new Date(time);
+    return back.getUTCFullYear() === year && back.getUTCMonth() === month - 1 && back.getUTCDate() === day ? time : null;
+  }
+
+  private static requireUtcDay(text: string): number {
+    const time = HoldoutCarve.utcDay(text);
+    if (time === null) throw new HoldoutCarveDateError(text);
+    return time;
   }
 
   private static iso(time: number): string {
