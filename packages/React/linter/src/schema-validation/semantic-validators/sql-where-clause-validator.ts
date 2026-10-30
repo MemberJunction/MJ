@@ -44,7 +44,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { SemanticValidator } from './semantic-validator';
 import { ValidationContext } from './validation-context';
 import { PropValueExtractor } from '../../prop-value-extractor';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { StrictFragmentValidator } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { GetDialect } from '@memberjunction/sql-dialect';
 
@@ -194,23 +194,18 @@ export class SqlWhereClauseValidator extends SemanticValidator {
   ): ConstraintViolation[] {
     const violations: ConstraintViolation[] = [];
 
-    // Parse WHERE clause using SQLParser (wraps node-sql-parser with FOR XML workaround)
+    // Parse the WHERE clause strictly, exactly as written (no parentheses added, no fallback
+    // re-parse), and collect the column references in it.
     const dialect = context.Dialect ?? DEFAULT_DIALECT;
-    const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`, dialect);
-    if (!ast) {
+    const parsed = StrictFragmentValidator.ValidateFilter(whereClause, dialect, {
+      Placement: 'AsWritten',
+      AllowFallbackParse: false,
+      CollectColumnReferences: true,
+    });
+    if (!parsed.Parsed || !parsed.ColumnReferences) {
       throw new Error('Failed to parse WHERE clause');
     }
-
-    // Extract column references from AST
-    const columnRefs = new Set<string>();
-    const statements = Array.isArray(ast) ? ast : [ast];
-
-    for (const statement of statements) {
-      // Type guard: check if statement has a where clause
-      if (statement && typeof statement === 'object' && 'where' in statement && statement.where) {
-        this.extractColumnReferences(statement.where, columnRefs);
-      }
-    }
+    const columnRefs = parsed.ColumnReferences;
 
     // Validate each column reference
     for (const col of columnRefs) {
@@ -294,71 +289,6 @@ export class SqlWhereClauseValidator extends SemanticValidator {
     }
 
     return violations;
-  }
-
-  /**
-   * Extract column references from SQL AST
-   *
-   * Pattern based on MJQueryEntity.extractColumnReferences (lines 563-590)
-   * Recursively traverses the AST to find all column_ref nodes.
-   *
-   * @param expr - Expression node from AST
-   * @param referencedColumns - Set to collect column names
-   */
-  private extractColumnReferences(expr: any, referencedColumns: Set<string>): void {
-    if (!expr || typeof expr !== 'object') return;
-
-    // Column reference found
-    if (expr.type === 'column_ref') {
-      // Handle qualified names (table.column)
-      const colName = expr.table ? `${expr.table}.${expr.column}` : expr.column;
-      if (typeof colName === 'string') {
-        referencedColumns.add(colName);
-      }
-      return;
-    }
-
-    // Skip SQL functions - these are not field references
-    // But still check function arguments for column references
-    if (expr.type === 'function') {
-      if (expr.args) {
-        const args = expr.args.value || expr.args;
-        const argsArray = Array.isArray(args) ? args : [args];
-        for (const arg of argsArray) {
-          if (arg) this.extractColumnReferences(arg, referencedColumns);
-        }
-      }
-      return;
-    }
-
-    // Recursively traverse binary expressions (AND, OR, comparisons)
-    if (expr.left) this.extractColumnReferences(expr.left, referencedColumns);
-    if (expr.right) this.extractColumnReferences(expr.right, referencedColumns);
-
-    // Handle IN clauses and arrays
-    if (expr.value && Array.isArray(expr.value)) {
-      for (const item of expr.value) {
-        this.extractColumnReferences(item, referencedColumns);
-      }
-    }
-
-    // Handle CASE expressions
-    if (expr.result) this.extractColumnReferences(expr.result, referencedColumns);
-    if (expr.expr) this.extractColumnReferences(expr.expr, referencedColumns);
-
-    // Handle function args (different structure than type:'function')
-    if (expr.args) {
-      const args = Array.isArray(expr.args) ? expr.args : [expr.args];
-      for (const arg of args) {
-        if (arg && typeof arg === 'object') {
-          if (arg.value) {
-            this.extractColumnReferences(arg.value, referencedColumns);
-          } else {
-            this.extractColumnReferences(arg, referencedColumns);
-          }
-        }
-      }
-    }
   }
 
   /**

@@ -6,6 +6,7 @@ import { QueryCompositionEngine } from '@memberjunction/generic-database-provide
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { NoLog } from '../logging/NoLog.js';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { GetDbType } from '../index.js';
 import { GetSystemUser } from '../auth/index.js';
@@ -125,9 +126,9 @@ export class GetDataResolver {
             });
             LogStatus(`GetData invoked: ${input.Queries.length} queries`);
 
-            // validate the token
+            // validate the token (never echo the raw token into error messages or logs — Token is @NoLog)
             if (!IsTokenValid(input.Token)) {
-                throw new Error(`Token ${input.Token} is not valid or has expired`);
+                throw new Error('Access token is not valid or has expired');
             }
 
             // Use the read-only connection for executing queries
@@ -297,6 +298,26 @@ const __accessTokens: GetDataAccessToken[] = [];
 const __defaultTokenLifeSpan = 1000 * 60 * 5; // 5 minutes
 
 /**
+ * Non-short-circuiting constant-time scan over active access tokens: hashes the presented token
+ * once and compares against every stored token digest with `timingSafeEqual` without breaking early,
+ * so neither prefix similarity, token length, nor array index leaks through timing.
+ */
+function findMatchingAccessTokenIndex(token: string): number {
+    if (typeof token !== 'string' || token.length === 0) {
+        return -1;
+    }
+    const targetDigest = createHash('sha256').update(token).digest();
+    let matchedIndex = -1;
+    for (let i = 0; i < __accessTokens.length; i++) {
+        const candidateDigest = createHash('sha256').update(__accessTokens[i].Token).digest();
+        if (timingSafeEqual(candidateDigest, targetDigest)) {
+            matchedIndex = i;
+        }
+    }
+    return matchedIndex;
+}
+
+/**
  * Removes every token whose `ExpiresAt` has already passed (and its `TokenUses`
  * log along with it). Without this sweep `__accessTokens` grows forever — nothing
  * else in this module ever removes an expired token, `deleteAccessToken()` has no
@@ -339,7 +360,7 @@ export function RegisterAccessToken(token?: string, lifeSpan: number = __default
 
     if (TokenExists(tokenToUse)) {
         // should never happen if we used the uuidv4() function but could happen if someone tries to use a custom token
-        throw new Error(`Token ${tokenToUse} already exists`);
+        throw new Error('Access token already exists');
     }
 
     const newToken = new GetDataAccessToken();
@@ -356,12 +377,12 @@ export function registerAccessToken(token?: string, lifeSpan: number = __default
     return RegisterAccessToken(token, lifeSpan, requestorPayload);
 }
 export function DeleteAccessToken(token: string) {
-    const index = __accessTokens.findIndex((t) => t.Token === token);
+    const index = findMatchingAccessTokenIndex(token);
     if (index >= 0) {
         __accessTokens.splice(index, 1);
     }
     else {
-        throw new Error(`Token ${token} does not exist`);
+        throw new Error('Access token does not exist');
     }
 }
 
@@ -370,7 +391,7 @@ export function deleteAccessToken(token: string) {
     return DeleteAccessToken(token);
 }
 export function TokenExists(token: string) {
-    return __accessTokens.find((t) => t.Token === token) !== undefined;
+    return findMatchingAccessTokenIndex(token) >= 0;
 }
 
 /** @deprecated Use {@link TokenExists}. */
@@ -378,9 +399,9 @@ export function tokenExists(token: string) {
     return TokenExists(token);
 }
 export function IsTokenValid(token: string) {
-    const t = __accessTokens.find((t) => t.Token === token);
-    if (t) {
-        return t.ExpiresAt > new Date();
+    const index = findMatchingAccessTokenIndex(token);
+    if (index >= 0) {
+        return __accessTokens[index].ExpiresAt > new Date();
     }
     return false;
 }
@@ -390,15 +411,16 @@ export function isTokenValid(token: string) {
     return IsTokenValid(token);
 } 
 export function RecordTokenUse(token: string, usePayload: any) {
-    const t = __accessTokens.find((t) => t.Token === token);
-    if (t) {
+    const index = findMatchingAccessTokenIndex(token);
+    if (index >= 0) {
+        const t = __accessTokens[index];
         if (!t.TokenUses) {
             t.TokenUses = [];
         }
-        t.TokenUses.push({ Token: token, UsedAt: new Date(), UsePayload: usePayload });
+        t.TokenUses.push({ Token: t.Token, UsedAt: new Date(), UsePayload: usePayload });
     }
     else {
-        throw new Error(`Token ${token} does not exist`);
+        throw new Error('Access token does not exist');
     }
 }
 
