@@ -4,7 +4,8 @@
  * Candidates are ranked on their repeated inner-fold means over development rows only; every inner score is
  * optimistic and labelled so, and the locked holdout is read once, for the finalist. The trainer selects in the
  * sidecar (the simplest candidate within one standard error of the best, so the finalist need not have the best
- * mean); the engine re-checks the trainer's report before anything is stored, and the UI ranks with the same direction.
+ * mean); the engine re-checks the trainer's report before anything is stored. The viewer orders rows by the rank
+ * stored with them.
  */
 import { OrdinalCompare } from '@memberjunction/global';
 import { METRIC_DIRECTION, type MetricKey } from './evaluation-protocol';
@@ -49,13 +50,13 @@ export class InnerScoreSelection {
   /**
    * What the protocol guarantees about a search, checked on the trainer's report: every candidate scored on every fold
    * (none pruned) with a valid interval around its mean, and the holdout read for the finalist. The holdout's read
-   * count is pinned to 1 by the result schema, so only the finalist it was read for is compared here. The finalist is
+   * count is pinned to 1 by the result schema, so only the candidate it was read for is taken here. The finalist is
    * not required to have the best mean: the one-standard-error rule may pick a simpler candidate.
    */
   public static CheckSelection(
     scores: readonly CandidateInnerScore[],
     finalist: string,
-    holdoutAccess: Pick<TrainerCompleted['holdoutAccess'], 'count' | 'finalist'>,
+    holdoutAccess: Pick<TrainerCompleted['holdoutAccess'], 'finalist'>,
   ): SelectionCheck {
     if (scores.length === 0) return { Ok: false, Reason: 'missing-inner-scores', Detail: 'the trainer returned no inner-CV scores' };
     if (!scores.some((s) => s.candidate === finalist)) return { Ok: false, Reason: 'finalist-not-a-candidate', Detail: `finalist ${finalist} has no inner score` };

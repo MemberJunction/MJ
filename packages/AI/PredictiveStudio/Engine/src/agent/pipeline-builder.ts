@@ -301,9 +301,10 @@ export class PredictiveStudioPipelineBuilder {
    */
   private async trainWithoutUnit(pipeline: MJMLTrainingPipelineEntity, approved: readonly ProposedExperiment[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
     const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
-    const first = approved[0];
-    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, TrustVerdicts.DeriveTrustVerdict(train.model), first ? first.Label : pipeline.Name);
-    return { Train: train, Leaderboard: leaderboard, Untrained: approved.slice(1).map((e) => e.Label) };
+    // The pipeline was built from the first approved experiment (ModelingPlanToPipelineConfig refuses a plan without one).
+    const [trained, ...untrained] = approved;
+    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, TrustVerdicts.DeriveTrustVerdict(train.model), trained.Label);
+    return { Train: train, Leaderboard: leaderboard, Untrained: untrained.map((e) => e.Label) };
   }
 
   /**

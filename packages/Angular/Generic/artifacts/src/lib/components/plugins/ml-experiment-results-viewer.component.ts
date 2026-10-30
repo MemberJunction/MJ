@@ -150,6 +150,12 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   /** Normalized, ranked leaderboard rows for rendering. */
   public LeaderboardRows: readonly NormalizedLeaderboardRow[] = [];
 
+  /** The score column's label, from the rows' own metric (see {@link LeaderboardRows.ScoreColumnLabel}). */
+  public ScoreColumnLabel = 'Score';
+
+  /** The rows state different metrics, so each score cell names its own. */
+  public ShowRowMetric = false;
+
   /** Normalized feature-importance bars for rendering. */
   public FeatureBars: NormalizedFeatureBar[] = [];
 
@@ -165,6 +171,8 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
       }
 
       this.LeaderboardRows = LeaderboardRows.NormalizeLeaderboardRows(this.Spec.Leaderboard ?? this.Spec.leaderboard ?? []);
+      this.ScoreColumnLabel = LeaderboardRows.ScoreColumnLabel(this.LeaderboardRows, this.TargetMetricLabel);
+      this.ShowRowMetric = LeaderboardRows.RowsDisagreeOnMetric(this.LeaderboardRows);
       this.FeatureBars = this.buildFeatureBars(this.Spec.FeatureImportance ?? this.Spec.featureImportance ?? []);
     } catch (error) {
       this.HasError = true;
@@ -215,6 +223,11 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return this.Spec?.Summary ?? this.Spec?.report?.summary ?? '';
   }
 
+  /** The hero's label: the winning row's own metric (a search's inner-fold metric), else the artifact's target metric. */
+  public get HeadlineMetricLabel(): string {
+    return this.WinningRow?.metricName ?? this.TargetMetricLabel;
+  }
+
   public get TargetMetricLabel(): string {
     return this.Spec?.TargetMetric ?? this.Spec?.targetMetric ?? this.firstMetricName() ?? 'Score';
   }
@@ -255,7 +268,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     // Synthesize a single metric from the headline score when nothing explicit was provided.
     const row = this.WinningRow;
     if (row?.score != null) {
-      return [{ label: this.firstMetricName() ?? 'Score', value: this.FormatScore(row.score) }];
+      return [{ label: row.metricName ?? this.firstMetricName() ?? 'Score', value: this.FormatScore(row.score) }];
     }
     return [];
   }

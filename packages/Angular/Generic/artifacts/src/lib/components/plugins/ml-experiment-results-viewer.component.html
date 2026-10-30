@@ -24,7 +24,7 @@
       @if (HeadlineScore != null) {
         <div class="hero-metric">
           <div class="hero-metric-value">{{ HeadlineScore }}</div>
-          <div class="hero-metric-label">{{ TargetMetricLabel }} · winner</div>
+          <div class="hero-metric-label">{{ HeadlineMetricLabel }} · winner</div>
         </div>
       }
     </div>
@@ -79,7 +79,7 @@
                     <th class="lb-rank-col">#</th>
                     <th>Algorithm</th>
                     <th>Feature set</th>
-                    <th class="num">{{ TargetMetricLabel }}</th>
+                    <th class="num">{{ ScoreColumnLabel }}</th>
                     <th class="num">95% interval</th>
                   </tr>
                 </thead>
@@ -109,10 +109,11 @@
                         } @else {
                           {{ FormatScore(row.score) }}
                         }
+                        @if (ShowRowMetric && row.metricName) { <span class="lb-row-metric">{{ row.metricName }}</span> }
                       </td>
                       <td class="num muted">
                         @if (row.interval) { [{{ FormatScore(row.interval[0]) }}, {{ FormatScore(row.interval[1]) }}] } @else { — }
-                        @if (row.isWinner && row.optimistic) { <span class="lb-optimistic" title="The winner's inner-CV score is optimistic: it was the best of several tries.">optimistic</span> }
+                        @if (row.optimisticTag) { <span class="lb-optimistic" title="The winner's inner-CV score is optimistic: it was the best of several tries.">optimistic</span> }
                       </td>
                     </tr>
                   }

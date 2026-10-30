@@ -248,8 +248,8 @@ function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | und
   const search = IsSearchLeaderboard(leaderboard);
   const rows = leaderboard
     .map((r) => {
-      const measured = r.score !== null && r.score !== undefined;
-      const scoreText = measured ? leaderboardScoreText(r, r.score as number, search) : 'not measured';
+      const measured = typeof r.score === 'number';
+      const scoreText = typeof r.score === 'number' ? leaderboardScoreText(r, r.score, search) : 'not measured';
       const status = r.isWinner ? '🏆 Winner (Selected)' : measured ? 'Evaluated' : 'Not measured';
       return `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${scoreText} | ${status} |`;
     })

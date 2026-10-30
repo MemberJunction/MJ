@@ -5,7 +5,7 @@ import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import {
   TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrustVerdicts,
-  type CandidateInnerScore, type HoldoutSplit, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
+  type CandidateInnerScore, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioPipelineBuilder, RESERVED_CANDIDATE_NAMES, RESERVED_CANDIDATE_PREFIX, type AlgorithmRow } from '../pipeline-builder';
 import { TrainingDelegation } from '../../operations/delegation';
@@ -199,12 +199,13 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(calls).toHaveLength(1);
     expect(calls[0].candidates?.map((c) => [c.name, c.driverKey])).toEqual([['A', 'xgboost'], ['B', 'logistic_regression'], ['C', 'xgboost'], ['D', 'logistic_regression'], ['E', 'xgboost']]);
     expect(result.untrainedExperiments).toEqual([]);
-    expect(result.leaderboard?.map((r) => [r.rank, r.algorithm, r.score, r.innerLower, r.innerUpper, r.optimistic, r.isWinner, r.modelId])).toEqual([
-      [1, 'B', 0.40, 0.38, 0.42, true, false, undefined],
-      [2, 'C', 0.41, 0.39, 0.43, true, true, 'M-1'],
-      [3, 'A', 0.42, 0.4, 0.44, true, false, undefined],
-      [4, 'E', 0.44, 0.42, 0.46, true, false, undefined],
-      [5, 'D', 0.45, 0.43, 0.47, true, false, undefined],
+    // Only the finalist's row links the model, under both keys (the viewer reads `ModelID` first).
+    expect(result.leaderboard?.map((r) => [r.rank, r.algorithm, r.score, r.innerLower, r.innerUpper, r.optimistic, r.isWinner, r.modelId, r.ModelID])).toEqual([
+      [1, 'B', 0.40, 0.38, 0.42, true, false, undefined, undefined],
+      [2, 'C', 0.41, 0.39, 0.43, true, true, 'M-1', 'M-1'],
+      [3, 'A', 0.42, 0.4, 0.44, true, false, undefined, undefined],
+      [4, 'E', 0.44, 0.42, 0.46, true, false, undefined, undefined],
+      [5, 'D', 0.45, 0.43, 0.47, true, false, undefined, undefined],
     ].map((row) => row.map((v) => (typeof v === 'number' ? expect.closeTo(v, 12) : v))));
     expect(result.leaderboard?.every((r) => r.metricName === 'log-loss')).toBe(true);
   });
@@ -219,7 +220,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(world.Order).toEqual(['save:pipeline', 'save:protocol', 'save:pipeline', 'train']);
     const protocol = world.Protocol as unknown as MJEvaluationProtocolEntity;
     expect(world.Pipeline.EvaluationProtocolID).toBe(protocol.ID);
-    expect(JSON.parse(protocol.Holdout) as HoldoutSplit).toEqual({ kind: 'seeded-random', fraction: 0.25 });
+    expect(JSON.parse(protocol.Holdout)).toEqual({ kind: 'seeded-random', fraction: 0.25 });
     expect(JSON.parse(protocol.Budgets)).toMatchObject({ maxCandidates: 3 });
     expect(protocol.Seed).toBe(0);
     expect(JSON.parse(protocol.AuthoredBy)).toEqual({ kind: 'system', component: 'pipeline-builder' });

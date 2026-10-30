@@ -228,6 +228,12 @@
   color: var(--mj-text-muted);
 }
 
+.lb-row-metric {
+  margin-left: 4px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
 .lb-optimistic {
   margin-left: 6px;
   font-size: var(--mj-text-xs);
