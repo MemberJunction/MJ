@@ -291,7 +291,7 @@ export class FakeEvaluationProtocolStore implements IEvaluationProtocolStore {
   constructor(private readonly rows: readonly EvaluationProtocolColumns[], private readonly createdAt: Date = FakeEvaluationProtocolStore.DefaultCreatedAt) {}
   public async Load(protocolId: string): Promise<StoredEvaluationProtocol | null> {
     this.Reads++;
-    const row = this.rows.find((r) => r.ID === protocolId);
+    const row = this.rows.find((r) => UUIDsEqual(r.ID, protocolId));
     return row ? { ...row, __mj_CreatedAt: this.createdAt } : null;
   }
 }

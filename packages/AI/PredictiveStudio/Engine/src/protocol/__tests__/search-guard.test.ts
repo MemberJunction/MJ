@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { UUIDsEqual } from '@memberjunction/global';
 import { EvaluationProtocolRules, type EvaluationProtocolDraft, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { ProtocolSearchGuard } from '../search-guard';
 import type { IEvaluationProtocolStore, LoadedProtocol, StoredEvaluationProtocol } from '../../training/evaluation-protocol-store';
@@ -27,7 +28,7 @@ class FakeStore implements IEvaluationProtocolStore {
   constructor(private readonly stored: StoredEvaluationProtocol | null) {}
   public async Load(protocolId: string): Promise<StoredEvaluationProtocol | null> {
     this.Reads++;
-    return this.stored !== null && this.stored.ID === protocolId ? this.stored : null;
+    return this.stored !== null && UUIDsEqual(this.stored.ID, protocolId) ? this.stored : null;
   }
 }
 
