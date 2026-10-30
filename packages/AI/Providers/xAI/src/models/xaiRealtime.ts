@@ -72,10 +72,11 @@ function prepareXaiTurnRequest(requested: RealtimeTurnDetectionSettings | undefi
 export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'xai',
     inputTranscriptionModel: XAI_INPUT_TRANSCRIPTION_MODEL,
-    // xAI's socket accepts session.update immediately after connect (observed in production), so
-    // the config is sent synchronously — honoring driver obligation #7 ("Ready" only after the
-    // session config is applied) without waiting on a session.created frame.
-    deferInitialConfigUntilSessionCreated: false,
+    // The socket is still connecting when StartSession returns, and a session.update sent then is dropped
+    // ("could not send data"), so the start config waits for session.created, which xAI sends first once
+    // the socket is open (as OpenAI does). Driver obligation #7 ("Ready" only after the session config
+    // is applied) is met by WaitForConfigApplied resolving after that send.
+    deferInitialConfigUntilSessionCreated: true,
     foldInitialContextIntoPrompt: false,
     supportsReasoningEffort: false,
     supportsParallelToolCalls: false,

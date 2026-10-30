@@ -614,6 +614,14 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
 
     /* ------------- #6182: native max duration is the clamped session cap ------------- */
 
+    // The cap is a conversation setting; it must not leak into the turn settings (turnTimeout re-engages a silent user).
+    it('a capped agent keeps the cap off the turn settings', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900, Config: { turnDetection: { Eagerness: 'high' } } }));
+        const body = driver.CreateBodies[0].conversationConfig;
+        expect(body?.conversation?.maxDurationSeconds).toBe(900);
+        expect(body?.turn).toEqual({ turnEagerness: 'eager' });
+    });
+
     it('MaxSessionSeconds 900 lands on conversationConfig.conversation.maxDurationSeconds', async () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
         expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
@@ -624,10 +632,17 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(7200);
     });
 
-    it('ClientConfig carries the effective cap: the clamped host cap, or the 7200s provider cap when the host sets none', async () => {
+    // With no host cap the driver sends no max duration, so the agent keeps its own setting (ElevenLabs creates agents
+    // with 600 s, not the 7200 s ceiling); the driver does not know that value, so it reports none rather than 7200.
+    it('ClientConfig carries the cap put on the agent: the clamped host cap, or none when the host sets none', async () => {
         expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
         expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 9000 }))).MaxSessionSeconds).toBe(7200);
-        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }))).MaxSessionSeconds).toBe(7200);
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }))).MaxSessionSeconds).toBeUndefined();
+    });
+
+    it('a verbatim agent id reports no cap: MJ writes nothing onto an agent it does not manage', async () => {
+        const config = await driver.CreateClientSession(makeParams({ Model: 'agent_hand_tuned', Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(config.MaxSessionSeconds).toBeUndefined();
     });
 
     it('absent MaxSessionSeconds leaves conversation unset', async () => {

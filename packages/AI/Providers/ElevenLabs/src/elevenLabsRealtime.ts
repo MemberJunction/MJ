@@ -555,7 +555,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
                 overrides: ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
                 config: params.Config ?? {},
             },
-            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
+            // The cap actually put on the agent. With no host cap (or a verbatim agent id MJ does not manage) the agent's
+            // own max_duration_seconds applies — ElevenLabs creates agents with 600 s, not the 7200 s ceiling — and it
+            // is not known here, so none is reported.
+            MaxSessionSeconds: resolvedModel.startsWith(ELEVENLABS_AGENT_ID_PREFIX) ? undefined : this.resolveNativeMaxDuration(params),
         };
     }
 

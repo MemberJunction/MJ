@@ -81,9 +81,14 @@ describe('GeminiRealtime turnDetection through the driver', () => {
         });
     });
 
-    it('meeting mode disabled:true survives a SilenceDurationMs merge', async () => {
-        const config = await connectConfig({ disableAutoResponse: true, turnDetection: { SilenceDurationMs: 900 } });
-        expect(config.realtimeInputConfig?.automaticActivityDetection).toEqual({ disabled: true, silenceDurationMs: 900 });
+    // Gemini Live refuses a setup that sets any activity-detection field next to `disabled: true` (close 1007,
+    // "automatic_activity_detection.disabled is true, but the following fields were also set"), so meeting mode
+    // sends `disabled` alone: with detection off the mapped fields would change nothing anyway.
+    it('meeting mode sends disabled:true alone; the mapped fields are dropped', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const config = await connectConfig({ disableAutoResponse: true, turnDetection: { SilenceDurationMs: 900, Eagerness: 'high', Threshold: 0.3 } });
+        expect(config.realtimeInputConfig?.automaticActivityDetection).toEqual({ disabled: true });
+        expect(warn.mock.calls.some((c) => String(c[0]).includes('disabled'))).toBe(true);
     });
 
     it('leaves turnCoverage as the Coverage setting alone decides', async () => {

@@ -476,7 +476,9 @@ export interface ClientRealtimeSessionConfig {
 
     /**
      * The effective session cap in seconds for this minted session: `min(provider ceiling, host cap)`.
-     * With no host cap it reports the provider ceiling; `undefined` when the driver knows neither.
+     * With no host cap it reports the provider ceiling; `undefined` when the driver does not know the cap that
+     * applies. ElevenLabs Agents is that case without a host cap (or with a verbatim agent id): the agent's own
+     * `max_duration_seconds` applies, which ElevenLabs sets to 600 s on a new agent, not the 7200 s ceiling.
      * Server-side information carried on the prep result — the GraphQL resolver does not forward it
      * to the browser today — and never an input: the cap on the wire is the driver's own decision.
      */

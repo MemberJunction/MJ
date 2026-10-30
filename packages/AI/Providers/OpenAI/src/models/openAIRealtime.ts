@@ -214,6 +214,13 @@ export interface OpenAIRealtimeProfile {
      */
     buildTurnDetection(disableAutoResponse: boolean, requested?: RealtimeTurnDetectionSettings): RealtimeAudioInputTurnDetection | undefined;
     /**
+     * The `turn_detection.type` the provider applies when a session sends none (OpenAI: `server_vad`, as its
+     * `session.created` reports). Used only when a Config-bag `audio.input.turn_detection` leaf would otherwise go out
+     * without a `type`, which the provider rejects. Leave unset when the provider's default is not known; nothing is
+     * then invented.
+     */
+    defaultTurnDetectionType?: 'server_vad' | 'semantic_vad';
+    /**
      * Maps MJ's NORMALIZED effort level (numeric 1–100 or named — the same vocabulary as
      * `ChatParams.effortLevel`) onto THIS provider's realtime effort literals. Providers whose
      * endpoint uses a different level set override this seam; return `undefined` to drop an
@@ -287,6 +294,7 @@ export function MapNormalizedTurnDetection(
 export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'openai',
     inputTranscriptionModel: OPENAI_INPUT_TRANSCRIPTION_MODEL,
+    defaultTurnDetectionType: 'server_vad',
     deferInitialConfigUntilSessionCreated: true,
     foldInitialContextIntoPrompt: false,
     supportsReasoningEffort: true,
@@ -618,6 +626,8 @@ function applyMeetingFloor(merged: Record<string, unknown>, base: Record<string,
  * - A non-object override (string, null, array, ...) is ignored; `built` is returned unchanged.
  * - A `turn_detection.type` that differs from the built one replaces the whole `turn_detection`
  *   object, because fields of one detector kind (e.g. `silence_duration_ms`) are invalid on another.
+ * - A merged `turn_detection` object that still has no `type` (nothing was built, the bag gave none) gets
+ *   `defaultTurnDetectionType` when one is passed: the provider rejects a type-less block.
  * - In meeting mode, after the merge: a surviving `turn_detection` object gets `create_response:
  *   false`. An explicit `turn_detection: null` is kept (VAD off cannot auto-respond). If the bag nulled
  *   or broke `input`, or sent a `turn_detection` that is neither an object nor null, and the built block
@@ -629,12 +639,14 @@ function applyMeetingFloor(merged: Record<string, unknown>, base: Record<string,
  * @param built The audio block from {@link BuildAudioBlock}, or `undefined` when nothing was built.
  * @param override The raw `audio` value from the open JSON Config bag; untrusted shape.
  * @param meetingMode Whether the session is a meeting (the model must not auto-respond).
+ * @param defaultTurnDetectionType The provider's own default `turn_detection.type` ({@link OpenAIRealtimeProfile.defaultTurnDetectionType}), if known.
  * @returns The merged audio block, or `undefined` when there is neither a built block nor an override.
  */
 export function MergeAudioOverride(
     built: RealtimeSessionCreateRequest['audio'] | undefined,
     override: unknown,
     meetingMode: boolean,
+    defaultTurnDetectionType?: string,
 ): RealtimeSessionCreateRequest['audio'] | undefined {
     if (!isPlainObject(override)) {
         return built;
@@ -647,6 +659,11 @@ export function MergeAudioOverride(
     if (overrideDetection && typeof overrideDetection.type === 'string' && overrideDetection.type !== builtType
         && isPlainObject(merged.input)) {
         merged.input = { ...merged.input, turn_detection: mergeDeep({}, overrideDetection) };
+    }
+    // Nothing was built and the bag gave no type: the provider rejects a type-less block, so name its own default.
+    const mergedDetection = readTurnDetection(merged);
+    if (mergedDetection && typeof mergedDetection.type !== 'string' && defaultTurnDetectionType && isPlainObject(merged.input)) {
+        merged.input = { ...merged.input, turn_detection: { type: defaultTurnDetectionType, ...mergedDetection } };
     }
 
     if (meetingMode) {
@@ -700,7 +717,7 @@ export function BuildSessionPayload(
 ): GARealtimeSessionCreateRequest {
     const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
     const { audio: audioOverride, ...rest } = features.rest;
-    const merged = MergeAudioOverride(BuildAudioBlock(profile, features, turnDetection), audioOverride, features.disableAutoResponse);
+    const merged = MergeAudioOverride(BuildAudioBlock(profile, features, turnDetection), audioOverride, features.disableAutoResponse, profile.defaultTurnDetectionType);
     const voiced = profile.supportsVoiceOutput ? merged : withoutOutputVoice(merged);
     const audio = voiced && Object.keys(voiced).length > 0 ? voiced : undefined;
     return {

@@ -116,11 +116,13 @@ const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
 const MAX_HELD_INPUT_AUDIO_BYTES = 16000 * 2 * 2;
 
 /**
- * Window (ms) within which a client-direct browser must OPEN its Live session using a minted
- * ephemeral token. After this the token can no longer start a NEW session (an already-open
- * session continues until {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}).
+ * How many Live connections one minted client-direct token may open. Gemini ends a Live connection after about
+ * 10 minutes, and the browser resumes on the SAME token, which Gemini counts as a new session: a single-use token
+ * is refused "Token has been used too many times". Three connections cover the 30-minute token; three more cover a
+ * resume after a dropped network or a `goAway`. A leaked token can open at most this many sessions, each locked to
+ * the server-built config, until it expires.
  */
-const GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS = 10 * 60 * 1000;
+const GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS = 6;
 
 /**
  * Total lifetime (ms) of a minted client-direct ephemeral token: messages on a Live session
@@ -227,7 +229,7 @@ interface GeminiOpenedConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiRealtime')
 export class GeminiRealtime extends BaseRealtimeModel {
-    /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS); session resumption continues a conversation past a single connection, but the token bounds the session. */
+    /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS) and may open several connections (GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS), so session resumption continues a conversation past Gemini's ~10-minute connection, and the token bounds the session. */
     public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
         ProviderMaxSessionSeconds: 1800,
         SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
@@ -356,9 +358,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * because the SDK still expects the client to pass a model/config at `live.connect` time; the
      * token-side lock is what makes the server's prompt and tool set authoritative.
      *
-     * Expiry: the browser must open its session within
-     * {@link GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS}; the token (and thus the session's
-     * ability to send messages) dies at {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}.
+     * Expiry: the token opens connections (the first, and each resume, which Gemini counts as a new
+     * session) until {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}, at most
+     * {@link GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS} of them; the session's ability to send messages
+     * dies with it.
      *
      * @param params Session configuration (model, system prompt, tools, config bag).
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
@@ -367,12 +370,12 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const config = this.BuildConnectConfig(params);
         const now = Date.now();
         const expireTime = new Date(now + GEMINI_CLIENT_TOKEN_EXPIRY_MS).toISOString();
-        const newSessionExpireTime = new Date(now + GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS).toISOString();
         const token = await this.mintAuthToken({
             config: {
-                uses: 1,
+                uses: GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS,
                 expireTime,
-                newSessionExpireTime,
+                // Each resume is a new session to Gemini, so the window to open one lasts as long as the token.
+                newSessionExpireTime: expireTime,
                 // Lock the model + the MASK-SAFE config subset into the token
                 // (lockAdditionalFields: [] means "lock exactly the fields set in
                 // liveConnectConstraints.config"). The token API only accepts a SUBSET of
@@ -1119,9 +1122,11 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Merges the mapped silence, eagerness and threshold into `automaticActivityDetection`, over what is already
-     * there so meeting mode's `disabled: true` survives. Gemini has no field for `Mode`; a `serverVad` or `semanticVad`
-     * request gets one line and the mapped fields still apply.
+     * Merges the mapped silence, eagerness and threshold into `automaticActivityDetection`. Gemini has no field for
+     * `Mode`; a `serverVad` or `semanticVad` request gets one line and the mapped fields still apply.
+     *
+     * In meeting mode (`disabled: true`) nothing is merged: Gemini Live refuses a setup that sets any of these fields
+     * next to `disabled: true` (close 1007), and with activity detection off they would change nothing.
      */
     private static applyActivityDetection(config: LiveConnectConfig, settings: RealtimeTurnDetectionSettings | undefined, model: string): void {
         if (settings?.Mode === 'serverVad' || settings?.Mode === 'semanticVad') {
@@ -1132,6 +1137,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
             return;
         }
         const existing = config.realtimeInputConfig ?? {};
+        if (existing.automaticActivityDetection?.disabled === true) {
+            console.warn(`[GeminiRealtime] Activity detection is disabled (meeting mode) for ${model}; SilenceDurationMs, Eagerness and Threshold are not sent, because Gemini refuses them next to disabled.`);
+            return;
+        }
         config.realtimeInputConfig = { ...existing, automaticActivityDetection: { ...existing.automaticActivityDetection, ...mapped } };
     }
 

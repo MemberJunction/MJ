@@ -109,6 +109,15 @@ import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'opena
 class FakeConnection implements IxAIRealtimeConnection {
     public Sent: RealtimeClientEvent[] = [];
     public Closed = false;
+    /**
+     * Behave like the real `OpenAIRealtimeWebSocket`: the socket is still CONNECTING when the driver gets it, a
+     * `send` before it opens is dropped and reported as the SDK's 'could not send data' error, and the server's
+     * `session.created` is the first frame after it opens.
+     */
+    public RequireOpen = false;
+    private open = false;
+    /** Fire `session.created` on its own once the session listens, as the real socket does once it opens. */
+    public AutoSessionCreated = true;
     private listeners: Array<(event: RealtimeServerEvent) => void> = [];
     private errorListeners: Array<(error: OpenAIRealtimeError) => void> = [];
     private socketCloseListeners: Array<() => void> = [];
@@ -127,7 +136,17 @@ class FakeConnection implements IxAIRealtimeConnection {
         listener: ((event: RealtimeServerEvent) => void) | ((error: OpenAIRealtimeError) => void)
     ): void {
         if (event === 'event') {
-            this.listeners.push(listener as (event: RealtimeServerEvent) => void);
+            const eventListener = listener as (event: RealtimeServerEvent) => void;
+            this.listeners.push(eventListener);
+            if (this.AutoSessionCreated) {
+                // Each session on this (reused) fake hears its own session.created, as each real socket sends one.
+                queueMicrotask(() => {
+                    if (this.AutoSessionCreated && this.listeners.includes(eventListener)) {
+                        this.open = true;
+                        eventListener({ type: 'session.created', event_id: 'auto-created' } as RealtimeServerEvent);
+                    }
+                });
+            }
         } else {
             this.errorListeners.push(listener as (error: OpenAIRealtimeError) => void);
         }
@@ -145,6 +164,10 @@ class FakeConnection implements IxAIRealtimeConnection {
         }
     }
     public send(event: RealtimeClientEvent): void {
+        if (this.RequireOpen && !this.open) {
+            this.FireError(makeSdkError('could not send data'));
+            return;
+        }
         this.Sent.push(event);
     }
     public close(): void {
@@ -152,7 +175,10 @@ class FakeConnection implements IxAIRealtimeConnection {
     }
     /** Test helper: dispatch a server event to all registered listeners. */
     public Fire(event: RealtimeServerEvent): void {
-        for (const l of this.listeners) {
+        if (event.type === 'session.created') {
+            this.open = true;
+        }
+        for (const l of [...this.listeners]) {
             l(event);
         }
     }
@@ -205,6 +231,25 @@ class ClientDirectTestablexAI extends xAIRealtime {
         };
     }
 }
+
+describe('xAIRealtime start config on a socket that is still connecting', () => {
+    it('sends the start session.update only once the socket is open, so the config reaches xAI', async () => {
+        const driver = new TestablexAIRealtime('xai-key');
+        driver.Fake.RequireOpen = true;
+        driver.Fake.AutoSessionCreated = false;
+        const session = (await driver.StartSession({
+            Model: 'grok-voice',
+            SystemPrompt: 'sys',
+            Config: { turnDetection: { Eagerness: 'high' } },
+        })) as xAIRealtimeSession;
+        const applied = session.WaitForConfigApplied();
+        driver.Fake.Fire({ type: 'session.created', event_id: 'e1' } as RealtimeServerEvent);
+        await expect(applied).resolves.toBeUndefined();
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        expect(update?.type === 'session.update' && update.session.type === 'realtime' ? update.session.audio?.input?.turn_detection : null)
+            .toMatchObject({ type: 'server_vad', silence_duration_ms: 400 });
+    });
+});
 
 describe('xAIRealtime construction', () => {
     beforeEach(() => {
@@ -937,10 +982,13 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         driver = new TestablexAIRealtime('test-key');
     });
 
-    it('resolves WaitForConfigApplied immediately (non-deferring profile sends config synchronously)', async () => {
+    it('holds the start config until session.created, then resolves WaitForConfigApplied', async () => {
+        driver.Fake.AutoSessionCreated = false;
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        // Nothing on the socket before the server's first frame: a send there would be dropped on a connecting socket.
+        expect(driver.Fake.Sent.some((e) => e.type === 'session.update')).toBe(false);
+        driver.Fake.Fire({ type: 'session.created', event_id: 'e' } as RealtimeServerEvent);
         await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
-        // Config already on the socket BEFORE any server frame — xAI accepts it right after connect.
         expect(driver.Fake.Sent[0]?.type).toBe('session.update');
     });
 

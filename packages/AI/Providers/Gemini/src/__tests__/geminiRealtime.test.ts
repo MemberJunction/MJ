@@ -136,13 +136,14 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
 
         const mintConfig = driver.MintParams?.config;
         expect(mintConfig).toBeDefined();
-        expect(mintConfig?.uses).toBe(1);
         expect(mintConfig?.lockAdditionalFields).toEqual([]);
         expect(typeof mintConfig?.expireTime).toBe('string');
-        expect(typeof mintConfig?.newSessionExpireTime).toBe('string');
-        // The new-session window precedes the token expiry.
-        expect(new Date(mintConfig!.newSessionExpireTime!).getTime())
-            .toBeLessThan(new Date(mintConfig!.expireTime!).getTime());
+        // Gemini ends a Live connection after about 10 minutes, and the browser resumes on the SAME token, which Gemini
+        // counts as a new session (live runs: a single-use token is refused "Token has been used too many times", a
+        // 10-minute new-session window "new_session_expire_time deadline exceeded"). So the token must open new
+        // sessions until it expires, and allow at least one connection per 10 minutes of the cap the mint reports.
+        expect(mintConfig?.newSessionExpireTime).toBe(mintConfig?.expireTime);
+        expect(mintConfig?.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 600));
 
         const constraints = mintConfig?.liveConnectConstraints;
         expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');

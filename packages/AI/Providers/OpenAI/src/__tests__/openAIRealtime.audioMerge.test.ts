@@ -261,6 +261,28 @@ describe('session payload', () => {
     }
   });
 
+  // OpenAI rejects a turn_detection without `type` ("Missing required parameter:
+  // 'session.audio.input.turn_detection.type'"). With the default config nothing builds a turn_detection, so a bag
+  // leaf alone would be type-less: the provider's own default type (server_vad, the type OpenAI reports in
+  // session.created) is filled in, on both paths.
+  it('a type-less bag turn_detection leaf on the default config gets the provider default type, on both paths', async () => {
+    const bag = { audio: { input: { turn_detection: { idle_timeout_ms: 8000 } } } };
+    const driver = new PayloadCapture('k');
+    await driver.CreateClientSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: bag });
+    await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: bag });
+    for (const session of [driver.MintedSession(), driver.SentSession()]) {
+      const audio = session.audio as AudioShape;
+      expect(audio.input?.turn_detection).toEqual({ type: 'server_vad', idle_timeout_ms: 8000 });
+      expect(audio.input?.transcription?.model).toBe(OPENAI_REALTIME_PROFILE.inputTranscriptionModel);
+    }
+  });
+
+  it('a profile with no known default turn type invents none', () => {
+    const profile = { ...OPENAI_REALTIME_PROFILE, defaultTurnDetectionType: undefined };
+    const session = BuildSessionPayload(profile, ExtractRealtimeFeatures({ audio: { input: { turn_detection: { idle_timeout_ms: 8000 } } } }), 'hi');
+    expect(session.audio?.input?.turn_detection).toEqual({ idle_timeout_ms: 8000 });
+  });
+
   it('omits instructions when undefined and keeps type realtime', () => {
     const session = BuildSessionPayload(OPENAI_REALTIME_PROFILE, ExtractRealtimeFeatures({}), undefined);
     expect(session.type).toBe('realtime');
