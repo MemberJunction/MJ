@@ -49,10 +49,11 @@ T4_REFERENCE_CI = (0.4854, 0.7821)
 # random-row contrast on the 2,000 blocked validation rows, and the pooled within-entity residual autocorrelation of
 # the selected GLM with its Box-Pierce statistic on 3 lags.
 T2P_RMSE = 1.559098962
-# The reference pipeline bootstraps T2p's holdout by row (1.512303196, 1.608225373). The protocol declares the
-# entity-cluster bootstrap; the holdout holds one row per entity, so clusters are rows in another draw order and the
-# interval differs from the reference's by less than 0.001. Measured: the entity-cluster interval itself.
-T2P_RMSE_CLUSTER_CI = (1.5115559078708785, 1.6087104328453439)
+# The reference pipeline bootstraps T2p's holdout by row. The protocol declares the entity-cluster bootstrap; the
+# holdout holds one row per entity, so clusters are rows drawn in another order and the interval stays within 0.001
+# of the reference's (measured 1.51156 / 1.60871). Whole entities versus rows is pinned by the route tests.
+T2P_RMSE_ROW_CI = (1.512303196, 1.608225373)
+T2P_CI_TOLERANCE = 0.001
 T2P_CONTRAST = (2000, 1.551750799, 1.552041614)
 T2P_ACF = (0.7229736366, 0.5823661424, 0.5135602571)
 T2P_BOX_PIERCE = 7271.405527
@@ -221,7 +222,7 @@ def test_T2p_S_T_4_blocked_grouped_folds(server: FileServer) -> None:
     value, lower, upper = _shipped_rmse(r)
     assert r.gate.outcome == "keep-simple-baseline" and r.gate.shipped == "glm"
     assert abs(value - T2P_RMSE) <= REFERENCE_DIGITS
-    assert max(abs(lower - T2P_RMSE_CLUSTER_CI[0]), abs(upper - T2P_RMSE_CLUSTER_CI[1])) <= 1e-12
+    assert max(abs(lower - T2P_RMSE_ROW_CI[0]), abs(upper - T2P_RMSE_ROW_CI[1])) <= T2P_CI_TOLERANCE
     c = r.innerSplitContrast
     assert c is not None and c.rows == T2P_CONTRAST[0]
     assert abs(c.blockedGroupedScore - T2P_CONTRAST[1]) <= REFERENCE_DIGITS

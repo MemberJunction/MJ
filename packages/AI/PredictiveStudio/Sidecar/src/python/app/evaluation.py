@@ -15,7 +15,10 @@ clock's last check and before `computeSeconds` is stamped, so the reported cost 
 A number that is undefined on these rows never reaches the wire as NaN (JSON cannot carry it): a holdout without
 every declared class fails the stage, an undefined secondary metric is left out (the contract lists the secondary
 metrics computed, not every declared one), an undefined calibration fit reports no calibration, and any other
-non-finite number fails the stage naming its field.
+non-finite number fails the stage naming its field. One deliberate exception to leaving an undefined number out: when
+the protocol declares residual diagnostics on an entity panel and the finalist's development residuals are constant,
+their autocorrelation is undefined and the stage fails rather than reporting no diagnostics, as the series path does,
+because a declared check that cannot run must not read as a check that passed.
 """
 
 from __future__ import annotations
@@ -23,7 +26,6 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import math
-from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Protocol, Sequence, Tuple
 
@@ -562,30 +564,36 @@ def panel_residuals(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev:
     (label minus prediction), paired only within an entity in period order and pooled over entities, with a
     Box-Pierce test whose lags are weighted by their pairs (the reference pipeline's `run._residual_panel`).
 
-    The lags are the declared `acfLags` capped at one less than the most development rows any entity has, so every
-    lag pairs two rows of some entity; `ljungBox.lags` reports the lags used. The reference pipeline's rule is
-    `max(1, min(3, periods - 1))` with `periods` that same maximum: equal here whenever 3 lags are declared. None when
-    the protocol declares no residual diagnostics, when no entity has two development rows (nothing repeats over
-    time), or for a multiclass task (its prediction is a probability vector, so a residual is not one number).
+    The lags are the declared `acfLags` capped at one less than the most distinct decision periods any entity has in
+    the development rows, so every lag pairs two rows of some entity; `ljungBox.lags` reports the lags used. The
+    reference pipeline caps at `max(1, min(3, rows - 1))` with `rows` the most rows any entity has: on a panel with one
+    row per entity and period (the reference pipeline's panels) the two agree whenever 3 lags are declared. None when
+    the protocol declares no residual diagnostics, when no entity has development rows in two decision periods
+    (nothing repeats over time, even if an entity has several rows in one period), or for a multiclass task (its
+    prediction is a probability vector, so a residual is not one number).
 
     Raises:
         TrainerFailure: Stage `holdout`, when the finalist cannot predict its development rows or the residuals are
-            constant (their autocorrelation is undefined).
+            constant (their autocorrelation is undefined; the series path fails the same way).
     """
     rd = req.protocol.residualDiagnostics
     if rd is None or enc.family == "multiclass":
         return None
     entities = [snap.entity_keys[int(i)] for i in dev]
-    most = max(Counter(entities).values())
-    if most < 2:
+    periods_of: Dict[str, set[int]] = {}
+    for entity, ordinal in zip(entities, ordinals[dev].tolist()):
+        periods_of.setdefault(entity, set()).add(int(ordinal))
+    periods = max(len(seen) for seen in periods_of.values())
+    if periods < 2:
         return None
-    lags = min(rd.acfLags, most - 1)
+    # At most one less than an entity's periods, hence than its rows: every lag has a within-entity pair.
+    lags = min(rd.acfLags, periods - 1)
     try:
         resid = y_dev - np.asarray(finalist.predict(X_dev), dtype=np.float64)
         rhos, pairs = TM.panel_acf(resid, entities, ordinals[dev], lags)
+        q, p_value = TM.box_pierce(rhos, pairs)
     except ValueError as exc:
         raise TrainerFailure("holdout", f"residual diagnostics: {exc}") from exc
-    q, p_value = TM.box_pierce(rhos, pairs)
     return ResidualDiagnostics(acf=rhos, ljungBox=LjungBox(statistic=q, pValue=p_value, lags=lags),
                                autocorrelationFlagged=p_value < rd.ljungBoxAlpha)
 
@@ -600,8 +608,10 @@ def split_contrast(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: 
     entity-period data. None unless the inner validation is blocked in time.
 
     Raises:
-        TrainerFailure: Stage `inner-cv` when the finalist cannot be fitted on a random-row fold or the development rows
-            cannot fill the folds; `timeout`/`budget-exceeded` from the run clock, checked after every fold.
+        TrainerFailure: Stage `holdout`, prefixed "random-row contrast: ", when the development rows cannot fill the
+            folds or the finalist cannot be fitted on a random-row fold (the holdout has been read by now, so this is
+            a holdout-stage failure, not inner CV); `timeout`/`budget-exceeded` from the run clock, checked after
+            every fold.
     """
     if not isinstance(req.protocol.innerValidation, BlockedTime):
         return None
@@ -609,13 +619,18 @@ def split_contrast(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: 
     try:
         random_folds = repeated_stratified(y_dev, RANDOM_ROW_FOLDS, 1, req.protocol.seed, stratify=False)
     except ValueError as exc:
-        raise TrainerFailure("inner-cv", f"random-row contrast: {exc}") from exc
+        raise TrainerFailure("holdout", f"random-row contrast: {exc}") from exc
     spec = next(c for c in req.candidates if c.name == out.selection.finalist)
     every_row = np.arange(len(dev), dtype=np.int64)
     # The trainer's one cross-validation loop, run on the random-row folds: every development row is validated once,
     # so its out-of-fold predictions are in development-row order.
-    random_cv = TR.cross_validate(req.protocol, snap, columns, enc, dev, spec, req.threads, clock,
-                                  dataclasses.replace(out, folds=random_folds, validated=every_row))
+    try:
+        random_cv = TR.cross_validate(req.protocol, snap, columns, enc, dev, spec, req.threads, clock,
+                                      dataclasses.replace(out, folds=random_folds, validated=every_row))
+    except TrainerFailure as exc:
+        if exc.stage != "inner-cv":
+            raise
+        raise TrainerFailure("holdout", f"random-row contrast: {exc.message}") from exc
     y_val = np.asarray(y_dev, dtype=np.float64)[out.validated]
     blocked = primary.aggregate(y_val, out.cv[spec.name].oof)
     random_row = primary.aggregate(y_val, random_cv.oof[out.validated])
@@ -629,8 +644,10 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
     """The holdout stage for one selected finalist; see the module docstring for the fixed order.
 
     Raises:
-        TrainerFailure: Stage `holdout`/`baselines` for a failure in this stage; `timeout`/`budget-exceeded` from the
-            run clock, checked after the baselines, after the holdout scoring and after every holdout statistic.
+        TrainerFailure: Stage `holdout`/`baselines` for a failure in this stage, including the development-row
+            statistics (constant panel residuals, a random-row contrast fold that cannot be filled or fitted);
+            `timeout`/`budget-exceeded` from the run clock, checked after the baselines, after the holdout scoring,
+            after every random-row contrast fold and after every statistic.
     """
     p = req.protocol
     primary = scores.primary_score(p.primaryScore.metric, enc.tweedie_power)

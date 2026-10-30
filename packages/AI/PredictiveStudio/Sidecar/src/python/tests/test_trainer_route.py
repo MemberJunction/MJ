@@ -825,19 +825,20 @@ def _pooled_within_entity_acf(resid: np.ndarray, entity: list[str], lags: int) -
 
 
 def test_a_panel_reports_pooled_within_entity_residual_autocorrelation(server: FileServer) -> None:
-    """The finalist's in-sample development residuals, paired only within an entity, give the reported ACF and a
-    Box-Pierce statistic weighted by each lag's pairs; the AR(1) noise is flagged."""
+    """The finalist's in-sample development residuals, paired only within an entity in period order (the snapshot's
+    rows are shuffled, so row order is no guide), give the reported ACF and a Box-Pierce statistic weighted by each
+    lag's pairs; the AR(1) noise is flagged."""
     df = _panel()
-    r = _completed(_panel_request(server, df, "panel-resid"))
+    r = _completed(_panel_request(server, df.sample(frac=1, random_state=4), "panel-resid"))
     dev = df[df["T"] < "2024"].reset_index(drop=True)
     resid = dev["Target"].to_numpy(dtype=np.float64) - _finalist_predictions(r, dev)
     rhos, pairs = _pooled_within_entity_acf(resid, list(dev["EntityKey"]), 3)
     q = float(sum(n * rho * rho for n, rho in zip(pairs, rhos)))
     d = r.residualDiagnostics
     assert d is not None and d.ljungBox.lags == 3 and pairs == [600, 450, 300]
-    assert d.acf == pytest.approx(rhos, abs=1e-12)
-    assert d.ljungBox.statistic == pytest.approx(q, rel=1e-12)
-    assert d.ljungBox.pValue == pytest.approx(float(stats.chi2.sf(q, 3)), abs=1e-12)
+    assert d.acf == pytest.approx(rhos, abs=1e-10)
+    assert d.ljungBox.statistic == pytest.approx(q, rel=1e-10)
+    assert d.ljungBox.pValue == pytest.approx(float(stats.chi2.sf(q, 3)), abs=1e-10)
     assert d.autocorrelationFlagged and d.acf[0] > 0.3
 
 
@@ -916,3 +917,44 @@ def test_a_cluster_bootstrap_resamples_whole_entities(server: FileServer) -> Non
     got = r.holdout.primary.interval
     assert (got.lower, got.upper) == pytest.approx((clustered.lower, clustered.upper), abs=1e-12)
     assert abs(got.lower - rows.lower) > 1e-6
+
+
+def test_rows_of_an_entity_in_one_period_report_no_residual_diagnostics(server: FileServer) -> None:
+    """Two development rows per entity, both in the 2023 decision period: nothing repeats over time, so there is no
+    serial autocorrelation to report even though entities repeat."""
+    rng = np.random.default_rng(8)
+    rows: list[dict[str, object]] = []
+    for e in range(150):
+        effect = rng.normal()
+        for day in ("2023-01-01", "2023-02-01", "2024-01-01"):
+            x = rng.normal()
+            rows.append({"ID": f"s{e}-{day}", "EntityKey": f"E{e}", "T": day, "x": x,
+                         "Target": 5 + x + effect + rng.normal()})
+    r = _completed(_panel_request(server, pd.DataFrame(rows), "panel-one-period", innerValidation={
+        "kind": "grouped-kfold", "folds": 5, "repeats": 1, "groupKey": "EntityKey"}))
+    assert r.residualDiagnostics is None
+
+
+def test_a_multiclass_panel_reports_no_residual_diagnostics(server: FileServer) -> None:
+    """A multiclass prediction is a probability vector, so a residual is not one number: the run completes without
+    residual diagnostics and still reports the random-row contrast."""
+    df = _panel()
+    df["Target"] = np.digitize(df["Target"].to_numpy(dtype=np.float64), [4.0, 6.0])
+    hold = [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
+    m, n = snapshot_files(df, {"x": NUMERIC}, hold, label_map=MULTICLASS_LABELS)
+    proto = protocol("multiclass", innerValidation=BLOCKED_BY_ENTITY,
+                     residualDiagnostics={"acfLags": 3, "ljungBoxAlpha": 0.05})
+    r = _completed(request(server, m, n, MULTICLASS_TASK, proto, candidates("multiclass", LOGISTIC_ONLY),
+                           tag="panel-multiclass"))
+    assert r.residualDiagnostics is None and r.innerSplitContrast is not None
+
+
+def test_a_random_row_contrast_that_cannot_refit_fails_the_holdout_stage(server: FileServer,
+                                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    """The contrast runs after the holdout was read: a refit failure there is a holdout-stage failure, named."""
+    def refuse(*_args: object, **_kwargs: object) -> NoReturn:
+        raise TrainerFailure("inner-cv", "candidate 'ridge_candidate': cannot fit")
+
+    monkeypatch.setattr(EV.TR, "cross_validate", refuse)
+    r = _failed(_panel_request(server, _panel(), "panel-contrast-fails"))
+    assert r.stage == "holdout" and r.message == "random-row contrast: candidate 'ridge_candidate': cannot fit"
