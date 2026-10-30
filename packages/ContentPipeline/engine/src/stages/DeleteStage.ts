@@ -27,6 +27,7 @@ import {
 } from '@memberjunction/content-pipeline-base';
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
 import { WhereEqual } from '../Filters.js';
+import { IsUploadItemURL, UPLOAD_URL_PREFIX } from '../UploadLocator.js';
 
 /** The registered name for the chunk-level stage. */
 export const DELETE_STAGE = 'Delete';
@@ -174,10 +175,10 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
      */
     private isCallerOwnedFile(record: WorkingRecord, fileID: string): boolean {
         const url = record.Identity.EphemeralID;
-        if (typeof url !== 'string' || !url.startsWith('upload://') || url.includes('#')) {
+        if (!IsUploadItemURL(url) || url.includes('#')) {
             return false;
         }
-        const locatorFileID = url.slice('upload://'.length);
+        const locatorFileID = url.slice(UPLOAD_URL_PREFIX.length);
         return locatorFileID.length > 0 && UUIDsEqual(locatorFileID, fileID);
     }
 

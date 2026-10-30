@@ -43,6 +43,7 @@ import {
 import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from '../ContentSourceConfigurationResolver.js';
 import { FetchContent, FetchResponse } from '../ContentFetcher.js';
 import { DetectionCatalog } from '../DetectionCatalog.js';
+import { IsUploadItemURL } from '../UploadLocator.js';
 import { SelectExtractor } from '../ExtractorCascade.js';
 import { ResolveSourceDriver } from './DiscoverStage.js';
 
@@ -359,7 +360,7 @@ export class ExtractStage extends BasePipelineStage {
             throw new FatalStageError(`No storage account is configured for provider '${file.ProviderID}', so '${fileID}' cannot be read`);
         }
         const bytes = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
-        const resolvedURL = url.startsWith('upload://') && !url.includes('#')
+        const resolvedURL = IsUploadItemURL(url) && !url.includes('#')
             ? this.uploadFileNameHint(file.Name, resolved.ObjectKey)
             : resolved.ObjectKey;
         return { Content: new Uint8Array(bytes), ContentType: file.ContentType ?? undefined, ResolvedURL: resolvedURL };

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
-import { WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
+import { ConfidenceScale, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import {
     CONTENT_PIPELINE_DELETE_CHUNKS_PROCESS_ID,
     CONTENT_PIPELINE_DELETE_PROCESS_ID,
@@ -17,8 +17,8 @@ import {
 import { ContentPipelineStartup } from '../ContentPipelineStartup.js';
 import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
-import type { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
-import type { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
+import { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
+import { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
 import '../stages/index.js';
 
 interface SavedContentItem {
@@ -27,10 +27,11 @@ interface SavedContentItem {
     ContentTypeID: string;
     ContentSourceTypeID: string;
     ContentFileTypeID: string;
-    FileID: string;
+    FileID: string | null;
     URL: string;
     Name: string;
     Description: string | null;
+    FieldConfidence?: string | null;
     EntityRecordDocumentID: string | null;
     ParentID?: string | null;
     RootParentID?: string | null;
@@ -57,10 +58,17 @@ interface SavedChunk {
     DeleteStatus: string | null;
 }
 
+interface CapturedRunViewParams {
+    EntityName: string;
+    ExtraFilter?: string;
+    IgnoreMaxRows?: boolean;
+}
+
 function createFakeEnvironment() {
     const items: SavedContentItem[] = [];
     const erds: SavedERD[] = [];
     const chunks: SavedChunk[] = [];
+    const runViewCalls: CapturedRunViewParams[] = [];
     let itemSeq = 0;
     let erdSeq = 0;
 
@@ -149,7 +157,8 @@ function createFakeEnvironment() {
         return values;
     };
 
-    const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
+    const runView = vi.fn(async (params: CapturedRunViewParams) => {
+        runViewCalls.push(params);
         const filter = parseFilter(params.ExtraFilter);
         const extra = params.ExtraFilter ?? '';
 
@@ -173,6 +182,9 @@ function createFakeEnvironment() {
                     return false;
                 }
                 if (filter.ContentSourceID !== undefined && item.ContentSourceID !== filter.ContentSourceID) {
+                    return false;
+                }
+                if (filter.URL !== undefined && item.URL !== filter.URL) {
                     return false;
                 }
                 if (filter.FileID !== undefined && item.FileID !== filter.FileID) {
@@ -243,7 +255,7 @@ function createFakeEnvironment() {
             return undefined;
         },
         RunView: runView,
-        RunViews: vi.fn(async (views: { EntityName: string; ExtraFilter?: string }[]) => {
+        RunViews: vi.fn(async (views: CapturedRunViewParams[]) => {
             return Promise.all(views.map((v) => runView(v)));
         }),
         GetEntityObject: vi.fn(async (entityName: string) => {
@@ -254,10 +266,11 @@ function createFakeEnvironment() {
                     ContentTypeID: '',
                     ContentSourceTypeID: '',
                     ContentFileTypeID: '',
-                    FileID: '',
+                    FileID: null,
                     URL: '',
                     Name: '',
                     Description: null,
+                    FieldConfidence: null,
                     EntityRecordDocumentID: null,
                     ExtractionStatus: '',
                     TaggingStatus: '',
@@ -265,33 +278,82 @@ function createFakeEnvironment() {
                     EmbeddingStatus: '',
                     DeleteStatus: null,
                 };
+                const fields = [
+                    'ID',
+                    'ContentSourceID',
+                    'ContentTypeID',
+                    'ContentSourceTypeID',
+                    'ContentFileTypeID',
+                    'FileID',
+                    'URL',
+                    'Name',
+                    'Description',
+                    'FieldConfidence',
+                    'EntityRecordDocumentID',
+                    'ExtractionStatus',
+                    'TaggingStatus',
+                    'SegmentationStatus',
+                    'EmbeddingStatus',
+                    'DeleteStatus',
+                ].map((name) => ({ Name: name }));
                 return {
+                    Fields: fields,
                     get ID() {
                         return record.ID;
+                    },
+                    get ContentSourceID() {
+                        return record.ContentSourceID;
                     },
                     set ContentSourceID(v: string) {
                         record.ContentSourceID = v;
                     },
+                    get ContentTypeID() {
+                        return record.ContentTypeID;
+                    },
                     set ContentTypeID(v: string) {
                         record.ContentTypeID = v;
+                    },
+                    get ContentSourceTypeID() {
+                        return record.ContentSourceTypeID;
                     },
                     set ContentSourceTypeID(v: string) {
                         record.ContentSourceTypeID = v;
                     },
+                    get ContentFileTypeID() {
+                        return record.ContentFileTypeID;
+                    },
                     set ContentFileTypeID(v: string) {
                         record.ContentFileTypeID = v;
                     },
-                    set FileID(v: string) {
+                    get FileID() {
+                        return record.FileID;
+                    },
+                    set FileID(v: string | null) {
                         record.FileID = v;
+                    },
+                    get URL() {
+                        return record.URL;
                     },
                     set URL(v: string) {
                         record.URL = v;
                     },
+                    get Name() {
+                        return record.Name;
+                    },
                     set Name(v: string) {
                         record.Name = v;
                     },
+                    get Description() {
+                        return record.Description;
+                    },
                     set Description(v: string | null) {
                         record.Description = v;
+                    },
+                    get FieldConfidence() {
+                        return record.FieldConfidence ?? null;
+                    },
+                    set FieldConfidence(v: string | null) {
+                        record.FieldConfidence = v;
                     },
                     get EntityRecordDocumentID() {
                         return record.EntityRecordDocumentID;
@@ -420,7 +482,7 @@ function createFakeEnvironment() {
         }),
     };
 
-    return { items, erds, chunks, provider: provider as never, contextUser: { ID: 'USER-1' } as never };
+    return { items, erds, chunks, runViewCalls, runView, provider: provider as never, contextUser: { ID: 'USER-1' } as never };
 }
 
 beforeEach(async () => {
@@ -429,7 +491,7 @@ beforeEach(async () => {
 });
 
 describe('ContentUploadIngestor', () => {
-    it('creates a Pending Content Item with FileID, UploadItemURL, and no EntityRecordDocument when Origin is omitted', async () => {
+    it('creates a Pending Content Item with FileID, UploadItemURL, CallerTitle FieldConfidence, and no EntityRecordDocument when Origin is omitted', async () => {
         const { items, erds, provider, contextUser } = createFakeEnvironment();
 
         const result = await ContentUploadIngestor.Ingest({
@@ -458,6 +520,9 @@ describe('ContentUploadIngestor', () => {
             URL: UploadItemURL('FILE-100'),
             Name: 'quarterly-report.pdf',
             Description: 'Q3 financial summary',
+            FieldConfidence: JSON.stringify({
+                Title: { Score: ConfidenceScale.CallerTitle, SetBy: 'Upload' },
+            }),
             EntityRecordDocumentID: null,
             ExtractionStatus: 'Pending',
             TaggingStatus: 'Pending',
@@ -465,6 +530,32 @@ describe('ContentUploadIngestor', () => {
             EmbeddingStatus: 'Pending',
         });
         expect(IsUploadItemURL(items[0].URL)).toBe(true);
+    });
+
+    it('preserves the caller-provided Name when Extract proposes an embedded title (M2)', async () => {
+        const { items, provider, contextUser } = createFakeEnvironment();
+
+        const created = await ContentUploadIngestor.Ingest({
+            ContentSourceID: 'SRC-UPLOAD-1',
+            FileID: 'FILE-150',
+            Name: 'caller-chosen-name.pdf',
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+
+        const hydrator = new WorkingRecordHydrator(provider, contextUser);
+        const working = await hydrator.Hydrate('Content Item', created.ContentItemID);
+        expect(working.Get('Title')).toBe('caller-chosen-name.pdf');
+        expect(working.GetConfidence('Title')).toBe(ConfidenceScale.CallerTitle);
+
+        // Neither an extractor's embedded title (6) nor a discovery title override (8) can replace CallerTitle (10).
+        expect(working.Propose('Title', 'Embedded PDF Metadata Title', ConfidenceScale.ExtractorTitle, 'Extract.pdf')).toBe(false);
+        expect(working.Propose('Title', 'Discovered Title Override', 8, 'Discover.Web')).toBe(false);
+        expect(working.Get('Title')).toBe('caller-chosen-name.pdf');
+
+        const committer = new WorkingRecordCommitter(provider, contextUser);
+        await committer.Commit(working, 'ExtractionStatus', 'Complete');
+        expect(items[0].Name).toBe('caller-chosen-name.pdf');
     });
 
     it('writes Entity Record Documents RecordID using CompositeKey.ToCompactURLSegment(), finds existing rows in either compact or KeyValuePair form, and refuses a mismatched EntityDocument entity', async () => {
@@ -552,6 +643,27 @@ describe('ContentUploadIngestor', () => {
         ).rejects.toThrow(/EntityDocumentID 'ED-OTHER'.*does not match Origin entity 'MJ: Collaboration Space Items'/);
     });
 
+    it('throws a clear configuration error when ResolveVectorIndexID returns null while creating an EntityRecordDocument (M3)', async () => {
+        const { provider, contextUser } = createFakeEnvironment();
+        vi.spyOn(ContentVectorInfrastructure.prototype, 'ResolveVectorIndexID').mockResolvedValue(null);
+
+        await expect(
+            ContentUploadIngestor.Ingest({
+                ContentSourceID: 'SRC-UPLOAD-1',
+                FileID: 'FILE-220',
+                Name: 'needs-vector-index.pdf',
+                Origin: {
+                    EntityName: 'MJ: Collaboration Space Items',
+                    RecordID: 'SPACE-ITEM-220',
+                },
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(
+            /Configure VectorIndexID on the Content Source or its Content Type, or set ContentPipeline\.DefaultVectorIndexID/,
+        );
+    });
+
     it('refuses a ContentSourceID whose driver is not push-only with a clear error', async () => {
         const { provider, contextUser } = createFakeEnvironment();
 
@@ -622,7 +734,7 @@ describe('ContentUploadIngestor', () => {
         ]);
     });
 
-    it('revives an existing Content Item still pending deletion (clears DeleteStatus) instead of creating a second one', async () => {
+    it('releases FileID on Remove(RunNow: false), matches by URL locator on re-Ingest, revives the same row with FileID and Pending stages, and re-segments after Delete Chunks purged old chunks (M7, M8)', async () => {
         const { items, chunks, provider, contextUser } = createFakeEnvironment();
 
         const created = await ContentUploadIngestor.Ingest({
@@ -632,13 +744,60 @@ describe('ContentUploadIngestor', () => {
             ContextUser: contextUser,
             Provider: provider,
         });
-        chunks.push({ ID: 'CHK-350', ContentItemID: created.ContentItemID, DeleteStatus: 'Pending' });
-        items[0].DeleteStatus = 'Pending';
+        // Simulate completed stages and custom FieldConfidence before Remove.
+        items[0].ExtractionStatus = 'Complete';
+        items[0].SegmentationStatus = 'Complete';
+        items[0].TaggingStatus = 'Complete';
+        items[0].EmbeddingStatus = 'Complete';
+        items[0].FieldConfidence = JSON.stringify({
+            Title: { Score: ConfidenceScale.CallerTitle, SetBy: 'Upload' },
+            Text: { Score: ConfidenceScale.ExtractorText, SetBy: 'Extract.pdf' },
+        });
+        chunks.push({ ID: 'CHK-350-OLD', ContentItemID: created.ContentItemID, DeleteStatus: null });
+
+        // Remove(RunNow: false) immediately sets FileID = null on the root upload item and marks it and its chunk Pending delete.
+        const removed = await ContentUploadIngestor.Remove({
+            FileID: 'FILE-350',
+            ContentSourceID: 'SRC-UPLOAD-1',
+            RunNow: false,
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+        expect(removed.ContentItemIDs).toEqual([created.ContentItemID]);
+        expect(items[0].FileID).toBeNull();
+        expect(items[0].DeleteStatus).toBe('Pending');
+        expect(chunks[0].DeleteStatus).toBe('Pending');
+
+        // Simulate Delete Chunks having purged CHK-350-OLD before the user re-ingests the file.
+        chunks.splice(0, chunks.length);
+
+        const processCalls: { processID: string; recordIDs: string[] }[] = [];
+        vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID, options) => {
+            const scope = options.Scope as { Kind: string; RecordIDs: string[] };
+            processCalls.push({ processID, recordIDs: scope.RecordIDs });
+            if (processID === CONTENT_PIPELINE_SEGMENT_PROCESS_ID) {
+                chunks.push({
+                    ID: 'CHK-350-NEW',
+                    ContentItemID: scope.RecordIDs[0],
+                    EmbeddingStatus: 'Pending',
+                    DeleteStatus: null,
+                });
+            }
+            return {
+                Status: 'Completed',
+                Processed: scope.RecordIDs.length,
+                Success: scope.RecordIDs.length,
+                Error: 0,
+                Skipped: 0,
+                ProcessRunID: 'RUN-REVIVE',
+            } as never;
+        });
 
         const revived = await ContentUploadIngestor.Ingest({
             ContentSourceID: 'SRC-UPLOAD-1',
             FileID: 'FILE-350',
-            Name: 'revive-me.pdf',
+            Name: 'revive-me-v2.pdf',
+            RunNow: true,
             ContextUser: contextUser,
             Provider: provider,
         });
@@ -650,10 +809,23 @@ describe('ContentUploadIngestor', () => {
         });
         expect(items).toHaveLength(1);
         expect(items[0].DeleteStatus).toBeNull();
-        expect(chunks[0].DeleteStatus).toBeNull();
+        expect(items[0].FileID).toBe('FILE-350');
+        expect(items[0].Name).toBe('revive-me-v2.pdf');
+        expect(items[0].FieldConfidence).toBe(
+            JSON.stringify({
+                Title: { Score: ConfidenceScale.CallerTitle, SetBy: 'Upload' },
+            }),
+        );
+        // Because all 4 stage statuses were reset to Pending on revive, Extract, Segment, Tag, and Embed all run.
+        expect(processCalls).toEqual([
+            { processID: CONTENT_PIPELINE_EXTRACT_PROCESS_ID, recordIDs: [created.ContentItemID] },
+            { processID: CONTENT_PIPELINE_SEGMENT_PROCESS_ID, recordIDs: [created.ContentItemID] },
+            { processID: CONTENT_PIPELINE_TAG_PROCESS_ID, recordIDs: [created.ContentItemID] },
+            { processID: CONTENT_PIPELINE_EMBED_PROCESS_ID, recordIDs: ['CHK-350-NEW'] },
+        ]);
     });
 
-    it('runs Extract, Segment, Embed, and Tag in order with a records scope when RunNow is true, and never throws when a stage fails', async () => {
+    it('runs Extract, Segment, Tag, and Embed in order with a records scope when RunNow is true, and never throws when a stage fails', async () => {
         const { items, chunks, provider, contextUser } = createFakeEnvironment();
         const processCalls: { processID: string; recordIDs: string[] }[] = [];
 
@@ -689,8 +861,8 @@ describe('ContentUploadIngestor', () => {
         expect(processCalls).toEqual([
             { processID: CONTENT_PIPELINE_EXTRACT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
             { processID: CONTENT_PIPELINE_SEGMENT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
-            { processID: CONTENT_PIPELINE_EMBED_PROCESS_ID, recordIDs: ['CHK-1', 'CHK-2'] },
             { processID: CONTENT_PIPELINE_TAG_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
+            { processID: CONTENT_PIPELINE_EMBED_PROCESS_ID, recordIDs: ['CHK-1', 'CHK-2'] },
         ]);
 
         // If a stage throws unexpectedly, Ingest logs, marks the item status Failed, and does not throw past the caller.
@@ -821,25 +993,25 @@ describe('ContentUploadIngestor', () => {
 
         expect(processCalls).toEqual([
             { processID: CONTENT_PIPELINE_EXTRACT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
-            // ITEM-CHILD-BAD failed Extract, so only the 3 completed items advance to Segment (including depth-2 grandchild).
+            // ITEM-CHILD-BAD failed Extract, so only the 3 extracted items advance to Segment and Tag (including depth-2 grandchild).
             {
                 processID: CONTENT_PIPELINE_SEGMENT_PROCESS_ID,
                 recordIDs: ['ITEM-UPLOAD-1', 'ITEM-CHILD-1', 'ITEM-GRANDCHILD-1'],
             },
-            // ITEM-CHILD-1 failed Segment, so Embed and Tag still run for the 2 items that completed Segment.
+            {
+                processID: CONTENT_PIPELINE_TAG_PROCESS_ID,
+                recordIDs: ['ITEM-UPLOAD-1', 'ITEM-CHILD-1', 'ITEM-GRANDCHILD-1'],
+            },
+            // ITEM-CHILD-1 failed Segment, so Embed runs for the chunks of the 2 items whose segmentation is complete.
             {
                 processID: CONTENT_PIPELINE_EMBED_PROCESS_ID,
                 recordIDs: ['CHK-ITEM-UPLOAD-1', 'CHK-ITEM-GRANDCHILD-1'],
             },
-            {
-                processID: CONTENT_PIPELINE_TAG_PROCESS_ID,
-                recordIDs: ['ITEM-UPLOAD-1', 'ITEM-GRANDCHILD-1'],
-            },
         ]);
     });
 
-    it('Remove marks the root and every descendant at any depth and all their chunks as Pending delete, checks receipts, and reports unremoved IDs when RunNow fails', async () => {
-        const { items, chunks, provider, contextUser } = createFakeEnvironment();
+    it('Remove marks the root and every descendant at any depth and all their chunks as Pending delete with IgnoreMaxRows: true, checks receipts, and reports unremoved IDs when RunNow fails (M1, M5)', async () => {
+        const { items, chunks, runViewCalls, runView, provider, contextUser } = createFakeEnvironment();
 
         await ContentUploadIngestor.Ingest({
             ContentSourceID: 'SRC-UPLOAD-1',
@@ -922,6 +1094,7 @@ describe('ContentUploadIngestor', () => {
             } as never;
         });
 
+        runViewCalls.length = 0;
         const removed = await ContentUploadIngestor.Remove({
             FileID: 'FILE-500',
             ContentSourceID: 'SRC-UPLOAD-1',
@@ -935,6 +1108,18 @@ describe('ContentUploadIngestor', () => {
             DependentsMarked: 4, // 2 descendants + 2 chunks
             FailedChunkIDs: ['CHK-DESC-2'],
         });
+        // Every unbounded RunView during Remove (targets, descendants, chunks) passes IgnoreMaxRows: true (M1).
+        const chunkRunViewCalls = runViewCalls.filter((c) => c.EntityName === 'MJ: Content Item Chunks');
+        expect(chunkRunViewCalls.length).toBeGreaterThan(0);
+        for (const call of chunkRunViewCalls) {
+            expect(call.IgnoreMaxRows).toBe(true);
+        }
+        for (const call of runViewCalls) {
+            expect(call.IgnoreMaxRows).toBe(true);
+        }
+        // Root upload item had its caller-owned FileID released, while archive members kept their durable-copy FileIDs for DeleteStage.
+        expect(items[0].FileID).toBeNull();
+        expect(items[1].FileID).toBe('FILE-DESC-1');
         expect(deleteCalls).toEqual([
             {
                 processID: CONTENT_PIPELINE_DELETE_PROCESS_ID,
@@ -945,6 +1130,124 @@ describe('ContentUploadIngestor', () => {
                 recordIDs: ['CHK-ROOT', 'CHK-DESC-2'],
             },
         ]);
+
+        // M5: when RunByID reports a failure but the follow-up query succeeds and finds 0 remaining unremoved rows,
+        // FailedItemIDs / FailedChunkIDs are empty rather than falling back to all attempted IDs; when the follow-up
+        // query itself fails, all attempted IDs are reported.
+        items[0].DeleteStatus = null;
+        chunks[0].DeleteStatus = 'Pending';
+        vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID) => {
+            if (processID === CONTENT_PIPELINE_DELETE_PROCESS_ID) {
+                for (const item of items) {
+                    item.DeleteStatus = 'Deleted';
+                }
+            } else {
+                for (const chunk of chunks) {
+                    chunk.DeleteStatus = 'Deleted';
+                }
+            }
+            return { Status: 'Failed', Processed: 1, Success: 0, Error: 1, Skipped: 0, ProcessRunID: 'RUN-ERR' } as never;
+        });
+
+        const allClearedDespiteRunError = await ContentUploadIngestor.Remove({
+            ContentItemID: 'ITEM-UPLOAD-1',
+            RunNow: true,
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+        expect(allClearedDespiteRunError.FailedItemIDs).toBeUndefined();
+        expect(allClearedDespiteRunError.FailedChunkIDs).toBeUndefined();
+
+        items[0].DeleteStatus = null;
+        chunks[0].DeleteStatus = 'Pending';
+        vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockImplementation(async (processID) => {
+            if (processID === CONTENT_PIPELINE_DELETE_CHUNKS_PROCESS_ID) {
+                // Simulate the follow-up verification query failing after Delete Chunks fails.
+                runView.mockResolvedValue({ Success: false, Results: [] } as never);
+            }
+            return { Status: 'Failed', Processed: 1, Success: 0, Error: 1, Skipped: 0, ProcessRunID: 'RUN-ERR-2' } as never;
+        });
+        const fallbackOnQueryFailure = await ContentUploadIngestor.Remove({
+            ContentItemID: 'ITEM-UPLOAD-1',
+            RunNow: true,
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+        expect(fallbackOnQueryFailure.FailedItemIDs).toEqual(['ITEM-UPLOAD-1']);
+        expect(fallbackOnQueryFailure.FailedChunkIDs).toEqual(['CHK-ROOT']);
+    });
+
+    it('Remove(ContentItemID) refuses non-upload items, already-Deleted items, and mismatched ContentSourceID, and throws when root MarkForDeletion fails (M9)', async () => {
+        const { items, provider, contextUser } = createFakeEnvironment();
+
+        await ContentUploadIngestor.Ingest({
+            ContentSourceID: 'SRC-UPLOAD-1',
+            FileID: 'FILE-600',
+            Name: 'valid-upload.pdf',
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+        items.push(
+            {
+                ID: 'ITEM-WEB-1',
+                ContentSourceID: 'SRC-RSS-1',
+                ContentTypeID: 'CT-DOC',
+                ContentSourceTypeID: 'CST-RSS',
+                ContentFileTypeID: 'CFT-HTML',
+                FileID: null,
+                URL: 'https://example.com/article',
+                Name: 'Crawled article',
+                Description: null,
+                EntityRecordDocumentID: null,
+                ExtractionStatus: 'Complete',
+                TaggingStatus: 'Complete',
+                SegmentationStatus: 'Complete',
+                EmbeddingStatus: 'Complete',
+                DeleteStatus: null,
+            },
+            {
+                ID: 'ITEM-ALREADY-DELETED',
+                ContentSourceID: 'SRC-UPLOAD-1',
+                ContentTypeID: 'CT-DOC',
+                ContentSourceTypeID: 'CST-UPLOAD',
+                ContentFileTypeID: 'CFT-PDF',
+                FileID: null,
+                URL: UploadItemURL('FILE-601'),
+                Name: 'already-gone.pdf',
+                Description: null,
+                EntityRecordDocumentID: null,
+                ExtractionStatus: 'Complete',
+                TaggingStatus: 'Complete',
+                SegmentationStatus: 'Complete',
+                EmbeddingStatus: 'Complete',
+                DeleteStatus: 'Deleted',
+            },
+        );
+
+        await expect(
+            ContentUploadIngestor.Remove({
+                ContentItemID: 'ITEM-WEB-1',
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/is not an upload locator/);
+
+        await expect(
+            ContentUploadIngestor.Remove({
+                ContentItemID: 'ITEM-ALREADY-DELETED',
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/is already Deleted/);
+
+        await expect(
+            ContentUploadIngestor.Remove({
+                ContentItemID: 'ITEM-UPLOAD-1',
+                ContentSourceID: 'SRC-OTHER-ENTITY',
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/belongs to Content Source 'SRC-UPLOAD-1', not 'SRC-OTHER-ENTITY'/);
     });
 
     it('Sync and Discover over an Upload source return Skipped, mark zero existing uploaded items for deletion, and stamp LastDiscoveredAt / LastSyncedAt', async () => {
