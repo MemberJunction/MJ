@@ -58,7 +58,7 @@ describe('SyncLogger — repeated warnings are rolled up by code', () => {
         }
         emitted.length = 0;
 
-        expect(logger.flushWarningRollups()).toBe(1);
+        expect(logger.FlushWarningRollups()).toBe(1);
 
         const [rollup, ...rest] = warnings(emitted);
         expect(rest).toEqual([]);
@@ -78,7 +78,7 @@ describe('SyncLogger — repeated warnings are rolled up by code', () => {
         logger.warning('Invoices', 'ORPHANS_DETECTED', 'one orphan');
         emitted.length = 0;
 
-        expect(logger.flushWarningRollups()).toBe(0);
+        expect(logger.FlushWarningRollups()).toBe(0);
         expect(warnings(emitted)).toEqual([]);            // both were already reported in full
     });
 
@@ -91,15 +91,15 @@ describe('SyncLogger — repeated warnings are rolled up by code', () => {
         expect(codes.filter(c => c === 'ORPHANS_DETECTED')).toHaveLength(1);
 
         emitted.length = 0;
-        expect(logger.flushWarningRollups()).toBe(1);      // only the cascading code rolls up
+        expect(logger.FlushWarningRollups()).toBe(1);      // only the cascading code rolls up
         expect(warnings(emitted)[0].data.code).toBe('NO_CREDENTIAL');
     });
 
     it('clears its tallies, so a second flush repeats nothing', () => {
         for (let i = 0; i < 10; i++) logger.warning('Contacts', 'NO_CREDENTIAL', 'no credential');
-        expect(logger.flushWarningRollups()).toBe(1);
+        expect(logger.FlushWarningRollups()).toBe(1);
         emitted.length = 0;
-        expect(logger.flushWarningRollups()).toBe(0);
+        expect(logger.FlushWarningRollups()).toBe(0);
         expect(warnings(emitted)).toEqual([]);
     });
 
@@ -107,7 +107,7 @@ describe('SyncLogger — repeated warnings are rolled up by code', () => {
         // Same stage 20 times: the rollup must not claim 20 objects were affected.
         for (let i = 0; i < 20; i++) logger.warning('Contacts', 'CONNECTOR_IGNORED_BATCH_SIZE', 'over-size batch');
         emitted.length = 0;
-        logger.flushWarningRollups();
+        logger.FlushWarningRollups();
         const rollup = warnings(emitted)[0];
         const payload = rollup.data.warningData as Record<string, unknown>;
         expect(payload.occurrences).toBe(20);

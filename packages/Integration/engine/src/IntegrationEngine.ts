@@ -1588,7 +1588,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const summary = this.buildSyncResultBody(config.companyIntegration.Integration, result);
             // Repeated warnings are rolled up by code (SyncLogger.warning) and the summary is emitted
             // HERE — before the terminal event, so it lands inside this run's own artifact stream.
-            logger.flushWarningRollups();
+            logger.FlushWarningRollups();
             logger.emit('sync.run.complete', {
                 success: result.Success && result.RecordsErrored === 0,
                 durationMs: result.Duration,
@@ -1620,7 +1620,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const errMsg = err instanceof Error ? err.message : String(err);
             // A failing run is exactly where a warning cascade is most likely, so flush the rollups
             // on this path too — before the terminal fail event.
-            logger.flushWarningRollups();
+            logger.FlushWarningRollups();
             logger.emit('sync.run.fail', { error: errMsg, durationMs: Date.now() - startTime });
             // Ownership lost (fence moved / lease reclaimed): the run row now belongs to
             // ANOTHER process — writing a terminal status to it here would clobber the new

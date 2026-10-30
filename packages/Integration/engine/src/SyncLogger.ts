@@ -199,7 +199,7 @@ export class SyncLogger {
      *
      * ROLLED UP BY CODE. The first {@link WARNING_VERBATIM_LIMIT} occurrences of a code are emitted
      * as they happen, carrying `occurrence`; after that the code is counted and
-     * {@link flushWarningRollups} emits ONE summary at the end of the run. Nothing is lost — the
+     * {@link FlushWarningRollups} emits ONE summary at the end of the run. Nothing is lost — the
      * count and the affected stages survive — and one root cause can no longer bury every other
      * warning the run raised.
      */
@@ -223,7 +223,7 @@ export class SyncLogger {
      *
      * @returns the number of rollup warnings emitted (0 when no code exceeded the limit).
      */
-    public flushWarningRollups(): number {
+    public FlushWarningRollups(): number {
         let emitted = 0;
         for (const [code, tally] of this.warningTallies) {
             const suppressed = tally.count - WARNING_VERBATIM_LIMIT;
