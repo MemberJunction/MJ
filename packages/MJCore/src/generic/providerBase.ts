@@ -136,6 +136,12 @@ export interface QueryCacheAuthorization {
      * provider cannot compute one (a client, whose slots the server validates instead).
      */
     definition?: QueryDefinitionSignature;
+    /**
+     * The user's field-security profile (`FieldSecuritySQLGate.CatalogDenialProfileKey`) when the
+     * run drops denied columns from its rows; it joins the fingerprint, so users with different
+     * denials never share a slot. Undefined when the rows are the same for every authorized user.
+     */
+    fieldSecurityKey?: string;
 }
 
 export const AllMetadataArrays = [
@@ -2708,7 +2714,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ...(params.Parameters ?? {}),
                 __maxRows: params.MaxRows ?? -1,
                 __startRow: params.StartRow ?? 0,
-                ...serverSegment
+                ...serverSegment,
+                ...(queryAuth.fieldSecurityKey ? { __fieldSecurity: queryAuth.fieldSecurityKey } : {})
             };
             if (serverSegment !== null) {
                 queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
@@ -6833,7 +6840,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // We have a candidate cache entry — confirm freshness with the server.
             const localDate = new Date(cachedDateStr);
             const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
-            if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
+            const serverDate = this.validDatasetDate(status?.LatestUpdateDate);
+            if (status?.Success && serverDate && localDate.getTime() >= serverDate.getTime()) {
                 // Timestamps suggest cache is fresh; verify per-entity row counts to
                 // catch deleted rows (timestamp comparison alone misses pure deletes).
                 // Shared with IsDatasetCacheUpToDate so the two cannot drift again.
@@ -6843,9 +6851,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        // Cold path or stale: fetch from server and cache.
+        // Cold path or stale: fetch from server and cache only when the load succeeded.
         const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
-        await this.CacheDataset(datasetName, itemFilters, dataset);
+        if (dataset?.Success) {
+            await this.CacheDataset(datasetName, itemFilters, dataset);
+        }
         return dataset;
     }
 
@@ -6879,8 +6889,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (localDate) {
             // we have a local cached timestamp, so compare it to the server timestamp
             const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
-            if (status) {
-                const serverTimestamp = status.LatestUpdateDate.getTime();
+            const serverDate = this.validDatasetDate(status?.LatestUpdateDate);
+            if (status?.Success && serverDate) {
+                const serverTimestamp = serverDate.getTime();
                 if (localDate.getTime() >= serverTimestamp) {
                     // this situation means our local cache timestamp is >= the server timestamp, so we're most likely up to date
                     // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
@@ -6902,6 +6913,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // we don't have a local cache timestamp, so we're out of date
             return false;
         }
+    }
+
+    /**
+     * Normalizes a dataset `LatestUpdateDate` to a valid `Date`, or `null` when absent or invalid
+     * (for example, when a dataset or dataset-status call fails and returns `LatestUpdateDate: null`).
+     */
+    private validDatasetDate(value: Date | string | number | null | undefined): Date | null {
+        if (value == null) {
+            return null;
+        }
+        const date = value instanceof Date ? value : new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
     }
 
     /**
@@ -6964,6 +6987,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param dataset 
      */
     public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[] | undefined, dataset: DatasetResultType): Promise<void> {
+        const latestUpdateDate = this.validDatasetDate(dataset?.LatestUpdateDate);
+        if (!dataset?.Success || !latestUpdateDate) {
+            LogError(
+                `CacheDataset("${datasetName}"): refusing to cache failed or undated dataset result ` +
+                `(Success=${dataset?.Success}, Status=${dataset?.Status ?? 'unknown'})`
+            );
+            return;
+        }
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
@@ -6972,7 +7003,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 { TTLSeconds: ProviderBase.DatasetCacheTTLSeconds });
             // Date is stored as ISO string for forward-compatibility across providers
             // (Redis can't natively round-trip Date; localStorage requires string).
-            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString(),
+            await ls.SetItem<string>(key + '_date', latestUpdateDate.toISOString(),
                 ProviderBase.DatasetCacheCategory, { TTLSeconds: ProviderBase.DatasetDateCacheTTLSeconds });
         }
     }

@@ -11,9 +11,11 @@
  *          reader is denied returns that row to the unrestricted user and not to the reader, even after
  *          the unrestricted user warmed the identical request
  *   Saved queries (RunQuery) enforce field-level security
- *     PQ1  a saved query SELECTING a denied column is refused for the restricted caller and runs for the unrestricted one
+ *     PQ1  a saved query SELECTING a denied column is refused for the restricted caller, worded exactly as a query
+ *          that does not exist, and runs for the unrestricted one
  *     PQ2  a saved query FILTERING on a denied column (selecting only allowed ones) is refused for the restricted caller
- *     PQ3  a saved query reading whole rows (SELECT *) of the entity is refused for the restricted caller (fail closed)
+ *     PQ3  a saved query reading whole rows (SELECT *) of the entity runs for the restricted caller with the denied
+ *          column dropped from its rows, silently, and returns it to the unrestricted caller
  *     PQ4  a query whose role list includes the restricted caller's role runs for that caller: the role-list
  *          grant bypasses field-level security by design
  *
@@ -261,10 +263,14 @@ function assertQueryRefused(result: QueryOutcome, marker: string, what: string):
     Assert(!result.ErrorMessage.includes(marker), `${what}: the refusal must not carry the denied value`);
 }
 
-/** PQ1 — a saved query selecting a denied column: refused for the reader, runs for the writer with the value. */
+/** PQ1 — a saved query selecting a denied column: refused for the reader (as if it did not exist), runs for the writer with the value. */
 export async function CheckPq1QuerySelectingDeniedRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PQ1');
-    assertQueryRefused(await runQueryAs(state.Queries.SelectsDenied!, r.Fx.Reader!), r.Markers.Email, 'PQ1 reader');
+    const asReader = await runQueryAs(state.Queries.SelectsDenied!, r.Fx.Reader!);
+    assertQueryRefused(asReader, r.Markers.Email, 'PQ1 reader');
+    // The run asks by ID, so the refusal echoes the ID and never the query's name.
+    const unavailable = `Query '${state.Queries.SelectsDenied!.ID}' does not exist or you do not have permission to run it.`;
+    Assert(asReader.ErrorMessage === unavailable, `PQ1: the refusal must read exactly as the not-found message ('${unavailable}'), got '${asReader.ErrorMessage}'`);
     const asWriter = await runQueryAs(state.Queries.SelectsDenied!, r.Fx.Writer!);
     Assert(asWriter.Success && asWriter.Results.length === 1, `PQ1: the writer must run the query: ${asWriter.ErrorMessage}`);
     AssertValuePresent(asWriter.Results[0], FLS_READER_DENIED_FIELD, r.Markers.Email, 'PQ1 writer (control)');
@@ -278,12 +284,17 @@ export async function CheckPq2QueryFilteringOnDeniedRefused(ctx: IntegrationChec
     Assert(asWriter.Success, `PQ2: the writer must run the query: ${asWriter.ErrorMessage}`);
 }
 
-/** PQ3 — a saved query reading whole rows of the entity fails closed for the reader. */
-export async function CheckPq3QueryWholeRowRefused(ctx: IntegrationCheckContext): Promise<void> {
+/** PQ3 — a saved query reading whole rows of the entity runs for the reader with the denied column dropped, silently. */
+export async function CheckPq3QueryStarDropsDeniedColumn(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PQ3');
-    assertQueryRefused(await runQueryAs(state.Queries.SelectsStar!, r.Fx.Reader!), r.Markers.Email, 'PQ3 reader');
+    const asReader = await runQueryAs(state.Queries.SelectsStar!, r.Fx.Reader!);
+    Assert(asReader.Success && asReader.Results.length === 1, `PQ3: the reader must run the SELECT * query: ${asReader.ErrorMessage}`);
+    Assert(!(FLS_READER_DENIED_FIELD in asReader.Results[0]), `LEAK: PQ3: the reader's rows carry the denied column '${FLS_READER_DENIED_FIELD}'`);
+    Assert(!JSON.stringify(asReader).includes(r.Markers.Email), 'LEAK: PQ3: the reader\'s result carries the denied value');
+    Assert('ID' in asReader.Results[0], 'PQ3: the reader must still receive the columns they may read');
     const asWriter = await runQueryAs(state.Queries.SelectsStar!, r.Fx.Writer!);
     Assert(asWriter.Success && asWriter.Results.length === 1, `PQ3: the writer must run the query: ${asWriter.ErrorMessage}`);
+    AssertValuePresent(asWriter.Results[0], FLS_READER_DENIED_FIELD, r.Markers.Email, 'PQ3 writer (control)');
 }
 
 /** PQ4 — a query whose role list includes the reader's role runs for the reader: the role-list grant bypasses FLS by design. */
@@ -301,7 +312,7 @@ export const FlsCloseoutPendingChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.PC3`, Name: 'PC3 (cache segmentation): a search matching a row only through a denied column returns it to the unrestricted user and never to the restricted one', Fn: CheckPc3SearchRowSetIsolated },
     { Id: `${BUNDLE}.PQ1`, Name: 'PQ1 (RunQuery FLS): a saved query selecting a denied column is refused for the restricted caller and runs for the unrestricted one', Fn: CheckPq1QuerySelectingDeniedRefused },
     { Id: `${BUNDLE}.PQ2`, Name: 'PQ2 (RunQuery FLS): a saved query filtering on a denied column is refused for the restricted caller', Fn: CheckPq2QueryFilteringOnDeniedRefused },
-    { Id: `${BUNDLE}.PQ3`, Name: 'PQ3 (RunQuery FLS): a saved query reading whole rows (SELECT *) fails closed for the restricted caller', Fn: CheckPq3QueryWholeRowRefused },
+    { Id: `${BUNDLE}.PQ3`, Name: 'PQ3 (RunQuery FLS): a saved query reading whole rows (SELECT *) runs for the restricted caller with the denied column dropped', Fn: CheckPq3QueryStarDropsDeniedColumn },
     { Id: `${BUNDLE}.PQ4`, Name: 'PQ4 (RunQuery FLS): a role-list grant that includes the restricted caller\'s role lets the query run (role-list grants bypass FLS by design)', Fn: CheckPq4RoleListGrantBypasses },
 ];
 

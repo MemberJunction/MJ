@@ -99,6 +99,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     }
 
     class StubQuery extends StubEntity {
+        /** The query's declared child collections, empty: this save declares no children. */
+        public DeclaredParameters = { Items: [] };
+        public DeclaredFields = { Items: [] };
+        public DeclaredEntities = { Items: [] };
         public EntityInfo = { Name: 'MJ: Queries' };
         public Status = 'Approved';
         public SQL = 'SELECT 1';
