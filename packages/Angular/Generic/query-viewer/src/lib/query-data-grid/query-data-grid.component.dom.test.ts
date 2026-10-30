@@ -5,6 +5,8 @@ import { renderComponentFixture, query, capture, StubEmptyStateComponent, StubLo
 import { QueryDataGridComponent } from './query-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
 import type { QueryGridColumnConfig } from './models/query-grid-types';
+import { BuildColumnsForResult } from './models/query-grid-types';
+import type { MJQueryEntityExtended, MJQueryFieldEntity } from '@memberjunction/core-entities';
 
 /**
  * DOM coverage for <mj-query-data-grid> — the AG-Grid-backed query results grid (~4×). The grid body
@@ -108,5 +110,58 @@ describe('QueryDataGridComponent (DOM)', () => {
       expect(internals(fx).getExportColumns()).toEqual([{ name: 'PaymentDate', displayName: 'Payment Date', dataType: 'dateonly' }]);
     });
   });
-});
 
+  describe('columns come from the result, not from the query fields', () => {
+    type FieldShape = Pick<MJQueryFieldEntity, 'Name' | 'Sequence' | 'SQLBaseType' | 'SQLFullType' | 'Description' | 'SourceEntity' | 'SourceEntityID' | 'SourceFieldName'>;
+    const field = (name: string, sequence: number, baseType: string, description: string | null = null): MJQueryFieldEntity => {
+      const shape: FieldShape = { Name: name, Sequence: sequence, SQLBaseType: baseType, SQLFullType: baseType, Description: description, SourceEntity: null, SourceEntityID: null, SourceFieldName: null };
+      return shape as MJQueryFieldEntity;
+    };
+    const FIELDS = [field('ID', 1, 'uniqueidentifier'), field('SSN', 2, 'nvarchar', 'Social security number'), field('Amount', 3, 'money', 'Order total')];
+    const queryInfo = (): MJQueryEntityExtended => {
+      const shape: Pick<MJQueryEntityExtended, 'ID' | 'QueryFields'> = { ID: 'q-1', QueryFields: FIELDS };
+      return shape as MJQueryEntityExtended;
+    };
+    // The server dropped SSN from the result (the user may not read it).
+    const RESULT = [{ ID: 'a', Amount: 10.5, Extra: 'x' }, { ID: 'b', Amount: 3, Extra: 'y' }];
+
+    it('shows only the columns the rows carry, in the order the server returned them', () => {
+      const fx = render({ PersistState: false, QueryInfo: queryInfo(), Data: RESULT });
+      expect(fx.componentInstance.Columns.map(c => c.field)).toEqual(['ID', 'Amount', 'Extra']);
+      expect(fx.componentInstance.ColumnDefs.map(d => d.headerName)).toEqual(['ID', 'Amount', 'Extra']);
+    });
+
+    it('leaves no trace of a field the result does not carry: not a column (so not exported), not a header tooltip, not in the page', () => {
+      const fx = render({ PersistState: false, QueryInfo: queryInfo(), Data: RESULT });
+      expect(JSON.stringify(fx.componentInstance.Columns)).not.toMatch(/SSN|Social security/);
+      expect(JSON.stringify(fx.componentInstance.ColumnDefs)).not.toMatch(/SSN|Social security/);
+      expect((fx.nativeElement as HTMLElement).textContent ?? '').not.toMatch(/SSN|Social security/);
+    });
+
+    it('formats a present column from its field metadata and infers one no field describes', () => {
+      const fx = render({ PersistState: false, QueryInfo: queryInfo(), Data: RESULT });
+      const amount = fx.componentInstance.Columns.find(c => c.field === 'Amount');
+      const extra = fx.componentInstance.Columns.find(c => c.field === 'Extra');
+      expect(amount).toMatchObject({ sqlBaseType: 'money', description: 'Order total', align: 'right' });
+      expect(extra).toMatchObject({ sqlBaseType: 'nvarchar', description: undefined });
+    });
+
+    it('builds no columns from the fields before any rows arrive', () => {
+      const fx = render({ PersistState: false, QueryInfo: queryInfo(), Data: [] });
+      expect(fx.componentInstance.Columns).toEqual([]);
+      expect(fx.componentInstance.ColumnDefs).toEqual([]);
+    });
+
+    it('drops a configured column the result does not carry', () => {
+      const configs = BuildColumnsForResult([{ ID: 'a', SSN: 's', Amount: 1 }], FIELDS);
+      const fx = render({ ColumnConfigs: configs, Data: RESULT });
+      expect(fx.componentInstance.Columns.map(c => c.field)).toEqual(['ID', 'Amount']);
+    });
+
+    it('matches field metadata by name ignoring case, keeping the result\'s spelling', () => {
+      const columns = BuildColumnsForResult([{ amount: 2 }], FIELDS);
+      expect(columns).toHaveLength(1);
+      expect(columns[0]).toMatchObject({ field: 'amount', title: 'amount', sqlBaseType: 'money', order: 0 });
+    });
+  });
+});

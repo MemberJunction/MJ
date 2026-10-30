@@ -120,6 +120,36 @@ describe('GetUserRowLevelSecurityInfo collects filters only from rows that GRANT
         expect(clause).toContain(' OR ');
     });
 
+    // #4078: the OR'd role filters are wrapped as one group, so a predicate ANDed beside them
+    // (`WHERE ID = @x AND <clause>`) applies to every filter instead of binding to the first one.
+    // Was pinned with it.fails until GetUserRowLevelSecurityWhereClause grouped them.
+    it('two granting rows OR their filters inside one enclosing pair of parentheses (#4078)', () => {
+        const entity = buildEntityInfo([
+            buildPermission({ RoleID: ROLE_A_ID, CreateRLSFilterID: FILTER_1_ID }),
+            buildPermission({ RoleID: ROLE_B_ID, CreateRLSFilterID: FILTER_2_ID }),
+        ]);
+        const user = buildUser([ROLE_A_ID, ROLE_B_ID]);
+        const f1 = filter1.MarkupFilterText(user);
+        const f2 = filter2.MarkupFilterText(user);
+
+        const clause = entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
+        expect(clause).toBe(`((${f1}) OR (${f2}))`);
+    });
+
+    it('one granting row keeps its single pair of parentheses, and the prefix leads the grouped clause', () => {
+        const single = buildEntityInfo([buildPermission({ RoleID: ROLE_A_ID, CreateRLSFilterID: FILTER_1_ID })]);
+        const singleUser = buildUser([ROLE_A_ID]);
+        expect(single.GetUserRowLevelSecurityWhereClause(singleUser, EntityPermissionType.Create, '')).toBe(`(${filter1.MarkupFilterText(singleUser)})`);
+
+        const both = buildEntityInfo([
+            buildPermission({ RoleID: ROLE_A_ID, CreateRLSFilterID: FILTER_1_ID }),
+            buildPermission({ RoleID: ROLE_B_ID, CreateRLSFilterID: FILTER_2_ID }),
+        ]);
+        const user = buildUser([ROLE_A_ID, ROLE_B_ID]);
+        const clause = both.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, 'AND');
+        expect(clause).toBe(`AND ((${filter1.MarkupFilterText(user)}) OR (${filter2.MarkupFilterText(user)}))`);
+    });
+
     it('a user whose only row does not grant the operation collects nothing (the permission gate refuses them anyway)', () => {
         const entity = buildEntityInfo([
             buildPermission({ RoleID: ROLE_B_ID, CanCreate: false, CreateRLSFilterID: FILTER_2_ID }),

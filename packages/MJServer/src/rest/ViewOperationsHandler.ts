@@ -2,6 +2,7 @@ import {
     BaseEntity, EntityInfo, LogError, Metadata, RunView, RunViewParams, 
     RunViewResult, UserInfo, type IRunViewProvider 
 } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
 import { ProjectRowsForCaller } from '../generic/fieldSecurityTransport.js';
 
@@ -163,7 +164,7 @@ export class ViewOperationsHandler {
             // Run a view to get the available views
             const params: RunViewParams = {
                 EntityName: 'MJ: User Views',
-                ExtraFilter: `Entity = '${entityName}'`
+                ExtraFilter: `Entity = '${EscapeSQLString(entity.Name)}'`
             };
             
             const runView = new RunView();
