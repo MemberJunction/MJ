@@ -62,6 +62,8 @@ let queries: StoredQuery[];
 let dependencies: { QueryID: string; DependsOnQueryID: string }[];
 let calls: string[];
 let applyFailure: string | null;
+/** Queries whose row save the caller is refused (an Update row-level security filter), by name. */
+let refusedSaves: Set<string>;
 let storedHash: string;
 let previewChanges: boolean;
 let readFailure: boolean;
@@ -74,6 +76,7 @@ function fakeQuery(stored: StoredQuery): MJQueryEntityServer {
         ApplyRefreshAsync: async (_e: QueryExtractionResult, withAI: boolean) => {
             calls.push(`apply ${stored.Name}${withAI ? ' +ai' : ''}`);
             if (applyFailure) throw new Error(applyFailure);
+            if (refusedSaves.has(stored.Name)) throw new Error(`the refresh of query "${stored.Name}" could not be saved`);
             return summary();
         },
     });
@@ -122,6 +125,7 @@ beforeEach(() => {
     denied = new Set();
     calls = [];
     applyFailure = null;
+    refusedSaves = new Set();
     storedHash = 'new-hash';
     previewChanges = true;
     readFailure = false;
@@ -246,6 +250,27 @@ describe('RefreshQueries', () => {
         expect(run.Reports.map(r => r.Outcome)).toEqual(['NotPermitted', 'NotPermitted']);
         expect(run.Reports[0].Diagnostics).toEqual(['Skipped: not permitted.']);
         expect(progress).toEqual([1, 2]);
+    });
+
+    it('checks the refresh permissions for each query: a caller lacking one is skipped on every query, and nothing is computed', async () => {
+        denied = new Set(['MJ: Query Fields:Delete']);
+        const run = await service().RefreshQueries({ All: true });
+
+        expect(run.Reports.map(r => [r.QueryName, r.Outcome, r.Diagnostics])).toEqual([
+            ['Top Customers', 'NotPermitted', ['Skipped: not permitted.']], ['Totals', 'NotPermitted', ['Skipped: not permitted.']],
+        ]);
+        expect(calls).toEqual([]);
+    });
+
+    it('applies each query as the caller, so a row the caller may not update fails that query alone', async () => {
+        refusedSaves = new Set(['Top Customers']);
+        const run = await service().RefreshQueries({ All: true });
+
+        expect(run.Reports.map(r => r.QueryName)).toEqual(['Top Customers', 'Totals']);
+        expect(run.Reports[0].Outcome).toBe('Failed');
+        expect(run.Reports[0].Diagnostics.join(' ')).toMatch(/could not be saved/);
+        expect(run.Reports[1].Outcome).not.toBe('Failed');
+        expect(calls.filter(c => c.startsWith('apply'))).toEqual(['apply Top Customers', 'apply Totals']);
     });
 
     it('a caller who may neither refresh nor read queries gets each named query reported unavailable', async () => {
