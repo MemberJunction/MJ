@@ -371,5 +371,27 @@ describe('MarkdownComponent (DOM)', () => {
       const c = container(render({ data: 'text <img src="x" onerror="alert(1)">', enableSvgRenderer: false }));
       expect(attributeNamesIn(c).some((n) => n.startsWith('on'))).toBe(false);
     });
+
+    it('upgrades an embedded svg[data-mj-diagram="1"] in the middle of a conversation message into an interactive diagram viewer', async () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" data-mj-diagram="1" data-diagram-kind="workflow">' +
+        '<desc id="mj-diagram-meta">{"version":"1","kind":"workflow","title":"Renewal Flow","lanes":{"member":"Member"}}</desc>' +
+        '<defs><marker id="m1-mk-line"><path d="M0 0L8 4L0 8Z"/></marker></defs>' +
+        '<g class="lanes"><g class="lane" data-lane-id="member"><rect x="20" y="20" width="700" height="120"/></g></g>' +
+        '<g class="edges"><g class="edge" data-edge-id="e1" data-edge-from="n1" data-edge-to="n2" data-main-path="true"><path d="M200 80H400" marker-end="url(#m1-mk-line)"/></g></g>' +
+        '<g class="nodes">' +
+        '<g class="node" data-node-id="n1" data-node-kind="start" data-lane="member" data-label="Start"><rect x="60" y="54" width="140" height="52"/><text class="lbl">Start</text></g>' +
+        '<g class="node" data-node-id="n2" data-node-kind="end" data-lane="member" data-label="Finish"><rect x="400" y="54" width="140" height="52"/><text class="lbl">Finish</text></g>' +
+        '</g></svg>';
+      const markdownMessage = `Here is how certification renewal works:\n\n\`\`\`svg\n${svg}\n\`\`\`\n\nClick any step above to inspect deadlines.`;
+      const c = container(render({ data: markdownMessage, enableSvgRenderer: true }));
+      await Promise.resolve();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      expect(c.querySelector('.mjd-toolbar')).toBeNull();
+      expect(c.querySelector('.mjd-stage')).not.toBeNull();
+      expect(c.querySelector('.mjd-panel')).not.toBeNull();
+      expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
+    });
   });
 });
+

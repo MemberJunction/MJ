@@ -16,6 +16,7 @@ import {
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
+import { MountInteractiveDiagram, type DiagramViewerInstance } from '@memberjunction/ai-diagrams/viewer';
 
 /** A rendered image the reader clicked or activated: what a host needs to show it full size. */
 export class ImageClickedEventArgs {
@@ -446,6 +447,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private hasMath: boolean = false;
   private hasCodeBlocks: boolean = false;
   private themeObserver: MutationObserver | null = null;
+  private diagramViewers: DiagramViewerInstance[] = [];
 
   constructor(
     private elementRef: ElementRef<HTMLElement>,
@@ -478,13 +480,22 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.themeObserver?.disconnect();
     this.themeObserver = null;
+    this.destroyDiagramViewers();
     this.cleanupEventListeners();
+  }
+
+  private destroyDiagramViewers(): void {
+    for (const v of this.diagramViewers) {
+      v.Destroy();
+    }
+    this.diagramViewers = [];
   }
 
   /**
    * Render the markdown content
    */
   private render(): void {
+    this.destroyDiagramViewers();
     if (!this.Data) {
       this.RenderedContent = '';
       this.cdr.markForCheck();
@@ -524,9 +535,10 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.hasMath = html.includes('class="mj-math') || /<math[\s>]/.test(html);
 
     // Sanitize if enabled
-    // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
-    // because it strips SVG elements and most HTML layout tags.
-    const bypassAngularSanitizer = this.EnableSvgRenderer || this.EnableHtml;
+    // Note: We bypass Angular's sanitizer when SVG renderer, HTML passthrough, or an MJ interactive diagram
+    // is present because Angular's HTML sanitizer strips SVG elements and data-* attributes.
+    const bypassAngularSanitizer =
+      this.EnableSvgRenderer || this.EnableHtml || /\bdata-mj-diagram\s*=\s*["']1["']/.test(html);
     if (this.Sanitize && !bypassAngularSanitizer) {
       const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html);
       html = sanitized || '';
@@ -546,7 +558,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
   /**
    * Process rendered content after DOM update
-   * Handles syntax highlighting, mermaid rendering, copy buttons, etc.
+   * Handles syntax highlighting, mermaid rendering, interactive MJ diagrams, copy buttons, etc.
    */
   private async postRenderProcessing(): Promise<void> {
     const container = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
@@ -578,6 +590,9 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       await this.markdownService.renderMermaid(container as HTMLElement);
     }
 
+    // Upgrade any MJ Interactive Diagram SVGs (`svg[data-mj-diagram="1"]`) embedded in markdown
+    this.mountEmbeddedInteractiveDiagrams(container as HTMLElement);
+
     // Setup heading click listeners
     if (this.EnableHeadingIds) {
       this.setupHeadingClickListeners(container as HTMLElement);
@@ -604,6 +619,33 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       hasCodeBlocks: this.hasCodeBlocks,
       headingIds,
     });
+  }
+
+  private resolveDiagramTheme(): 'light' | 'dark' {
+    if (typeof document !== 'undefined' && document.documentElement?.getAttribute('data-theme') === 'dark') {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  private mountEmbeddedInteractiveDiagrams(container: HTMLElement): void {
+    const svgs = Array.from(container.querySelectorAll<SVGSVGElement>('svg[data-mj-diagram="1"]'));
+    const theme = this.resolveDiagramTheme();
+    for (const svg of svgs) {
+      if (svg.closest('.mjd-shell')) continue;
+      const svgMarkup = svg.outerHTML;
+      const host = container.ownerDocument.createElement('div');
+      host.className = 'mj-inline-diagram-host';
+      const wrapper = svg.closest('.svg-rendered, .svg-block-container') ?? svg;
+      wrapper.replaceWith(host);
+      const viewer = MountInteractiveDiagram(host, svgMarkup, {
+        InitialTheme: theme,
+        Sanitize: (raw) => this.markdownService.sanitizeHtml(raw),
+      });
+      if (viewer) {
+        this.diagramViewers.push(viewer);
+      }
+    }
   }
 
   /**
@@ -851,6 +893,12 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * Triggers a full re-render when mermaid auto-theming is active.
    */
   private onThemeAttributeChanged(): void {
+    if (this.diagramViewers.length > 0) {
+      const nextTheme = this.resolveDiagramTheme();
+      for (const viewer of this.diagramViewers) {
+        viewer.SetTheme(nextTheme);
+      }
+    }
     if (this.MermaidTheme === 'auto' && this.EnableMermaid && this.hasMermaid && this.Data) {
       this.render();
     }

@@ -1,0 +1,31 @@
+{
+  "kind": "sequence",
+  "title": "How does abstract review work for the annual conference?",
+  "participants": [
+    { "id": "author", "label": "Author", "sublabel": "member" },
+    { "id": "portal", "label": "Abstract portal", "sublabel": "submissions" },
+    { "id": "committee", "label": "Program committee", "sublabel": "assigns and decides" },
+    { "id": "reviewers", "label": "Reviewers", "sublabel": "three per abstract" }
+  ],
+  "phases": [
+    { "id": "submit", "label": "Submit", "fromMessage": 0, "toMessage": 2 },
+    { "id": "review", "label": "Blind review", "fromMessage": 3, "toMessage": 6 },
+    { "id": "decision", "label": "Decision", "fromMessage": 7, "toMessage": 9 }
+  ],
+  "messages": [
+    { "id": "m1", "from": "author", "to": "portal", "label": "submit abstract by Mar 15", "role": "emphasis" },
+    { "id": "m2", "from": "portal", "to": "author", "label": "confirmation and ID", "role": "return" },
+    { "id": "m3", "from": "portal", "to": "committee", "label": "new submission", "role": "default" },
+    { "id": "m4", "from": "committee", "to": "reviewers", "label": "assign, author names removed", "role": "emphasis" },
+    { "id": "m5", "from": "reviewers", "to": "committee", "label": "scores within 3 weeks", "role": "return" },
+    { "id": "m6", "from": "committee", "to": "reviewers", "label": "tie: fourth review", "role": "conditional" },
+    { "id": "m7", "from": "reviewers", "to": "committee", "label": "tiebreak score", "role": "return" },
+    { "id": "m8", "from": "committee", "to": "portal", "label": "accept, revise or decline", "role": "emphasis" },
+    { "id": "m9", "from": "portal", "to": "author", "label": "decision email by May 1", "role": "return" },
+    { "id": "m10", "from": "author", "to": "portal", "label": "confirm session slot", "role": "default" }
+  ],
+  "cards": [
+    { "id": "timeline", "tone": "success", "title": "Key dates", "body": "Submit abstracts by March 15; decision emails go out by May 1.", "nodes": ["author", "portal", "committee"] },
+    { "id": "blind-review", "tone": "warning", "title": "Double-blind scoring", "body": "Three reviewers score each abstract without author names; a tie triggers a fourth reviewer.", "nodes": ["committee", "reviewers"] }
+  ]
+}

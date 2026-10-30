@@ -1,0 +1,164 @@
+[
+  {
+    "fields": {
+      "Name": "Render Architecture Diagram",
+      "Description": "Renders an interactive workflow, lifecycle, sequence, or dataflow diagram from an MJ Diagram Spec JSON object via @memberjunction/ai-diagrams. Validates the spec and computes deterministic layout + self-contained SVG implementing the MJ Diagram Data Contract (data-mj-diagram=\"1\") for interactive rendering in <mj-markdown> and <mj-svg-artifact-viewer>. On validation failure, returns VALIDATION_FAILED with structured diagnostics (JSON path, message, closest ID suggestions, and fix instructions) so you can repair the spec and retry. Call Get Architecture Diagram Reference first to read the spec schema for the desired DiagramType.",
+      "DriverClass": "__RenderArchitectureDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-sitemap",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "primaryKey": {
+      "ID": "42FC2391-612C-4336-9D80-C53948EDBA6D"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram kind to render: workflow (actor swimlanes, tasks, decisions, exception paths), lifecycle (state groups, status transitions, step badges), sequence (participants, chronological messages, phase bands), or dataflow (left-to-right processing stages and data-labeled flows). Optional if SpecJSON includes a top-level kind field.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A9D9D99-544B-473E-A6BA-E6E780B8A99C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SpecJSON",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The MJ Diagram Spec as a JSON string or object (containing kind, title, lanes/stages/participants, nodes/states, edges/transitions/flows/messages, and optional mainPath/phases/cards).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "664ADAD1-2798-4AB3-A2D3-431F0235F90A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Self-contained interactive SVG markup (with data-mj-diagram=\"1\" contract attributes).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8FB409F3-5652-49E8-B5C0-40EF9A7BEBD5"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The diagram validated and rendered. Both the Message and the SVG output parameter contain the self-contained interactive SVG."
+          },
+          "primaryKey": {
+            "ID": "2E1AC8E3-9D93-4B63-8DCC-DAEA91AF184F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_FAILED",
+            "IsSuccess": false,
+            "Description": "The spec failed validation. The Message is a JSON object with diagnostics ([{ code, severity, path, message, fix }]). Apply the suggested fixes and call again."
+          },
+          "primaryKey": {
+            "ID": "64F8CBD0-9A0D-4815-B302-B7FAB17898D6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT",
+            "IsSuccess": false,
+            "Description": "DiagramType or SpecJSON is missing or not a valid JSON object."
+          },
+          "primaryKey": {
+            "ID": "E3479E8F-8908-4ABB-A94B-269EB6877ED7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RENDER_FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during layout or SVG rendering."
+          },
+          "primaryKey": {
+            "ID": "84A63FF9-F5E2-4AFD-9438-06A344817D4A"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Architecture Diagram Reference",
+      "Description": "Returns the MJ Diagram Spec authoring guide and required fields for Render Architecture Diagram (workflow, lifecycle, sequence, or dataflow).",
+      "DriverClass": "__GetArchitectureDiagramReference",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book-open",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "primaryKey": {
+      "ID": "4CEB029C-B252-4649-9E10-BDE31BB4A7B1"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which diagram kind to retrieve the spec reference for: workflow, lifecycle, sequence, dataflow, or all (default: all).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DB4B4A25-F4A7-40C0-80D3-97558936DBFC"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The Message holds the requested diagram spec reference guide."
+          },
+          "primaryKey": {
+            "ID": "55087815-96B4-444E-BFAF-A3DEFB4E0BBB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "DiagramType is not one of workflow, lifecycle, sequence, dataflow, or all."
+          },
+          "primaryKey": {
+            "ID": "0904A8DE-F33B-4B5E-983A-36F73D0F14DE"
+          }
+        }
+      ]
+    }
+  }
+]
