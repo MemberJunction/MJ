@@ -215,6 +215,61 @@
           "primaryKey": {
             "ID": "B09F255A-3D03-4DAE-B417-98C12CA9C28A"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T4 -> S-T.3",
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B378E8DE-65FD-4235-9426-530C2A145F84"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T1p -> S-T.2",
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8C80DAC1-9CC1-49B1-915C-2337F0C60234"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T2p -> S-T.6",
+            "Sequence": 22,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3FAE66C2-F753-481F-B555-6492230BF7FA"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T1p -> S-T.3",
+            "Sequence": 23,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80310625-CAA8-4721-9787-A18F420A4DB7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T2p -> S-T.4",
+            "Sequence": 24,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9BEF0189-EE11-4D31-A2BC-69782B3F0957"
+          }
         }
       ]
     },

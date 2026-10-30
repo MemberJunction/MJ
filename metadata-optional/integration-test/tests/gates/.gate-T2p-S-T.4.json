@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T2p -> S-T.4",
+    "Description": "Gate G2.26 (phase 2, dataset T2p, criterion S-T.4): inner folds are blocked in time with a gap ≥ h and grouped by entity, with 0 entity keys shared across a fold boundary; the blocked-split RMSE lies inside the reference's [1.5123, 1.6082], and the random-row split's inflation is stored beside it. It fails when the blocked inner folds drop the gap h (shared keys across a boundary > 0 or the RMSE leaves the band).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.26\",\"owner:PR3\",\"phase:2\",\"dataset:T2p\",\"criterion:S-T.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Blocked inner folds grouped by entity share 0 keys and keep the gap (1 and 2 periods); the shipped RMSE is the reference's 1.5591 with its interval at [1.5123, 1.6082]; the random-row contrast on the same 2,000 rows is reported (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t2p-s-t-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "D73CB378-1D7F-427B-BBDA-74E69C1D279B"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T1p -> S-T.2",
+    "Description": "Gate G2.12 (phase 2, dataset T1p, criterion S-T.2): over ≥ 5 rolling origins at the declared horizon, the shipped model's MASE is ≤ 0.5401, the reference's upper bound (reference 0.4401 [0.3646, 0.5401]; PS 0.9583 today), and it beats seasonal naïve with a paired lower bound > 0. It fails when the rolling-origin holdout uses a random split: the origins' test windows are drawn by a seeded permutation of the holdout periods (the MASE leaves the reference's 0.4401).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.12\",\"owner:PR3\",\"phase:2\",\"dataset:T1p\",\"criterion:S-T.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The shipped model's rolling-origin MASE is at most 0.5401 and beats seasonal naive with a paired lower bound above 0; a row manifest disagreeing with the design is refused; the Ljung-Box veto uses the declared alpha (3 of 3 pytest cases pass)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t1p-s-t-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "0C54C668-A647-4184-AB42-199438F3EB41"
+  }
+}

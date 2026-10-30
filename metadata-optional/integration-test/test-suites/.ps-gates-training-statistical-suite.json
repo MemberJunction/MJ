@@ -17,6 +17,17 @@
           "primaryKey": {
             "ID": "810E31F8-4C02-415E-8B26-BFCE4D7EA2FB"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=T2p -> S-T.5",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D750E09A-26EA-443F-B072-BB77E2E78A32"
+          }
         }
       ]
     },

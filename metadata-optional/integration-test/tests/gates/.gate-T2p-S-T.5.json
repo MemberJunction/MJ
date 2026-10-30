@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T2p -> S-T.5",
+    "Description": "Gate G2.13 (phase 2, dataset T2p, criterion S-T.5): over 400 T2p seeds, the entity-cluster bootstrap 95% interval covers the planted value in 372 to 388 of 400 seeds (P1's S-T.5 rule, `logs/P1/st5_power.txt`). It fails when the holdout interval ignores the declared intervals.level and is built at 0.80 (coverage below 372). The plan's row-bootstrap mutation cannot fail here: T2p's holdout holds one row per entity, so rows and entity clusters draw the same distribution; whole-entity resampling is pinned by the sidecar route test test_a_cluster_bootstrap_resamples_whole_entities.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.13\",\"owner:PR3\",\"phase:2\",\"dataset:T2p\",\"criterion:S-T.5\"]",
+    "MaxExecutionTimeMS": 1800000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The shipped RMSE's entity-cluster bootstrap interval covers the planted RMSE on 372-388 of 400 T2p seeds (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t2p-s-t-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "2EB7150C-BF4C-41D8-AEC6-54A7D1E13B48"
+  }
+}

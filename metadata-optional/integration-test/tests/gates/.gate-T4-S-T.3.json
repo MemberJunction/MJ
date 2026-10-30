@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T4 -> S-T.3",
+    "Description": "Gate G2.11 (phase 2, dataset T4, criterion S-T.3): over ≥ 5 rolling origins, lightgbm is not graded above naïve unless its paired MASE improvement over naïve has a lower bound > 0 (it does not on T4), and the shipped model's MASE lies inside the reference's 95% interval [0.4854, 0.7821] (reference 0.6242; PS's lightgbm 0.8777 today). It fails when selection makes lightgbm the finalist and the forecast gate grades it the model without its paired lower bounds (lightgbm graded above naïve with a lower bound below 0). The forecast gate dropping the lower-bound requirement alone cannot fail on T4: lightgbm is never the finalist (inner MASE 1.2305 against ar1_const's 0.9745) and its MASE (1.0096) is above naïve's (0.6348) even as a point value.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.11\",\"owner:PR3\",\"phase:2\",\"dataset:T4\",\"criterion:S-T.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Over 12 rolling origins of T4 lightgbm on lag columns is not shipped above naive without a paired MASE lower bound above 0, and the shipped MASE lies inside [0.4854, 0.7821] (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t4-s-t-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "5ADDDD33-4343-4FE7-888D-B0D1C834BFE7"
+  }
+}
