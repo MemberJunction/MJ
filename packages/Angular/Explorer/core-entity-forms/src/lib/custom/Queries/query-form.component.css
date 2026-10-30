@@ -805,3 +805,48 @@
   flex: 1;
   min-width: 0;
 }
+
+/* ─── Metadata extraction status ─────────────────────────────────────────── */
+
+.extraction-badge {
+  --extraction-accent: var(--mj-text-muted);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--mj-radius-full);
+  padding: 2px var(--mj-space-3);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  color: var(--extraction-accent);
+  background: color-mix(in srgb, var(--extraction-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--extraction-accent) 30%, transparent);
+  white-space: nowrap;
+}
+
+.extraction-badge--ok { --extraction-accent: var(--mj-status-success); }
+.extraction-badge--warning { --extraction-accent: var(--mj-status-warning); }
+.extraction-badge--error { --extraction-accent: var(--mj-status-error); }
+.extraction-badge--skipped,
+.extraction-badge--none { --extraction-accent: var(--mj-text-muted); }
+
+.save-diagnostics {
+  margin-bottom: var(--mj-space-3);
+}
+
+.extraction-diagnostics {
+  margin-top: var(--mj-space-3);
+}
+
+/* The header sits on the brand colour: a light pill and a light outline button stay readable. */
+.query-header .extraction-badge {
+  background: var(--mj-bg-surface);
+}
+
+.query-header button.refresh-metadata-btn {
+  color: var(--mj-text-inverse);
+  border-color: color-mix(in srgb, var(--mj-text-inverse) 60%, transparent);
+  background: transparent;
+}
+
+.query-header button.refresh-metadata-btn:hover {
+  background: color-mix(in srgb, var(--mj-text-inverse) 15%, transparent);
+}

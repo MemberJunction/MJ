@@ -1195,6 +1195,19 @@ export class PullService {
     return '.' + keys.map(k => String(k).replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase()).join('-') + '.json';
   }
 
+  /** Copies the collections, embeds and extension a record holds onto `target`, when present. */
+  private copyCompositionAxes(target: RecordData, source: RecordData): void {
+    if (source.collections && !target.collections) {
+      target.collections = source.collections;
+    }
+    if (source.embeds) {
+      target.embeds = source.embeds;
+    }
+    if (source.extension) {
+      target.extension = source.extension;
+    }
+  }
+
   private async mergeRecords(
     existing: RecordData,
     newData: RecordData,
@@ -1220,7 +1233,8 @@ export class PullService {
         }
       }
 
-      // Add relatedEntities before primaryKey and sync
+      // Composition axes and relatedEntities before primaryKey and sync
+      this.copyCompositionAxes(result, newData);
       if (newData.relatedEntities) {
         result.relatedEntities = newData.relatedEntities;
       }
@@ -1245,7 +1259,12 @@ export class PullService {
       }
     }
 
-    // Add relatedEntities before primaryKey and sync
+    // Composition axes and relatedEntities before primaryKey and sync. A collection the pull did not
+    // produce (one the author declared but the pull config does not fetch) is kept from the file.
+    if (existing.collections || newData.collections) {
+      result.collections = { ...existing.collections, ...newData.collections };
+    }
+    this.copyCompositionAxes(result, { fields: {}, embeds: newData.embeds ?? existing.embeds, extension: newData.extension ?? existing.extension });
     if (existing.relatedEntities || newData.relatedEntities) {
       result.relatedEntities = {
         ...existing.relatedEntities,

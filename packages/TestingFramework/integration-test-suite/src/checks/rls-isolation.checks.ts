@@ -49,6 +49,7 @@ import {
     SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEEDED_NOGRANT_EMAIL,
     SEEDED_RLS_ENTITY, SEED_FIXTURES_COMMAND
 } from '@memberjunction/testing-integration';
+import { CheckRls12TwoFilterLoadById } from './rls-two-filter-load';
 
 /** ProviderBase exposes the per-instance connection string used in the fingerprint. */
 function connStrOf(provider: IMetadataProvider): string {
@@ -541,6 +542,11 @@ export const RlsIsolationChecks: NamedCheck[] = [
         Id: 'rls-isolation.RLS10',
         Name: 'RLS10: a SEEDED no-grant user is served ZERO rows (deterministic negative — no unauthorized set)',
         Fn: CheckRls10NoGrantUserDenied
+    },
+    {
+        Id: 'rls-isolation.RLS12',
+        Name: 'RLS12: a user holding two Read RLS filters loads one record by ID and gets exactly that record (role clause, single-record resolver, BaseEntity.Load), and list reads return exactly the rows either filter admits',
+        Fn: CheckRls12TwoFilterLoadById
     }
 ];
 
