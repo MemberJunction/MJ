@@ -323,3 +323,161 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
     });
 });
 
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — representation drift is not a conflict', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000002';
+    const jobEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Probe Jobs',
+        BaseTable: 'ProbeJob',
+        BaseView: 'vwProbeJobs',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'J-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'J-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'J-3', EntityID: entityId, Name: 'Config', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active' },
+            { ID: 'J-4', EntityID: entityId, Name: 'ScheduledAt', Type: 'datetime', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active' },
+            { ID: 'J-5', EntityID: entityId, Name: 'CompletedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 5, Status: 'Active' },
+            { ID: 'J-6', EntityID: entityId, Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 6, Status: 'Active' },
+        ],
+    });
+    const jobId = '22222222-3333-4444-5555-666666666666';
+    const dbScheduledAt = new Date('2026-03-01T00:00:00.000Z');
+    const dbCompletedAt = new Date('2026-03-02T00:00:00.000Z');
+
+    function createLoadedJobEntity(errorLogSaves: Array<Record<string, unknown>>): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [jobEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(jobEntityInfo, fakeProvider);
+        entity.LoadFromData({
+            ID: jobId,
+            Name: 'Nightly',
+            Config: '{"retries":3,"targets":["a","b"]}',
+            ScheduledAt: dbScheduledAt,
+            CompletedAt: dbCompletedAt,
+            __mj_UpdatedAt: new Date('2026-03-01T00:00:00.000Z'),
+        });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it('saves an edited JSON field whose old value differs from the DB only in whitespace and key order', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: jobId,
+                Config: '{"retries":5,"targets":["a","b"]}',
+                OldValues___: [
+                    { Key: 'ID', Value: jobId },
+                    { Key: 'Config', Value: '{ "targets": ["a", "b"],\n  "retries": 3 }' },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Config')).toBe('{"retries":5,"targets":["a","b"]}');
+    });
+
+    it('still rejects an edited JSON field when the DB content really changed', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    Config: '{"retries":5,"targets":["a","b"]}',
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'Config', Value: '{"retries":3,"targets":["a"]}' },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['Config'] } });
+        expect(errorLogSaves).toHaveLength(1);
+        expect(entity.Get('Config')).toBe('{"retries":3,"targets":["a","b"]}');
+    });
+
+    it('saves an edited datetime field whose old value is within the column resolution of the DB value', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+        const newScheduledAt = new Date('2026-04-01T00:00:00.000Z');
+
+        // SQL Server datetime resolves to 1/300 s: a 3 ms drift is below one tick.
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: jobId,
+                ScheduledAt: newScheduledAt,
+                OldValues___: [
+                    { Key: 'ID', Value: jobId },
+                    { Key: 'ScheduledAt', Value: String(dbScheduledAt.getTime() + 3) },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect((entity.Get('ScheduledAt') as Date).getTime()).toBe(newScheduledAt.getTime());
+    });
+
+    it('still rejects an edited datetime field when the DB value moved by a full second', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    ScheduledAt: new Date('2026-04-01T00:00:00.000Z'),
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'ScheduledAt', Value: String(dbScheduledAt.getTime() + 1000) },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['ScheduledAt'] } });
+        expect(errorLogSaves).toHaveLength(1);
+    });
+
+    it('keeps millisecond precision on a datetimeoffset column, so a 1 ms drift there is a real conflict', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    CompletedAt: new Date('2026-04-02T00:00:00.000Z'),
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'CompletedAt', Value: String(dbCompletedAt.getTime() + 1) },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['CompletedAt'] } });
+        expect(errorLogSaves).toHaveLength(1);
+    });
+});

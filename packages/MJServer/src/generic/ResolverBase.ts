@@ -49,7 +49,7 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift, Canonicalize } from '@memberjunction/global';
 import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
@@ -2327,7 +2327,7 @@ export class ResolverBase {
       if (!(rightDate instanceof Date) || isNaN(rightDate.getTime())) {
         return true;
       }
-      if (normalizedLeft.getTime() === rightDate.getTime()) {
+      if (this.datesEqualAtColumnResolution(field, normalizedLeft, rightDate)) {
         return false;
       }
       const sqlType = field?.SQLFullType?.trim().toLowerCase() || '';
@@ -2347,11 +2347,57 @@ export class ResolverBase {
     if (normalizedRight instanceof Date && field?.TSType === EntityFieldTSType.Date && normalizedLeft !== null) {
       const leftDate = this.ClientOldValueToFieldValue(field, normalizedLeft);
       if (leftDate instanceof Date && !isNaN(leftDate.getTime())) {
-        return leftDate.getTime() !== normalizedRight.getTime();
+        return !this.datesEqualAtColumnResolution(field, leftDate, normalizedRight);
       }
     }
 
+    if (typeof normalizedLeft === 'string' && typeof normalizedRight === 'string' && this.jsonStringsEquivalent(normalizedLeft, normalizedRight)) {
+      return false;
+    }
+
     return Object.is(normalizedLeft, normalizedRight) ? false : normalizedLeft !== (normalizedRight as never);
+  }
+
+  /**
+   * True when two instants would be stored as the same value in the field's column: SQL Server
+   * `datetime` resolves to 1/300 s and `smalldatetime` to one minute; every other type keeps milliseconds.
+   */
+  private datesEqualAtColumnResolution(field: EntityFieldInfo | undefined, left: Date, right: Date): boolean {
+    return Math.abs(left.getTime() - right.getTime()) < this.dateColumnResolutionMs(field);
+  }
+
+  private dateColumnResolutionMs(field: EntityFieldInfo | undefined): number {
+    switch ((field?.Type ?? '').trim().toLowerCase()) {
+      case 'datetime':
+        return 1000 / 300;
+      case 'smalldatetime':
+        return 60_000;
+      default:
+        return 1;
+    }
+  }
+
+  /**
+   * True when both strings are JSON documents with the same content, ignoring whitespace and key order.
+   */
+  private jsonStringsEquivalent(left: string, right: string): boolean {
+    const canonicalLeft = this.canonicalJSONDocument(left);
+    return canonicalLeft !== null && canonicalLeft === this.canonicalJSONDocument(right);
+  }
+
+  /**
+   * Canonical form of a JSON object or array string, or null when the text is not one.
+   */
+  private canonicalJSONDocument(text: string): string | null {
+    const first = text.trimStart().charAt(0);
+    if (first !== '{' && first !== '[') {
+      return null;
+    }
+    try {
+      return Canonicalize(JSON.parse(text));
+    } catch {
+      return null;
+    }
   }
 
   protected async TestAndSetClientOldValuesToDBValues<
