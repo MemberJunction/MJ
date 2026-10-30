@@ -4489,6 +4489,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     const rootId = this.collapsedThreadRootId(message);
     if (rootId !== null) {
+      if (index < 0) {
+        // A hidden reply's first frame: the full path adds the row once; later frames patch it in place above.
+        this.ngZone.run(() => void this.OnMessageSent(message));
+        return;
+      }
       const root = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
       if (root) {
         this.messageListComponent?.RefreshRenderedMessage(root);
@@ -6060,9 +6065,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * that run, so the placeholder says so.
    */
   private stoppedLastReplyAgent(): string | null | undefined {
-    const rows = this.DisplayMessages
-      .filter(r => r.ReplacedAt == null)
-      .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+    const rows = this.DisplayMessages;
     const last = rows[rows.length - 1];
     if (!last) {
       return undefined;
@@ -7234,7 +7237,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Not in the loaded window. Pins are fetched by their own query precisely so the panel can
     // list pins older than the transcript, so this is the EXPECTED case for an old pin, not an
     // error — page back until it is loaded, the same way a date jump does.
-    const reached = await this.loadUntilMessageIsWindowed(messageId);
+    const reached = (await this.loadUntilMessageIsWindowed(messageId)) && (await this.loadUntilThreadRootIsWindowed(messageId));
     if (!reached) {
       MJNotificationService.Instance.CreateSimpleNotification(
         'Could not reach that message — it is further back than this jump loads.', 'info', 3000
@@ -7279,6 +7282,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return false;
     }
     await this.loadUntilSequenceIsWindowed(sequence);
+    const hit = this.windowStore.GetSnapshot().Details.find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, branchId));
+    if (hit) {
+      await this.loadUntilThreadRootIsWindowed(hit.ID);
+    }
     if (!this.isActiveConversation(conversationId)) {
       return false;
     }
@@ -7299,7 +7306,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Scrolls to `messageId`, or when {@link CollapseThreadReplies} hides `messageId` under a thread
    * root, scrolls to that root and emits {@link ThreadReplyRevealRequested} so the host can open
-   * the thread.
+   * the thread. False when the row (or its root) is not loaded, so the caller can page back for it.
    */
   private scrollToMessageOrThreadRoot(
     messageId: string,
@@ -7310,9 +7317,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       ? this.displayState().ThreadReplyRoots.Get(messageId)
       : undefined;
     if (rootId) {
-      if (this.messageListComponent?.ScrollToMessage(rootId)) {
-        this.beaconMessage(rootId, cssClass, durationMs);
+      if (!this.messageListComponent?.ScrollToMessage(rootId)) {
+        return false;
       }
+      this.beaconMessage(rootId, cssClass, durationMs);
       this.emitThreadReplyReveal(messageId, rootId);
       return true;
     }
@@ -7326,7 +7334,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private emitThreadReplyReveal(replyId: string, rootId: string): void {
     const loadedReply = (this.messages ?? []).find(m => UUIDsEqual(m.ID, replyId));
     const loadedRoot = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
-    (this.ThreadReplyRevealRequested ??= new EventEmitter<ThreadReplyRevealRequest>()).emit({
+    this.ThreadReplyRevealRequested.emit({
       ReplyID: loadedReply?.ID ?? replyId,
       RootID: loadedRoot?.ID ?? rootId,
     });
@@ -7356,6 +7364,34 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return false;   // not a loaded pin — nothing tells us how far back to page
     }
     return this.loadUntilSequenceIsWindowed(target.Sequence);
+  }
+
+  /**
+   * With {@link CollapseThreadReplies} on, pages older history until the top-level root of the loaded
+   * thread reply `messageId` is loaded too, since the jump lands on the root. True when nothing more is
+   * needed (collapsing off, `messageId` not a loaded thread reply, or its root loaded).
+   */
+  private async loadUntilThreadRootIsWindowed(messageId: string): Promise<boolean> {
+    if (!this.CollapseThreadReplies) {
+      return true;
+    }
+    const conversationId = this.ConversationId;
+    for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
+      const snapshot = this.windowStore.GetSnapshot();
+      // Recomputed per page: a loaded parent that is itself a reply moves the root further up.
+      const rootId = GetThreadReplyRoots(snapshot.Details).Get(messageId);
+      if (!rootId || snapshot.Details.some(m => UUIDsEqual(m.ID, rootId))) {
+        return true;
+      }
+      if (!snapshot.Cursor.HasMoreAbove) {
+        return false;
+      }
+      await this.windowStore.LoadOlder(this.CurrentUser);
+      if (!this.isActiveConversation(conversationId)) {
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
@@ -7539,6 +7575,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * The rows removed by "delete this and everything after": when thread replies are collapsed,
    * the target, every main-flow row after it, and any thread replies whose root is among those rows.
+   * When the target is itself a thread reply, only the target and the replies under it.
    */
   private rowsToDeleteFrom(
     sortedMessages: MJConversationDetailEntity[],
@@ -7552,6 +7589,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return sortedMessages.slice(targetIndex);
     }
     const roots = GetThreadReplyRoots(sortedMessages);
+    if (roots.Has(targetId)) {
+      // Sorted by Sequence, so a reply always follows its parent: one pass collects the subtree.
+      const subtree = new UUIDSet([sortedMessages[targetIndex].ID]);
+      for (let i = targetIndex + 1; i < sortedMessages.length; i++) {
+        const parentId = sortedMessages[i].ParentID;
+        if (parentId && subtree.Has(parentId)) {
+          subtree.Add(sortedMessages[i].ID);
+        }
+      }
+      return sortedMessages.filter(m => subtree.Has(m.ID));
+    }
     const removedRoots = new UUIDSet();
     for (let i = targetIndex; i < sortedMessages.length; i++) {
       const id = sortedMessages[i].ID;
@@ -9913,16 +9961,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (this.scrollToMessageOrThreadRoot(messageId)) {
         return;
       }
-      const rootId = this.CollapseThreadReplies
-        ? this.displayState().ThreadReplyRoots.Get(messageId)
-        : undefined;
-      const targetId = rootId ?? messageId;
-      const messageElement = document.querySelector(`[data-message-id="${targetId}"]`);
+      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
       if (messageElement) {
         messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        console.log('📍 Scrolled to message:', targetId);
+        console.log('📍 Scrolled to message:', messageId);
       } else {
-        console.warn('⚠️ Message element not found for ID:', targetId);
+        console.warn('⚠️ Message element not found for ID:', messageId);
       }
     }, 300); // Give time for artifact panel to open and DOM to render
   }

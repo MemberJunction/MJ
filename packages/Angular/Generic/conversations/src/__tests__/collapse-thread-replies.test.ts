@@ -396,6 +396,79 @@ describe('chat area: CollapseThreadReplies', () => {
     expect(notifySpy).not.toHaveBeenCalled();
   });
 
+  it('a jump to a collapsed reply whose root is not loaded pages back to the root before revealing, and reports a root it cannot reach', async () => {
+    const root = fakeMessage('root-1', null, 'User', null, { Sequence: 1 });
+    const reply = fakeMessage('reply-1', 'root-1', 'User', null, { Sequence: 50 });
+
+    const setUp = (rootReachable: boolean) => {
+      const component = createChatArea([reply]);
+      component.CollapseThreadReplies = true;
+      const details: MJConversationDetailEntity[] = [reply];
+      let hasMoreAbove = rootReachable;
+      const loadOlder = vi.fn(async () => {
+        details.unshift(root);
+        hasMoreAbove = false;
+      });
+      const scrollToMessage = vi.fn((id: string) => component.messages.some((m) => m.ID === id));
+      const open = component as unknown as Record<string, unknown>;
+      open['messageListComponent'] = { ScrollToMessage: scrollToMessage };
+      open['readyConversationId'] = 'CONV-1';
+      open['windowStore'] = {
+        PinnedDetails: [reply],
+        GetSnapshot: () => ({
+          Details: [...details],
+          Cursor: { OldestSequence: details[0].Sequence, HasMoreAbove: hasMoreAbove },
+        }),
+        LoadOlder: loadOlder,
+      };
+      open['mergePeripheralsForNewRows'] = vi.fn(async () => undefined);
+      open['cdr'] = { detectChanges: vi.fn() };
+      const reveals: ThreadReplyRevealRequest[] = [];
+      component.ThreadReplyRevealRequested.subscribe((req) => reveals.push(req));
+      return { component, loadOlder, scrollToMessage, reveals };
+    };
+    const notifySpy = vi.mocked(MJNotificationService.Instance.CreateSimpleNotification);
+
+    const jump = setUp(true);
+    await jump.component.OnJumpToMessage('reply-1');
+    expect(jump.loadOlder).toHaveBeenCalledTimes(1);
+    expect(jump.scrollToMessage).toHaveBeenLastCalledWith('root-1');
+    expect(jump.reveals).toEqual([{ ReplyID: 'reply-1', RootID: 'root-1' }]);
+    expect(notifySpy).not.toHaveBeenCalled();
+
+    const search = setUp(true);
+    expect(await search.component.OpenMessage('CONV-1', null, 50)).toBe(true);
+    expect(search.loadOlder).toHaveBeenCalledTimes(1);
+    expect(search.reveals).toEqual([{ ReplyID: 'reply-1', RootID: 'root-1' }]);
+    expect(notifySpy).not.toHaveBeenCalled();
+
+    // The root is above everything loadable: no reveal naming a root the host lacks, and the user is told.
+    const unreachable = setUp(false);
+    await unreachable.component.OnJumpToMessage('reply-1');
+    expect(unreachable.loadOlder).not.toHaveBeenCalled();
+    expect(unreachable.reveals).toEqual([]);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('deleting from a collapsed thread reply removes only that reply and the replies under it', () => {
+    const root1 = fakeMessage('root-1', null, 'User', null, { Sequence: 1 });
+    const reply1 = fakeMessage('reply-1', 'root-1', 'User', null, { Sequence: 2 });
+    const agentUnderReply1 = fakeMessage('reply-2', 'reply-1', 'AI', 'agent-1', { Sequence: 3 });
+    const root2 = fakeMessage('root-2', null, 'User', null, { Sequence: 4 });
+    const siblingReply = fakeMessage('reply-3', 'root-1', 'User', null, { Sequence: 5 });
+    const rows = [root1, reply1, agentUnderReply1, root2, siblingReply];
+
+    const component = createChatArea(rows);
+    component.CollapseThreadReplies = true;
+    const removed = (
+      component as unknown as {
+        rowsToDeleteFrom: (m: MJConversationDetailEntity[], id: string) => MJConversationDetailEntity[];
+      }
+    ).rowsToDeleteFrom(rows, 'reply-1');
+
+    expect(removed.map((m) => m.ID)).toEqual(['reply-1', 'reply-2']);
+  });
+
   it('followTranscript ignores collapsed thread replies while following main-flow messages', () => {
     const root = fakeMessage('root-1', null, 'User', null, { Sequence: 1 });
     const threadReply = fakeMessage('reply-1', 'root-1', 'User', null, { Sequence: 2 });
