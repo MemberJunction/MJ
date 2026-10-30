@@ -19,7 +19,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLLiveKitClient } from '@memberjunction/graphql-dataprovider';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 
 const AUDIT_LOG_ENTITY = 'MJ: Audit Logs';
@@ -81,13 +81,11 @@ export const LiveKitRoomChecks: NamedCheck[] = [
             const id = 'LKR1';
             const provider = resolveWireProvider(ctx);
             if (!provider) {
-                console.warn(`  ⚠ ${id} SKIPPED — no GraphQL wire provider (this bundle runs on the client transport against a live MJAPI)`);
-                return;
+                SkipCheck('no GraphQL wire provider (this bundle runs on the client transport against a live MJAPI)');
             }
             const typeId = await consentAuditTypeId(ctx);
             if (!typeId) {
-                console.warn(`  ⚠ ${id} SKIPPED — audit log type '${CONSENT_AUDIT_TYPE}' is not seeded (push metadata/audit-log-types)`);
-                return;
+                SkipCheck(`audit log type '${CONSENT_AUDIT_TYPE}' is not seeded (push metadata/audit-log-types)`);
             }
             // A room nobody is in: LiveKit refuses, or the server does when it has no LiveKit credentials.
             const roomName = `mj-it-lkr-${Date.now().toString(36)}`;

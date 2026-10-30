@@ -18,7 +18,8 @@ import { SQLUtilityBase } from "./sql";
 import { ApplyIncludeSchemaScope, FindUnmatchedIncludeSchemas } from "./schema-scope";
 import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
 import { JSON_VALIDATOR_CATEGORY_NAME, JSONCheckStore, JSONCheckTranslator, JSONFieldRow, JSONValidatorResult, ResolveJSONCheckValidators } from "./json-check-validators";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityDisplayNameResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
+import { AssessDisplayNameOpacity } from "../Misc/display-name-heuristics";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
    ApplySearchableFieldsCap,
@@ -8879,7 +8880,9 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
                e.AllowUserSearchAPI,
                e.AutoUpdateAllowUserSearchAPI,
                e.FullTextSearchEnabled,
-               e.AutoUpdateFullTextSearch
+               e.AutoUpdateFullTextSearch,
+               e.DisplayName,
+               e.AutoUpdateDisplayName
             FROM
                ${this.qs(MjCoreSchema(), 'vwEntities')} e
             WHERE
@@ -9000,6 +9003,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       const batchSize = configInfo.advancedGeneration?.batchSize ?? 5;
       let processedCount = 0;
       let errorCount = 0;
+      let circuitSkippedCount = 0;
       const total = entities.length;
 
       // Pre-group fields by EntityID once — O(total fields) — instead of a per-entity linear scan
@@ -9020,6 +9024,10 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       // Process in batches
       for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
+         // processEntityAdvancedGeneration returns at once while the circuit is open; count those entities.
+         if (ag.AICircuitOpen) {
+            circuitSkippedCount += batch.length;
+         }
 
          // Process batch in parallel. entityPhase() sets the reporter's "current entity"
          // so any LLM calls issued by processEntityAdvancedGeneration get attributed
@@ -9052,8 +9060,15 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          if (ag.AICircuitOpen) {
             const skipped = total - processedCount;
             UpdateSpinner(`Advanced generation: AI credential circuit open — skipping remaining ${skipped} entit${skipped === 1 ? 'y' : 'ies'} (check AI credentials).`);
+            circuitSkippedCount += total - (i + batch.length);
             break;
          }
+      }
+
+      // The circuit skips entities without an error, so say so once: an entity left without a name
+      // field may not have been analyzed at all this run (MJ issue #3608).
+      if (ag.AICircuitOpen) {
+         LogWarning(`Advanced generation: the AI credential circuit was open, so smart-field identification (name field, default-in-view, searchable fields) and form layout did not run for ${circuitSkippedCount} of ${total} entit${total === 1 ? 'y' : 'ies'}. Fix the AI credentials and run CodeGen again.`);
       }
 
       return errorCount === 0;
@@ -9154,10 +9169,166 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
                logStatus(`         Applied form layout for ${entity.Name}`);
             }
          }
+
+         // Entity Display Name Generation
+         // Gated three ways: the entity must permit auto-update, the feature must
+         // be on, and (unless alwaysGenerate is set) the name must still look
+         // opaque after the deterministic conversion — so clean names never
+         // reach the model.
+         if (this.needsEntityDisplayNameGeneration(ag, entityRecord)) {
+            const displayNameResult = await ag.GenerateEntityDisplayName({
+               Name: entity.Name,
+               SchemaName: entityRecord.SchemaName as string | undefined,
+               BaseTable: entityRecord.BaseTable as string | undefined,
+               Description: entity.Description,
+               Fields: fields
+            }, currentUser);
+
+            if (displayNameResult) {
+               await this.applyEntityDisplayName(pool, entityRecord, displayNameResult);
+            }
+         }
       }
       catch (ex) {
          logError('Error Processing Entity Advanced Generation', ex)
       }
+   }
+
+   /**
+    * Decides whether an entity should be sent to the LLM for a display-name pass.
+    *
+    * Three independent gates, cheapest first:
+    *
+    * 1. `Entity.AutoUpdateDisplayName` — an administrator has locked this name.
+    * 2. The feature flag itself (checked inside `GenerateEntityDisplayName` too,
+    *    but checked here so the opacity assessment is skipped when it is off).
+    * 3. Opacity — whether the deterministic `createDisplayName()` conversion
+    *    already produces something readable. This is a COST filter and can be
+    *    turned off with the `alwaysGenerate` option; correctness does not depend
+    *    on it, only the token bill.
+    */
+   protected needsEntityDisplayNameGeneration(ag: AdvancedGeneration, entityRecord: Record<string, unknown>): boolean {
+      // The column is BIT/BOOLEAN over two drivers; compare loosely rather than
+      // assuming `true` vs `1`.
+      const autoUpdate = entityRecord.AutoUpdateDisplayName;
+      const allowsAutoUpdate = autoUpdate === true || autoUpdate === 1 || autoUpdate === '1';
+      if (!allowsAutoUpdate) {
+         return false;
+      }
+
+      if (!ag.featureEnabled('EntityDisplayNames')) {
+         return false;
+      }
+
+      if (ag.FeatureOptionBool('EntityDisplayNames', 'alwaysGenerate', false)) {
+         return true;
+      }
+
+      const entityName = String(entityRecord.Name ?? '');
+      const opacity = AssessDisplayNameOpacity(entityName);
+      if (!opacity.IsOpaque) {
+         return false;
+      }
+
+      logStatus(`         Display name for ${entityName} looks opaque (${opacity.Reason}${opacity.OffendingToken ? `: "${opacity.OffendingToken}"` : ''}), requesting LLM rewrite`);
+      return true;
+   }
+
+   /**
+    * Writes an LLM-proposed entity display name.
+    *
+    * Refuses to write in three cases, each of which would otherwise make the
+    * feature actively harmful rather than merely unhelpful:
+    *
+    * - **Not high or medium confidence.** A confidently wrong display name is worse
+    *   than an ugly accurate one, since nothing downstream flags it as a guess. An
+    *   allowlist, not a `'low'` check: a missing, null or oddly-cased confidence is
+    *   a model that did not answer the question, and it is treated the same way.
+    * - **No change.** Skipped so the run does not report work it did not do.
+    * - **Empty or over-long.** `Entity.DisplayName` is nvarchar(255); a model
+    *   that returns prose instead of a name is discarded rather than truncated.
+    *
+    * The schema prefix a name rule puts on `Entity.Name` (`CRM: ACCT_STAT_CD`) is
+    * stripped from the proposal first: `DisplayName` drops it by convention (see
+    * {@link createNewEntityDisplayName}), and a model that keeps it would otherwise
+    * leave this one entity prefixed while its siblings are not.
+    *
+    * The UPDATE goes through the SQL capture like every other metadata write here,
+    * so it reaches the CodeGen_Run_*.sql file that becomes the migration. A bare
+    * `runQuery` would land it in this machine's database and nowhere else.
+    */
+   protected async applyEntityDisplayName(
+      pool: CodeGenConnection,
+      entityRecord: Record<string, unknown>,
+      result: EntityDisplayNameResult
+   ): Promise<void> {
+      const entityName = String(entityRecord.Name ?? '');
+      const proposed = this.stripEntityNameAffixes((result.DisplayName ?? '').trim(), String(entityRecord.SchemaName ?? ''));
+
+      if (result.Confidence !== 'high' && result.Confidence !== 'medium') {
+         logStatus(`         Skipped display name for ${entityName}: confidence is ${JSON.stringify(result.Confidence ?? null)}, not high or medium ("${proposed}")`);
+         return;
+      }
+
+      if (proposed.length === 0 || proposed.length > 255) {
+         logStatus(`         Skipped display name for ${entityName}: proposed value is empty or exceeds 255 characters`);
+         return;
+      }
+
+      const current = entityRecord.DisplayName == null ? '' : String(entityRecord.DisplayName).trim();
+      if (current === proposed) {
+         return;
+      }
+
+      const sql = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, ${this.qi('DisplayName')} = '${EscapeSQLString(proposed)}' WHERE ID = '${String(entityRecord.ID)}' AND ${this.qi('AutoUpdateDisplayName')} = ${this.boolLit(true)}`;
+      await this.logSQLAndExecute(pool, sql, `Update display name for ${entityName}`);
+
+      // The model's list of what it expanded is for the log only; a malformed one must not turn a
+      // write that already happened into "Error Processing Entity Advanced Generation".
+      const expansionList = Array.isArray(result.Expansions)
+         ? result.Expansions.filter((e): e is { From: string; To: string } => !!e && typeof e === 'object')
+         : [];
+      const expansions = expansionList.length ? ` [${expansionList.map(e => `${e.From}->${e.To}`).join(', ')}]` : '';
+      logStatus(`         Display name for ${entityName}: "${current || '(none)'}" -> "${proposed}"${expansions}`);
+   }
+
+   /**
+    * Removes the prefix and suffix the entity's schema name rule adds to `Entity.Name` from a
+    * proposed display name. `DisplayName` never carries them (`createNewEntityDisplayName` strips
+    * them the same way), so a proposal that kept the prefix — `CRM: Account Status Codes`, or
+    * `CRM:Account Status Codes` with the separator space dropped — becomes `Account Status Codes`.
+    * Either affix strips only at a word boundary: under `Sales: `, `Salesforce Contacts` is a real
+    * name that happens to start with the prefix's letters, and stays whole.
+    * Without a rule, or when stripping would leave nothing, the proposal is returned as given.
+    */
+   protected stripEntityNameAffixes(proposed: string, schemaName: string): string {
+      const rule = schemaName ? this.getNewEntityNameRule(schemaName) : undefined;
+      if (!rule) {
+         return proposed;
+      }
+      let name = proposed.trim();
+      // The rule's prefix is typically "CRM: "; match its core ("CRM") followed by any separator the
+      // model kept or dropped, so both spellings above strip.
+      const prefixCore = (rule.EntityNamePrefix ?? '').trim().replace(/[\s:]+$/, '');
+      if (prefixCore.length > 0 && name.startsWith(prefixCore)
+         && ManageMetadataBase.isWordBoundary(prefixCore.charAt(prefixCore.length - 1), name.charAt(prefixCore.length))) {
+         name = name.substring(prefixCore.length).replace(/^[\s:]+/, '').trim();
+      }
+      const suffix = (rule.EntityNameSuffix ?? '').trim();
+      if (suffix.length > 0 && name.endsWith(suffix)
+         && ManageMetadataBase.isWordBoundary(name.charAt(name.length - suffix.length - 1), suffix.charAt(0))) {
+         name = name.substring(0, name.length - suffix.length).trim();
+      }
+      return name.length > 0 ? name : proposed.trim();
+   }
+
+   /**
+    * True when two adjacent characters do not both belong to one word, so an affix may end (or
+    * begin) between them. An empty side is a boundary: the affix met the end of the name.
+    */
+   private static isWordBoundary(left: string, right: string): boolean {
+      const wordChar = /[\p{L}\p{N}_]/u;
+      return !(left.length > 0 && right.length > 0 && wordChar.test(left) && wordChar.test(right));
    }
 
    /**
@@ -9445,9 +9616,15 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       }
 
       const winner = this.selectNameFieldWinner(fields, nameFieldNames);
+      const entityName = entity?.Name ?? '(unknown entity)';
+      if (!winner) {
+         logStatus(`         Name field: no eligible name field for ${entityName}; it has no name field after this run`);
+      }
 
-      // Set the winner when it isn't flagged yet (and auto-update is allowed).
+      // Set the winner when it isn't flagged yet (and auto-update is allowed). An unflagged winner
+      // can only come from step 3, the AI's ranked candidates, so the pick is logged (MJ issue #3608).
       if (winner && winner.AutoUpdateIsNameField && winner.ID && !winner.IsNameField) {
+         logStatus(`         Name field: set ${entityName}.${String(winner.Name)} as the name field (AI pick; no eligible field was flagged)`);
          sqlStatements.push(`
                UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET IsNameField = ${this.boolLit(true)}

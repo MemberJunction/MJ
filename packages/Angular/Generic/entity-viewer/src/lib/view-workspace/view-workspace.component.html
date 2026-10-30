@@ -7,6 +7,7 @@
       [SelectedViewID]="selectedViewId"
       [SelectedAlternateBaseView]="AlternateBaseView"
       [ViewModified]="viewModified"
+      [ShowExportButton]="ShowFallbackExportButton"
       (ViewSelected)="onViewSelected($event)"
       (AlternateBaseViewSelected)="OnAlternateBaseViewSelected($event)"
       (SaveViewRequested)="onSaveViewRequested($event)"
@@ -52,7 +53,8 @@
         (FilteredCountChanged)="onFilteredCountChanged($event)"
         (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)"
         (CreateRecordRequested)="onCreateRecordRequested()"
-        (ConfigureRequested)="onConfigureViewRequested()">
+        (ConfigureRequested)="onConfigureViewRequested()"
+        (ActiveViewTypeResolved)="OnActiveViewTypeResolved()">
       </mj-entity-viewer>
     }
   </div>
@@ -78,6 +80,7 @@
     (Close)="onCloseConfigPanel()"
     (Save)="onSaveView($event)"
     (SaveDefaults)="onSaveDefaultViewSettings($event)"
+    (SwitchToDefaultLayout)="OnSwitchToDefaultLayout()"
     (Delete)="onDeleteView()"
     (Duplicate)="onDuplicateFromPanel()"
     (OpenFilterDialogRequest)="onOpenFilterDialogRequest($event)">

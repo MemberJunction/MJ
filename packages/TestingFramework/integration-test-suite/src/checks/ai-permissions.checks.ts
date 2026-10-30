@@ -25,14 +25,14 @@
  * mutation-tier catalog item AI3 (see omissions in the bundle report).
  *
  * ANTI-VACUITY: every check is a DENY, a DIFFERENCE, or a SHAPE assertion — never "can the
- * high-privilege harness user do X". Data-dependent checks skip-as-pass LOUDLY.
+ * high-privilege harness user do X". Data-dependent checks record a SKIP.
  */
 import { RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PermissionEngine } from '@memberjunction/core-entities';
 import type { MJAISkillEntity, MJAISkillPermissionEntity } from '@memberjunction/core-entities';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -49,10 +49,10 @@ const SYNTH_USER_ID = '00000000-0000-4000-8000-00000000AB01';
 /** The seeded role-less integration principal (same as permission-engine / rls-isolation). */
 const SEEDED_NOGRANT_EMAIL = 'it-nogrant@integration.test';
 
-/** The command that seeds the integration principals — printed in every skip-as-pass warning. */
+/** The command that seeds the integration principals — printed in every skip reason. */
 const SEED_FIXTURES_COMMAND = 'npx mj sync push --dir=metadata-optional/integration-test';
 
-/** Loud, uniform skip-as-pass note. */
+/** Loud note for a skipped leg of a check that goes on asserting its other legs (APM5, APM6). */
 function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ ai-permissions.${checkId} SKIPPED — ${reason}`);
 }
@@ -179,8 +179,7 @@ export const AiPermissionsChecks: NamedCheck[] = [
             const engine = await configuredAIEngine(ctx);
             const skill = anyNonSyntheticOwnedSkill(engine);
             if (!skill) {
-                skipNote('APM2', 'no AI Skills in metadata — the role-grant leg is unexercised');
-                return;
+                SkipCheck('no AI Skills in metadata — the role-grant leg is unexercised');
             }
             const userWithRoleA = makeSyntheticUser(ctx, SYNTH_USER_ID, [ROLE_A]);
             const userWithRoleB = makeSyntheticUser(ctx, SYNTH_USER_ID, [ROLE_B]);
@@ -220,8 +219,7 @@ export const AiPermissionsChecks: NamedCheck[] = [
             const engine = await configuredAIEngine(ctx);
             const owned = engine.Skills.find(s => s.CreatedByUserID != null && s.CreatedByUserID.trim().length > 0);
             if (!owned) {
-                skipNote('APM3', 'no AI Skill with a non-null CreatedByUserID — the owner short-circuit is unexercised');
-                return;
+                SkipCheck('no AI Skill with a non-null CreatedByUserID — the owner short-circuit is unexercised');
             }
             const ownerIdentity = makeSyntheticUser(ctx, owned.CreatedByUserID as string, []);
             const foreignOnly = await makeUnsavedGrant(ctx, owned.ID, { userId: STRANGER_ID, canView: true });
@@ -251,8 +249,7 @@ export const AiPermissionsChecks: NamedCheck[] = [
             const engine = await configuredAIEngine(ctx);
             const skill = anyNonSyntheticOwnedSkill(engine);
             if (!skill) {
-                skipNote('APM4', 'no AI Skills in metadata — the union-merge leg is unexercised');
-                return;
+                SkipCheck('no AI Skills in metadata — the union-merge leg is unexercised');
             }
             const principal = makeSyntheticUser(ctx, SYNTH_USER_ID, [ROLE_A]);
             const userViewGrant = await makeUnsavedGrant(ctx, skill.ID, { userId: SYNTH_USER_ID, canView: true });
@@ -332,8 +329,7 @@ export const AiPermissionsChecks: NamedCheck[] = [
             // would pass without proving principal filtering. Skip loudly until a grant exists.
             const grantRows = (AIEngineBase.Instance.AgentPermissions?.length ?? 0) + (AIEngineBase.Instance.SkillPermissions?.length ?? 0);
             if (grantRows === 0) {
-                console.warn('  ⚠ ai-permissions.APM6 SKIPPED — zero grant rows table-wide; emptiness would be vacuous. Seed any one grant to arm this check.');
-                return;
+                SkipCheck('zero grant rows table-wide; emptiness would be vacuous. Seed any one grant to arm this check.');
             }
 
             // PE5/PE6/PE7 pin CheckPermission/GetEffectivePermissions; this pins the two
@@ -342,8 +338,7 @@ export const AiPermissionsChecks: NamedCheck[] = [
             // zero-grant resource must audit as having NO grantees (GetResourcePermissions → []).
             const noGrant = await loadSeededNoGrantUser(ctx);
             if (!noGrant) {
-                skipNote('APM6', `seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
-                return;
+                SkipCheck(`seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
             }
             const unified = PermissionEngine.Instance;
             await unified.Config(false, ctx.User, ctx.Provider);
