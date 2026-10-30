@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CreateWorkQueueSqlBuilder } from '../sql/CreateWorkQueueSqlBuilder';
+import type { SqlParam, WorkQueueSqlExecutor } from '../sql/WorkQueueSqlExecutor';
 import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 import { WorkQueueSweeper } from '../host/WorkQueueSweeper';
 import type { WorkQueueSweeperEngine, WorkQueueSweeperOptions } from '../host/WorkQueueSweeper';
@@ -103,7 +104,7 @@ describe('WorkQueueSweeper.RunOnce', () => {
         expect(events).toEqual([]);
     });
 
-    it('immediately discards lease-expired rows when subscription BindingConfig sets ExhaustionBehavior to Discard', async () => {
+    it('immediately discards lease-expired rows atomically inside a transaction when subscription BindingConfig sets ExhaustionBehavior to Discard', async () => {
         const discardSubscription = FakeSubscription({
             ID: IDS.IntegrationSubscription,
             Name: 'integration.apply',
@@ -126,10 +127,81 @@ describe('WorkQueueSweeper.RunOnce', () => {
         const result = await sweeper.RunOnce();
         expect(result.ExpireLeases).toBe(0);
         expect(events).toEqual([]);
+        expect(locked.Events).toEqual(['begin', 'commit']);
+        expect(locked.Calls[0].InTransaction).toBe(true);
+        expect(locked.Calls[1].InTransaction).toBe(true);
+        expect(locked.Calls[2].InTransaction).toBe(false);
         const operator = CreateWorkQueueSqlBuilder(locked).Operator;
         expect(locked.Calls[1].SQL).toBe(
             operator.DiscardDelivery(IDS.IntegrationSubscription, IDS.DeliveryA, false, TEST_USER.ID ?? null, 'LeaseExpired').SQL,
         );
+    });
+
+    it('rolls back ExpireLeasesAll and suppresses NotifyDeadLettered when DiscardDelivery throws mid-batch', async () => {
+        const deadLetterSubscription = FakeSubscription({
+            ID: IDS.IntegrationSubscription,
+            Name: 'integration.apply',
+            TopicID: IDS.IntegrationTopic,
+        });
+        const discardSubscription = FakeSubscription({
+            ID: IDS.UnknownSubscription,
+            Name: 'integration.discard',
+            TopicID: IDS.IntegrationTopic,
+            BindingConfig: '{"ExhaustionBehavior":"Discard"}',
+        });
+        const locked = new RecordingExecutor()
+            .QueueRows([
+                { DeliveryID: IDS.DeliveryA, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: 'venue-1' },
+                { DeliveryID: IDS.DeliveryB, SubscriptionID: IDS.UnknownSubscription, PartitionKey: 'venue-2' },
+            ])
+            .QueueError(new Error('transient deadlock'))
+            .QueueRows([{ AffectedRows: 0 }])
+            .QueueRows([{ AffectedRows: 0 }]);
+        const events: DeadLetteredEvent[] = [];
+        const mixedEngine: WorkQueueSweeperEngine = {
+            Subscriptions: [deadLetterSubscription, discardSubscription],
+            NotifyDeadLettered: event => { events.push(event); },
+        };
+        const log = new SilentLogger();
+        const sweeper = new WorkQueueSweeper(new RecordingExecutor(), mixedEngine, TEST_USER, log, harness(locked).Options);
+        const result = await sweeper.RunOnce();
+
+        expect(result.ExpireLeases).toBe(-1);
+        expect(locked.Events).toEqual(['begin', 'rollback']);
+        // Neither row committed, so NotifyDeadLettered must NOT have fired for DeliveryA
+        expect(events).toEqual([]);
+        expect(log.Lines.some(line => line.includes('ExpireLeases failed'))).toBe(true);
+    });
+
+    it('falls back to direct execution when lock.Executor is a non-transactional WorkQueueSqlExecutor test double', async () => {
+        const template = new RecordingExecutor();
+        const calls: string[] = [];
+        const plainExecutor: WorkQueueSqlExecutor = {
+            PlatformKey: 'sqlserver',
+            MJCoreSchemaName: '__mj',
+            Dialect: template.Dialect,
+            QuoteIdentifier: (name: string) => template.QuoteIdentifier(name),
+            BuildParameterPlaceholder: (index: number) => template.BuildParameterPlaceholder(index),
+            ExecuteSQL: async <T>(sql: string, _params?: SqlParam[]) => {
+                calls.push(sql);
+                if (calls.length === 1) {
+                    return [{ DeliveryID: IDS.DeliveryA, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: 'k1' }] as T[];
+                }
+                return [{ AffectedRows: 0 }] as T[];
+            },
+        };
+        const events: DeadLetteredEvent[] = [];
+        const options: Partial<WorkQueueSweeperOptions> = {
+            AcquireLock: async () => ({ Executor: plainExecutor, Release: async () => {} }),
+            CreateLedger: () => ({ PurgeExpired: async () => 0 }),
+        };
+        const sweeper = new WorkQueueSweeper(new RecordingExecutor(), engine(events), TEST_USER, new SilentLogger(), options);
+        const result = await sweeper.RunOnce();
+
+        expect(result).toEqual({ ExpireLeases: 1, PurgeRetention: 0, PurgeDeduplications: 0 });
+        expect(events).toEqual([
+            { SubscriptionName: 'integration.apply', DeliveryID: IDS.DeliveryA, Reason: 'LeaseExpired', PartitionKey: 'k1' },
+        ]);
     });
 
     it('repeats a purge while batches come back full, up to the per-run cap', async () => {

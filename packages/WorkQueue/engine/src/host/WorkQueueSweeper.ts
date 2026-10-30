@@ -10,6 +10,7 @@ import { ExecuteRows, ExecuteWrite } from '../sql/sqlExecution';
 import { TryAcquireSweepLock } from '../sql/sweepLock';
 import type { SweepLock } from '../sql/sweepLock';
 import type { OperatorSqlBuilder } from '../sql/WorkQueueSqlBuilder';
+import { IsWorkQueueTransactionalExecutor } from '../sql/WorkQueueSqlExecutor';
 import type { SqlStatement, WorkQueueExecutorSource, WorkQueueSqlExecutor } from '../sql/WorkQueueSqlExecutor';
 import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 
@@ -97,29 +98,57 @@ export class WorkQueueSweeper {
     /**
      * ExpireLeasesAll returns only the deliveries it dead-lettered (03 §7), so every lease-expiry dead letter reaches
      * the engine. Rows returned to Pending, or discarded because a cancel was pending, are not returned.
+     *
+     * Runs inside an entity transaction on the dedicated sweep executor so `ExpireLeasesAll` and any follow-up
+     * `ExhaustionBehavior === 'Discard'` transitions commit or roll back atomically, and `NotifyDeadLettered`
+     * fires only after commit succeeds.
      */
     private async expireLeases(executor: WorkQueueSqlExecutor, sql: OperatorSqlBuilder): Promise<number> {
-        const deadLettered = await ExecuteRows<ExpiredDeadLetterRow>(executor, sql.ExpireLeasesAll(), this.contextUser);
-        let retainedDeadLetters = 0;
-        for (const row of deadLettered) {
-            const sub = this.findSubscription(row.SubscriptionID);
-            if (sub && ResolveSubscriptionExhaustionBehavior(sub) === 'Discard') {
-                await ExecuteWrite(
-                    executor,
-                    sql.DiscardDelivery(row.SubscriptionID, row.DeliveryID, false, this.contextUser.ID ?? null, 'LeaseExpired'),
-                    this.contextUser,
-                );
-                continue;
+        const scope = IsWorkQueueTransactionalExecutor(executor)
+            ? await executor.BeginEntityTransaction()
+            : null;
+        const pendingNotifications: DeadLetteredEvent[] = [];
+        try {
+            const deadLettered = await ExecuteRows<ExpiredDeadLetterRow>(executor, sql.ExpireLeasesAll(), this.contextUser);
+            let retainedDeadLetters = 0;
+            for (const row of deadLettered) {
+                const sub = this.findSubscription(row.SubscriptionID);
+                if (sub && ResolveSubscriptionExhaustionBehavior(sub) === 'Discard') {
+                    const discardedCount = await ExecuteWrite(
+                        executor,
+                        sql.DiscardDelivery(row.SubscriptionID, row.DeliveryID, false, this.contextUser.ID ?? null, 'LeaseExpired'),
+                        this.contextUser,
+                    );
+                    if (discardedCount !== 1) {
+                        throw new Error(`DiscardDelivery affected ${discardedCount} rows for expired delivery ${row.DeliveryID}`);
+                    }
+                    continue;
+                }
+                retainedDeadLetters++;
+                pendingNotifications.push({
+                    SubscriptionName: sub?.Name ?? row.SubscriptionID,
+                    DeliveryID: row.DeliveryID,
+                    Reason: 'LeaseExpired',
+                    PartitionKey: row.PartitionKey,
+                });
             }
-            retainedDeadLetters++;
-            this.engine.NotifyDeadLettered({
-                SubscriptionName: sub?.Name ?? row.SubscriptionID,
-                DeliveryID: row.DeliveryID,
-                Reason: 'LeaseExpired',
-                PartitionKey: row.PartitionKey,
-            });
+            if (scope) {
+                await scope.Commit();
+            }
+            for (const event of pendingNotifications) {
+                this.engine.NotifyDeadLettered(event);
+            }
+            return retainedDeadLetters;
+        } catch (error) {
+            if (scope) {
+                try {
+                    await scope.Rollback();
+                } catch {
+                    // Connection is gone or transaction already ended; preserve the original error.
+                }
+            }
+            throw error;
         }
-        return retainedDeadLetters;
     }
 
     /** Returns the cached subscription entity when metadata has caught up with it. */

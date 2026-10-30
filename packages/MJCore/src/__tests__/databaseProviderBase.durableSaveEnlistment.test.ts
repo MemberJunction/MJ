@@ -20,12 +20,29 @@ import {
     UserInfo,
 } from '../index';
 
+class TestTransactionGroup extends TransactionGroupBase {
+    constructor(private readonly provider: EnlistmentTestProvider) {
+        super();
+    }
+
+    protected async HandleSubmit(): Promise<TransactionResult[]> {
+        return this.PendingTransactions.map((item) => {
+            this.provider.RecordGroupSql();
+            return new TransactionResult(item, { ID: 'db-generated-id-99', Name: 'Saved Order' }, true);
+        });
+    }
+}
+
 class EnlistmentTestProvider extends DatabaseProviderBase {
     public EnlistSave = false;
     public FailDurableHook = false;
     public readonly Events: string[] = [];
     public ObservedPkInDurableHook: string | null = null;
     private txDepth = 0;
+
+    public RecordGroupSql(): void {
+        this.Events.push(`group-sql:tx=${this.txDepth}`);
+    }
 
     protected get ProviderType(): ProviderType { return ProviderType.Database; }
     protected get AllowRefresh(): boolean { return false; }
@@ -208,5 +225,65 @@ describe('DatabaseProviderBase durable after-save transactional enlistment', () 
             'durable-after-save:tx=1',
             'rollback:1',
         ]);
+    });
+
+    it('hydrates DB-generated PKs and awaits OnDurableAfterSaveExecute inside a TransactionGroup save callback before OnAfterSaveExecute', async () => {
+        const provider = new EnlistmentTestProvider();
+        provider.EnlistSave = true;
+        const user = new UserInfo(provider, { ID: 'u1', Name: 'Admin', Email: 'admin@example.com', UserRoles: [] });
+        const entity = createFakeNewEntity(provider);
+        // Memoize entity.PrimaryKey while ID is still null to ensure hydration refreshes it
+        expect(entity.PrimaryKey.KeyValuePairs[0]?.Value).toBeNull();
+
+        const tg = new TestTransactionGroup(provider);
+        entity.TransactionGroup = tg;
+
+        expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
+        expect(provider.Events).toEqual([]);
+
+        const scope = await provider.BeginEntityTransaction();
+        const submitted = await tg.Submit();
+        expect(submitted).toBe(true);
+        await scope.Commit();
+
+        expect(provider.ObservedPkInDurableHook).toBe('ID|db-generated-id-99');
+        expect(provider.Events).toEqual([
+            'begin:1',
+            'group-sql:tx=1',
+            'durable-after-save:tx=1',
+            'inline-after-save:tx=1',
+            'commit:1',
+        ]);
+        expect(tg.Status).toBe('Complete');
+    });
+
+    it('fails TransactionGroup.Submit, skips OnAfterSaveExecute, and allows caller transaction rollback when OnDurableAfterSaveExecute throws', async () => {
+        const provider = new EnlistmentTestProvider();
+        provider.EnlistSave = true;
+        provider.FailDurableHook = true;
+        const user = new UserInfo(provider, { ID: 'u1', Name: 'Admin', Email: 'admin@example.com', UserRoles: [] });
+        const entity = createFakeNewEntity(provider);
+
+        const tg = new TestTransactionGroup(provider);
+        entity.TransactionGroup = tg;
+
+        expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
+
+        const scope = await provider.BeginEntityTransaction();
+        const submitted = await tg.Submit();
+        if (!submitted) {
+            await scope.Rollback();
+        }
+
+        expect(submitted).toBe(false);
+        expect(tg.Status).toBe('Failed');
+        expect(provider.Events).toEqual([
+            'begin:1',
+            'group-sql:tx=1',
+            'durable-after-save:tx=1',
+            'rollback:1',
+        ]);
+        expect(entity.LatestResult?.Success).toBe(false);
+        expect(entity.LatestResult?.Message).toBe('durable outbox write failed');
     });
 });

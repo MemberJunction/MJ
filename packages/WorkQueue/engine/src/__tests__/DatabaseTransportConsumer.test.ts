@@ -58,6 +58,37 @@ describe('DatabaseTransportConsumer.Receive', () => {
         expect(events).toEqual([{ SubscriptionName: 'venue-import', DeliveryID: 'D9', Reason: 'LeaseExpired', PartitionKey: 'venue-1' }]);
     });
 
+    it('atomically expires and discards leases inside an isolated transaction when ExhaustionBehavior is Discard, and rolls back if DiscardDelivery fails', async () => {
+        const events: DeadLetteredEvent[] = [];
+        const source = new RecordingExecutor()
+            .QueueRows([{ DeliveryID: 'EEEEEEEE-0000-0000-0000-000000000009', SubscriptionID: 'S', PartitionKey: 'venue-1', Reason: 'LeaseExpired' }])
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([]);
+        await Consumer(source, { ExhaustionBehavior: 'Discard' }, events).Receive(1, 0, new AbortController().signal);
+
+        expect(events).toEqual([]);
+        expect(source.Calls[0].SQL).toContain('[spWorkQueueExpireLeases]');
+        expect(source.Calls[0].Executor).toBe('independent#1');
+        expect(source.Calls[0].InTransaction).toBe(true);
+        expect(source.Calls[1].SQL).toContain('[spWorkQueueDiscardDelivery]');
+        expect(source.Calls[1].Executor).toBe('independent#1');
+        expect(source.Calls[1].InTransaction).toBe(true);
+        expect(source.Calls[2].SQL).toContain('[spWorkQueueClaimUnpartitioned]');
+        expect(source.Calls[2].Executor).toBe('independent#2');
+        expect(source.Calls[2].InTransaction).toBe(false);
+        expect(source.Events).toEqual(['independent', 'begin', 'commit', 'release', 'independent']);
+
+        // Rollback when DiscardDelivery throws: ExpireLeases is rolled back so no row is stranded in DeadLettered
+        const failingSource = new RecordingExecutor()
+            .QueueRows([{ DeliveryID: 'EEEEEEEE-0000-0000-0000-000000000009', SubscriptionID: 'S', PartitionKey: 'venue-1', Reason: 'LeaseExpired' }])
+            .QueueError(new Error('deadlock victim'));
+        await expect(
+            Consumer(failingSource, { ExhaustionBehavior: 'Discard' }, events).Receive(1, 0, new AbortController().signal),
+        ).rejects.toThrow('deadlock victim');
+        expect(failingSource.Events).toEqual(['independent', 'begin', 'rollback', 'release']);
+        expect(events).toEqual([]);
+    });
+
     it('keeps the first candidate per key, skips a key lost to another worker, then fills with keyless rows', async () => {
         const lost = Object.assign(new Error("Cannot insert duplicate key row with unique index 'UQ_WorkQueueDelivery_InFlightPartition'"), { number: 2601 });
         const source = new RecordingExecutor()
@@ -162,29 +193,76 @@ describe('DatabaseTransportConsumer settles', () => {
         expect(events).toEqual([{ SubscriptionName: 'venue-import', DeliveryID: CLAIMED.DeliveryID, Reason: 'Poison', PartitionKey: 'venue-42' }]);
     });
 
-    it('token-fences DiscardExhausted via DeadLetterDelivery + DiscardDelivery and auto-discards lease expiries when ExhaustionBehavior is Discard', async () => {
+    it('atomically token-fences DiscardExhausted on an isolated transaction (never on this.owned) and rolls back on LeaseLost or DiscardDelivery failure', async () => {
         const events: DeadLetteredEvent[] = [];
         const source = new RecordingExecutor()
-            .QueueRows([{ AffectedRows: 1 }])
-            .QueueRows([{ AffectedRows: 1 }])
-            .QueueRows([{ AffectedRows: 0 }]);
+            .QueueRows([{ AffectedRows: 1 }])   // Complete on this.owned (independent#1)
+            .QueueRows([{ AffectedRows: 1 }])   // DiscardExhausted -> DeadLetterDelivery on independent#2
+            .QueueRows([{ AffectedRows: 1 }])   // DiscardExhausted -> DiscardDelivery on independent#2
+            .QueueRows([{ AffectedRows: 0 }]);  // DiscardExhausted -> token-fence mismatch on independent#3
         const consumer = Consumer(source, { ExhaustionBehavior: 'Discard' }, events);
+
+        // Initialize this.owned (independent#1) first to prove DiscardExhausted never opens a tx on it
+        expect(await consumer.Complete(Delivery())).toEqual({
+            Kind: 'Settled',
+            DeliveryID: CLAIMED.DeliveryID,
+            Status: 'Completed',
+        });
 
         expect(await consumer.DiscardExhausted!(Delivery(), 'MaxAttemptsExceeded', 'boom')).toEqual({
             Kind: 'Settled',
             DeliveryID: CLAIMED.DeliveryID,
             Status: 'Discarded',
         });
-        expect(source.Calls[0].SQL).toContain('[spWorkQueueDeadLetterDelivery]');
-        expect(source.Calls[1].SQL).toContain('[spWorkQueueDiscardDelivery]');
+        expect(source.Calls[1].SQL).toContain('[spWorkQueueDeadLetterDelivery]');
+        expect(source.Calls[1].Executor).toBe('independent#2');
+        expect(source.Calls[1].InTransaction).toBe(true);
+        expect(source.Calls[2].SQL).toContain('[spWorkQueueDiscardDelivery]');
+        expect(source.Calls[2].Executor).toBe('independent#2');
+        expect(source.Calls[2].InTransaction).toBe(true);
         expect(events).toEqual([]);
 
-        // Token-fence mismatch returns LeaseLost without calling DiscardDelivery
+        // Token-fence mismatch rolls back without calling DiscardDelivery
         expect(await consumer.DiscardExhausted!(Delivery(), 'MaxAttemptsExceeded', 'boom')).toEqual({
             Kind: 'LeaseLost',
             DeliveryID: CLAIMED.DeliveryID,
         });
-        expect(source.Calls).toHaveLength(3);
+        expect(source.Calls).toHaveLength(4);
+        expect(source.CallsOn('independent#1')).toHaveLength(1);
+        expect(source.Events).toEqual([
+            'independent',
+            'independent', 'begin', 'commit', 'release',
+            'independent', 'begin', 'rollback', 'release',
+        ]);
+    });
+
+    it('rolls back DeadLetterDelivery and returns Failed when DiscardDelivery throws or affects 0 rows inside DiscardExhausted', async () => {
+        const events: DeadLetteredEvent[] = [];
+        const throwingSource = new RecordingExecutor()
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueError(new Error('lock timeout'));
+        const throwingConsumer = Consumer(throwingSource, { ExhaustionBehavior: 'Discard' }, events);
+
+        expect(await throwingConsumer.DiscardExhausted!(Delivery(), 'MaxAttemptsExceeded', 'boom')).toEqual({
+            Kind: 'Failed',
+            DeliveryID: CLAIMED.DeliveryID,
+            Error: 'lock timeout',
+        });
+        expect(throwingSource.Events).toEqual(['independent', 'begin', 'rollback', 'release']);
+        expect(events).toEqual([]);
+
+        const zeroRowSource = new RecordingExecutor()
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([{ AffectedRows: 0 }]);
+        const zeroRowConsumer = Consumer(zeroRowSource, { ExhaustionBehavior: 'Discard' }, events);
+
+        const zeroRowResult = await zeroRowConsumer.DiscardExhausted!(Delivery(), 'MaxAttemptsExceeded', 'boom');
+        expect(zeroRowResult).toEqual({
+            Kind: 'Failed',
+            DeliveryID: CLAIMED.DeliveryID,
+            Error: `DiscardDelivery affected 0 rows for exhausted delivery ${CLAIMED.DeliveryID}`,
+        });
+        expect(zeroRowSource.Events).toEqual(['independent', 'begin', 'rollback', 'release']);
     });
 
     it('reports infrastructure failures as Failed', async () => {

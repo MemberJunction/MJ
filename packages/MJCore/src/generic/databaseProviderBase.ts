@@ -1318,9 +1318,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Returns true when a direct `Save()` must wrap its SQL execution and {@link OnDurableAfterSaveExecute}
-     * inside an {@link EntityTransactionScope} (e.g., when active `RunMode === 'Durable'` after-save
-     * entity actions are registered alongside a durable queue submitter).
+     * Returns true when `Save()` must enlist {@link OnDurableAfterSaveExecute} transactionally
+     * (wrapping direct saves in an {@link EntityTransactionScope}, and awaiting durable action
+     * submission inside `TransactionGroup` save callbacks before group completion).
      *
      * Default: `false` (zero extra transaction overhead on ordinary entity saves).
      */
@@ -1334,8 +1334,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Awaited inside `Save()`'s {@link EntityTransactionScope} immediately after the save SQL
-     * succeeds and before the scope commits, when {@link ShouldEnlistSaveInTransaction} returned `true`.
+     * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
+     * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
+     * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
+     * {@link ShouldEnlistSaveInTransaction} returned `true`.
      * Used by `GenericDatabaseProvider` to enlist durable after-save entity actions atomically in the
      * same SQL transaction as the entity write.
      */
@@ -2088,6 +2090,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     });
                     extraData.entityName = entity.EntityInfo.Name;
 
+                    type TransactionRowValue = string | number | boolean | Date | Uint8Array | object | null | undefined;
                     entity.TransactionGroup.AddTransaction(
                         new TransactionItem(
                             entity,
@@ -2095,19 +2098,43 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.literalSQL ?? sqlDetails.fullSQL,
                             sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                             extraData,
-                            (transactionResult: Record<string, unknown>, success: boolean) => {
+                            async (transactionResult: Record<string, TransactionRowValue>, success: boolean) => {
                                 resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
+                                    if (bNewRecord) {
+                                        let hydratedPk = false;
+                                        for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                            const fieldObj = entity.Fields.find((f) => f.Name === pkField.Name);
+                                            if (
+                                                fieldObj &&
+                                                (fieldObj.Value === null || fieldObj.Value === undefined) &&
+                                                transactionResult[pkField.Name] != null
+                                            ) {
+                                                fieldObj.Value = transactionResult[pkField.Name];
+                                                hydratedPk = true;
+                                            }
+                                        }
+                                        if (hydratedPk) {
+                                            entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                        }
+                                    }
+                                    if (await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord)) {
+                                        await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                                    }
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    const mergedResult: Record<string, unknown> = preSaveValues
-                                        ? { ...preSaveValues, ...transactionResult }
+                                    const mergedResult: Record<string, TransactionRowValue> = preSaveValues
+                                        ? { ...(preSaveValues as Record<string, TransactionRowValue>), ...transactionResult }
                                         : transactionResult;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
                                 } else {
                                     entityResult.Success = false;
-                                    entityResult.Message = 'Transaction Failed';
+                                    if (!entityResult.Message) {
+                                        entityResult.Message = transactionResult instanceof Error
+                                            ? transactionResult.message
+                                            : 'Transaction Failed';
+                                    }
                                 }
                             },
                         ),
@@ -2141,11 +2168,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                         if (result && result.length > 0) {
                             if (bNewRecord) {
+                                let hydratedPk = false;
                                 for (const pkField of entity.EntityInfo.PrimaryKeys) {
                                     const fieldObj = entity.Fields.find(f => f.Name === pkField.Name);
                                     if (fieldObj && (fieldObj.Value === null || fieldObj.Value === undefined) && result[0][pkField.Name] != null) {
                                         fieldObj.Value = result[0][pkField.Name];
+                                        hydratedPk = true;
                                     }
+                                }
+                                if (hydratedPk) {
+                                    entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
                                 }
                             }
                             if (enlistInTx) {

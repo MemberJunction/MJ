@@ -2,10 +2,12 @@ import type {
     DeliveryStatus, ITransportConsumer, LeaseExtension, ReceivedDelivery, SettleResult, SubscriptionBinding, WorkJson, WorkProgress,
 } from '@memberjunction/work-queue-core';
 import { CANDIDATE_OVERSCAN, IN_FLIGHT_PARTITION_INDEX } from '../../constants';
+import { CreateWorkQueueSqlBuilder } from '../../sql/CreateWorkQueueSqlBuilder';
 import type { ClaimedDeliveryRow, ClaimPartitionMode, ExpiredDeadLetterRow, LeaseStateRow, PartitionCandidateRow } from '../../sql/rows';
 import { ErrorText, ExecuteRows, ExecuteWrite, IsUniqueViolation, ToBoolean, ToNumber } from '../../sql/sqlExecution';
 import type { WorkQueueSqlBuilder } from '../../sql/WorkQueueSqlBuilder';
 import type { SqlStatement, WorkQueueExecutorSource } from '../../sql/WorkQueueSqlExecutor';
+import { RunInWorkQueueTransaction } from '../../transaction/RunInWorkQueueTransaction';
 import { OwnedExecutor } from '../OwnedExecutor';
 import type { TransportDriverDeps } from '../TransportDriverDeps';
 import { ReadSubscriptionIDs } from './bindingIds';
@@ -13,15 +15,17 @@ import type { DatabaseSubscriptionIDs } from './bindingIds';
 import { MessageFromColumns, NormalizeRowID, SerializeProgress } from './rowMapping';
 
 /**
- * The Database transport's consumer (03 §7, §11). It owns one independent executor, never runs a statement on the
- * shared source, and never opens a transaction: every claim, heartbeat and settle is a single guarded procedure call.
+ * The Database transport's consumer (03 §7, §11). It owns one independent executor for single-step claim, heartbeat
+ * and settle calls (never running statements on the shared source or opening transactions on `this.owned`, which may
+ * serve concurrent in-flight deliveries when `Concurrency > 1`). Multi-statement `ExhaustionBehavior === 'Discard'`
+ * transitions run atomically on a short-lived independent transaction via `RunInWorkQueueTransaction(this.source, ...)`.
  */
 export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> implements ITransportConsumer<TPayload> {
     private readonly ids: DatabaseSubscriptionIDs;
     private readonly owned: OwnedExecutor;
 
     constructor(
-        source: WorkQueueExecutorSource,
+        private readonly source: WorkQueueExecutorSource,
         private readonly sql: WorkQueueSqlBuilder,
         private readonly binding: SubscriptionBinding,
         private readonly deps: TransportDriverDeps,
@@ -80,28 +84,45 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
     }
 
     /**
-     * Token-fenced terminal discard for `ExhaustionBehavior === 'Discard'`: stamps `DeadLetterReason`/`LastError`
+     * Atomic token-fenced terminal discard for `ExhaustionBehavior === 'Discard'`: stamps `DeadLetterReason`/`LastError`
      * under the holder's `LeaseToken` via `DeadLetterDelivery`, then immediately transitions to `'Discarded'`
-     * via `Operator.DiscardDelivery` so ordered partition keys unblock automatically.
+     * via `Operator.DiscardDelivery` inside a single isolated transaction on `this.source` (never on `this.owned`)
+     * so transient failures cannot strand `Ordered` partition keys in `DeadLettered`.
      */
     public async DiscardExhausted(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
         try {
-            const fencedCount = await this.write(
-                this.sql.Consume.DeadLetterDelivery(delivery.DeliveryID, delivery.LeaseToken, reason, error),
-            );
-            if (fencedCount !== 1) {
-                return { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID };
-            }
-            await this.write(
-                this.sql.Operator.DiscardDelivery(
-                    this.ids.SubscriptionID,
-                    delivery.DeliveryID,
-                    false,
-                    this.deps.ContextUser?.ID ?? null,
-                    reason,
-                ),
-            );
-            return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Discarded' };
+            return await RunInWorkQueueTransaction<SettleResult>(this.source, async tx => {
+                const txSql = CreateWorkQueueSqlBuilder(tx);
+                const fencedCount = await ExecuteWrite(
+                    tx,
+                    txSql.Consume.DeadLetterDelivery(delivery.DeliveryID, delivery.LeaseToken, reason, error),
+                    this.deps.ContextUser,
+                );
+                if (fencedCount !== 1) {
+                    return {
+                        Commit: false,
+                        Value: { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID },
+                    };
+                }
+                const discardedCount = await ExecuteWrite(
+                    tx,
+                    txSql.Operator.DiscardDelivery(
+                        this.ids.SubscriptionID,
+                        delivery.DeliveryID,
+                        false,
+                        this.deps.ContextUser?.ID ?? null,
+                        reason,
+                    ),
+                    this.deps.ContextUser,
+                );
+                if (discardedCount !== 1) {
+                    throw new Error(`DiscardDelivery affected ${discardedCount} rows for exhausted delivery ${delivery.DeliveryID}`);
+                }
+                return {
+                    Commit: true,
+                    Value: { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Discarded' },
+                };
+            });
         } catch (err) {
             return { Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: ErrorText(err) };
         }
@@ -123,21 +144,36 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
 
     private async expireLeases(): Promise<void> {
         const policy = this.binding.Policy;
-        const expired = await this.rows<ExpiredDeadLetterRow>(this.sql.Consume.ExpireLeases(this.ids.SubscriptionID, policy.MaxAttempts));
         if (policy.ExhaustionBehavior === 'Discard') {
-            for (const row of expired) {
-                await this.write(
-                    this.sql.Operator.DiscardDelivery(
-                        this.ids.SubscriptionID,
-                        NormalizeRowID(row.DeliveryID),
-                        false,
-                        this.deps.ContextUser?.ID ?? null,
-                        row.Reason,
-                    ),
+            await RunInWorkQueueTransaction<void>(this.source, async tx => {
+                const txSql = CreateWorkQueueSqlBuilder(tx);
+                const expired = await ExecuteRows<ExpiredDeadLetterRow>(
+                    tx,
+                    txSql.Consume.ExpireLeases(this.ids.SubscriptionID, policy.MaxAttempts),
+                    this.deps.ContextUser,
                 );
-            }
+                for (const row of expired) {
+                    const deliveryID = NormalizeRowID(row.DeliveryID);
+                    const discardedCount = await ExecuteWrite(
+                        tx,
+                        txSql.Operator.DiscardDelivery(
+                            this.ids.SubscriptionID,
+                            deliveryID,
+                            false,
+                            this.deps.ContextUser?.ID ?? null,
+                            row.Reason,
+                        ),
+                        this.deps.ContextUser,
+                    );
+                    if (discardedCount !== 1) {
+                        throw new Error(`DiscardDelivery affected ${discardedCount} rows for expired delivery ${deliveryID}`);
+                    }
+                }
+                return { Commit: true, Value: undefined };
+            });
             return;
         }
+        const expired = await this.rows<ExpiredDeadLetterRow>(this.sql.Consume.ExpireLeases(this.ids.SubscriptionID, policy.MaxAttempts));
         for (const row of expired) {
             this.deps.NotifyDeadLettered?.({
                 SubscriptionName: policy.SubscriptionName, DeliveryID: row.DeliveryID, Reason: row.Reason, PartitionKey: row.PartitionKey,
