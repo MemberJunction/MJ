@@ -141,6 +141,23 @@ describe('BuildSessionStatusDisplay', () => {
         expect(d.Icon).toBe('');
     });
 
+    // Rows closed before TimeLimit and Idle existed keep 'Janitor' for every expiry close (see the CloseReason column
+    // description), so the title must not claim every Janitor row was a crash orphan.
+    it('titles a Janitor row with both meanings: an orphan from an earlier boot, or an older idle / time-limit close', () => {
+        const title = BuildSessionStatusDisplay('Closed', 'Janitor').Title;
+        expect(title).toMatch(/orphan/i);
+        expect(title).toMatch(/idle/i);
+        expect(title).toMatch(/time limit/i);
+    });
+
+    // A TimeLimit close is either the janitor's deadline sweep or the browser's own deadline alarm (a claim the server
+    // verified), so its title must not say the janitor closed it.
+    it('titles a TimeLimit row without claiming the janitor closed it', () => {
+        const title = BuildSessionStatusDisplay('Closed', 'TimeLimit').Title;
+        expect(title).toMatch(/time limit/i);
+        expect(title).not.toMatch(/janitor/i);
+    });
+
     it('renders Idle with the pause icon', () => {
         const d = BuildSessionStatusDisplay('Idle', null);
         expect(d.Label).toBe('Idle');

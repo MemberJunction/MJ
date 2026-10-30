@@ -98,10 +98,10 @@ export interface RealtimeSessionRollup {
      */
     CloseReason: RealtimeSessionCloseReason | null;
     /**
-     * The session was closed by the server's lifecycle janitor rather than
-     * ended by a person: `Idle` (staleness sweep), `TimeLimit` (deadline
-     * sweep) or `Janitor` (crash orphan reconciled at startup). All three
-     * count, so the "Janitor closes" KPI keeps counting every system close. Derived from the real column; the old
+     * The session was closed by the system rather than ended by a person: `Idle` (the janitor's staleness sweep),
+     * `TimeLimit` (the janitor's deadline sweep, or the browser's deadline alarm once the server verified the claim) or
+     * `Janitor` (crash orphan reconciled at startup, and every expiry close recorded before `Idle` and `TimeLimit`
+     * existed). All three count toward the "System closes" KPI. Derived from the real column; the old
      * ClosedAt−LastActiveAt timing heuristic has been retired, so legacy
      * NULL-reason rows report `false` here and "unknown" in the UI.
      */
@@ -318,9 +318,11 @@ export function BuildSessionStatusDisplay(
         case 'Explicit':
             return { Label: 'Closed', Title: 'Closed explicitly (user hang-up / close mutation)', Icon: 'fa-solid fa-circle-stop' };
         case 'Janitor':
-            return { Label: 'Closed · janitor', Title: 'Crash orphan reconciled by the lifecycle janitor at startup', Icon: 'fa-solid fa-broom' };
+            // Rows closed before TimeLimit and Idle existed keep 'Janitor' for every expiry close, so the title names both meanings.
+            return { Label: 'Closed · janitor', Title: 'Closed by the lifecycle janitor: an orphan from an earlier boot, or (for sessions closed before the idle and time-limit reasons existed) an idle or time limit close', Icon: 'fa-solid fa-broom' };
         case 'TimeLimit':
-            return { Label: 'Closed · time limit', Title: 'Closed by the janitor because the session passed its time limit', Icon: 'fa-solid fa-hourglass-end' };
+            // The janitor's deadline sweep or the browser's own deadline alarm (a claim the server verified): not always the janitor.
+            return { Label: 'Closed · time limit', Title: 'Closed because the session reached its time limit', Icon: 'fa-solid fa-hourglass-end' };
         case 'Idle':
             return { Label: 'Closed · idle — no activity', Title: 'Closed by the janitor staleness sweep after no activity', Icon: 'fa-solid fa-moon' };
         case 'Shutdown':
