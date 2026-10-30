@@ -13,14 +13,12 @@ import {
   type EvaluationProtocolSpec,
   type HyperparameterValue,
   type JsonValue,
-  type PredictionUnitSpec,
   type TaskType,
   type TrainerRequest,
   type TrainerRequestConfig,
 } from '@memberjunction/predictive-studio-core';
 import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
-import { TrainingRefusedError } from './training-refusal';
 
 /** Everything one trainer request is built from. */
 export interface TrainerRequestInput {
@@ -30,9 +28,8 @@ export interface TrainerRequestInput {
     'ID' | 'ContentHash' | 'FeatureSchemaHash' | 'MatrixFileID' | 'MatrixSha256' | 'RowManifestFileID' | 'RowManifestSha256'
   >;
   readonly Files: ISnapshotFileStore;
+  /** The protocol the run is judged under; whether it fits the unit is checked where training binds the two. */
   readonly Protocol: EvaluationProtocolSpec;
-  /** The unit the snapshot was built from: its ID and the key its rows are grouped by. */
-  readonly Unit: Pick<PredictionUnitSpec, 'id' | 'groupKey'>;
   readonly Task: TaskType;
   readonly Candidates: readonly CandidateSpec[];
   /** The seed; default the protocol's. A retrain replays the logged one. */
@@ -52,15 +49,8 @@ export class TrainerRequestBuilder {
   /** The trainer's default retry bound for a transport failure or a sidecar fault. */
   public static readonly DefaultMaxRetries = 2;
 
-  /**
-   * The request for one run. A protocol whose inner validation groups rows by a key other than the unit's group key is
-   * refused (`unit-invalid`): the manifest's group of each row is the unit's group key, so the folds would not be
-   * grouped the way the protocol says.
-   *
-   * @throws TrainingRefusedError when the protocol's group key is not the unit's
-   */
+  /** The request for one run. */
   public static async BuildTrainerRequest(i: TrainerRequestInput): Promise<TrainerRequest> {
-    TrainerRequestBuilder.RefuseGroupKeyMismatch(i.Protocol, i.Unit);
     const [matrix, rowManifest] = await Promise.all([
       i.Files.CreatePreAuthDownload(i.Snapshot.MatrixFileID, i.Snapshot.MatrixSha256, i.Now),
       i.Files.CreatePreAuthDownload(i.Snapshot.RowManifestFileID, i.Snapshot.RowManifestSha256, i.Now),
@@ -107,24 +97,5 @@ export class TrainerRequestBuilder {
 
   private static isScalar(value: JsonValue): value is HyperparameterValue {
     return value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
-  }
-
-  /**
-   * Refuses (`unit-invalid`) a protocol whose inner validation groups rows by a key other than the unit's group key.
-   * Field names compare case-insensitively, as the database resolves them. Training calls it as soon as the protocol
-   * and unit are loaded; the request builder checks again.
-   *
-   * @throws TrainingRefusedError when the keys differ
-   */
-  public static RefuseGroupKeyMismatch(protocol: EvaluationProtocolSpec, unit: Pick<PredictionUnitSpec, 'id' | 'groupKey'>): void {
-    const inner = protocol.innerValidation;
-    const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
-    if (protocolKey === null) return;
-    if (unit.groupKey !== null && unit.groupKey.trim().toLowerCase() === protocolKey.trim().toLowerCase()) return;
-    const unitKey = unit.groupKey === null ? 'no group key (rows are grouped by their entity key)' : `the group key "${unit.groupKey}"`;
-    throw new TrainingRefusedError({
-      stage: 'pipeline',
-      reason: { kind: 'unit-invalid', unitId: unit.id, errors: [`Evaluation Protocol ${protocol.id} groups its inner validation by "${protocolKey}", but the unit has ${unitKey}`] },
-    });
   }
 }

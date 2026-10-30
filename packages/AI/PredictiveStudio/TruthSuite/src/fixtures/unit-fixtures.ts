@@ -1,16 +1,42 @@
 /**
- * Prediction Unit + pipeline fixtures for the Prediction Unit, assembly, snapshot and protocol gates. Units are created through the product's own versioning
- * helpers and saved through the API (so the server subclasses validate them); pipelines get their legacy target
- * columns from the unit (ApplyUnitToPipeline). Every fixture takes the TruthHarness and records each unit version and
- * pipeline it saves on `h.Created`, so the bundle teardown deletes them.
+ * Prediction Unit + pipeline fixtures for the Prediction Unit, assembly, snapshot and protocol gates. Units and
+ * protocols are created through the product's own versioning helpers and saved through the API (so the server
+ * subclasses validate them); pipelines get their legacy target columns from the unit (ApplyUnitToPipeline) and are
+ * bound to an Evaluation Protocol version (a unit pipeline without one does not train). Every fixture takes the
+ * TruthHarness and records each unit version, protocol version and pipeline it saves on `h.Created`, so the bundle
+ * teardown deletes them.
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { PredictionUnit, type ColumnEncodingKind, type FeatureStep, type FeatureStepGraph, type LeakageGuard, type PredictionUnitSpec, type TaskType } from '@memberjunction/predictive-studio-core';
-import { RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata, type IEntityFactory, type PredictionUnitDraft } from '@memberjunction/predictive-studio';
+import {
+  EvaluationProtocolRules, HoldoutCarve, PredictionUnit,
+  type ColumnEncodingKind, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
+  type PredictionUnitSpec, type SliceSpec, type TaskType,
+} from '@memberjunction/predictive-studio-core';
+import {
+  EvaluationProtocolVersioning, PredictionUnitRowReader, RunViewDataAccess, RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata,
+  type IEntityFactory, type PredictionUnitDraft,
+} from '@memberjunction/predictive-studio';
 import type { ScenarioID, TruthHarness } from '../harness/types';
 import { DatasetSeeds } from '../data/seeds';
+
+/** Which Evaluation Protocol a fixture pipeline is bound to. */
+export type ProtocolChoice =
+  /**
+   * Date-carved on the decision date at the year cutoff over the unit's resolved decision dates (`HoldoutCarve.YearCutoff`
+   * at its default share); `NewEntityFraction` adds a new-entity report grouped by the unit's group key.
+   */
+  | { readonly Kind: 'year-cutoff'; readonly NewEntityFraction?: number }
+  /** A seeded row-hash holdout, for units whose rows share one fixed decision date. */
+  | { readonly Kind: 'seeded-random'; readonly Fraction: number }
+  /** The given holdout, and optionally inner validation and slices, over the default protocol of the unit. */
+  | { readonly Kind: 'explicit'; readonly Holdout: HoldoutSplit; readonly InnerValidation?: InnerValidation; readonly Slices?: SliceSpec }
+  /** No protocol: the pipeline is refused before training. */
+  | { readonly Kind: 'none' };
+
+/** The T3 pipeline's default protocol: five one-month rolling origins after at least 24 training months, expanding window. */
+const T3_ROLLING_ORIGIN: ProtocolChoice = { Kind: 'explicit', Holdout: { kind: 'rolling-origin', origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' } };
 
 /** What a W-world renewal pipeline selects: its features, and the options that shape the unit and its steps. */
 export interface WorldRenewalPipelineOptions {
@@ -23,12 +49,23 @@ export interface WorldRenewalPipelineOptions {
   readonly Encodings?: Record<string, ColumnEncodingKind>;
   /** Also select the person's `Status`, read from the world's Person table through the year's PersonID. */
   readonly PersonStatus?: boolean;
+  /** The protocol the pipeline is bound to; default the year cutoff. */
+  readonly Protocol?: ProtocolChoice;
 }
 
 /** The columns a T3 pipeline selects from the series table, and how many periods back each one refers to. */
 export interface T3PipelineOptions {
   readonly Columns: readonly string[];
   readonly PeriodOffsets: Record<string, number>;
+  /** The protocol the pipeline is bound to; default five one-month rolling origins. */
+  readonly Protocol?: ProtocolChoice;
+}
+
+/** A scenario pipeline: its date column (null for one fixed decision date), its group key and its protocol. */
+export interface ScenarioUnitPipelineOptions {
+  readonly DateColumn: string | null;
+  readonly GroupKey: string | null;
+  readonly Protocol: ProtocolChoice;
 }
 
 export interface ProvisionedUnitPipeline {
@@ -152,8 +189,62 @@ export class UnitFixtures {
     return r.Results[0].ID;
   }
 
-  /** `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. */
-  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
+  /** Columns an incumbent expression names (identifiers other than `and`/`or`, the incumbent-expression grammar). */
+  private static expressionColumns(expression: string): readonly string[] {
+    return (expression.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).filter((t) => t !== 'and' && t !== 'or');
+  }
+
+  /** The feature names a step graph produces: every select step's columns and every other step's feature name. */
+  private static stepFeatureNames(steps: FeatureStepGraph): readonly string[] {
+    return steps.Steps.flatMap((step) => (step.Kind === 'select' ? [...step.Columns] : 'FeatureName' in step ? [step.FeatureName] : []));
+  }
+
+  /** The year cutoff over the unit's resolved decision dates, read the way training reads them. */
+  private static async yearCutoff(h: TruthHarness, unit: PredictionUnitSpec): Promise<string> {
+    const read = await new PredictionUnitRowReader().Read(unit, { DataAccess: new RunViewDataAccess(h.User, h.Provider), Metadata: new ProviderAssemblyMetadata(h.Provider), Read: { mode: 'complete' }, Now: new Date() });
+    if (read.Status !== 'read') throw new Error(`unit refused while choosing the holdout cutoff: ${JSON.stringify(read.Refusal)}`);
+    return HoldoutCarve.YearCutoff(read.Rows.map((r) => r.DecisionDate.toISOString().slice(0, 10)));
+  }
+
+  /** The holdout a protocol choice declares for a unit. */
+  private static async holdoutOf(h: TruthHarness, unit: PredictionUnitSpec, choice: Exclude<ProtocolChoice, { Kind: 'none' }>): Promise<HoldoutSplit> {
+    if (choice.Kind === 'explicit') return choice.Holdout;
+    if (choice.Kind === 'seeded-random') return { kind: 'seeded-random', fraction: choice.Fraction };
+    if (choice.NewEntityFraction !== undefined && unit.groupKey === null) throw new Error(`unit "${unit.name}" has no group key, so it cannot hold out new groups`);
+    const newEntityReport = choice.NewEntityFraction === undefined || unit.groupKey === null ? null : { groupKey: unit.groupKey, holdoutFraction: choice.NewEntityFraction };
+    return { kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: await UnitFixtures.yearCutoff(h, unit), holdoutEnd: null, newEntityReport };
+  }
+
+  /**
+   * The draft protocol a fixture pipeline is bound to: the unit's default protocol with the chosen holdout (and inner
+   * validation and slices when given). The snapshot refuses an incumbent expression naming a column the pipeline does
+   * not assemble, so the incumbent-heuristic comparator is kept only when every column it names is one of `features`.
+   */
+  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string): Promise<EvaluationProtocolDraft> {
+    const base = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: await UnitFixtures.holdoutOf(h, unit, choice), Candidates: 1, Seed: 0, Name: name });
+    const usable = unit.incumbent.kind === 'rule' && UnitFixtures.expressionColumns(unit.incumbent.scoreExpression).every((c) => features.includes(c));
+    const baselines = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
+    return {
+      ...base, baselines, promotion: { ...base.promotion, comparators: baselines },
+      ...(choice.Kind === 'explicit' && choice.InnerValidation ? { innerValidation: choice.InnerValidation } : {}),
+      ...(choice.Kind === 'explicit' && choice.Slices ? { slices: choice.Slices } : {}),
+    };
+  }
+
+  /** Saves the chosen protocol (version 1, authored by the harness user) and records it for teardown; null for `none`. */
+  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string): Promise<string | null> {
+    if (choice.Kind === 'none') return null;
+    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name);
+    const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, { kind: 'human', userId: h.User.ID }, UnitFixtures.EntityFactory(h), h.User);
+    h.Created.RecordEvaluationProtocol(row.ID);
+    return row.ID;
+  }
+
+  /**
+   * `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. The
+   * pipeline is bound to the protocol `protocol` chooses (none for `{ Kind: 'none' }`).
+   */
+  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -167,29 +258,33 @@ export class UnitFixtures {
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 });
     if (guard) pipeline.LeakageGuard = JSON.stringify(guard);
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, unitRow.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
+    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`);
     if (!(await pipeline.Save())) throw new Error(`Saving pipeline failed: ${pipeline.LatestResult?.CompleteMessage}`);
     h.Created.RecordPipeline(pipeline.ID);
     return { UnitRow: unitRow, Unit: parsed.Value, Pipeline: pipeline };
   }
 
-  public static ProvisionC1RenewalPipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), ['PeriodIndex'], 'Logistic Regression');
+  public static ProvisionC1RenewalPipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), ['PeriodIndex'], 'Logistic Regression', protocol);
   }
 
   /** The C1 renewal unit with the reference's as-of features (`C1AssemblySteps`). */
-  public static ProvisionC1AssemblyPipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), [], 'Logistic Regression', undefined, UnitFixtures.C1AssemblySteps(h));
+  public static ProvisionC1AssemblyPipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), [], 'Logistic Regression', protocol, undefined, UnitFixtures.C1AssemblySteps(h));
   }
 
   public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: WorldRenewalPipelineOptions): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.LeakageGuard, UnitFixtures.worldRenewalSteps(h, world, o));
+    return UnitFixtures.provision(
+      h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.Protocol || { Kind: 'year-cutoff' },
+      o.LeakageGuard, UnitFixtures.worldRenewalSteps(h, world, o),
+    );
   }
 
   /**
    * The W1 renewal unit with the four year columns and a two-year windowed sum of the person's earlier events, on a
    * deterministic algorithm (the provenance and snapshot-retrain fixture).
    */
-  public static ProvisionW1ProvenancePipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
+  public static ProvisionW1ProvenancePipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
     const features = ['EventsAttended', 'Plan', 'AutoRenew', 'IncomeK'];
     const steps: FeatureStepGraph = { Steps: [
       { Id: 'select', Kind: 'select', Columns: [...features] },
@@ -198,17 +293,53 @@ export class UnitFixtures {
         ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', DateField: 'StartDate', Aggregate: 'sum', ValueField: 'EventsAttended', WindowDays: 730,
       },
     ] };
-    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), features, 'Logistic Regression', undefined, steps);
+    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), features, 'Logistic Regression', protocol, undefined, steps);
   }
 
   /** The T3 forecast unit with one select step over the given series columns and their period offsets. */
   public static ProvisionT3Pipeline(h: TruthHarness, o: T3PipelineOptions): Promise<ProvisionedUnitPipeline> {
     const steps: FeatureStepGraph = { Steps: [{ Id: 'select', Kind: 'select', Columns: [...o.Columns], PeriodOffsets: { ...o.PeriodOffsets } }] };
-    return UnitFixtures.provision(h, UnitFixtures.T3UnitDraft(h), o.Columns, 'Ridge Regression', undefined, steps);
+    return UnitFixtures.provision(h, UnitFixtures.T3UnitDraft(h), o.Columns, 'Ridge Regression', o.Protocol || T3_ROLLING_ORIGIN, undefined, steps);
   }
 
-  public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.ScenarioUnitDraft(h, scenario, task), ['PastEventsZ', 'Member', 'DistanceZ'], 'Ridge Regression');
+  /** A planted scenario with one fixed decision date; its rows are held out by a seeded row hash by default. */
+  public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, protocol: ProtocolChoice = { Kind: 'seeded-random', Fraction: 0.25 }): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.ScenarioUnitDraft(h, scenario, task), ['PastEventsZ', 'Member', 'DistanceZ'], 'Ridge Regression', protocol);
+  }
+
+  /** A planted scenario whose rows carry a date column: one row per scenario row, decided at that date. */
+  public static DatedScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType, dateColumn: string, groupKey: string | null): PredictionUnitDraft {
+    return {
+      Name: `${scenario} (${task.kind}, dated)`, Description: null,
+      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`), decisionDate: { kind: 'column', column: dateColumn }, filter: [] },
+      LabelRule: { kind: 'column', column: 'Target' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: task,
+      // Planted outcomes are fully observed: a cutoff after every scenario date censors nothing.
+      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2099-12-31' } },
+      ChangeHistoryPolicy: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, GroupKey: groupKey, TemporalSpec: null,
+      DecisionSpec: { action: 'scenario', actorRole: 'test', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
+    };
+  }
+
+  /**
+   * The scenario table's feature columns: every field except keys, the target, the planted-truth columns and the date
+   * column `T` (always: a scenario without dated rows still has a `T` column, NULL on every row) and `dateColumn`.
+   */
+  public static ScenarioFeatureColumns(h: TruthHarness, scenario: string, dateColumn: string | null): readonly string[] {
+    const entity = h.Provider.EntityByName(UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`));
+    if (!entity) throw new Error(`scenario ${scenario} is not registered`);
+    const skip = new Set(['ID', 'EntityKey', 'Target', 'TruthScore', 'WorldID', 'Seed', 'T', ...(dateColumn ? [dateColumn] : [])]);
+    return entity.Fields.filter((f) => !f.IsPrimaryKey && !skip.has(f.Name) && !f.Name.startsWith('__mj') && !f.Name.startsWith('True')).map((f) => f.Name);
+  }
+
+  /** A scenario pipeline, dated (`DateColumn`) or with one fixed decision date, bound to `o.Protocol`. */
+  public static ProvisionScenarioUnitPipeline(h: TruthHarness, scenario: string, task: TaskType, o: ScenarioUnitPipelineOptions): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(
+      h,
+      o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
+      UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
+      task.kind === 'binary' || task.kind === 'multiclass' ? 'Logistic Regression' : 'Ridge Regression',
+      o.Protocol,
+    );
   }
 
   /** The newest training run of a pipeline (an entity: callers read ValidationResults, Status and ResultingModelID). */

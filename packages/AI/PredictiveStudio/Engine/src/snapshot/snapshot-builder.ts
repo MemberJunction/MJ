@@ -216,12 +216,22 @@ export class TrainingSnapshotBuilder {
     throw new Error(`Saving the Training Snapshot failed: ${saveError}`);
   }
 
+  /**
+   * The series a manifest row belongs to. A forecast unit of kind `grain` has one row per period of a single series, so
+   * every row carries one series key: the unit's grain entity name (the unit's single series). Every other unit keeps
+   * the row's entity key (the grain record for a `grain` unit, the grain foreign key for a `grain-x-periods` unit), so
+   * a `grain-x-periods` forecast keeps one series per grain record, which the protocol rules refuse at bind time.
+   */
+  public static ManifestEntityKey(unit: Pick<PredictionUnitSpec, 'rows' | 'label'>, row: Pick<UnitRow, 'EntityKey'>): string {
+    return unit.rows.kind === 'grain' && unit.label.outcome.kind === 'forecast' ? unit.rows.grainEntity : row.EntityKey;
+  }
+
   /** One manifest line: the unit row's keys and dates, and the role the carver assigned. */
   private manifestLine(input: SnapshotBuildInput, unitRows: ReadonlyMap<string, UnitRow>, rowId: string): SnapshotRowKey {
     const u = unitRows.get(rowId);
     if (!u) throw new Error(`Snapshot: assembled row ${rowId} is not a unit row`);
     return {
-      rowId: u.RowId, entityKey: u.EntityKey, decisionDate: UtcDay.UtcDayIso(u.DecisionDate), groupKey: u.GroupKey,
+      rowId: u.RowId, entityKey: TrainingSnapshotBuilder.ManifestEntityKey(input.Unit, u), decisionDate: UtcDay.UtcDayIso(u.DecisionDate), groupKey: u.GroupKey,
       period: u.Period ? UtcDay.UtcDayIso(u.Period) : null, role: TrainingSnapshotBuilder.roleOf(input, rowId),
     };
   }

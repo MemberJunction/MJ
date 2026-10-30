@@ -7,6 +7,7 @@ import {
   TrainingRunResultsParser,
   TrustVerdicts,
   type EvaluationProtocolSpec,
+  type SourceColumnImportance,
   type TrainerCompleted,
   type TrainerRequest,
   type TrainingRunResults,
@@ -20,6 +21,7 @@ import {
 import { TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { TrainingEngine } from '../training-engine';
 import { TrainingRefusedError } from '../training-refusal';
+import { TrainerRequestBuilder } from '../trainer-request';
 import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
 import { InMemoryArtifactStore } from '../artifact-store';
 import { ProtocolRowFixture } from './fixtures/protocol-row';
@@ -38,11 +40,13 @@ import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
 import type { MLInferenceDeps } from '../../scoring/types';
 import type { RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
 import {
   FakeEntityFactory,
   FakeEvaluationProtocolStore,
   FakeMLModel,
   FakeMLPipeline,
+  FakeMLRun,
   FakeSidecar,
   FakeTrainer,
   FakeTrainingSnapshot,
@@ -395,22 +399,62 @@ async function storedContent(files: InMemorySnapshotFileStore, s: FakeTrainingSn
   return SnapshotFiles.ParseSnapshotFiles(await files.Get(s.MatrixFileID), await files.Get(s.RowManifestFileID), await files.Get(s.ProvenanceFileID));
 }
 
-/** The snapshot rows of one manifest role, cut to the columns the trainer is sent (feature-schema columns, then the label). */
-function rowsOfRole(content: SnapshotContent, role: SnapshotContent['Manifest'][number]['role']): MatrixData {
-  const columns = [...content.Header.featureSchema.map((f) => f.Name), content.Header.labelColumn];
-  const at = columns.map((c) => content.Header.columns.indexOf(c));
-  const rows = content.Rows.filter((_r, i) => content.Manifest[i].role === role).map((r) => at.map((k) => r[k] ?? null));
-  return { columns, rows };
+/** Every row of the stored snapshot, as column → value (the matrix the trainer is sent the downloads of). */
+function snapshotRows(content: SnapshotContent): Array<Record<string, string | number | boolean | null>> {
+  return content.Rows.map((r) => Object.fromEntries(content.Header.columns.map((c, i) => [c, r[i] ?? null])));
 }
 
-/** Every matrix row the sidecar saw (training data and the locked holdout), as column → value. */
-function sentRows(sidecar: FakeSidecar): Array<Record<string, string | number | boolean | null>> {
-  const out: Array<Record<string, string | number | boolean | null>> = [];
-  for (const m of [sidecar.LastRequest?.data, sidecar.LastHoldout]) {
-    if (!m) continue;
-    for (const r of m.rows) out.push(Object.fromEntries(m.columns.map((c, i) => [c, r[i] ?? null])));
+/** The run's stored envelope, parsed through its schema. */
+function storedResults(validationResults: string | null): TrainingRunResults {
+  const parsed = TrainingRunResultsParser.ParseTrainingRunResults(validationResults);
+  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+  return parsed.Value;
+}
+
+/** The parsed protocol row the harness binds. */
+function protocolSpec(): EvaluationProtocolSpec {
+  const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row());
+  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+  return parsed.Value;
+}
+
+/** The completed answer the engine accepts for this request: its run, its snapshot's feature-schema hash, real artifact hashes. */
+function cannedFor(r: TrainerRequest): TrainerCompleted {
+  return TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec(), r.snapshot.featureSchemaHash);
+}
+
+/** A source column's held-out permutation importance, as the trainer reports it. */
+function importanceOf(sourceColumn: string, value: number): SourceColumnImportance {
+  return { sourceColumn, permutationImportance: TrainerResultFixtures.Mwi('log-loss', value, value, value, 8) };
+}
+
+/** An artifact store whose save of one file name fails; it records the files it deleted. */
+class FailingArtifactStore extends InMemoryArtifactStore {
+  public readonly DeletedIDs: string[] = [];
+  constructor(private readonly failingName: string) { super(); }
+  public override async save(bytes: Uint8Array, name: string): Promise<string> {
+    if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
+    return super.save(bytes, name);
   }
-  return out;
+  public override async Delete(fileId: string): Promise<void> {
+    this.DeletedIDs.push(fileId);
+    await super.Delete(fileId);
+  }
+}
+
+/** The unit harness (bound to the protocol row) with the given trainer answer, protocol row, artifact store and steps. */
+function protocolHarness(
+  answer: ConstructorParameters<typeof FakeTrainer>[0],
+  protocolRow = ProtocolRowFixture.Row(),
+  artifacts: InMemoryArtifactStore = new InMemoryArtifactStore(),
+  featureSteps?: FeatureStepGraph,
+): ReturnType<typeof TrainingHarness.ForUnit> & { artifacts: InMemoryArtifactStore } {
+  const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), featureSteps);
+  const trainer = new FakeTrainer(answer);
+  harness.deps.protocols = new FakeEvaluationProtocolStore([protocolRow]);
+  harness.deps.trainer = trainer;
+  harness.deps.artifactStore = artifacts;
+  return { ...harness, trainer, artifacts };
 }
 
 describe('TrainingEngine — Prediction Unit pipelines', () => {
@@ -418,12 +462,11 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   const unitColumns = UnitYearsWorld.UnitColumns();
 
   it('excludes the unresolved 2026 cycle, stores the counts, and records the unit in the model lineage', async () => {
-    const { engine, deps, sidecar, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
+    const { engine, deps, pipeline, files, snapshots } = TrainingHarness.ForUnit(years, unitColumns);
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    const data = sidecar.LastRequest?.data ?? { columns: [], rows: [] };
-    const labelIdx = data.columns.indexOf('__ps_label');
-    expect(data.rows.length + (sidecar.LastHoldout?.rows.length ?? 0)).toBe(8);   // 2024 + 2025 only
-    expect(data.rows.every((r) => r[labelIdx] === '0' || r[labelIdx] === '1')).toBe(true);
+    const rows = snapshotRows(await storedContent(files, snapshots[0]));
+    expect(rows).toHaveLength(8);   // 2024 + 2025 only
+    expect(rows.every((r) => r.__ps_label === '0' || r.__ps_label === '1')).toBe(true);
     const results = JSON.parse(run.ValidationResults!);
     expect(results.schema).toBe('ps-run-results/v2');
     expect(results.unitResolution).toMatchObject({ rowsRead: 12, censoredRowsExcluded: 4, resolvedRows: 8, dataCutoff: '2026-01-01' });
@@ -432,9 +475,9 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('reads an updatable field of another entity as of each decision date, and stores the feature spec and levels in the lineage', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
-    const { engine, deps, sidecar, pipeline, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
+    const { engine, deps, pipeline, models, files, snapshots } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    const sent = sentRows(sidecar);
+    const sent = snapshotRows(await storedContent(files, snapshots[0]));
     expect(sent).toHaveLength(8);
     const statusOf = (person: number, cycle: number) => sent.find((r) => r.EventsAttended === UnitYearsWorld.EventsAttended(person, cycle))?.Status;
     // The lapsed person's stored Status is Lapsed, but on the 2024 decision date it was still Active.
@@ -446,11 +489,11 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(lineage.categoryLevels).toEqual({ Status: ['Active', 'Lapsed'] });
   });
 
-  it('refuses a text column declared numeric at the assembly stage, naming the column, before calling the sidecar', async () => {
+  it('refuses a text column declared numeric at the assembly stage, naming the column, before calling the trainer', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'Region'], Encodings: { Region: 'numeric' } }] };
-    const { engine, deps, sidecar, pipeline, runs, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
+    const { engine, deps, trainer, pipeline, runs, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'non-numeric-in-numeric-column', column: 'Region' } } });
-    expect(sidecar.CallCount).toBe(0);
+    expect(trainer.Requests).toHaveLength(0);
     expect(models).toHaveLength(0);
     const results = JSON.parse(runs[0].ValidationResults!);
     expect(results.refusal.stage).toBe('assembly');
@@ -501,11 +544,11 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(scored.Rows[0].Values[1]).toBe('Active');
   });
 
-  it('refuses a one-class target before calling the sidecar and records the refusal on the run', async () => {
-    const { engine, deps, sidecar, pipeline, runs } = TrainingHarness.ForUnit(years.filter((y) => y.Renewed === true), { ...unitColumns, Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2030-01-01' } }) });
+  it('refuses a one-class target before calling the trainer and records the refusal on the run', async () => {
+    const { engine, deps, trainer, pipeline, runs } = TrainingHarness.ForUnit(years.filter((y) => y.Renewed === true), { ...unitColumns, Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2030-01-01' } }) });
     // Typed: the refusal is identified by its structured fields, never by the message text.
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ name: 'TrainingRefusedError', Refusal: { stage: 'unit', reason: { kind: 'single-valued-target' } } });
-    expect(sidecar.CallCount).toBe(0);
+    expect(trainer.Requests).toHaveLength(0);
     const run = runs[0];
     expect(run.Status).toBe('Failed');
     expect(JSON.parse(run.ValidationResults!)).toMatchObject({ status: 'refused', refusal: { stage: 'unit', reason: { kind: 'single-valued-target', value: '1' } } });
@@ -516,30 +559,30 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     await expect(engine.trainModel({ pipelineId: pipeline.ID, maxRows: 5 }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
   });
 
-  it('refuses an as-of strategy for a unit pipeline before calling the sidecar (decision dates come from the unit)', async () => {
-    const { engine, deps, sidecar, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
+  it('refuses an as-of strategy for a unit pipeline before calling the trainer (decision dates come from the unit)', async () => {
+    const { engine, deps, trainer, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     pipeline.AsOfStrategy = JSON.stringify({ Mode: 'column', Column: 'StartDate' } satisfies AsOfStrategy);
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf' } } });
-    expect(sidecar.CallCount).toBe(0);
+    expect(trainer.Requests).toHaveLength(0);
   });
 
-  it("records the sidecar's measured seconds as the run's compute, unpriced when no rate is configured", async () => {
+  it("records the trainer's measured seconds as the run's compute, unpriced when no rate is configured", async () => {
     const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(run.Status).toBe('Completed');
-    expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec); // real compute, never 0
+    expect(run.ComputeSeconds).toBe(12.5); // real compute, never 0
     expect(run.ComputeCost).toBeNull();
   });
 
-  it("copies the pipeline's EvaluationProtocolID onto the run and trains it through the trainer", async () => {
-    const { engine, deps, sidecar, pipeline, runs } = protocolHarness(cannedFor);
+  it("copies the pipeline's EvaluationProtocolID onto the run and never calls the legacy /train", async () => {
+    const { engine, deps, sidecar, trainer, pipeline, runs } = TrainingHarness.ForUnit(years, unitColumns);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(runs[0].EvaluationProtocolID).toBe(ProtocolRowFixture.ID);
-    expect(sidecar.CallCount).toBe(0);
+    expect([sidecar.CallCount, trainer.Requests.length]).toEqual([0, 1]);
   });
 
-  it('freezes the unit rows into one Training Snapshot and trains from its development and locked-holdout rows', async () => {
-    const { engine, deps, sidecar, pipeline, runs, models, snapshots, files } = TrainingHarness.ForUnit(years, unitColumns);
+  it('freezes the unit rows into one Training Snapshot and sends the trainer its files', async () => {
+    const { engine, deps, trainer, pipeline, runs, models, snapshots, files } = TrainingHarness.ForUnit(years, unitColumns);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(snapshots).toHaveLength(1);
     const s = snapshots[0];
@@ -547,14 +590,13 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(runs[0].TrainingSnapshotID).toBe(s.ID);
     expect(JSON.parse(models[0].Lineage!)).toMatchObject({ trainingSnapshotId: s.ID, snapshotContentHash: s.ContentHash });
     const content = await storedContent(files, s);
-    const holdout = rowsOfRole(content, 'locked-holdout');
-    expect(holdout.rows.length).toBe(s.HoldoutRowCount);
-    expect(holdout.rows.length).toBeGreaterThan(0);
-    expect(sidecar.LastRequest?.data).toEqual(rowsOfRole(content, 'development'));
-    expect(sidecar.LastHoldout).toEqual(holdout);
-    const results = JSON.parse(runs[0].ValidationResults!);
-    expect(results.legacyRequest).toMatchObject({ algorithm: 'xgboost', problemType: 'classification', hyperparameters: { max_depth: 4 } });
-    expect(results.legacy).toMatchObject({ trainingRowCount: 8 - s.HoldoutRowCount, holdoutRowCount: s.HoldoutRowCount });
+    const holdout = content.Manifest.filter((m) => m.role === 'locked-holdout');
+    expect(holdout.length).toBe(s.HoldoutRowCount);
+    expect(holdout.length).toBeGreaterThan(0);
+    const request = trainer.Requests[0];
+    expect([request.snapshot.id, request.snapshot.matrix.fileId, request.snapshot.rowManifest.fileId]).toEqual([s.ID, s.MatrixFileID, s.RowManifestFileID]);
+    const results = storedResults(runs[0].ValidationResults);
+    expect(results.status === 'completed' ? [results.legacy, results.legacyRequest] : 'not completed').toEqual([null, null]);
   });
 
   it('reuses the snapshot for a second training of identical data: one snapshot row, two runs pointing at it', async () => {
@@ -570,24 +612,32 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(runs.map((r) => r.TrainingSnapshotID)).toEqual([snapshots[0].ID, snapshots[0].ID]);
   });
 
-  it('refuses to train a unit pipeline without a snapshot file store, before calling the sidecar', async () => {
-    const { engine, deps, sidecar, pipeline, snapshots, runs } = TrainingHarness.ForUnit(years, unitColumns);
+  it('refuses to train a unit pipeline without a snapshot file store, before calling the trainer', async () => {
+    const { engine, deps, trainer, pipeline, snapshots, runs } = TrainingHarness.ForUnit(years, unitColumns);
     delete deps.snapshotFiles;
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/snapshot file store/);
-    expect(sidecar.CallCount).toBe(0);
+    expect(trainer.Requests).toHaveLength(0);
     expect(snapshots).toHaveLength(0);
     expect(runs[0].Status).toBe('Failed');
     expect(runs[0].Notes).toMatch(/^Training failed: .*training deps are incomplete.*snapshot file store/);
   });
 
-  it("records on the run the same hyperparameters the trainer was sent (a column that is not a JSON object sends none)", async () => {
-    const { engine, deps, sidecar, pipeline, runs } = TrainingHarness.ForUnit(years, unitColumns);
-    pipeline.Hyperparameters = JSON.stringify([3, 4]);
+  it("sends the pipeline's own algorithm as the single candidate and records the finalist's hyperparameters on the run", async () => {
+    const { engine, deps, pipeline, runs, models } = TrainingHarness.ForUnit(years, unitColumns);
+    const trainer = new FakeTrainer((r) => ({ ...cannedFor(r), finalist: 'xgboost', artifacts: [TrainerResultFixtures.Artifact('xgboost', r.snapshot.featureSchemaHash)] }));
+    deps.trainer = trainer;
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    const results = JSON.parse(runs[0].ValidationResults!);
-    expect(sidecar.LastRequest?.hyperparameters).toEqual({});
-    expect(results.legacyRequest.hyperparameters).toEqual({});
-    expect(JSON.parse(runs[0].Hyperparameters!)).toEqual(results.legacyRequest.hyperparameters);
+    expect(trainer.Requests.map((r) => r.candidates)).toEqual([[{ name: 'xgboost', algorithmId: 'algo-xgb', driverKey: 'xgboost', hyperparameters: { max_depth: 4 } }]]);
+    expect(JSON.parse(runs[0].Hyperparameters!)).toEqual({ max_depth: 4 });
+    expect(models[0].AlgorithmID).toBe('algo-xgb');
+  });
+
+  it('fails a run whose Hyperparameters column is not a JSON object, naming it, before calling the trainer', async () => {
+    const { engine, deps, trainer, pipeline, runs } = TrainingHarness.ForUnit(years, unitColumns);
+    pipeline.Hyperparameters = JSON.stringify([3, 4]);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow('Hyperparameters must be a JSON object');
+    expect(trainer.Requests).toHaveLength(0);
+    expect(runs[0].Status).toBe('Failed');
   });
 
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
@@ -596,66 +646,107 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 });
 
-/** A 36-character run ID: the trainer contract's run IDs are database UUIDs. */
-const TRAINER_RUN_ID = '00000000-0000-0000-0000-0000000000a1';
+describe('TrainingEngine — no unit pipeline trains without the protocol version it is bound to', () => {
+  it('refuses a unit pipeline without an Evaluation Protocol before any run row is written or any row is read', async () => {
+    const { engine, deps, pipeline, runs, trainer, protocols } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    pipeline.EvaluationProtocolID = null;
+    const read = vi.spyOn(TableDataAccess.prototype, 'fetchRows');
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: pipeline.ID } } });
+    expect([runs.length, trainer.Requests.length, protocols.Reads]).toEqual([0, 0, 0]);
+    expect(read).not.toHaveBeenCalled();
+    read.mockRestore();
+  });
 
-/** The parsed protocol row the protocol harness serves. */
-function protocolSpec(): EvaluationProtocolSpec {
-  const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row());
-  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
-  return parsed.Value;
-}
+  it('refuses a pipeline whose Evaluation Protocol row does not exist (protocol-required), before any run row', async () => {
+    const { engine, deps, pipeline, trainer, runs } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    deps.protocols = new FakeEvaluationProtocolStore([]);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: pipeline.ID } } });
+    expect([trainer.Requests.length, runs.length]).toEqual([0, 0]);
+  });
 
-/** The completed answer the engine accepts for this request: its run, its snapshot's feature-schema hash, real artifact hashes. */
-function cannedFor(r: TrainerRequest): TrainerCompleted {
-  return TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec(), r.snapshot.featureSchemaHash);
-}
+  it('refuses a bound protocol row that does not parse (protocol-invalid), before any run row', async () => {
+    const { engine, deps, pipeline, runs } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ Holdout: JSON.stringify({ kind: 'sideways' }) })]);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-invalid', protocolId: ProtocolRowFixture.ID } } });
+    expect(runs).toHaveLength(0);
+  });
 
-/** An artifact store whose save of one file name fails; it records the files it deleted. */
-class FailingArtifactStore extends InMemoryArtifactStore {
-  public readonly DeletedIDs: string[] = [];
-  constructor(private readonly failingName: string) { super(); }
-  public override async save(bytes: Uint8Array, name: string): Promise<string> {
-    if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
-    return super.save(bytes, name);
-  }
-  public override async Delete(fileId: string): Promise<void> {
-    this.DeletedIDs.push(fileId);
-    await super.Delete(fileId);
-  }
-}
+  it("refuses more candidates than the protocol's budget allows, before any run row, instead of running the first ones", async () => {
+    const { engine, deps, pipeline, runs, trainer } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const candidate = (name: string) => TrainerRequestBuilder.CandidateFromPipeline(name, 'algo-xgb', 'xgboost', '{}');
+    const four = ['a', 'b', 'c', 'd'].map(candidate);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID, candidates: four }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'too-many-candidates', pipelineId: pipeline.ID, candidates: 4, maxCandidates: 3 } } });
+    expect([runs.length, trainer.Requests.length]).toEqual([0, 0]);
+  });
 
-/** The unit harness with its pipeline bound to the protocol row, the protocol store serving it and a fake trainer. */
-function protocolHarness(
-  answer: ConstructorParameters<typeof FakeTrainer>[0],
-  protocolRow = ProtocolRowFixture.Row(),
-  artifacts: InMemoryArtifactStore = new InMemoryArtifactStore(),
-  featureSteps?: FeatureStepGraph,
-): ReturnType<typeof TrainingHarness.ForUnit> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
-  const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), featureSteps, TRAINER_RUN_ID);
-  harness.pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
-  const trainer = new FakeTrainer(answer);
-  harness.deps.protocols = new FakeEvaluationProtocolStore([protocolRow]);
-  harness.deps.trainer = trainer;
-  harness.deps.artifactStore = artifacts;
-  return { ...harness, trainer, artifacts };
-}
+  it("sends the search's candidates and records the finalist's algorithm and hyperparameters", async () => {
+    const { engine, deps, trainer, pipeline, runs, models } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const candidates = [TrainerRequestBuilder.CandidateFromPipeline('glm', 'algo-glm', 'logistic_regression', '{"C":0.5}'), TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb2', 'xgboost', '{"max_depth":2}')];
+    await engine.trainModel({ pipelineId: pipeline.ID, candidates }, deps);
+    expect(trainer.Requests[0].candidates).toEqual(candidates);
+    expect(JSON.parse(runs[0].Hyperparameters!)).toEqual({ max_depth: 2 });
+    expect(models[0].AlgorithmID).toBe('algo-xgb2');
+  });
 
-/** The run's stored envelope, parsed through its schema. */
-function storedResults(validationResults: string | null): TrainingRunResults {
-  const parsed = TrainingRunResultsParser.ParseTrainingRunResults(validationResults);
-  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
-  return parsed.Value;
-}
+  it("caps the trainer's timeout at an enclosing budget's remaining seconds, 0 included, and otherwise sends the protocol's budget", async () => {
+    const { engine, deps, trainer, pipeline } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    await engine.trainModel({ pipelineId: pipeline.ID, timeoutSeconds: 90 }, deps);
+    await engine.trainModel({ pipelineId: pipeline.ID, timeoutSeconds: 5000 }, deps);
+    await engine.trainModel({ pipelineId: pipeline.ID, timeoutSeconds: null }, deps);
+    expect(trainer.Requests.map((r) => r.timeoutSeconds)).toEqual([600, 90, 600, 600]);
+    expect(TrainingEngine.TimeoutSecondsFor(protocolSpec(), { timeoutSeconds: 0 })).toBe(0);
+  });
 
-describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol trains through the trainer', () => {
-  it('trains a protocol-bound unit pipeline through /trainer', async () => {
+  it('refuses a protocol row created after the run row, recording the refusal on the run', async () => {
+    const { engine, deps, pipeline, runs, trainer } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const later = new Date(FakeMLRun.DefaultCreatedAt.getTime() + 1);
+    deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row()], later);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({
+      Refusal: { stage: 'pipeline', reason: { kind: 'protocol-created-after-run', protocolId: ProtocolRowFixture.ID, protocolCreatedAt: later.toISOString(), runCreatedAt: FakeMLRun.DefaultCreatedAt.toISOString() } },
+    });
+    expect(trainer.Requests).toHaveLength(0);
+    expect(storedResults(runs[0].ValidationResults)).toMatchObject({ status: 'refused', refusal: { reason: { kind: 'protocol-created-after-run' } } });
+    // A protocol created at the same instant as the run precedes it.
+    const same = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    same.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row()], FakeMLRun.DefaultCreatedAt);
+    expect((await same.engine.trainModel({ pipelineId: same.pipeline.ID }, same.deps)).run.Status).toBe('Completed');
+  });
+
+  it("refuses a protocol scoring another task family than the unit's, on the run, before any row is read", async () => {
+    const { engine, deps, pipeline, runs, trainer } = protocolHarness(cannedFor, ProtocolRowFixture.Row({ PrimaryScore: JSON.stringify({ family: 'count', metric: 'poisson-deviance' }) }));
+    const read = vi.spyOn(TableDataAccess.prototype, 'fetchRows');
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({
+      Refusal: { stage: 'pipeline', reason: { kind: 'protocol-unit-mismatch', protocolId: ProtocolRowFixture.ID, problems: ["The primary score is a count score but the Prediction Unit's task is binary; candidates may only be ranked by a binary score."] } },
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect([runs[0].Status, trainer.Requests.length]).toEqual(['Failed', 0]);
+    read.mockRestore();
+  });
+
+  it("refuses a protocol grouping by a key other than the unit's before any assembly or snapshot write", async () => {
+    const assemble = vi.spyOn(AsOfFeatureAssembler.prototype, 'Assemble');
+    const row = ProtocolRowFixture.Row({ InnerValidation: JSON.stringify({ kind: 'grouped-kfold', folds: 5, repeats: 1, groupKey: 'PersonID' }) });
+    const { engine, deps, pipeline, trainer, snapshots, files, runs } = protocolHarness(cannedFor, row);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({
+      Refusal: { stage: 'pipeline', reason: { kind: 'protocol-unit-mismatch', protocolId: ProtocolRowFixture.ID, problems: ['The protocol groups its inner validation by "PersonID", but the Prediction Unit has no group key (its rows are grouped by their entity key); the folds would not be grouped the way the protocol says.'] } },
+    });
+    expect(assemble).not.toHaveBeenCalled();
+    expect([snapshots.length, files.Saved.size, trainer.Requests.length]).toEqual([0, 0, 0]);
+    expect(runs[0].Status).toBe('Failed');
+    assemble.mockRestore();
+  });
+});
+
+describe('TrainingEngine — a unit pipeline trains through the trainer', () => {
+  it('trains a unit pipeline through /trainer', async () => {
     const { engine, deps, sidecar, pipeline, trainer, artifacts, files, snapshots } = protocolHarness(cannedFor);
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     // The protocol reached the snapshot: its subgroup field is a slice column of the frozen matrix.
     const content = await storedContent(files, snapshots[0]);
     expect(content.Header.sliceColumns).toEqual({ Region: '__ps_slice:Region' });
     expect(content.Header.columns).toContain('__ps_slice:Region');
+    expect(snapshots[0].EvaluationProtocolID).toBe(ProtocolRowFixture.ID);
     expect(trainer.Requests).toHaveLength(1);
     const request = trainer.Requests[0];
     expect(request.snapshot.id).toBe(run.TrainingSnapshotID);
@@ -676,12 +767,19 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
     expect(sidecar.CallCount).toBe(0);
   });
 
-  it('freezes no slice or incumbent-score column for a pipeline without a protocol', async () => {
-    const { engine, deps, pipeline, files, snapshots } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
-    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    const content = await storedContent(files, snapshots[0]);
-    expect([content.Header.sliceColumns, content.Header.incumbentScoreColumn]).toEqual([{}, null]);
-    expect(content.Header.columns.some((c) => c.startsWith('__ps_slice:'))).toBe(false);
+  it("stores the trainer's held-out permutation importance as the legacy share map and its kind in the evaluation record", async () => {
+    const importance = [importanceOf('EventsAttended', 0.375), importanceOf('Region', 0.125), importanceOf('StartDate', -0.01)];
+    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), importance }));
+    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(JSON.parse(model.FeatureImportance!)).toEqual({ EventsAttended: 0.75, Region: 0.25, StartDate: 0 });
+    expect(EvaluationLineage.Read(model.Lineage)?.ImportanceKind).toBe('held_out_permutation');
+  });
+
+  it('stores an empty importance map with no importance kind when the trainer measured none (a forecast reports none)', async () => {
+    const { engine, deps, pipeline } = protocolHarness(cannedFor);
+    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(model.FeatureImportance).toBe('{}');
+    expect(EvaluationLineage.Read(model.Lineage)?.ImportanceKind).toBe('none');
   });
 
   it('prices the trainer seconds at the rate read before training, even when the rate changes while the trainer runs', async () => {
@@ -729,17 +827,6 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
     expect(store.Saved.size).toBe(0);
     expect(runs[0].Status).toBe('Failed');
     expect(models).toHaveLength(0);
-  });
-
-  it("refuses a protocol grouping by a key other than the unit's before any assembly or snapshot write", async () => {
-    const assemble = vi.spyOn(AsOfFeatureAssembler.prototype, 'Assemble');
-    const row = ProtocolRowFixture.Row({ InnerValidation: JSON.stringify({ kind: 'grouped-kfold', folds: 5, repeats: 1, groupKey: 'PersonID' }) });
-    const { engine, deps, pipeline, trainer, snapshots, files, runs } = protocolHarness(cannedFor, row);
-    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'unit-invalid', unitId: UnitYearsWorld.UnitID } } });
-    expect(assemble).not.toHaveBeenCalled();
-    expect([snapshots.length, files.Saved.size, trainer.Requests.length]).toEqual([0, 0, 0]);
-    expect(runs[0].Status).toBe('Failed');
-    assemble.mockRestore();
   });
 
   it('slices by an assembled date-part column, named as the assembler names it, and completes', async () => {
@@ -797,15 +884,7 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
     expect(models).toHaveLength(0);
   });
 
-  it('refuses a pipeline whose Evaluation Protocol row does not exist (protocol-required), before calling the trainer', async () => {
-    const { engine, deps, pipeline, trainer, runs } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
-    deps.protocols = new FakeEvaluationProtocolStore([]);
-    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: pipeline.ID } } });
-    expect(trainer.Requests).toHaveLength(0);
-    expect(runs[0].Status).toBe('Failed');
-  });
-
-  it('fails a protocol-bound run whose deps carry no trainer, before any snapshot is written', async () => {
+  it('fails a unit run whose deps carry no trainer, before any snapshot is written', async () => {
     const { engine, deps, pipeline, runs, snapshots } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
     delete deps.trainer;
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/no trainer \(trainer\) was supplied/);
@@ -827,7 +906,7 @@ describe('TrainingEngine — compute pricing on the run', () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0');
     const { engine, deps, pipeline } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
     const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    expect([run.ComputeSeconds, run.ComputeCost]).toEqual([cleanResponse.duration_sec, 0]);
+    expect([run.ComputeSeconds, run.ComputeCost]).toEqual([12.5, 0]);
   });
 
   it('keeps the measured compute on a run that fails after the sidecar returned', async () => {

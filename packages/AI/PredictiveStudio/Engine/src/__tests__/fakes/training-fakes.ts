@@ -1,7 +1,8 @@
 /**
  * In-memory training fakes shared by the training-engine and snapshot-retrainer tests: field-bag entity fakes served by
- * an entity-factory fake, a record loader, a capturing sidecar, a snapshot store over the saved fakes, and the harness
- * for a pipeline that points at the `UnitYearsWorld` Prediction Unit. No live database, no live sidecar.
+ * an entity-factory fake, a record loader, a capturing sidecar, a trainer and a protocol store, a snapshot store over
+ * the saved fakes, and the harness for a pipeline that points at the `UnitYearsWorld` Prediction Unit and is bound to
+ * the `ProtocolRowFixture` protocol. No live database, no live sidecar.
  */
 import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
 import type {
@@ -20,13 +21,17 @@ import type {
   ValidationStrategy,
   PredictionUnitColumns,
   EvaluationProtocolColumns,
+  EvaluationProtocolSpec,
   TrainerRequest,
   TrainerResult,
 } from '@memberjunction/predictive-studio-core';
+import { EvaluationProtocol } from '@memberjunction/predictive-studio-core';
 import { TrainingEngine } from '../../training/training-engine';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
 import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator, TrainingDeps } from '../../training/types';
-import type { IEvaluationProtocolStore } from '../../training/evaluation-protocol-store';
+import type { IEvaluationProtocolStore, StoredEvaluationProtocol } from '../../training/evaluation-protocol-store';
+import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import type { SourceRow } from '../../feature-assembly';
 import { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
 import type { ITrainingSnapshotStore } from '../../snapshot/training-snapshot-store';
@@ -108,6 +113,11 @@ export class FakeMLRun extends FakeEntity {
   public TrainingSnapshotID: string | null = null;
   public TokensUsed: number | null = null;
   public Notes: string | null = null;
+  /** The row's creation instant, as the database stamps it on the first save. */
+  public __mj_CreatedAt: Date = FakeMLRun.DefaultCreatedAt;
+
+  /** When every fake run row is created unless a test says otherwise (after the fake protocol row). */
+  public static readonly DefaultCreatedAt = new Date('2026-06-01T00:00:00.000Z');
 }
 
 /**
@@ -270,11 +280,30 @@ export class FakeTrainer implements ITrainerEvaluator {
   }
 }
 
-/** Serves the given Evaluation Protocol rows by ID. */
+/** Serves the given Evaluation Protocol rows by ID, each created at `createdAt`; counts the reads. */
 export class FakeEvaluationProtocolStore implements IEvaluationProtocolStore {
-  constructor(private readonly rows: readonly EvaluationProtocolColumns[]) {}
-  public async Load(protocolId: string): Promise<EvaluationProtocolColumns | null> {
-    return this.rows.find((r) => r.ID === protocolId) || null;
+  /** When every served protocol row was created unless a test says otherwise (before the fake run rows). */
+  public static readonly DefaultCreatedAt = new Date('2026-01-01T00:00:00.000Z');
+  public Reads = 0;
+  constructor(private readonly rows: readonly EvaluationProtocolColumns[], private readonly createdAt: Date = FakeEvaluationProtocolStore.DefaultCreatedAt) {}
+  public async Load(protocolId: string): Promise<StoredEvaluationProtocol | null> {
+    this.Reads++;
+    const row = this.rows.find((r) => r.ID === protocolId);
+    return row ? { ...row, __mj_CreatedAt: this.createdAt } : null;
+  }
+}
+
+/** The trainer answers the fake harness accepts: a completed run for the request's run and snapshot (static members on one owner). */
+export class TrainerAnswers {
+  /** The completed answer for a request: its run, its snapshot's feature-schema hash, real artifact hashes. */
+  public static CannedFor(r: TrainerRequest): TrainerResult {
+    return TrainerResultFixtures.CannedCompleted(r.trainingRunId, TrainerAnswers.protocolSpec(), r.snapshot.featureSchemaHash);
+  }
+
+  private static protocolSpec(): EvaluationProtocolSpec {
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row());
+    if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+    return parsed.Value;
   }
 }
 
@@ -306,16 +335,23 @@ export class TrainingHarness {
     return { deps, factory, sidecar, store };
   }
 
-  /** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows; every run row gets `runId`. */
+  /**
+   * A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows and is bound
+   * to the `ProtocolRowFixture` protocol (served by a protocol store), trained by a fake trainer answering
+   * `TrainerAnswers.CannedFor`; every run row gets `runId` (a 36-character ID: the trainer contract's run IDs are
+   * database UUIDs).
+   */
   public static ForUnit(
     rows: SourceRow[],
     unitColumns: PredictionUnitColumns,
     featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] },
-    runId = 'run-1',
+    runId = '00000000-0000-0000-0000-0000000000a1',
   ): {
     engine: TrainingEngine;
     deps: TrainingDeps;
     sidecar: FakeSidecar;
+    trainer: FakeTrainer;
+    protocols: FakeEvaluationProtocolStore;
     pipeline: FakeMLPipeline;
     runs: FakeMLRun[];
     models: FakeMLModel[];
@@ -328,7 +364,12 @@ export class TrainingHarness {
     pipeline.TargetEntity = 'Years';
     pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
     pipeline.FeatureSteps = JSON.stringify(featureSteps);
+    pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
     const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
+    const trainer = new FakeTrainer((r) => TrainerAnswers.CannedFor(r));
+    const protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row()]);
+    deps.trainer = trainer;
+    deps.protocols = protocols;
     deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
     deps.assemblyMetadata = UnitYearsWorld.Metadata();
     deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
@@ -336,7 +377,7 @@ export class TrainingHarness {
     deps.snapshotFiles = files;
     const snapshotStore = new FakeTrainingSnapshotStore(factory);
     deps.snapshots = snapshotStore;
-    return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
+    return { engine: new TrainingEngine(), deps, sidecar, trainer, protocols, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
   }
 }
 

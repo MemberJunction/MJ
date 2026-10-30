@@ -4,9 +4,10 @@
  * Training from a Training Snapshot: the rows the trainer sees are the snapshot's rows, split by the roles its row
  * manifest records, so what was frozen is exactly what was trained on. Retraining a completed run reads its snapshot
  * files back, verifies them against the hashes on the snapshot row, calls the trainer with the request the run logged
- * and compares the holdout metrics, so a run can be shown to reproduce from what it stored. A run trained under an
- * Evaluation Protocol is retrained through the protocol trainer with its logged request settings and new downloads of
- * the same snapshot files; any other unit run through the legacy trainer with its logged request.
+ * and compares the holdout metrics, so a run can be shown to reproduce from what it stored. A run is retrained through
+ * the protocol trainer (`/trainer`) with its logged request settings and new downloads of the same snapshot files; a
+ * run that logged no trainer request is refused. `TrainOnSnapshot` still sends a snapshot's rows to the legacy `/train`
+ * call for callers outside the unit training path.
  */
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import {
@@ -14,7 +15,6 @@ import {
   TrainerContract,
   TrainingRunResultsParser,
   type LegacyRequestConfig,
-  type LegacyTrainerMetrics,
   type MatrixData,
   type EvaluationProtocolSpec,
   type PredictionUnitSpec,
@@ -80,13 +80,7 @@ export interface MetricDifference {
   readonly Keys: number;
 }
 
-/** What a completed unit run logged: its trainer metrics and the request the trainer was called with. */
-interface LoggedTraining {
-  readonly Legacy: LegacyTrainerMetrics;
-  readonly Request: LegacyRequestConfig;
-}
-
-/** What a completed protocol-bound run logged: the trainer's stored result and the request settings it was called with. */
+/** What a completed run logged: the trainer's stored result and the request settings it was called with. */
 export interface LoggedTrainerRun {
   readonly Result: StoredTrainerResult;
   readonly Request: TrainerRequestConfig;
@@ -107,22 +101,24 @@ export interface SnapshotTraining {
 }
 
 /**
- * Trains from Training Snapshots: `TrainOnSnapshot` (static) is the one way a snapshot's rows reach the trainer;
- * `Retrain` re-runs a completed run through it, with its reads split into protected steps a subclass can replace.
+ * Trains from Training Snapshots: `Retrain` re-runs a completed run through the protocol trainer from its verified
+ * snapshot files, with its reads split into protected steps a subclass can replace; `TrainOnSnapshot` (static) sends a
+ * snapshot's rows to the legacy `/train` call.
  */
 export class SnapshotRetrainer {
   /** The default largest holdout-metric difference a retraining may show and still reproduce its run. */
   public static readonly DefaultTolerance = 1e-9;
 
   /**
-   * Re-runs a completed unit run from its snapshot files and logged request. The run and snapshot are read through
-   * `deps.snapshots` and the files through `deps.snapshotFiles` (defaults: the RunView and storage-provider stores on
-   * `deps.provider`, as `deps.contextUser`).
+   * Re-runs a completed unit run from its snapshot files and logged trainer request. The run and snapshot are read
+   * through `deps.snapshots` and the files through `deps.snapshotFiles` (defaults: the RunView and storage-provider
+   * stores on `deps.provider`, as `deps.contextUser`).
    *
    * @param trainingRunId the `MJ: ML Training Runs` row to retrain
    * @param deps the training seams; only the snapshot stores, the trainer, the provider and the user are used
    * @param tolerance the largest holdout-metric difference that still counts as reproduced
    * @returns both metric sets, their largest difference and whether the run reproduced
+   * @throws Error when the run logged no trainer request (only runs trained through `/trainer` are retrained)
    * @throws SnapshotIntegrityError when a stored file or the content hash does not match the snapshot row
    */
   public async Retrain(trainingRunId: string, deps: TrainingDeps, tolerance: number = SnapshotRetrainer.DefaultTolerance): Promise<RetrainResult> {
@@ -130,23 +126,18 @@ export class SnapshotRetrainer {
     const run = await store.LoadRun(trainingRunId);
     if (!run) throw new Error(`Training run ${trainingRunId} not found`);
     if (!run.TrainingSnapshotID) throw new Error(`Training run ${trainingRunId} has no Training Snapshot`);
-    const results = this.StoredResultsOf(run);
+    const trainerRun = SnapshotRetrainer.loggedTrainerRunOf(run, this.StoredResultsOf(run));
     const snapshot = await store.LoadSnapshot(run.TrainingSnapshotID);
     if (!snapshot) throw new Error(`Training Snapshot ${run.TrainingSnapshotID} of run ${trainingRunId} not found`);
     const files = this.FileStore(deps);
-    const content = await this.ReadVerifiedContent(snapshot, files);
-    const trainerRun = SnapshotRetrainer.loggedTrainerRunOf(results);
-    if (trainerRun) {
-      const retrained = await this.RetrainThroughTrainer(run, snapshot, files, trainerRun, deps);
-      return SnapshotRetrainer.compared(run, snapshot, TrainerContract.HoldoutMetricsOf(trainerRun.Result.holdout), retrained, tolerance);
-    }
-    const logged = this.LoggedTrainingOf(run, results);
-    const retrained = (await SnapshotRetrainer.TrainOnSnapshot(content, logged.Request, deps.sidecar)).Response.holdout_metrics || {};
-    return SnapshotRetrainer.compared(run, snapshot, logged.Legacy.holdoutMetrics || {}, retrained, tolerance);
+    // Verified before the trainer is called: the trainer reads the same files through new downloads.
+    await this.ReadVerifiedContent(snapshot, files);
+    const retrained = await this.RetrainThroughTrainer(run, snapshot, files, trainerRun, deps);
+    return SnapshotRetrainer.compared(run, snapshot, TrainerContract.HoldoutMetricsOf(trainerRun.Result.holdout), retrained, tolerance);
   }
 
   /**
-   * Sends a protocol-bound run's logged request settings to the trainer again, with new downloads of the verified
+   * Sends a run's logged request settings to the trainer again, with new downloads of the verified
    * snapshot files, under the protocol and unit the run was trained with; the retraining's holdout metrics.
    *
    * @throws Error when the deps have no trainer, the protocol or unit row is missing or does not parse, or the
@@ -158,7 +149,7 @@ export class SnapshotRetrainer {
     if (!deps.trainer) throw new Error(`Training run ${run.ID} was trained under an Evaluation Protocol; retraining it needs the trainer (deps.trainer)`);
     const [protocol, unit] = await Promise.all([this.LoadProtocolSpec(logged.Request.evaluationProtocolId, deps), this.LoadUnitSpec(snapshot.PredictionUnitID, deps)]);
     const request = await TrainerRequestBuilder.BuildTrainerRequest({
-      TrainingRunID: run.ID, Snapshot: snapshot, Files: files, Protocol: protocol, Unit: unit, Task: unit.label.outcome,
+      TrainingRunID: run.ID, Snapshot: snapshot, Files: files, Protocol: protocol, Task: unit.label.outcome,
       Candidates: logged.Request.candidates, Seed: logged.Request.seed, Threads: logged.Request.threads,
       TimeoutSeconds: logged.Request.timeoutSeconds, MaxRetries: logged.Request.maxRetries,
     });
@@ -200,9 +191,14 @@ export class SnapshotRetrainer {
     };
   }
 
-  /** The trainer result and request a completed protocol-bound run stored, or null for any other run. */
-  private static loggedTrainerRunOf(results: TrainingRunResults): LoggedTrainerRun | null {
-    if (results.status !== 'completed' || !results.trainer || !results.trainerRequest) return null;
+  /**
+   * The trainer result and request a completed run stored. A run without them is refused, naming it: only runs trained
+   * through `/trainer` are retrained.
+   */
+  private static loggedTrainerRunOf(run: MJMLTrainingRunEntity, results: TrainingRunResults): LoggedTrainerRun {
+    if (results.status !== 'completed' || !results.trainer || !results.trainerRequest) {
+      throw new Error(`Run ${run.ID} has no trainer request; only runs trained through /trainer are retrained`);
+    }
     return { Result: results.trainer, Request: results.trainerRequest };
   }
 
@@ -260,17 +256,6 @@ export class SnapshotRetrainer {
     return results.Value;
   }
 
-  /**
-   * The run's logged trainer metrics and request. Only a completed unit run's results envelope carries them; any other
-   * run is refused, naming it.
-   */
-  protected LoggedTrainingOf(run: MJMLTrainingRunEntity, results: TrainingRunResults): LoggedTraining {
-    if (results.status !== 'completed' || !results.legacy || !results.legacyRequest) {
-      throw new Error(`Training run ${run.ID} is not a completed run with logged trainer metrics and request`);
-    }
-    return { Legacy: results.legacy, Request: results.legacyRequest };
-  }
-
   /** Where the run and its snapshot are read: `deps.snapshots`, or the RunView store on the request's provider. */
   protected SnapshotStore(deps: TrainingDeps): ITrainingSnapshotStore {
     return deps.snapshots || new RunViewTrainingSnapshotStore(deps.provider, deps.contextUser);
@@ -289,7 +274,7 @@ export class SnapshotRetrainer {
   }
 
   /**
-   * The unit path's way of calling the trainer from a snapshot: rows split by manifest role, never re-carved; only the
+   * Sends a snapshot's rows to the legacy `/train` call: rows split by manifest role, never re-carved; only the
    * feature columns of `featureSchema` and the label are sent (the incumbent-score and slice columns stay in the
    * snapshot for evaluation, never reach the model).
    *

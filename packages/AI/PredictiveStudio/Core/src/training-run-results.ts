@@ -5,8 +5,9 @@
  * The `refused` variant carries the refusal (its stage and reason); the `completed` variant carries the unit resolution
  * counts and one of two records of the training, so a later training of the same snapshot can call the trainer the
  * same way: a run trained under an Evaluation Protocol stores the trainer's result (`trainer`, artifacts as stored file
- * references, never bytes) and the request settings (`trainerRequest`); any other unit run stores the trainer's
- * metrics and row counts (`legacy`) and the request settings (`legacyRequest`). A completed run also stores the
+ * references, never bytes) and the request settings (`trainerRequest`); a unit run stored before every unit run was
+ * trained under its protocol holds the legacy trainer's metrics and row counts (`legacy`) and the request settings
+ * (`legacyRequest`), and is read but no longer written. A completed run also stores the
  * locked-holdout carve its protocol declared (`carve`). An envelope written before trainer results or the carve were
  * stored has no `trainer`/`trainerRequest`/`carve` members and reads them as null.
  */
@@ -26,7 +27,11 @@ export type PipelineRefusal =
   | { readonly kind: 'unit-required'; readonly pipelineId: string; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'protocol-required'; readonly pipelineId: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'input-not-accepted'; readonly input: 'asOf' | 'labelEventDates' | 'maxRows'; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'unit-invalid'; readonly unitId: string; readonly errors: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'unit-invalid'; readonly unitId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'too-many-candidates'; readonly pipelineId: string; readonly candidates: number; readonly maxCandidates: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'protocol-created-after-run'; readonly protocolId: string; readonly protocolCreatedAt: string; readonly runCreatedAt: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'protocol-unit-mismatch'; readonly protocolId: string; readonly problems: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'protocol-invalid'; readonly protocolId: string; readonly errors: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
 /** A trainer run that did not complete: the stage it failed at, or a lineage the run cannot record. */
 export type TrainerRefusal =
@@ -98,6 +103,10 @@ const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('
   z.object({ kind: z.literal('protocol-required'), pipelineId: z.string() }),
   z.object({ kind: z.literal('input-not-accepted'), input: z.enum(['asOf', 'labelEventDates', 'maxRows']), why: z.string() }),
   z.object({ kind: z.literal('unit-invalid'), unitId: z.string(), errors: z.array(z.string()) }),
+  z.object({ kind: z.literal('too-many-candidates'), pipelineId: z.string(), candidates: z.number().int(), maxCandidates: z.number().int() }),
+  z.object({ kind: z.literal('protocol-created-after-run'), protocolId: z.string(), protocolCreatedAt: z.string(), runCreatedAt: z.string() }),
+  z.object({ kind: z.literal('protocol-unit-mismatch'), protocolId: z.string(), problems: z.array(z.string()) }),
+  z.object({ kind: z.literal('protocol-invalid'), protocolId: z.string(), errors: z.array(z.string()) }),
 ]);
 const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('single-valued-target'), value: z.string(), rows: z.number() }),

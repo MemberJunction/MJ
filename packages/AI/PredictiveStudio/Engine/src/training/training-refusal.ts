@@ -28,6 +28,10 @@ export class TrainingRefusedError extends Error {
       case 'protocol-required': return `Refused (protocol-required): pipeline ${reason.pipelineId} has no Evaluation Protocol.`;
       case 'input-not-accepted': return `Refused (input-not-accepted): ${reason.input} — ${reason.why}`;
       case 'unit-invalid': return `Refused (unit-invalid): Prediction Unit ${reason.unitId}: ${reason.errors.join('; ')}`;
+      case 'too-many-candidates': return `Refused (too-many-candidates): ${reason.candidates} candidates requested but the protocol's budget allows ${reason.maxCandidates}; raise the budget in a new protocol version or remove candidates.`;
+      case 'protocol-created-after-run': return `Refused (protocol-created-after-run): the Evaluation Protocol ${reason.protocolId} (created ${reason.protocolCreatedAt}) is newer than the run (created ${reason.runCreatedAt}).`;
+      case 'protocol-unit-mismatch': return `Refused (protocol-unit-mismatch): Evaluation Protocol ${reason.protocolId} does not fit the Prediction Unit: ${reason.problems.join(' ')}`;
+      case 'protocol-invalid': return `Refused (protocol-invalid): Evaluation Protocol ${reason.protocolId}: ${reason.errors.join('; ')}`;
       case 'select-changes-after-decision-date': return `Refused (select-changes-after-decision-date): ${reason.entity}.${reason.field} was updated ${reason.changesAfter} time(s) after a decision date, so its stored value is not the value on that date.`;
       case 'decision-date-before-change-history': return `Refused (decision-date-before-change-history): ${reason.entity}.${reason.field} cannot be read as of ${reason.rowsAffected} row(s)' decision dates; ${reason.historyStart ? `its change history starts ${reason.historyStart}` : 'it has no change history'}.`;
       case 'truncated-read': return `Refused (truncated-read): ${reason.entity} returned ${reason.rowsRead} of ${reason.rowsExpected} expected rows; a partial read is not a complete one.`;

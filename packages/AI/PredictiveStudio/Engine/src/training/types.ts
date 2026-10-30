@@ -26,6 +26,7 @@ import type {
   EvaluationRecord,
   TrainerRequest,
   TrainerResult,
+  CandidateSpec,
   PREDICTOR_ARTIFACT_FORMAT,
 } from '@memberjunction/predictive-studio-core';
 import type {
@@ -199,6 +200,16 @@ export interface TrainModelInput {
   maxRows?: number;
   /** Sidecar version string recorded in model lineage (provenance). */
   sidecarVersion?: string;
+  /**
+   * The candidates of this search; absent means the pipeline's own algorithm as the single candidate. More candidates
+   * than the bound protocol's budget allows refuse the search before a run row is written (`too-many-candidates`).
+   */
+  candidates?: readonly CandidateSpec[];  // case-violation-ok-legacy-back-compat: matches the existing TrainModelInput member casing
+  /**
+   * Seconds left in an enclosing budget (an experiment session). The trainer's timeout is the smaller of this and the
+   * protocol's compute budget; absent or null means no enclosing budget.
+   */
+  timeoutSeconds?: number | null;  // case-violation-ok-legacy-back-compat: matches the existing TrainModelInput member casing
 }
 
 /**
@@ -241,9 +252,9 @@ export interface TrainingDeps {
   /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
   snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /**
-   * The trainer a pipeline bound to an Evaluation Protocol trains through. Required on that path: a protocol-bound run
-   * without one fails before anything is read. Production wiring passes the same `MJSidecarTrainer` it uses for
-   * `sidecar`, so both reach one sidecar process.
+   * The trainer every Prediction Unit pipeline trains through. Required on that path: a unit run without one fails
+   * before anything is read. Production wiring passes the same `MJSidecarTrainer` it uses for `sidecar`, so both reach
+   * one sidecar process.
    */
   trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */

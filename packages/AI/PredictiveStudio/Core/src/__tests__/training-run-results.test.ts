@@ -9,6 +9,21 @@ describe('TrainingRunResultsParser', () => {
     const refused = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } } }));
     expect(refused.Ok && refused.Value.status === 'refused' ? refused.Value.refusal.reason.kind : null).toBe('protocol-required');
   });
+  it('reads every protocol refusal of a pipeline and refuses a candidate count that is not an integer', () => {
+    const envelope = (reason: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason } });
+    const reasons = [
+      { kind: 'too-many-candidates', pipelineId: 'p1', candidates: 3, maxCandidates: 2 },
+      { kind: 'protocol-created-after-run', protocolId: 'P1', protocolCreatedAt: '2026-05-01T10:00:00.001Z', runCreatedAt: '2026-05-01T10:00:00.000Z' },
+      { kind: 'protocol-unit-mismatch', protocolId: 'P1', problems: ['one', 'two'] },
+      { kind: 'protocol-invalid', protocolId: 'P1', errors: ['Holdout must be an object'] },
+    ];
+    for (const reason of reasons) {
+      const r = TrainingRunResultsParser.ParseTrainingRunResults(envelope(reason));
+      expect(r.Ok && r.Value.status === 'refused' ? r.Value.refusal.reason : null).toEqual(reason);
+    }
+    const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'too-many-candidates', pipelineId: 'p1', candidates: 2.5, maxCandidates: 2 }));
+    expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.candidates/);
+  });
   it('refuses an envelope whose members have the wrong shape, naming the path', () => {
     const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' }, legacy: null, legacyRequest: null }));
     expect(r.Ok ? null : r.Errors.join('\n')).toMatch(/unitResolution\.resolvedRows/);

@@ -185,3 +185,18 @@ describe('TrainerContract.ToStoredTrainerResult (artifact bytes are never stored
     expect(() => TrainerContract.ToStoredTrainerResult(result, new Map([['xgb', 'F1']]))).toThrow("artifact 'glm' has no stored file");
   });
 });
+
+describe('TrainerContract.FeatureImportanceOf (held-out permutation importance as stored shares per source column)', () => {
+  const column = (sourceColumn: string, value: number) => ({
+    sourceColumn, permutationImportance: { metric: 'log-loss' as const, value, interval: { lower: value, upper: value, level: 0.95 }, n: 100 },
+  });
+  it('stores each source column as its share of the positive loss increase, a decrease counting as zero', () => {
+    expect(TrainerContract.FeatureImportanceOf([column('AutoRenew', 0.375), column('EventsAttended', 0.125), column('IncomeK', -0.02)])).toEqual({ AutoRenew: 0.75, EventsAttended: 0.25, IncomeK: 0 });
+    expect(TrainerContract.ImportanceKindOf([column('AutoRenew', 0.3)])).toBe('held_out_permutation');
+  });
+  it('stores every share as 0 when no column increases the loss, and an empty map when nothing was measured', () => {
+    expect(TrainerContract.FeatureImportanceOf([column('A', 0), column('B', -0.1)])).toEqual({ A: 0, B: 0 });
+    expect(TrainerContract.FeatureImportanceOf([])).toEqual({});
+    expect(TrainerContract.ImportanceKindOf([])).toBe('none');
+  });
+});

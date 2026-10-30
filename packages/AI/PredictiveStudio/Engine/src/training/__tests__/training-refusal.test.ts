@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { CarveRefusal } from '@memberjunction/predictive-studio-core';
+import type { CarveRefusal, PipelineRefusal } from '@memberjunction/predictive-studio-core';
 import { TrainingRefusedError } from '../training-refusal';
 
 describe('TrainingRefusedError.DescribeTrainingRefusal', () => {
@@ -35,5 +35,27 @@ describe('TrainingRefusedError.DescribeTrainingRefusal', () => {
       expect(TrainingRefusedError.DescribeTrainingRefusal({ stage: 'carve', reason: c.Reason })).toBe(c.Sentence);
       expect(new TrainingRefusedError({ stage: 'carve', reason: c.Reason }).message).toBe(c.Sentence);
     }
+  });
+
+  it('states every protocol refusal of a search with its kind, naming the protocol and what does not fit', () => {
+    const cases: readonly { readonly Reason: PipelineRefusal; readonly Sentence: string }[] = [
+      {
+        Reason: { kind: 'too-many-candidates', pipelineId: 'pipe-1', candidates: 3, maxCandidates: 2 },
+        Sentence: "Refused (too-many-candidates): 3 candidates requested but the protocol's budget allows 2; raise the budget in a new protocol version or remove candidates.",
+      },
+      {
+        Reason: { kind: 'protocol-created-after-run', protocolId: 'P1', protocolCreatedAt: '2026-05-01T10:00:00.001Z', runCreatedAt: '2026-05-01T10:00:00.000Z' },
+        Sentence: 'Refused (protocol-created-after-run): the Evaluation Protocol P1 (created 2026-05-01T10:00:00.001Z) is newer than the run (created 2026-05-01T10:00:00.000Z).',
+      },
+      {
+        Reason: { kind: 'protocol-unit-mismatch', protocolId: 'P1', problems: ['First.', 'Second.'] },
+        Sentence: 'Refused (protocol-unit-mismatch): Evaluation Protocol P1 does not fit the Prediction Unit: First. Second.',
+      },
+      {
+        Reason: { kind: 'protocol-invalid', protocolId: 'P1', errors: ['Holdout must be an object', 'Seed must be an integer'] },
+        Sentence: 'Refused (protocol-invalid): Evaluation Protocol P1: Holdout must be an object; Seed must be an integer',
+      },
+    ];
+    for (const c of cases) expect(new TrainingRefusedError({ stage: 'pipeline', reason: c.Reason }).message).toBe(c.Sentence);
   });
 });

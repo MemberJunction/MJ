@@ -145,9 +145,12 @@ export class PredictionUnitGates {
     await h.Train(pipeline);
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);
     const results = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
-    if (!results.Ok || results.Value.status !== 'completed' || !results.Value.legacy) return { Passed: false, Measured: {}, Detail: 'run did not complete' };
-    const { unitResolution, legacy } = results.Value;
-    const censoredInMatrix = unitResolution.resolvedRows - (legacy.trainingRowCount + legacy.holdoutRowCount);
+    if (!results.Ok || results.Value.status !== 'completed') return { Passed: false, Measured: {}, Detail: 'run did not complete' };
+    const { unitResolution } = results.Value;
+    // Every resolved row the matrix holds is a manifest row of the run's snapshot.
+    const snapshot = await PredictionUnitGates.snapshotCounts(h, run);
+    if (!snapshot) return { Passed: false, Measured: { censoredRowsExcluded: unitResolution.censoredRowsExcluded }, Detail: `run ${run.ID} has no Training Snapshot` };
+    const censoredInMatrix = unitResolution.resolvedRows - snapshot.ManifestRowCount;
     const truth = await h.ReadWorldTruth(w5);
     const newest = [...truth.values()].filter((t) => t.Censored);
     if (!run.ResultingModelID) return { Passed: false, Measured: {}, Detail: `run ${run.ID} produced no model` };
@@ -158,8 +161,6 @@ export class PredictionUnitGates {
     if (!scores.Ok || scores.Predictions.length === 0) throw new Error(`dry-run scoring of W5 2026 failed: ${scores.ErrorMessage || 'no predictions'}`);
     const meanPrediction = scores.Predictions.reduce((s, p) => s + p.Score, 0) / scores.Predictions.length;
     const meanTrue = newest.reduce((s, t) => s + t.TrueP, 0) / newest.length;
-    const snapshot = await PredictionUnitGates.snapshotCounts(h, run);
-    if (!snapshot) return { Passed: false, Measured: { censoredRowsExcluded: unitResolution.censoredRowsExcluded }, Detail: `run ${run.ID} has no Training Snapshot` };
     const censoredDecisionRows = (await PredictionUnitGates.manifestOf(h, snapshot.RowManifestFileID)).filter((m) => m.decisionDate === W5_CENSORED_DECISION_DAY).length;
     const snapshotHolds = snapshot.CensoredRowsExcluded === 2147 && censoredDecisionRows === 0;
     const passed = unitResolution.censoredRowsExcluded === 2147 && censoredInMatrix === 0 && Math.abs(meanPrediction - meanTrue) <= 0.05 && snapshotHolds;

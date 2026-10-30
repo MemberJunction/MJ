@@ -22,6 +22,7 @@ import type {
   MetricWithInterval,
 } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
+import type { FeatureImportance, ImportanceKind } from './sidecar-contract';
 import type { JsonValue, ParseResult } from './json-value';
 import { StoreSchemas } from './store-schemas';
 import type { TaskType } from './task-type';
@@ -383,6 +384,23 @@ export class TrainerContract {
   /** A completed run's holdout scores by metric: the primary score and every secondary one. */
   public static HoldoutMetricsOf(holdout: TrainerCompleted['holdout']): Record<string, number> {
     return Object.fromEntries([holdout.primary, ...holdout.secondary].map((m): [string, number] => [m.metric, m.value]));
+  }
+
+  /**
+   * A trainer run's held-out permutation importance as the stored `FeatureImportance` map: each source column's share
+   * of the total positive loss increase. It is the same quantity, in the same format, the sidecar's legacy `/train`
+   * response stores (`_extract_importance` in the sidecar's `main.py`): a decrease counts as zero, and every share is 0
+   * when no column has a positive increase. An empty list (a forecast reports none) is `{}`.
+   */
+  public static FeatureImportanceOf(importance: readonly SourceColumnImportance[]): FeatureImportance {
+    const drops = importance.map((c): [string, number] => [c.sourceColumn, Math.max(0, c.permutationImportance.value)]);
+    const total = drops.reduce((sum, [, drop]) => sum + drop, 0);
+    return Object.fromEntries(drops.map(([column, drop]): [string, number] => [column, total > 0 ? drop / total : 0]));
+  }
+
+  /** Which kind of number {@link FeatureImportanceOf} holds: held-out permutation shares, or none when nothing was measured. */
+  public static ImportanceKindOf(importance: readonly SourceColumnImportance[]): ImportanceKind {
+    return importance.length > 0 ? 'held_out_permutation' : 'none';
   }
 
   /**

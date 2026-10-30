@@ -2,22 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { EvaluationProtocol, type EvaluationProtocolSpec } from '@memberjunction/predictive-studio-core';
 import { InMemorySnapshotFileStore, PreAuthDownloads } from '../../snapshot/snapshot-file-store';
 import { TrainerRequestBuilder, type TrainerRequestInput } from '../trainer-request';
-import { TrainingRefusedError } from '../training-refusal';
 import { ProtocolRowFixture } from './fixtures/protocol-row';
 
-function protocol(innerValidation?: string): EvaluationProtocolSpec {
-  const r = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row(innerValidation ? { InnerValidation: innerValidation } : {}));
+function protocol(): EvaluationProtocolSpec {
+  const r = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row());
   if (r.Ok === false) throw new Error(r.Errors.join('; '));
   return r.Value;
 }
 
 /** A request input over a matrix and manifest stored in `files`. */
-async function inputOver(files: InMemorySnapshotFileStore, p: EvaluationProtocolSpec, unitGroupKey: string | null = null): Promise<TrainerRequestInput> {
+async function inputOver(files: InMemorySnapshotFileStore, p: EvaluationProtocolSpec): Promise<TrainerRequestInput> {
   const matrix = await files.Put('k/matrix.jsonl', 'm', new TextEncoder().encode('{"format":"ps-snapshot-matrix/v1"}\n'));
   const manifest = await files.Put('k/manifest.jsonl', 'n', new TextEncoder().encode('{"rowId":"r1"}\n'));
   return {
     TrainingRunID: 'RUN-1', Files: files, Protocol: p, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 },
-    Unit: { id: 'U-1', groupKey: unitGroupKey },
     Snapshot: {
       ID: 'SNAP-1', ContentHash: 'c'.repeat(64), FeatureSchemaHash: 'f'.repeat(64),
       MatrixFileID: matrix.FileID, MatrixSha256: matrix.Sha256, RowManifestFileID: manifest.FileID, RowManifestSha256: manifest.Sha256,
@@ -51,15 +49,6 @@ describe('TrainerRequestBuilder', () => {
   it('replays a logged seed, timeout and retry bound, 0 included', async () => {
     const req = await TrainerRequestBuilder.BuildTrainerRequest({ ...(await inputOver(new InMemorySnapshotFileStore('p'), protocol())), Seed: 7, TimeoutSeconds: 30, MaxRetries: 0 });
     expect([req.seed, req.timeoutSeconds, req.maxRetries]).toEqual([7, 30, 0]);
-  });
-
-  it("refuses a protocol that groups inner validation by a key other than the unit's group key", async () => {
-    const grouped = protocol(JSON.stringify({ kind: 'grouped-kfold', folds: 5, repeats: 1, groupKey: 'PersonID' }));
-    const refused = TrainerRequestBuilder.BuildTrainerRequest(await inputOver(new InMemorySnapshotFileStore('p'), grouped, null));
-    await expect(refused).rejects.toBeInstanceOf(TrainingRefusedError);
-    await expect(refused).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'unit-invalid', unitId: 'U-1' } } });
-    const req = await TrainerRequestBuilder.BuildTrainerRequest(await inputOver(new InMemorySnapshotFileStore('p'), grouped, 'PersonID'));
-    expect(req.protocol.innerValidation).toMatchObject({ kind: 'grouped-kfold', groupKey: 'PersonID' });
   });
 
   it('keeps scalar hyperparameters and refuses a nested one by name', () => {

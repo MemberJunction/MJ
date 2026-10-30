@@ -256,6 +256,22 @@ describe('TrainingSnapshotBuilder manifest roles', () => {
   });
 });
 
+describe('TrainingSnapshotBuilder manifest series key', () => {
+  it('gives every row of a forecast unit of kind grain the one series key, and keeps each row its own key otherwise', async () => {
+    const forecast: PredictionUnitSpec = {
+      ...unit, label: { ...unit.label, outcome: { kind: 'forecast', valueKind: 'continuous' } },
+      temporal: { timeColumn: 'DecisionDate', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'month', seasonality: null },
+    };
+    const numeric: UnitRowsRead = { ...unitRead, Rows: unitRead.Rows.map((r, k) => ({ ...r, Label: k + 1, Period: r.DecisionDate })) };
+    const series = await new TrainingSnapshotBuilder().Build({ ...input(new InMemorySnapshotFileStore('p')), Unit: forecast, UnitRead: numeric });
+    expect(series.Content.Manifest.map((m) => m.entityKey)).toEqual(['Years', 'Years', 'Years']);
+    const perRow = await new TrainingSnapshotBuilder().Build(input(new InMemorySnapshotFileStore('p')));
+    expect(perRow.Content.Manifest.map((m) => m.entityKey)).toEqual(['Y-r1', 'Y-r2', 'Y-r3']);
+    const panel: PredictionUnitSpec = { ...forecast, rows: { kind: 'grain-x-periods', grainEntity: 'People', childEntity: 'Years', foreignKey: 'PersonID', periodDate: 'DecisionDate', filter: [] } };
+    expect(TrainingSnapshotBuilder.ManifestEntityKey(panel, { EntityKey: 'P-7' })).toBe('P-7');
+  });
+});
+
 describe('Snapshot file write-once rule', () => {
   it('lets a later build of the same content succeed after an earlier build failed once its files were written', async () => {
     const files = new InMemorySnapshotFileStore('provider-local');

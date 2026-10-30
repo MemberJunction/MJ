@@ -1,9 +1,11 @@
 import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type { MJEvaluationProtocolEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
 import {
+    EvaluationProtocol,
+    EvaluationProtocolRules,
     JsonParse,
     PredictionUnit,
     TaskTypeRules,
@@ -12,6 +14,8 @@ import {
     type LeakageGuard,
     type LeakageGuardIssue,
     type LeakageGuardValidationContext,
+    type EvaluationProtocolColumns,
+    type PredictionUnitSpec,
     type SourceBinding,
 } from '@memberjunction/predictive-studio-core';
 
@@ -190,13 +194,12 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
     }
 
     /**
-     * A pipeline that names a unit must agree with it (legacy TargetEntityID/ProblemType/TargetVariable are derived from
-     * the unit), and a protocol it names must score the unit's task family. Pure.
+     * A pipeline that names a unit must agree with it: the legacy TargetEntityID/ProblemType/TargetVariable are derived
+     * from the unit. Pure.
      */
-    public static GetPipelineUnitProtocolProblems(
+    public static GetPipelineUnitProblems(
         pipeline: Pick<MJMLTrainingPipelineEntity, 'TargetEntityID' | 'ProblemType' | 'TargetVariable'>,
         unit: PipelineUnitFacts,
-        protocol: Pick<MJEvaluationProtocolEntity, 'PrimaryScore'> | null,
     ): string[] {
         const problems: string[] = [];
         const taskJson = JsonParse.ParseJsonText(unit.TaskType, 'TaskType');
@@ -209,14 +212,19 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         const expectedProblemType = task !== null && task.Ok === true ? TaskTypeRules.LegacyProblemTypeForTask(task.Value) : 'regression';
         if (pipeline.ProblemType !== expectedProblemType) problems.push(`ProblemType must be ${expectedProblemType} for a ${taskKind || 'unknown'} unit`);
         if (pipeline.TargetVariable !== unit.DescribedLabel) problems.push(`TargetVariable must read "${unit.DescribedLabel}" (the unit's outcome rule)`);
-        if (protocol) {
-            const primary = JsonParse.ParseJsonText(protocol.PrimaryScore, 'PrimaryScore');
-            const family = primary.Ok === true && JsonParse.IsJsonObject(primary.Value) ? JsonParse.JsonString(primary.Value, 'family') : null;
-            if (family !== taskKind) {
-                problems.push(`The Evaluation Protocol scores family "${family || 'unknown'}" but the Prediction Unit declares task "${taskKind || 'unknown'}"; ranking a ${taskKind || 'unknown'} model by a ${family || 'unknown'} score is refused`);
-            }
-        }
         return problems;
+    }
+
+    /**
+     * Why the bound protocol cannot be used with the unit: the protocol rules that need a unit (the primary score's
+     * family is the unit's task, the holdout kind fits the unit, lags and windows and blocked-time gaps cover the
+     * horizon, grouping keys are the unit's, and what a forecast can be evaluated with), each as its sentence; or why
+     * the protocol row does not parse. Empty when the protocol fits. Pure.
+     */
+    public static GetProtocolUnitProblems(protocol: EvaluationProtocolColumns, unit: PredictionUnitSpec): string[] {
+        const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(protocol);
+        if (parsed.Ok === false) return [`Evaluation Protocol ${protocol.ID} does not parse: ${parsed.Errors.join('; ')}`];
+        return EvaluationProtocolRules.ValidateProtocolForUnit(parsed.Value, unit).map((r) => EvaluationProtocolRules.DescribeProtocolRefusal(r));
     }
 
     private async checkUnitAndProtocol(result: ValidationResult): Promise<void> {
@@ -247,20 +255,24 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
             RowEntityID: provider.EntityByName(rowEntityName)?.ID || `(unknown entity ${rowEntityName})`,
             DescribedLabel: PredictionUnit.DescribeLabelRule(spec.Value),
         };
-        for (const problem of MJMLTrainingPipelineEntityServer.GetPipelineUnitProtocolProblems(this, facts, protocol)) {
+        for (const problem of MJMLTrainingPipelineEntityServer.GetPipelineUnitProblems(this, facts)) {
             this.fail(result, 'PredictionUnitID', problem);
+        }
+        if (!protocol) return;
+        for (const problem of MJMLTrainingPipelineEntityServer.GetProtocolUnitProblems(protocol, spec.Value)) {
+            this.fail(result, 'EvaluationProtocolID', problem);
         }
     }
 
     /**
-     * Reads the bound unit row (every column, for the parser) and the bound protocol's primary score, in parallel, as
+     * Reads the bound unit row and the bound protocol row (every column of each, for the parsers), in parallel, as
      * plain rows (nothing is mutated). A failed read is reported as "not found" by the caller.
      */
     private async loadUnitAndProtocol(
         provider: IEntityDataProvider & IMetadataProvider,
         unitID: string,
         protocolID: string | null,
-    ): Promise<{ unitRow: MJPredictionUnitEntity | null; protocol: Pick<MJEvaluationProtocolEntity, 'PrimaryScore'> | null }> {
+    ): Promise<{ unitRow: MJPredictionUnitEntity | null; protocol: EvaluationProtocolColumns | null }> {
         const rv = RunView.FromMetadataProvider(provider);
         const [units, protocols] = await Promise.all([
             rv.RunView<MJPredictionUnitEntity>(
@@ -268,8 +280,8 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
                 this.ContextCurrentUser,
             ),
             protocolID
-                ? rv.RunView<Pick<MJEvaluationProtocolEntity, 'PrimaryScore'>>(
-                    { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(protocolID)}'`, Fields: ['PrimaryScore'], ResultType: 'simple' },
+                ? rv.RunView<EvaluationProtocolColumns>(
+                    { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(protocolID)}'`, ResultType: 'simple' },
                     this.ContextCurrentUser,
                 )
                 : null,

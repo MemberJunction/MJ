@@ -80,7 +80,7 @@ export class TrainingDelegation {
    * `RunViewRecordHistoryReader` over the same `dataAccess`; so is the holdout carver (the trailing
    * `LockedHoldoutFraction`). A unit run's Training Snapshot files go to the storage provider
    * `PS_SNAPSHOT_STORAGE_PROVIDER` names, recorded as `MJ: Files` rows, and snapshots are found by content hash
-   * through the same provider and user. A pipeline bound to an Evaluation Protocol reads its protocol through the
+   * through the same provider and user. A unit pipeline reads the Evaluation Protocol it is bound to through the
    * same provider and user and trains through the trainer, which is the same `MJSidecarTrainer` as `sidecar`, so both
    * reach one sidecar process.
    *
@@ -139,7 +139,8 @@ export class TrainingDelegation {
    *
    * A retraining reproduces only on the trainer the run was trained on, so a caller outside the server that trained it
    * passes that trainer as `trainer`; it serves both seams (the legacy train call and the protocol trainer), as the
-   * production `MJSidecarTrainer` does. Without one, the production deps' shared trainer is used.
+   * production `MJSidecarTrainer` does, and the retraining goes through the protocol trainer. Without one, the
+   * production deps' shared trainer is used.
    *
    * @param trainingRunId the `MJ: ML Training Runs` row to retrain
    * @param provider the owning provider
