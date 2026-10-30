@@ -200,7 +200,7 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     expect(instance.CategoryFilter).toBe('all');
     expect(queryAll(fixture, '[data-testid^="archetype-card-"]')).toHaveLength(2);
 
-    // Clicking a scope filter chip filters to company ("Yours") and toggles back
+    // Clicking a scope filter chip filters to company ("Yours"), updates category chip counts, and toggles back
     const yoursChipBtn = query(
       fixture,
       '[data-testid="archetype-scope-chip-company"] button',
@@ -209,10 +209,21 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     fixture.detectChanges();
     expect(instance.ScopeFilter).toBe('company');
     expect(queryAll(fixture, '[data-testid^="archetype-card-"]')).toHaveLength(1);
+    expect(instance.CategoryAllCount).toBe(1);
+    expect(
+      instance.CategoryChipItems.find((c) => c.Category === 'Briefing')?.Count,
+    ).toBe(0);
+    expect(
+      instance.CategoryChipItems.find((c) => c.Category === 'Social')?.Count,
+    ).toBe(1);
     yoursChipBtn!.click();
     fixture.detectChanges();
     expect(instance.ScopeFilter).toBe('all');
     expect(queryAll(fixture, '[data-testid^="archetype-card-"]')).toHaveLength(2);
+    expect(instance.CategoryAllCount).toBe(2);
+    expect(
+      instance.CategoryChipItems.find((c) => c.Category === 'Briefing')?.Count,
+    ).toBe(1);
 
     // Agent client tools & context
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);

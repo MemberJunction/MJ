@@ -79,7 +79,7 @@ describe('VSArchetypeEditorComponent DOM', () => {
           Key: 'problem',
           Label: 'Customer Problem',
           Purpose: 'State pain point',
-          MinDurationSeconds: 5,
+          MinDurationSeconds: 1.5,
           MaxDurationSeconds: 15,
           DefaultDurationSeconds: 10,
         },
@@ -93,7 +93,9 @@ describe('VSArchetypeEditorComponent DOM', () => {
         },
       ],
       PacingObject: {
-        AvgSecondsBetweenChanges: 4,
+        AvgSecondsBetweenChanges: 2.5,
+        MinBeatDurationSeconds: 1.5,
+        MaxBeatDurationSeconds: 6,
         HoldRules: 'Keep cuts brisk.',
       },
       Save: shippedProductSaveSpy,
@@ -204,9 +206,12 @@ describe('VSArchetypeEditorComponent DOM', () => {
     expect(instance.Category).toBe('Product');
     expect(instance.DefaultDurationSeconds).toBe(45);
     expect(instance.SelectedFormats).toEqual(['9:16']);
+    expect(instance.PacingAvgSeconds).toBe(2.5);
     expect(instance.Beats.map((b) => b.Label)).toEqual(['Customer Problem', 'Live Demo']);
+    expect(instance.Beats[0].MinDurationSeconds).toBe(1.5);
 
-    // Mutate editor state and verify shippedProduct is untouched
+    // Mutate editor state (rename existing beat 0 and add new beat 2) and verify shippedProduct is untouched
+    instance.OnBeatLabelChange(0, 'Opening Problem Hook');
     instance.AddBeat();
     instance.Beats[2].Label = 'Call to Action!';
     instance.Beats[2].Purpose = 'Drive signups';
@@ -228,15 +233,24 @@ describe('VSArchetypeEditorComponent DOM', () => {
       'already exists for this company',
     );
 
-    // 5. Backend duplicate-name error from entity.Save() surfaces LatestResult.CompleteMessage
+    // 5. Out-of-order Shortest/Default/Longest shows validation error instead of clamping silently
     instance.Name = 'Acme Product Spotlight';
+    instance.OnMinDurationChange(60);
+    await instance.Save();
+    fixture.detectChanges();
+    expect(customProvider.GetEntityObject).not.toHaveBeenCalled();
+    expect(instance.MinDurationSeconds).toBe(60);
+    expect(instance.SaveError).toContain('Shortest <= Default <= Longest');
+    instance.OnMinDurationChange(20);
+
+    // 6. Backend duplicate-name error from entity.Save() surfaces LatestResult.CompleteMessage
     shouldSaveSucceed = false;
     await instance.Save();
     fixture.detectChanges();
     expect(instance.SaveError).toBe('Database unique constraint: duplicate archetype name');
     expect(savedIds).toEqual([]);
 
-    // 6. Successful Save writes a valid VideoBeatTemplate[] with keys derived from labels and emits Saved(newId)
+    // 7. Successful Save preserves source beat Keys ('problem', 'demo'), derives 'call_to_action' only for the new beat, and keeps full unrounded Pacing + fractional beat MinDurationSeconds
     shouldSaveSucceed = true;
     await instance.Save();
     fixture.detectChanges();
@@ -251,6 +265,7 @@ describe('VSArchetypeEditorComponent DOM', () => {
     expect(savedEntity['CompanyID']).toBe('comp-1');
     expect(savedEntity['DefaultDurationSeconds']).toBe(45);
     expect(savedEntity['DefaultFormats']).toBe('9:16');
+    expect(savedEntity['Status']).toBe('Active');
 
     const savedBeats = JSON.parse(String(savedEntity['BeatTemplate'])) as Array<{
       Key: string;
@@ -262,13 +277,135 @@ describe('VSArchetypeEditorComponent DOM', () => {
     }>;
     expect(savedBeats).toHaveLength(3);
     expect(savedBeats.map((b) => b.Key)).toEqual([
-      'customer_problem',
-      'live_demo',
+      'problem',
+      'demo',
       'call_to_action',
     ]);
+    expect(savedBeats[0].Label).toBe('Opening Problem Hook');
+    expect(savedBeats[0].MinDurationSeconds).toBe(1.5);
     expect(savedBeats.reduce((sum, b) => sum + b.DefaultDurationSeconds, 0)).toBe(45);
 
+    const savedPacing = JSON.parse(String(savedEntity['Pacing'])) as Record<string, unknown>;
+    expect(savedPacing).toEqual({
+      AvgSecondsBetweenChanges: 2.5,
+      MinBeatDurationSeconds: 1.5,
+      MaxBeatDurationSeconds: 6,
+      HoldRules: 'Keep cuts brisk.',
+    });
+
     fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('starts with a blank form and one beat when opened as New archetype with no selected source, and preserves Inactive Status when editing a company archetype', async () => {
+    const currentUser = { ID: 'user-editor-2', Name: 'Producer' };
+    const loadedRecords: Record<string, unknown>[] = [];
+
+    const inactiveCompanyArch: MJVideoArchetypeEntity = {
+      ID: 'arch-company-inactive',
+      Name: 'Paused Quarterly Update',
+      Description: 'Archived company template',
+      Category: 'Briefing',
+      Status: 'Inactive',
+      CompanyID: 'comp-1',
+      Company: 'Acme Corp',
+      DefaultDurationSeconds: 60,
+      MinDurationSeconds: 30,
+      MaxDurationSeconds: 90,
+      DefaultFormats: '16:9',
+      DefaultInteractionMode: 'Autonomous',
+      Guidance: 'Keephook tight.',
+      BeatTemplateObject: [
+        {
+          Key: 'hook',
+          Label: 'Hook — Core Question',
+          Purpose: 'Open strong',
+          MinDurationSeconds: 2.5,
+          MaxDurationSeconds: 15,
+          DefaultDurationSeconds: 10,
+        },
+      ],
+      PacingObject: {
+        AvgSecondsBetweenChanges: 3.5,
+        MinBeatDurationSeconds: 2,
+        MaxBeatDurationSeconds: 8,
+        HoldRules: 'Hold KPI callouts.',
+      },
+    } as unknown as MJVideoArchetypeEntity;
+
+    const customProvider = {
+      CurrentUser: currentUser,
+      GetEntityObject: vi.fn().mockImplementation(async () => {
+        const record: Record<string, unknown> = {
+          ID: 'arch-company-inactive',
+          Status: 'Inactive',
+          Load: vi.fn().mockImplementation(async (id: string) => {
+            record['ID'] = id;
+            record['Status'] = 'Inactive';
+            return true;
+          }),
+          Save: vi.fn().mockResolvedValue(true),
+        };
+        loadedRecords.push(record);
+        return record;
+      }),
+    } as unknown as IMetadataProvider;
+
+    vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      Archetypes: [inactiveCompanyArch],
+    } as unknown as VideoStudioEngine);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [{ ID: 'comp-1', Name: 'Acme Corp' }],
+      }),
+    } as unknown as RunView);
+
+    // A) New archetype with SourceArchetypeId = null starts blank with 1 beat (does not pre-fill from AvailableArchetypes[0])
+    const blankFixture = renderComponentFixture(VSArchetypeEditorComponent, {
+      inputs: {
+        Provider: customProvider,
+        Mode: 'copy',
+        SourceArchetypeId: null,
+      },
+    });
+    await flushAsync();
+    blankFixture.detectChanges();
+
+    expect(blankFixture.componentInstance.SelectedSourceId).toBe('');
+    expect(blankFixture.componentInstance.Name).toBe('');
+    expect(blankFixture.componentInstance.Description).toBe('');
+    expect(blankFixture.componentInstance.Beats).toHaveLength(1);
+    expect(blankFixture.componentInstance.Beats[0].Key).toBe('');
+    expect(blankFixture.componentInstance.Beats[0].Label).toBe('');
+    blankFixture.destroy();
+
+    // B) Editing an Inactive company archetype keeps Status === 'Inactive' on Save
+    const editFixture = renderComponentFixture(VSArchetypeEditorComponent, {
+      inputs: {
+        Provider: customProvider,
+        Mode: 'edit',
+        EditingArchetypeId: 'arch-company-inactive',
+      },
+    });
+    await flushAsync();
+    editFixture.detectChanges();
+
+    expect(editFixture.componentInstance.Name).toBe('Paused Quarterly Update');
+    editFixture.componentInstance.Description = 'Updated description while remaining inactive';
+    await editFixture.componentInstance.Save();
+    editFixture.detectChanges();
+
+    expect(loadedRecords).toHaveLength(1);
+    expect(loadedRecords[0]['Status']).toBe('Inactive');
+    expect(loadedRecords[0]['Description']).toBe('Updated description while remaining inactive');
+    const editedBeats = JSON.parse(String(loadedRecords[0]['BeatTemplate'])) as Array<{ Key: string; MinDurationSeconds: number }>;
+    expect(editedBeats[0].Key).toBe('hook');
+    expect(editedBeats[0].MinDurationSeconds).toBe(2.5);
+
+    editFixture.destroy();
     vi.restoreAllMocks();
   });
 });

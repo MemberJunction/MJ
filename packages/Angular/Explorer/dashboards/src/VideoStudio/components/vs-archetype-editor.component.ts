@@ -59,10 +59,10 @@ export interface ArchetypeEditorSourceBeat {
 }
 
 export interface ArchetypeEditorSourcePacing {
-  AvgSecondsBetweenChanges?: number | null;
-  HoldRules?: string | null;
-  MinBeatDurationSeconds?: number | null;
-  MaxBeatDurationSeconds?: number | null;
+  AvgSecondsBetweenChanges?: number;
+  HoldRules?: string;
+  MinBeatDurationSeconds?: number;
+  MaxBeatDurationSeconds?: number;
 }
 
 export interface ArchetypeEditorSourceItem {
@@ -91,6 +91,7 @@ export interface ArchetypeEditorSourceItem {
 
 export interface ArchetypeEditorBeatRow {
   TrackId: number;
+  Key?: string;
   Label: string;
   Purpose: string;
   Seconds: number;
@@ -185,6 +186,7 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
 
   private nextBeatTrackId = 1;
   private lastAutoSuggestedName = '';
+  private sourcePacing: ArchetypeEditorSourcePacing | null = null;
   private companiesLoadError: string | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
 
@@ -226,14 +228,13 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
   }
 
   public get LiveBeatStripItems(): VideoBeatStripItem[] {
-    const usedKeys = new Set<string>();
+    const keys = this.resolveBeatKeys();
     return this.Beats.map((beat, idx) => {
       const label = (beat.Label ?? '').trim() || `Beat ${idx + 1}`;
-      const key = DeriveBeatKeyFromLabel(label, idx + 1, usedKeys);
       const seconds = Math.max(1, Math.round(Number(beat.Seconds) || 1));
       const detail = (beat.Purpose ?? '').trim();
       return {
-        Key: key,
+        Key: keys[idx],
         Label: label,
         Seconds: seconds,
         ...(detail ? { Detail: detail } : {}),
@@ -264,12 +265,6 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
     const numeric = typeof value === 'number' ? value : Number(value);
     if (Number.isFinite(numeric) && numeric > 0) {
       this.DefaultDurationSeconds = Math.max(1, Math.round(numeric));
-      if (this.MinDurationSeconds > this.DefaultDurationSeconds) {
-        this.MinDurationSeconds = this.DefaultDurationSeconds;
-      }
-      if (this.MaxDurationSeconds < this.DefaultDurationSeconds) {
-        this.MaxDurationSeconds = this.DefaultDurationSeconds;
-      }
     }
     this.cdr.markForCheck();
   }
@@ -333,7 +328,10 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
     const numeric = typeof value === 'number' ? value : Number(value);
     const seconds = Number.isFinite(numeric) && numeric >= 1 ? Math.round(numeric) : 1;
     beat.Seconds = seconds;
-    beat.MinDurationSeconds = Math.max(1, Math.min(beat.MinDurationSeconds || seconds, seconds));
+    beat.MinDurationSeconds =
+      beat.MinDurationSeconds > 0
+        ? Math.min(beat.MinDurationSeconds, seconds)
+        : Math.max(1, Math.floor(seconds * 0.6));
     beat.MaxDurationSeconds = Math.max(seconds, beat.MaxDurationSeconds || seconds);
     this.Beats = [...this.Beats];
     this.cdr.markForCheck();
@@ -377,6 +375,7 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
       ...this.Beats,
       {
         TrackId: this.nextBeatTrackId++,
+        Key: '',
         Label: `Beat ${nextIdx}`,
         Purpose: 'Advance the story with a clear visual focus.',
         Seconds: 5,
@@ -402,15 +401,10 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
       Math.round(Number(this.DefaultDurationSeconds) || 30),
     );
     this.DefaultDurationSeconds = targetDuration;
-    if (this.MinDurationSeconds > targetDuration) {
-      this.MinDurationSeconds = targetDuration;
-    }
-    if (this.MaxDurationSeconds < targetDuration) {
-      this.MaxDurationSeconds = targetDuration;
-    }
 
+    const keys = this.resolveBeatKeys();
     const inputs: ArchetypeBeatTemplateInput[] = this.Beats.map((b, idx) => ({
-      Key: DeriveBeatKeyFromLabel(b.Label, idx + 1),
+      Key: keys[idx],
       Label: b.Label,
       Purpose: b.Purpose,
       DefaultDurationSeconds: Math.max(1, Math.round(Number(b.Seconds) || 1)),
@@ -424,7 +418,10 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
       return {
         ...beat,
         Seconds: nextSeconds,
-        MinDurationSeconds: Math.max(1, Math.min(beat.MinDurationSeconds, nextSeconds)),
+        MinDurationSeconds:
+          beat.MinDurationSeconds > 0
+            ? Math.min(beat.MinDurationSeconds, nextSeconds)
+            : Math.max(1, Math.floor(nextSeconds * 0.6)),
         MaxDurationSeconds: Math.max(nextSeconds, beat.MaxDurationSeconds),
       };
     });
@@ -437,31 +434,22 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
   }
 
   public BuildBeatTemplatePayload(): MJVideoArchetypeEntity_VideoBeatTemplate[] {
-    const usedKeys = new Set<string>();
+    const keys = this.resolveBeatKeys();
     return this.Beats.map((beat, idx) => {
       const label = (beat.Label ?? '').trim() || `Beat ${idx + 1}`;
-      const key = DeriveBeatKeyFromLabel(label, idx + 1, usedKeys);
+      const key = keys[idx];
       const purpose = (beat.Purpose ?? '').trim() || label;
       const defaultDur = Math.max(1, Math.round(Number(beat.Seconds) || 1));
-      const minDur = Math.max(
-        1,
-        Math.min(
-          defaultDur,
-          Math.round(
-            Number(beat.MinDurationSeconds) > 0
-              ? Number(beat.MinDurationSeconds)
-              : Math.max(1, Math.floor(defaultDur * 0.6)),
-          ),
-        ),
-      );
-      const maxDur = Math.max(
-        defaultDur,
-        Math.round(
-          Number(beat.MaxDurationSeconds) >= defaultDur
-            ? Number(beat.MaxDurationSeconds)
-            : Math.ceil(defaultDur * 1.5),
-        ),
-      );
+      const rawMin = Number(beat.MinDurationSeconds);
+      const minDur =
+        Number.isFinite(rawMin) && rawMin > 0
+          ? Math.min(defaultDur, rawMin)
+          : Math.max(1, Math.floor(defaultDur * 0.6));
+      const rawMax = Number(beat.MaxDurationSeconds);
+      const maxDur =
+        Number.isFinite(rawMax) && rawMax >= defaultDur
+          ? rawMax
+          : Math.max(defaultDur, Math.ceil(defaultDur * 1.5));
       const guidance = (beat.Guidance ?? '').trim();
 
       return {
@@ -478,11 +466,13 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
   }
 
   public BuildPacingPayload(): MJVideoArchetypeEntity_VideoPacing {
+    const numericAvg = Number(this.PacingAvgSeconds);
     const avg =
-      Number.isFinite(Number(this.PacingAvgSeconds)) && Number(this.PacingAvgSeconds) > 0
-        ? Math.round(Number(this.PacingAvgSeconds))
+      Number.isFinite(numericAvg) && numericAvg > 0
+        ? numericAvg
         : 5;
     return {
+      ...(this.sourcePacing ?? {}),
       AvgSecondsBetweenChanges: avg,
       HoldRules: (this.PacingHoldRules ?? '').trim(),
     };
@@ -518,6 +508,28 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
       return;
     }
 
+    const rawDefaultDur = Number(this.DefaultDurationSeconds);
+    const rawMinDur = Number(this.MinDurationSeconds);
+    const rawMaxDur = Number(this.MaxDurationSeconds);
+    if (
+      !Number.isFinite(rawDefaultDur) ||
+      !Number.isFinite(rawMinDur) ||
+      !Number.isFinite(rawMaxDur) ||
+      rawMinDur < 1 ||
+      rawDefaultDur < 1 ||
+      rawMaxDur < 1 ||
+      rawMinDur > rawDefaultDur ||
+      rawDefaultDur > rawMaxDur
+    ) {
+      this.SaveError =
+        'Shortest length, default length, and longest length must satisfy Shortest <= Default <= Longest.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const defaultDur = Math.round(rawDefaultDur);
+    const minDur = Math.round(rawMinDur);
+    const maxDur = Math.round(rawMaxDur);
+
     const isEditing = this.IsEditingExistingCompanyArchetype;
     const duplicate = this.AvailableArchetypes.find((arch) => {
       if (!arch.CompanyID || !UUIDsEqual(arch.CompanyID, companyId)) {
@@ -552,15 +564,6 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
         }
       }
 
-      const defaultDur = Math.max(1, Math.round(Number(this.DefaultDurationSeconds) || 60));
-      const minDur = Math.max(
-        1,
-        Math.min(defaultDur, Math.round(Number(this.MinDurationSeconds) || defaultDur)),
-      );
-      const maxDur = Math.max(
-        defaultDur,
-        Math.round(Number(this.MaxDurationSeconds) || defaultDur),
-      );
       const beatTemplates = this.BuildBeatTemplatePayload();
       const pacingPayload = this.BuildPacingPayload();
       const formatsList =
@@ -577,7 +580,9 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
       entity.DefaultInteractionMode = (this.DefaultInteractionMode ||
         'Autonomous') as MJVideoArchetypeEntity['DefaultInteractionMode'];
       entity.Guidance = (this.Guidance ?? '').trim() || null;
-      entity.Status = 'Active';
+      if (!isEditing) {
+        entity.Status = 'Active';
+      }
 
       entity.BeatTemplate = JSON.stringify(beatTemplates);
       try {
@@ -621,6 +626,24 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
     }
   }
 
+  private resolveBeatKeys(): string[] {
+    const usedKeys = new Set<string>();
+    for (const beat of this.Beats) {
+      const existing = (beat.Key ?? '').trim();
+      if (existing) {
+        usedKeys.add(existing);
+      }
+    }
+    return this.Beats.map((beat, idx) => {
+      const existing = (beat.Key ?? '').trim();
+      if (existing) {
+        return existing;
+      }
+      const label = (beat.Label ?? '').trim() || `Beat ${idx + 1}`;
+      return DeriveBeatKeyFromLabel(label, idx + 1, usedKeys);
+    });
+  }
+
   private async initializeEditor(): Promise<void> {
     if (Array.isArray(this.Archetypes) && this.Archetypes.length > 0) {
       this.AvailableArchetypes = [...this.Archetypes];
@@ -653,41 +676,40 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
     const initialId =
       (this.Mode === 'edit' && this.EditingArchetypeId
         ? this.EditingArchetypeId
-        : this.SourceArchetypeId) ??
-      this.AvailableArchetypes[0]?.ID ??
-      '';
+        : this.SourceArchetypeId) ?? '';
 
-    const initialSource = this.findArchetypeById(initialId) ?? this.AvailableArchetypes[0] ?? null;
+    const initialSource = initialId ? this.findArchetypeById(initialId) : null;
     if (initialSource) {
       this.SelectedSourceId = initialSource.ID;
       this.applySourceArchetype(initialSource, true);
     } else {
+      this.SelectedSourceId = '';
+      this.Name = '';
+      this.Description = '';
+      this.Category = 'Explainer';
       this.CompanyID = this.resolveInitialCompanyId(null);
+      this.DefaultDurationSeconds = 30;
+      this.MinDurationSeconds = 15;
+      this.MaxDurationSeconds = 60;
+      this.SelectedFormats = ['16:9'];
+      this.DefaultInteractionMode = 'Autonomous';
+      this.Guidance = '';
+      this.sourcePacing = null;
+      this.PacingAvgSeconds = 5;
+      this.PacingHoldRules = '';
       this.Beats = [
         {
           TrackId: this.nextBeatTrackId++,
-          Label: 'Hook',
-          Purpose: 'Open with the core takeaway.',
-          Seconds: 10,
-          MinDurationSeconds: 5,
-          MaxDurationSeconds: 15,
-          Guidance: '',
-          RequiresDataBinding: false,
-        },
-        {
-          TrackId: this.nextBeatTrackId++,
-          Label: 'Walkthrough',
-          Purpose: 'Show the main mechanism or story.',
-          Seconds: 20,
-          MinDurationSeconds: 10,
-          MaxDurationSeconds: 30,
+          Key: '',
+          Label: '',
+          Purpose: '',
+          Seconds: 30,
+          MinDurationSeconds: 15,
+          MaxDurationSeconds: 60,
           Guidance: '',
           RequiresDataBinding: false,
         },
       ];
-      this.DefaultDurationSeconds = 30;
-      this.MinDurationSeconds = 15;
-      this.MaxDurationSeconds = 60;
     }
 
     this.cdr.markForCheck();
@@ -770,16 +792,21 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
           : Math.max(1, Math.round(b.DefaultDurationSeconds ?? 5));
         return {
           TrackId: this.nextBeatTrackId++,
+          Key: (b.Key ?? '').trim(),
           Label: (b.Label ?? b.Key ?? '').trim() || `Beat ${idx + 1}`,
           Purpose: (b.Purpose ?? '').trim(),
           Seconds: seconds,
           MinDurationSeconds:
-            typeof b.MinDurationSeconds === 'number' && b.MinDurationSeconds > 0
-              ? Math.round(b.MinDurationSeconds)
+            typeof b.MinDurationSeconds === 'number' &&
+            Number.isFinite(b.MinDurationSeconds) &&
+            b.MinDurationSeconds > 0
+              ? b.MinDurationSeconds
               : Math.max(1, Math.floor(seconds * 0.6)),
           MaxDurationSeconds:
-            typeof b.MaxDurationSeconds === 'number' && b.MaxDurationSeconds >= seconds
-              ? Math.round(b.MaxDurationSeconds)
+            typeof b.MaxDurationSeconds === 'number' &&
+            Number.isFinite(b.MaxDurationSeconds) &&
+            b.MaxDurationSeconds > 0
+              ? b.MaxDurationSeconds
               : Math.max(seconds, Math.ceil(seconds * 1.5)),
           Guidance: (b.Guidance ?? '').trim(),
           RequiresDataBinding: Boolean(b.RequiresDataBinding),
@@ -789,6 +816,7 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
       this.Beats = [
         {
           TrackId: this.nextBeatTrackId++,
+          Key: '',
           Label: 'Hook',
           Purpose: 'Open with the core takeaway.',
           Seconds: defaultDur,
@@ -801,11 +829,13 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
     }
 
     const pacing = this.extractSourcePacing(source);
+    this.sourcePacing = pacing ? { ...pacing } : null;
     this.PacingAvgSeconds =
       pacing &&
       typeof pacing.AvgSecondsBetweenChanges === 'number' &&
+      Number.isFinite(pacing.AvgSecondsBetweenChanges) &&
       pacing.AvgSecondsBetweenChanges > 0
-        ? Math.round(pacing.AvgSecondsBetweenChanges)
+        ? pacing.AvgSecondsBetweenChanges
         : 5;
     this.PacingHoldRules = pacing?.HoldRules ?? '';
   }
@@ -836,25 +866,33 @@ export class VSArchetypeEditorComponent extends BaseAngularComponent implements 
   private extractSourcePacing(
     source: ArchetypeEditorSourceItem,
   ): ArchetypeEditorSourcePacing | null {
-    if (source.PacingObject && typeof source.PacingObject === 'object') {
-      return source.PacingObject;
-    }
-    if (source.Pacing && typeof source.Pacing === 'object') {
-      return source.Pacing;
-    }
+    let parsedFromRaw: ArchetypeEditorSourcePacing | null = null;
     const rawJson =
       source.PacingRaw ?? (typeof source.Pacing === 'string' ? source.Pacing : null);
     if (typeof rawJson === 'string' && rawJson.trim().startsWith('{')) {
       try {
         const parsed: unknown = JSON.parse(rawJson);
         if (parsed && typeof parsed === 'object') {
-          return parsed as ArchetypeEditorSourcePacing;
+          parsedFromRaw = parsed as ArchetypeEditorSourcePacing;
         }
       } catch {
-        return null;
+        parsedFromRaw = null;
       }
     }
-    return null;
+    const fromPacingObj =
+      source.PacingObject && typeof source.PacingObject === 'object'
+        ? source.PacingObject
+        : null;
+    const fromPacingField =
+      source.Pacing && typeof source.Pacing === 'object' ? source.Pacing : null;
+    if (!parsedFromRaw && !fromPacingObj && !fromPacingField) {
+      return null;
+    }
+    return {
+      ...(parsedFromRaw ?? {}),
+      ...(fromPacingField ?? {}),
+      ...(fromPacingObj ?? {}),
+    };
   }
 
   private resolveInitialCompanyId(sourceCompanyId: string | null): string {

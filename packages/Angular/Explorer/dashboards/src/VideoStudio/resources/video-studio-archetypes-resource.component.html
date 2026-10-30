@@ -90,7 +90,7 @@
               <mj-filter-chip
                 data-testid="archetype-category-chip-all"
                 Label="All"
-                [Count]="TotalCount"
+                [Count]="CategoryAllCount"
                 [Active]="CategoryFilter === 'all'"
                 (Clicked)="SelectCategoryChip('all')"
               ></mj-filter-chip>
@@ -165,7 +165,7 @@
                       </span>
                     } @else if (arch.IsShipped) {
                       <span
-                        class="mj-badge mj-badge-neutral vs-archetype-shipped-pill"
+                        class="mj-badge mj-badge-neutral"
                         data-testid="archetype-shipped-badge"
                       >
                         <i class="fa-solid fa-lock" aria-hidden="true"></i>
@@ -330,7 +330,7 @@
                           ({{ FormatTimeRange(beat.MinDurationSeconds, beat.MaxDurationSeconds) }})
                         </span>
                         @if (beat.RequiresDataBinding) {
-                          <span class="mj-badge mj-badge-info vs-archetype-databound-pill">Data bound</span>
+                          <span class="mj-badge mj-badge-info">Data bound</span>
                         }
                       </div>
                       <p class="vs-slideout-beat-purpose">{{ beat.Purpose }}</p>

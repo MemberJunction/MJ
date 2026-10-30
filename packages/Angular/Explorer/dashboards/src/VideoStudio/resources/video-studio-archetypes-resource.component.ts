@@ -50,6 +50,8 @@ export interface ArchetypeBeatBlock {
 export interface ArchetypePacingView {
   AvgSecondsBetweenChanges: number;
   HoldRules: string;
+  MinBeatDurationSeconds?: number;
+  MaxBeatDurationSeconds?: number;
 }
 
 export interface ArchetypeViewItem extends ArchetypeCardSnapshot {
@@ -101,6 +103,7 @@ export class VideoStudioArchetypesResourceComponent
   public FilteredArchetypes: ArchetypeViewItem[] = [];
   public CategoryGroups: ArchetypeCategoryGroup<ArchetypeViewItem>[] = [];
   public CategoryChipItems: ArchetypeCategoryChipItem[] = [];
+  public CategoryAllCount = 0;
   public SelectedArchetype: ArchetypeViewItem | null = null;
 
   public SearchText = '';
@@ -239,7 +242,6 @@ export class VideoStudioArchetypesResourceComponent
       await engine.Config(forceRefresh, undefined, this.ProviderToUse);
       const archetypes = engine.Archetypes;
       this.AllArchetypes = archetypes.map((arch) => this.mapArchetypeToCard(arch));
-      this.rebuildCategoryChips();
       this.applyFiltersAndSync();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -397,16 +399,22 @@ export class VideoStudioArchetypesResourceComponent
   }
 
   private rebuildCategoryChips(): void {
+    const rowsAfterOtherFilters = FilterArchetypeCards(this.AllArchetypes, {
+      SearchQuery: this.SearchText,
+      Category: 'all',
+      Scope: this.ScopeFilter,
+    });
     const countsByCategory = new Map<ArchetypeCategory, number>();
     for (const cat of ARCHETYPE_CATEGORIES) {
       countsByCategory.set(cat, 0);
     }
-    for (const arch of this.AllArchetypes) {
+    for (const arch of rowsAfterOtherFilters) {
       countsByCategory.set(
         arch.Category,
         (countsByCategory.get(arch.Category) ?? 0) + 1,
       );
     }
+    this.CategoryAllCount = rowsAfterOtherFilters.length;
     this.CategoryChipItems = ARCHETYPE_CATEGORIES.map((cat) => ({
       Category: cat,
       Label: this.FormatCategoryLabel(cat),
@@ -424,7 +432,7 @@ export class VideoStudioArchetypesResourceComponent
       const stripItem = beatItems[idx];
       const seconds = stripItem?.Seconds ?? 1;
       return {
-        Key: stripItem?.Key ?? (b.Key || `beat-${idx + 1}`),
+        Key: (b.Key ?? '').trim() || stripItem?.Key || `beat-${idx + 1}`,
         Label: stripItem?.Label ?? (b.Label || b.Key || `Beat ${idx + 1}`),
         Purpose: b.Purpose || '',
         MinDurationSeconds: b.MinDurationSeconds ?? 0,
@@ -440,6 +448,7 @@ export class VideoStudioArchetypesResourceComponent
     const pacingObj = arch.PacingObject;
     const pacing: ArchetypePacingView | null = pacingObj
       ? {
+          ...pacingObj,
           AvgSecondsBetweenChanges: pacingObj.AvgSecondsBetweenChanges ?? 0,
           HoldRules: pacingObj.HoldRules ?? '',
         }
@@ -465,6 +474,7 @@ export class VideoStudioArchetypesResourceComponent
   }
 
   private applyFiltersAndSync(): void {
+    this.rebuildCategoryChips();
     this.FilteredArchetypes = FilterArchetypeCards(
       this.AllArchetypes,
       this.currentFilterState(),

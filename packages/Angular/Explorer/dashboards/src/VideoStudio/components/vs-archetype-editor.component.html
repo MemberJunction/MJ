@@ -24,6 +24,7 @@
       <mj-dropdown
         data-testid="vs-arch-editor-start-from"
         AriaLabelledBy="vs-arch-editor-start-from-label"
+        Placeholder="Choose an archetype to copy from..."
         [Data]="StartFromOptions"
         TextField="Label"
         ValueField="ID"
@@ -391,9 +392,9 @@
               <mj-numeric-input
                 data-testid="vs-arch-editor-pacing-avg"
                 AriaLabelledBy="vs-arch-editor-pacing-avg-label"
-                [Min]="1"
+                [Min]="0.5"
                 [Max]="60"
-                [Step]="1"
+                [Step]="0.5"
                 [Disabled]="IsSaving"
                 [(ngModel)]="PacingAvgSeconds"
               ></mj-numeric-input>
