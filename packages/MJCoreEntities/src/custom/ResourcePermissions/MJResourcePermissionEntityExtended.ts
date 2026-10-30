@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError, WellKnownUserSource } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJUserEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
@@ -8,6 +8,9 @@ import { CheckShareManagePermission } from "../Permissions/BaseShareEntityExtend
 
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+
+/** Fields that decide what an Approved row grants, and to whom. */
+const GRANT_FIELDS = ['PermissionLevel', 'Type', 'ResourceTypeID', 'ResourceRecordID', 'UserID', 'RoleID'];
 
 /**
  * Subclass for the Resource Permissiosn entity that implements some workflow logic
@@ -208,10 +211,12 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                 const recordOwnerID = resourceRecord.Get(resourceTypeFields.OwnerIDFieldName);
 
                 // Authorization gate for *granting* a share: only the resource's
-                // owner (or an existing Owner-level grantee) may create an Approved
-                // permission row. Access-request creates (Status='Requested') are
-                // allowed because the owner still approves them downstream.
-                if (!this.IsSaved && this.Status !== 'Requested') {
+                // owner (or an existing Owner-level grantee) may create a non-request
+                // row, approve a request, or change what an Approved row grants.
+                // Creating an access request (Status='Requested') stays open because
+                // the owner still approves it here. Without the update half, a
+                // requester could approve their own request.
+                if (this.savingGrantsAccess()) {
                     const authorized = this.callerMayGrantShare(engine, recordOwnerID);
                     if (!authorized) {
                         LogError(
@@ -314,14 +319,27 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
     }
 
     /**
+     * `true` when this save creates a non-request row, approves a row, or changes
+     * what an already Approved row grants (level, type, resource or grantee).
+     */
+    private savingGrantsAccess(): boolean {
+        if (!this.IsSaved) return this.Status !== 'Requested';
+        const status = this.GetFieldByName('Status');
+        const wasApproved = (status?.Dirty ? status.OldValue : this.Status) === 'Approved';
+        if (status?.Dirty && this.Status === 'Approved') return true;
+        return wasApproved && GRANT_FIELDS.some((name) => this.GetFieldByName(name)?.Dirty);
+    }
+
+    /**
      * `true` when the context user may create an Approved grant on this resource:
-     * they are either the resource's owner, or they already hold an Owner-level
-     * `MJ: Resource Permissions` row on it (direct or via role). Returns `false`
-     * when there is no context user.
+     * they are a sysadmin or the system user, the resource's owner, or they
+     * already hold an Owner-level `MJ: Resource Permissions` row on it (direct or
+     * via role). Returns `false` when there is no context user.
      */
     private callerMayGrantShare(engine: ResourcePermissionEngine, recordOwnerID: string | null | undefined): boolean {
         const user = this.ContextCurrentUser;
         if (!user) return false;
+        if (user.Type?.trim().toLowerCase() === 'owner' || WellKnownUserSource.Instance.IsSystemUser(user)) return true;
         if (recordOwnerID && UUIDsEqual(recordOwnerID, user.ID)) return true;
 
         const existing = engine.GetUserAvailableResources(user, this.ResourceTypeID);
