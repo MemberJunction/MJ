@@ -61,6 +61,8 @@ def series_algo(key: str) -> Optional[SeriesAlgo]:
 
 @dataclass(frozen=True)
 class Origin:
+    """One rolling origin: its training window (period indices first_train..last_train) and the periods it scores."""
+
     k: int                 # 1-based origin number
     last_train: int        # index of the last training period (inclusive)
     first_train: int       # index of the first training period; 0 for expanding windows
@@ -161,6 +163,11 @@ class SeriesBaseline:
     last_t: int = -1
 
     def fit(self, y: FArr, t: IntArr) -> "SeriesBaseline":
+        """Keeps the window's values `y` at periods `t` (in period order) and its last period.
+
+        Raises:
+            ValueError: When `y` and `t` differ in length.
+        """
         if len(y) != len(t):
             raise ValueError(f"y ({len(y)}) and t ({len(t)}) must have the same length")
         self.history = np.asarray(y, dtype=np.float64)
@@ -197,6 +204,7 @@ class OriginScores:
 
     @property
     def k(self) -> int:
+        """The origin's 1-based number."""
         return self.origin.k
 
     def mase(self, member: str) -> float:
@@ -310,6 +318,9 @@ def hac_se(d: FArr, lags: int) -> float:
 
 @dataclass(frozen=True)
 class DMResult:
+    """A Diebold-Mariano test of equal accuracy: the corrected statistic, its two-sided p-value, the mean loss
+    differential and the number of differentials."""
+
     statistic: float   # < 0: loss_a is the more accurate; NaN when the differential's HAC variance is not positive
     p_value: float
     mean_diff: float
@@ -373,6 +384,12 @@ class SeriesModel:
     last_t: int = -1
 
     def fit(self, y: FArr, t: IntArr) -> "SeriesModel":
+        """Least-squares fit on the window's values `y` at periods `t` (in period order); keeps the residuals, their
+        variance, the AR coefficient (None for trend + season OLS) and the window's last value and period.
+
+        Raises:
+            ValueError: When `y` and `t` differ in length, or the window has no more periods than coefficients.
+        """
         yv = np.asarray(y, dtype=np.float64)
         tv = np.asarray(t, dtype=np.int64)
         if len(yv) != len(tv):
