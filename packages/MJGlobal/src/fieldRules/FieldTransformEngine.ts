@@ -1,5 +1,6 @@
 import { MJLruCache } from '../MJLruCache';
 import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
+import { CompileTransformExpression } from './SafeTransformAstEvaluator';
 import { GetFieldTransform } from './transformRegistry';
 import type {
     TransformStep,
@@ -202,7 +203,7 @@ export class FieldTransformEngine {
     private getCompiled(expression: string): CompiledExpression {
         let cached = this.compiledExpressionCache.Get(expression);
         if (cached === undefined) {
-            cached = this.compile(expression);
+            cached = this.Compile(expression);
             this.compiledExpressionCache.Set(expression, cached);
         }
         if (cached instanceof Error) {
@@ -211,18 +212,18 @@ export class FieldTransformEngine {
         return cached;
     }
 
-    private compile(expression: string): CompiledExpression | Error {
-        // Formulas are authored by end users (Record Process field rules, integration mappings) and
-        // run on the server, so they pass the same allowlist screen as conditions before compiling.
+    /**
+     * Screens a custom/formula expression against {@link SafeExpressionEvaluator.ScreenExpression}
+     * (with `['value', 'fields']` as the only permitted free identifiers) and compiles it into a
+     * sandboxed AST-interpreted {@link CompiledExpression} — without ever invoking `new Function`
+     * or `eval`. Returns an `Error` value (cached by {@link Evaluate}) when the expression fails
+     * syntax or allowlist validation.
+     */
+    public Compile(expression: string): CompiledExpression | Error {
         const rejection = SafeExpressionEvaluator.ScreenExpression(expression, FORMULA_IDENTIFIERS);
         if (rejection) {
             return new Error(`Expression rejected: ${rejection}`);
         }
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-implied-eval
-            return new Function('value', 'fields', `return (${expression});`) as CompiledExpression;
-        } catch (err) {
-            return err instanceof Error ? err : new Error(String(err));
-        }
+        return CompileTransformExpression(expression);
     }
 }

@@ -95,7 +95,10 @@
           Icon="fa-solid fa-diagram-project"
           Title="No related records" />
       } @else {
-        @for (relEntity of relatedEntitiesWithRecords; track relEntity.relatedEntityName) {
+        <!-- track on `key` (the relationship id), NOT the entity name: two foreign keys to
+             one entity share a name, which is a duplicate @for key (NG0955) and lets Angular
+             reuse the wrong node between the two grids. -->
+        @for (relEntity of relatedEntitiesWithRecords; track relEntity.key) {
           <div class="related-entity-group" [class.expanded]="relEntity.isExpanded">
             <!-- Header row - click to expand -->
             <div
@@ -106,7 +109,7 @@
                  [class.fa-chevron-down]="relEntity.isExpanded"
                  [class.fa-chevron-right]="!relEntity.isExpanded"></i>
               <i [class]="getRelatedEntityIcon(relEntity)"></i>
-              <span class="related-entity-name">{{ relEntity.relatedEntityName }}</span>
+              <span class="related-entity-name">{{ relEntity.displayName }}</span>
               <span class="related-entity-count">{{ relEntity.count }}</span>
             </div>
 
