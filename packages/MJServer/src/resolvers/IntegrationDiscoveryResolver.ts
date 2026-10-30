@@ -60,7 +60,7 @@ import type { RunArtifactAuthorizationResult } from "../integration/RunArtifactA
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { CatalogIdentityKey, ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
 import { LookupObjectNamesByID } from "../integration/ObjectNamesByID.js";
@@ -6449,6 +6449,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Compared against the key the TABLES were built with (the entity's registered fields),
             // not against the previous catalog — the built key is what the stored rows were actually
             // written under, and it is the only side that cannot drift from them.
+            //
+            // The catalog side reads the same field rows as the build and Phase 6. A cold
+            // per-connection object answers `[]` from the engine, and an empty key against a real
+            // built key reads as a re-key, which deletes the object's record maps and rows.
             const rekeyTargets: Array<{
                 ExternalObjectName: string; EntityMapID: string; EntityID: string;
                 SchemaName: string; BaseTable: string;
@@ -6461,12 +6465,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const builtKey = IdentityKeyFields(entity.Fields.map(ef => ({
                     Name: ef.Name, IsPrimaryKey: ef.IsPrimaryKey, Sequence: ef.Sequence,
                 })));
-                const catalogKey = IdentityKeyFields(
-                    IntegrationEngineBase.Instance.GetIntegrationObjectFields(io.ID)
-                        .filter(iof => iof.Status === 'Active')
-                        .map(iof => ({
-                            Name: iof.Name, IsPrimaryKey: iof.IsPrimaryKey, Sequence: iof.Sequence,
-                        }))
+                const catalogKey = CatalogIdentityKey(
+                    FieldsForBuild(io.ID, scopedFields, IntegrationEngineBase.Instance)
                 );
                 if (!DecideRekeyed(builtKey, catalogKey)) continue;
                 rekeyTargets.push({
