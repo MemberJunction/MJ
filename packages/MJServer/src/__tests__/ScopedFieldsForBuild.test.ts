@@ -133,9 +133,15 @@ describe('every schema build reads its fields through the loader', () => {
         const calls = SRC.match(/this\.buildSourceSchemaFromPersistedRows\([\s\S]*?\);/g) ?? [];
         // ApplySchema, ApplyAll, buildSchemaForConnector, ApplyAllBatch, SchemaEvolution.
         expect(calls.length).toBe(5);
+        const inline = /await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\)/;
+        // SchemaEvolution loads once into `scopedFields`, because its field-map reconcile reads the same rows.
+        const hoisted = /scopedFields,?\s*\)/;
         for (const call of calls) {
-            expect(call).toMatch(/await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\)/);
+            expect(inline.test(call) || hoisted.test(call)).toBe(true);
         }
+        const hoistedCalls = calls.filter(c => !inline.test(c));
+        expect(hoistedCalls).toHaveLength(1);
+        expect(SRC).toMatch(/const scopedFields = await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\);/);
     });
 
     it('the rebuild reads fields only through FieldsForBuild, never the engine directly', () => {
@@ -144,5 +150,33 @@ describe('every schema build reads its fields through the loader', () => {
         const body = SRC.slice(start, SRC.indexOf('private async runSchemaRefreshPipeline(', start));
         expect(body).toMatch(/FieldsForBuild\(io\.ID, scopedFields, engine\)/);
         expect(body).not.toMatch(/engine\.GetIntegrationObjectFields\(/);
+    });
+});
+
+/**
+ * A refresh's field-map reconcile and the dependency map read the same cold per-connection fields.
+ * Reconcile is the destructive one: an empty field list there DISABLES every Active field map on the
+ * object, on a refresh that reports success. The dependency map only needs FK edges, which the scope
+ * carries without any field row being warm.
+ */
+describe('a refresh reads the connection\'s fields, never a cold engine cache', () => {
+    const SRC = readFileSync(join(__dirname, '..', 'resolvers', 'IntegrationDiscoveryResolver.ts'), 'utf-8');
+    const body = (start: string, end: string) => {
+        const i = SRC.indexOf(start);
+        expect(i).toBeGreaterThan(-1);
+        return SRC.slice(i, SRC.indexOf(end, i + start.length));
+    };
+
+    it('the field-map reconcile reads through FieldsForBuild with the loaded rows', () => {
+        const reconcile = body('private async reconcileFieldMapsForEntityMap(', '\n    }\n');
+        expect(reconcile).toMatch(/FieldsForBuild\(integrationObjectID, scopedFields, IntegrationEngineBase\.Instance\)/);
+        expect(reconcile).not.toMatch(/\.GetIntegrationObjectFields\(/);
+        expect(SRC).toMatch(/this\.reconcileFieldMapsForEntityMap\(em, io\.ID, user, md, autoEnableNewColumns, scopedFields\)/);
+    });
+
+    it('the dependency map reads FK parents from the edge set, not from field rows', () => {
+        const deps = body('private computeObjectDependencyNames(', '\n    }\n');
+        expect(deps).toMatch(/engine\.GetRelatedIntegrationObjectIDs\(io\.ID\)/);
+        expect(deps).not.toMatch(/GetIntegrationObjectFields\(/);
     });
 });

@@ -1265,6 +1265,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * (IntegrationObjectField.RelatedIntegrationObjectID) plus soft-FK declarations in the IO's
      * Configuration (parentObjectName / parentObjectNames map / ReferencedType). Reads the
      * engine cache only (no DB round-trip); objects with no persisted IO row have no entry.
+     *
+     * Hard FK parents come from `GetRelatedIntegrationObjectIDs`, which answers a per-connection
+     * object from the scope's edge set. Its full field rows are cold here (only the sync loop warms
+     * them), so reading them would find no parents at all.
      */
     private computeObjectDependencyNames(integrationID: string): Map<string, string[]> {
         const engine = IntegrationEngineBase.Instance;
@@ -1274,9 +1278,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const deps = new Map<string, string[]>();
         for (const io of ios) {
             const parents = new Set<string>();
-            for (const f of engine.GetIntegrationObjectFields(io.ID)) {
-                const parentID = f.RelatedIntegrationObjectID?.toUpperCase();
-                if (!parentID || UUIDsEqual(parentID, io.ID)) continue;
+            for (const relatedID of engine.GetRelatedIntegrationObjectIDs(io.ID)) {
+                const parentID = relatedID.toUpperCase();
+                if (UUIDsEqual(parentID, io.ID)) continue;
                 const parentName = nameById.get(parentID);
                 if (parentName) parents.add(parentName);
             }
@@ -6288,12 +6292,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             // Source of truth for the evolution = the PERSISTED post-resolution rows (the refresh in
-            // Phase 1 just wrote them via the overlay) — no duplicate vendor introspect.
+            // Phase 1 just wrote them via the overlay) — no duplicate vendor introspect. Phase 6 reads
+            // the same field rows, so they are loaded once.
+            const scopedFields = await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user);
             const sourceSchema = this.buildSourceSchemaFromPersistedRows(
                 companyIntegration.IntegrationID,
                 undefined,
                 undefined,
-                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+                scopedFields,
             );
 
             // Normalize names to match source schema casing
@@ -6398,7 +6404,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             for (const em of continuingMaps) {
                 const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
                 if (!io) continue;
-                const fmChanges = await this.reconcileFieldMapsForEntityMap(em, io.ID, user, md, autoEnableNewColumns);
+                const fmChanges = await this.reconcileFieldMapsForEntityMap(em, io.ID, user, md, autoEnableNewColumns, scopedFields);
                 if ((fmChanges.Added > 0 || fmChanges.Disabled > 0) && em.ExternalObjectName && !changedObjects.includes(em.ExternalObjectName)) {
                     changedObjects.push(em.ExternalObjectName);
                 }
@@ -6559,17 +6565,21 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * A field map whose source field is no longer Active in the resolution is DISABLED, never
      * deleted — a later re-appearance re-enables it through the same reconciliation (the
      * field-is-back branch above), so retiring and restoring a column are both non-destructive.
+     *
+     * Under a per-connection catalog the field rows come from `scopedFields`, never from the
+     * engine: the engine answers `[]` for a cold per-connection object, and an empty field list here
+     * disables every Active field map on the object.
      */
     private async reconcileFieldMapsForEntityMap(
         em: MJCompanyIntegrationEntityMapEntity,
         integrationObjectID: string,
         user: UserInfo,
         md: IMetadataProvider,
-        autoEnableNewColumns = true
+        autoEnableNewColumns = true,
+        scopedFields?: ScopedBuildFields | null,
     ): Promise<{ Added: number; Disabled: number }> {
         const result = { Added: 0, Disabled: 0 };
-        const activeFields = IntegrationEngineBase.Instance
-            .GetIntegrationObjectFields(integrationObjectID)
+        const activeFields = FieldsForBuild(integrationObjectID, scopedFields, IntegrationEngineBase.Instance)
             .filter(f => f.Status === 'Active');
         const mapEnabled = em.Status === 'Active' && em.SyncEnabled === true;
 
