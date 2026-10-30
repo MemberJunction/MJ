@@ -1960,6 +1960,15 @@ export class BaseAgent {
     private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
 
     /**
+     * True once gatherPromptTemplateData() has computed {@link _effectiveActions} and
+     * {@link _effectiveSubAgents} for this run. An empty list is then authoritative: a host's
+     * `actionChanges` that remove every action leave the run with none, instead of falling back to
+     * the agent's database configuration as an uncomputed list does.
+     * @private
+     */
+    private _effectiveCatalogComputed = false;
+
+    /**
      * The merged agent-type prompt params of the current step. Populated during
      * gatherPromptTemplateData() and read by the finishIf gate, which runs in executeActionsStep()
      * and executeNextStep() after the prompt that requested the step.
@@ -2694,6 +2703,8 @@ export class BaseAgent {
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
             this._effectiveActions = [];
+            this._effectiveSubAgents = [];
+            this._effectiveCatalogComputed = false;
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
             this._lastSubAgentArtifactDirective = undefined;
@@ -7414,7 +7425,7 @@ export class BaseAgent {
      * @since 2.123.0
      */
     protected getEffectiveActionsForValidation(agentId: string): MJActionEntityExtended[] {
-        if (this._effectiveActions.length > 0) {
+        if (this._effectiveCatalogComputed || this._effectiveActions.length > 0) {
             return this._effectiveActions;
         }
 
@@ -7613,7 +7624,7 @@ export class BaseAgent {
      * @protected
      */
     protected getEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[] {
-        if (this._effectiveSubAgents.length > 0) {
+        if (this._effectiveCatalogComputed || this._effectiveSubAgents.length > 0) {
             return this._effectiveSubAgents;
         }
 
@@ -11818,6 +11829,7 @@ The context is now within limits. Please retry your request with the recovered c
             this._effectiveActions = activeActions;
             // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
             this._effectiveSubAgents = uniqueActiveSubAgents;
+            this._effectiveCatalogComputed = true;
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -18329,18 +18341,13 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            const actionEngine = ActionEngineServer.Instance;
             // Get the AIAgentAction metadata records for this agent (used for expiration settings)
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, params.agent.ID));
 
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
-            // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
-            const validationEffectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
-            const effectiveActions = validationEffectiveActions.length > 0
-                ? validationEffectiveActions
-                : (actionEngine.Actions || []).filter(a =>
-                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
-                  );
+            // getEffectiveActionsForValidation falls back to the configured actions only when none were computed;
+            // an empty computed list (a host's actionChanges removed every action) is authoritative
+            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
             // Call agent type's pre-processing for actions
             try {
@@ -20855,7 +20862,7 @@ The context is now within limits. Please retry your request with the recovered c
             const agentActions = AIEngine.Instance.AgentActions.filter(
                 aa => UUIDsEqual(aa.AgentID, params.agent.ID)
             );
-            const effectiveActions = this._effectiveActions.length > 0
+            const effectiveActions = this._effectiveCatalogComputed || this._effectiveActions.length > 0
                 ? this._effectiveActions
                 : ActionEngineServer.Instance.Actions.filter(a =>
                     agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
