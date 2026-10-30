@@ -393,7 +393,7 @@ describe('TaskGraphDispatcher — multi-step ForEach & While loop bodies (steps[
         expect(outObj['Count']).toBeUndefined();
     });
 
-    it('preserves ResolveMappedInput literal semantics for legacy single-action durable loops', async () => {
+    it('supports both unified ForEachOperation bindings and legacy payload.<itemVar>.* / literal semantics on single-action durable loops', async () => {
         const receivedInputs: Array<Record<string, unknown>> = [];
         const runner: TaskActionRunner = {
             RunActionForTask: vi.fn(async ({ InputPayload }) => {
@@ -409,10 +409,19 @@ describe('TaskGraphDispatcher — multi-step ForEach & While loop bodies (steps[
                 action: {
                     name: 'Send Template Email',
                     params: {
-                        fileName: 'report.txt',
-                        sortBy: 'index',
-                        templateBody: 'Hello {{recipientName}}, check {{unknownField}}',
-                        email: 'payload.recipient.email',
+                        // Unresolved binding-like tail stays literal (`recipient` has no `.txt` property)
+                        attachmentName: 'recipient.txt',
+                        // Escaped literal binding keyword
+                        escapedSortKey: 'static:index',
+                        // Unprefixed payload key & unknown token stay literal for downstream templating action
+                        downstreamPureToken: '{{recipientName}}',
+                        unresolvedToken: '{{unknownField}}',
+                        templateBody: 'Hello {{recipient.name}}, cc {{recipientName}} ({{unknownField}})',
+                        // Unified ForEachOperation whole-value & braced binding forms
+                        directEmail: 'recipient.email',
+                        bracedTier: '{{recipient.tier}}',
+                        // Legacy TaskGraph / Flow `payload.<itemVar>.*` & `data.*` forms
+                        legacyEmail: 'payload.recipient.email',
                         sender: 'data.senderAddress',
                     },
                     outputMapping: '{"Sent": "sentFlags[]"}',
@@ -422,7 +431,7 @@ describe('TaskGraphDispatcher — multi-step ForEach & While loop bodies (steps[
 
         const loopTask = {
             ID: 'task-fe-legacy',
-            Name: 'Legacy Single Action Loop',
+            Name: 'Unified + Legacy Single Action Loop',
             ParentID: 'parent-1',
             ActionID: 'act-send',
             StepType: 'ForEach',
@@ -432,17 +441,24 @@ describe('TaskGraphDispatcher — multi-step ForEach & While loop bodies (steps[
         const outcome = await dispatcherWith(runner).runTaskBody(
             loopTask,
             providerWithParent({ data: { senderAddress: 'ops@mj.test' } }),
-            { recipients: [{ email: 'alice@mj.test' }] },
+            {
+                recipientName: 'Global Fallback',
+                recipients: [{ name: 'Alice', email: 'alice@mj.test', tier: 1 }],
+            },
             new Map(),
         );
 
         expect(outcome.Success).toBe(true);
         expect(receivedInputs).toEqual([
             {
-                fileName: 'report.txt',
-                sortBy: 'index',
-                templateBody: 'Hello {{recipientName}}, check {{unknownField}}',
-                email: 'alice@mj.test',
+                attachmentName: 'recipient.txt',
+                escapedSortKey: 'index',
+                downstreamPureToken: '{{recipientName}}',
+                unresolvedToken: '{{unknownField}}',
+                templateBody: 'Hello Alice, cc {{recipientName}} ({{unknownField}})',
+                directEmail: 'alice@mj.test',
+                bracedTier: 1,
+                legacyEmail: 'alice@mj.test',
                 sender: 'ops@mj.test',
             },
         ]);

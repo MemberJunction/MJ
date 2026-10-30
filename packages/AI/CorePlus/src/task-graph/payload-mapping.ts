@@ -183,6 +183,14 @@ function isForbiddenSegment(part: string): boolean {
     return false;
 }
 
+/** True when any dotted segment of an expression targets `__proto__`, `constructor`, or `prototype`. */
+function hasForbiddenPathSegment(expression: string): boolean {
+    return expression
+        .trim()
+        .split('.')
+        .some((part) => Boolean(part) && isForbiddenSegment(part));
+}
+
 /**
  * Walks an object path with `name[index]` array indexing and exact-first, case-insensitive-fallback
  * own-property lookup so loop step outputs (`steps.s1.Result` vs `steps.s1.result`) resolve reliably
@@ -242,10 +250,7 @@ function resolveLoopExpression(
         return getLoopPathValue(ctx.context, trimmed.substring(trimmed.indexOf('.') + 1));
     }
 
-    const fromBindings = getLoopPathValue(bindings, trimmed);
-    if (fromBindings !== undefined) return fromBindings;
-
-    return getLoopPathValue(ctx.payload, trimmed);
+    return getLoopPathValue(bindings, trimmed);
 }
 
 function isIdentifierStartCode(code: number): boolean {
@@ -339,14 +344,19 @@ function resolveLoopBodyValue(
         }
         if (lower.startsWith('static:')) return value.substring(value.indexOf(':') + 1);
 
-        // Pure single-token template `{{expr}}` preserves raw value type (number, boolean, object, array).
+        // Pure single-token template `{{expr}}` preserves raw value type (number, boolean, object, array),
+        // while keeping unresolved tokens (e.g. `{{recipientName}}` intended for a downstream templating
+        // action) as their original literal string unless a forbidden prototype segment is targeted.
         if (
             trimmed.startsWith('{{') &&
             trimmed.endsWith('}}') &&
             !trimmed.slice(2, -2).includes('{{') &&
             !trimmed.slice(2, -2).includes('}}')
         ) {
-            return resolveLoopExpression(trimmed.slice(2, -2), bindings, ctx);
+            const inner = trimmed.slice(2, -2);
+            if (hasForbiddenPathSegment(inner)) return undefined;
+            const lookedUp = resolveLoopExpression(inner, bindings, ctx);
+            return lookedUp !== undefined ? lookedUp : value;
         }
 
         // Inline template interpolation: `"({{item.x}} * 2) + {{steps.s1.Result}}"`.
@@ -365,12 +375,16 @@ function resolveLoopBodyValue(
         }
 
         // Unbraced explicit loop binding reference: e.g. `item.email`, `city.name`, `steps.s1.Result`,
-        // `item[0].id`, or exact binding variable name (`city`, `index`).
+        // `item[0].id`, or exact binding variable name (`city`, `index`). Unresolved tails (such as a
+        // literal filename `"file.txt"` when `itemVariable === "file"` has no `.txt` property) preserve
+        // their original literal string instead of silently dropping to `undefined`.
         const rootName = extractBindingRoot(trimmed);
         if (rootName && Object.prototype.hasOwnProperty.call(bindings, rootName)) {
             const hasTail = trimmed.length > rootName.length;
             if (hasTail) {
-                return getLoopPathValue(bindings, trimmed);
+                if (hasForbiddenPathSegment(trimmed)) return undefined;
+                const lookedUp = getLoopPathValue(bindings, trimmed);
+                return lookedUp !== undefined ? lookedUp : value;
             }
             return bindings[rootName];
         }

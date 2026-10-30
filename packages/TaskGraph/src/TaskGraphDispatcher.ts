@@ -37,7 +37,6 @@ import {
     ApplyOutputMapping,
     BuildMappedInput,
     ResolveLoopBodyParams,
-    ResolveMappedInput,
     type ForEachOperation,
     type LoopBodyActionStep,
     type LoopStepFold,
@@ -3898,12 +3897,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                 });
             }
 
-            // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
-            // current item the same way it reaches anything else: `payload.<itemVariable>`.
-            // Legacy single-arm durable loops (`action` / `subAgent` / `prompt`) keep `ResolveMappedInput`
-            // so existing unprefixed strings remain literal unless explicitly prefixed (`payload.`, `data.`, `context.`, `static:`).
+            // Bindings go INTO `iterationPayload` AND are passed explicitly to `ResolveLoopBodyParams`,
+            // so durable single-arm loops honor BOTH legacy TaskGraph/Flow mappings (`payload.<itemVar>.*`,
+            // `data.*`, `context.*`, `static:*`) AND the unified ForEachOperation/WhileOperation dialect
+            // (`<itemVar>.*`, `{{<itemVar>.*}}`, inline `{{...}}`) while keeping unresolved paths/tokens literal.
             const iterationPayload = { ...livePayload, ...Bindings };
-            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload, ...graphContext.Invocation }) as Record<string, unknown>;
+            const resolved = ResolveLoopBodyParams(bodyMapping, Bindings, {
+                payload: iterationPayload,
+                ...graphContext.Invocation,
+            });
 
             /**
              * Folds an iteration's output into the running payload the next pass will see, and

@@ -117,6 +117,46 @@ describe('ResolveLoopBodyParams', () => {
             },
         });
     });
+
+    it('preserves unresolved paths and downstream {{template}} literals while resolving unified loop and legacy payload.<itemVar>.* forms', () => {
+        const bindings = {
+            file: { email: 'ann@acme.test', pages: 3 },
+            index: 2,
+        };
+        const iterationPayload = {
+            recipientName: 'Ann',
+            ...bindings,
+        };
+        const resolved = ResolveLoopBodyParams(
+            {
+                literalFilename: 'file.txt',
+                bindingField: 'file.email',
+                bracedBindingField: '{{file.email}}',
+                legacyPayloadItemField: 'payload.file.email',
+                downstreamPureTemplate: '{{recipientName}}',
+                explicitPayloadTemplate: '{{payload.recipientName}}',
+                unresolvedPureToken: '{{unknownField}}',
+                unresolvedInlineToken: 'Hi {{unknownField}}',
+                escapedBindingName: 'static:index',
+                loopIndex: 'index',
+            },
+            bindings,
+            { payload: iterationPayload },
+        );
+
+        expect(resolved).toEqual({
+            literalFilename: 'file.txt',
+            bindingField: 'ann@acme.test',
+            bracedBindingField: 'ann@acme.test',
+            legacyPayloadItemField: 'ann@acme.test',
+            downstreamPureTemplate: '{{recipientName}}',
+            explicitPayloadTemplate: 'Ann',
+            unresolvedPureToken: '{{unknownField}}',
+            unresolvedInlineToken: 'Hi {{unknownField}}',
+            escapedBindingName: 'static:index'.slice('static:'.length),
+            loopIndex: 2,
+        });
+    });
 });
 
 describe('ValidateTaskGraphSpec — multi-step loop bodies (steps[])', () => {
