@@ -874,8 +874,9 @@ export class ValidationService {
   }
 
   /**
-   * Reads a folder's `overrides`. Reports an entry that is not `{ folder, fields }` or that names a
-   * field the folder's entity does not have, and keeps the well-formed entries.
+   * Reads a folder's `overrides`. Reports an entry that is not `{ folder, fields }` and drops it.
+   * Reports a field the folder's entity does not have but keeps its entry, since such a field can
+   * never be in a conflict.
    */
   private readFolderOverrides(value: unknown, folder: string, entityInfo: EntityInfo, configPath: string): void {
     if (value === undefined) {
@@ -936,10 +937,17 @@ export class ValidationService {
     if (earlierFolder === folder) {
       return `"overrides" names this folder itself ("${folder}"); name the earlier folder that sets the values it changes`;
     }
+    // A folder name only, as in directoryOrder, so the check never reads outside the metadata root
+    if (earlierFolder === '.' || earlierFolder === '..' || path.basename(earlierFolder) !== earlierFolder || earlierFolder.includes('/')) {
+      return `"overrides" names "${earlierFolder}", which is not a folder name; name a folder directly under the metadata root`;
+    }
     if (!fs.existsSync(path.join(rootDir, earlierFolder, '.mj-sync.json'))) {
       return `"overrides" names folder "${earlierFolder}", which is not an entity folder under ${rootDir}`;
     }
     const earlierIndex = pushOrder.indexOf(earlierFolder);
+    if (earlierIndex === -1) {
+      return `"overrides" names folder "${earlierFolder}", which push does not visit (a dot folder, or one that matches ignoreDirectories)`;
+    }
     const index = pushOrder.indexOf(folder);
     if (earlierIndex > index) {
       return `"overrides" names folder "${earlierFolder}", which push runs after "${folder}". Put "${earlierFolder}" before "${folder}" in directoryOrder`;

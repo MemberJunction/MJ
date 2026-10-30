@@ -52,8 +52,8 @@ describe('ValidationService — folder overrides', () => {
     await fs.remove(root);
   });
 
-  async function writeRoot(directoryOrder: string[]): Promise<void> {
-    await fs.writeJson(path.join(root, '.mj-sync.json'), { version: '1.0.0', directoryOrder });
+  async function writeRoot(directoryOrder: string[], ignoreDirectories?: string[]): Promise<void> {
+    await fs.writeJson(path.join(root, '.mj-sync.json'), { version: '1.0.0', directoryOrder, ...(ignoreDirectories ? { ignoreDirectories } : {}) });
   }
 
   async function writeFolder(name: string, records: Fields[], overrides?: unknown): Promise<string> {
@@ -191,6 +191,32 @@ describe('ValidationService — folder overrides', () => {
 
       expect(await declarationErrors()).toEqual([
         { file: configOf('activate'), message: `"overrides" names folder "drafts", which is not an entity folder under ${root}` },
+      ]);
+    });
+
+    it('reports a folder that push does not visit because ignoreDirectories leaves it out', async () => {
+      await writeRoot(['draft', 'activate'], ['draft']);
+      await writeFolder('draft', [{ Status: 'Draft' }]);
+      await writeFolder('activate', [{ Status: 'Active' }], [{ folder: 'draft', fields: ['Status'] }]);
+
+      expect(await declarationErrors()).toEqual([
+        {
+          file: configOf('activate'),
+          message: '"overrides" names folder "draft", which push does not visit (a dot folder, or one that matches ignoreDirectories)',
+        },
+      ]);
+    });
+
+    it.each([
+      ['a path that leaves the root and comes back', () => `../${path.basename(root)}/draft`],
+      ['the parent folder', () => '..'],
+      ['a nested path', () => 'draft/sub'],
+    ])('reports %s instead of following it', async (_label, folderOf) => {
+      const folder = folderOf();
+      await twoPass([{ folder, fields: ['Status'] }]);
+
+      expect((await declarationErrors()).map((e) => e.message)).toEqual([
+        `"overrides" names "${folder}", which is not a folder name; name a folder directly under the metadata root`,
       ]);
     });
 
