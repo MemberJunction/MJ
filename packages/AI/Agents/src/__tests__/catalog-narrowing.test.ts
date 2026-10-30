@@ -4,6 +4,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { ChatMessage, DecisionAnswer } from '@memberjunction/ai';
+import type { AgentChatMessage } from '@memberjunction/ai-core-plus';
+import { BaseAgent } from '../base-agent';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -121,6 +123,31 @@ describe('OpeningRequestText', () => {
         expect(OpeningRequestText([{ role: 'system', content: 'You are helpful' }])).toBe('');
         expect(OpeningRequestText(undefined)).toBe('');
         expect(OpeningRequestText([{ role: 'user', content: 'x'.repeat(CATALOG_NARROWING_REQUEST_MAX_CHARS + 50) }])).toHaveLength(CATALOG_NARROWING_REQUEST_MAX_CHARS);
+    });
+
+    it('prefers metadata.rawContent when speaker attribution prefixed content', () => {
+        const messages: AgentChatMessage[] = [{
+            role: 'user',
+            content: '[Alice]: Help me draft Q3 goals',
+            metadata: { rawContent: 'Help me draft Q3 goals' },
+        }];
+        expect(OpeningRequestText(messages)).toBe('Help me draft Q3 goals');
+    });
+
+    it('converts UI mention markup in both content and metadata.rawContent via convertUIMarkupInMessages', () => {
+        const mentionToken = '@{"_mode":"mention","type":"agent","id":"11111111-1111-1111-1111-111111111111","name":"Research Agent"}';
+        const messages: AgentChatMessage[] = [{
+            role: 'user',
+            content: `[Alice]: Ask ${mentionToken} to summarize this`,
+            metadata: { rawContent: `Ask ${mentionToken} to summarize this` },
+        }];
+        const agent = Object.create(BaseAgent.prototype) as BaseAgent & {
+            convertUIMarkupInMessages: (msgs: ChatMessage[]) => void;
+        };
+        agent.convertUIMarkupInMessages(messages);
+        expect(messages[0].content).toBe('[Alice]: Ask @Research Agent to summarize this');
+        expect(messages[0].metadata?.rawContent).toBe('Ask @Research Agent to summarize this');
+        expect(OpeningRequestText(messages)).toBe('Ask @Research Agent to summarize this');
     });
 });
 
