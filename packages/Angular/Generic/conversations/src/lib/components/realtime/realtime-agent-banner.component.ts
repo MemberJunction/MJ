@@ -83,7 +83,7 @@ export class RealtimeAgentBannerComponent {
   /** When reviewing: when the past session closed (null while it is still open). */
   @Input() ReviewClosedAt: Date | null = null;
 
-  /** When reviewing: why the past session closed (`Explicit` | `Janitor` | `Shutdown` | `Error`), when known. */
+  /** When reviewing: why the past session closed (`Explicit` | `Janitor` | `Shutdown` | `Error` | `TimeLimit` | `Idle`), when known. */
   @Input() ReviewCloseReason: string | null = null;
 
   // ── App-bar action cluster (disclosure-gated by the overlay) ────────────────
@@ -193,6 +193,8 @@ export class RealtimeAgentBannerComponent {
     switch (this.ReviewCloseReason) {
       case 'Explicit': return 'Ended by user';
       case 'Janitor': return 'Closed by janitor';
+      case 'TimeLimit': return 'Time limit';
+      case 'Idle': return 'Idle — no activity';
       case 'Shutdown': return 'Closed at shutdown';
       case 'Error': return 'Ended with error';
       default: return '';

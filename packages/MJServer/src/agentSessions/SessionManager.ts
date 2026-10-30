@@ -1,13 +1,15 @@
-import { IMetadataProvider, UserInfo, LogError, RunView } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJLruCache } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
+import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
+import { ParseSessionDeadlineMs, VerifyTimeLimitClaim } from './sessionDeadline.js';
 import { GetHostInstanceID } from './HostInstance.js';
 import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { SessionRunIDVerifier, SessionRunIDs } from './SessionRunIDVerifier.js';
@@ -40,11 +42,14 @@ export interface CreateSessionInput {
 /**
  * Why a session was closed — persisted to `AIAgentSession.CloseReason` alongside the
  * `Status = 'Closed'` transition so the admin dashboards can distinguish a user hanging up
- * (`Explicit`) from janitor reconciliation (`Janitor`), a graceful host drain (`Shutdown`),
- * or a failure-path teardown (`Error`). `NULL` in the column means "legacy/unknown" — rows
- * closed before this column existed.
+ * (`Explicit`) from janitor reconciliation (`Janitor`, an orphan from an earlier boot), a graceful
+ * host drain (`Shutdown`), a failure-path teardown (`Error`), an expired authored deadline
+ * (`TimeLimit`) or a session left quiet past the idle threshold (`Idle`). `NULL` in the column means
+ * "legacy/unknown" — rows closed before this column existed.
+ *
+ * Derived from the generated entity so the column's CHECK constraint stays the single source of truth.
  */
-export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+export type SessionCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 /**
  * The {@link SessionCloseReason} for a session whose bridged agent has left (see
@@ -191,6 +196,8 @@ export class SessionManager {
      *   call sites (the user-initiated close mutations) stamp the common case without modification;
      *   background callers (janitor sweeps, shutdown drain, error teardowns) must pass their reason
      *   explicitly. `NULL` rows remain only for legacy data closed before the column existed.
+     *   A `'TimeLimit'` is verified against the session's stored deadline ({@link VerifyTimeLimitClaim}); a claim the
+     *   deadline does not back is recorded as `'Explicit'` and logged, never refused.
      *
      * @remarks P5 adds in-flight-run abort + `ClientToolRequestManager.ClearSession` here.
      */
@@ -215,7 +222,9 @@ export class SessionManager {
             return true;
         }
 
-        const closed = await this.markSessionClosed(session, closeReason);
+        // Verified once: the stamped reason and the plugin notification must agree, so a client's unbacked claim steers neither.
+        const verifiedReason = this.verifiedCloseReason(session, closeReason);
+        const closed = await this.markSessionClosed(session, verifiedReason);
         if (!closed) {
             return false;
         }
@@ -228,12 +237,31 @@ export class SessionManager {
         }
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
-        await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
+        await this.notifyChannelPluginsSessionClosed(agentSessionID, verifiedReason);
         // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
         // summarize it into an Active memory note so the visitor's next session opens with prior context.
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
         await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Returns the reason to stamp: a `'TimeLimit'` claim the session's stored deadline does not back becomes
+     * `'Explicit'` (logged with the stored deadline); every other reason passes through.
+     */
+    private verifiedCloseReason(session: MJAIAgentSessionEntity, closeReason: SessionCloseReason): SessionCloseReason {
+        if (closeReason !== 'TimeLimit') {
+            return closeReason;
+        }
+        const verified = VerifyTimeLimitClaim(session, Date.now());
+        if (verified === 'Explicit') {
+            const deadlineMs = ParseSessionDeadlineMs(session.Config_);
+            LogStatus(
+                `SessionManager.CloseSession: TimeLimit claim for session ${session.ID} not backed by its stored deadline ` +
+                    `(${deadlineMs === null ? 'none stored' : new Date(deadlineMs).toISOString()}); closing as Explicit.`,
+            );
+        }
+        return verified;
     }
 
     /**
@@ -584,7 +612,9 @@ export class SessionManager {
         session.Status = 'Closed';
         session.ClosedAt = new Date();
         session.CloseReason = closeReason;
-        return this.saveOrLog(session, 'CloseSession');
+        // The session entity refuses a server-only CloseReason from an untrusted save; this is the server's own
+        // (already verified) close, so it saves inside the trusted session-write scope.
+        return RunWithTrustedSessionConfigWrites(() => this.saveOrLog(session, 'CloseSession'));
     }
 
     /** Marks every channel row of the session `Disconnected` (with `DisconnectedAt`), if not already. */
