@@ -41,6 +41,7 @@ import { IsPlainObject } from '@memberjunction/global';
 
 import { JSONObject, JSONValue } from './baseRealtime';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
+import type { EmbeddingInputType } from './embed.types';
 
 /**
  * MJ-normalized turn-detection mode vocabulary — provider-neutral by design so a shared model
@@ -421,6 +422,21 @@ export interface PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * The per-modality bag common to every AI configuration column. Sections are optional and
  * per-modality so one row can configure everything the thing it describes does.
  */
@@ -437,6 +453,8 @@ export interface AIConfigurationSections {
     Decision?: DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -581,6 +599,22 @@ export function IsZeroDataRetention(config: AIModelConfiguration | null | undefi
  */
 export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
     return config?.LLM?.PrefixPromptCache === true;
+}
+
+/**
+ * Prepends the model's configured embedding prefix for `inputType` (omitted means `'document'`).
+ * Returns the text unchanged when the effective configuration declares no prefix for that role.
+ * Read the configuration through {@link ResolveEffectiveModelConfiguration} (or
+ * `AIEngineBase.GetEffectiveModelConfiguration`) so the most specific layer's prefix wins.
+ */
+export function ApplyEmbeddingInputPrefix(
+    text: string,
+    inputType: EmbeddingInputType | undefined,
+    config: AIModelConfiguration | null | undefined
+): string {
+    const section = config?.Embedding;
+    const prefix = inputType === 'query' ? section?.QueryPrefix : section?.DocumentPrefix;
+    return prefix ? prefix + text : text;
 }
 
 /**

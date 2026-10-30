@@ -136,6 +136,9 @@ jobs:
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
+            # Same again for the hardcoded-colour gate: it runs in ci-ui-tokens.yml, not here, but
+            # its vitest suite lives in __tests__ — so an edit to the gate script alone must run it too.
+            .github/scripts/check-css-hex-tokens.sh
             # The browser-manifest server-leakage gate runs in this workflow (see that step).
             # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
             # is exactly the shape that can introduce a leak, and neither path is under packages/**
@@ -348,7 +351,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -357,6 +360,7 @@ jobs:
           src/__tests__/UUIDCompliance.test.ts
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
+          src/__tests__/PlatformStringCompliance.test.ts
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}

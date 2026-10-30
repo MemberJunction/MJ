@@ -9,14 +9,14 @@ This package contains server-side implementations of MemberJunction entity subcl
 ```mermaid
 graph TD
     A["Core Entities Server"] --> B["AIPromptEntityExtended"]
-    A --> C["QueryEntityExtended"]
+    A --> C["MJQueryEntityServer"]
     A --> D["ComponentEntityExtended"]
     A --> E["MJActionEntityExtended"]
     A --> F["ApplicationEntityExtended"]
     A --> G["Other Server Entities"]
 
     B -->|manages| H["Templates<br/>Template Contents"]
-    C -->|manages| H
+    C -->|extracts| L["Query Fields<br/>Parameters<br/>Entities<br/>Dependencies"]
     D -->|generates| I["Vector Embeddings"]
 
     J["MJ Class Factory"] -->|returns server subclass| A
@@ -32,6 +32,7 @@ graph TD
     style I fill:#b8762f,stroke:#8a5722,color:#fff
     style J fill:#2d6a9f,stroke:#1a4971,color:#fff
     style K fill:#b8762f,stroke:#8a5722,color:#fff
+    style L fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
 ### Key Differences from Core Entities
@@ -49,14 +50,13 @@ npm install @memberjunction/core-entities-server
 
 ### Basic Setup
 
-```typescript
-import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+Each server-side subclass registers itself with `@RegisterClass` when the package is imported, so there is no setup function to call:
 
-// Load all server-side entity subclasses at application startup
-LoadCoreEntitiesServerSubClasses();
+```typescript
+import '@memberjunction/core-entities-server';
 ```
 
-**Important**: Call `LoadCoreEntitiesServerSubClasses()` early in your application initialization to ensure the server-side subclasses are registered with the MemberJunction metadata system before any entities are instantiated.
+**Important**: The package must be loaded before any entities are instantiated. An MJAPI server built on `@memberjunction/server-bootstrap` loads it through the bootstrap's class-registration manifest, which also keeps a bundler from removing the classes as unused. Other server applications import the package at startup.
 
 ### Example: AI Prompt Entity
 
@@ -97,13 +97,16 @@ Extends the Component entity with automatic vector embedding generation:
 - **Smart Updates**: Only regenerates embeddings when source text changes
 - **Parallel Processing**: Generates multiple embeddings concurrently for performance
 
-### QueryEntityExtendedServer
+### MJQueryEntityServer
 
-Extends the Query entity with automatic Template management similar to AIPromptEntity:
+The server-side `MJ: Queries` entity. It extends `MJQueryEntityExtended` from `@memberjunction/core-entities`:
 
-- **Virtual Property**: `TemplateText` - Manages the SQL query template content
-- **Automatic Template Management**: Creates and updates Template records when saving
-- **Dynamic SQL Support**: Supports parameterized queries with Nunjucks templates
+- **Query Extraction**: Saving a new query, or a query whose SQL changed, works out the query's output fields, parameters, the entities it reads and its dependencies, and writes them as child rows. See [Query Extraction](#query-extraction).
+- **Save-Time Rules**: A query whose template breaks a rule, or whose output repeats a column name, is refused with the reasons in the save's result.
+- **Declared Child Rows**: A query and the `Parameters`, `Fields` and `Entities` rows it declares save together as one graph.
+- **Embeddings**: Computes a vector from the query's name, user question and description, unless `SkipEmbeddings` is set.
+- **Dialect Conversion**: Keeps the query's SQL variants for other database platforms in step with its SQL.
+- **On-Demand Refresh**: `QueryExtractionService` re-runs extraction for saved queries without changing their SQL. See [Query Refresh](#query-refresh).
 
 ### MJAIAgentNoteEntityServer (v5.30.x+)
 
@@ -129,8 +132,8 @@ The **AI-from-Description** half of the [Remote Operations](../../guides/REMOTE_
 
 The package uses MemberJunction's entity subclassing system:
 
-1. At startup, `LoadCoreEntitiesServerSubClasses()` is called
-2. This registers all server-side entity subclasses with the metadata system
+1. At startup, the package is imported (directly, or through the server bootstrap's class-registration manifest)
+2. Each subclass's `@RegisterClass` decorator registers it with the metadata system
 3. When code requests an entity (e.g., "AI Prompts"), the metadata system returns the server-side subclass
 4. The server-side subclass extends the base entity with additional functionality
 
@@ -305,130 +308,182 @@ export class OrderEntityServer extends OrderEntity {
 }
 ```
 
-## SQL Parser
+## Query Extraction
 
-The `SQLParser` utility class extracts table/view references and column references from SQL statements. It uses `node-sql-parser` for AST-based parsing with automatic regex fallback when the AST parser fails. This class has **no dependency on MJ Metadata** — it returns raw parse results that callers cross-reference against entities themselves.
+When a query is saved and it is new, or its SQL changed, `MJQueryEntityServer` works out what the query reads and returns, and writes it to the query's child entities. Nothing has to be filled in by hand for a query to be usable.
 
-### When to Use
+### What a Save Does
 
-- **Virtual entity decoration**: Parse a view's SQL to identify which source entities it pulls from
-- **Query entity metadata**: Parse SQL queries to find referenced tables and columns
-- **Any server-side SQL analysis**: Extract structural information from SQL without executing it
+1. **Reads the template.** MJ's own template parser reads the SQL: its parameters (with composition pass-throughs), the queries it composes (`{{query:"Category/Name(...)"}}`), and the tables and views it reads. Whether the query uses a template at all (`UsesTemplate`) comes from the lexer, so a tag inside a comment does not count.
+2. **Asks the database server.** The query is rendered with sample parameter values (a caller can supply tested values in `ParameterHints`, keyed by parameter name), once for the base render and once for each `{% if %}` branch, and the database server is asked to describe each render without running it. The server reports each output column's exact type, nullability, and the table column it comes from, when there is one.
+3. **Applies the save-time rules.** A rule error in the template, or an output that repeats a column name, refuses the save. Nothing is written, and the reasons are in the save's result (`LatestResult`).
+4. **Writes the child rows** once the query row is saved:
 
-### Basic Usage — Plain SQL
+| Child entity | What is written |
+|---|---|
+| `MJ: Query Fields` | Each output column: name, order, SQL type, nullability, whether it is computed, and its source (`SourceEntityFieldID` when the column maps to an entity field, otherwise `SourceObjectName`, the object the server reported) |
+| `MJ: Query Parameters` | Each template parameter: name, inferred type, whether it is required, its default |
+| `MJ: Query Entities` | Each entity whose base view, base table or alternate base view the query reads |
+| `MJ: Query Dependencies` | Each query it composes, with the alias and parameter mapping |
+
+5. **Records the run** on the query row (see [Extraction Status](#extraction-status)).
+6. **Fills empty descriptions** with an LLM, after the save's transaction commits. Facts never come from the LLM. Pass `SkipEntityAIActions: true` in the save options to skip this step.
+
+### Facts and Annotations
+
+Extraction separates what the SQL determines from what a person wrote:
+
+- **Facts** are corrected on every run: names, order, types, nullability, sources and the computed flag. A fact a person edited is set back to what the SQL and the server say.
+- **Annotations** are kept: descriptions, and for a parameter a person wrote (`DetectionMethod` `Manual`), its type, required flag, default, sample value and validation filters. Doc comments in the SQL (`{# @param ... #}`, `{# @field ... #}`, and a trailing `--:` comment on a select-list line) count as authored.
+- **A parameter a person wrote that the SQL no longer uses** is kept, and flagged in `ExtractionMessage`.
+- **A row extraction added that the SQL no longer produces** is removed.
+
+### DetectionMethod Values
+
+Each child row records who wrote it:
+
+| Value | Used on | Meaning |
+|---|---|---|
+| `Database` | Query Fields | The facts came from the database server describing the query's output |
+| `Parser` | Query Fields, Parameters, Entities | The facts came from MJ's analysis of the template and SQL structure |
+| `Manual` | Query Fields, Parameters, Entities, Dependencies | A person wrote the row. A `Manual` parameter's annotations are never overwritten, and it is kept when the SQL stops using it |
+| `AI` | Query Fields, Parameters, Entities | On a field, an LLM wrote its description (an LLM never sets types or sources). On a parameter or entity link, the row was written by the earlier LLM-based extraction |
+| `Auto` | Query Dependencies | The dependency was found in the SQL |
+
+### Extraction Status
+
+Each run is recorded on the `MJ: Queries` row:
+
+| Column | Meaning |
+|---|---|
+| `ExtractionStatus` | `OK`: every fact was extracted. `Warning`: extraction succeeded with findings. `Error`: the database server could not describe the query, so the stored child rows were kept. `Skipped`: the facts could not be checked, for example for a query on an external data source. `NULL`: never extracted. |
+| `ExtractionMessage` | The run's findings, one per line: flagged parameters, rule warnings, the server's error |
+| `ExtractedSQLHash` | A hash of the SQL and dialect the child rows were extracted from. A value that differs from the current SQL's hash means the rows may be stale |
+
+### Controlling Extraction per Save
+
+`MJQueryEntityServer.ExtractionOverride` sets what the next save does. It goes back to `Auto` after every save.
+
+| Value | Behaviour |
+|---|---|
+| `Auto` (default) | Extract when the query is new or its SQL changed |
+| `Skip` | Do not extract, even when the SQL changed. The save-time rules are not applied, and the child rows, the extraction columns and `UsesTemplate` stay as they are. For bulk loaders and fixtures that write those rows themselves |
+| `Force` | Extract even when the SQL did not change. On a query whose SQL did not change, rule errors are recorded instead of refusing the save; a save that changes the SQL is still held to the save-time rules |
 
 ```typescript
-import { SQLParser } from '@memberjunction/core-entities-server';
+import { Metadata, UserInfo } from '@memberjunction/core';
+import { MJQueryEntityServer } from '@memberjunction/core-entities-server';
 
-const sql = `
-  SELECT c.Name, c.Email, o.OrderDate, o.Total
-  FROM [dbo].[Customer] c
-  INNER JOIN [dbo].[Order] o ON o.CustomerID = c.ID
-  WHERE o.Status = 'Active'
-`;
+async function saveQuery(contextUser: UserInfo, queryID: string, sql: string): Promise<boolean> {
+  const md = new Metadata();
+  const query = await md.GetEntityObject<MJQueryEntityServer>('MJ: Queries', contextUser);
+  if (!(await query.Load(queryID))) return false;
 
-const result = SQLParser.Parse(sql);
-
-// Tables found in the query
-for (const table of result.Tables) {
-  console.log(`${table.SchemaName}.${table.TableName} (alias: ${table.Alias})`);
+  query.SQL = sql;
+  query.ExtractionOverride = 'Auto'; // the default; 'Skip' or 'Force' change this one save
+  const saved = await query.Save({ SkipEntityAIActions: true }); // no LLM description pass
+  if (!saved) {
+    console.error(query.LatestResult?.CompleteMessage); // the save-time rule findings
+  }
+  return saved;
 }
-// Output:
-//   dbo.Customer (alias: c)
-//   dbo.Order (alias: o)
-
-// Columns referenced in the query
-for (const col of result.Columns) {
-  console.log(`${col.TableQualifier ? col.TableQualifier + '.' : ''}${col.ColumnName}`);
-}
-// Output:
-//   c.Name, c.Email, o.OrderDate, o.Total, o.CustomerID, c.ID, o.Status
-
-// Whether AST parsing succeeded (true) or regex fallback was used (false)
-console.log(`Used AST: ${result.UsedASTParsing}`);
 ```
 
-### Nunjucks Template SQL
+### Other Behaviour
 
-For SQL that contains Nunjucks template syntax (e.g., MemberJunction query templates), use `ParseWithTemplatePreprocessing`. This replaces template expressions with safe placeholder values before parsing:
+- **Declared child rows win by name.** A save can declare child rows through the query's `Parameters`, `Fields` and `Entities` collections, and the query and those rows save as one graph. Extraction does not add a second row with a declared row's name or delete a declared row. A declared field still gets its facts from the describe, so only its annotations are the caller's.
+- **Written as the system user.** The child rows a save derives mirror SQL the caller was allowed to change, so they are written as the system user, inside the caller's transaction when there is one. A failed child-row write is recorded on the query as an `Error` rather than failing a save whose row is already written.
+- **Tables named by a parameter.** A query that reads a table or view named by a template parameter is not described, because its columns depend on the arguments. Its declared fields are kept, and `ExtractionMessage` says why.
+- **Network providers.** A query saved through a network (client) provider leaves extraction to the server it saves to.
+
+### Legacy Pipeline
+
+`RunExtractionPipeline` in `src/custom/query-extraction/pipeline.ts`, the earlier LLM-assisted extraction, is deprecated. It is not used by saves and is not exported from the package root. Saves use `ComputeQueryExtraction` with `WriteExtractedChildRows`. The pipeline is kept until 7.0 for code that imports it directly.
+
+## Query Refresh
+
+`QueryExtractionService` re-runs extraction for saved queries on demand, without changing their SQL. It is the same extraction a save runs, under the refresh rules: a rule error is recorded on the query, never a refusal. Use it after a schema change, after an upgrade, or when a query's child rows look stale.
+
+- **`RefreshQuery(queryID, options)`** refreshes one query and returns a `QueryRefreshReport`.
+- **`RefreshQueries(filter, options)`** refreshes a selection and returns a `QueryRefreshRunReport`. The `QueryRefreshFilter` selectors combine as a union: `QueryIDs`, `QueryNames` (a bare name or a full path such as `Category/Sub/Name`), `CategoryPath` (that category and every category below it), `EntityNames` or `EntityIDs` (the queries that read those entities), or `All`. A filter with no selector refreshes nothing.
+- **`QueryRefreshOptions`**: `DryRun` works out and reports the changes without writing anything; `WithAI` queues the LLM description pass for rows still without a description (off by default); `OnProgress` is called after each query in a bulk run.
+
+Each query is refreshed in its own transaction on the caller's provider, so a failure rolls back that query only. A bulk run refreshes the queries a composition depends on before the queries that compose them; queries that compose each other in a cycle are refreshed once, after the rest, and listed in `Cycles`.
+
+Each query's report gives:
+
+- `Outcome`: `Refreshed` (rows changed, or would change in a dry run), `Unchanged`, `NotPermitted` (a bulk run skipped it), `Unavailable` (does not exist, or the caller may not refresh it), or `Failed` (nothing was written)
+- `Added`, `Updated` and `Removed`: the child rows changed, with the changed columns for an update
+- `Flagged`: authored parameters the SQL no longer uses
+- `ExtractionStatus`, `QueryColumns` (the query-row columns that change) and `Diagnostics`
 
 ```typescript
-import { SQLParser } from '@memberjunction/core-entities-server';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import {
+  FormatQueryRefreshRun,
+  IsQueryRefreshProvider,
+  QueryExtractionService,
+  QueryRefreshFilter,
+} from '@memberjunction/core-entities-server';
 
-const templateSQL = `
-  SELECT * FROM [dbo].[Customer]
-  WHERE Status = {{ status | sqlString }}
-  {% if regionId %}
-    AND RegionID = {{ regionId | sqlNumber }}
-  {% endif %}
-`;
+async function refreshSalesQueries(provider: IMetadataProvider, contextUser: UserInfo): Promise<void> {
+  if (!IsQueryRefreshProvider(provider)) {
+    throw new Error('A query refresh needs a provider that can run views');
+  }
+  const service = new QueryExtractionService({ Provider: provider, User: contextUser });
+  const filter: QueryRefreshFilter = { CategoryPath: 'Reports/Sales' };
 
-// Nunjucks syntax is replaced with placeholders, then parsed normally
-const result = SQLParser.ParseWithTemplatePreprocessing(templateSQL);
-console.log(result.Tables); // [{ TableName: 'Customer', SchemaName: 'dbo', Alias: 'Customer' }]
-```
+  // Review first: a dry run reports what would change and writes nothing
+  const preview = await service.RefreshQueries(filter, {
+    DryRun: true,
+    OnProgress: p => console.log(`${p.Processed}/${p.Total} ${p.Report.Outcome}: ${p.Report.QueryName}`),
+  });
+  for (const line of FormatQueryRefreshRun(preview, true)) console.log(line);
 
-### Cross-Referencing with Entity Metadata
-
-The parser returns raw table/column references. To resolve them to MemberJunction entities:
-
-```typescript
-import { Metadata } from '@memberjunction/core';
-import { SQLParser } from '@memberjunction/core-entities-server';
-
-const parseResult = SQLParser.Parse(viewDefinitionSQL);
-const md = new Metadata();
-
-for (const tableRef of parseResult.Tables) {
-  const entity = md.Entities.find(e =>
-    (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
-     e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase()) &&
-    e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
-  );
-
-  if (entity) {
-    console.log(`Table ${tableRef.TableName} → Entity "${entity.Name}"`);
-    // Access entity.Fields for full field metadata
+  // Then apply
+  const run = await service.RefreshQueries(filter);
+  for (const report of run.Reports) {
+    if (report.Outcome === 'Failed') console.error(report.QueryName, report.Diagnostics);
   }
 }
 ```
 
-### Return Types
+### Entry Points
 
-```typescript
-interface SQLParseResult {
-  Tables: SQLTableReference[];   // All table/view references (FROM, JOIN, subqueries, CTEs)
-  Columns: SQLColumnReference[]; // All column references (SELECT, WHERE, JOIN ON, etc.)
-  UsedASTParsing: boolean;       // true = AST parsed, false = regex fallback
-}
+Every entry point goes through `QueryExtractionService`, so the same authorization applies to all of them:
 
-interface SQLTableReference {
-  TableName: string;    // Table or view name
-  SchemaName: string;   // Schema name (defaults to 'dbo')
-  Alias: string;        // Query alias, or table name if no alias
-}
+- **`Query.RefreshExtraction` remote operation** (`QueryRefreshExtractionServerOperation`): a long-running operation that reports each query as a progress event. An API key needs the `query:refresh` scope.
+- **CLI**: `mj query refresh [--id|--name|--category|--entity|--all] [--dry-run] [--with-ai]`. After an upgrade, run `mj query refresh --all --dry-run` to review, then `mj query refresh --all`.
+- **CodeGen**: `RebindQueriesForChangedEntities` refreshes the queries that read an entity whose fields were added, dropped, or changed in type or nullability, with no description pass. The SQL is never edited: a query the change broke is recorded as an `Error` with the server's message. A query authorized by its role list (`MJ: Query Permissions`) that gains a column from a field with field permissions is recorded as a `Warning`.
 
-interface SQLColumnReference {
-  ColumnName: string;        // Column name
-  TableQualifier: string | null; // Table alias prefix (e.g., "c" in "c.Name")
-}
-```
+### Refresh Authorization
 
-### How It Works
+- The caller needs Update on `MJ: Queries` and Create, Update and Delete on `MJ: Query Fields`, `MJ: Query Parameters`, `MJ: Query Entities` and `MJ: Query Dependencies`. A dry run needs the same, since its report shows the same metadata. Run permissions on the query play no part: refreshing is an authoring act.
+- The caller must be able to read every entity the query reads, with no field denied on any of them, because the report and the written rows expose those entities' columns.
+- A refused single query reads exactly like one that does not exist (`Unavailable`). A bulk run reports a refused query as `NotPermitted`, with no reason.
+- A refresh writes the child rows as the caller, not as the system user, so each write's own permission check also applies.
 
-1. **AST Parsing** (preferred): Uses `node-sql-parser` with `TransactSQL` dialect to build an AST, then recursively walks it to extract table references from `FROM`/`JOIN` clauses, subqueries, and CTEs, plus column references from `SELECT`, `WHERE`, `GROUP BY`, `ORDER BY`, and `ON` conditions.
+`UserCanRefreshQueries(user, entities)` and `UserCanSeeQuerySources(user, entityIDs, entities)` expose these checks for callers that want to test them up front.
 
-2. **Regex Fallback**: If AST parsing fails (complex SQL, dialect edge cases), a regex-based extractor finds `FROM`/`JOIN` table references. Column references are not extracted in regex mode (the `Columns` array will be empty).
+## SQL Parser
 
-3. **Nunjucks Preprocessing**: `ParseWithTemplatePreprocessing` first renders the SQL through a Nunjucks environment with placeholder filters (`sqlString` → `'placeholder'`, `sqlNumber` → `0`, etc.), stripping template blocks while preserving the SQL structure. If Nunjucks rendering fails, it falls back to regex-based template removal.
+This package does not contain a SQL parser. SQL and template parsing live in [`@memberjunction/sql-parser`](../SQLParser/README.md), which query extraction uses. New code reads SQL with `SqlDocument.Parse(sql, dialect)` (table references, column references, output items, CTEs) and templates with `QueryTemplate.Parse(sql, dialect)` (parameters, compositions, `{% if %}` branches).
+
+The legacy `SQLParser` class in `@memberjunction/sql-parser` is deprecated but kept. Its `Parse` and extraction methods now run on the new parser, which changes some results from earlier releases:
+
+- A CTE name is not reported as a table, and neither are table-valued functions or derived tables.
+- Names inside comments and string literals are never read as tables or columns.
+- A template is read branch by branch, and the result is the union of every branch's references; a `{{query:"..."}}` composition is not a table.
+- An unqualified table gets the dialect's default schema (`dbo` on SQL Server, `public` on PostgreSQL). The dialect defaults to SQL Server when none is given.
+- `ParseWithTemplatePreprocessing` is the same as `Parse`. `UsedASTParsing` is true when every reading of the SQL parsed completely, and `Columns` is empty when it could not be read completely.
 
 ## Troubleshooting
 
 ### Entity subclass not being used
-Ensure `LoadCoreEntitiesServerSubClasses()` is called before any entity instantiation.
+Ensure the package is imported before any entity is instantiated. In a bundled server, check that it is in the class-registration manifest (`mj codegen manifest`), so the bundler does not drop the classes.
 
 ### Module loading errors
-This package uses CommonJS. Ensure your Node.js application is configured to handle CommonJS modules.
+This package is a native ES module (`"type": "module"`). Import it from ES module code (`import`), not with `require()`.
 
 ### Virtual properties not persisting
 Virtual properties are not saved to the database. Use them as convenient accessors that manage real database fields behind the scenes.

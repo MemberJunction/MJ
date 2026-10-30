@@ -9,7 +9,8 @@ import {
   BuildSentinel,
   BuildShellPeerGuidance,
   BuildWorkspaceYaml,
-  PickTurboJson, AssertAppPackageNamesUnique } from '../../../lib/dev-workspace/build.js';
+  AssertAppPackageNamesUnique } from '../../../lib/dev-workspace/build.js';
+import { ReadSentinel, RetireLegacyFiles } from '../../../lib/dev-workspace/clean.js';
 import { DetectCandidates, LoadRepo } from '../../../lib/dev-workspace/detect.js';
 import { WORKSPACE_DIR_ENV_VAR } from '../../../lib/dev-workspace/dir-flag.js';
 import { FindMemberInstallTrees, IsInsideDirectory, RemoveMemberInstallTrees } from '../../../lib/dev-workspace/member-installs.js';
@@ -26,9 +27,9 @@ function describeConflict(conflict: DevDepConflict): string {
 /**
  * CLI command: `mj dev workspace`.
  *
- * Generates the four ephemeral files that join sibling repo checkouts into a
+ * Generates the three ephemeral files that join sibling repo checkouts into a
  * single pnpm workspace at their common parent directory (pnpm-workspace.yaml,
- * .npmrc, package.json, turbo.json), then runs `pnpm install` there.
+ * .npmrc, package.json), then runs `pnpm install` there.
  *
  * Automates what was previously a hand-run setup: writing those files yourself and
  * keeping them in step as repos come and go.
@@ -58,8 +59,8 @@ export function parseAppsFlag(values: readonly string[]): Map<string, string[]> 
 
 export default class DevWorkspace extends Command {
   static description =
-    'Join sibling repo clones into one pnpm workspace: writes pnpm-workspace.yaml, .npmrc, package.json, ' +
-    'turbo.json and the .mj-dev-workspace.json sentinel at their common parent, then runs pnpm install there. ' +
+    'Join sibling repo clones into one pnpm workspace: writes pnpm-workspace.yaml, .npmrc, package.json ' +
+    '(with a `build` script for every member) and the .mj-dev-workspace.json sentinel at their common parent, then runs pnpm install there. ' +
     'Members are the parent\'s immediate subdirectories carrying an mj-app.json, a @mj-biz-apps package, or the ' +
     'MJ monorepo root name. Existing files are never overwritten without --force (which keeps a .bak of each). ' +
     'Generated files are ephemeral — never commit them; tear them down with `dev workspace clean`.';
@@ -121,9 +122,13 @@ export default class DevWorkspace extends Command {
       if (admittedApps.length > 0) this.log(chalk.green('apps admitted') + ` ${admittedApps.join(', ')}`);
       await this.handleStandaloneInstalls(parentDir, members, flags['clean-members']);
       const files = this.buildFiles(parentDir, members, flags.verbose);
+      const previousSentinel = ReadSentinel(parentDir);
       const result = WriteWorkspaceFiles(parentDir, files, flags.force);
       for (const backup of result.BackedUp) {
         this.log(chalk.yellow(`Backed up existing file to ${backup}`));
+      }
+      for (const name of RetireLegacyFiles(parentDir, previousSentinel)) {
+        this.log(chalk.yellow(`Moved ${name} from an earlier generator version to ${name}.bak — it is no longer generated`));
       }
       this.log(chalk.green(`Wrote ${result.Written.join(', ')} at ${parentDir}`));
       for (const line of BuildShellPeerGuidance()) {
@@ -137,7 +142,8 @@ export default class DevWorkspace extends Command {
       } else {
         this.log(chalk.dim('Skipped pnpm install (--no-install); run `pnpm install` at the parent when ready.'));
       }
-      this.log(chalk.dim(`\nBuild any package from the parent: pnpm --filter <package-name> run build`));
+      this.log(chalk.dim(`\nBuild every member from the parent: pnpm run build`));
+      this.log(chalk.dim(`Build one package from the parent:  pnpm --filter <package-name> run build`));
       this.log(
         chalk.dim(
           `(members whose package.json pins npm refuse in-place pnpm runs — drive those from the parent with --filter until they migrate)`
@@ -202,8 +208,6 @@ export default class DevWorkspace extends Command {
       this.warn(`devDependency conflict on ${conflict.Package}: ${describeConflict(conflict)}`);
     }
     this.log(chalk.dim(`packageManager pin ${rootPkg.Pin} from ${rootPkg.PinSource}`));
-    const turbo = PickTurboJson(members);
-    this.log(chalk.dim(`turbo.json copied from ${turbo.Source}`));
     for (const member of members) {
       this.reportMemberGlobs(member);
     }
@@ -212,7 +216,6 @@ export default class DevWorkspace extends Command {
       { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(members, rootPkg.PnpmSettings) },
       { Name: '.npmrc', Content: BuildNpmrc() },
       { Name: 'package.json', Content: rootPkg.Content },
-      { Name: 'turbo.json', Content: turbo.Content },
     ];
     const written = [...workspaceFiles.map((f) => f.Name), SENTINEL_FILE_NAME];
     return [...workspaceFiles, { Name: SENTINEL_FILE_NAME, Content: BuildSentinel(written, memberNames) }];
