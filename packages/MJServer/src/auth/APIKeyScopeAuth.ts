@@ -7,6 +7,7 @@
 import { AuthorizationError } from 'type-graphql';
 import { GetAPIKeyEngine, AuthorizationResult, AuthorizationRequest } from '@memberjunction/api-keys';
 import { UserInfo, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJAPIKeyEntity, MJAPIApplicationEntity } from '@memberjunction/core-entities';
 
 /**
@@ -96,7 +97,7 @@ export async function CheckAPIKeyScope(
     const rv = new RunView();
     const keyResult = await rv.RunView<MJAPIKeyEntity>({
         EntityName: 'MJ: API Keys',
-        ExtraFilter: `ID='${apiKeyId}'`,
+        ExtraFilter: `ID='${EscapeSQLString(apiKeyId)}'`,
         ResultType: 'entity_object'
     }, contextUser);
 
@@ -117,7 +118,7 @@ export async function CheckAPIKeyScope(
     // Get the application by name
     const appResult = await rv.RunView<MJAPIApplicationEntity>({
         EntityName: 'MJ: API Applications',
-        ExtraFilter: `Name='${applicationName}'`,
+        ExtraFilter: `Name='${EscapeSQLString(applicationName)}'`,
         ResultType: 'entity_object'
     }, contextUser);
 
@@ -224,7 +225,7 @@ export async function CheckAPIKeyScopeAndLog(
     // Get the API key
     const keyResult = await rv.RunView<MJAPIKeyEntity>({
         EntityName: 'MJ: API Keys',
-        ExtraFilter: `ID='${apiKeyId}'`,
+        ExtraFilter: `ID='${EscapeSQLString(apiKeyId)}'`,
         ResultType: 'entity_object'
     }, contextUser);
 
@@ -245,7 +246,7 @@ export async function CheckAPIKeyScopeAndLog(
     // Get the application
     const appResult = await rv.RunView<MJAPIApplicationEntity>({
         EntityName: 'MJ: API Applications',
-        ExtraFilter: `Name='${applicationName}'`,
+        ExtraFilter: `Name='${EscapeSQLString(applicationName)}'`,
         ResultType: 'entity_object'
     }, contextUser);
 

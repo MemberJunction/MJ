@@ -1095,6 +1095,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   // ── Voice session (Realtime Co-Agent) ───────────────────────────────
   /** True while a live voice session is active — drives the overlay + mic state. */
   public VoiceActive: boolean = false;
+  /** True when THIS composer instance initiated the currently-open realtime call. */
+  private startedRealtimeSession: boolean = false;
+
+  /**
+   * True when this composer owns active work or unsent attachments that would be
+   * disrupted or lost if the parent chat area unmounted this hidden instance.
+   */
+  public get HasActiveWork(): boolean {
+    return Boolean(
+      this.IsSending ||
+      this.IsProcessing ||
+      this.IsUploadingAttachments ||
+      (this.registeredCallbacks?.size ?? 0) > 0 ||
+      (this.inFlightWatches?.size ?? 0) > 0 ||
+      (this.pendingAttachments?.length ?? 0) > 0 ||
+      (this.ConversationId && this.realtimeSession?.IsActiveFor?.(this.ConversationId))
+    );
+  }
 
   /** @deprecated Use {@link VoiceActive}. */
   public get voiceActive(): boolean {
@@ -1118,6 +1136,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Reflect the live voice-session Active flag into a local field for the template.
     this.realtimeActiveSub = this.realtimeSession.Active$.subscribe(active => {
       this.VoiceActive = active;
+      if (!active) {
+        this.startedRealtimeSession = false;
+      }
     });
 
     this.ConverationManagerAgent = await this.agentService.getConversationManagerAgent();
@@ -1204,8 +1225,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.unregisterAllCallbacks();
     this.clearInFlightWatches();
     this.realtimeActiveSub?.unsubscribe();
-    // If the user navigates away mid-call, tear the session down.
-    if (this.realtimeSession.IsActive) {
+    // Only end a live voice session if THIS composer owns it — cached hidden composers
+    // for older conversations are unmounted on LRU eviction and must not hang up a
+    // minimized call running on another conversation (or one minted from the empty state).
+    const ownsActiveCall = this.ConversationId
+      ? Boolean(this.realtimeSession?.IsActiveFor?.(this.ConversationId))
+      : Boolean(
+          this.startedRealtimeSession &&
+          this.realtimeSession?.IsActive &&
+          !this.realtimeSession.SessionCreatedConversationId
+        );
+    if (ownsActiveCall) {
       void this.realtimeSession.EndRealtimeSession();
     }
   }
@@ -1593,6 +1623,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     recordingConsent?: boolean | null
   ): Promise<void> {
     try {
+      this.startedRealtimeSession = true;
       await this.realtimeSession.StartRealtimeSession(
         agentId,
         this.ConversationId,
@@ -1613,6 +1644,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         { ...ConversationCallStartOptions(), ConversationBranchID: this.TargetBranchID }
       );
     } catch (error) {
+      this.startedRealtimeSession = false;
       console.error('Failed to start voice session:', error);
       this.toastService.error('Could not start the voice session.');
     }
@@ -3395,8 +3427,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.showDelegateReply(first.reply, userMessage);
         return;
       }
-      // A post-ACK disconnect means the first run may still be executing — do not start a second run.
-      if (agentFailureDisposition(first.result).status === 'In-Progress') {
+      // Only a genuine failure earns a retry. A post-ACK disconnect means the first run may still
+      // be executing on this detail, and an Awaiting-Input run is parked on the user — re-invoking
+      // in either case starts a second run against a live one, and for the awaiting run it throws
+      // away the question the agent is waiting to have answered.
+      if (agentFailureDisposition(first.result).status !== 'Error') {
         await this.applyAgentFailureToDetail(first.reply, userMessage, agentName, first.result);
         return;
       }
@@ -3973,6 +4008,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * follows the row until the server writes a terminal status. A placeholder the server never
    * acknowledged shows the failure on screen only.
    *
+   * A run in AwaitingFeedback/Paused is not a failure at all — the agent asked this user a
+   * question, or is parked on a workflow. It only reaches here because the envelope says
+   * `success: false`, and because such a run usually carries no ErrorMessage it used to render as
+   * "❌ failed — Unknown error": a verdict the server never returned. That branch surfaces the
+   * agent's question and completes the bubble instead.
+   *
    * Always completes the user message — the user turn finished regardless of what the agent is doing.
    */
   private async applyAgentFailureToDetail(
@@ -3983,6 +4024,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     failedVerb = 'failed',
   ): Promise<void> {
     const disposition = agentFailureDisposition(result);
+    if (disposition.status === 'Awaiting-Input') {
+      // Complete, not Error: the turn is over (the timer must stop) and the agent's question is
+      // the reply. `result` is passed through so any ResponseForm the agent attached to its
+      // question still renders. The user's answer resumes the run, which re-enters
+      // AgentStateService's active set as Running.
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        disposition.message || `**${agentName}** needs more information to continue — please reply with details.`,
+        'Complete',
+        result ?? undefined,
+      );
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      return;
+    }
     if (disposition.status === 'In-Progress' && agentResponseMessage.IsSaved) {
       await agentResponseMessage.Load(agentResponseMessage.ID);
       if (agentResponseMessage.Status === 'In-Progress') {

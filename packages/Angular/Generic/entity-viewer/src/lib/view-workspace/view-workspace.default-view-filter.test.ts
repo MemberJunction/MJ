@@ -69,8 +69,8 @@ function makeEntity(): EntityInfo {
     Name: 'Accounts',
     DisplayNameOrName: 'Accounts',
     Fields: [
-      { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', DefaultInView: true, DefaultColumnWidth: 200 },
-      { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', DefaultInView: true, DefaultColumnWidth: 120 },
+      { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', DefaultInView: true, DefaultColumnWidth: 200, Type: 'nvarchar' },
+      { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', DefaultInView: true, DefaultColumnWidth: 120, Type: 'nvarchar' },
     ],
   } as unknown as EntityInfo;
 }
