@@ -478,7 +478,7 @@ export class ContentUploadIngestor {
         contextUser: UserInfo,
     ): Promise<string | null> {
         const kh = KnowledgeHubMetadataEngine.Instance;
-        const cachedType = kh.GetContentSourceTypeByID?.(contentSourceTypeID);
+        const cachedType = kh.GetContentSourceTypeByID(contentSourceTypeID);
         if (cachedType?.DriverClass) {
             return cachedType.DriverClass;
         }
@@ -538,7 +538,7 @@ export class ContentUploadIngestor {
             return;
         }
         const kh = KnowledgeHubMetadataEngine.Instance;
-        const cachedDoc = kh.GetEntityDocumentByID?.(source.EntityDocumentID);
+        const cachedDoc = kh.GetEntityDocumentByID(source.EntityDocumentID);
         let docEntityID: string | null = cachedDoc?.EntityID ?? null;
         if (!docEntityID) {
             try {
@@ -627,7 +627,7 @@ export class ContentUploadIngestor {
         }
         const chunks = await this.collectLiveChunks(itemIDs, provider, contextUser);
         for (const chunk of chunks) {
-            if (chunk.EmbeddingStatus && chunk.EmbeddingStatus !== 'Complete' && chunk.EmbeddingStatus !== 'Skipped' && chunk.EmbeddingStatus !== 'Pending' && chunk.EmbeddingStatus !== 'MetadataOnly') {
+            if (chunk.EmbeddingStatus === 'Failed') {
                 const chunkEntity = await provider.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
                 if (await chunkEntity.InnerLoad(CompositeKey.FromID(chunk.ID))) { // first-pk-ok: single PK ID
                     chunkEntity.EmbeddingStatus = 'Pending';
@@ -669,7 +669,8 @@ export class ContentUploadIngestor {
     }
 
     private isRetryableStatus(status: string | null | undefined): boolean {
-        return status !== null && status !== undefined && status !== 'Complete' && status !== 'Skipped' && status !== 'Pending';
+        // Only 'Failed': resetting 'Processing' could start a second run beside one still in flight.
+        return status === 'Failed';
     }
 
     private isStagePending(status: string | null | undefined): boolean {
@@ -981,25 +982,22 @@ export class ContentUploadIngestor {
         if (rootItemIDs.length === 0) {
             return [];
         }
-        try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<{ ID: string }>(
-                {
-                    EntityName: 'MJ: Content Items',
-                    ExtraFilter: `((${WhereAnyOf('RootParentID', rootItemIDs)}) OR (${WhereAnyOf('ParentID', rootItemIDs)})) AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                },
-                contextUser,
-            );
-            if (!result.Success) {
-                return [];
-            }
-            const rootSet = new UUIDSet(rootItemIDs);
-            return result.Results.map((r) => r.ID).filter((id) => !rootSet.Has(id));
-        } catch {
-            return [];
+        // Throws rather than returning [] so a failed lookup never leaves descendants live and searchable.
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `((${WhereAnyOf('RootParentID', rootItemIDs)}) OR (${WhereAnyOf('ParentID', rootItemIDs)})) AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!result.Success) {
+            throw new Error(`Could not query descendants of Content Item(s) [${rootItemIDs.join(', ')}]: ${result.ErrorMessage}`);
         }
+        const rootSet = new UUIDSet(rootItemIDs);
+        return result.Results.map((r) => r.ID).filter((id) => !rootSet.Has(id));
     }
 
     private async markItemsAndChunksForDeletion(
@@ -1033,21 +1031,20 @@ export class ContentUploadIngestor {
         provider: IMetadataProvider,
         contextUser: UserInfo,
     ): Promise<string[]> {
-        try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const chunks = await rv.RunView<{ ID: string }>(
-                {
-                    EntityName: 'MJ: Content Item Chunks',
-                    ExtraFilter: `(${WhereAnyOf('ContentItemID', itemIDs)}) AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                },
-                contextUser,
-            );
-            return chunks.Success ? chunks.Results.map((c) => c.ID) : [];
-        } catch {
-            return [];
+        const rv = RunView.FromMetadataProvider(provider);
+        const chunks = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter: `(${WhereAnyOf('ContentItemID', itemIDs)}) AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!chunks.Success) {
+            throw new Error(`Could not query chunks of Content Item(s) [${itemIDs.join(', ')}]: ${chunks.ErrorMessage}`);
         }
+        return chunks.Results.map((c) => c.ID);
     }
 
     private async runDeleteNow(
