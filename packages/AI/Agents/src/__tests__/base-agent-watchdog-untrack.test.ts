@@ -93,7 +93,7 @@ describe('BaseAgent untracks the run from the watchdog on every terminal path', 
         { step: 'Failed', parked: false, status: 'Failed' },
         { step: 'Chat', parked: false, status: 'AwaitingFeedback' },
         { step: 'Success', parked: true, status: 'Paused' },
-    ] satisfies Array<{ step: BaseAgentNextStep['step']; parked: boolean; status: string }>)('finalizeAgentRun leaving the run $status untracks it and stops the watchdog timers', async ({ step, parked, status }) => {
+    ] satisfies Array<{ step: BaseAgentNextStep['step']; parked: boolean; status: string }>)('finalizeAgentRun leaving the run $status untracks it and stops the heartbeat', async ({ step, parked, status }) => {
         const { internals, run } = trackedAgent();
         internals._awaitingWorkflowTaskID = parked ? 'dddddddd-dddd-dddd-dddd-dddddddddddd' : null;
 
@@ -104,7 +104,6 @@ describe('BaseAgent untracks the run from the watchdog on every terminal path', 
         expect(run.Save).toHaveBeenCalledTimes(1);
         expect(AgentRunWatchdog.Instance.TrackedCount).toBe(0);
         expect(AgentRunWatchdog.Instance.HasActiveRunTimers).toBe(false);
-        expect(AgentRunWatchdog.Instance.HasSweepTimer).toBe(false);
     });
 
     it('createFailureResult leaving the run Failed untracks it', async () => {
@@ -127,10 +126,11 @@ describe('BaseAgent untracks the run from the watchdog on every terminal path', 
         await expect(internals.endRun({} as ExecuteAgentParams)).rejects.toThrow('sandbox teardown failed');
 
         expect(AgentRunWatchdog.Instance.TrackedCount).toBe(0);
-        expect(AgentRunWatchdog.Instance.HasSweepTimer).toBe(false);
+        expect(AgentRunWatchdog.Instance.HasActiveRunTimers).toBe(false);
     });
 
-    it('once every run has finished, the watchdog issues no further statements', async () => {
+    it('once every run has finished, the watchdog stops heart-beating it (and, with the sweep off, issues nothing)', async () => {
+        AgentRunWatchdog.Instance.Configure({ sweepIntervalMs: 0 });
         const { internals } = trackedAgent();
         await internals.finalizeAgentRun({ step: 'Success', terminate: true });
         mockProviderShape.ExecuteSQL.mockClear();

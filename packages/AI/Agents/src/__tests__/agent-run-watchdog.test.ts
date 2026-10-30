@@ -387,9 +387,26 @@ describe('AgentRunWatchdog idle lifecycle', () => {
         return p;
     }
 
-    it('issues no database statements at all once the last run is untracked', async () => {
+    it('by default keeps sweeping after the last run leaves (other instances\' orphans), with no heartbeat', async () => {
         const p = makeProvider();
         const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser, new AbortController());
+        wd.Untrack(RUN_A);
+        p.ExecuteSQL.mockClear();
+
+        await vi.advanceTimersByTimeAsync(HOUR_MS);
+
+        expect(sweeps(p)).toBe(12); // every 5 minutes, under the last tracked run's provider
+        expect(heartbeats(p)).toBe(0);
+        expect(p.ExecuteSQL.mock.calls.every(c => c[3] === mockUser)).toBe(true);
+        expect(wd.HasActiveRunTimers).toBe(false);
+        expect(wd.HasSweepTimer).toBe(true);
+    });
+
+    it('with sweepIntervalMs 0, issues no database statements at all once the last run is untracked', async () => {
+        const p = makeProvider();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Configure({ sweepIntervalMs: 0 });
         wd.Track(RUN_A, asProvider(p), mockUser, new AbortController());
         wd.Untrack(RUN_A);
         p.ExecuteSQL.mockClear();
@@ -403,16 +420,23 @@ describe('AgentRunWatchdog idle lifecycle', () => {
         expect(wd.HasSweepTimer).toBe(false);
     });
 
-    it('stops the sweep with the last run and starts it again when a run is tracked (including the same run resuming)', async () => {
+    it('a process that never tracked a run never sweeps on a timer', async () => {
+        const wd = AgentRunWatchdog.Instance;
+        wd.Configure({ heartbeatIntervalMs: 10_000 });
+        await vi.advanceTimersByTimeAsync(HOUR_MS);
+        expect(wd.HasSweepTimer).toBe(false);
+        expect(wd.HasActiveRunTimers).toBe(false);
+    });
+
+    it('stops the heartbeat with the last run and starts it again when a run is tracked (including the same run resuming)', async () => {
         const p = providerWithRunning([RUN_A]);
         const wd = AgentRunWatchdog.Instance;
         wd.Track(RUN_A, asProvider(p), mockUser);
-        expect(wd.HasSweepTimer).toBe(true);
+        expect(wd.HasActiveRunTimers).toBe(true);
         wd.Untrack(RUN_A);
-        expect(wd.HasSweepTimer).toBe(false);
+        expect(wd.HasActiveRunTimers).toBe(false);
 
         wd.Track(RUN_A, asProvider(p), mockUser);
-        expect(wd.HasSweepTimer).toBe(true);
         expect(wd.HasActiveRunTimers).toBe(true);
         await vi.advanceTimersByTimeAsync(5 * 60_000);
 
@@ -421,7 +445,7 @@ describe('AgentRunWatchdog idle lifecycle', () => {
         expect(wd.TrackedCount).toBe(1);
     });
 
-    it('a run the prune finds finished stops every timer, so nothing beats or sweeps afterwards', async () => {
+    it('a run the prune finds finished stops the heartbeat, so nothing beats afterwards', async () => {
         const p = providerWithRunning([]); // the run finished, but its Untrack was missed
         const wd = AgentRunWatchdog.Instance;
         wd.Track(RUN_A, asProvider(p), mockUser);
@@ -429,14 +453,40 @@ describe('AgentRunWatchdog idle lifecycle', () => {
         await vi.advanceTimersByTimeAsync(5 * 60_000); // first sweep tick prunes it
         expect(wd.TrackedCount).toBe(0);
         const beatsAtPrune = heartbeats(p);
-        const sweepsAtPrune = sweeps(p);
 
         await vi.advanceTimersByTimeAsync(HOUR_MS);
 
         expect(heartbeats(p)).toBe(beatsAtPrune);
-        expect(sweeps(p)).toBe(sweepsAtPrune);
-        expect(wd.HasSweepTimer).toBe(false);
         expect(wd.HasActiveRunTimers).toBe(false);
+    });
+
+    it('Configure on an idle watchdog restarts only the sweep, never the heartbeat', async () => {
+        const p = makeProvider();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser);
+        wd.Untrack(RUN_A);
+        wd.Configure({ sweepIntervalMs: 60_000 });
+        p.ExecuteSQL.mockClear();
+
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+        expect(sweeps(p)).toBe(5);
+        expect(heartbeats(p)).toBe(0);
+        expect(wd.HasActiveRunTimers).toBe(false);
+    });
+
+    it('Configure with sweepIntervalMs 0 on an idle watchdog stops the sweep', async () => {
+        const p = makeProvider();
+        const wd = AgentRunWatchdog.Instance;
+        wd.Track(RUN_A, asProvider(p), mockUser);
+        wd.Untrack(RUN_A);
+        wd.Configure({ sweepIntervalMs: 0 });
+        p.ExecuteSQL.mockClear();
+
+        await vi.advanceTimersByTimeAsync(HOUR_MS);
+
+        expect(p.ExecuteSQL).not.toHaveBeenCalled();
+        expect(wd.HasSweepTimer).toBe(false);
     });
 
     it('sweepIntervalMs 0 never sweeps, and the heartbeat prunes a finished run within one beat', async () => {

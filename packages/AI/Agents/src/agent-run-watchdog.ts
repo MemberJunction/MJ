@@ -16,9 +16,11 @@ export interface AgentRunWatchdogConfig {
     heartbeatIntervalMs: number;
     /**
      * How often this process re-scans for orphaned runs (mid-life, without waiting for a restart).
-     * The timer runs only while this process is guarding at least one run. `0` turns the periodic
-     * sweep off: the host's one-time startup sweep ({@link AgentRunWatchdog.SweepOrphanedRuns})
-     * still closes runs orphaned by a crash, on the next restart.
+     * Once this process has tracked a run, the sweep keeps running for the life of the process, even
+     * with nothing tracked, so it also closes runs that other, crashed instances left `Running`.
+     * `0` turns the periodic sweep off (for a database that should be able to pause when idle): the
+     * host's one-time startup sweep ({@link AgentRunWatchdog.SweepOrphanedRuns}) still closes runs
+     * orphaned by a crash, on the next restart, and the tracked-set prune moves to the heartbeat.
      */
     sweepIntervalMs: number;
     /** A Running run whose heartbeat is older than this (or NULL with an older StartedAt) is force-failed. */
@@ -94,9 +96,11 @@ const SP_CANCEL = 'spCancelAIAgentRun';
  *    the row is the channel, the replica that owns the run is the one that reacts, with no
  *    cross-process messaging.
  *
- * Every timer runs only while this process is guarding at least one run: the last run leaving
- * the tracked set stops them all, and the next {@link Track} starts them again. An idle process
- * therefore issues no periodic statements at all, which lets a serverless database pause.
+ * The heartbeat and the stop-relay poll run only while this process is guarding at least one run:
+ * the last run leaving stops them, and the next {@link Track} starts them again. The periodic
+ * sweep, once started, keeps running so it can close other instances' orphans; set
+ * {@link AgentRunWatchdogConfig.sweepIntervalMs} to `0` and an idle process issues no periodic
+ * statements at all, which lets a serverless database pause.
  *
  * Every proc filters `Status='Running'` only — `Paused` and `AwaitingFeedback` are
  * legitimately-not-progressing states and are never touched. The watchdog accesses the DB only
@@ -125,6 +129,9 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     private _sweepTimer: ReturnType<typeof setInterval> | null = null;
     private _cancellationPollTimer: ReturnType<typeof setInterval> | null = null;
     private _cancellationPollInFlight = false;
+    /** The provider and user of the most recently tracked run: the periodic sweep's fallback once nothing is tracked. */
+    private _lastProvider: DatabaseProviderBase | null = null;
+    private _lastContextUser: UserInfo | null = null;
     private _registered = false;
 
     protected constructor() {
@@ -165,6 +172,8 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         }
         this._config = next;
         if (this.HasActiveRunTimers || this.HasSweepTimer) {
+            // Timers only exist once a run was tracked, so restarting them here never starts a
+            // sweep in a process that has not run an agent; the heartbeat restarts only if runs remain.
             this.stopTimers();
             this.ensureStarted();
         }
@@ -185,6 +194,8 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             return;
         }
         const key = runID.toLowerCase();
+        this._lastProvider = provider;
+        this._lastContextUser = contextUser;
         this._trackedRuns.set(key, { provider, contextUser });
         if (abortController) {
             this._abortControllers.set(key, abortController);
@@ -194,7 +205,8 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * Stop guarding a run. The owner calls this as soon as the run leaves `Running` (any terminal
-     * or parked state), so it is never heart-beaten again; the last run leaving stops every timer.
+     * or parked state), so it is never heart-beaten again; the last run leaving stops the heartbeat
+     * and the stop-relay poll.
      * A missed call is healed by the tracked-set prune, which drops runs whose row is no longer
      * `Running`. That prune is a safety net, not the normal path.
      */
@@ -317,7 +329,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             ShutdownRegistry.Instance.Register(this);
             this._registered = true;
         }
-        if (!this._heartbeatTimer) {
+        if (!this._heartbeatTimer && this._trackedRuns.size > 0) {
             this._heartbeatTimer = setInterval(() => void this.heartbeat(), this._config.heartbeatIntervalMs);
             // Don't keep the event loop alive solely for the watchdog.
             this._heartbeatTimer.unref?.();
@@ -330,7 +342,8 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             // scheduled jobs off, exactly where the safety net still needs to work. A Scheduled Job
             // could be added on top later as an observability/audit layer (it would call the same
             // idempotent SweepOrphanedRuns), but it must not be the only thing that runs it.
-            // Like the heartbeat, it runs only while this process guards a run (see stopIdleTimers).
+            // Unlike the heartbeat, it keeps running once nothing is tracked (other instances'
+            // orphans still need closing); sweepIntervalMs = 0 is the opt-out.
             this._sweepTimer = setInterval(() => void this.periodicSweep(), this._config.sweepIntervalMs);
             this._sweepTimer.unref?.();
         }
@@ -342,16 +355,17 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * Stop the timers that have nothing left to do: the cancellation poll once no run registered a
-     * controller, and the heartbeat and periodic sweep once no run is tracked, so an idle process
-     * issues no periodic database statements. Calling `Track()` restarts them.
+     * controller, and the heartbeat once no run is tracked. Calling `Track()` restarts them. The
+     * periodic sweep is left running (see {@link AgentRunWatchdogConfig.sweepIntervalMs}).
      */
     private stopIdleTimers(): void {
         if (this._abortControllers.size === 0 && this._cancellationPollTimer) {
             clearInterval(this._cancellationPollTimer);
             this._cancellationPollTimer = null;
         }
-        if (this._trackedRuns.size === 0) {
-            this.stopTimers();
+        if (this._trackedRuns.size === 0 && this._heartbeatTimer) {
+            clearInterval(this._heartbeatTimer);
+            this._heartbeatTimer = null;
         }
     }
 
@@ -398,17 +412,18 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     }
 
     /**
-     * Periodic tick: force-fail orphans, then prune any terminal runs out of the tracked set. Only
-     * scheduled while runs are tracked; a tick that finds none stops the timers instead of sweeping.
+     * Periodic tick: force-fail orphans, then prune any terminal runs out of the tracked set. With
+     * nothing tracked it still sweeps, under the last tracked run's provider and user, so runs that
+     * other, crashed instances left `Running` are closed without waiting for their restart.
      */
     private async periodicSweep(): Promise<void> {
         const groups = this.groupRunsByProvider(this.trackedIds());
-        if (groups.length === 0) {
-            this.stopIdleTimers();
-            return;
-        }
-        for (const group of groups) {
-            await AgentRunWatchdog.SweepOrphanedRuns(group.provider, group.contextUser, this._config);
+        if (groups.length > 0) {
+            for (const group of groups) {
+                await AgentRunWatchdog.SweepOrphanedRuns(group.provider, group.contextUser, this._config);
+            }
+        } else if (this._lastProvider && this._lastContextUser) {
+            await AgentRunWatchdog.SweepOrphanedRuns(this._lastProvider, this._lastContextUser, this._config);
         }
         await this.pruneTerminalRuns();
     }
