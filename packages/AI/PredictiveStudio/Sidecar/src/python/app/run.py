@@ -172,7 +172,8 @@ def _explaining_columns(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedL
         kept = [c for c in columns if c.source_column != src]
         if not encoding.source_map(kept):
             continue   # no feature column would remain: removing the only source explains nothing
-        trial = TR.cross_validate(req.protocol, snap, kept, enc, dev, spec, req.threads, clock, out)
+        trial = TR.cross_validate(req.protocol, snap, kept, enc, dev, spec, req.threads, clock, out.folds,
+                                  out.validated)
         if not AU.beats_reference(y_val, trial.oof, ref_val)[0]:
             flags.append(DropColumnFlag(kind="drop-column", sourceColumn=src,
                                         scoreDrop=float(np.mean(trial.row_loss)) - base_loss))

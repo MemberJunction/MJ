@@ -6,7 +6,8 @@ finalist by the one-standard-error rule (selection.py), and refits it on all dev
 locked-holdout row: the caller takes the development index from the row manifest before anything is fitted, and
 `_assert_dev_only` re-checks that index and every fold (fold positions index the development rows and are mapped back
 to snapshot rows through it). The holdout is scored later, once, by the evaluation stage. `cross_validate` re-scores one
-candidate on a finished selection's folds with another column set (the drop-column trials of the implausible-gain rule).
+candidate on given folds with no refit: a finished selection's folds with another column set (the drop-column trials of
+the implausible-gain rule), or random-row folds over the same development rows (the evaluation's split contrast).
 
 Class rebalancing (`resampling: in-fold`) is applied to each fit's training rows only, after the fold split, so a
 validation or holdout row is never duplicated, dropped or reweighted.
@@ -357,9 +358,10 @@ def _development_view(snap: Snapshot, enc: EncodedLabel, dev: IntArr) -> tuple[p
 
 def cross_validate(protocol: EvaluationProtocol, snap: Snapshot, columns: Sequence[encoding.ColumnSpec],
                    enc: EncodedLabel, dev: IntArr, spec: CandidateSpec, threads: int, clock: RunClock,
-                   outcome: SelectionOutcome) -> CandidateCV:
-    """One candidate on a finished selection's folds and validated rows, with no finalist refit: a trial with another
-    column set whose out-of-fold predictions line up row for row with `outcome`'s.
+                   folds: Sequence[F.Fold], validated: IntArr) -> CandidateCV:
+    """One candidate on the given folds of the development rows, with no finalist refit; its out-of-fold predictions
+    line up row for row with `validated` (the development positions the folds validate). Called with a finished
+    selection's folds for a trial with another column set, or with another fold design over the same rows.
 
     Raises:
         TrainerFailure: Stage `inner-cv` when the candidate cannot be fitted; `timeout`/`budget-exceeded` from the
@@ -367,8 +369,7 @@ def cross_validate(protocol: EvaluationProtocol, snap: Snapshot, columns: Sequen
     """
     primary = scores.primary_score(protocol.primaryScore.metric, enc.tweedie_power)
     X, dev_enc = _development_view(snap, enc, dev)
-    return _cross_validate(spec, columns, X, dev_enc, outcome.folds, outcome.validated, primary, protocol, threads,
-                           clock)
+    return _cross_validate(spec, columns, X, dev_enc, folds, validated, primary, protocol, threads, clock)
 
 
 def _cross_validate(spec: CandidateSpec, columns: Sequence[encoding.ColumnSpec], X: pd.DataFrame,

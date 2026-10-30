@@ -23,7 +23,6 @@ because a declared check that cannot run must not read as a check that passed.
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 import math
 from dataclasses import dataclass
@@ -625,8 +624,8 @@ def split_contrast(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: 
     # The trainer's one cross-validation loop, run on the random-row folds: every development row is validated once,
     # so its out-of-fold predictions are in development-row order.
     try:
-        random_cv = TR.cross_validate(req.protocol, snap, columns, enc, dev, spec, req.threads, clock,
-                                      dataclasses.replace(out, folds=random_folds, validated=every_row))
+        random_cv = TR.cross_validate(req.protocol, snap, columns, enc, dev, spec, req.threads, clock, random_folds,
+                                      every_row)
     except TrainerFailure as exc:
         if exc.stage != "inner-cv":
             raise
