@@ -285,7 +285,7 @@ describe('discovery can need credentials too', () => {
             ContentSourceID: 'SRC-UPLOAD',
             URL: '',
             DriverClass: 'AutotagUpload',
-            TypeConfiguration: { IsPushOnly: true },
+            TypeConfiguration: {},
             Configuration: {},
             Settings: {},
             Parameters: {},

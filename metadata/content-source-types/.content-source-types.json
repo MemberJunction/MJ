@@ -195,7 +195,6 @@
       "Description": "User-uploaded files pushed into the content pipeline on demand",
       "DriverClass": "AutotagUpload",
       "Configuration": {
-        "IsPushOnly": true,
         "RequiredFields": []
       }
     },

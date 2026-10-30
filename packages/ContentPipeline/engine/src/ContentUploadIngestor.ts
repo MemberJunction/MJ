@@ -68,9 +68,9 @@ export interface ContentUploadIngestRequest {
      */
     Origin?: ContentUploadOrigin | null;
     /**
-     * When true, runs `Extract`, `Tag`, `Segment`, and `Embed` immediately for this item through
-     * `RecordProcessExecutor` with a `records` scope. Stage failures are logged and leave the item
-     * `Failed` without throwing past the caller.
+     * When true, runs `Extract`, `Segment`, `Embed`, and `Tag` immediately for this item through
+     * `RecordProcessExecutor` with a `records` scope so chunks become searchable before LLM tagging runs.
+     * Stage failures are logged and leave the item `Failed` without throwing past the caller.
      */
     RunNow?: boolean;
     /** Server-side user context. */
@@ -377,15 +377,6 @@ export class ContentUploadIngestor {
             return;
         }
 
-        await this.executeProcessStage(
-            CONTENT_PIPELINE_TAG_PROCESS_ID,
-            'Tag',
-            targetItemIDs,
-            'TaggingStatus',
-            contextUser,
-            provider,
-        );
-
         const segmentOk = await this.executeProcessStage(
             CONTENT_PIPELINE_SEGMENT_PROCESS_ID,
             'Segment',
@@ -394,20 +385,25 @@ export class ContentUploadIngestor {
             contextUser,
             provider,
         );
-        if (!segmentOk) {
-            return;
-        }
-
-        const chunkIDs = await this.collectLiveChunkIDs(targetItemIDs, provider, contextUser);
-        if (chunkIDs.length === 0) {
-            return;
+        if (segmentOk) {
+            const chunkIDs = await this.collectLiveChunkIDs(targetItemIDs, provider, contextUser);
+            if (chunkIDs.length > 0) {
+                await this.executeProcessStage(
+                    CONTENT_PIPELINE_EMBED_PROCESS_ID,
+                    'Embed',
+                    chunkIDs,
+                    null,
+                    contextUser,
+                    provider,
+                );
+            }
         }
 
         await this.executeProcessStage(
-            CONTENT_PIPELINE_EMBED_PROCESS_ID,
-            'Embed',
-            chunkIDs,
-            null,
+            CONTENT_PIPELINE_TAG_PROCESS_ID,
+            'Tag',
+            targetItemIDs,
+            'TaggingStatus',
             contextUser,
             provider,
         );

@@ -465,9 +465,9 @@ describe('ContentUploadIngestor', () => {
         expect(result.ContentItemID).toBe('ITEM-UPLOAD-1');
         expect(processCalls).toEqual([
             { processID: CONTENT_PIPELINE_EXTRACT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
-            { processID: CONTENT_PIPELINE_TAG_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
             { processID: CONTENT_PIPELINE_SEGMENT_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
             { processID: CONTENT_PIPELINE_EMBED_PROCESS_ID, recordIDs: ['CHK-1', 'CHK-2'] },
+            { processID: CONTENT_PIPELINE_TAG_PROCESS_ID, recordIDs: ['ITEM-UPLOAD-1'] },
         ]);
 
         // If a stage throws unexpectedly, Ingest logs, marks the item status Failed, and does not throw past the caller.
@@ -540,8 +540,8 @@ describe('ContentUploadIngestor', () => {
             Settings: {},
             DriverClass: 'AutotagUpload',
             Parameters: {},
-            Configuration: { IsPushOnly: true },
-            TypeConfiguration: { IsPushOnly: true },
+            Configuration: {},
+            TypeConfiguration: {},
             Problems: [],
             IsValid: true,
         } as never);

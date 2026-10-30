@@ -157,17 +157,14 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
     }
 
     /**
-     * True when `FileID` points to a caller-uploaded file rather than a durable copy created by `ExtractStage`:
-     * - the item's locator uses the `upload://` scheme, or
-     * - `Pipeline.callerOwnedFile` is set on the working record, or
-     * - the item belongs to a push-only (`Upload`) source or a source without `ObjectKeyTemplate` configured.
+     * True when `FileID` points to a caller-uploaded file rather than a durable copy created by `ExtractStage`
+     * (or when source ownership cannot be verified, failing safe to keep the file):
+     * 1. The item's locator uses the `upload://` scheme (set by `ContentUploadIngestor.Ingest`), or
+     * 2. The item's Content Source uses a push-only driver (`driver.IsPushOnly === true`).
      */
     private async isCallerOwnedFile(record: WorkingRecord, context: StageContext): Promise<boolean> {
         const url = record.Identity.EphemeralID;
         if (typeof url === 'string' && url.startsWith('upload://')) {
-            return true;
-        }
-        if (record.GetExtension<boolean>('Pipeline', 'callerOwnedFile') === true) {
             return true;
         }
         const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
@@ -177,26 +174,26 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         try {
             const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
             const resolved = await resolver.Resolve(contentSourceID, context.ContextUser);
-            if (!resolved.IsValid) {
-                return false;
-            }
-            if (resolved.TypeConfiguration.IsPushOnly === true) {
+            if (!resolved.IsValid || !resolved.DriverClass) {
+                const detail = resolved.Problems.map((p) => p.Message).join('; ') || 'missing DriverClass';
+                LogError(
+                    `DeleteStage: could not verify ownership of FileID on '${record.Identity.Key}' (ContentSource '${contentSourceID}': ${detail}); keeping the file.`,
+                );
                 return true;
             }
-            if (resolved.DriverClass) {
-                const driver = MJGlobal.Instance.ClassFactory.TryCreateInstance<AutotagBase>(AutotagBase, resolved.DriverClass);
-                if (driver.Instance?.IsPushOnly === true) {
-                    return true;
-                }
+            const driver = MJGlobal.Instance.ClassFactory.TryCreateInstance<AutotagBase>(AutotagBase, resolved.DriverClass);
+            if (!driver.Resolved || !driver.Instance) {
+                LogError(
+                    `DeleteStage: driver '${resolved.DriverClass}' for ContentSource '${contentSourceID}' is not registered; keeping the file on '${record.Identity.Key}'.`,
+                );
+                return true;
             }
-            const objectKeyTemplate =
-                (context.Configuration.ObjectKeyTemplate as string | undefined) ??
-                (resolved.Configuration.ObjectKeyTemplate as string | undefined) ??
-                (resolved.Settings.ObjectKeyTemplate as string | undefined) ??
-                (resolved.TypeConfiguration.ObjectKeyTemplate as string | undefined);
-            return !objectKeyTemplate;
-        } catch {
-            return false;
+            return driver.Instance.IsPushOnly === true;
+        } catch (error) {
+            LogError(
+                `DeleteStage: failed to resolve ContentSource '${contentSourceID}' while checking file ownership for '${record.Identity.Key}' (${error instanceof Error ? error.message : String(error)}); keeping the file.`,
+            );
+            return true;
         }
     }
 

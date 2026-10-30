@@ -12,6 +12,7 @@ import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging
 import { FileStorageEngine } from '@memberjunction/storage';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { DeleteContentItemStage, DeleteStage } from '../stages/DeleteStage.js';
+import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
 import type { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
 import type { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
@@ -374,6 +375,137 @@ describe('DeleteContentItemStage — dependent marking and dry-run isolation', (
         expect(resolveSpy).not.toHaveBeenCalled();
         expect(events).toEqual([]);
     });
+
+    it('leaves the MJ: Files row and storage object in place when ContentSourceConfigurationResolver fails or throws (U1-B1)', async () => {
+        const events: string[] = [];
+        const resolveFileSpy = vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'uploads/user-doc.pdf',
+            Driver: {
+                DeleteObject: async () => {
+                    events.push('Driver.DeleteObject');
+                },
+            },
+        } as never);
+
+        const makeItemWithSource = (id: string) => {
+            const item = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/doc.pdf', id));
+            item.SetExtension('Pipeline', 'fileID', 'FILE-USER-2');
+            item.SetExtension('Pipeline', 'contentSourceID', 'SRC-BROKEN');
+            return item;
+        };
+
+        const provider = {
+            EntityByName: () => undefined,
+            RunViews: async () => [
+                { Success: true, Results: [] },
+                { Success: true, Results: [] },
+            ],
+            GetEntityObject: async () => {
+                events.push('GetEntityObject');
+                return {};
+            },
+        } as never;
+
+        // Case 1: Resolver returns IsValid: false
+        vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValueOnce({
+            ContentSourceID: 'SRC-BROKEN',
+            URL: '',
+            DriverClass: null,
+            TypeConfiguration: {},
+            Configuration: {},
+            Settings: {},
+            Parameters: {},
+            Confidence: {},
+            Problems: [{ Key: 'ContentSource', Message: 'Content Source row not found' }],
+            IsValid: false,
+        } as never);
+
+        const invalidOutcome = await new DeleteContentItemStage().Run(makeItemWithSource('ITEM-B1-INVALID'), {
+            ...contextWith(),
+            Provider: provider,
+        });
+        expect(invalidOutcome.Status).toBe('Complete');
+        expect(resolveFileSpy).not.toHaveBeenCalled();
+        expect(events).toEqual([]);
+
+        // Case 2: Resolver throws
+        vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockRejectedValueOnce(
+            new Error('metadata database unreachable'),
+        );
+
+        const thrownOutcome = await new DeleteContentItemStage().Run(makeItemWithSource('ITEM-B1-THROW'), {
+            ...contextWith(),
+            Provider: provider,
+        });
+        expect(thrownOutcome.Status).toBe('Complete');
+        expect(resolveFileSpy).not.toHaveBeenCalled();
+        expect(events).toEqual([]);
+    });
+
+    it('still deletes a durable copy on a non-push-only source that has no ObjectKeyTemplate (U1-B2)', async () => {
+        const events: string[] = [];
+        vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'copies/website-item.pdf',
+            Driver: {
+                DeleteObject: async () => {
+                    events.push('Driver.DeleteObject');
+                },
+            },
+        } as never);
+
+        vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
+            ContentSourceID: 'SRC-WEB',
+            URL: 'https://x.test',
+            DriverClass: 'AutotagWebsite',
+            TypeConfiguration: {},
+            Configuration: {},
+            Settings: {},
+            Parameters: {},
+            Confidence: {},
+            Problems: [],
+            IsValid: true,
+        } as never);
+
+        const item = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/page.pdf', 'ITEM-WEB-1'));
+        item.SetExtension('Pipeline', 'fileID', 'FILE-COPY-1');
+        item.SetExtension('Pipeline', 'contentSourceID', 'SRC-WEB');
+
+        const outcome = await new DeleteContentItemStage().Run(item, {
+            ...contextWith(),
+            Provider: {
+                EntityByName: () => undefined,
+                RunViews: async () => [
+                    { Success: true, Results: [] },
+                    { Success: true, Results: [] },
+                ],
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Files') {
+                        return {
+                            ProviderID: 'P1',
+                            InnerLoad: async () => true,
+                            Delete: async () => {
+                                events.push('file.Delete');
+                                return true;
+                            },
+                        };
+                    }
+                    const itemObj = {
+                        FileID: 'FILE-COPY-1' as string | null,
+                        InnerLoad: async () => true,
+                        Save: async () => {
+                            events.push(`item.Save(FileID=${String(itemObj.FileID)})`);
+                            return true;
+                        },
+                    };
+                    return itemObj;
+                },
+            } as never,
+        });
+
+        expect(outcome.Status).toBe('Complete');
+        expect(events).toEqual(['Driver.DeleteObject', 'item.Save(FileID=null)', 'file.Delete']);
+    });
 });
+
 
 

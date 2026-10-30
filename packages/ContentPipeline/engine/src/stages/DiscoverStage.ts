@@ -119,11 +119,7 @@ export class DiscoverStage extends BasePipelineStage {
             throw new FatalStageError("No Discover driver for this source. Set its Content Source Type's DriverClass.");
         }
         const driver = ResolveSourceDriver(resolved.DriverClass);
-        const isPushOnly =
-            driver.IsPushOnly === true ||
-            resolved.TypeConfiguration?.IsPushOnly === true ||
-            resolved.Configuration?.IsPushOnly === true;
-        if (isPushOnly) {
+        if (driver.IsPushOnly === true) {
             return { resolved, driver, isPushOnly: true };
         }
         if (!driver.Discover) {
