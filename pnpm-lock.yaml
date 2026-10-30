@@ -15272,9 +15272,6 @@ importers:
       '@huggingface/transformers':
         specifier: ^4.3.1
         version: 4.3.1(@types/node@24.10.11)
-      cohere-ai:
-        specifier: ^7.20.0
-        version: 7.20.0
 
   packages/ServerBootstrap:
     dependencies:
