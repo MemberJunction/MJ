@@ -2391,6 +2391,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ExtraFilter: filter,
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!r.Success || (r.Results?.length ?? 0) === 0) return null;
@@ -2532,6 +2533,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             Fields: entity.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
             MaxRows: ids.length,
+            SkipTotalRowCount: true,
         }, contextUser);
         if (!r.Success) return new Set();
         return new Set((r.Results ?? []).map(row => CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()));

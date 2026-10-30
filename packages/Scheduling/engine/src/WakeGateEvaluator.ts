@@ -628,6 +628,7 @@ export class WakeGateEvaluator {
                 EntityName: 'MJ: AI Prompts',
                 ExtraFilter: `Name='${fallbackName.replace(/'/g, "''")}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, contextUser);
             if (res.Success && res.Results.length > 0) {

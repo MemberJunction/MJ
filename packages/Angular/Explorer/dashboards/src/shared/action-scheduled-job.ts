@@ -47,6 +47,7 @@ export async function ResolveActionJobTypeID(provider: IMetadataProvider): Promi
         Fields: ['ID'],
         ResultType: 'simple',
         MaxRows: 1,
+        SkipTotalRowCount: true,
     });
     return result.Success && result.Results.length > 0 ? result.Results[0].ID : null;
 }
@@ -68,6 +69,7 @@ export async function ResolveActionParamID(
         Fields: ['ID'],
         ResultType: 'simple',
         MaxRows: 1,
+        SkipTotalRowCount: true,
     });
     return result.Success && result.Results.length > 0 ? result.Results[0].ID : null;
 }

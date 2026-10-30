@@ -213,6 +213,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 ResultType: 'simple',
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             });
             if (result.Success && result.Results.length > 0 && result.Results[0].TemplateText) {
                 this.EditDocTemplate = result.Results[0].TemplateText;
@@ -284,6 +285,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 ResultType: 'entity_object',
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             });
             if (result.Success && result.Results.length > 0) {
                 const content = result.Results[0];
@@ -468,6 +470,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (result.Success && result.Results.length > 0) {
             return result.Results[0].ID;
@@ -1787,6 +1790,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             ExtraFilter: `Name='${EscapeSQLString(this.SaveDocumentName)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
 
         if (existing.Success && existing.Results.length > 0) {
@@ -1838,6 +1842,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 : `Name='${EscapeSQLString(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (existing.Success && existing.Results.length > 0) {
             return existing.Results[0];
@@ -1863,6 +1868,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             ResultType: 'entity_object',
             OrderBy: 'Priority ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (existing.Success && existing.Results.length > 0) {
             return existing.Results[0];
@@ -1881,6 +1887,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['Name'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         return result.Success && result.Results.length > 0 && result.Results[0].Name === name;
     }

@@ -622,7 +622,8 @@ export class ComponentRegistryAPIServer {
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
         OrderBy: 'VersionSequence DESC',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
       
       if (!result.Success || !result.Results?.length) {

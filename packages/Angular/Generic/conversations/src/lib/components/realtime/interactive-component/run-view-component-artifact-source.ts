@@ -75,7 +75,7 @@ export class RunViewComponentArtifactSource implements IComponentArtifactSource 
     private async queryOne<T>(entityName: string, filter: string, what: string, orderBy?: string): Promise<T> {
         const rv = RunView.FromMetadataProvider(this.provider);
         const result = await rv.RunView<T>(
-            { EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, MaxRows: 1, ResultType: 'entity_object' },
+            { EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, MaxRows: 1, SkipTotalRowCount: true, ResultType: 'entity_object' },
             this.user
         );
         if (!result.Success) {

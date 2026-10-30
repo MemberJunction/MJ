@@ -2404,6 +2404,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (result.Success && result.Results.length > 0) {
             return result.Results[0].ID;

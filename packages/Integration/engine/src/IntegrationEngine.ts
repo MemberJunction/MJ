@@ -757,6 +757,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             OrderBy: 'StartedAt DESC',
             Fields: ['ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // live liveness/progress read — must see the current row
         }, contextUser);
@@ -1671,6 +1672,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ID='${companyIntegrationID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
@@ -3797,6 +3799,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.ID}'`,
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // write-back targets the committed external-id mapping
         }, contextUser);
@@ -6051,6 +6054,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
             Fields: ['ID', 'EntityRecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // upsert-by-identity: a stale miss here re-creates a duplicate record map
         }, contextUser);

@@ -232,6 +232,7 @@ export class FormBuilderBuilderAgent extends BaseFormBuilderCodeAgent {
                 Fields: ['ID', 'ComponentID', 'Status'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 // Prefer Active over Pending.
                 OrderBy: `CASE WHEN Status='Active' THEN 0 WHEN Status='Pending' THEN 1 ELSE 2 END, __mj_UpdatedAt DESC`,
             }, user);
@@ -244,6 +245,7 @@ export class FormBuilderBuilderAgent extends BaseFormBuilderCodeAgent {
                 Fields: ['Name', 'Version'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, user);
             const comp = compResult.Success && compResult.Results?.[0] ? compResult.Results[0] : null;
             return {
@@ -523,6 +525,7 @@ export class FormBuilderBuilderAgent extends BaseFormBuilderCodeAgent {
                 Fields: ['StepNumber'],
                 OrderBy: 'StepNumber DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             }, params.contextUser as UserInfo);
             if (result.Success && result.Results?.[0]) return (result.Results[0].StepNumber ?? 0) + 1;

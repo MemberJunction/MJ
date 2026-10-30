@@ -9938,6 +9938,7 @@ The context is now within limits. Please retry your request with the recovered c
             ),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID', 'Status', 'CancellationReason'],
             ResultType: 'simple',
             // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
@@ -9963,6 +9964,7 @@ The context is now within limits. Please retry your request with the recovered c
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ID='${runId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID', 'Status', 'CancellationReason'],
             ResultType: 'simple',
             // The row this checks was written by the Stop button moments ago; read the database, not a cache.
@@ -10140,6 +10142,7 @@ The context is now within limits. Please retry your request with the recovered c
             ExtraFilter: BaseAgent.BuildPriorTurnRunFilter(params.conversationId!, params.agent.ID, branchId, this._conversationBranches, statusList),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple',
         }, params.contextUser);
@@ -14427,6 +14430,7 @@ The context is now within limits. Please retry your request with the recovered c
             Fields: ['Status', 'OriginatingAgentRunStepID'],
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, params.contextUser);
 
@@ -14448,6 +14452,7 @@ The context is now within limits. Please retry your request with the recovered c
             ExtraFilter: `ID='${request.OriginatingAgentRunStepID}'`,
             Fields: ['StepType'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, params.contextUser);
 
@@ -18843,7 +18848,7 @@ The context is now within limits. Please retry your request with the recovered c
             const existing = await rv.RunView<MJConversationSkillEntity>({
                 EntityName: 'MJ: Conversation Skills',
                 ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skill.ID)}'`,
-                ResultType: 'entity_object', MaxRows: 1,
+                ResultType: 'entity_object', MaxRows: 1, SkipTotalRowCount: true,
             }, params.contextUser);
             if (!existing.Success) {
                 LogErrorEx({ message: `Could not read conversation skill '${skill.Name}': ${existing.ErrorMessage}`, severity: 'warning', category: 'AgentSkills' });
@@ -18879,7 +18884,7 @@ The context is now within limits. Please retry your request with the recovered c
             const existing = await rv.RunView<MJConversationSkillEntity>({
                 EntityName: 'MJ: Conversation Skills',
                 ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skillId)}' AND Status = 'Active'`,
-                ResultType: 'entity_object', MaxRows: 1,
+                ResultType: 'entity_object', MaxRows: 1, SkipTotalRowCount: true,
             }, contextUser);
             const row = existing.Success ? existing.Results?.[0] : undefined;
             if (!row) return;

@@ -2020,6 +2020,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['Status', 'ViewName'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 BypassCache: true,
             },
             contextUser,
@@ -5973,6 +5974,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['MaterializedResultID'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -6010,6 +6012,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName', 'LastRefreshedAt'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 BypassCache: true,
             },
             contextUser,
