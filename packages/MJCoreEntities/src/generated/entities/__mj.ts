@@ -19291,6 +19291,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.`),
+    AutoUpdateDisplayName: z.boolean().describe(`
+        * * Field Name: AutoUpdateDisplayName
+        * * Display Name: Auto Update Display Name
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -96263,6 +96269,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * * Field Name: AutoUpdateDisplayName
+    * * Display Name: Auto Update Display Name
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way.
+    */
+    get AutoUpdateDisplayName(): boolean {
+        return this.Get('AutoUpdateDisplayName');
+    }
+    set AutoUpdateDisplayName(value: boolean) {
+        this.Set('AutoUpdateDisplayName', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -141149,6 +141169,8 @@ export interface MJTaskEntity_ITaskForEachConfiguration {
     maxConcurrency?: number;
     /** Run this action once per iteration. */
     action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: MJTaskEntity_ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -141174,6 +141196,8 @@ export interface MJTaskEntity_ITaskWhileConfiguration {
     delayBetweenIterationsMs?: number;
     /** Run this action once per iteration. */
     action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: MJTaskEntity_ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -141203,6 +141227,20 @@ export interface MJTaskEntity_ITaskLoopActionBody {
     /** Parameters passed to the action. */
     params: Record<string, unknown>;
     /** JSON mapping from the action's outputs back into the payload. */
+    outputMapping?: string;
+}
+
+/** One action step inside a multi-step loop body (`steps[]`). */
+export interface MJTaskEntity_ITaskLoopBodyActionStep {
+    /** Optional handle used by later steps in the same pass via `steps.<id>.<OutputField>`. */
+    id?: string;
+    /** Action name. */
+    name: string;
+    /** Parameters passed to the action. */
+    params: Record<string, unknown>;
+    /** Optional boolean expression deciding whether this step runs on the current pass. */
+    condition?: string;
+    /** Optional JSON mapping from this step's outputs into the running payload. */
     outputMapping?: string;
 }
 

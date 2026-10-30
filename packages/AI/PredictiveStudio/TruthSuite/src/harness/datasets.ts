@@ -37,7 +37,7 @@ export class HarnessDatasets {
       ctx.User,
     );
     if (!res.Success) throw new Error(`count ${dataset.Entity.Name}.${column}: ${res.ErrorMessage}`);
-    return res.TotalRowCount;
+    return res.TotalRowCount ?? 0;
   }
 
   /** Reset `column` (`TruthScore`) to NULL on the dataset's `pstruth` table: direct SQL its entity sanctions. */

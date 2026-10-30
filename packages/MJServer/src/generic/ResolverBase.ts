@@ -661,7 +661,8 @@ export class ResolverBase {
           viewInput.DataSource,
           viewInput.IncludeBinaryFields,
           viewInput.AlternateBaseView,
-          viewInput.Properties
+          viewInput.Properties,
+          viewInput.SkipTotalRowCount
         );
       }
       else {
@@ -710,7 +711,8 @@ export class ResolverBase {
         viewInput.DataSource,
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
-        viewInput.Properties
+        viewInput.Properties,
+        viewInput.SkipTotalRowCount
       );
     } catch (err) {
       console.log(err);
@@ -759,7 +761,9 @@ export class ResolverBase {
         viewInput.BypassCache,
         viewInput.DataSource,
         viewInput.IncludeBinaryFields,
-        viewInput.AlternateBaseView
+        viewInput.AlternateBaseView,
+        undefined,
+        viewInput.SkipTotalRowCount
       );
     } catch (err) {
       console.log(err);
@@ -834,6 +838,7 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          skipTotalRowCount: viewInput.SkipTotalRowCount,
           alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
         });
@@ -1244,7 +1249,8 @@ export class ResolverBase {
     dataSource?: 'Live' | 'Materialized',
     includeBinaryFields?: boolean,
     alternateBaseView?: string,
-    properties?: ViewPropertyValues
+    properties?: ViewPropertyValues,
+    skipTotalRowCount?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1327,6 +1333,7 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          SkipTotalRowCount: skipTotalRowCount,
           AlternateBaseView: alternateBaseView,
           Properties: properties,
           TimeZone: userPayload?.TimeZone,
@@ -1491,6 +1498,7 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          SkipTotalRowCount: param.skipTotalRowCount,
           AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
           TimeZone: param.userPayload?.TimeZone,

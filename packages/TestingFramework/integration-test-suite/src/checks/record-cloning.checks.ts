@@ -56,7 +56,7 @@ import {
 } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { Assert, AssertEqual, IntegrationCheckRegistry, IsTierEnabled, LoadClientConfig } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, IsTierEnabled, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, RecordCloningFixture } from '@memberjunction/testing-integration';
 
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
@@ -142,7 +142,7 @@ async function countRows(provider: IMetadataProvider, entityName: string, filter
         BypassCache: true,
     });
     Assert(res.Success, `counting ${entityName} failed: ${res.ErrorMessage}`);
-    return res.TotalRowCount;
+    return res.TotalRowCount ?? 0;
 }
 
 /** Plans over the wire and returns the plan. The operation itself must succeed; the plan may still be blocked. */
@@ -804,8 +804,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             const md = ctx.Provider;
             const links = await readRows<{ PromptID: string; AgentID: string }>(md, AI_AGENT_PROMPTS, '', { Fields: ['PromptID', 'AgentID'], OrderBy: 'PromptID ASC', MaxRows: 1 });
             if (links.length === 0) {
-                console.warn(`  ⚠ record-cloning.RC10 SKIPPED — no ${AI_AGENT_PROMPTS} row references a prompt in this database`);
-                return;
+                SkipCheck(`no ${AI_AGENT_PROMPTS} row references a prompt in this database`);
             }
             const plan = await planClone(md, { EntityName: AI_PROMPTS, SourceRecordKey: idKey(links[0].PromptID) }, 'RC10');
             Assert(!plan.Blocked, `RC10: the plan is blocked — ${plan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; ')}`);
@@ -846,8 +845,7 @@ export const RecordCloningChecks: NamedCheck[] = [
                 jobIds = (await readRows<{ ID: string }>(md, SCHEDULED_JOBS, '', { Fields: ['ID'], OrderBy: 'Name ASC', MaxRows: 1 })).map((r) => r.ID);
             }
             if (jobIds.length === 0) {
-                console.warn(`  ⚠ record-cloning.RC11 SKIPPED — no ${SCHEDULED_JOBS} rows exist`);
-                return;
+                SkipCheck(`no ${SCHEDULED_JOBS} rows exist in this database`);
             }
 
             for (const jobId of [...new Set(jobIds.map((j) => j.toLowerCase()))]) {

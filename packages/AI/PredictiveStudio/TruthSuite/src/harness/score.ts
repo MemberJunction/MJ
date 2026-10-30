@@ -159,6 +159,7 @@ export class HarnessScoring {
           Fields: ['ID', 'Status'],
           OrderBy: 'StartTime DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           BypassCache: true,
         },
         ctx.User,

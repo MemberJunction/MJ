@@ -84,6 +84,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
                 ExtraFilter: `ID='${this.ArtifactID}'`,
                 Fields: ['ID', 'UserID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             {
@@ -91,6 +92,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
                 ExtraFilter: `ArtifactID='${this.ArtifactID}' AND UserID='${user.ID}' AND CanShare=1`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
         ], user);
@@ -108,6 +110,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
             ExtraFilter: `ID='${this.ArtifactID}'`,
             Fields: ['ID', 'Name'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         }, this.ContextCurrentUser);
         return result.Success ? result.Results?.[0]?.Name ?? null : null;

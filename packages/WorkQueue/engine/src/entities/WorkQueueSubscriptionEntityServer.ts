@@ -29,6 +29,7 @@ export class MJWorkQueueSubscriptionEntityServer extends MJWorkQueueSubscription
             ExtraFilter: `SubscriptionID = '${this.ID}'`,
             Fields: ['ID'], // pk-filter-ok: MJ: Work Queue Deliveries is a core entity with a single ID key
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         }, this.ContextCurrentUser);
         if (!view.Success) {

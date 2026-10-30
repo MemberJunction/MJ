@@ -84,7 +84,8 @@ import {
     FindUserByEmail,
     IntegrationCheckRegistry,
     SEEDED_NOGRANT_EMAIL,
-    SEED_FIXTURES_COMMAND
+    SEED_FIXTURES_COMMAND,
+    SkipCheck
 } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -545,20 +546,17 @@ export const StorageChecks: NamedCheck[] = [
             const engine = await configuredEngine(ctx);
             const noGrant = FindUserByEmail(UserCache.Instance.Users, SEEDED_NOGRANT_EMAIL);
             if (!noGrant || UUIDsEqual(noGrant.ID, ctx.User.ID)) {
-                console.warn(`  ⚠ storage.ST8 SKIPPED — seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not in the user cache; `
+                SkipCheck(`seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' is not in the user cache; `
                     + `seed with: ${SEED_FIXTURES_COMMAND}`);
-                return;
             }
             AssertEqual(noGrant.UserRoles.length, 0, `fixture invalid: '${SEEDED_NOGRANT_EMAIL}' has roles; it must have none`);
             const roleID = ctx.User.UserRoles?.[0]?.RoleID;
             if (!roleID) {
-                console.warn('  ⚠ storage.ST8 SKIPPED — the context user has no role to restrict the fixture account to');
-                return;
+                SkipCheck('the context user has no role to restrict the fixture account to.');
             }
             const fixture = await createAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
-                console.warn(`  ⚠ storage.ST8 NOTE — SKIPPED, no fixture storage account could be created: ${fixture}`);
-                return;
+                SkipCheck(`no fixture storage account could be created: ${fixture}`);
             }
             try {
                 await assertAccountGate(ctx, fixture, noGrant, roleID);
@@ -574,22 +572,19 @@ export const StorageChecks: NamedCheck[] = [
             const engine = await configuredEngine(ctx);
             const noGrant = FindUserByEmail(UserCache.Instance.Users, SEEDED_NOGRANT_EMAIL);
             if (!noGrant || UUIDsEqual(noGrant.ID, ctx.User.ID)) {
-                console.warn(`  ⚠ storage.ST9 SKIPPED — seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not in the user cache; `
+                SkipCheck(`seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' is not in the user cache; `
                     + `seed with: ${SEED_FIXTURES_COMMAND}`);
-                return;
             }
             const roleID = ctx.User.UserRoles?.[0]?.RoleID;
             const download = await coreAction('File Storage: Get Download URL', ctx.User);
             const list = await coreAction('List Storage Providers', ctx.User);
             if (!roleID || !download || !list) {
-                console.warn(`  ⚠ storage.ST9 SKIPPED — ${!roleID ? 'the context user has no role to restrict the fixture account to'
-                    : 'the File Storage core actions are not in the action catalog'}`);
-                return;
+                SkipCheck(!roleID ? 'the context user has no role to restrict the fixture account to.'
+                    : 'the File Storage core actions are not in the action catalog; push the core action metadata.');
             }
             const fixture = await createAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
-                console.warn(`  ⚠ storage.ST9 NOTE — SKIPPED, no fixture storage account could be created: ${fixture}`);
-                return;
+                SkipCheck(`no fixture storage account could be created: ${fixture}`);
             }
             try {
                 await addPermission(ctx, fixture, { Type: 'Role', RoleID: roleID, CanRead: true, CanWrite: true });

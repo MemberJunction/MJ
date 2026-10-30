@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT147 - Agent Execution Primitives and Multi-Step Loops (deterministic)",
+      "Description": "DETERMINISTIC tier (scripted native-tool-calling model, real SQL Server + ActionEngineServer + TaskGraphService + TaskGraphDispatcher). Verifies the single-channel JSON envelope bridge under native tool calling, sanitized native tool-name normalization (calculate_expression -> Calculate Expression), structured JSON Message coercion in Pipelines and loop steps, multi-step loop bodies (steps[] with steps.<id>.*, per-step condition, and outputMapping append) across in-turn ForEach/While and durable TaskGraph ForEach/While, agent-emitted nextStep.type='Tasks' parking in Paused and settling to Completed via TaskGraphDispatcher, and Flow graduation round-trip (ConvertTaskGraphToAgentSpec -> CompileFlowToTaskGraph -> TaskGraphService.Submit). Self-cleaning.",
+      "MaxExecutionTimeMS": 300000,
+      "InputDefinition": {},
+      "ExpectedOutcomes": {
+        "summary": "AEP1-AEP6 pass against SQL Server: Pipeline, in-turn multi-step ForEach/While, durable TaskGraph multi-step ForEach/While, agent-parked Tasks settlement, and Flow graduation round-trip all execute and clean up."
+      },
+      "Configuration": {
+        "tier": "deterministic",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "agent-execution-primitives"
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1505B1E0-A038-45DA-9B1F-4263F0A51D56"
+    }
+  }
+]

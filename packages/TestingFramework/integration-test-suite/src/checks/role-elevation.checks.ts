@@ -64,7 +64,7 @@ import type {
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { MJRoleEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -185,7 +185,7 @@ function asRunViewProvider(provider: IMetadataProvider): IMetadataProvider & IRu
 
 /**
  * The non-Owner RE2/RE3/RE6 need: holds `grant` on 'MJ: User Roles', holds at least one role, and
- * has at least one role it does not hold. Returns `undefined` — and the caller skips as pass — when
+ * has at least one role it does not hold. Returns `undefined` — and the caller calls SkipCheck — when
  * this database cannot express the invariant.
  */
 function findEscalationCandidate(
@@ -253,8 +253,7 @@ export const RoleElevationChecks: NamedCheck[] = [
             const userRolesEntity = requireEntity(ctx, USER_ROLES_ENTITY, 'RE2');
             const candidate = findEscalationCandidate(ctx, userRolesEntity, (p) => p.CanRead);
             if (!candidate) {
-                console.warn(`  ⚠ role-elevation.RE2 SKIPPED — ${SKIP_NO_CANDIDATE}`);
-                return;
+                SkipCheck(SKIP_NO_CANDIDATE);
             }
             const { caller, unheld } = candidate;
 
@@ -285,8 +284,7 @@ export const RoleElevationChecks: NamedCheck[] = [
             const userRolesEntity = requireEntity(ctx, USER_ROLES_ENTITY, 'RE3');
             const candidate = findEscalationCandidate(ctx, userRolesEntity, (p) => p.CanRead);
             if (!candidate) {
-                console.warn(`  ⚠ role-elevation.RE3 SKIPPED — ${SKIP_NO_CANDIDATE}`);
-                return;
+                SkipCheck(SKIP_NO_CANDIDATE);
             }
             const { caller, held } = candidate;
 
@@ -313,13 +311,11 @@ export const RoleElevationChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const owner = findOwner();
             if (!owner) {
-                console.warn('  ⚠ role-elevation.RE4 SKIPPED — no ACTIVE Owner user in the cache.');
-                return;
+                SkipCheck('no ACTIVE Owner user in the user cache.');
             }
             const role = findUnheldRole(ctx, owner) ?? ctx.Provider.Roles[0];
             if (!role) {
-                console.warn('  ⚠ role-elevation.RE4 SKIPPED — no roles exist in metadata.');
-                return;
+                SkipCheck('no roles exist in metadata.');
             }
 
             // Deliberately a role the Owner does NOT hold where one exists: with a held role the
@@ -343,8 +339,7 @@ export const RoleElevationChecks: NamedCheck[] = [
             const rolesEntity = requireEntity(ctx, ROLES_ENTITY, 'RE5');
             const owner = findOwner();
             if (!owner) {
-                console.warn('  ⚠ role-elevation.RE5 SKIPPED — no ACTIVE Owner user in the cache.');
-                return;
+                SkipCheck('no ACTIVE Owner user in the user cache.');
             }
 
             // Leg A — the Owner baseline. Establishes that a later failure in leg B is the guard,
@@ -399,10 +394,7 @@ export const RoleElevationChecks: NamedCheck[] = [
             const userRolesEntity = requireEntity(ctx, USER_ROLES_ENTITY, 'RE6');
             const candidate = findEscalationCandidate(ctx, userRolesEntity, (p) => p.CanCreate);
             if (!candidate) {
-                console.warn(
-                    `  ⚠ role-elevation.RE6 SKIPPED — ${SKIP_NO_CANDIDATE} RE2 still proves the guard's refusal.`
-                );
-                return;
+                SkipCheck(`${SKIP_NO_CANDIDATE} RE2 still proves the guard's refusal.`);
             }
             const { caller, unheld } = candidate;
 
@@ -416,12 +408,11 @@ export const RoleElevationChecks: NamedCheck[] = [
             // unprotected.
             const provider = asDataProvider(ctx.Provider);
             if (provider.SupportsEntityTransactions !== true || !provider.BeginEntityTransaction) {
-                console.warn(
-                    '  ⚠ role-elevation.RE6 SKIPPED — this provider cannot open a transaction, and RE6 refuses to ' +
+                SkipCheck(
+                    'this provider cannot open a transaction, and RE6 refuses to ' +
                     'attempt a real role grant without a guaranteed rollback (a regressed guard would leave a real ' +
                     'account holding a role it was never given). Run this bundle on the server transport.'
                 );
-                return;
             }
 
             const row = await newAssignment(ctx, caller, caller.ID, unheld.ID);

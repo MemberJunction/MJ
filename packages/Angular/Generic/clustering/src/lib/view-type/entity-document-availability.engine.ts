@@ -118,6 +118,7 @@ export class EntityDocumentAvailabilityEngine extends BaseEngine<EntityDocumentA
         ExtraFilter: `EntityDocumentID = '${d.ID}' AND (VectorBinary IS NOT NULL OR VectorJSON IS NOT NULL)`,
         Fields: ['ID'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple' as const,
       })),
       contextUser,

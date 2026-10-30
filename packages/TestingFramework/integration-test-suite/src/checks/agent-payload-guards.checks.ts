@@ -36,7 +36,7 @@
  * RESTORES in a finally — the AL7 "deactivate-in-fixture" pattern. Prefer a seeded fixture: a
  * run-time save reaches the server's cached agent only after its debounced engine refresh.
  */
-import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext, SkipCheck } from '@memberjunction/testing-integration';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { AgentInvoker } from './_it-live-agent-harness';
@@ -67,15 +67,10 @@ function requireFixture(): PayloadGuardsFixture {
     return fixture;
 }
 
-/** Loud skip-as-pass note (client transport unavailable / roster unseeded). */
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ agent-payload-guards.${checkId} SKIPPED — ${reason}`);
-}
-
-/** If Setup could not establish client + roster, skip the check as a pass with a loud note. */
-function guardOrSkip(checkId: string): PayloadGuardsFixture | undefined {
+/** If Setup could not establish client + roster, skip the check (recorded as a skip, not a pass). */
+function guardOrSkip(): PayloadGuardsFixture {
     const fx = requireFixture();
-    if (fx.Skip) { skipNote(checkId, fx.Skip); return undefined; }
+    if (fx.Skip) SkipCheck(fx.Skip);
     return fx;
 }
 
@@ -191,7 +186,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG1: downstream extraction strips sibling keys — the child sees customer.* only, never secret/other',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG1'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG1');
             const custVal = `${CUSTOMER_SENTINEL}-${marker}`;
             const secretVal = `${SECRET_SENTINEL}-${marker}`;
@@ -217,7 +212,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG2: upstream merge blocks the ungranted secret.leak, merges only analysis.*, and RECORDS the violation',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG2'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG2');
             const rootRunId = await RunWithCompliance(
                 () => runParent(ctx, fx, { __marker: marker }, 'IT: Payload Child'),
@@ -245,7 +240,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG3: a child DELETE under an :add,update grant does not reach the parent (pins the blocked-but-unaudited seam)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG3'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG3');
             const present = `PRESENT-${marker}`;
             const rootRunId = await RunWithCompliance(
@@ -313,7 +308,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG4: PayloadUpstreamPaths=[] ignores ALL child changes (empty-grant is NOT all-grant)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG4'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG4');
             // Delegates to a child SEEDED with PayloadUpstreamPaths=[] rather than overriding
             // 'IT: Payload Child' at run time. A run-time save reaches the server's cached agent only
@@ -340,7 +335,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG5: PayloadScope=/analysis — scoped child sees ONLY that subtree; its write reverse-slices back under /analysis',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG5'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG5');
             const seed = `IT-SEED-${marker}`;
             const custVal = `${CUSTOMER_SENTINEL}-${marker}`;
@@ -367,7 +362,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG6: PayloadScope naming a MISSING path is a HARD Critical failure (the one fail-closed guard)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG6'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG6');
             // Starting payload OMITS `analysis`, so the scoped child's PayloadScope='/analysis' cannot resolve.
             const rootRunId = await RunWithCompliance(
@@ -387,7 +382,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG7: self-write default is fail-OPEN (null paths); IT: Self-Write Restricted blocks config.b, lands notes.a',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG7'); if (!fx) return;
+            const fx = guardOrSkip();
             // Part A — pin the fail-OPEN default: a default agent (IT: Payload Child) has NULL self-write paths.
             const child = await LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child');
             Assert(!!child, 'PG7: IT: Payload Child loads');
@@ -438,7 +433,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG8: a FAILED sub-agent merges NO upstream state (no partial-state merge from failures)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG8'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG8');
             {
                 // HOW THIS FORCES A FAILED DELEGATION — and why it no longer flips Status.
@@ -514,7 +509,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Name: 'PG9: malformed PayloadDownstreamPaths JSON currently fails OPEN to ["*"] (pins Q4a behavior)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('PG9'); if (!fx) return;
+            const fx = guardOrSkip();
             const marker = NewMarker('IT-PG9');
             const secretVal = `${SECRET_SENTINEL}-${marker}`;
             // Set the downstream paths column to non-JSON text; the getter/parse must fall open to ["*"].

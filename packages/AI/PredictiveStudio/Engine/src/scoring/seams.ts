@@ -38,6 +38,7 @@ export class RunViewMLModelLoader implements IMLModelLoader {
         ExtraFilter: `ID='${modelId}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );
