@@ -1599,7 +1599,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT138 - Archive Seed (staging actions and host data source)",
+            "TestID": "@lookup:MJ: Tests.Name=IT147 - Archive Seed (staging actions and host data source)",
             "Sequence": 49,
             "Status": "Active"
           },

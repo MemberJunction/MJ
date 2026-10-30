@@ -1076,8 +1076,14 @@ import {
     HereGeocodingProvider,
 } from '@memberjunction/geo-core';
 
-// @memberjunction/integration-actions (1 classes)
+// @memberjunction/integration-actions (7 classes)
 import {
+    BootstrapSQLServerIntegrationFromBackupAction,
+    DropSQLServerStagingDatabaseAction,
+    InspectSQLServerBackupAction,
+    ListAzureBackupBlobsAction,
+    LoadSQLServerIntegrationFromStagingAction,
+    RestoreSQLServerBackupToStagingAction,
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
@@ -2515,6 +2521,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
     HereGeocodingProvider,
+    BootstrapSQLServerIntegrationFromBackupAction,
+    DropSQLServerStagingDatabaseAction,
+    InspectSQLServerBackupAction,
+    ListAzureBackupBlobsAction,
+    LoadSQLServerIntegrationFromStagingAction,
+    RestoreSQLServerBackupToStagingAction,
     RunSyncAction,
     AIActionQueue,
     EntityAIActionQueue,
@@ -2564,16 +2576,16 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     AutotagLocalFileSystem,
     AutotagRSSFeed,
     AutotagWebsite,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2768,16 +2780,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2972,16 +2984,16 @@ const CLASS_REGISTRATIONS_5: any[] = [
     VectorizeEntityAction,
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     WebPageContentAction,
     WebSearchAction,
     WriteEntityFieldsAction,
     XMLParserAction,
     AutotagAndVectorizeContentAction,
     DatabaseTransportDriverFactory,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
@@ -3021,7 +3033,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1222;
+export const CLASS_REGISTRATIONS_COUNT = 1228;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -250,7 +250,7 @@ Why the last two: a database restored from another server keeps that server's `d
 
 ### Test coverage
 
-The deterministic integration tier's `archive-seed` bundle (`IT138 - Archive Seed (staging actions and host data source)`) runs the drop against a throwaway database, connects a host-mode data source through `ExternalDataSourceRouter`, and checks that a load against a missing staging database fails with `STAGING_NOT_FOUND`. The tier has no `.bak` fixture, so the restore itself is covered by this package's unit tests and by a manual run of the walkthrough above.
+The deterministic integration tier's `archive-seed` bundle (`IT147 - Archive Seed (staging actions and host data source)`) runs the drop against a throwaway database, connects a host-mode data source through `ExternalDataSourceRouter`, and checks that a load against a missing staging database fails with `STAGING_NOT_FOUND`. The tier has no `.bak` fixture, so the restore itself is covered by this package's unit tests and by a manual run of the walkthrough above.
 
 ---
 
