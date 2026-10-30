@@ -3,17 +3,21 @@ import {
     BuildSheetMatrix,
     EXCEL_MAX_CELL_LENGTH,
     EXCEL_MAX_SHEET_NAME_LENGTH,
+    EXCEL_MAX_SOURCES_PER_WORKBOOK,
     EXCEL_SOURCES_CHUNK_SIZE,
     EXCEL_WORKBOOK_CONTRACT_VERSION,
     ExcelWorkbookManifest,
     ExcelWorkbookSource,
     MakeUniqueSheetName,
+    NextSourceKey,
     ParseWorkbookManifest,
+    RemoveWorkbookSource,
     ResolveColumns,
     SplitManifestForCells,
     TableNameForSource,
     ToExcelCellValue,
     ToExcelSerialDate,
+    UpsertWorkbookSource,
 } from '../contract';
 
 const VIEW_ID = '1F5D2C3B-4A6E-4F70-8B9C-0D1E2F3A4B5C';
@@ -88,6 +92,80 @@ describe('SplitManifestForCells / ParseWorkbookManifest', () => {
     it('treats an unknown column data type as text', () => {
         const odd = manifest([viewSource({ Columns: [{ Name: 'X', Header: 'X', DataType: 'Fancy' as 'Text' }] })]);
         expect(ParseWorkbookManifest([JSON.stringify(odd)]).Manifest?.Sources[0].Columns[0].DataType).toBe('Text');
+    });
+
+    it('accepts Entity sources with EntityName and refuses Entity sources without EntityName or Query sources with EntityName', () => {
+        const entitySource = viewSource({ Kind: 'Entity', Name: 'People', EntityName: 'MJ: People' });
+        const parsed = ParseWorkbookManifest(SplitManifestForCells(manifest([entitySource])));
+        expect(parsed.Success).toBe(true);
+        expect(parsed.Manifest?.Sources[0].EntityName).toBe('MJ: People');
+
+        const missingEntityName = manifest([viewSource({ Kind: 'Entity' })]);
+        expect(ParseWorkbookManifest([JSON.stringify(missingEntityName)]).Success).toBe(false);
+
+        const queryWithEntityName = manifest([viewSource({ Kind: 'Query', ID: QUERY_ID, EntityName: 'MJ: People' })]);
+        expect(ParseWorkbookManifest([JSON.stringify(queryWithEntityName)]).Success).toBe(false);
+    });
+});
+
+describe('NextSourceKey / UpsertWorkbookSource / RemoveWorkbookSource', () => {
+    it('picks the lowest unused source key', () => {
+        expect(NextSourceKey([])).toBe('s1');
+        expect(NextSourceKey([{ Key: 's1' }, { Key: 's3' }])).toBe('s2');
+    });
+
+    it('creates a manifest from scratch, appends new sheets, replaces same-sheet sources keeping Key, and unlinks down to null', () => {
+        const host = { ServerName: 'Cheese Federation', AddinUrl: 'https://mj.example.org/office/excel' };
+        const first = UpsertWorkbookSource(
+            null,
+            host,
+            { Kind: 'Entity', ID: VIEW_ID, Name: 'People', EntityName: 'People', Columns: viewSource().Columns },
+            'People',
+            '2026-10-30T12:00:00.000Z',
+        );
+        expect(first.Source.Key).toBe('s1');
+        expect(first.Manifest.Sources).toHaveLength(1);
+
+        const second = UpsertWorkbookSource(
+            first.Manifest,
+            host,
+            { Kind: 'Query', ID: QUERY_ID, Name: 'Renewals', Columns: [] },
+            'Renewals',
+            '2026-10-30T12:01:00.000Z',
+        );
+        expect(second.Source.Key).toBe('s2');
+        expect(second.Manifest.Sources).toHaveLength(2);
+
+        const replaced = UpsertWorkbookSource(
+            second.Manifest,
+            host,
+            { Kind: 'View', ID: VIEW_ID, Name: 'Active People', EntityName: 'People', Columns: viewSource().Columns },
+            'PEOPLE',
+            '2026-10-30T12:02:00.000Z',
+        );
+        expect(replaced.Source.Key).toBe('s1');
+        expect(replaced.Source.SheetName).toBe('People');
+        expect(replaced.Manifest.Sources).toHaveLength(2);
+
+        const afterFirstUnlink = RemoveWorkbookSource(replaced.Manifest, 's1', '2026-10-30T12:03:00.000Z');
+        expect(afterFirstUnlink?.Sources.map(s => s.Key)).toEqual(['s2']);
+        expect(RemoveWorkbookSource(afterFirstUnlink!, 's2')).toBeNull();
+    });
+
+    it('enforces EXCEL_MAX_SOURCES_PER_WORKBOOK when adding distinct sheets', () => {
+        const host = { ServerName: 'Cheese Federation', AddinUrl: 'https://mj.example.org/office/excel' };
+        let current: ExcelWorkbookManifest | null = null;
+        for (let i = 1; i <= EXCEL_MAX_SOURCES_PER_WORKBOOK; i++) {
+            current = UpsertWorkbookSource(
+                current,
+                host,
+                { Kind: 'Query', ID: QUERY_ID, Name: `Q${i}`, Columns: [] },
+                `Sheet${i}`,
+            ).Manifest;
+        }
+        expect(() =>
+            UpsertWorkbookSource(current, host, { Kind: 'Query', ID: QUERY_ID, Name: 'Overflow', Columns: [] }, 'Overflow'),
+        ).toThrow(/at most/);
     });
 });
 

@@ -152,4 +152,36 @@ describe('OfficeConnectComponent (DOM)', () => {
         const target = `/office/connect?pk=${PUBLIC_KEY}&state=${STATE}`;
         expect(login).toHaveBeenCalledWith({ appState: { target }, targetUrl: target });
     });
+
+    it('waits until CurrentUser is hydrated on the GraphQL provider before showing consent', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.spyOn(ExcelAddinGetStatusOperation.prototype, 'Execute').mockResolvedValue(statusResult(status()));
+            const delayedProvider: { ConfigData: { Token: string; URL: string }; CurrentUser: typeof provider.CurrentUser | undefined } = {
+                ConfigData: { Token: 'token', URL: GRAPHQL_URL },
+                CurrentUser: undefined,
+            };
+            const f = RenderComponentFixture(TestOfficeConnectComponent, {
+                declarations: [TestOfficeConnectComponent],
+                imports: [StubLoadingComponent, MJButtonDirective],
+                providers: [
+                    { provide: ActivatedRoute, useValue: { snapshot: { queryParams: { pk: PUBLIC_KEY, state: STATE } } } },
+                    { provide: Router, useValue: { url: `/office/connect?pk=${PUBLIC_KEY}&state=${STATE}` } },
+                    { provide: MJAuthBase, useValue: { login } },
+                ],
+                inputs: { Provider: delayedProvider },
+            });
+            f.detectChanges();
+            expect(f.componentInstance.Stage).toBe('waiting');
+            expect(ExcelAddinGetStatusOperation.prototype.Execute).not.toHaveBeenCalled();
+
+            delayedProvider.CurrentUser = provider.CurrentUser;
+            await vi.advanceTimersByTimeAsync(500);
+            f.detectChanges();
+            expect(f.componentInstance.Stage).toBe('consent');
+            expect(Query(f, '.office-connect-user-email')?.textContent).toContain('ada@example.org');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

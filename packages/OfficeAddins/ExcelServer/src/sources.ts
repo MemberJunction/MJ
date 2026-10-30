@@ -1,16 +1,18 @@
 /**
- * @fileoverview Resolves the saved views and queries an Open in Excel request names into workbook
- * sources: their names, columns and data types, and a query's checked parameter values.
+ * @fileoverview Resolves the saved views, entities, and saved queries an Open in Excel or in-pane
+ * picker request names into workbook sources: their names, columns and data types, and a query's
+ * checked parameter values.
  *
- * Everything is read AS the caller, so a view or query they can't see is refused here, before a
- * workbook exists. This reads metadata only (no rows); the add-in pane fetches rows later, as
- * whoever opens the file, through GraphQL operations that check permissions again.
+ * Everything is read AS the caller, so a view, entity, or query they can't see is refused here,
+ * before a workbook or sheet exists. This reads metadata only (no rows); the add-in pane fetches
+ * rows later, as whoever opens the file, through GraphQL operations that check permissions again.
  *
  * @module @memberjunction/excel-addin-server
  */
 import {
     EntityFieldInfo,
     EntityFieldTSType,
+    EntityInfo,
     IMetadataProvider,
     QueryFieldInfo,
     QueryInfo,
@@ -24,6 +26,7 @@ import {
     EXCEL_MAX_SOURCES_PER_WORKBOOK,
     ExcelColumnDataType,
     ExcelParameterValue,
+    ExcelResolvedWorkbookSource,
     ExcelSourceColumn,
     ExcelWorkbookSource,
     ExcelWorkbookSourceRequest,
@@ -37,9 +40,6 @@ export class ExcelSourceError extends Error {
         this.name = 'ExcelSourceError';
     }
 }
-
-/** A source before it has its place in the workbook. */
-type ResolvedSource = Omit<ExcelWorkbookSource, 'Key' | 'SheetName'>;
 
 const MAX_PARAMETER_TEXT = 32767;
 
@@ -58,12 +58,29 @@ export async function ResolveWorkbookSources(
     // At most EXCEL_MAX_SOURCES_PER_WORKBOOK iterations; each view is loaded AS the user because that
     // load is what sets the permission context UserCanView reads.
     for (const [index, request] of requests.entries()) {
-        const resolved = request.Kind === 'View'
-            ? await resolveView(request.ID, provider, user)
-            : resolveQuery(request, provider, user);
+        const resolved = await ResolveSingleWorkbookSource(request, provider, user);
         sources.push({ ...resolved, Key: `s${index + 1}`, SheetName: MakeUniqueSheetName(resolved.Name, usedSheetNames) });
     }
     return sources;
+}
+
+/**
+ * Resolves and authorizes a single view, entity, or saved query request for `user`.
+ */
+export async function ResolveSingleWorkbookSource(
+    request: ExcelWorkbookSourceRequest,
+    provider: IMetadataProvider,
+    user: UserInfo,
+): Promise<ExcelResolvedWorkbookSource> {
+    validateSingleRequest(request);
+    switch (request.Kind) {
+        case 'View':
+            return resolveView(request.ID, provider, user);
+        case 'Entity':
+            return resolveEntity(request.ID, provider, user);
+        case 'Query':
+            return resolveQuery(request, provider, user);
+    }
 }
 
 /** The data type the pane uses for an entity field's values. */
@@ -100,22 +117,26 @@ export function DataTypeForSQLType(sqlType: string | null | undefined): ExcelCol
 
 function validateRequests(requests: ExcelWorkbookSourceRequest[]): void {
     if (!Array.isArray(requests) || requests.length === 0) {
-        throw new ExcelSourceError('Choose at least one view or query to open in Excel.');
+        throw new ExcelSourceError('Choose at least one view, entity, or query to open in Excel.');
     }
     if (requests.length > EXCEL_MAX_SOURCES_PER_WORKBOOK) {
         throw new ExcelSourceError(`A workbook can hold at most ${EXCEL_MAX_SOURCES_PER_WORKBOOK} views and queries.`);
     }
     for (const request of requests) {
-        if (request?.Kind !== 'View' && request?.Kind !== 'Query') {
-            throw new ExcelSourceError('Only saved views and saved queries can be opened in Excel.');
-        }
-        if (!IsValidUUID(request.ID)) {
-            throw new ExcelSourceError('That view or query ID is not valid.');
-        }
+        validateSingleRequest(request);
     }
 }
 
-async function resolveView(viewID: string, provider: IMetadataProvider, user: UserInfo): Promise<ResolvedSource> {
+function validateSingleRequest(request: ExcelWorkbookSourceRequest): void {
+    if (request?.Kind !== 'View' && request?.Kind !== 'Entity' && request?.Kind !== 'Query') {
+        throw new ExcelSourceError('Only saved views, entities, and saved queries can be opened in Excel.');
+    }
+    if (!IsValidUUID(request.ID)) {
+        throw new ExcelSourceError('That view, entity, or query ID is not valid.');
+    }
+}
+
+async function resolveView(viewID: string, provider: IMetadataProvider, user: UserInfo): Promise<ExcelResolvedWorkbookSource> {
     const view = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', user);
     const loaded = await view.Load(viewID);
     if (!loaded || !view.UserCanView) {
@@ -129,7 +150,34 @@ async function resolveView(viewID: string, provider: IMetadataProvider, user: Us
     if (columns.length === 0) {
         throw new ExcelSourceError(`The view "${view.Name}" has no columns to show.`);
     }
-    return { Kind: 'View', ID: view.ID, Name: view.Name, Columns: columns };
+    const resolved: ExcelResolvedWorkbookSource = {
+        Kind: 'View',
+        ID: view.ID,
+        Name: view.Name,
+        Columns: columns,
+    };
+    if (typeof entity.Name === 'string' && entity.Name.trim().length > 0) {
+        resolved.EntityName = entity.Name;
+    }
+    return resolved;
+}
+
+function resolveEntity(entityID: string, provider: IMetadataProvider, user: UserInfo): ExcelResolvedWorkbookSource {
+    const entity: EntityInfo | undefined = (provider.Entities ?? []).find(e => UUIDsEqual(e.ID, entityID));
+    if (!entity || entity.IncludeInAPI === false || entity.Status === 'Disabled' || !entity.GetUserPermisions(user).CanRead) {
+        throw new ExcelSourceError('That entity doesn\'t exist, or you don\'t have access to read it.');
+    }
+    const columns = entityDefaultColumns(entity.Fields);
+    if (columns.length === 0) {
+        throw new ExcelSourceError(`The entity "${entity.DisplayNameOrName}" has no columns to show.`);
+    }
+    return {
+        Kind: 'Entity',
+        ID: entity.ID,
+        Name: entity.DisplayNameOrName,
+        EntityName: entity.Name,
+        Columns: columns,
+    };
 }
 
 /** The view's visible columns in display order, or the entity's default columns when it records none. */
@@ -144,8 +192,17 @@ function viewColumns(columns: ViewColumnInfo[], fields: EntityFieldInfo[]): Exce
             DataType: DataTypeForEntityField(c.EntityField),
         }));
     }
-    return fields
-        .filter(f => f.DefaultInView && !f.IsBinaryFieldType)
+    return entityDefaultColumns(fields);
+}
+
+function entityDefaultColumns(fields: EntityFieldInfo[]): ExcelSourceColumn[] {
+    const nonBinary = fields.filter(f => !f.IsBinaryFieldType);
+    const defaults = nonBinary.filter(f => f.DefaultInView);
+    const chosen = defaults.length > 0
+        ? defaults
+        : nonBinary.filter(f => !f.Name.startsWith('__mj_'));
+    const finalFields = chosen.length > 0 ? chosen : nonBinary;
+    return [...finalFields]
         .sort((a, b) => a.Sequence - b.Sequence)
         .map(f => ({ Name: f.Name, Header: f.DisplayNameOrName, DataType: DataTypeForEntityField(f) }));
 }
@@ -154,13 +211,13 @@ function orderOf(column: ViewColumnInfo): number {
     return typeof column.orderIndex === 'number' ? column.orderIndex : Number.MAX_SAFE_INTEGER;
 }
 
-function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): ResolvedSource {
+function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): ExcelResolvedWorkbookSource {
     // Roles-only check (QueryInfo.UserCanRun). No rows are read here; GetQueryData runs the full check on refresh.
     const query = provider.Queries.find(q => UUIDsEqual(q.ID, request.ID));
     if (!query || !query.UserCanRun(user)) {
         throw new ExcelSourceError('That saved query doesn\'t exist, or you don\'t have access to it.');
     }
-    const source: ResolvedSource = { Kind: 'Query', ID: query.ID, Name: query.Name, Columns: queryColumns(query.Fields) };
+    const source: ExcelResolvedWorkbookSource = { Kind: 'Query', ID: query.ID, Name: query.Name, Columns: queryColumns(query.Fields) };
     const parameters = checkParameters(query, request.Parameters);
     if (parameters) {
         source.Parameters = parameters;

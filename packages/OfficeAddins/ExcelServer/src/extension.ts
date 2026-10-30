@@ -102,6 +102,7 @@ export function CreateExcelAddinRouter(options: ExcelAddinRouterOptions): Router
     });
     router.get(EXCEL_ADDIN_PATHS.Config, (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Access-Control-Allow-Origin', '*');
         res.json(config);
     });
     // Excel caches add-in pages hard; no-cache makes it revalidate, so a host's upgrade reaches people.
@@ -118,12 +119,17 @@ export class ExcelAddinServerExtension extends BaseServerExtension {
         return 'pre-auth';
     }
 
-    public async Initialize(contextOrApp: ServerExtensionInitContext | Application, config?: ServerExtensionConfig): Promise<ExtensionInitResult> {
+    // Keep Function.length === 1 (via rest tuple) so ServerExtensionLoader passes ServerExtensionInitContext
+    // instead of treating this class as a legacy 2-arg Initialize(app, config) extension.
+    public async Initialize(
+        contextOrApp: ServerExtensionInitContext | Application,
+        ...legacyConfig: [ServerExtensionConfig?]
+    ): Promise<ExtensionInitResult> {
         try {
             if (typeof contextOrApp === 'function') {
                 return fail('the Excel add-in needs MJServer\'s extension context to know its public URL; this server called Initialize(app, config).');
             }
-            const settings = ParseExcelAddinSettings((config ?? contextOrApp.config).Settings);
+            const settings = ParseExcelAddinSettings((legacyConfig[0] ?? contextOrApp.config).Settings);
             if (!settings.Success || !settings.Settings) {
                 return fail(settings.ErrorMessage ?? 'its settings are not valid.');
             }

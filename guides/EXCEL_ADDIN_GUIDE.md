@@ -80,6 +80,8 @@ The add-in needs Excel API 1.4 and Dialog API 1.1: current Excel for Windows, Ma
 
 ## 3. How people use it
 
+### From MemberJunction Explorer ("Open in Excel")
+
 1. In Explorer, open a **saved** view or a **saved** query and choose **Open in Excel**. For a query,
    the parameters of its last run go into the workbook.
 2. Open the downloaded file in Excel. The MemberJunction pane opens beside it.
@@ -89,6 +91,21 @@ The add-in needs Excel API 1.4 and Dialog API 1.1: current Excel for Windows, Ma
    refreshes by itself when the workbook opens.
 
 A view opens as it was last **saved**: unsaved filter or column changes in the grid aren't included.
+
+### Directly inside Excel ("Browse Data" & Multi-Server Switcher)
+
+1. Open any workbook in Excel and click **MemberJunction** on the **Data** ribbon tab.
+2. *(Optional)* Click **Server** in the pane header to connect to a different MemberJunction server URL
+   (each server's connection key is stored separately so you can switch environments cleanly).
+3. Sign in once, then use the **Browse Data** tab:
+   - **Entities & Views**: Filter by **Application** (or *All Applications*), search for any readable
+     entity, and choose either **All Records (Default Columns)** (`RunDynamicView`) or any accessible
+     **Saved View** (`RunViewByID`).
+   - **Queries**: Filter by **Category** folder, search for any runnable **Saved Query**, fill in any
+     caller-settable parameters, and choose **Run & Load into Excel**.
+4. Choose **New worksheet** or **Current worksheet**. Every sheet loaded from the picker is recorded in
+   the workbook's hidden `MJ_Sources` manifest, so **Refresh**, **Refresh all**, **Open sheet**,
+   **Unlink**, and sharing the `.xlsx` with colleagues work identically to **Open in Excel**.
 
 ## 4. How sign-in works
 
@@ -127,11 +144,13 @@ that can't create `MJ: API Keys` can't connect Excel, and the connect page says 
 
 ## 6. Limits
 
-- Saved views and saved queries only (no ad-hoc filters), up to 10 sheets per workbook.
+- Up to 10 connected MemberJunction sheets per workbook (`Entity`, saved `View`, or saved `Query`).
 - `MaxRows` rows per sheet (default 100,000). The pane says when a sheet holds fewer rows than exist.
 - Date and date-time columns are written as Excel dates in the computer's local time.
-- Not yet: browsing and inserting views or queries from inside the pane, `=MJ.QUERY()` worksheet
-  functions, and a Microsoft AppSource listing. The plan tracks them as follow-ups.
+- When connecting to an external MemberJunction server URL not listed in the deployed XML manifest's
+  `<AppDomains>`, sign-in opens in the system browser and completes via a one-time RSA-OAEP-encrypted
+  connection code copied from `connected.html`.
+- Not yet: `=MJ.QUERY()` custom worksheet functions and a Microsoft AppSource listing.
 
 ## 7. Troubleshooting
 

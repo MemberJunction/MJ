@@ -2,9 +2,10 @@
  * @fileoverview Server bodies of the `ExcelAddin.*` Remote Operations.
  *
  * Each subclass extends the typed base from `@memberjunction/excel-addin` and registers under the
- * same key, so a browser's `new ExcelAddinBuildWorkbookOperation().Execute(...)` lands here. All
- * three read {@link ExcelAddinRuntime}: on a host whose Server Extension isn't configured, status
- * says the add-in is off and the other two refuse.
+ * same key, so a browser's `new ExcelAddinBuildWorkbookOperation().Execute(...)` or the Excel
+ * pane's `ExecuteRemoteOperation` GraphQL mutation lands here. All operations read
+ * {@link ExcelAddinRuntime}: on a host whose Server Extension isn't configured, status says the
+ * add-in is off and the other operations refuse.
  *
  * @module @memberjunction/excel-addin-server
  */
@@ -15,18 +16,28 @@ import {
     ExcelAddinBuildWorkbookInput,
     ExcelAddinBuildWorkbookOperation,
     ExcelAddinBuildWorkbookOutput,
+    ExcelAddinCatalogInput,
+    ExcelAddinCatalogOutput,
     ExcelAddinCreateConnectionInput,
     ExcelAddinCreateConnectionOperation,
     ExcelAddinCreateConnectionOutput,
+    ExcelAddinEntityViewsInput,
+    ExcelAddinEntityViewsOutput,
+    ExcelAddinGetCatalogOperation,
+    ExcelAddinGetEntityViewsOperation,
     ExcelAddinGetStatusOperation,
+    ExcelAddinResolveSourceInput,
+    ExcelAddinResolveSourceOperation,
+    ExcelAddinResolveSourceOutput,
     ExcelAddinStatusInput,
     ExcelAddinStatusOutput,
     ExcelWorkbookManifest,
     ExcelWorkbookSource,
 } from '@memberjunction/excel-addin';
+import { BuildExcelCatalog, LoadExcelEntityViews } from './catalog';
 import { CreateExcelConnectionKey } from './connection';
 import { ExcelAddinRuntime } from './runtime';
-import { ResolveWorkbookSources } from './sources';
+import { ResolveSingleWorkbookSource, ResolveWorkbookSources } from './sources';
 import { BuildConnectedWorkbook } from './workbook-builder';
 
 const MAX_FILE_NAME_LENGTH = 100;
@@ -64,7 +75,7 @@ export class ExcelAddinCreateConnectionServerOperation extends ExcelAddinCreateC
     }
 }
 
-/** Builds a connected workbook (headings, no rows) for saved views and queries the caller can see. */
+/** Builds a connected workbook (headings, no rows) for saved views, entities, and queries the caller can see. */
 @RegisterClass(BaseRemotableOperation, 'ExcelAddin.BuildWorkbook')
 export class ExcelAddinBuildWorkbookServerOperation extends ExcelAddinBuildWorkbookOperation {
     protected async Authorize(_input: ExcelAddinBuildWorkbookInput, _user: UserInfo): Promise<boolean> {
@@ -89,6 +100,46 @@ export class ExcelAddinBuildWorkbookServerOperation extends ExcelAddinBuildWorkb
             StoreType: settings.StoreType,
         });
         return { FileName: MakeWorkbookFileName(sources), ContentBase64: workbook.toString('base64') };
+    }
+}
+
+/** Lists the applications, readable entities, query categories, and runnable queries for the Excel picker. */
+@RegisterClass(BaseRemotableOperation, 'ExcelAddin.GetCatalog')
+export class ExcelAddinGetCatalogServerOperation extends ExcelAddinGetCatalogOperation {
+    protected async Authorize(_input: ExcelAddinCatalogInput, _user: UserInfo): Promise<boolean> {
+        return ExcelAddinRuntime.Instance.IsEnabled;
+    }
+
+    protected async InternalExecute(_input: ExcelAddinCatalogInput, provider: IMetadataProvider, user: UserInfo): Promise<ExcelAddinCatalogOutput> {
+        ExcelAddinRuntime.Instance.RequireSettings();
+        return BuildExcelCatalog(provider, user);
+    }
+}
+
+/** Lists the accessible saved `MJ: User Views` records on a chosen entity for the Excel picker. */
+@RegisterClass(BaseRemotableOperation, 'ExcelAddin.GetEntityViews')
+export class ExcelAddinGetEntityViewsServerOperation extends ExcelAddinGetEntityViewsOperation {
+    protected async Authorize(_input: ExcelAddinEntityViewsInput, _user: UserInfo): Promise<boolean> {
+        return ExcelAddinRuntime.Instance.IsEnabled;
+    }
+
+    protected async InternalExecute(input: ExcelAddinEntityViewsInput, provider: IMetadataProvider, user: UserInfo): Promise<ExcelAddinEntityViewsOutput> {
+        ExcelAddinRuntime.Instance.RequireSettings();
+        return LoadExcelEntityViews(input?.EntityID ?? '', provider, user);
+    }
+}
+
+/** Resolves a single chosen view, entity, or saved query into its canonical columns and checked parameters. */
+@RegisterClass(BaseRemotableOperation, 'ExcelAddin.ResolveSource')
+export class ExcelAddinResolveSourceServerOperation extends ExcelAddinResolveSourceOperation {
+    protected async Authorize(_input: ExcelAddinResolveSourceInput, _user: UserInfo): Promise<boolean> {
+        return ExcelAddinRuntime.Instance.IsEnabled;
+    }
+
+    protected async InternalExecute(input: ExcelAddinResolveSourceInput, provider: IMetadataProvider, user: UserInfo): Promise<ExcelAddinResolveSourceOutput> {
+        ExcelAddinRuntime.Instance.RequireSettings();
+        const source = await ResolveSingleWorkbookSource(input?.Source, provider, user);
+        return { Source: source };
     }
 }
 

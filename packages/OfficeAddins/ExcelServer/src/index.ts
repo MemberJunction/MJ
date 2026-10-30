@@ -13,6 +13,7 @@ export * from './runtime';
 export * from './manifest-builder';
 export * from './workbook-builder';
 export * from './sources';
+export * from './catalog';
 export * from './connection';
 export * from './operations';
 export * from './extension';

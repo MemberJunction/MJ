@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import express from 'express';
-import type { ServerExtensionInitContext } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, type ServerExtensionInitContext } from '@memberjunction/server-extensions-core';
 import { ComputeAddinPublicUrl, ExcelAddinServerExtension } from '../extension';
 import { ExcelAddinRuntime } from '../runtime';
 
@@ -91,6 +91,27 @@ describe('ExcelAddinServerExtension', () => {
         expect(result.Success).toBe(true);
     });
 
+    it('loads through ServerExtensionLoader with context (Initialize.length === 1)', async () => {
+        expect(ExcelAddinServerExtension.prototype.Initialize.length).toBe(1);
+        const loader = new ServerExtensionLoader();
+        await loader.LoadExtensions(
+            express(),
+            [
+                {
+                    Enabled: true,
+                    DriverClass: 'ExcelAddinServerExtension',
+                    RootPath: '/office/excel',
+                    Phase: 'pre-auth',
+                    Settings: { ExplorerUrl: 'https://explorer.example.org', ServerName: 'Cheese Federation' },
+                },
+            ],
+            { phase: 'pre-auth', publicUrl: 'https://api.example.org', apiRootPath: '' },
+        );
+        expect(loader.ExtensionCount).toBe(1);
+        expect(ExcelAddinRuntime.Instance.IsEnabled).toBe(true);
+        expect(ExcelAddinRuntime.Instance.ManifestUrl).toBe('https://api.example.org/office/excel/manifest.xml');
+    });
+
     describe('serving', () => {
         let server: Server;
         let origin: string;
@@ -117,8 +138,10 @@ describe('ExcelAddinServerExtension', () => {
             expect(xml).toContain('<DisplayName DefaultValue="Cheese Federation"/>');
         });
 
-        it('serves the pane\'s config', async () => {
-            const config = await (await fetch(`${origin}/api/office/excel/config.json`)).json();
+        it('serves the pane\'s config with CORS enabled for multi-server discovery', async () => {
+            const response = await fetch(`${origin}/api/office/excel/config.json`);
+            expect(response.headers.get('access-control-allow-origin')).toBe('*');
+            const config = await response.json();
             expect(config).toEqual({
                 ContractVersion: 1,
                 ServerName: 'Cheese Federation',

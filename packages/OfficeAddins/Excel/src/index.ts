@@ -9,6 +9,7 @@
  * The pane itself is bundled to `dist/web` and served by `@memberjunction/excel-addin-server`.
  */
 export * from './contract';
+export * from './catalog-types';
 export * from './operations';
 export * from './handoff';
 export * from './client';

@@ -20,10 +20,14 @@ import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, Enti
 import { UUIDsEqual, MJGlobal, MJEvent } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
-import { ExcelAddinClient } from '@memberjunction/excel-addin';
+import { ExcelAddinClient, type ExcelWorkbookSourceRequest } from '@memberjunction/excel-addin';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { CanOpenViewInExcel, OPEN_VIEW_IN_EXCEL_TOOLTIP } from './open-in-excel';
+import {
+  ExcelSourceMenuDescription,
+  ExcelSourceTooltip,
+  ResolveGridExcelSource,
+} from './open-in-excel';
 import {
   BuildPkString,
   BuildUsablePkString,
@@ -1082,24 +1086,140 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
+  private static _nextExcelMenuInstanceId = 0;
   private _excelAddinEnabled = false;
+  private _savedViewID: string | null = null;
+  @ViewChild('excelMenuTrigger') private _excelMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+  /** Unique DOM id pairing the unified Export/Excel disclosure trigger with its action popover. */
+  public readonly ExcelMenuId = `mj-entity-grid-excel-menu-${++EntityDataGridComponent._nextExcelMenuInstanceId}`;
+  /** True while the unified Export/Excel toolbar action popover is open. */
+  public ShowExcelMenu = false;
+
+  /**
+   * Optional ID of the persisted `MJ: User Views` record backing the rows on screen when a parent
+   * container (such as `<mj-entity-viewer>` / `<mj-grid-view-renderer>`) loads the view itself and
+   * feeds the grid `[Data]` + `{ EntityName }` params. Used by Open in Excel without giving the grid
+   * ownership of persisting the `UserView` record.
+   */
+  @Input()
+  set SavedViewID(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized !== this._savedViewID) {
+      this._savedViewID = normalized;
+      if (normalized) {
+        void this.resolveExcelAddinAvailability();
+      }
+    }
+  }
+  get SavedViewID(): string | null {
+    return this._savedViewID;
+  }
+
+  /** The saved view ID to open in Excel: explicit `SavedViewID` input, else the grid's loaded `_viewEntity`. */
+  private get effectiveSavedViewID(): string | null {
+    if (this._savedViewID) {
+      return this._savedViewID;
+    }
+    const view = this._viewEntity;
+    if (!view || view.IsSaved === false) {
+      return null;
+    }
+    return view.ID?.trim() || null;
+  }
+
+  /** Resolves the workbook source (`View` for saved views, `Entity` for unscoped default entity grids). */
+  private get resolvedExcelSource(): ExcelWorkbookSourceRequest | null {
+    return ResolveGridExcelSource({
+      ShowButton: this._showOpenInExcelButton,
+      AddinEnabled: this._excelAddinEnabled,
+      SavedViewID: this.effectiveSavedViewID,
+      EntityID: this._entityInfo?.ID ?? null,
+      ExtraFilter: this._params?.ExtraFilter ?? null,
+      AlternateBaseView: this._alternateBaseView ?? this._params?.AlternateBaseView ?? null,
+    });
+  }
+
   /** True while Open in Excel is building the workbook. */
   public IsOpeningInExcel = false;
-  /** The Open in Excel button's tooltip. */
-  public readonly OpenInExcelTooltip = OPEN_VIEW_IN_EXCEL_TOOLTIP;
 
-  /** True when the toolbar offers Open in Excel: a saved view is loaded and the host serves the add-in. */
-  get CanOpenInExcel(): boolean {
-    return CanOpenViewInExcel(this._showOpenInExcelButton, this._viewEntity?.ID, this._excelAddinEnabled);
+  /** Tooltip matching the resolved workbook source (`View` vs `Entity`). */
+  get OpenInExcelTooltip(): string {
+    return ExcelSourceTooltip(this.resolvedExcelSource);
   }
+
+  /** Subtitle shown under "Open in Excel" inside the unified toolbar menu. */
+  get OpenInExcelDescription(): string {
+    return ExcelSourceMenuDescription(this.resolvedExcelSource);
+  }
+
+  /** True when the toolbar offers Open in Excel (saved view or unscoped entity, and the host serves the add-in). */
+  get CanOpenInExcel(): boolean {
+    return this.resolvedExcelSource !== null;
+  }
+
+  /** Toggles the unified Export/Excel action popover. */
+  public ToggleExcelMenu(): void {
+    if (this.ShowOverflowMenu) {
+      this.CloseOverflowMenu();
+    }
+    this.ShowExcelMenu = !this.ShowExcelMenu;
+    this.cdr.detectChanges();
+
+    if (this.ShowExcelMenu) {
+      setTimeout(() => {
+        document.addEventListener('click', this.handleExcelMenuOutsideClick);
+      }, 0);
+    } else {
+      document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+    }
+  }
+
+  /** Closes the unified Export/Excel action popover, optionally restoring focus to the trigger button. */
+  public CloseExcelMenu(restoreFocus = false): void {
+    if (!this.ShowExcelMenu) {
+      document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+      return;
+    }
+    this.ShowExcelMenu = false;
+    document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+    this.cdr.detectChanges();
+    if (restoreFocus) {
+      this._excelMenuTrigger?.nativeElement?.focus();
+    }
+  }
+
+  /** Handles Escape key dismissal inside the unified Export/Excel dropdown. */
+  public OnExcelMenuEscape(event: Event): void {
+    if (!this.ShowExcelMenu) {
+      return;
+    }
+    event.stopPropagation();
+    this.CloseExcelMenu(true);
+  }
+
+  /** Invokes Open in Excel from the unified toolbar popover. */
+  public OnOpenInExcelFromMenu(): void {
+    this.CloseExcelMenu();
+    void this.OnOpenInExcelClick();
+  }
+
+  /** Invokes static snapshot export from the unified toolbar popover. */
+  public OnExportSnapshotFromMenu(): void {
+    this.CloseExcelMenu();
+    this.OnExportClick();
+  }
+
+  private handleExcelMenuOutsideClick = (): void => {
+    this.CloseExcelMenu();
+  };
 
   /**
    * Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in.
-   * Only a saved view can be opened in Excel, so a dynamic view never asks.
    */
   private async resolveExcelAddinAvailability(): Promise<void> {
     const provider = this.ProviderToUse;
-    if (!this._viewEntity || this._excelAddinEnabled || !provider) {
+    if ((!this.effectiveSavedViewID && !this._entityInfo?.ID) || this._excelAddinEnabled || !provider) {
       return;
     }
     try {
@@ -1108,21 +1228,21 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         this.cdr.detectChanges();
       }
     } catch (e) {
-      // Non-fatal: the button stays hidden. The client already treats an unreadable status as "off".
+      // Non-fatal: the option stays hidden. The client already treats an unreadable status as "off".
       LogError(`EntityDataGrid: Excel add-in status check failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  /** Builds a workbook that loads the saved view in Excel, and downloads it. */
+  /** Builds a workbook that loads the saved view or unscoped entity in Excel, and downloads it. */
   public async OnOpenInExcelClick(): Promise<void> {
-    const view = this._viewEntity;
-    if (!view || this.IsOpeningInExcel) {
+    const source = this.resolvedExcelSource;
+    if (!source || this.IsOpeningInExcel) {
       return;
     }
     this.IsOpeningInExcel = true;
     this.cdr.detectChanges();
     try {
-      const result = await ExcelAddinClient.Instance.OpenInExcel([{ Kind: 'View', ID: view.ID }], this.ProviderToUse);
+      const result = await ExcelAddinClient.Instance.OpenInExcel([source], this.ProviderToUse);
       if (result.Success) {
         MJNotificationService.Instance?.CreateSimpleNotification(
           `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
@@ -2107,6 +2227,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       clearTimeout(this._patchedRowClearTimer);
       this._patchedRowClearTimer = null;
     }
+    document.removeEventListener('click', this.handleOutsideClick);
+    document.removeEventListener('click', this.handleExcelMenuOutsideClick);
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -5830,6 +5952,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   ToggleOverflowMenu(): void {
+    if (this.ShowExcelMenu) {
+      this.CloseExcelMenu();
+    }
     this.ShowOverflowMenu = !this.ShowOverflowMenu;
     this.cdr.detectChanges();
 

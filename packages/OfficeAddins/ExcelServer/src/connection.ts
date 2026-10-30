@@ -84,6 +84,10 @@ async function finishKeyOrRevoke(apiKeyID: string, scopeIDs: string[], user: Use
             await addScope(apiKeyID, scopeID, user, provider);
         }
         await bindApplication(apiKeyID, user, provider);
+        // APIKeysEngineBase overrides AdditionalLoading, so BaseEngine debounces entity-event cache
+        // reloads by 1500ms. Refresh before returning the raw key so the Excel pane's immediate
+        // post-sign-in RefreshAll() sees the new key's scopes and MJAPI application binding.
+        await APIKeysEngineBase.Instance.Config(true, user, provider);
     } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
         await revokeAfterFailure(apiKeyID, user, provider, reason);

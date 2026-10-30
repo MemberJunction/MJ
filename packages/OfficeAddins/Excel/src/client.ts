@@ -8,13 +8,13 @@
  */
 import { IMetadataProvider, LogError } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
+import type { ExcelWorkbookSourceRequest } from './catalog-types';
 import { DecodeBase64Url } from './handoff';
 import {
     ExcelAddinBuildWorkbookOperation,
     ExcelAddinBuildWorkbookOutput,
     ExcelAddinGetStatusOperation,
     ExcelAddinStatusOutput,
-    ExcelWorkbookSourceRequest,
 } from './operations';
 
 /** The outcome of {@link ExcelAddinClient.OpenInExcel}. */

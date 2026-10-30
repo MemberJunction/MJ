@@ -54,6 +54,7 @@ describe('CreateExcelConnectionKey', () => {
     beforeEach(() => {
         engine.CreateAPIKey.mockReset().mockResolvedValue({ Success: true, RawKey: 'mj_sk_raw', APIKeyId: 'key-1' });
         engine.RevokeAPIKey.mockReset().mockResolvedValue(true);
+        base.Config.mockClear();
         base.GetScopeByPath.mockClear();
         base.GetApplicationByName.mockClear();
     });
@@ -71,6 +72,7 @@ describe('CreateExcelConnectionKey', () => {
             { Entity: 'MJ: API Key Scopes', Values: { APIKeyID: 'key-1', ScopeID: 'scope-query:run', ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0 } },
             { Entity: 'MJ: API Key Applications', Values: { APIKeyID: 'key-1', ApplicationID: 'app-mjapi' } },
         ]);
+        expect(base.Config).toHaveBeenLastCalledWith(true, user, provider);
         expect(key).toEqual({ APIKey: 'mj_sk_raw', APIKeyID: 'key-1', ExpiresAt: new Date('2027-01-28T12:00:00.000Z'), Label: EXCEL_CONNECTION_KEY_LABEL });
         expect(engine.RevokeAPIKey).not.toHaveBeenCalled();
     });

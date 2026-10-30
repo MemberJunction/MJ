@@ -1012,11 +1012,14 @@ import {
     PandaDocSignatureProvider,
 } from '@memberjunction/esignature-pandadoc';
 
-// @memberjunction/excel-addin-server (4 classes)
+// @memberjunction/excel-addin-server (7 classes)
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinGetCatalogServerOperation,
+    ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
+    ExcelAddinResolveSourceServerOperation,
     ExcelAddinServerExtension,
 } from '@memberjunction/excel-addin-server';
 
@@ -2494,7 +2497,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PandaDocSignatureProvider,
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinGetCatalogServerOperation,
+    ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
+    ExcelAddinResolveSourceServerOperation,
     ExcelAddinServerExtension,
     ExternalDataSourceReadRouterImpl,
     DatabricksExternalDataSourceDriver,
@@ -2564,13 +2570,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
-    DeterministicRubricEvaluator,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DeterministicRubricEvaluator,
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
     GetRubricConsensusAction,
     GetRubricSubjectAction,
     HumanRubricEvaluator,
@@ -2768,13 +2774,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
-    MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
-    MJUserViewEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJUserRoutineEntityServer,
+    MJUserRoutineRecipientEntityServer,
+    MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     QueryRefreshExtractionServerOperation,
     EntityDataGridRelatedEntityGenerator,
@@ -2972,13 +2978,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     XMLParserAction,
     AutotagAndVectorizeContentAction,
     DatabaseTransportDriverFactory,
-    MJWorkQueueDeduplicationEntityServer,
-    MJWorkQueueDeliveryEntityServer,
-    MJWorkQueueMessageEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    MJWorkQueueDeduplicationEntityServer,
+    MJWorkQueueDeliveryEntityServer,
+    MJWorkQueueMessageEntityServer,
     MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
@@ -3015,7 +3021,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1219;
+export const CLASS_REGISTRATIONS_COUNT = 1222;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

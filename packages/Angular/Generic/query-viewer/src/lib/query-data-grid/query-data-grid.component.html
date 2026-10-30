@@ -37,25 +37,84 @@
             <i class="fa-solid fa-sync-alt" [class.fa-spin]="IsLoading"></i>
           </button>
         }
-        <!-- Export button -->
-        @if (ShowExport) {
+        <!-- Unified Excel / Export Toolbar Control -->
+        @if (ShowExport && CanOpenInExcel) {
+          <div
+            class="toolbar-excel-dropdown"
+            (click)="$event.stopPropagation()"
+            (keydown.escape)="OnExcelMenuEscape($event)">
+            <button
+              #excelMenuTrigger
+              type="button"
+              [disabled]="IsPreparingExport || IsOpeningInExcel"
+              title="Excel &amp; export options"
+              class="toolbar-btn excel-menu-trigger"
+              [class.active]="ShowExcelMenu"
+              [attr.aria-expanded]="ShowExcelMenu"
+              [attr.aria-controls]="ExcelMenuId"
+              (click)="ToggleExcelMenu()">
+              <i
+                class="fa-solid"
+                [class.fa-file-excel]="!IsPreparingExport && !IsOpeningInExcel"
+                [class.fa-spinner]="IsPreparingExport || IsOpeningInExcel"
+                [class.fa-spin]="IsPreparingExport || IsOpeningInExcel"></i>
+              <span class="button-text">Export</span>
+              <i class="fa-solid fa-chevron-down excel-menu-caret" [class.rotated]="ShowExcelMenu"></i>
+            </button>
+            @if (ShowExcelMenu) {
+              <div class="excel-action-menu" [id]="ExcelMenuId">
+                <button
+                  type="button"
+                  class="excel-action-item open-in-excel-btn"
+                  [disabled]="IsOpeningInExcel"
+                  [title]="OpenInExcelTooltip"
+                  (click)="OnOpenInExcelFromMenu()">
+                  <span class="excel-action-icon excel-action-icon-live">
+                    <i class="fa-solid fa-table-cells"></i>
+                  </span>
+                  <span class="excel-action-copy">
+                    <span class="excel-action-title">
+                      <span>Open in Excel</span>
+                      <span class="excel-live-pill">Live</span>
+                    </span>
+                    <span class="excel-action-desc">Connected workbook — sign in &amp; refresh this query live</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="excel-action-item export-snapshot-btn"
+                  [disabled]="RowCount === 0 || IsPreparingExport"
+                  title="Download a static Excel, CSV, or JSON file"
+                  (click)="OnExportSnapshotFromMenu()">
+                  <span class="excel-action-icon">
+                    <i class="fa-solid fa-file-arrow-down"></i>
+                  </span>
+                  <span class="excel-action-copy">
+                    <span class="excel-action-title">Export Snapshot…</span>
+                    <span class="excel-action-desc">Download a static Excel, CSV, or JSON file</span>
+                  </span>
+                </button>
+              </div>
+            }
+          </div>
+        } @else if (ShowExport) {
           <button
+            type="button"
             [disabled]="RowCount === 0 || IsPreparingExport"
             title="Export data"
-            class="toolbar-btn"
+            class="toolbar-btn export-snapshot-btn"
             (click)="OpenExportDialog()">
-            <i class="fa-solid" [class.fa-file-export]="!IsPreparingExport" [class.fa-spinner]="IsPreparingExport" [class.fa-spin]="IsPreparingExport"></i>
+            <i class="fa-solid" [class.fa-file-excel]="!IsPreparingExport" [class.fa-spinner]="IsPreparingExport" [class.fa-spin]="IsPreparingExport"></i>
             <span class="button-text">Export</span>
           </button>
-        }
-        <!-- Open in Excel: a saved query, when the host serves the Excel add-in -->
-        @if (CanOpenInExcel) {
+        } @else if (CanOpenInExcel) {
           <button
+            type="button"
             [disabled]="IsOpeningInExcel"
             [title]="OpenInExcelTooltip"
             class="toolbar-btn open-in-excel-btn"
             (click)="OpenInExcel()">
-            <i class="fa-solid" [class.fa-table-cells]="!IsOpeningInExcel" [class.fa-spinner]="IsOpeningInExcel" [class.fa-spin]="IsOpeningInExcel"></i>
+            <i class="fa-solid" [class.fa-file-excel]="!IsOpeningInExcel" [class.fa-spinner]="IsOpeningInExcel" [class.fa-spin]="IsOpeningInExcel"></i>
             <span class="button-text">Open in Excel</span>
           </button>
         }

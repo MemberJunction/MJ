@@ -15,8 +15,9 @@ brings current data.
 
 | Module | For |
 |---|---|
-| `contract` | The workbook format the server writes and the pane reads: one data sheet per saved view or query, and a very-hidden `MJ_Sources` sheet recording each source. `ParseWorkbookManifest` validates it, because a workbook is user-editable. |
-| `operations` | The typed Remote Operations Explorer calls: `ExcelAddin.GetStatus`, `ExcelAddin.CreateConnection`, `ExcelAddin.BuildWorkbook`. These bases are not registered; the server package registers their bodies. |
+| `contract` | The workbook format the server writes and the pane reads/updates: one data sheet per entity, saved view, or saved query, and a very-hidden `MJ_Sources` sheet recording each source. `ParseWorkbookManifest` validates it, because a workbook is user-editable. |
+| `catalog-types` | Dependency-free catalog and source-resolution DTOs shared between the browser pane and server operations. |
+| `operations` | The typed Remote Operations Explorer and the Excel pane call: `ExcelAddin.GetStatus`, `ExcelAddin.CreateConnection`, `ExcelAddin.BuildWorkbook`, `ExcelAddin.GetCatalog`, `ExcelAddin.GetEntityViews`, and `ExcelAddin.ResolveSource`. These bases are not registered; the server package registers their bodies. |
 | `handoff` | The encrypted sign-in handoff between Explorer's connect page and the pane (RSA-OAEP-wrapped AES-GCM, Web Crypto only). |
 | `client` | `ExcelAddinClient`: caches the add-in's status per provider and downloads a workbook. Used by the grids. |
 | `src/web` | The pane itself, bundled with esbuild to `dist/web`. Plain TypeScript and Office.js, no framework. |

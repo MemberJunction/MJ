@@ -4,7 +4,10 @@ import { IMetadataProvider, QueryInfo, RemoteOpServerContext, UserInfo } from '@
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinGetCatalogServerOperation,
+    ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
+    ExcelAddinResolveSourceServerOperation,
     MakeWorkbookFileName,
 } from '../operations';
 import { ExcelAddinRuntime } from '../runtime';
@@ -49,6 +52,14 @@ describe('ExcelAddin operations, add-in off', () => {
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('FORBIDDEN');
     });
+
+    it('refuses catalog, entity views, and source resolution when off', async () => {
+        expect((await new ExcelAddinGetCatalogServerOperation().ExecuteServer({}, context)).ResultCode).toBe('FORBIDDEN');
+        expect((await new ExcelAddinGetEntityViewsServerOperation().ExecuteServer({ EntityID: QUERY_ID }, context)).ResultCode).toBe('FORBIDDEN');
+        expect(
+            (await new ExcelAddinResolveSourceServerOperation().ExecuteServer({ Source: { Kind: 'Query', ID: QUERY_ID } }, context)).ResultCode,
+        ).toBe('FORBIDDEN');
+    });
 });
 
 describe('ExcelAddin operations, add-in on', () => {
@@ -76,7 +87,20 @@ describe('ExcelAddin operations, add-in on', () => {
     it('returns a source refusal as the failure message', async () => {
         const result = await new ExcelAddinBuildWorkbookServerOperation().ExecuteServer({ Sources: [] }, context);
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/at least one view or query/);
+        expect(result.ErrorMessage).toMatch(/at least one view, entity, or query/);
+    });
+
+    it('returns the caller\'s catalog and resolves an individual source', async () => {
+        const catalogResult = await new ExcelAddinGetCatalogServerOperation().ExecuteServer({}, context);
+        expect(catalogResult.Success).toBe(true);
+        expect(catalogResult.Output?.Queries.map(q => q.ID)).toEqual([QUERY_ID]);
+
+        const resolvedResult = await new ExcelAddinResolveSourceServerOperation().ExecuteServer(
+            { Source: { Kind: 'Query', ID: QUERY_ID } },
+            context,
+        );
+        expect(resolvedResult.Success).toBe(true);
+        expect(resolvedResult.Output?.Source.Name).toBe('Renewals: 2026');
     });
 });
 

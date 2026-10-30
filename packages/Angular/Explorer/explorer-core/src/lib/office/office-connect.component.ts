@@ -165,11 +165,12 @@ export class OfficeConnectComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    /** The GraphQL provider has a token and endpoint once the session is restored. */
+    /** The GraphQL provider has a token, endpoint, and hydrated CurrentUser once the session is restored. */
     private isProviderReady(): boolean {
         try {
-            const config = (this.ProviderToUse as GraphQLDataProvider)?.ConfigData;
-            return Boolean(config?.Token && config?.URL);
+            const provider = this.ProviderToUse as GraphQLDataProvider;
+            const config = provider?.ConfigData;
+            return Boolean(config?.Token && config?.URL && provider?.CurrentUser);
         } catch {
             return false;
         }

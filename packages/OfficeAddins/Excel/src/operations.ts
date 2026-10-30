@@ -11,14 +11,16 @@
  * @module @memberjunction/excel-addin
  */
 import { BaseRemotableOperation } from '@memberjunction/core';
-import type { ExcelParameterValue, ExcelSourceKind } from './contract';
-
-/** The operations' stable keys. */
-export const EXCEL_ADDIN_OPERATION_KEYS = {
-    GetStatus: 'ExcelAddin.GetStatus',
-    CreateConnection: 'ExcelAddin.CreateConnection',
-    BuildWorkbook: 'ExcelAddin.BuildWorkbook',
-} as const;
+import {
+    EXCEL_ADDIN_OPERATION_KEYS,
+    ExcelAddinCatalogInput,
+    ExcelAddinCatalogOutput,
+    ExcelAddinEntityViewsInput,
+    ExcelAddinEntityViewsOutput,
+    ExcelAddinResolveSourceInput,
+    ExcelAddinResolveSourceOutput,
+    ExcelWorkbookSourceRequest,
+} from './catalog-types';
 
 /** Input for {@link ExcelAddinGetStatusOperation}; it takes none. */
 export type ExcelAddinStatusInput = Record<string, never>;
@@ -48,15 +50,6 @@ export interface ExcelAddinCreateConnectionOutput {
     ExpiresAt: string;
     /** The label the key carries on the API Keys page. */
     Label: string;
-}
-
-/** One sheet to put in a workbook. */
-export interface ExcelWorkbookSourceRequest {
-    Kind: ExcelSourceKind;
-    /** The saved view's or saved query's ID. */
-    ID: string;
-    /** Query parameter values; ignored for a view. Server-set parameters are refused. */
-    Parameters?: Record<string, ExcelParameterValue>;
 }
 
 /** Input for {@link ExcelAddinBuildWorkbookOperation}. */
@@ -92,4 +85,33 @@ export class ExcelAddinCreateConnectionOperation extends BaseRemotableOperation<
 export class ExcelAddinBuildWorkbookOperation extends BaseRemotableOperation<ExcelAddinBuildWorkbookInput, ExcelAddinBuildWorkbookOutput> {
     public readonly OperationKey: string = EXCEL_ADDIN_OPERATION_KEYS.BuildWorkbook;
     public readonly ExecutionMode = 'Sync' as const;
+}
+
+/**
+ * Lists the applications, readable entities, query categories and runnable saved queries the caller
+ * may pick from inside the Excel task pane. Callable with an Excel connection key (`view:run` scope).
+ */
+export class ExcelAddinGetCatalogOperation extends BaseRemotableOperation<ExcelAddinCatalogInput, ExcelAddinCatalogOutput> {
+    public readonly OperationKey: string = EXCEL_ADDIN_OPERATION_KEYS.GetCatalog;
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope: string = 'view:run';
+}
+
+/**
+ * Lists the saved `MJ: User Views` records the caller can view on a specific entity.
+ */
+export class ExcelAddinGetEntityViewsOperation extends BaseRemotableOperation<ExcelAddinEntityViewsInput, ExcelAddinEntityViewsOutput> {
+    public readonly OperationKey: string = EXCEL_ADDIN_OPERATION_KEYS.GetEntityViews;
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope: string = 'view:run';
+}
+
+/**
+ * Resolves a single chosen view, entity, or saved query into its canonical `ExcelResolvedWorkbookSource`
+ * (columns, data types, and checked query parameters) before the Excel pane writes it into `MJ_Sources`.
+ */
+export class ExcelAddinResolveSourceOperation extends BaseRemotableOperation<ExcelAddinResolveSourceInput, ExcelAddinResolveSourceOutput> {
+    public readonly OperationKey: string = EXCEL_ADDIN_OPERATION_KEYS.ResolveSource;
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope: string = 'view:run';
 }

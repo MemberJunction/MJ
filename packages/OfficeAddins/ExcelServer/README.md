@@ -11,7 +11,10 @@ The browser-safe half — the workbook contract, the typed Remote Operations Exp
 | `ExcelAddinServerExtension` | A Server Extension (pre-auth) that serves the add-in's manifest, its `config.json`, and the pane's pages and icons from this host |
 | `ExcelAddin.GetStatus` | Tells Explorer whether this host serves the add-in, and where |
 | `ExcelAddin.CreateConnection` | Mints the signed-in user's Excel connection key |
-| `ExcelAddin.BuildWorkbook` | Builds the connected workbook for saved views and queries the caller can see |
+| `ExcelAddin.BuildWorkbook` | Builds the connected workbook for saved views, entities, and queries the caller can see |
+| `ExcelAddin.GetCatalog` | Lists the caller's active applications, readable entities, query categories, and runnable saved queries for the in-pane browser |
+| `ExcelAddin.GetEntityViews` | Lists accessible saved `MJ: User Views` on a chosen entity for the in-pane browser |
+| `ExcelAddin.ResolveSource` | Resolves a chosen entity, view, or query into canonical columns and checked parameters before writing to `MJ_Sources` |
 | `BuildExcelAddinManifest`, `BuildConnectedWorkbook` | The builders those use |
 
 The operations are registered whenever this package is loaded. Until the Server Extension is configured, `GetStatus` reports the add-in as off, the other two refuse, and Explorer hides the Open in Excel button.

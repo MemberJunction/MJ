@@ -34,8 +34,8 @@ export const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
 /** Excel's own limit on the characters in one cell. */
 export const EXCEL_MAX_CELL_LENGTH = 32767;
 
-/** What a sheet's rows come from. */
-export type ExcelSourceKind = 'View' | 'Query';
+/** What a sheet's rows come from: a saved User View, an Entity's default columns, or a saved Query. */
+export type ExcelSourceKind = 'View' | 'Entity' | 'Query';
 
 /** How the pane writes a column's values into Excel. */
 export type ExcelColumnDataType = 'Text' | 'Number' | 'Boolean' | 'Date' | 'DateTime';
@@ -53,20 +53,22 @@ export interface ExcelSourceColumn {
     DataType: ExcelColumnDataType;
 }
 
-/** One data sheet and the saved view or query that fills it. */
+/** One data sheet and the saved view, entity, or saved query that fills it. */
 export interface ExcelWorkbookSource {
     /** Stable within the workbook (`s1`, `s2`, ...); names the sheet's Excel table. */
     Key: string;
     Kind: ExcelSourceKind;
-    /** The saved view's or saved query's ID. */
+    /** The saved view's, entity's, or saved query's ID. */
     ID: string;
-    /** The view's or query's name, for display. */
+    /** The view's, entity's, or query's name, for display. */
     Name: string;
+    /** Canonical MJ entity name (required when `Kind === 'Entity'`, optional metadata on `View`). */
+    EntityName?: string;
     /** The worksheet the rows go into. */
     SheetName: string;
     /** Columns in display order. Empty for a query whose fields are unknown: the pane uses the result's own columns. */
     Columns: ExcelSourceColumn[];
-    /** Query parameter values the user chose. Never server-set parameters; never present for a view. */
+    /** Query parameter values the user chose. Never server-set parameters; only present for a query. */
     Parameters?: Record<string, ExcelParameterValue>;
 }
 
@@ -151,6 +153,75 @@ export function MakeUniqueSheetName(name: string, used: Set<string>): string {
 /** The Excel table name for a source, unique within the workbook. */
 export function TableNameForSource(source: Pick<ExcelWorkbookSource, 'Key'>): string {
     return `MJ_${source.Key}`;
+}
+
+/** Picks the lowest unused `s1`, `s2`, ... key among the workbook's existing sources. */
+export function NextSourceKey(existing: readonly Pick<ExcelWorkbookSource, 'Key'>[]): string {
+    const used = new Set(existing.map(s => s.Key));
+    for (let n = 1; n <= 999; n++) {
+        const candidate = `s${n}`;
+        if (!used.has(candidate)) {
+            return candidate;
+        }
+    }
+    throw new Error('This workbook already has the maximum number of MemberJunction sources.');
+}
+
+/**
+ * Adds a resolved source to a workbook manifest (creating a fresh manifest if the workbook had none),
+ * or replaces the source already bound to `targetSheetName` (case-insensitively) while preserving its `Key`.
+ */
+export function UpsertWorkbookSource(
+    current: ExcelWorkbookManifest | null,
+    host: { ServerName: string; AddinUrl: string },
+    incoming: Omit<ExcelWorkbookSource, 'Key' | 'SheetName'>,
+    targetSheetName: string,
+    nowIso: string = new Date().toISOString(),
+): { Manifest: ExcelWorkbookManifest; Source: ExcelWorkbookSource } {
+    const existingSources = current ? [...current.Sources] : [];
+    const matchIndex = existingSources.findIndex(s => s.SheetName.toLowerCase() === targetSheetName.toLowerCase());
+    if (matchIndex < 0 && existingSources.length >= EXCEL_MAX_SOURCES_PER_WORKBOOK) {
+        throw new Error(`A workbook can hold at most ${EXCEL_MAX_SOURCES_PER_WORKBOOK} MemberJunction data sheets.`);
+    }
+    const key = matchIndex >= 0 ? existingSources[matchIndex].Key : NextSourceKey(existingSources);
+    const sheetName = matchIndex >= 0 ? existingSources[matchIndex].SheetName : targetSheetName;
+    const source: ExcelWorkbookSource = {
+        ...incoming,
+        Key: key,
+        SheetName: sheetName,
+    };
+    if (matchIndex >= 0) {
+        existingSources[matchIndex] = source;
+    } else {
+        existingSources.push(source);
+    }
+    const manifest: ExcelWorkbookManifest = {
+        ContractVersion: EXCEL_WORKBOOK_CONTRACT_VERSION,
+        ServerName: current?.ServerName ?? host.ServerName,
+        AddinUrl: current?.AddinUrl ?? host.AddinUrl,
+        GeneratedAt: nowIso,
+        Sources: existingSources,
+    };
+    return { Manifest: manifest, Source: source };
+}
+
+/**
+ * Removes one source by `Key` from the workbook manifest. Returns `null` when no sources remain.
+ */
+export function RemoveWorkbookSource(
+    current: ExcelWorkbookManifest,
+    sourceKey: string,
+    nowIso: string = new Date().toISOString(),
+): ExcelWorkbookManifest | null {
+    const remaining = current.Sources.filter(s => s.Key !== sourceKey);
+    if (remaining.length === 0) {
+        return null;
+    }
+    return {
+        ...current,
+        GeneratedAt: nowIso,
+        Sources: remaining,
+    };
 }
 
 /**
@@ -272,11 +343,18 @@ function validateSource(raw: unknown): ExcelWorkbookSource | null {
     if (!isRecord(raw)) {
         return null;
     }
-    const kindOk = raw.Kind === 'View' || raw.Kind === 'Query';
+    const kindOk = raw.Kind === 'View' || raw.Kind === 'Entity' || raw.Kind === 'Query';
     const keyOk = typeof raw.Key === 'string' && SOURCE_KEY_PATTERN.test(raw.Key);
     const idOk = typeof raw.ID === 'string' && UUID_PATTERN.test(raw.ID);
     const sheetOk = isBoundedString(raw.SheetName, EXCEL_MAX_SHEET_NAME_LENGTH);
     if (!kindOk || !keyOk || !idOk || !sheetOk || !isBoundedString(raw.Name)) {
+        return null;
+    }
+    const hasEntityName = raw.EntityName !== undefined && raw.EntityName !== null;
+    if (raw.Kind === 'Entity' && !isBoundedString(raw.EntityName)) {
+        return null;
+    }
+    if (hasEntityName && (raw.Kind === 'Query' || !isBoundedString(raw.EntityName))) {
         return null;
     }
     const columns = validateColumns(raw.Columns);
@@ -292,6 +370,9 @@ function validateSource(raw: unknown): ExcelWorkbookSource | null {
         SheetName: raw.SheetName as string,
         Columns: columns,
     };
+    if (hasEntityName) {
+        source.EntityName = raw.EntityName as string;
+    }
     if (parameters) {
         source.Parameters = parameters;
     }

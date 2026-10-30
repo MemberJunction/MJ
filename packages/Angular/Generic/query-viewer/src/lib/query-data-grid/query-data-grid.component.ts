@@ -433,6 +433,7 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
     ngOnDestroy(): void {
         // Flush any pending state changes before destroy
         this.FlushState();
+        document.removeEventListener('click', this.handleExcelMenuOutsideClick);
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -1088,7 +1089,14 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
         this.RefreshRequest.emit();
     }
 
+    private static _nextExcelMenuInstanceId = 0;
     private _excelAddinEnabled = false;
+    @ViewChild('excelMenuTrigger') private _excelMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+    /** Unique DOM id pairing the unified Export/Excel disclosure trigger with its action popover. */
+    public readonly ExcelMenuId = `mj-query-grid-excel-menu-${++QueryDataGridComponent._nextExcelMenuInstanceId}`;
+    /** True while the unified Export/Excel toolbar action popover is open. */
+    public ShowExcelMenu = false;
     /** True while Open in Excel is building the workbook. */
     public IsOpeningInExcel = false;
     /** The Open in Excel button's tooltip. */
@@ -1105,6 +1113,59 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
         }
         return CanOpenQueryInExcel(this.ShowOpenInExcel, query.ID, this._excelAddinEnabled, this.ParameterValues, query.QueryParameters ?? []);
     }
+
+    /** Toggles the unified Export/Excel action popover. */
+    public ToggleExcelMenu(): void {
+        this.ShowExcelMenu = !this.ShowExcelMenu;
+        this.cdr.markForCheck();
+
+        if (this.ShowExcelMenu) {
+            setTimeout(() => {
+                document.addEventListener('click', this.handleExcelMenuOutsideClick);
+            }, 0);
+        } else {
+            document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+        }
+    }
+
+    /** Closes the unified Export/Excel action popover, optionally restoring focus to the trigger button. */
+    public CloseExcelMenu(restoreFocus = false): void {
+        if (!this.ShowExcelMenu) {
+            document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+            return;
+        }
+        this.ShowExcelMenu = false;
+        document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+        this.cdr.detectChanges();
+        if (restoreFocus) {
+            this._excelMenuTrigger?.nativeElement?.focus();
+        }
+    }
+
+    /** Handles Escape key dismissal inside the unified Export/Excel dropdown. */
+    public OnExcelMenuEscape(event: Event): void {
+        if (!this.ShowExcelMenu) {
+            return;
+        }
+        event.stopPropagation();
+        this.CloseExcelMenu(true);
+    }
+
+    /** Invokes Open in Excel from the unified toolbar popover. */
+    public OnOpenInExcelFromMenu(): void {
+        this.CloseExcelMenu();
+        void this.OpenInExcel();
+    }
+
+    /** Invokes static snapshot export from the unified toolbar popover. */
+    public OnExportSnapshotFromMenu(): void {
+        this.CloseExcelMenu();
+        void this.OpenExportDialog();
+    }
+
+    private handleExcelMenuOutsideClick = (): void => {
+        this.CloseExcelMenu();
+    };
 
     /** Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in. */
     private async resolveExcelAddinAvailability(): Promise<void> {
