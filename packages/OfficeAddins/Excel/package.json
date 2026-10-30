@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/excel-addin",
+  "version": "6.2.0-edge.6",
+  "description": "MemberJunction: the Excel add-in's browser-safe half - the Open in Excel workbook contract, the typed Remote Operations Explorer calls, the sign-in handoff crypto, and the add-in pane itself (bundled to dist/web, served by @memberjunction/excel-addin-server)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f && npm run build:web",
+    "build:web": "tsc -p tsconfig.web.json && node scripts/build-web.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6"
+  },
+  "devDependencies": {
+    "@types/office-js": "^1.0.463",
+    "esbuild": "^0.26.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

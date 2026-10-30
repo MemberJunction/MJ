@@ -50,7 +50,7 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift, Canonicalize } from '@memberjunction/global';
-import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
+import { SQLParser, IsBalancedSQLFragment, LexSQL, StrictFragmentValidator, type StrictStatementReads } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate, StatusUpdateOwnerID } from './PushStatusResolver.js';
@@ -1118,7 +1118,7 @@ export class ResolverBase {
    * Fails closed: no user, or an unresolvable reference, refuses.
    *
    * The references come from a walk of the whole parse tree
-   * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
+   * (`StrictFragmentValidator.ValidateReadOnlyStatement`). The statement is refused when that walk does not
    * account for every SELECT in the text, or when a FROM item names no table (a table function or
    * a row list).
    *
@@ -1139,14 +1139,7 @@ export class ResolverBase {
     }
     const dialect = this.dialectForProvider(provider);
     ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
-    const parser = new SQLParser(sqlText, dialect);
-    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
-    }
-    if (this.astContainsWriteNode(parser.AST)) {
-      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-    }
-    const reads = ClientClauseScreen.CollectStatementReads(parser);
+    const reads = this.strictReadOnlyStatementReads(sqlText, dialect, label);
     ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
     const allowed = this.entityBaseViewAllowList(provider);
     for (const relation of reads.Relations) {
@@ -1215,9 +1208,19 @@ export class ResolverBase {
     return LexSQL(clause, dialect).some((t) => (t.Kind === 'string' || t.Kind === 'identifier') && t.Text.includes('\\'));
   }
 
-  /** Write/DDL node walk shared with the clause screen; see `ClientClauseScreen.AstContainsWriteNode`. */
-  private astContainsWriteNode(node: unknown): boolean {
-    return ClientClauseScreen.AstContainsWriteNode(node);
+  /**
+   * Parses a whole statement with the strict validator and returns what it reads; throws unless it
+   * is one plain read-only SELECT with no write or DDL at any depth.
+   */
+  private strictReadOnlyStatementReads(sqlText: string, dialect: SQLParserDialect, label: string): StrictStatementReads {
+    const result = StrictFragmentValidator.ValidateReadOnlyStatement(sqlText, dialect, { CollectReads: true });
+    if (result.Refusal === 'NestedWrite') {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+    if (!result.IsValid || !result.Reads) {
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+    }
+    return result.Reads;
   }
 
   private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {

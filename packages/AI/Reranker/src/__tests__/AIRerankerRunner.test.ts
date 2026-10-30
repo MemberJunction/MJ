@@ -117,6 +117,8 @@ class MockReranker extends BaseReranker {
     public static HangingModels = new Set<string>();
     /** The cancellation signal each call was handed, in call order. */
     public static Signals: Array<AbortSignal | undefined> = [];
+    /** The per-document token limit each call was handed, in call order. */
+    public static MaxTokens: Array<number | undefined> = [];
 
     public override async Rerank(params: RerankParams): Promise<RerankResponse> {
         const response = await super.Rerank(params);
@@ -129,6 +131,7 @@ class MockReranker extends BaseReranker {
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
         MockReranker.Calls.push(this.ModelName);
         MockReranker.Signals.push(params.CancellationToken);
+        MockReranker.MaxTokens.push(params.MaxTokensPerDocument);
         if (MockReranker.HangingModels.has(this.ModelName)) {
             return this.waitForAbort(params.CancellationToken);
         }
@@ -323,6 +326,7 @@ beforeEach(() => {
     MockReranker.Usage = undefined;
     MockReranker.HangingModels = new Set();
     MockReranker.Signals = [];
+    MockReranker.MaxTokens = [];
     FakePromptRun.FailSaves = false;
     stubDriverFactory();
     // BaseReranker logs a driver's exception to console.error; keep the test output clean.
@@ -360,6 +364,17 @@ describe('AIRerankerRunner', () => {
         // No driver reports usage, so no cost or tokens are invented.
         expect(row.Cost ?? null).toBeNull();
         expect(row.TokensPrompt ?? null).toBeNull();
+    });
+
+    it("hands the driver its model-vendor row's MaxInputTokens as the per-document token limit", async () => {
+        const primaryVendor = (h.state.models[0].ModelVendors as Array<Record<string, unknown>>)[0];
+        primaryVendor.MaxInputTokens = 32768;
+
+        await newRunner().RunRerank(rerankParams());
+        await newRunner().RunRerank(rerankParams({ ModelID: SECONDARY_MODEL_ID }));
+
+        // The secondary row sets none, so the driver is left to its API's default.
+        expect(MockReranker.MaxTokens).toEqual([32768, undefined]);
     });
 
     it('builds LLMReranker with the ID of the chat prompt its model-vendor APIName names, and no key', async () => {

@@ -10,7 +10,7 @@
 import { RunQuery, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Assert } from '@memberjunction/testing-integration';
+import { Assert, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
@@ -39,13 +39,12 @@ const REFUSAL = /Dangerous SQL keyword detected|single read query/i;
 /**
  * Whether the server can run ad-hoc SQL. ExecuteAdhocQuery uses only the read-only login and
  * never falls back to the read-write pool, so a server with no read-only login refuses every
- * ad-hoc query. Warns that the check is skipped when it cannot.
+ * ad-hoc query. Skips the running check when it cannot.
  */
-async function adhocAvailable(checkId: string, user: UserInfo): Promise<boolean> {
+async function requireAdhoc(user: UserInfo): Promise<void> {
     const probe = await new RunQuery().RunQuery({ SQL: 'SELECT 1 AS N', StartRow: 0, MaxRows: 1 }, user);
-    if (probe.Success || !/No read-only data source available/i.test(probe.ErrorMessage ?? '')) return true;
-    console.warn(`  ⚠ ${checkId} SKIPPED — the server has no read-only connection configured, which ad-hoc SQL requires.`);
-    return false;
+    if (probe.Success || !/No read-only data source available/i.test(probe.ErrorMessage ?? '')) return;
+    SkipCheck('the server has no read-only connection configured, which ad-hoc SQL requires (set DB_READ_ONLY_USERNAME / DB_READ_ONLY_PASSWORD for MJAPI)');
 }
 
 function numbers(predicate: (n: number) => boolean): ComparableRow[] {
@@ -152,8 +151,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             const wire = requireWire(ctx);
             const result = await runTestQuerySQL(wire, `SELECT N FROM ${NUMBER_SOURCE} ORDER BY N`, 7);
             if (!result.Success && /Read-only data source is not available/i.test(result.ErrorMessage ?? '')) {
-                console.warn('  ⚠ runquery-rendering-client.RRC3 SKIPPED — the server has no read-only connection configured, which TestQuerySQL requires.');
-                return;
+                SkipCheck('the server has no read-only connection configured, which TestQuerySQL requires (set DB_READ_ONLY_USERNAME / DB_READ_ONLY_PASSWORD for MJAPI)');
             }
             Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
             const rows = ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['N']);
@@ -177,8 +175,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
                 }
                 const row = ProjectRows(run.Results, ['StatementTimeout', 'IdleInTransactionTimeout'])[0];
                 if (row.StatementTimeout === 'n/a') {
-                    console.log('      → RRC4: SQL Server applies requestTimeout in the driver; nothing to read from the server');
-                    return;
+                    SkipCheck('PostgreSQL only: SQL Server applies requestTimeout in the driver, so there is no session timeout to read from the server');
                 }
                 if (row.StatementTimeout !== '30s' || row.IdleInTransactionTimeout !== '1min') {
                     failures.push(`statement_timeout '${row.StatementTimeout}', idle_in_transaction_session_timeout '${row.IdleInTransactionTimeout}'`);
@@ -196,13 +193,11 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             // which user to expect.
             const expectedUser = process.env.DB_READ_ONLY_USERNAME;
             if (!expectedUser) {
-                console.warn('  ⚠ runquery-rendering-client.RRC5 SKIPPED — DB_READ_ONLY_USERNAME is not set for the runner, so there is no read-only login to expect.');
-                return;
+                SkipCheck('DB_READ_ONLY_USERNAME is not set for the runner, so there is no read-only login to expect');
             }
             const result = await runTestQuerySQL(wire, 'SELECT CURRENT_USER AS UserName, SUSER_SNAME() AS LoginName', 1);
             if (!result.Success && /Read-only data source is not available/i.test(result.ErrorMessage ?? '')) {
-                console.warn('  ⚠ runquery-rendering-client.RRC5 SKIPPED — the server has no read-only connection configured, which TestQuerySQL requires.');
-                return;
+                SkipCheck('the server has no read-only connection configured, which TestQuerySQL requires (set DB_READ_ONLY_USERNAME / DB_READ_ONLY_PASSWORD for MJAPI)');
             }
             Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
             const row = ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['UserName', 'LoginName'])[0];
@@ -222,13 +217,11 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             const probe = await new RunQuery().RunQuery({ QueryID: queryID('RRC Session Timeouts') }, ctx.User);
             Assert(probe.Success, `platform probe failed: ${probe.ErrorMessage}`);
             if (ProjectRows(probe.Results, ['StatementTimeout'])[0].StatementTimeout === 'n/a') {
-                console.log('      → RRC6: SQL Server read queries cannot change session settings; nothing to check');
-                return;
+                SkipCheck('PostgreSQL only: SQL Server read queries cannot change session settings');
             }
             const change = await runTestQuerySQL(wire, "SELECT set_config('statement_timeout', '3s', false) AS Changed", 1);
             if (!change.Success && /Read-only data source is not available/i.test(change.ErrorMessage ?? '')) {
-                console.warn('  ⚠ runquery-rendering-client.RRC6 SKIPPED — the server has no read-only connection configured.');
-                return;
+                SkipCheck('the server has no read-only connection configured, which TestQuerySQL requires (set DB_READ_ONLY_USERNAME / DB_READ_ONLY_PASSWORD for MJAPI)');
             }
             Assert(change.Success, `set_config call failed: ${change.ErrorMessage}`);
             const failures: string[] = [];
@@ -247,8 +240,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             const wire = requireWire(ctx);
             const result = await runTestQuerySQL(wire, `SELECT COUNT(*) AS RowTotal, SUM(CAST(N AS DECIMAL(10, 2))) AS ValueTotal FROM ${NUMBER_SOURCE}`, 1);
             if (!result.Success && /Read-only data source is not available/i.test(result.ErrorMessage ?? '')) {
-                console.warn('  ⚠ runquery-rendering-client.RRC7 SKIPPED — the server has no read-only connection configured, which TestQuerySQL requires.');
-                return;
+                SkipCheck('the server has no read-only connection configured, which TestQuerySQL requires (set DB_READ_ONLY_USERNAME / DB_READ_ONLY_PASSWORD for MJAPI)');
             }
             Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
             const row = (JSON.parse(result.Results ?? '[]') as Record<string, unknown>[])[0] ?? {};
@@ -267,7 +259,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         Name: 'RRC8: ad-hoc SQL over GraphQL returns the right rows and totals under every MaxRows / StartRow combination',
         Fn: async (ctx): Promise<void> => {
             requireWire(ctx);
-            if (!await adhocAvailable('runquery-rendering-client.RRC8', ctx.User)) return;
+            await requireAdhoc(ctx.User);
             const expected: ExpectedResult = { Rows: numbers(n => n % 2 === 0), Ordered: true };
             const sql = `SELECT N FROM ${NUMBER_SOURCE} WHERE N % 2 = 0 ORDER BY N`;
             FailOnMismatches('RRC8', await RunCapAndPagingMatrix('ad-hoc over GraphQL', { SQL: sql }, expected, ['N'], ctx.User), 1);
@@ -278,7 +270,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         Name: 'RRC9: ad-hoc SQL over GraphQL must be a single read query; a write, alone or stacked after a read, is refused and changes nothing',
         Fn: async (ctx): Promise<void> => {
             requireWire(ctx);
-            if (!await adhocAvailable('runquery-rendering-client.RRC9', ctx.User)) return;
+            await requireAdhoc(ctx.User);
             const category = requireFixtures().Category;
             // Double-quoted identifiers are valid on both platforms, so only the read-only guard can stop these.
             const update = `UPDATE __mj."QueryCategory" SET "Description" = 'changed by RRC9' WHERE "ID" = '${category.ID}'`;
@@ -302,7 +294,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         Name: 'RRC10: ad-hoc SQL over GraphQL stops at the caller timeout and reports it',
         Fn: async (ctx): Promise<void> => {
             requireWire(ctx);
-            if (!await adhocAvailable('runquery-rendering-client.RRC10', ctx.User)) return;
+            await requireAdhoc(ctx.User);
             // Seven copies of the 30-row source cross joined: far too many rows to count in a second.
             const copies = Array.from({ length: 7 }, (_, i) => NUMBER_SOURCE.replace(/ AS v$/, () => ` AS v${i}`)).join(' CROSS JOIN ');
             const started = Date.now();
