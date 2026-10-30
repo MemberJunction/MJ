@@ -370,6 +370,11 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         ClearOfflineQueue();
         ClearPendingChatHandoff();
         await LocalCacheManager.Instance.ClearAll().catch(() => undefined);
+        // The manager's ClearAll is a no-op until bootWith() has handed it the
+        // storage provider, and BootGate's escape buttons can call signOut()
+        // before that (token load/refresh threw, or the 6s loading escape). Wipe
+        // the MMKV store directly so the previous user's cache never survives.
+        mobileCacheStorage.ClearAll();
         ClearUserPreferences();
         // The next Auth0 sign-in must show the credentials form even if the tenant session
         // teardown above could not complete (unlisted logout URL, dismissed sheet).

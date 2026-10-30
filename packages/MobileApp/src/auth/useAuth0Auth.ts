@@ -25,6 +25,9 @@ export function UseAuth0Auth() {
     // After an explicit sign-out, force Auth0 to show the credentials form instead of silently
     // reusing the previous user's SSO cookie (see src/auth/fresh-login.ts). `extraParams` is part
     // of useAuthRequest's rebuild dependencies, so flipping the flag re-creates the request.
+    // Read once per render, not subscribed: this relies on signOut() ending in status 'no-token',
+    // which remounts the login screen. If this hook ever lives in a component that stays mounted
+    // across sign-out, the read goes stale and needs a state hook instead.
     const freshLogin = IsFreshLoginRequired();
     const [request, , promptAsync] = useAuthRequest(
         {
