@@ -6533,10 +6533,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return this.Base.EntityMaps;
     }
 
-    public get FieldMaps(): MJCompanyIntegrationFieldMapEntity[] {
-        return this.Base.FieldMaps;
-    }
-
     public get Watermarks(): MJCompanyIntegrationSyncWatermarkEntity[] {
         return this.Base.Watermarks;
     }
@@ -6563,8 +6559,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return this.Base.GetEntityMapsForCompanyIntegration(companyIntegrationID);
     }
 
-    public GetFieldMapsForEntityMap(entityMapID: string): MJCompanyIntegrationFieldMapEntity[] {
-        return this.Base.GetFieldMapsForEntityMap(entityMapID);
+    public LoadFieldMapsForEntityMap(entityMapID: string, contextUser?: UserInfo): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+        return this.Base.LoadFieldMapsForEntityMap(entityMapID, contextUser);
     }
 
     public GetEnabledEntityMaps(companyIntegrationID: string): MJCompanyIntegrationEntityMapEntity[] {
