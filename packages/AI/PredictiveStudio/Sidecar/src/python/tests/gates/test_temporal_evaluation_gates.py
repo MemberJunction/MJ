@@ -167,6 +167,8 @@ def test_T4_S_T_3_lightgbm_not_above_naive_without_evidence(server: FileServer) 
     if r.gate.outcome == "model":
         shipped = r.holdout.primary.value
     else:
+        assert r.gate.shipped is not None, \
+            f"the gate's outcome is {r.gate.outcome} on finalist {r.finalist}: nothing shipped, so no MASE to grade"
         kind = "seasonal-naive" if r.gate.shipped == "seasonalNaive" else r.gate.shipped
         shipped = next(b.holdout.value for b in r.baselines if b.baseline.kind == kind)
     assert T4_REFERENCE_CI[0] <= shipped <= T4_REFERENCE_CI[1]
