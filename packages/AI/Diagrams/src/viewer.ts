@@ -5,24 +5,18 @@
  * - Click / keyboard selection of nodes, edges, and summary rule cards
  * - Dismissible slide-over inspector drawer with incoming/outgoing step links
  * - Upstream (`Trace back`) and downstream (`Trace forward`) graph traversal
- * - Light / dark theme synchronization using MemberJunction `--mj-*` design tokens
+ * - Colors from MemberJunction `--mj-*` design tokens, so light and dark mode follow the host
  *
  * Zero runtime dependencies; safe for both browser and JSDOM environments.
  *
  * @module @memberjunction/ai-diagrams/viewer
  */
 
-export interface DiagramViewerOptions {
-    /** Initial theme (`'light'` or `'dark'`). */
-    Theme?: 'light' | 'dark';
-}
-
 export interface DiagramViewerState {
     Selected: string | null;
     SelectedEdge: string | null;
     Highlighted: string[];
     ActiveCard: string | null;
-    Theme: 'light' | 'dark';
 }
 
 export interface DiagramViewerInstance {
@@ -31,18 +25,9 @@ export interface DiagramViewerInstance {
     Trace(id: string, dir?: 'up' | 'down' | 'both'): void;
     Select(id: string | null): void;
     SelectEdge(edgeId: string | null): void;
-    SetTheme(theme: 'light' | 'dark'): void;
-    GetTheme(): 'light' | 'dark';
     OnState(fn: (state: DiagramViewerState) => void): () => void;
+    /** Removes the viewer's listeners, highlight classes, hit paths and shell, leaving the original SVG. */
     Destroy(): void;
-    Markup?: string;
-}
-
-export interface MountInteractiveDiagramOptions {
-    /** Optional HTML/SVG sanitizer callback (e.g. `MarkdownService.sanitizeHtml`). */
-    Sanitize?: (rawSvg: string) => string;
-    /** Initial theme (`'light'` or `'dark'`). */
-    InitialTheme?: 'light' | 'dark';
 }
 
 interface EdgeRecord {
@@ -86,14 +71,6 @@ const SHELL_CSS = `
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
 }
-.mjd-shell[data-theme="dark"] {
-  --s-bg: #0d1117;
-  --s-surface: #161b22;
-  --s-ink: #e6edf3;
-  --s-muted: #9198a1;
-  --s-border: #30363d;
-  --s-accent: #4493f8;
-}
 .mjd-stage {
   position: relative;
   overflow-x: auto;
@@ -134,15 +111,21 @@ const SHELL_CSS = `
   color: var(--s-muted);
   margin: 12px 0 6px;
 }
-.mjd-panel .mjd-Conn {
+.mjd-panel .mjd-conn {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 4px 6px;
+  border: 0;
   border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.mjd-panel .mjd-Conn:hover { background: var(--s-bg); }
+.mjd-panel .mjd-conn:hover, .mjd-panel .mjd-conn:focus-visible { background: var(--s-bg); }
 .mjd-panel .mjd-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .mjd-btn {
   padding: 4px 9px;
@@ -234,7 +217,7 @@ function createCloseButton(doc: Document): HTMLButtonElement {
     return btn;
 }
 
-function buildShellDom(svg: SVGSVGElement, initialTheme: 'light' | 'dark'): {
+function buildShellDom(svg: SVGSVGElement): {
     shell: HTMLDivElement;
     stage: HTMLDivElement;
     panel: HTMLElement;
@@ -243,8 +226,6 @@ function buildShellDom(svg: SVGSVGElement, initialTheme: 'light' | 'dark'): {
     const doc = svg.ownerDocument;
     const shell = doc.createElement('div');
     shell.className = 'mjd-shell';
-    shell.dataset.theme = initialTheme;
-    svg.setAttribute('data-theme', initialTheme);
     svg.parentNode?.insertBefore(shell, svg);
 
     const stage = doc.createElement('div');
@@ -369,9 +350,10 @@ function createConnRow(
     arrowOrPrefix: string,
     targetLabel: string,
     edgeLabel?: string
-): HTMLDivElement {
-    const row = doc.createElement('div');
-    row.className = 'mjd-Conn';
+): HTMLButtonElement {
+    const row = doc.createElement('button');
+    row.type = 'button';
+    row.className = 'mjd-conn';
     row.dataset.jump = targetId;
     row.append(createTextEl(doc, 'span', arrowOrPrefix), createTextEl(doc, 'strong', targetLabel));
     if (edgeLabel) {
@@ -448,259 +430,205 @@ function buildCardPanelDom(card: SVGGElement, nodeIds: string[], index: IndexedD
     return nodes;
 }
 
-/**
- * Mounts an interactive diagram controller around a rendered `<svg data-mj-diagram="1">` element.
- */
-export function MountDiagramViewer(svg: SVGSVGElement, options: DiagramViewerOptions = {}): DiagramViewerInstance {
-    const doc = svg.ownerDocument;
-    ensureStylesInjected(doc);
+type HighlightSet = Set<string> | null;
 
-    const initialTheme: 'light' | 'dark' =
-        options.Theme || (svg.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-    const { shell, stage, panel, live } = buildShellDom(svg, initialTheme);
-    const index = indexDiagramElements(svg);
+/** The interactive controller around one rendered `<svg data-mj-diagram="1">`. */
+class DiagramViewer implements DiagramViewerInstance {
+    private readonly shell: HTMLDivElement;
+    private readonly stage: HTMLDivElement;
+    private readonly panel: HTMLElement;
+    private readonly live: HTMLDivElement;
+    private readonly index: IndexedDiagram;
+    private readonly events: AbortController;
+    private readonly listeners = new Set<(s: DiagramViewerState) => void>();
+    private selected: string | null = null;
+    private selectedEdge: string | null = null;
+    private activeCard: string | null = null;
+    private highlighted = new Set<string>();
 
-    const state: {
-        selected: string | null;
-        selectedEdge: string | null;
-        highlighted: Set<string>;
-        activeCard: string | null;
-    } = { selected: null, selectedEdge: null, highlighted: new Set(), activeCard: null };
-    const listeners = new Set<(s: DiagramViewerState) => void>();
+    constructor(public readonly Svg: SVGSVGElement) {
+        // The document's own realm: jsdom and iframes reject a signal from another window.
+        this.events = new (Svg.ownerDocument.defaultView ?? globalThis).AbortController();
+        ensureStylesInjected(Svg.ownerDocument);
+        const dom = buildShellDom(Svg);
+        this.shell = dom.shell;
+        this.stage = dom.stage;
+        this.panel = dom.panel;
+        this.live = dom.live;
+        this.index = indexDiagramElements(Svg);
+        this.bindEvents();
+    }
 
-    const emitState = (): void => {
-        const snapshot: DiagramViewerState = {
-            Selected: state.selected,
-            SelectedEdge: state.selectedEdge,
-            Highlighted: [...state.highlighted],
-            ActiveCard: state.activeCard,
-            Theme: (shell.dataset.theme as 'light' | 'dark') || 'light',
-        };
-        listeners.forEach((fn) => fn(snapshot));
-    };
+    public Clear(): void {
+        this.setSelection(null, null, null);
+        this.highlight(null, null);
+        this.panel.dataset.empty = 'true';
+        this.panel.replaceChildren();
+    }
 
-    const applyVisualHighlight = (nodeSet: Set<string> | null, edgeSet: Set<string> | null): void => {
-        const hasFilter = nodeSet !== null && nodeSet.size > 0;
-        index.nodes.forEach((el, id) => {
-            el.classList.toggle('sel', state.selected === id);
-            el.classList.toggle('lit', Boolean(hasFilter && nodeSet!.has(id) && state.selected !== id));
-            el.classList.toggle('dim', Boolean(hasFilter && !nodeSet!.has(id)));
-        });
-        index.edges.forEach((e) => {
-            const onEdge = edgeSet ? edgeSet.has(e.id) : false;
-            e.el.classList.toggle('sel', state.selectedEdge === e.id);
-            e.el.classList.toggle('lit', Boolean(hasFilter && onEdge));
-            e.el.classList.toggle('dim', Boolean(hasFilter && !onEdge));
-        });
-        index.cards.forEach((c) => c.classList.toggle('sel', state.activeCard === c.dataset.cardId));
-        state.highlighted = nodeSet ? new Set(nodeSet) : new Set();
-        emitState();
-    };
-
-    const bindPanelInteractions = (selectedNodeId: string | null): void => {
-        panel.querySelector('[data-act="close-panel"]')?.addEventListener('click', () => clearSelection());
-        panel.querySelectorAll<HTMLElement>('[data-jump]').forEach((row) => {
-            row.addEventListener('click', () => selectNode(row.dataset.jump || null));
-        });
-        if (selectedNodeId) {
-            panel.querySelectorAll<HTMLButtonElement>('[data-trace]').forEach((btn) => {
-                btn.addEventListener('click', () => traceNode(selectedNodeId, btn.dataset.trace as 'up' | 'down'));
-            });
-        }
-    };
-
-    const clearSelection = (): void => {
-        state.selected = null;
-        state.selectedEdge = null;
-        state.activeCard = null;
-        applyVisualHighlight(null, null);
-        panel.dataset.empty = 'true';
-        panel.replaceChildren();
-    };
-
-    const selectNode = (id: string | null): void => {
-        if (!id || !index.nodes.has(id)) {
-            clearSelection();
+    public Select(id: string | null): void {
+        if (!id || !this.index.nodes.has(id)) {
+            this.Clear();
             return;
         }
-        state.selected = id;
-        state.selectedEdge = null;
-        state.activeCard = null;
-        const nSet = new Set<string>([id]);
-        const eSet = new Set<string>();
-        (index.adjOut.get(id) || []).forEach((e) => { eSet.add(e.id); nSet.add(e.to); });
-        (index.adjIn.get(id) || []).forEach((e) => { eSet.add(e.id); nSet.add(e.from); });
-        applyVisualHighlight(nSet, eSet);
-        panel.dataset.empty = 'false';
-        panel.replaceChildren(...buildNodePanelDom(id, index.nodes.get(id)!, index));
-        bindPanelInteractions(id);
-        live.textContent = `Selected ${getNodeLabel(index, id)}`;
-    };
+        this.setSelection(id, null, null);
+        const nodes = new Set<string>([id]);
+        const edges = new Set<string>();
+        (this.index.adjOut.get(id) || []).forEach((e) => { edges.add(e.id); nodes.add(e.to); });
+        (this.index.adjIn.get(id) || []).forEach((e) => { edges.add(e.id); nodes.add(e.from); });
+        this.highlight(nodes, edges);
+        this.showPanel(buildNodePanelDom(id, this.index.nodes.get(id)!, this.index));
+        this.live.textContent = `Selected ${getNodeLabel(this.index, id)}`;
+    }
 
-    const selectEdge = (edgeId: string | null): void => {
-        const edge = edgeId ? index.edgeById.get(edgeId) : undefined;
+    public SelectEdge(edgeId: string | null): void {
+        const edge = edgeId ? this.index.edgeById.get(edgeId) : undefined;
         if (!edge) {
-            clearSelection();
+            this.Clear();
             return;
         }
-        state.selected = null;
-        state.selectedEdge = edge.id;
-        state.activeCard = null;
-        applyVisualHighlight(new Set([edge.from, edge.to]), new Set([edge.id]));
-        panel.dataset.empty = 'false';
-        panel.replaceChildren(...buildEdgePanelDom(edge, index));
-        bindPanelInteractions(null);
-        live.textContent = `Selected connection ${edge.label || `${edge.from} to ${edge.to}`}`;
-    };
+        this.setSelection(null, edge.id, null);
+        this.highlight(new Set([edge.from, edge.to]), new Set([edge.id]));
+        this.showPanel(buildEdgePanelDom(edge, this.index));
+        this.live.textContent = `Selected connection ${edge.label || `${edge.from} to ${edge.to}`}`;
+    }
 
-    const selectCard = (card: SVGGElement): void => {
+    public Trace(id: string, dir: 'up' | 'down' | 'both' = 'both'): void {
+        if (!this.index.nodes.has(id)) return;
+        this.setSelection(id, null, null);
+        const { nodeSet, edgeSet } = traverseGraph(id, dir, this.index);
+        this.highlight(nodeSet, edgeSet);
+        this.showPanel(buildNodePanelDom(id, this.index.nodes.get(id)!, this.index));
+    }
+
+    public OnState(fn: (state: DiagramViewerState) => void): () => void {
+        this.listeners.add(fn);
+        return () => this.listeners.delete(fn);
+    }
+
+    public Destroy(): void {
+        this.listeners.clear();
+        this.Clear();
+        this.events.abort();
+        this.Svg.querySelectorAll('path.mjd-hit').forEach((hit) => hit.remove());
+        if (this.shell.parentNode) {
+            this.shell.parentNode.insertBefore(this.Svg, this.shell);
+            this.shell.remove();
+        }
+    }
+
+    private selectCard(card: SVGGElement): void {
         const cid = card.dataset.cardId || null;
-        if (state.activeCard === cid) {
-            clearSelection();
+        if (this.activeCard === cid) {
+            this.Clear();
             return;
         }
-        state.selected = null;
-        state.selectedEdge = null;
-        state.activeCard = cid;
-        const ids = (card.dataset.cardNodes || '').split(/\s+/).filter((id) => index.nodes.has(id));
-        const nSet = new Set(ids);
-        const eSet = new Set(index.edges.filter((e) => nSet.has(e.from) && nSet.has(e.to)).map((e) => e.id));
-        applyVisualHighlight(nSet, eSet);
-        panel.dataset.empty = 'false';
-        panel.replaceChildren(...buildCardPanelDom(card, ids, index));
-        bindPanelInteractions(null);
-    };
+        this.setSelection(null, null, cid);
+        const ids = (card.dataset.cardNodes || '').split(/\s+/).filter((id) => this.index.nodes.has(id));
+        const nodes = new Set(ids);
+        this.highlight(nodes, new Set(this.index.edges.filter((e) => nodes.has(e.from) && nodes.has(e.to)).map((e) => e.id)));
+        this.showPanel(buildCardPanelDom(card, ids, this.index));
+    }
 
-    const traceNode = (id: string, dir: 'up' | 'down' | 'both' = 'both'): void => {
-        if (!index.nodes.has(id)) return;
-        state.selected = id;
-        state.selectedEdge = null;
-        state.activeCard = null;
-        const { nodeSet, edgeSet } = traverseGraph(id, dir, index);
-        applyVisualHighlight(nodeSet, edgeSet);
-        panel.dataset.empty = 'false';
-        panel.replaceChildren(...buildNodePanelDom(id, index.nodes.get(id)!, index));
-        bindPanelInteractions(id);
-    };
+    private setSelection(node: string | null, edge: string | null, card: string | null): void {
+        this.selected = node;
+        this.selectedEdge = edge;
+        this.activeCard = card;
+    }
 
-    bindSvgEvents({ svg, stage, shell, index, state, selectNode, selectEdge, selectCard, clearSelection });
+    private showPanel(content: Node[]): void {
+        this.panel.dataset.empty = 'false';
+        this.panel.replaceChildren(...content);
+    }
 
-    return {
-        Svg: svg,
-        Clear: clearSelection,
-        Trace: traceNode,
-        Select: selectNode,
-        SelectEdge: selectEdge,
-        SetTheme: (theme: 'light' | 'dark') => {
-            shell.dataset.theme = theme;
-            svg.setAttribute('data-theme', theme);
-            emitState();
-        },
-        GetTheme: () => (shell.dataset.theme as 'light' | 'dark') || 'light',
-        OnState: (fn) => {
-            listeners.add(fn);
-            return () => listeners.delete(fn);
-        },
-        Destroy: () => {
-            listeners.clear();
-            if (shell.parentNode) {
-                shell.parentNode.insertBefore(svg, shell);
-                shell.remove();
-            }
-        },
-    };
-}
-
-function bindSvgEvents(ctx: {
-    svg: SVGSVGElement;
-    stage: HTMLDivElement;
-    shell: HTMLDivElement;
-    index: IndexedDiagram;
-    state: { selected: string | null; selectedEdge: string | null; activeCard: string | null };
-    selectNode: (id: string | null) => void;
-    selectEdge: (id: string | null) => void;
-    selectCard: (card: SVGGElement) => void;
-    clearSelection: () => void;
-}): void {
-    ctx.index.nodes.forEach((el, id) => {
-        el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (ctx.state.selected === id) ctx.clearSelection();
-            else ctx.selectNode(id);
+    private highlight(nodeSet: HighlightSet, edgeSet: HighlightSet): void {
+        const filtered = nodeSet !== null && nodeSet.size > 0;
+        this.index.nodes.forEach((el, id) => {
+            el.classList.toggle('sel', this.selected === id);
+            el.classList.toggle('lit', filtered && nodeSet!.has(id) && this.selected !== id);
+            el.classList.toggle('dim', filtered && !nodeSet!.has(id));
         });
-        el.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                ctx.selectNode(id);
-            }
+        this.index.edges.forEach((e) => {
+            const onPath = edgeSet?.has(e.id) ?? false;
+            e.el.classList.toggle('sel', this.selectedEdge === e.id);
+            e.el.classList.toggle('lit', filtered && onPath);
+            e.el.classList.toggle('dim', filtered && !onPath);
         });
-    });
-    ctx.index.edges.forEach((edge) => {
-        edge.el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (ctx.state.selectedEdge === edge.id) ctx.clearSelection();
-            else ctx.selectEdge(edge.id);
-        });
-    });
-    ctx.index.cards.forEach((card) => {
-        const toggle = (e: Event): void => {
-            e.stopPropagation();
-            ctx.selectCard(card);
+        this.index.cards.forEach((c) => c.classList.toggle('sel', this.activeCard === c.dataset.cardId));
+        this.highlighted = nodeSet ? new Set(nodeSet) : new Set();
+        const snapshot: DiagramViewerState = {
+            Selected: this.selected,
+            SelectedEdge: this.selectedEdge,
+            Highlighted: [...this.highlighted],
+            ActiveCard: this.activeCard,
         };
-        card.addEventListener('click', toggle);
-        card.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggle(e);
-            }
-        });
-    });
-    ctx.stage.addEventListener('click', (e) => {
-        if (e.target === ctx.stage || e.target === ctx.svg || (e.target as Element).classList?.contains('bg')) {
-            ctx.clearSelection();
-        }
-    });
-    ctx.shell.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') ctx.clearSelection();
-    });
+        this.listeners.forEach((fn) => fn(snapshot));
+    }
+
+    private bindEvents(): void {
+        const signal = this.events.signal;
+        const onActivate = (el: Element, act: () => void): void => {
+            el.addEventListener('click', (e) => { e.stopPropagation(); act(); }, { signal });
+            el.addEventListener('keydown', (e) => {
+                const key = (e as KeyboardEvent).key;
+                if (key === 'Enter' || key === ' ') { e.preventDefault(); act(); }
+            }, { signal });
+        };
+        this.index.nodes.forEach((el, id) => onActivate(el, () => (this.selected === id ? this.Clear() : this.Select(id))));
+        this.index.edges.forEach((edge) =>
+            edge.el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.selectedEdge === edge.id) this.Clear();
+                else this.SelectEdge(edge.id);
+            }, { signal })
+        );
+        this.index.cards.forEach((card) => onActivate(card, () => this.selectCard(card)));
+        this.stage.addEventListener('click', (e) => {
+            const t = e.target as Element;
+            if (t === this.stage || t === this.Svg || t.classList?.contains('bg')) this.Clear();
+        }, { signal });
+        this.shell.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.Clear(); }, { signal });
+        this.panel.addEventListener('click', (e) => this.onPanelClick(e), { signal });
+    }
+
+    /** One delegated handler for the close button, connection rows and trace buttons. */
+    private onPanelClick(e: Event): void {
+        const target = (e.target as Element).closest<HTMLElement>('[data-act], [data-jump], [data-trace]');
+        if (!target) return;
+        if (target.dataset.act === 'close-panel') this.Clear();
+        else if (target.dataset.jump) this.Select(target.dataset.jump);
+        else if (target.dataset.trace && this.selected) this.Trace(this.selected, target.dataset.trace as 'up' | 'down');
+    }
 }
 
-function parseSafeSvgElement(doc: Document, markup: string): SVGSVGElement | null {
+/**
+ * Mounts an interactive diagram controller around a rendered `<svg data-mj-diagram="1">` that is already
+ * in the document and already sanitized (for example by `MarkdownService.Parse`).
+ */
+export function MountDiagramViewer(svg: SVGSVGElement): DiagramViewerInstance {
+    return new DiagramViewer(svg);
+}
+
+/** The first `<svg>` in the markup, imported into `doc`, or null when there is none. */
+function parseFirstSvg(doc: Document, markup: string): SVGSVGElement | null {
     const parserCtor = doc.defaultView?.DOMParser ?? (typeof DOMParser !== 'undefined' ? DOMParser : null);
     if (!parserCtor) return null;
-    const parsedDoc = new parserCtor().parseFromString(markup, 'text/html');
-    const svg = parsedDoc.querySelector<SVGSVGElement>('svg[data-mj-diagram="1"], svg.mjd');
-    if (!svg) return null;
-    svg.querySelectorAll('script, foreignObject, iframe, object, embed').forEach((el) => el.remove());
-    svg.querySelectorAll('*').forEach((el) => {
-        for (const attr of Array.from(el.attributes)) {
-            if (attr.name.toLowerCase().startsWith('on')) {
-                el.removeAttribute(attr.name);
-            }
-        }
-    });
-    return doc.importNode(svg, true);
+    const svg = new parserCtor().parseFromString(markup, 'text/html').querySelector<SVGSVGElement>('svg');
+    return svg ? doc.importNode(svg, true) : null;
 }
 
 /**
- * Convenience helper for Angular hosts (`@memberjunction/ng-markdown`, `@memberjunction/ng-artifacts`).
- * Sanitizes raw SVG markup, parses the `<svg>` via DOMParser, and upgrades it with `MountDiagramViewer`.
+ * Shows untrusted SVG markup in `host`: it is run through `sanitize` first (required; use
+ * `MarkdownService.SanitizeHtml` in Angular hosts), then mounted interactively when it carries the MJ Diagram
+ * contract (`data-mj-diagram="1"`), or shown as a static SVG otherwise. Returns the viewer, or null when the
+ * markup is not an MJ diagram.
  */
 export function MountInteractiveDiagram(
     host: HTMLElement,
     svgMarkup: string,
-    options: MountInteractiveDiagramOptions = {}
+    sanitize: (rawSvg: string) => string
 ): DiagramViewerInstance | null {
-    const cleanMarkup = options.Sanitize ? options.Sanitize(svgMarkup) : svgMarkup;
-    const svg = parseSafeSvgElement(host.ownerDocument, cleanMarkup);
-    if (!svg) {
-        host.replaceChildren();
-        return null;
-    }
-    host.replaceChildren(svg);
-    const viewer = MountDiagramViewer(svg, {
-        Theme: options.InitialTheme,
-    });
-    viewer.Markup = svgMarkup;
-    return viewer;
+    const svg = parseFirstSvg(host.ownerDocument, sanitize(svgMarkup));
+    host.replaceChildren(...(svg ? [svg] : []));
+    return svg?.matches('svg[data-mj-diagram="1"], svg.mjd') ? MountDiagramViewer(svg) : null;
 }

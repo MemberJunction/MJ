@@ -423,10 +423,10 @@ function layoutSequence(spec: MJDiagramSpec): LayoutOutput {
 }
 
 const DIAGRAM_CSS = `
-.mjd{--bg:#ffffff;--ink:#1f2328;--muted:#59636e;--line:#8c959f;--grid:#d1d9e0;--node:#ffffff;--stroke:#8c959f;--lane:#f6f8fa;--lane-alt:#eff2f5;--lane-exc:#fff5f4;--lane-wait:#fffbeb;--accent:#0969da;--accent-tint:#ddf4ff;--success:#1a7f37;--success-tint:#dafbe1;--warn:#9a6700;--warn-tint:#fff8c5;--error:#cf222e;--error-tint:#ffebe9;--match:#bf8700;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
-.mjd[data-theme=dark]{--bg:#0d1117;--ink:#e6edf3;--muted:#9198a1;--line:#6e7681;--grid:#30363d;--node:#161b22;--stroke:#6e7681;--lane:#131920;--lane-alt:#171e26;--lane-exc:#21151a;--lane-wait:#221c11;--accent:#4493f8;--accent-tint:#10284a;--success:#3fb950;--success-tint:#122d1f;--warn:#d29922;--warn-tint:#2b2111;--error:#f85149;--error-tint:#3c1618;--match:#d29922}
+.mjd{--bg:var(--mj-bg-surface,#fff);--ink:var(--mj-text-primary,#1f2328);--muted:var(--mj-text-muted,#59636e);--line:var(--mj-border-strong,#8c959f);--grid:var(--mj-border-default,#d1d9e0);--node:var(--mj-bg-surface,#fff);--stroke:var(--mj-border-strong,#8c959f);--lane:var(--mj-bg-surface-card,#f6f8fa);--lane-alt:var(--mj-bg-surface-sunken,#eff2f5);--lane-exc:var(--mj-status-error-bg,#fff5f4);--lane-wait:var(--mj-status-warning-bg,#fffbeb);--accent:var(--mj-brand-primary,#0969da);--accent-tint:color-mix(in srgb,var(--accent) 12%,var(--bg));--success:var(--mj-status-success,#1a7f37);--success-tint:var(--mj-status-success-bg,#dafbe1);--warn:var(--mj-status-warning,#9a6700);--warn-tint:var(--mj-status-warning-bg,#fff8c5);--error:var(--mj-status-error,#cf222e);--error-tint:var(--mj-status-error-bg,#ffebe9);font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
 .mjd .bg{fill:var(--bg)}
 .mjd .title{fill:var(--ink);font-size:18px;font-weight:650}
+.mjd .subtitle{fill:var(--muted);font-size:13px}
 .mjd .lane rect{fill:var(--lane);stroke:var(--grid)}
 .mjd .lane.alt rect{fill:var(--lane-alt)}
 .mjd .lane[data-lane-role=exceptions] rect,.mjd .lane[data-lane-role=terminal] rect{fill:var(--lane-exc)}
@@ -619,6 +619,7 @@ export function RenderDiagramSvg(spec: MJDiagramSpec, prefix = 'mjd'): string {
         `<style>${DIAGRAM_CSS}</style><defs>${mk('line')}${mk('accent')}${mk('error')}</defs>\n` +
         `<rect class="bg" x="0" y="0" width="${W}" height="${H}"/>\n` +
         `<text class="title" x="${LEFT}" y="38">${esc(spec.title)}</text>\n` +
+        (spec.subtitle ? `<text class="subtitle" x="${LEFT}" y="58">${esc(spec.subtitle)}</text>\n` : '') +
         `${out.join('\n')}\n` +
         `</svg>`
     );

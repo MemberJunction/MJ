@@ -903,13 +903,13 @@ importers:
       '@dagrejs/dagre':
         specifier: ^1.1.8
         version: 1.1.8
-      '@memberjunction/global':
-        specifier: 6.2.0-edge.6
-        version: link:../../MJGlobal
     devDependencies:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       jsdom:
         specifier: 26.1.0
         version: 26.1.0

@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -9,7 +9,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 /**
  * Viewer component for SVG artifacts.
  *
- * Uses DOMPurify's SVG profile (via `MarkdownService.sanitizeHtml`) instead of Angular's HTML
+ * Uses DOMPurify's SVG profile (via `MarkdownService.SanitizeHtml`) instead of Angular's HTML
  * sanitizer so `<svg>`, `<style>`, `<desc>`, and `data-*` attributes survive intact.
  * When the SVG carries the MJ Diagram SVG Data Contract (`data-mj-diagram="1"`), mounts the
  * interactive diagram viewer (`MountInteractiveDiagram`) with click-to-inspect node details
@@ -22,11 +22,11 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
     <div class="svg-artifact-viewer" [ngClass]="cssClass">
       <div class="svg-toolbar">
         <button class="btn-icon" [class.active]="ViewMode === 'preview'"
-                title="Preview" (click)="SetViewMode('preview')">
+                title="Preview" (click)="ViewMode = 'preview'">
           <i class="fa-solid fa-eye"></i> Preview
         </button>
         <button class="btn-icon" [class.active]="ViewMode === 'source'"
-                title="Source" (click)="SetViewMode('source')">
+                title="Source" (click)="ViewMode = 'source'">
           <i class="fa-solid fa-code"></i> Source
         </button>
         <button class="btn-icon" title="Copy SVG" (click)="OnCopy()">
@@ -128,12 +128,18 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SvgArtifactViewerPlugin')
-export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnDestroy {
+export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
   public SvgContent = '';
   public IsInteractiveDiagram = false;
 
+  /** Mounts the viewer when the preview host appears and tears it down when it goes (source view, destroy). */
   @ViewChild('interactiveHost')
-  private interactiveHost?: ElementRef<HTMLElement>;
+  private set interactiveHost(ref: ElementRef<HTMLElement> | undefined) {
+    this.destroyInteractiveViewer();
+    if (ref) {
+      this.viewerInstance = MountInteractiveDiagram(ref.nativeElement, this.SvgContent, (raw) => this.markdownService.SanitizeHtml(raw));
+    }
+  }
 
   private viewerInstance: DiagramViewerInstance | null = null;
 
@@ -163,7 +169,7 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   }
   /** @deprecated Use {@link ViewMode}. */
   public set viewMode(value: 'preview' | 'source') {
-    this.SetViewMode(value);
+    this.ViewMode = value;
   }
 
   /**
@@ -184,23 +190,8 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.refreshSvgContent();
   }
 
-  ngAfterViewInit(): void {
-    this.mountInteractiveIfReady();
-  }
-
   ngOnDestroy(): void {
     this.destroyInteractiveViewer();
-  }
-
-  public SetViewMode(mode: 'preview' | 'source'): void {
-    if (this.ViewMode === mode) return;
-    if (mode === 'source') {
-      this.destroyInteractiveViewer();
-    }
-    this.ViewMode = mode;
-    if (mode === 'preview' && this.IsInteractiveDiagram) {
-      setTimeout(() => this.mountInteractiveIfReady(), 0);
-    }
   }
 
   private refreshSvgContent(): void {
@@ -208,18 +199,8 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.IsInteractiveDiagram =
       this.SvgContent.includes('data-mj-diagram="1"') ||
       this.SvgContent.includes("data-mj-diagram='1'");
-    const sanitized = this.markdownService.sanitizeHtml(this.SvgContent);
+    const sanitized = this.markdownService.SanitizeHtml(this.SvgContent);
     this.SafeSvgContent = this.sanitizer.bypassSecurityTrustHtml(sanitized);
-  }
-
-  private mountInteractiveIfReady(): void {
-    this.destroyInteractiveViewer();
-    if (!this.IsInteractiveDiagram || this.ViewMode !== 'preview') return;
-    const host = this.interactiveHost?.nativeElement;
-    if (!host) return;
-    this.viewerInstance = MountInteractiveDiagram(host, this.SvgContent, {
-      Sanitize: (raw) => this.markdownService.sanitizeHtml(raw),
-    });
   }
 
   private destroyInteractiveViewer(): void {

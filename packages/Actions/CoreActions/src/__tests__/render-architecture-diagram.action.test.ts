@@ -15,7 +15,7 @@ vi.mock('@memberjunction/actions', () => ({ BaseAction: class BaseAction {} }));
 const renderMock = vi.fn();
 vi.mock('@memberjunction/ai-diagrams', () => ({
     MJ_DIAGRAM_KINDS: ['workflow', 'lifecycle', 'sequence', 'dataflow'],
-    MJDiagramRenderer: { Instance: { Render: (...args: unknown[]) => renderMock(...args) } },
+    RenderDiagram: (...args: unknown[]) => renderMock(...args),
 }));
 
 import { RenderArchitectureDiagramAction } from '../custom/visualization/render-architecture-diagram.action';
@@ -51,7 +51,7 @@ describe('RenderArchitectureDiagramAction', () => {
     });
 
     it('returns the sanitized SVG (preserving data-* attributes and <desc>) as both Message and SVG output param', async () => {
-        renderMock.mockResolvedValue(RENDERED);
+        renderMock.mockReturnValue(RENDERED);
 
         const { result, outputs } = await run({ DiagramType: 'Workflow', SpecJSON: JSON.stringify(SPEC) });
 
@@ -64,7 +64,7 @@ describe('RenderArchitectureDiagramAction', () => {
     });
 
     it('accepts the spec as an object and infers DiagramType from spec.kind when DiagramType param is omitted', async () => {
-        renderMock.mockResolvedValue(RENDERED);
+        renderMock.mockReturnValue(RENDERED);
 
         await run({ SpecJSON: SPEC });
 
@@ -72,8 +72,8 @@ describe('RenderArchitectureDiagramAction', () => {
     });
 
     it('hands @memberjunction/ai-diagrams diagnostics back as JSON so the agent can repair the spec', async () => {
-        const diagnostics = [{ code: 'UNKNOWN_EDGE_TO', severity: 'error', path: 'edges[0].to', message: 'Not found', fix: 'Use valid id' }];
-        renderMock.mockResolvedValue({
+        const diagnostics = [{ Code: 'UNKNOWN_EDGE_TO', Severity: 'error', Path: 'edges[0].to', Message: 'Not found', Fix: 'Use valid id' }];
+        renderMock.mockReturnValue({
             Success: false,
             ErrorCode: 'VALIDATION_FAILED',
             Message: 'Dangling edge',

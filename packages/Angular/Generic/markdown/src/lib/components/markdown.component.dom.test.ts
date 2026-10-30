@@ -392,6 +392,11 @@ describe('MarkdownComponent (DOM)', () => {
       expect(c.querySelector('.mjd-panel')).not.toBeNull();
       expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
     });
+
+    it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
+      const c = container(render({ data: 'text <span data-mj-diagram="1" style="position:fixed;inset:0">x</span>', enableSvgRenderer: false }));
+      expect(c.querySelector('[style]')).toBeNull();
+    });
   });
 });
 

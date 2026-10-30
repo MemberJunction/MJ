@@ -25,6 +25,10 @@ import {
 
 const MAX_NODES = 40;
 const MAX_EDGES = 80;
+/** Lanes, stages and participants each become a band or column, so they share the node cap. */
+const MAX_LANES = MAX_NODES;
+/** Summary cards render side by side under the diagram. */
+const MAX_CARDS = 8;
 
 const VALID_NODE_KINDS = new Set<MJDiagramNodeKind>([
     'start', 'end', 'task', 'decision', 'state', 'waiting',
@@ -135,7 +139,7 @@ function pushError(
     message: string,
     fix: string
 ): void {
-    diagnostics.push({ code, severity: 'error', path, message, fix });
+    diagnostics.push({ Code: code, Severity: 'error', Path: path, Message: message, Fix: fix });
 }
 
 function parseRawSpecObject(
@@ -149,11 +153,11 @@ function parseRawSpecObject(
             return {
                 ok: false,
                 diagnostic: {
-                    code: 'INVALID_JSON',
-                    severity: 'error',
-                    path: '$',
-                    message: `Spec is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-                    fix: 'Pass a valid JSON object matching the MJ Diagram Spec schema.',
+                    Code: 'INVALID_JSON',
+                    Severity: 'error',
+                    Path: '$',
+                    Message: `Spec is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+                    Fix: 'Pass a valid JSON object matching the MJ Diagram Spec schema.',
                 },
             };
         }
@@ -162,11 +166,11 @@ function parseRawSpecObject(
         return {
             ok: false,
             diagnostic: {
-                code: 'INVALID_ROOT',
-                severity: 'error',
-                path: '$',
-                message: 'Diagram spec must be a JSON object.',
-                fix: 'Provide an object with "kind", "title", "lanes" (or "stages"/"participants"), "nodes" (or "states"), and "edges" (or "transitions"/"flows"/"messages").',
+                Code: 'INVALID_ROOT',
+                Severity: 'error',
+                Path: '$',
+                Message: 'Diagram spec must be a JSON object.',
+                Fix: 'Provide an object with "kind", "title", "lanes" (or "stages"/"participants"), "nodes" (or "states"), and "edges" (or "transitions"/"flows"/"messages").',
             },
         };
     }
@@ -194,6 +198,10 @@ function validateSequenceParticipants(
             'Sequence diagram requires a non-empty "participants" (or "nodes") array.',
             'Add "participants": [{ "id": "author", "label": "Author", "sublabel": "member" }, ...].'
         );
+        return;
+    }
+    if (rawParticipants.length > MAX_LANES) {
+        pushError(diagnostics, 'TOO_MANY_PARTICIPANTS', 'participants', `Diagram has ${rawParticipants.length} participants; maximum allowed is ${MAX_LANES}.`, `Merge minor parties so there are at most ${MAX_LANES} participants.`);
         return;
     }
     rawParticipants.forEach((p, idx) => {
@@ -235,6 +243,10 @@ function validateNamedLanes(
         );
         return;
     }
+    if (rawLanes.length > MAX_LANES) {
+        pushError(diagnostics, 'TOO_MANY_LANES', laneKey, `Diagram has ${rawLanes.length} ${laneKey}; maximum allowed is ${MAX_LANES}.`, `Combine ${laneKey} so there are at most ${MAX_LANES}.`);
+        return;
+    }
     rawLanes.forEach((l, idx) => {
         const path = `${laneKey}[${idx}]`;
         if (!isRecord(l)) {
@@ -251,6 +263,11 @@ function validateNamedLanes(
             lanes.push({ id, label, sublabel: asString(l.sublabel) || undefined, role: mapLaneRole(l.role, l.variant, id) });
         }
     });
+}
+
+/** A row/column hint as a whole number in 0..MAX_NODES, or undefined when absent or unusable. */
+function layoutHint(v: unknown): number | undefined {
+    return typeof v === 'number' && !Number.isNaN(v) ? Math.min(Math.max(Math.trunc(v), 0), MAX_NODES) : undefined;
 }
 
 function resolveNodeLaneRef(n: Record<string, unknown>, lanes: MJDiagramLane[]): string {
@@ -307,8 +324,8 @@ function validateSingleNode(
             lane: laneRef || lanes[0]?.id,
             kind: mapNodeKind(n.kind, n.type, kind),
             step: asString(n.step) || undefined,
-            col: typeof n.col === 'number' ? n.col : undefined,
-            row: typeof n.row === 'number' ? n.row : undefined,
+            col: layoutHint(n.col),
+            row: layoutHint(n.row),
         });
     }
 }
@@ -337,6 +354,7 @@ function validateDiagramNodes(
     }
     if (rawNodes.length > MAX_NODES) {
         pushError(diagnostics, 'TOO_MANY_NODES', nodeKey, `Diagram has ${rawNodes.length} nodes; maximum allowed is ${MAX_NODES} so the diagram stays readable.`, `Combine minor steps or split the diagram so it has at most ${MAX_NODES} nodes.`);
+        return;
     }
     rawNodes.forEach((n, idx) => validateSingleNode(n, idx, nodeKey, kind, lanes, laneIds, nodes, nodeIds, diagnostics));
 }
@@ -363,12 +381,14 @@ function validateSingleEdge(
     if (!to) pushError(diagnostics, 'MISSING_EDGE_TO', `${path}.to`, `${path} is missing "to".`, `Set "to" to a valid node id.${suggestId('', [...nodeIds])}`);
     else if (nodeIds.size > 0 && !nodeIds.has(to)) pushError(diagnostics, 'UNKNOWN_EDGE_TO', `${path}.to`, `${path}.to references unknown node "${to}".`, `Change "to" to a defined node id.${suggestId(to, [...nodeIds])}`);
 
+    if (from && from === to) pushError(diagnostics, 'SELF_LOOP_EDGE', path, `${path} goes from "${from}" to itself.`, 'Remove the edge, or describe the repeat in the node\'s "detail" instead.');
+
     let id = asString(e.id) || `e${idx + 1}`;
     if (edgeIds.has(id)) id = `${id}-${idx + 1}`;
     edgeIds.add(id);
     if (typeof e.y === 'number') rawMessageYs[idx] = e.y;
 
-    if (from && to && nodeIds.has(from) && nodeIds.has(to)) {
+    if (from && to && from !== to && nodeIds.has(from) && nodeIds.has(to)) {
         edges.push({
             id,
             from,
@@ -397,6 +417,7 @@ function validateDiagramEdges(
     }
     if (rawEdges.length > MAX_EDGES) {
         pushError(diagnostics, 'TOO_MANY_EDGES', edgeKey, `Diagram has ${rawEdges.length} edges; maximum allowed is ${MAX_EDGES}.`, `Simplify the diagram so it has at most ${MAX_EDGES} edges.`);
+        return edgeKey;
     }
     const edgeIds = new Set<string>();
     rawEdges.forEach((e, idx) => validateSingleEdge(e, idx, edgeKey, nodeIds, edgeIds, edges, rawMessageYs, diagnostics));
@@ -459,11 +480,11 @@ function validateExplicitMainPath(
         const b = mp[i + 1];
         if (!edges.some((e) => e.from === a && e.to === b)) {
             warnings.push({
-                code: 'DISCONNECTED_MAIN_PATH',
-                severity: 'warning',
-                path: `mainPath[${i + 1}]`,
-                message: `mainPath step "${a}" -> "${b}" has no direct edge in "${edgeKey}".`,
-                fix: `Add an edge from "${a}" to "${b}" or adjust "mainPath" so consecutive nodes are connected.`,
+                Code: 'DISCONNECTED_MAIN_PATH',
+                Severity: 'warning',
+                Path: `mainPath[${i + 1}]`,
+                Message: `mainPath step "${a}" -> "${b}" has no direct edge in "${edgeKey}".`,
+                Fix: `Add an edge from "${a}" to "${b}" or adjust "mainPath" so consecutive nodes are connected.`,
             });
         }
     }
@@ -566,7 +587,7 @@ function validateSingleCard(
  */
 export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): MJDiagramValidationResult {
     const parsed = parseRawSpecObject(rawInput);
-    if (!parsed.ok || !parsed.raw) return { valid: false, diagnostics: [parsed.diagnostic!] };
+    if (!parsed.ok || !parsed.raw) return { Valid: false, Diagnostics: [parsed.diagnostic!] };
     const raw = parsed.raw;
 
     const diagnostics: MJDiagramDiagnostic[] = [];
@@ -575,7 +596,7 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
     const rawKind = asString(raw.kind ?? raw.diagram_type ?? fallbackKind).toLowerCase();
     if (!MJ_DIAGRAM_KINDS.includes(rawKind as MJDiagramKind)) {
         pushError(diagnostics, 'INVALID_KIND', 'kind', rawKind ? `Unknown diagram kind "${rawKind}".` : 'Missing required "kind" field.', `Set "kind" to one of: ${MJ_DIAGRAM_KINDS.map((k) => `"${k}"`).join(', ')}.`);
-        return { valid: false, diagnostics };
+        return { Valid: false, Diagnostics: diagnostics };
     }
     const kind = rawKind as MJDiagramKind;
 
@@ -601,11 +622,13 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
     const mainPath = resolveMainPath(raw, kind, lanes, nodes, nodeIds, edges, edgeKey, diagnostics, warnings);
 
     let cards: MJDiagramCard[] | undefined;
-    if (Array.isArray(raw.cards) && raw.cards.length > 0) {
+    if (Array.isArray(raw.cards) && raw.cards.length > MAX_CARDS) {
+        pushError(diagnostics, 'TOO_MANY_CARDS', 'cards', `Diagram has ${raw.cards.length} summary cards; maximum allowed is ${MAX_CARDS}.`, `Keep the ${MAX_CARDS} most important rules as cards.`);
+    } else if (Array.isArray(raw.cards) && raw.cards.length > 0) {
         cards = [];
         raw.cards.forEach((c, idx) => validateSingleCard(c, idx, nodes, nodeIds, mainPath, cards!, diagnostics));
     }
 
-    if (diagnostics.length > 0) return { valid: false, diagnostics };
-    return { valid: true, spec: { kind, title, subtitle, lanes, nodes, edges, phases, mainPath, cards }, warnings };
+    if (diagnostics.length > 0) return { Valid: false, Diagnostics: diagnostics };
+    return { Valid: true, Spec: { kind, title, subtitle, lanes, nodes, edges, phases, mainPath, cards }, Warnings: warnings };
 }

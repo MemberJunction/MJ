@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import {
-    MJDiagramRenderer,
+    RenderDiagram,
     MJ_DIAGRAM_KINDS,
     type MJDiagramKind,
 } from "@memberjunction/ai-diagrams";
@@ -30,7 +30,7 @@ export class RenderArchitectureDiagramAction extends BaseAction {
         if ('Failure' in input) {
             return input.Failure;
         }
-        const rendered = await MJDiagramRenderer.Instance.Render(input.Spec, input.DiagramType);
+        const rendered = RenderDiagram(input.Spec, input.DiagramType);
         if (rendered.Success === false) {
             return {
                 Success: false,

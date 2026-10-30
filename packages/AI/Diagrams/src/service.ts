@@ -1,72 +1,50 @@
 /**
- * @fileoverview High-level rendering service and agent reference guide for MemberJunction Diagrams.
+ * @fileoverview High-level rendering entry point and agent reference guide for MemberJunction Diagrams.
  *
- * Combines `ValidateDiagramSpec` and `RenderDiagramSvg` behind a singleton (`MJDiagramRenderer`).
+ * `RenderDiagram` combines `ValidateDiagramSpec` and `RenderDiagramSvg`.
  *
  * @module @memberjunction/ai-diagrams
  */
 
-import { BaseSingleton } from '@memberjunction/global';
 import {
     MJ_DIAGRAM_KINDS,
     type MJDiagramKind,
     type MJDiagramRenderResult,
-    type MJDiagramSpec,
 } from './spec.js';
 import { ValidateDiagramSpec } from './validator.js';
 import { RenderDiagramSvg } from './renderer.js';
 
 /**
- * Singleton diagram renderer for MemberJunction.
+ * Validates and renders an MJ Diagram Spec into a self-contained `<svg data-mj-diagram="1">`.
+ * Each render gets a random marker-ID prefix so several diagrams can share one page.
  */
-export class MJDiagramRenderer extends BaseSingleton<MJDiagramRenderer> {
-    private renderSeq = 1;
-
-    protected constructor() {
-        super();
+export function RenderDiagram(rawSpec: unknown, fallbackKind?: string): MJDiagramRenderResult {
+    const validation = ValidateDiagramSpec(rawSpec, fallbackKind);
+    if (validation.Valid === false) {
+        return {
+            Success: false,
+            ErrorCode: validation.Diagnostics.some((d) => d.Code === 'INVALID_KIND' || d.Code === 'INVALID_ROOT' || d.Code === 'INVALID_JSON')
+                ? 'INVALID_INPUT'
+                : 'VALIDATION_FAILED',
+            Message: validation.Diagnostics.map((d) => `[${d.Code}] ${d.Path}: ${d.Message} Fix: ${d.Fix}`).join('\n'),
+            Diagnostics: validation.Diagnostics,
+        };
     }
-
-    public static get Instance(): MJDiagramRenderer {
-        return super.getInstance<MJDiagramRenderer>();
-    }
-
-    /**
-     * Validates and renders an MJ Diagram Spec into a self-contained `<svg data-mj-diagram="1">`.
-     */
-    public async Render(rawSpec: unknown, fallbackKind?: string): Promise<MJDiagramRenderResult> {
-        const validation = ValidateDiagramSpec(rawSpec, fallbackKind);
-        if (validation.valid === false) {
-            const summary = validation.diagnostics
-                .map((d) => `[${d.code}] ${d.path}: ${d.message} Fix: ${d.fix}`)
-                .join('\n');
-            return {
-                Success: false,
-                ErrorCode: validation.diagnostics.some((d) => d.code === 'INVALID_KIND' || d.code === 'INVALID_ROOT')
-                    ? 'INVALID_INPUT'
-                    : 'VALIDATION_FAILED',
-                Message: summary,
-                Diagnostics: validation.diagnostics,
-            };
-        }
-
-        try {
-            const spec: MJDiagramSpec = validation.spec;
-            const prefix = `mjd-${this.renderSeq++}`;
-            const svg = RenderDiagramSvg(spec, prefix);
-            return {
-                Success: true,
-                Svg: svg,
-                Title: spec.title,
-                Kind: spec.kind,
-                Warnings: validation.warnings,
-            };
-        } catch (err) {
-            return {
-                Success: false,
-                ErrorCode: 'RENDER_FAILED',
-                Message: err instanceof Error ? err.message : String(err),
-            };
-        }
+    try {
+        const spec = validation.Spec;
+        return {
+            Success: true,
+            Svg: RenderDiagramSvg(spec, `mjd-${crypto.randomUUID().slice(0, 8)}`),
+            Title: spec.title,
+            Kind: spec.kind,
+            Warnings: validation.Warnings,
+        };
+    } catch (err) {
+        return {
+            Success: false,
+            ErrorCode: 'RENDER_FAILED',
+            Message: err instanceof Error ? err.message : String(err),
+        };
     }
 }
 

@@ -94,11 +94,6 @@ export interface MJDiagramCard {
     tone?: MJDiagramCardTone; // case-violation-ok-legacy-back-compat: JSON wire-format schema key
 }
 
-export interface MJDiagramLegendItem {
-    role: 'main' | 'default' | 'error' | 'return' | 'conditional'; // case-violation-ok-legacy-back-compat: JSON wire-format schema key
-    label: string; // case-violation-ok-legacy-back-compat: JSON wire-format schema key
-}
-
 /**
  * Canonical MemberJunction diagram specification after validation and normalization.
  */
@@ -118,34 +113,25 @@ export interface MJDiagramSpec {
     mainPath?: string[]; // case-violation-ok-legacy-back-compat: JSON wire-format schema key
     /** Summary rule cards rendered beneath the diagram and linked to specific nodes. */
     cards?: MJDiagramCard[]; // case-violation-ok-legacy-back-compat: JSON wire-format schema key
-    /** Optional custom legend items; sensible defaults are generated per diagram kind if omitted. */
-    legend?: MJDiagramLegendItem[]; // case-violation-ok-legacy-back-compat: JSON wire-format schema key
 }
 
 /**
  * Actionable validation diagnostic returned so an agent can repair a malformed spec and retry.
  */
 export interface MJDiagramDiagnostic {
-    code: string; // case-violation-ok-legacy-back-compat: JSON wire-format diagnostic key
-    severity: 'error' | 'warning'; // case-violation-ok-legacy-back-compat: JSON wire-format diagnostic key
+    Code: string;
+    Severity: 'error' | 'warning';
     /** JSON path to the offending field (e.g. `"edges[2].to"` or `"nodes[1].lane"`). */
-    path: string; // case-violation-ok-legacy-back-compat: JSON wire-format diagnostic key
+    Path: string;
     /** Human and agent readable explanation of what is wrong. */
-    message: string; // case-violation-ok-legacy-back-compat: JSON wire-format diagnostic key
+    Message: string;
     /** Concrete instruction on how to fix the issue. */
-    fix: string; // case-violation-ok-legacy-back-compat: JSON wire-format diagnostic key
+    Fix: string;
 }
 
 export type MJDiagramValidationResult =
-    | {
-        valid: true; // case-violation-ok-legacy-back-compat: discriminated union tag
-        spec: MJDiagramSpec; // case-violation-ok-legacy-back-compat: JSON wire-format field
-        warnings: MJDiagramDiagnostic[]; // case-violation-ok-legacy-back-compat: JSON wire-format field
-    }
-    | {
-        valid: false; // case-violation-ok-legacy-back-compat: discriminated union tag
-        diagnostics: MJDiagramDiagnostic[]; // case-violation-ok-legacy-back-compat: JSON wire-format field
-    };
+    | { Valid: true; Spec: MJDiagramSpec; Warnings: MJDiagramDiagnostic[] }
+    | { Valid: false; Diagnostics: MJDiagramDiagnostic[] };
 
 export type MJDiagramErrorCode = 'INVALID_INPUT' | 'VALIDATION_FAILED' | 'RENDER_FAILED';
 
