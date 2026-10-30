@@ -9,8 +9,9 @@
 import type { UserInfo } from '@memberjunction/core';
 import { MJUserSettingEntity } from '@memberjunction/core-entities';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
-import type { NamedCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
+import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
+import { MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
 import { CloseWireSession, OpenWireSession, Sleep } from './wire-sessions';
 
 const BUNDLE = 'entity-status-fanout-client';
@@ -40,8 +41,13 @@ interface FanoutFixture {
 }
 
 let fixture: FanoutFixture | undefined;
+/** Set by Setup when the fixture was deliberately not created; every check then skips with it. */
+let skipReason: string | undefined;
 
 function fx(): FanoutFixture {
+    if (skipReason) {
+        SkipCheck(skipReason);
+    }
     Assert(fixture != null, `${BUNDLE} fixture missing (bundle Setup did not run)`);
     return fixture!;
 }
@@ -84,7 +90,12 @@ async function createSetting(session: Session, user: UserInfo, setting: string):
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
-    Setup: async () => {
+    Setup: async (ctx: IntegrationCheckContext) => {
+        // Setup opens nothing on a deterministic-only run: no sockets, no rows.
+        if (!MutationTierOn(ctx)) {
+            skipReason = MUTATION_TIER_OFF_REASON;
+            return;
+        }
         const sessionA = await openSubscribedSession();
         const sessionB = await openSubscribedSession();
         const user = sessionA.Provider.CurrentUser;
@@ -96,6 +107,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Teardown: async () => {
         const f = fixture;
         fixture = undefined;
+        skipReason = undefined;
         if (!f) {
             return;
         }

@@ -10,8 +10,9 @@ import { RunView } from '@memberjunction/core';
 import type { RunViewParams } from '@memberjunction/core';
 import { MJCredentialEntity } from '@memberjunction/core-entities';
 import { IsValueEncrypted } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, UniqueFilter } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, UniqueFilter } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
+import { EncryptionUnavailableReason, MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
 
 const BUNDLE = 'ciphertext-cache';
 const ENTITY = 'MJ: Credentials';
@@ -28,8 +29,13 @@ interface CiphertextCacheFixture {
 }
 
 let fixture: CiphertextCacheFixture | undefined;
+/** Set by Setup when the fixture was deliberately not created; every check then skips with it. */
+let skipReason: string | undefined;
 
 function fx(): CiphertextCacheFixture {
+    if (skipReason) {
+        SkipCheck(skipReason);
+    }
     Assert(fixture != null, `${BUNDLE} fixture missing (bundle Setup did not run)`);
     return fixture!;
 }
@@ -55,6 +61,11 @@ function hasEncryptedLookingValue(serialized: string): boolean {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext) => {
+        // Setup writes nothing on a deterministic-only run.
+        if (!MutationTierOn(ctx)) {
+            skipReason = MUTATION_TIER_OFF_REASON;
+            return;
+        }
         const tag = `it150-${Date.now()}`;
         const secret = `it150-secret-${tag}`;
         const credential = await ctx.Provider.GetEntityObject<MJCredentialEntity>(ENTITY, ctx.User);
@@ -62,7 +73,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         credential.CredentialTypeID = await firstCredentialTypeId(ctx);
         credential.Name = `it150-credential-${tag}`;
         credential.Values = secret;
-        Assert(await credential.Save(), `fixture create failed: ${credential.LatestResult?.CompleteMessage ?? ''}`);
+        if (!await credential.Save()) {
+            const message = credential.LatestResult?.CompleteMessage ?? '';
+            // A process without a base encryption key refuses the write; that is a missing credential, not a defect.
+            skipReason = EncryptionUnavailableReason(message);
+            Assert(skipReason != null, `fixture create failed: ${message}`);
+            return;
+        }
         fixture = {
             RecordID: credential.ID,
             Secret: secret,
@@ -73,6 +90,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = fixture;
         fixture = undefined;
+        skipReason = undefined;
         if (!f) {
             return;
         }

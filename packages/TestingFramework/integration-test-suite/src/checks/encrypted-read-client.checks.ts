@@ -9,8 +9,9 @@
 import { RunView } from '@memberjunction/core';
 import type { RunViewParams } from '@memberjunction/core';
 import { MJCredentialEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
+import { EncryptionUnavailableReason, MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
 
 const BUNDLE = 'encrypted-read-client';
 const ENTITY = 'MJ: Credentials';
@@ -21,8 +22,13 @@ interface EncryptedReadFixture {
 }
 
 let fixture: EncryptedReadFixture | undefined;
+/** Set by Setup when the fixture was deliberately not created; every check then skips with it. */
+let skipReason: string | undefined;
 
 function fx(): EncryptedReadFixture {
+    if (skipReason) {
+        SkipCheck(skipReason);
+    }
     Assert(fixture != null, `${BUNDLE} fixture missing (bundle Setup did not run)`);
     return fixture!;
 }
@@ -47,18 +53,30 @@ async function firstCredentialTypeId(ctx: IntegrationCheckContext): Promise<stri
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext) => {
+        // Setup writes nothing on a deterministic-only run.
+        if (!MutationTierOn(ctx)) {
+            skipReason = MUTATION_TIER_OFF_REASON;
+            return;
+        }
         const secret = `{"token":"it149-${Date.now()}"}`;
         const credential = await ctx.Provider.GetEntityObject<MJCredentialEntity>(ENTITY, ctx.User);
         credential.NewRecord();
         credential.CredentialTypeID = await firstCredentialTypeId(ctx);
         credential.Name = `it149-credential-${Date.now()}`;
         credential.Values = secret;
-        Assert(await credential.Save(), `fixture create failed: ${credential.LatestResult?.CompleteMessage ?? ''}`);
+        if (!await credential.Save()) {
+            const message = credential.LatestResult?.CompleteMessage ?? '';
+            // MJAPI without a base encryption key refuses the write; that is a missing credential, not a defect.
+            skipReason = EncryptionUnavailableReason(message);
+            Assert(skipReason != null, `fixture create failed: ${message}`);
+            return;
+        }
         fixture = { RecordID: credential.ID, Secret: secret };
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = fixture;
         fixture = undefined;
+        skipReason = undefined;
         if (!f) {
             return;
         }

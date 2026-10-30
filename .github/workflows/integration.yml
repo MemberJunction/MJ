@@ -499,6 +499,14 @@ jobs:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
 
+      # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
+      # processes that write them: MJAPI (IT149 over the wire) and the mj test process (IT150
+      # in-process). Without one the save is refused and those bundles can only skip. A per-run
+      # throwaway is enough — the database was provisioned for this run, so there is no earlier
+      # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
+      - name: Generate a throwaway encryption key for this run
+        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
       # accepts it via the x-mj-api-key header, and the test process presents the same

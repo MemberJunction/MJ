@@ -11,8 +11,9 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { MJUserSettingEntity } from '@memberjunction/core-entities';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
-import type { NamedCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
+import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
+import { MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
 import { CloseWireSession, OpenWireSession } from './wire-sessions';
 
 const BUNDLE = 'concurrency-conflict-client';
@@ -28,8 +29,13 @@ interface ConcurrencyFixture {
 }
 
 let fixture: ConcurrencyFixture | undefined;
+/** Set by Setup when the fixture was deliberately not created; every check then skips with it. */
+let skipReason: string | undefined;
 
 function fx(): ConcurrencyFixture {
+    if (skipReason) {
+        SkipCheck(skipReason);
+    }
     Assert(fixture != null, `${BUNDLE} fixture missing (bundle Setup did not run)`);
     return fixture!;
 }
@@ -49,7 +55,12 @@ async function storedValues(f: ConcurrencyFixture): Promise<{ Setting: string; V
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
-    Setup: async () => {
+    Setup: async (ctx: IntegrationCheckContext) => {
+        // Setup writes nothing on a deterministic-only run: no sessions, no row.
+        if (!MutationTierOn(ctx)) {
+            skipReason = MUTATION_TIER_OFF_REASON;
+            return;
+        }
         const sessionA = await OpenWireSession(false);
         const sessionB = await OpenWireSession(false);
         const user = sessionA.CurrentUser;
@@ -66,6 +77,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Teardown: async () => {
         const f = fixture;
         fixture = undefined;
+        skipReason = undefined;
         if (!f) {
             return;
         }
