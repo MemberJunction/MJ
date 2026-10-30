@@ -538,7 +538,10 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Note: We bypass Angular's sanitizer when SVG renderer, HTML passthrough, or an MJ interactive diagram
     // is present because Angular's HTML sanitizer strips SVG elements and data-* attributes.
     const bypassAngularSanitizer =
-      this.EnableSvgRenderer || this.EnableHtml || /\bdata-mj-diagram\s*=\s*["']1["']/.test(html);
+      this.EnableSvgRenderer ||
+      this.EnableHtml ||
+      html.includes('data-mj-diagram="1"') ||
+      html.includes("data-mj-diagram='1'");
     if (this.Sanitize && !bypassAngularSanitizer) {
       const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html);
       html = sanitized || '';

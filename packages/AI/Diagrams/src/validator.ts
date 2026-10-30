@@ -109,8 +109,23 @@ function mapCardTone(rawTone: unknown, rawDot: unknown): MJDiagramCardTone {
 }
 
 function slugify(s: string, fallback: string): string {
-    const slug = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    return slug || fallback;
+    const lower = s.toLowerCase();
+    const parts: string[] = [];
+    let current = '';
+    for (let i = 0; i < lower.length; i++) {
+        const code = lower.charCodeAt(i);
+        const isAlphaNum = (code >= 97 && code <= 122) || (code >= 48 && code <= 57);
+        if (isAlphaNum) {
+            current += lower[i];
+        } else if (current.length > 0) {
+            parts.push(current);
+            current = '';
+        }
+    }
+    if (current.length > 0) {
+        parts.push(current);
+    }
+    return parts.length > 0 ? parts.join('-') : fallback;
 }
 
 function pushError(

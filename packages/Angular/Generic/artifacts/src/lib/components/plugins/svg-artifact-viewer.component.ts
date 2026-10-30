@@ -205,7 +205,9 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
 
   private refreshSvgContent(): void {
     this.SvgContent = this.getContent();
-    this.IsInteractiveDiagram = /\bdata-mj-diagram\s*=\s*["']1["']/.test(this.SvgContent);
+    this.IsInteractiveDiagram =
+      this.SvgContent.includes('data-mj-diagram="1"') ||
+      this.SvgContent.includes("data-mj-diagram='1'");
     const sanitized = this.markdownService.sanitizeHtml(this.SvgContent);
     this.SafeSvgContent = this.sanitizer.bypassSecurityTrustHtml(sanitized);
   }

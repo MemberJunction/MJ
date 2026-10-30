@@ -214,12 +214,24 @@ function ensureStylesInjected(doc: Document): void {
     }
 }
 
-function escapeHtml(text: string): string {
-    return String(text ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+function createTextEl<K extends keyof HTMLElementTagNameMap>(
+    doc: Document,
+    tag: K,
+    text: string,
+    className?: string
+): HTMLElementTagNameMap[K] {
+    const el = doc.createElement(tag);
+    if (className) el.className = className;
+    el.textContent = text;
+    return el;
+}
+
+function createCloseButton(doc: Document): HTMLButtonElement {
+    const btn = createTextEl(doc, 'button', '✕', 'mjd-btn mjd-close');
+    btn.type = 'button';
+    btn.dataset.act = 'close-panel';
+    btn.setAttribute('aria-label', 'Close details');
+    return btn;
 }
 
 function buildShellDom(svg: SVGSVGElement, initialTheme: 'light' | 'dark'): {
@@ -351,7 +363,27 @@ function traverseGraph(
     return { nodeSet, edgeSet };
 }
 
-function renderNodePanelHtml(id: string, el: SVGGElement, index: IndexedDiagram): string {
+function createConnRow(
+    doc: Document,
+    targetId: string,
+    arrowOrPrefix: string,
+    targetLabel: string,
+    edgeLabel?: string
+): HTMLDivElement {
+    const row = doc.createElement('div');
+    row.className = 'mjd-Conn';
+    row.dataset.jump = targetId;
+    row.append(createTextEl(doc, 'span', arrowOrPrefix), createTextEl(doc, 'strong', targetLabel));
+    if (edgeLabel) {
+        const note = createTextEl(doc, 'span', `· ${edgeLabel}`);
+        note.style.color = 'var(--s-muted)';
+        row.appendChild(note);
+    }
+    return row;
+}
+
+function buildNodePanelDom(id: string, el: SVGGElement, index: IndexedDiagram): Node[] {
+    const doc = el.ownerDocument;
     const label = getNodeLabel(index, id);
     const kind = el.dataset.nodeKind || 'step';
     const lane = index.laneLabels.get(el.dataset.lane || '') || el.dataset.lane || '';
@@ -359,49 +391,61 @@ function renderNodePanelHtml(id: string, el: SVGGElement, index: IndexedDiagram)
     const incoming = index.adjIn.get(id) || [];
     const outgoing = index.adjOut.get(id) || [];
 
-    const renderConn = (e: EdgeRecord, targetId: string, arrow: string): string =>
-        `<div class="mjd-Conn" data-jump="${escapeHtml(targetId)}"><span>${arrow}</span><strong>${escapeHtml(getNodeLabel(index, targetId))}</strong>${e.label ? `<span style="color:var(--s-muted)">· ${escapeHtml(e.label)}</span>` : ''}</div>`;
+    const actions = doc.createElement('div');
+    actions.className = 'mjd-actions';
+    const btnUp = createTextEl(doc, 'button', '← Trace back', 'mjd-btn');
+    btnUp.type = 'button';
+    btnUp.dataset.trace = 'up';
+    const btnDown = createTextEl(doc, 'button', 'Trace forward →', 'mjd-btn');
+    btnDown.type = 'button';
+    btnDown.dataset.trace = 'down';
+    actions.append(btnUp, btnDown);
 
-    return (
-        `<button type="button" class="mjd-btn mjd-close" data-act="close-panel" aria-label="Close details">✕</button>` +
-        `<h3>${escapeHtml(label)}</h3>` +
-        `<div class="mjd-meta">${escapeHtml(kind)}${lane ? ` · ${escapeHtml(lane)}` : ''}</div>` +
-        (desc ? `<div class="mjd-desc">${escapeHtml(desc)}</div>` : '') +
-        `<div class="mjd-actions">` +
-        `<button type="button" class="mjd-btn" data-trace="up">← Trace back</button>` +
-        `<button type="button" class="mjd-btn" data-trace="down">Trace forward →</button>` +
-        `</div>` +
-        (incoming.length ? `<div class="mjd-sec">From (${incoming.length})</div>${incoming.map((e) => renderConn(e, e.from, '←')).join('')}` : '') +
-        (outgoing.length ? `<div class="mjd-sec">To (${outgoing.length})</div>${outgoing.map((e) => renderConn(e, e.to, '→')).join('')}` : '')
-    );
+    const nodes: Node[] = [
+        createCloseButton(doc),
+        createTextEl(doc, 'h3', label),
+        createTextEl(doc, 'div', `${kind}${lane ? ` · ${lane}` : ''}`, 'mjd-meta'),
+    ];
+    if (desc) nodes.push(createTextEl(doc, 'div', desc, 'mjd-desc'));
+    nodes.push(actions);
+    if (incoming.length) {
+        nodes.push(createTextEl(doc, 'div', `From (${incoming.length})`, 'mjd-sec'));
+        incoming.forEach((e) => nodes.push(createConnRow(doc, e.from, '←', getNodeLabel(index, e.from), e.label)));
+    }
+    if (outgoing.length) {
+        nodes.push(createTextEl(doc, 'div', `To (${outgoing.length})`, 'mjd-sec'));
+        outgoing.forEach((e) => nodes.push(createConnRow(doc, e.to, '→', getNodeLabel(index, e.to), e.label)));
+    }
+    return nodes;
 }
 
-function renderEdgePanelHtml(edge: EdgeRecord, index: IndexedDiagram): string {
+function buildEdgePanelDom(edge: EdgeRecord, index: IndexedDiagram): Node[] {
+    const doc = edge.el.ownerDocument;
     const fromLabel = getNodeLabel(index, edge.from);
     const toLabel = getNodeLabel(index, edge.to);
-    return (
-        `<button type="button" class="mjd-btn mjd-close" data-act="close-panel" aria-label="Close details">✕</button>` +
-        `<h3>${escapeHtml(edge.label || `${fromLabel} → ${toLabel}`)}</h3>` +
-        `<div class="mjd-meta">connection · ${escapeHtml(edge.role)}${edge.main ? ' · main path' : ''}</div>` +
-        `<div class="mjd-sec">Endpoints</div>` +
-        `<div class="mjd-Conn" data-jump="${escapeHtml(edge.from)}"><span>From:</span><strong>${escapeHtml(fromLabel)}</strong></div>` +
-        `<div class="mjd-Conn" data-jump="${escapeHtml(edge.to)}"><span>To:</span><strong>${escapeHtml(toLabel)}</strong></div>`
-    );
+    return [
+        createCloseButton(doc),
+        createTextEl(doc, 'h3', edge.label || `${fromLabel} → ${toLabel}`),
+        createTextEl(doc, 'div', `connection · ${edge.role}${edge.main ? ' · main path' : ''}`, 'mjd-meta'),
+        createTextEl(doc, 'div', 'Endpoints', 'mjd-sec'),
+        createConnRow(doc, edge.from, 'From:', fromLabel),
+        createConnRow(doc, edge.to, 'To:', toLabel),
+    ];
 }
 
-function renderCardPanelHtml(card: SVGGElement, nodeIds: string[], index: IndexedDiagram): string {
+function buildCardPanelDom(card: SVGGElement, nodeIds: string[], index: IndexedDiagram): Node[] {
+    const doc = card.ownerDocument;
     const title = card.querySelector('.ct')?.textContent || card.getAttribute('aria-label') || 'Summary rule';
     const body = [...card.querySelectorAll('.cb')].map((t) => t.textContent).join(' ');
-    const stepsHtml = nodeIds
-        .map((id) => `<div class="mjd-Conn" data-jump="${escapeHtml(id)}"><span>→</span><strong>${escapeHtml(getNodeLabel(index, id))}</strong></div>`)
-        .join('');
-    return (
-        `<button type="button" class="mjd-btn mjd-close" data-act="close-panel" aria-label="Close details">✕</button>` +
-        `<h3>${escapeHtml(title)}</h3>` +
-        `<div class="mjd-meta">summary rule · ${nodeIds.length} linked step${nodeIds.length === 1 ? '' : 's'}</div>` +
-        (body ? `<div class="mjd-desc">${escapeHtml(body)}</div>` : '') +
-        `<div class="mjd-sec">Applies to</div>${stepsHtml}`
-    );
+    const nodes: Node[] = [
+        createCloseButton(doc),
+        createTextEl(doc, 'h3', title),
+        createTextEl(doc, 'div', `summary rule · ${nodeIds.length} linked step${nodeIds.length === 1 ? '' : 's'}`, 'mjd-meta'),
+    ];
+    if (body) nodes.push(createTextEl(doc, 'div', body, 'mjd-desc'));
+    nodes.push(createTextEl(doc, 'div', 'Applies to', 'mjd-sec'));
+    nodeIds.forEach((id) => nodes.push(createConnRow(doc, id, '→', getNodeLabel(index, id))));
+    return nodes;
 }
 
 /**
@@ -471,7 +515,7 @@ export function MountDiagramViewer(svg: SVGSVGElement, options: DiagramViewerOpt
         state.activeCard = null;
         applyVisualHighlight(null, null);
         panel.dataset.empty = 'true';
-        panel.innerHTML = '';
+        panel.replaceChildren();
     };
 
     const selectNode = (id: string | null): void => {
@@ -488,7 +532,7 @@ export function MountDiagramViewer(svg: SVGSVGElement, options: DiagramViewerOpt
         (index.adjIn.get(id) || []).forEach((e) => { eSet.add(e.id); nSet.add(e.from); });
         applyVisualHighlight(nSet, eSet);
         panel.dataset.empty = 'false';
-        panel.innerHTML = renderNodePanelHtml(id, index.nodes.get(id)!, index);
+        panel.replaceChildren(...buildNodePanelDom(id, index.nodes.get(id)!, index));
         bindPanelInteractions(id);
         live.textContent = `Selected ${getNodeLabel(index, id)}`;
     };
@@ -504,7 +548,7 @@ export function MountDiagramViewer(svg: SVGSVGElement, options: DiagramViewerOpt
         state.activeCard = null;
         applyVisualHighlight(new Set([edge.from, edge.to]), new Set([edge.id]));
         panel.dataset.empty = 'false';
-        panel.innerHTML = renderEdgePanelHtml(edge, index);
+        panel.replaceChildren(...buildEdgePanelDom(edge, index));
         bindPanelInteractions(null);
         live.textContent = `Selected connection ${edge.label || `${edge.from} to ${edge.to}`}`;
     };
@@ -523,7 +567,7 @@ export function MountDiagramViewer(svg: SVGSVGElement, options: DiagramViewerOpt
         const eSet = new Set(index.edges.filter((e) => nSet.has(e.from) && nSet.has(e.to)).map((e) => e.id));
         applyVisualHighlight(nSet, eSet);
         panel.dataset.empty = 'false';
-        panel.innerHTML = renderCardPanelHtml(card, ids, index);
+        panel.replaceChildren(...buildCardPanelDom(card, ids, index));
         bindPanelInteractions(null);
     };
 
@@ -535,7 +579,7 @@ export function MountDiagramViewer(svg: SVGSVGElement, options: DiagramViewerOpt
         const { nodeSet, edgeSet } = traverseGraph(id, dir, index);
         applyVisualHighlight(nodeSet, edgeSet);
         panel.dataset.empty = 'false';
-        panel.innerHTML = renderNodePanelHtml(id, index.nodes.get(id)!, index);
+        panel.replaceChildren(...buildNodePanelDom(id, index.nodes.get(id)!, index));
         bindPanelInteractions(id);
     };
 
@@ -621,9 +665,26 @@ function bindSvgEvents(ctx: {
     });
 }
 
+function parseSafeSvgElement(doc: Document, markup: string): SVGSVGElement | null {
+    const parserCtor = doc.defaultView?.DOMParser ?? (typeof DOMParser !== 'undefined' ? DOMParser : null);
+    if (!parserCtor) return null;
+    const parsedDoc = new parserCtor().parseFromString(markup, 'text/html');
+    const svg = parsedDoc.querySelector<SVGSVGElement>('svg[data-mj-diagram="1"], svg.mjd');
+    if (!svg) return null;
+    svg.querySelectorAll('script, foreignObject, iframe, object, embed').forEach((el) => el.remove());
+    svg.querySelectorAll('*').forEach((el) => {
+        for (const attr of Array.from(el.attributes)) {
+            if (attr.name.toLowerCase().startsWith('on')) {
+                el.removeAttribute(attr.name);
+            }
+        }
+    });
+    return doc.importNode(svg, true);
+}
+
 /**
  * Convenience helper for Angular hosts (`@memberjunction/ng-markdown`, `@memberjunction/ng-artifacts`).
- * Sanitizes raw SVG markup, inserts it into `host`, and upgrades it with `MountDiagramViewer`.
+ * Sanitizes raw SVG markup, parses the `<svg>` via DOMParser, and upgrades it with `MountDiagramViewer`.
  */
 export function MountInteractiveDiagram(
     host: HTMLElement,
@@ -631,9 +692,12 @@ export function MountInteractiveDiagram(
     options: MountInteractiveDiagramOptions = {}
 ): DiagramViewerInstance | null {
     const cleanMarkup = options.Sanitize ? options.Sanitize(svgMarkup) : svgMarkup;
-    host.innerHTML = cleanMarkup;
-    const svg = host.querySelector<SVGSVGElement>('svg[data-mj-diagram="1"], svg.mjd');
-    if (!svg) return null;
+    const svg = parseSafeSvgElement(host.ownerDocument, cleanMarkup);
+    if (!svg) {
+        host.replaceChildren();
+        return null;
+    }
+    host.replaceChildren(svg);
     const viewer = MountDiagramViewer(svg, {
         Theme: options.InitialTheme,
     });
