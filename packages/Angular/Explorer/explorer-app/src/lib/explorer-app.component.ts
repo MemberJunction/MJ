@@ -287,9 +287,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public IsChatOverlayReady = false;
 
   /**
-   * True when the active resource surface hosts its own right-edge conversation slide-in
-   * (e.g. Video Studio Productions) and suppresses the floating chat bubble so two right-edge
-   * chat entry points never appear at the same time.
+   * True when the active resource surface publishes `SuppressChatOverlay: true` in its agent
+   * context because it hosts its own right-edge conversation slide-in, preventing two right-edge
+   * chat entry points from appearing at the same time.
    */
   public get IsChatOverlaySuppressedBySurface(): boolean {
     const additional = this.AppContextSnapshot?.AdditionalContext;
@@ -297,10 +297,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       return false;
     }
     const record = additional as Record<string, unknown>;
-    return (
-      record['SuppressChatOverlay'] === true ||
-      record['Surface'] === 'VideoStudioProductions'
-    );
+    return record['SuppressChatOverlay'] === true;
   }
 
 

@@ -1,0 +1,30 @@
+<div class="vp-beat-strip">
+  <ul class="vp-beat-strip__track" role="list">
+    @for (block of ComputedBlocks; track block.Key) {
+      <li
+        class="vp-beat-strip__item"
+        [style.width.%]="block.WidthPercent"
+        [style.flex-grow]="block.Seconds"
+      >
+        <button
+          type="button"
+          class="vp-beat-strip__block"
+          [class.vp-beat-strip__block--active]="ActiveKey === block.Key"
+          [attr.data-beat-key]="block.Key"
+          [attr.title]="block.TooltipAndAria"
+          [attr.aria-label]="block.TooltipAndAria"
+          (click)="OnPickBeat(block.Key, $event)"
+        >
+          @if (block.ShowInnerLabel) {
+            <span
+              class="vp-beat-strip__label"
+              [class.vp-beat-strip__label--md]="block.LabelTier === 'md'"
+              [class.vp-beat-strip__label--lg]="block.LabelTier === 'lg'"
+            >{{ block.Label }}</span>
+          }
+        </button>
+      </li>
+    }
+  </ul>
+  <span class="vp-beat-strip__total" data-testid="beat-strip-total">{{ TotalTimeText }}</span>
+</div>

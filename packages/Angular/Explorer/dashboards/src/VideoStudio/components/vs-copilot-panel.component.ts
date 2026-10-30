@@ -120,7 +120,6 @@ export class VSCopilotPanelComponent
     this.IsStartingBrief = true;
     this.BriefStartError = null;
     this.AppContext = event.AppContext;
-    this.PendingMessage = event.Message;
     this.BriefStartRequested.emit(event);
     this.cdr.detectChanges();
 

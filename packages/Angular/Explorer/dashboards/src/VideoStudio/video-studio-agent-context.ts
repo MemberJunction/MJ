@@ -336,6 +336,7 @@ export function BuildProductionsAgentContext(
 
     const context: Record<string, unknown> = {
         Surface: 'VideoStudioProductions',
+        SuppressChatOverlay: true,
         TotalProductionCount: input.TotalCount,
         FilteredProductionCount: input.FilteredCards.length,
         SearchQuery: input.Filters.SearchQuery,
@@ -564,6 +565,124 @@ export const ARCHETYPE_SCOPE_FILTERS = ['all', 'shipped', 'company'] as const;
 export type ArchetypeScopeFilter = (typeof ARCHETYPE_SCOPE_FILTERS)[number];
 
 /**
+ * Raw beat entry from `MJ: Video Archetypes.BeatTemplate`.
+ */
+export interface ArchetypeBeatTemplateInput {
+    Key?: string | null;
+    Label?: string | null;
+    Purpose?: string | null;
+    Guidance?: string | null;
+    MinDurationSeconds?: number | null;
+    DefaultDurationSeconds?: number | null;
+    MaxDurationSeconds?: number | null;
+}
+
+/**
+ * Scaled beat strip item whose integer `Seconds` values sum to the archetype's
+ * target duration (`DefaultDurationSeconds`). Structurally matches `VideoBeatStripItem`
+ * from `@memberjunction/ng-artifacts`.
+ */
+export interface ScaledVideoBeatStripItem {
+    Key: string;
+    Label: string;
+    Seconds: number;
+    Detail?: string;
+}
+
+/**
+ * Convert an archetype's beat template into `VideoBeatStripItem[]` with integer
+ * `Seconds` scaled (via largest-remainder rounding) so their sum equals
+ * `targetDurationSeconds`.
+ */
+export function BuildArchetypeBeatStripItems(
+    rawBeats: readonly ArchetypeBeatTemplateInput[] | null | undefined,
+    targetDurationSeconds: number,
+): ScaledVideoBeatStripItem[] {
+    if (!Array.isArray(rawBeats) || rawBeats.length === 0) {
+        return [];
+    }
+
+    const beatCount = rawBeats.length;
+    const targetTotal =
+        Number.isFinite(targetDurationSeconds) && targetDurationSeconds > 0
+            ? Math.max(beatCount, Math.round(targetDurationSeconds))
+            : beatCount * 5;
+
+    const weights = rawBeats.map((b) => {
+        const def = b.DefaultDurationSeconds;
+        if (typeof def === 'number' && Number.isFinite(def) && def > 0) {
+            return def;
+        }
+        const min =
+            typeof b.MinDurationSeconds === 'number' &&
+            Number.isFinite(b.MinDurationSeconds) &&
+            b.MinDurationSeconds > 0
+                ? b.MinDurationSeconds
+                : 1;
+        const max =
+            typeof b.MaxDurationSeconds === 'number' &&
+            Number.isFinite(b.MaxDurationSeconds) &&
+            b.MaxDurationSeconds >= min
+                ? b.MaxDurationSeconds
+                : min;
+        return Math.max(0.1, (min + max) / 2);
+    });
+
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0) || beatCount;
+    const exactQuotas = weights.map((w) => (w / totalWeight) * targetTotal);
+    const integerSeconds = exactQuotas.map((q) => Math.max(1, Math.floor(q)));
+    let currentSum = integerSeconds.reduce((sum, s) => sum + s, 0);
+
+    if (currentSum < targetTotal) {
+        const order = exactQuotas
+            .map((q, idx) => ({ idx, remainder: q - Math.floor(q), quota: q }))
+            .sort((a, b) => {
+                if (Math.abs(b.remainder - a.remainder) > 1e-9) {
+                    return b.remainder - a.remainder;
+                }
+                if (Math.abs(b.quota - a.quota) > 1e-9) {
+                    return b.quota - a.quota;
+                }
+                return a.idx - b.idx;
+            });
+        let cursor = 0;
+        while (currentSum < targetTotal) {
+            const targetIdx = order[cursor % order.length].idx;
+            integerSeconds[targetIdx] += 1;
+            currentSum += 1;
+            cursor += 1;
+        }
+    } else if (currentSum > targetTotal) {
+        const order = exactQuotas
+            .map((q, idx) => ({ idx, remainder: q - Math.floor(q), quota: q }))
+            .sort((a, b) => a.remainder - b.remainder || a.quota - b.quota || b.idx - a.idx);
+        let cursor = 0;
+        let safety = beatCount * targetTotal;
+        while (currentSum > targetTotal && safety > 0) {
+            const targetIdx = order[cursor % order.length].idx;
+            if (integerSeconds[targetIdx] > 1) {
+                integerSeconds[targetIdx] -= 1;
+                currentSum -= 1;
+            }
+            cursor += 1;
+            safety -= 1;
+        }
+    }
+
+    return rawBeats.map((b, idx) => {
+        const key = (b.Key ?? '').trim() || `beat-${idx + 1}`;
+        const label = (b.Label ?? b.Key ?? '').trim() || `Beat ${idx + 1}`;
+        const detail = (b.Purpose ?? b.Guidance ?? '').trim();
+        return {
+            Key: key,
+            Label: label,
+            Seconds: integerSeconds[idx],
+            ...(detail ? { Detail: detail } : {}),
+        };
+    });
+}
+
+/**
  * Card view-model for a single `MJ: Video Archetypes` record on the Archetypes resource.
  */
 export interface ArchetypeCardSnapshot extends NamedVideoStudioItem {
@@ -581,7 +700,7 @@ export interface ArchetypeCardSnapshot extends NamedVideoStudioItem {
     DefaultFormats: string;
     BeatCount: number;
     BeatLabels: readonly string[];
-    BeatItems?: readonly { Key: string; Label: string; Seconds: number; Detail?: string }[];
+    BeatItems?: readonly ScaledVideoBeatStripItem[];
 }
 
 /**

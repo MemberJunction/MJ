@@ -15,8 +15,16 @@
 }
 
 .vs-health-card--healthy {
-  border-color: var(--mj-border-subtle);
-  background: var(--mj-bg-surface-sunken);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.vs-health-card--healthy .vs-health-card__summary-text {
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-secondary);
 }
 
 .vs-health-card--warning {

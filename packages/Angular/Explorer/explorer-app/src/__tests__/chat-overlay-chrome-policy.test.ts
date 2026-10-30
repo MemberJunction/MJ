@@ -48,29 +48,28 @@ describe('MJExplorerAppComponent.ShowChatOverlay follows the shell chrome policy
     expect(appWith(undefined, false).ShowChatOverlay).toBe(false);
   });
 
-  it('suppresses the floating chat overlay when the active surface hosts its own right-edge slide-in (VideoStudioProductions / SuppressChatOverlay)', () => {
+  it('suppresses the floating chat overlay when the active surface publishes SuppressChatOverlay: true', () => {
     const app = appWith(resolved(true), true);
     expect(app.IsChatOverlaySuppressedBySurface).toBe(false);
 
     app.AppContextSnapshot = {
-      App: { Name: 'Video Studio', Description: '' },
-      ActiveNavItem: { Name: 'Productions' },
+      App: { Name: 'Workspace', Description: '' },
+      ActiveNavItem: { Name: 'Main' },
       OtherNavItems: [],
       User: { Name: 'Admin', Roles: [] },
       AdditionalContext: {
-        Surface: 'VideoStudioProductions',
         SuppressChatOverlay: true,
       },
     };
     expect(app.IsChatOverlaySuppressedBySurface).toBe(true);
 
     app.AppContextSnapshot = {
-      App: { Name: 'Video Studio', Description: '' },
-      ActiveNavItem: { Name: 'Brand Kits' },
+      App: { Name: 'Workspace', Description: '' },
+      ActiveNavItem: { Name: 'Secondary' },
       OtherNavItems: [],
       User: { Name: 'Admin', Roles: [] },
       AdditionalContext: {
-        Surface: 'VideoStudioBrandKits',
+        SuppressChatOverlay: false,
       },
     };
     expect(app.IsChatOverlaySuppressedBySurface).toBe(false);

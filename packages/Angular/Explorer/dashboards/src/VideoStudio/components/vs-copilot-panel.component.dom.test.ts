@@ -277,6 +277,69 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(component.ConversationId).toBeNull();
   });
 
+  it('OnBriefStartRequested sends through one path without pre-setting PendingMessage before ConversationCreated', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const chatDebugEl = fixture.debugElement.query(By.directive(ConversationChatAreaStubComponent));
+    const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
+
+    const pendingMessagesSeenDuringSend: Array<string | null> = [];
+    chatStub.OnEmptyStateMessageSent.mockImplementation(
+      async ({ text }: { text: string }) => {
+        pendingMessagesSeenDuringSend.push(component.PendingMessage);
+        chatStub.ConversationCreated.emit({
+          conversation: { ID: 'conv-brief-1', Name: 'Brief Production' } as unknown as MJConversationEntity,
+          pendingMessage: text,
+        });
+      },
+    );
+
+    const briefMessage =
+      'Make a KPI Briefing video, about Q4 ARR growth, 12 seconds, formats 16:9 and 9:16, voiceover on, captions burned in.';
+    await component.OnBriefStartRequested({
+      Message: briefMessage,
+      AppContext: { Surface: 'VideoStudioProductions', SuppressChatOverlay: true },
+      Archetype: {
+        ID: 'arch-1',
+        Name: 'KPI Briefing',
+        Description: 'Executive KPI briefing',
+        Category: 'DataStory',
+        Status: 'Active',
+        CompanyID: null,
+        CompanyName: null,
+        IsShipped: true,
+        DefaultDurationSeconds: 60,
+        MinDurationSeconds: 45,
+        MaxDurationSeconds: 90,
+        DefaultFormats: '16:9',
+        BeatCount: 3,
+        BeatLabels: ['Hook', 'KPI', 'Takeaway'],
+      },
+      BrandKit: null,
+      Formats: ['16:9', '9:16'],
+      DurationSeconds: 12,
+      Topic: 'Q4 ARR growth',
+      Queries: [],
+      NarrationEnabled: true,
+      CaptionsMode: 'Burned',
+    });
+    fixture.detectChanges();
+
+    // Before ConversationCreated emitted, PendingMessage was null (not pre-assigned)
+    expect(pendingMessagesSeenDuringSend).toEqual([null]);
+    // OnEmptyStateMessageSent was called exactly once
+    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledTimes(1);
+    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledWith({
+      text: briefMessage,
+      attachments: [],
+    });
+    // And ConversationCreated populated PendingMessage once
+    expect(component.PendingMessage).toBe(briefMessage);
+    expect(component.ConversationId).toBe('conv-brief-1');
+  });
+
   it('ConversationId setter flips ChatIsNewConversation both ways when updated after initial render', async () => {
     component.ConversationId = null;
     fixture.detectChanges();

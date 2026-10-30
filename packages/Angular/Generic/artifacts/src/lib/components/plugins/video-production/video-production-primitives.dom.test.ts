@@ -37,7 +37,7 @@ describe('MJVideoFormatGlyphComponent (DOM)', () => {
           ShowLabel: true,
         },
       });
-      const box = query(fixture, '.mj-video-format-glyph__box');
+      const box = query(fixture, '.vp-format-glyph__box');
       expect(box).not.toBeNull();
       const width = Number.parseFloat(box!.style.width);
       const height = Number.parseFloat(box!.style.height);
@@ -51,7 +51,7 @@ describe('MJVideoFormatGlyphComponent (DOM)', () => {
       } else {
         expect(width).toBe(height);
       }
-      expect(text(fixture, '.mj-video-format-glyph__label')).toBe(c.format);
+      expect(text(fixture, '.vp-format-glyph__label')).toBe(c.format);
     }
 
     const badFixture = renderComponentFixture(MJVideoFormatGlyphComponent, {
@@ -61,8 +61,8 @@ describe('MJVideoFormatGlyphComponent (DOM)', () => {
         ShowLabel: false,
       },
     });
-    expect(query(badFixture, '.mj-video-format-glyph__box')).toBeNull();
-    expect(text(badFixture, '.mj-video-format-glyph__label')).toBe('bad');
+    expect(query(badFixture, '.vp-format-glyph__box')).toBeNull();
+    expect(text(badFixture, '.vp-format-glyph__label')).toBe('bad');
   });
 });
 
@@ -73,7 +73,7 @@ describe('MJVideoBeatStripComponent (DOM)', () => {
     { Key: 'cta', Label: 'CTA', Seconds: 10 },
   ];
 
-  it('renders beat blocks with widths proportional to seconds, accessible aria-label, and emits BeatPicked on click', () => {
+  it('renders beat list items with widths proportional to seconds, native button elements with accessible aria-label, and emits BeatPicked on click', () => {
     const fixture = renderComponentFixture(MJVideoBeatStripComponent, {
       inputs: {
         Beats: sampleBeats,
@@ -82,25 +82,28 @@ describe('MJVideoBeatStripComponent (DOM)', () => {
       },
     });
 
-    const blocks = queryAll(fixture, '.mj-video-beat-strip__block');
+    const items = queryAll(fixture, 'li.vp-beat-strip__item');
+    const blocks = queryAll(fixture, 'button.vp-beat-strip__block');
+    expect(items.length).toBe(3);
     expect(blocks.length).toBe(3);
 
-    expect(blocks[0].style.width).toBe('25%');
-    expect(blocks[1].style.width).toBe('50%');
-    expect(blocks[2].style.width).toBe('25%');
+    expect(items[0].style.width).toBe('25%');
+    expect(items[1].style.width).toBe('50%');
+    expect(items[2].style.width).toBe('25%');
 
+    expect(blocks[0].getAttribute('type')).toBe('button');
     expect(blocks[0].getAttribute('aria-label')).toBe(
       'Hook \u00B7 0:00\u20130:10 \u00B7 Open on the headline metric.',
     );
     expect(blocks[1].getAttribute('aria-label')).toBe('Proof \u00B7 0:10\u20130:30');
     expect(blocks[2].getAttribute('aria-label')).toBe('CTA \u00B7 0:30\u20130:40');
-    expect(blocks[1].classList.contains('mj-video-beat-strip__block--active')).toBe(true);
+    expect(blocks[1].classList.contains('vp-beat-strip__block--active')).toBe(true);
     expect(text(fixture, '[data-testid="beat-strip-total"]')).toBe('0:40');
 
     const pickedSpy = vi.fn();
     fixture.componentInstance.BeatPicked.subscribe(pickedSpy);
 
-    (blocks[2] as HTMLElement).click();
+    (blocks[2] as HTMLButtonElement).click();
     expect(pickedSpy).toHaveBeenCalledWith('cta');
   });
 });

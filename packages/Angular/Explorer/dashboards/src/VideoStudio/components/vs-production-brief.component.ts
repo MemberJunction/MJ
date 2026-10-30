@@ -44,6 +44,7 @@ import {
   ArchetypeCardSnapshot,
   ArchetypeCategory,
   BrandKitCardSnapshot,
+  BuildArchetypeBeatStripItems,
   BuildSavedQuerySearchFilter,
   BuildStudioAppContext,
   ClampStudioDuration,
@@ -275,15 +276,13 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     if (labels.length === 0) {
       return [];
     }
-    const perBeatSeconds = Math.max(
-      1,
-      Math.round((card.DefaultDurationSeconds || DEFAULT_STUDIO_DURATION_SECONDS) / labels.length),
+    return BuildArchetypeBeatStripItems(
+      labels.map((label, idx) => ({
+        Key: `${card.ID}-beat-${idx + 1}`,
+        Label: label,
+      })),
+      card.DefaultDurationSeconds || DEFAULT_STUDIO_DURATION_SECONDS,
     );
-    return labels.map((label, idx) => ({
-      Key: `${card.ID}-beat-${idx + 1}`,
-      Label: label,
-      Seconds: perBeatSeconds,
-    }));
   }
 
   public IsArchetypeSelected(card: ArchetypeCardSnapshot): boolean {
@@ -739,25 +738,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     const rawBeats = Array.isArray(entity.BeatTemplateObject)
       ? entity.BeatTemplateObject
       : [];
-    const fallbackPerBeat =
-      rawBeats.length > 0 ? Math.max(1, Math.round(defaultDur / rawBeats.length)) : 5;
-
-    const beatItems: VideoBeatStripItem[] = rawBeats.map((b, idx) => {
-      const def = b.DefaultDurationSeconds;
-      const min = typeof b.MinDurationSeconds === 'number' ? b.MinDurationSeconds : fallbackPerBeat;
-      const max = typeof b.MaxDurationSeconds === 'number' ? b.MaxDurationSeconds : min;
-      const seconds =
-        typeof def === 'number' && def > 0
-          ? Math.round(def)
-          : Math.max(1, Math.round((min + max) / 2));
-      return {
-        Key: b.Key || `beat-${idx + 1}`,
-        Label: b.Label || b.Key || `Beat ${idx + 1}`,
-        Seconds: seconds,
-        Detail: b.Purpose || b.Guidance || undefined,
-      };
-    });
-
+    const beatItems: VideoBeatStripItem[] = BuildArchetypeBeatStripItems(rawBeats, defaultDur);
     const beatLabels = beatItems.map((b) => b.Label);
     const companyRaw = entity.Company;
 

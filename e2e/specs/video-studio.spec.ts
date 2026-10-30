@@ -262,7 +262,7 @@ test.describe('Video Studio — Right-Side Copilot Slide-In & Iterate (VS-UX-2)'
     ).toBeVisible({ timeout: 60_000 });
 
     // Close the slide-in via its header close button and verify the production card + Iterate
-    await copilotPanel.getByTestId('vs-copilot-close-btn').click();
+    await copilotPanel.getByTestId('vs-copilot-close-button').click();
     await expect(slideInDrawer).toBeHidden();
 
     const firstProductionCard = page.locator('[data-testid^="production-card-"]').first();

@@ -23,6 +23,7 @@ import {
   ArchetypeCategoryGroup,
   ArchetypeFilterState,
   ArchetypeScopeFilter,
+  BuildArchetypeBeatStripItems,
   BuildArchetypesAgentContext,
   FilterArchetypeCards,
   GroupArchetypesByCategory,
@@ -378,29 +379,23 @@ export class VideoStudioArchetypesResourceComponent
   }
 
   private mapArchetypeToCard(arch: MJVideoArchetypeEntity): ArchetypeViewItem {
+    const defaultDur = arch.DefaultDurationSeconds ?? 60;
     const rawBeats = Array.isArray(arch.BeatTemplateObject) ? arch.BeatTemplateObject : [];
-    const computedWeights = rawBeats.map((b) => {
-      const def = b.DefaultDurationSeconds;
-      if (typeof def === 'number' && def > 0) {
-        return def;
-      }
-      const min = typeof b.MinDurationSeconds === 'number' ? b.MinDurationSeconds : 5;
-      const max = typeof b.MaxDurationSeconds === 'number' ? b.MaxDurationSeconds : min;
-      return Math.max(1, (min + max) / 2);
-    });
-    const totalWeight = computedWeights.reduce((acc, w) => acc + w, 0) || 1;
+    const beatItems = BuildArchetypeBeatStripItems(rawBeats, defaultDur);
+    const totalWeight = beatItems.reduce((acc, item) => acc + item.Seconds, 0) || 1;
 
     const beats: ArchetypeBeatBlock[] = rawBeats.map((b, idx) => {
-      const weight = computedWeights[idx] ?? 1;
+      const stripItem = beatItems[idx];
+      const seconds = stripItem?.Seconds ?? 1;
       return {
-        Key: b.Key || `beat-${idx + 1}`,
-        Label: b.Label || b.Key || `Beat ${idx + 1}`,
+        Key: stripItem?.Key ?? (b.Key || `beat-${idx + 1}`),
+        Label: stripItem?.Label ?? (b.Label || b.Key || `Beat ${idx + 1}`),
         Purpose: b.Purpose || '',
         MinDurationSeconds: b.MinDurationSeconds ?? 0,
         MaxDurationSeconds: b.MaxDurationSeconds ?? 0,
         DefaultDurationSeconds: b.DefaultDurationSeconds,
-        ComputedDurationSeconds: weight,
-        WidthPercent: Math.max(4, Math.round((weight / totalWeight) * 1000) / 10),
+        ComputedDurationSeconds: seconds,
+        WidthPercent: Math.max(4, Math.round((seconds / totalWeight) * 1000) / 10),
         Guidance: b.Guidance,
         RequiresDataBinding: b.RequiresDataBinding,
       };
@@ -425,7 +420,7 @@ export class VideoStudioArchetypesResourceComponent
       CompanyID: companyId,
       CompanyName: arch.Company ?? null,
       IsShipped: companyId === null,
-      DefaultDurationSeconds: arch.DefaultDurationSeconds ?? 60,
+      DefaultDurationSeconds: defaultDur,
       MinDurationSeconds: arch.MinDurationSeconds ?? 30,
       MaxDurationSeconds: arch.MaxDurationSeconds ?? 120,
       DefaultFormats: arch.DefaultFormats ?? '16:9',
@@ -435,6 +430,7 @@ export class VideoStudioArchetypesResourceComponent
       PacingRaw: arch.Pacing ?? (pacingObj ? JSON.stringify(pacingObj) : null),
       BeatCount: beats.length,
       BeatLabels: beats.map((b) => b.Label),
+      BeatItems: beatItems,
       Beats: beats,
       Pacing: pacing,
     };

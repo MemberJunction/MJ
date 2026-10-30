@@ -5,6 +5,8 @@
  *   2. Brand Kits (`VideoStudioBrandKitsResource`)
  *   3. Archetypes (`VideoStudioArchetypesResource`)
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
     VIDEO_STUDIO_NAME_LIST_CAP,
@@ -18,6 +20,7 @@ import {
     FilterArchetypeCards,
     GroupArchetypesByCategory,
     BuildArchetypesAgentContext,
+    BuildArchetypeBeatStripItems,
     ARCHETYPE_CATEGORIES,
     ProductionCardSnapshot,
     ProductionFilterState,
@@ -28,6 +31,7 @@ import {
     ArchetypeCardSnapshot,
     ArchetypeFilterState,
     ArchetypesAgentContextInput,
+    ArchetypeBeatTemplateInput,
     STUDIO_VIDEO_FORMATS,
     ParseArchetypeDefaultFormats,
     ClampStudioDuration,
@@ -206,6 +210,7 @@ describe('FilterProductionCards & BuildProductionsAgentContext', () => {
         };
         const ctx = BuildProductionsAgentContext(input);
         expect(ctx['Surface']).toBe('VideoStudioProductions');
+        expect(ctx['SuppressChatOverlay']).toBe(true);
         expect(ctx['TotalProductionCount']).toBe(2);
         expect(ctx['FilteredProductionCount']).toBe(1);
         expect(ctx['StatusFilter']).toBe('Delivered');
@@ -436,6 +441,47 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
             },
         });
     });
+
+    it('scales beat templates via largest-remainder rounding so integer Seconds sum to DefaultDurationSeconds for every seeded archetype', () => {
+        const metadataPath = resolve(
+            __dirname,
+            '../../../../../../metadata/video-archetypes/.video-archetypes.json',
+        );
+        const rawJson = JSON.parse(readFileSync(metadataPath, 'utf8')) as Array<{
+            fields: {
+                Name: string;
+                DefaultDurationSeconds: number;
+                BeatTemplate: ArchetypeBeatTemplateInput[];
+            };
+        }>;
+        expect(rawJson.length).toBeGreaterThanOrEqual(7);
+
+        for (const entry of rawJson) {
+            const { Name, DefaultDurationSeconds, BeatTemplate } = entry.fields;
+            const items = BuildArchetypeBeatStripItems(BeatTemplate, DefaultDurationSeconds);
+            expect(items.length).toBe(BeatTemplate.length);
+            for (const item of items) {
+                expect(Number.isInteger(item.Seconds)).toBe(true);
+                expect(item.Seconds).toBeGreaterThanOrEqual(1);
+            }
+            const sum = items.reduce((acc, item) => acc + item.Seconds, 0);
+            expect(sum, `${Name} beat sum should equal DefaultDurationSeconds`).toBe(
+                DefaultDurationSeconds,
+            );
+        }
+
+        // Also verify fallback min/max weights when DefaultDurationSeconds is omitted on beats
+        const minMaxOnly = BuildArchetypeBeatStripItems(
+            [
+                { Key: 'a', Label: 'A', MinDurationSeconds: 2, MaxDurationSeconds: 4 },
+                { Key: 'b', Label: 'B', MinDurationSeconds: 4, MaxDurationSeconds: 8 },
+                { Key: 'c', Label: 'C', MinDurationSeconds: 2, MaxDurationSeconds: 4 },
+            ],
+            25,
+        );
+        expect(minMaxOnly.reduce((acc, item) => acc + item.Seconds, 0)).toBe(25);
+    });
 });
+
 
 
