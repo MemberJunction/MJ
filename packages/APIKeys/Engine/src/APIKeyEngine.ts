@@ -1549,6 +1549,7 @@ export class APIKeyEngine {
                 ExtraFilter: `Status = 'Active'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, contextUser);
 

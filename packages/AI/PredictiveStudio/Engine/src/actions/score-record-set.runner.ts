@@ -174,7 +174,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     const rv = RunView.FromMetadataProvider(provider);
 
     const listResult = await rv.RunView<{ EntityID: string }>(
-      { EntityName: 'MJ: Lists', ExtraFilter: `ID='${listId}'`, Fields: ['EntityID'], ResultType: 'simple', MaxRows: 1 },
+      { EntityName: 'MJ: Lists', ExtraFilter: `ID='${listId}'`, Fields: ['EntityID'], ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
       contextUser,
     );
     if (!listResult.Success) {

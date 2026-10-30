@@ -236,7 +236,7 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
                 this.AgentMessageCount = agent?.TotalRowCount ?? 0;
                 this.Messages = recent?.Results ?? [];
             }
-            this.ForkCount = forks?.Success ? forks.TotalRowCount : 0;
+            this.ForkCount = forks?.Success ? forks.TotalRowCount ?? 0 : 0;
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`Conversation overview: could not load the details of conversation ${this.Record.ID}: ${message}`);

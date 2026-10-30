@@ -57,6 +57,7 @@ export class RunViewRecordLoader implements IRecordLoader {
         ExtraFilter: `ID='${pipelineId}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );
@@ -80,6 +81,7 @@ export class RunViewRecordLoader implements IRecordLoader {
         Fields: ['Version'],
         OrderBy: 'Version DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       },
       contextUser,
@@ -103,6 +105,7 @@ export class RunViewRecordLoader implements IRecordLoader {
         ExtraFilter: `ID='${algorithmId}'`,
         Fields: ['DriverClass'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       },
       contextUser,

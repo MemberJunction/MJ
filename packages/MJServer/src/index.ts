@@ -2233,6 +2233,7 @@ async function processRSUPendingWork(): Promise<void> {
               EntityName: 'MJ: Scheduled Job Types',
               ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               ResultType: 'simple',
               Fields: ['ID']
             }, systemUser);
@@ -2326,6 +2327,7 @@ async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: Us
       ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
       Fields: ['ID'],
     }, systemUser);

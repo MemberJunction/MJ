@@ -681,6 +681,22 @@ describe('GraphQL Schema Synchronization', () => {
             }
         });
 
+        it('defines SkipTotalRowCount as an OPTIONAL boolean on every RunView input the client sends', () => {
+            // Forwarded only when the caller set it, so a required field would break every older client.
+            const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/RunViewResolver.ts');
+            if (!fs.existsSync(serverPath)) {
+                return;
+            }
+
+            const types = extractInputTypesFromFile(serverPath);
+            for (const typeName of ['RunViewByIDInput', 'RunViewByNameInput', 'RunDynamicViewInput', 'RunViewGenericInput']) {
+                const field = types.find(t => t.name === typeName)?.fields.find(f => f.name === 'SkipTotalRowCount');
+                expect(field, `${typeName}.SkipTotalRowCount`).toBeDefined();
+                expect(field!.required, `${typeName}.SkipTotalRowCount required`).toBe(false);
+                expect(field!.type, `${typeName}.SkipTotalRowCount type`).toBe('boolean');
+            }
+        });
+
         it('parses nested InputType references (RunViewWithCacheCheckInput.params)', () => {
             const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/RunViewResolver.ts');
             if (!fs.existsSync(serverPath)) {

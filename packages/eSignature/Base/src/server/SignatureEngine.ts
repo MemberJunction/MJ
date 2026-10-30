@@ -598,6 +598,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
                 ExtraFilter: `ExternalEnvelopeID = '${externalEnvelopeId.replace(/'/g, "''")}'`,
                 ResultType: 'entity_object',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );

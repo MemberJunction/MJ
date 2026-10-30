@@ -502,7 +502,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             const count = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'count_only' }, ctx.User);
             Assert(count.Success, `count_only failed: ${count.ErrorMessage}`);
             AssertEqual(count.Results.length, 0, 'count_only must return no rows');
-            Assert(count.TotalRowCount > 100, `count_only TotalRowCount expected 100+, got ${count.TotalRowCount}`);
+            Assert((count.TotalRowCount ?? 0) > 100, `count_only TotalRowCount expected 100+, got ${(count.TotalRowCount ?? 0)}`);
 
             // The same entity+filter must still serve full rows afterwards (no empty-poisoning)
             const rows = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple' }, ctx.User);
@@ -755,7 +755,7 @@ export const ServerCacheChecks: NamedCheck[] = [
                 capped.Results.map(e => ({ EntityName: e.Name, ResultType: 'count_only' as const, BypassCache: true })),
                 ctx.User
             );
-            const idx = counts.findIndex((c, i) => c.Success && c.TotalRowCount > capped.Results[i].UserViewMaxRows);
+            const idx = counts.findIndex((c, i) => c.Success && (c.TotalRowCount ?? 0) > capped.Results[i].UserViewMaxRows);
             if (idx < 0) {
                 SkipCheck('no capped entity has more rows than its UserViewMaxRows on this DB, so the IgnoreMaxRows divergence is not observable.');
             }
@@ -790,7 +790,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             const matching = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'count_only', BypassCache: true }, ctx.User);
             const all = await rv.RunView({ EntityName: ENTITY, ResultType: 'count_only', BypassCache: true }, ctx.User);
             Assert(matching.Success && all.Success, 'count probes must succeed');
-            if (matching.TotalRowCount === 0 || matching.TotalRowCount >= all.TotalRowCount) {
+            if ((matching.TotalRowCount ?? 0) === 0 || (matching.TotalRowCount ?? 0) >= (all.TotalRowCount ?? 0)) {
                 SkipCheck(`the filter "${filter}" does not discriminate on this DB (${matching.TotalRowCount}/${all.TotalRowCount} rows match), so a filtered view cannot be told apart from the plain query.`);
             }
 
@@ -923,7 +923,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             let chosen = candidates[0];
             for (const c of candidates.slice(0, 20)) {
                 const cnt = await rv.RunView({ EntityName: c.e, ResultType: 'count_only', BypassCache: true }, c.a);
-                if (cnt.Success && cnt.TotalRowCount > 0) { chosen = c; break; }
+                if (cnt.Success && (cnt.TotalRowCount ?? 0) > 0) { chosen = c; break; }
             }
             const { a: A, b: B, e: E } = chosen;
             const filter = `'s31' <> 'zzz-marker'`; // always-true unique cold slot

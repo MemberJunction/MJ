@@ -7769,7 +7769,8 @@ export abstract class BaseEntity<T = unknown> {
                 ExtraFilter: `${pkField.Name} = '${EscapeSQLString(String(pkValue))}'`,
                 ResultType: 'simple',
                 Fields: [pkField.Name],
-                MaxRows: 1
+                MaxRows: 1,
+                SkipTotalRowCount: true
             }, this._contextCurrentUser);
 
             if (result && result.Success && result.Results && result.Results.length > 0) {
@@ -7899,7 +7900,8 @@ export abstract class BaseEntity<T = unknown> {
                 ExtraFilter: `${childPK.Name} = '${EscapeSQLString(String(pkValue))}'`,
                 ResultType: 'simple',
                 Fields: [childPK.Name],
-                MaxRows: 1
+                MaxRows: 1,
+                SkipTotalRowCount: true
             }, contextUser);
 
             if (result?.Success && result.Results?.length > 0) {
@@ -7954,7 +7956,8 @@ export abstract class BaseEntity<T = unknown> {
             ExtraFilter: `${sibling.FirstPrimaryKey.Name} = '${EscapeSQLString(String(pkValue))}'`, // first-pk-ok: IS-A shared key
             ResultType: 'simple' as const,
             Fields: [sibling.FirstPrimaryKey.Name], // first-pk-ok: IS-A shared key
-            MaxRows: 1
+            MaxRows: 1,
+            SkipTotalRowCount: true
         }));
 
         const results = await rv.RunViews(viewParams, this._contextCurrentUser);
