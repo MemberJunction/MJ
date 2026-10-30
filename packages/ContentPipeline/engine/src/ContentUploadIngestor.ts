@@ -309,6 +309,8 @@ export class ContentUploadIngestor {
             throw new Error(`Could not load existing Content Item '${itemID}'`);
         }
         if (reviveFromPendingDelete) {
+            // ponytail: a Delete run that hydrated this item before the revive commits 'Deleted' over it afterwards
+            // (WorkingRecordCommitter.Commit does not re-read); a re-read or concurrency check in Commit closes it.
             item.DeleteStatus = null;
             item.FileID = request.FileID;
             item.Name = request.Name;
@@ -521,16 +523,18 @@ export class ContentUploadIngestor {
         const cachedDoc = kh.GetEntityDocumentByID(source.EntityDocumentID);
         let docEntityID: string | null = cachedDoc?.EntityID ?? null;
         if (!docEntityID) {
-            try {
-                const entityDoc = await provider.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', contextUser);
-                if (await entityDoc.InnerLoad(CompositeKey.FromID(source.EntityDocumentID))) { // first-pk-ok: single PK ID
-                    docEntityID = entityDoc.EntityID;
-                }
-            } catch {
-                // Provider does not expose MJ: Entity Documents in this environment.
+            const entityDoc = await provider.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', contextUser);
+            if (await entityDoc.InnerLoad(CompositeKey.FromID(source.EntityDocumentID))) { // first-pk-ok: single PK ID
+                docEntityID = entityDoc.EntityID;
             }
         }
-        if (docEntityID && !UUIDsEqual(docEntityID, entityInfo.ID)) {
+        // Fails closed: an origin link is only written when the Entity Document is known to be for the origin's entity.
+        if (!docEntityID) {
+            throw new Error(
+                `Content Source '${source.ID}' names EntityDocumentID '${source.EntityDocumentID}', which could not be loaded; cannot link Origin '${origin.EntityName}'`,
+            );
+        }
+        if (!UUIDsEqual(docEntityID, entityInfo.ID)) {
             throw new Error(
                 `Content Source '${source.ID}' has EntityDocumentID '${source.EntityDocumentID}' for EntityID '${docEntityID}', which does not match Origin entity '${origin.EntityName}' ('${entityInfo.ID}')`,
             );
@@ -668,56 +672,17 @@ export class ContentUploadIngestor {
         return status === null || status === undefined || status === 'Pending';
     }
 
+    /** Extract → Segment → Tag → Embed over the root's live tree; a stage failure stops only what depends on it. */
     private async runStagesNow(
         rootItemID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
-        const preExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
-        const extractIDs = preExtractItems.filter((i) => this.isStagePending(i.ExtractionStatus)).map((i) => i.ID);
-        let extractBatchSucceeded = false;
-        if (extractIDs.length > 0) {
-            extractBatchSucceeded = await this.executeProcessStage(
-                CONTENT_PIPELINE_EXTRACT_PROCESS_ID,
-                'Extract',
-                extractIDs,
-                'ExtractionStatus',
-                contextUser,
-                provider,
-            );
-        }
-
-        const postExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
-        const extractedItems = this.filterCompletedExtractItems(postExtractItems, extractBatchSucceeded);
+        const extractedItems = await this.runExtractNow(rootItemID, contextUser, provider);
         if (extractedItems.length === 0) {
             return;
         }
-
-        const segmentIDs = extractedItems.filter((i) => this.isStagePending(i.SegmentationStatus)).map((i) => i.ID);
-        let segmentBatchSucceeded = false;
-        if (segmentIDs.length > 0) {
-            segmentBatchSucceeded = await this.executeProcessStage(
-                CONTENT_PIPELINE_SEGMENT_PROCESS_ID,
-                'Segment',
-                segmentIDs,
-                'SegmentationStatus',
-                contextUser,
-                provider,
-            );
-        }
-
-        const tagIDs = extractedItems.filter((i) => this.isStagePending(i.TaggingStatus)).map((i) => i.ID);
-        if (tagIDs.length > 0) {
-            await this.executeProcessStage(
-                CONTENT_PIPELINE_TAG_PROCESS_ID,
-                'Tag',
-                tagIDs,
-                'TaggingStatus',
-                contextUser,
-                provider,
-            );
-        }
-
+        const { segmentIDs, segmentBatchSucceeded } = await this.runSegmentAndTagNow(extractedItems, contextUser, provider);
         const completedSegmentItems = await this.resolveCompletedSegmentItems(
             rootItemID,
             extractedItems,
@@ -735,6 +700,61 @@ export class ContentUploadIngestor {
             contextUser,
             provider,
         );
+    }
+
+    /** Runs Extract on the tree's Pending items and returns the items whose extraction completed. */
+    private async runExtractNow(
+        rootItemID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<ContentItemStageRow[]> {
+        const preExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
+        const extractIDs = preExtractItems.filter((i) => this.isStagePending(i.ExtractionStatus)).map((i) => i.ID);
+        let extractBatchSucceeded = false;
+        if (extractIDs.length > 0) {
+            extractBatchSucceeded = await this.executeProcessStage(
+                CONTENT_PIPELINE_EXTRACT_PROCESS_ID,
+                'Extract',
+                extractIDs,
+                'ExtractionStatus',
+                contextUser,
+                provider,
+            );
+        }
+        const postExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
+        return this.filterCompletedExtractItems(postExtractItems, extractBatchSucceeded);
+    }
+
+    /** Runs Segment, then Tag (before Embed, so the vectors carry the tags), on the extracted items. */
+    private async runSegmentAndTagNow(
+        extractedItems: readonly ContentItemStageRow[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<{ segmentIDs: string[]; segmentBatchSucceeded: boolean }> {
+        const segmentIDs = extractedItems.filter((i) => this.isStagePending(i.SegmentationStatus)).map((i) => i.ID);
+        let segmentBatchSucceeded = false;
+        if (segmentIDs.length > 0) {
+            segmentBatchSucceeded = await this.executeProcessStage(
+                CONTENT_PIPELINE_SEGMENT_PROCESS_ID,
+                'Segment',
+                segmentIDs,
+                'SegmentationStatus',
+                contextUser,
+                provider,
+            );
+        }
+        const tagIDs = extractedItems.filter((i) => this.isStagePending(i.TaggingStatus)).map((i) => i.ID);
+        if (tagIDs.length > 0) {
+            await this.executeProcessStage(
+                CONTENT_PIPELINE_TAG_PROCESS_ID,
+                'Tag',
+                tagIDs,
+                'TaggingStatus',
+                contextUser,
+                provider,
+            );
+        }
+        return { segmentIDs, segmentBatchSucceeded };
     }
 
     private filterCompletedExtractItems(
@@ -880,34 +900,24 @@ export class ContentUploadIngestor {
         provider: IMetadataProvider,
         contextUser: UserInfo,
     ): Promise<ContentItemStageRow[]> {
-        try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<ContentItemStageRow>(
-                {
-                    EntityName: 'MJ: Content Items',
-                    ExtraFilter: `((${WhereEqual({ ID: rootItemID })}) OR (${WhereEqual({ RootParentID: rootItemID })}) OR (${WhereEqual({ ParentID: rootItemID })})) AND (${WhereEqual({ DeleteStatus: null })})`,
-                    Fields: ['ID', 'ExtractionStatus', 'SegmentationStatus', 'TaggingStatus', 'EmbeddingStatus', 'DeleteStatus'],
-                    ResultType: 'simple',
-                    IgnoreMaxRows: true,
-                },
-                contextUser,
-            );
-            if (result.Success && result.Results.length > 0) {
-                return result.Results;
-            }
-        } catch {
-            // Fall back to default pending row for the root item when tree lookup is unavailable.
-        }
-        return [
+        // Throws rather than guessing statuses: an invented Pending row would re-run Extract on a Complete or Processing item.
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<ContentItemStageRow>(
             {
-                ID: rootItemID,
-                ExtractionStatus: 'Pending',
-                SegmentationStatus: 'Pending',
-                TaggingStatus: 'Pending',
-                EmbeddingStatus: 'Pending',
-                DeleteStatus: null,
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `((${WhereEqual({ ID: rootItemID })}) OR (${WhereEqual({ RootParentID: rootItemID })}) OR (${WhereEqual({ ParentID: rootItemID })})) AND (${WhereEqual({ DeleteStatus: null })})`,
+                Fields: ['ID', 'ExtractionStatus', 'SegmentationStatus', 'TaggingStatus', 'EmbeddingStatus', 'DeleteStatus'],
+                ResultType: 'simple',
+                IgnoreMaxRows: true,
             },
-        ];
+            contextUser,
+        );
+        if (!result.Success) {
+            throw new Error(
+                `Could not read the Content Item tree for '${rootItemID}' (the item is saved; the scheduled pipeline will process it): ${result.ErrorMessage}`,
+            );
+        }
+        return result.Results;
     }
 
     private async collectLiveChunks(

@@ -12,7 +12,7 @@
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJContentItemEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { IsRouteFailure, RouteVectorRecords } from '../VectorRouting.js';
 import {
@@ -27,7 +27,7 @@ import {
 } from '@memberjunction/content-pipeline-base';
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
 import { WhereEqual } from '../Filters.js';
-import { IsUploadItemURL, UPLOAD_URL_PREFIX } from '../UploadLocator.js';
+import { IsCallerOwnedUploadURL } from '../UploadLocator.js';
 
 /** The registered name for the chunk-level stage. */
 export const DELETE_STAGE = 'Delete';
@@ -121,22 +121,31 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         if (!fileID) {
             return false;
         }
-        const isCallerFile = this.isCallerOwnedFile(record, fileID);
+        // A file belongs to the caller only when the locator is exactly `upload://<fileId>` with that FileID;
+        // everything else with a FileID is a durable copy made by ExtractStage (archive members included).
+        const isCallerFile = IsCallerOwnedUploadURL(record.Identity.EphemeralID, fileID);
         if (context.IsTest) {
             return !isCallerFile;
         }
-        if (isCallerFile) {
-            try {
-                await this.detachFileFromRecord(record, context);
-                return false;
-            } catch (error) {
-                throw new TransientStageError(
-                    `Detaching caller file for '${record.Identity.Key}' failed: ` +
-                        `${error instanceof Error ? error.message : String(error)}`,
-                    { cause: error },
-                );
-            }
+        return isCallerFile ? this.detachCallerFile(record, context) : this.deleteKeptCopy(record, fileID, context);
+    }
+
+    /** The caller's file is never deleted: only `FileID` is cleared, so the caller can delete its own row. */
+    private async detachCallerFile(record: WorkingRecord, context: StageContext): Promise<false> {
+        try {
+            await this.detachFileFromRecord(record, context);
+            return false;
+        } catch (error) {
+            throw new TransientStageError(
+                `Detaching caller file for '${record.Identity.Key}' failed: ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
+            );
         }
+    }
+
+    /** Delete a pipeline-made copy: the stored object, then its `MJ: Files` row. */
+    private async deleteKeptCopy(record: WorkingRecord, fileID: string, context: StageContext): Promise<boolean | null> {
         try {
             const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
             if (!(await file.InnerLoad(CompositeKey.FromID(fileID)))) { // first-pk-ok: MJ core entity, single-column ID
@@ -165,21 +174,6 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
                 { cause: error },
             );
         }
-    }
-
-    /**
-     * A file belongs to the caller when, and only when, the item's locator is
-     * exactly `upload://<fileId>` (no `#member` suffix) and its `FileID` equals
-     * that `<fileId>`. Everything else with a `FileID` is a durable copy made
-     * by `ExtractStage` (including archive members' durable copies).
-     */
-    private isCallerOwnedFile(record: WorkingRecord, fileID: string): boolean {
-        const url = record.Identity.EphemeralID;
-        if (!IsUploadItemURL(url) || url.includes('#')) {
-            return false;
-        }
-        const locatorFileID = url.slice(UPLOAD_URL_PREFIX.length);
-        return locatorFileID.length > 0 && UUIDsEqual(locatorFileID, fileID);
     }
 
     /** Clear `FileID` on the owning Content Item before deleting its `MJ: Files` row, so `FK_ContentItem_File` does not block `spDeleteFile`. */

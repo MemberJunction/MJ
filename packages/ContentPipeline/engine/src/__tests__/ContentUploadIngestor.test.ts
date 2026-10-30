@@ -664,6 +664,49 @@ describe('ContentUploadIngestor', () => {
         );
     });
 
+    it('refuses to link an Origin when the source Entity Document cannot be loaded (fails closed)', async () => {
+        const { provider, contextUser } = createFakeEnvironment();
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue(undefined);
+        const fake = provider as unknown as { GetEntityObject: (name: string) => Promise<unknown> };
+        const original = fake.GetEntityObject;
+        fake.GetEntityObject = async (name: string) =>
+            name === 'MJ: Entity Documents' ? { InnerLoad: async () => false } : original(name);
+
+        await expect(
+            ContentUploadIngestor.Ingest({
+                ContentSourceID: 'SRC-UPLOAD-1',
+                FileID: 'FILE-221',
+                Name: 'unknown-entity-document.pdf',
+                Origin: { EntityName: 'MJ: Collaboration Space Items', RecordID: 'SPACE-ITEM-221' },
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/EntityDocumentID 'ED-SPACE-ITEM', which could not be loaded/);
+    });
+
+    it('throws instead of guessing stage statuses when the RunNow tree lookup fails, and runs no stage', async () => {
+        const { runView, provider, contextUser } = createFakeEnvironment();
+        const realRunView = runView.getMockImplementation()!;
+        runView.mockImplementation(async (params: CapturedRunViewParams) =>
+            String(params.ExtraFilter ?? '').includes('RootParentID')
+                ? ({ Success: false, Results: [], ErrorMessage: 'db down' } as never)
+                : realRunView(params),
+        );
+        const runByID = vi.spyOn(RecordProcessExecutor.prototype, 'RunByID');
+
+        await expect(
+            ContentUploadIngestor.Ingest({
+                ContentSourceID: 'SRC-UPLOAD-1',
+                FileID: 'FILE-222',
+                Name: 'tree-lookup-fails.pdf',
+                RunNow: true,
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/Could not read the Content Item tree .*db down/);
+        expect(runByID).not.toHaveBeenCalled();
+    });
+
     it('refuses a ContentSourceID whose driver is not push-only with a clear error', async () => {
         const { provider, contextUser } = createFakeEnvironment();
 
