@@ -22,6 +22,7 @@ import { TrainerResultMalformedError } from '@memberjunction/predictive-studio-s
 import { TrainingEngine } from '../training-engine';
 import { TrainingRefusedError } from '../training-refusal';
 import { TrainerRequestBuilder } from '../trainer-request';
+import { WasTrainingLeakageFlagged } from '../../operations/delegation';
 import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
 import { RollingOriginCarver, TrailingFractionCarver } from '../../snapshot/holdout-carver';
 import { InMemoryArtifactStore } from '../artifact-store';
@@ -787,6 +788,24 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     expect(EvaluationLineage.Read(model.Lineage)?.ImportanceKind).toBe('held_out_permutation');
   });
 
+  it('flags a run whose trainer importance is dominated by one feature with the LEAKAGE WARNING note, and keeps the model Draft', async () => {
+    const importance = [importanceOf('EventsAttended', 0.95), importanceOf('Region', 0.01)];
+    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), importance }));
+    const result = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(result.run.Notes).toMatch(/^Trainer completed: finalist 'xgb'\. LEAKAGE WARNING: one field \("EventsAttended"\) is doing almost all the predicting \(99\.0% of total importance, over the 60% threshold\)/);
+    expect(WasTrainingLeakageFlagged(result)).toBe(true);
+    expect(result.model.Status).toBe('Draft');
+  });
+
+  it('notes no dominance when no feature dominates the trainer importance, or the trainer measured none', async () => {
+    for (const importance of [[importanceOf('EventsAttended', 0.5), importanceOf('Region', 0.5)], []]) {
+      const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), importance }));
+      const result = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+      expect(result.run.Notes).toBe("Trainer completed: finalist 'xgb'. Training completed. No single-feature dominance detected.");
+      expect(WasTrainingLeakageFlagged(result)).toBe(false);
+    }
+  });
+
   it('stores an empty importance map with no importance kind when the trainer measured none (a forecast reports none)', async () => {
     const { engine, deps, pipeline } = protocolHarness(cannedFor);
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
@@ -902,6 +921,21 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/no trainer \(trainer\) was supplied/);
     expect(snapshots).toHaveLength(0);
     expect(runs[0].Status).toBe('Failed');
+  });
+});
+
+describe('TrainingEngine — a pipeline without a Prediction Unit', () => {
+  it('refuses a search over candidates before any run row is written (unit-required)', async () => {
+    const { deps, factory, sidecar } = TrainingHarness.BuildDeps();
+    const candidates = [TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb', 'xgboost', '{}')];
+    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1', candidates }, deps)).rejects.toMatchObject({
+      Refusal: { stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1', why: 'a search over several candidates needs a Prediction Unit' } },
+      message: 'Refused (unit-required): pipeline pipe-1 — a search over several candidates needs a Prediction Unit',
+    });
+    expect([factory.Runs.length, sidecar.CallCount]).toEqual([0, 0]);
+    // An empty candidate list asks for no search: the pipeline trains as before.
+    const { deps: plain } = TrainingHarness.BuildDeps();
+    expect((await buildEngine().trainModel({ pipelineId: 'pipe-1', candidates: [] }, plain)).run.Status).toBe('Completed');
   });
 });
 

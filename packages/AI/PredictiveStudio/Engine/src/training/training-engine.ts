@@ -43,7 +43,8 @@
  * the protocol decides the incumbent-score and slice columns). The protocol trainer (`TrainingDeps.trainer`) is sent pre-authorised downloads of the
  * snapshot files, its result is recorded on the run (compute, code version), every returned artifact
  * is stored in `MJ: Files`, and the model row is created from the finalist's artifact with the
- * trainer's held-out permutation importance. The run stores the trainer's result with its artifacts
+ * trainer's held-out permutation importance; a single feature dominating that importance flags the run
+ * (the same LEAKAGE WARNING note as above) and the model stays `Draft`. The run stores the trainer's result with its artifacts
  * as file references, never their bytes, the unit resolution counts and the request settings a
  * retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
  * categorical levels scoring reuses, the snapshot's ID and content hash, and the protocol. A refusal
@@ -59,6 +60,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   type TrainResponse,
+  type FeatureImportance,
   type ValidationConfig,
   type MatrixData,
   type SourceBinding,
@@ -188,6 +190,18 @@ interface TrainerRunInputs {
   readonly Deps: TrainingDeps;
 }
 
+/** What a completed trainer result decides about its run and model (computed once per run). */
+interface TrainerOutcome {
+  readonly Result: TrainerCompleted;
+  /** The candidate the trainer chose; null when its finalist is a baseline. */
+  readonly Finalist: CandidateSpec | null;
+  /** The held-out permutation importance as the stored share map. */
+  readonly Importance: FeatureImportance;
+  readonly Evaluation: EvaluationRecord;
+  /** The single-feature-dominance check of `Importance` against the pipeline's leakage guard. */
+  readonly Dominance: DominanceResult;
+}
+
 /**
  * Training orchestrator. Stateless across calls; construct once and reuse. All
  * dependencies are supplied per call via {@link TrainingDeps}.
@@ -220,13 +234,17 @@ export class TrainingEngine {
   }
 
   /**
-   * Train a pipeline that does not point at a Prediction Unit: the `MajorityBaselineRule` parse runs before the run row
-   * is written; a point-in-time AsOfStrategy is refused on the run (`unit-required`); then the target entity is
-   * assembled, the locked holdout carved and the sidecar trained.
+   * Train a pipeline that does not point at a Prediction Unit: the `MajorityBaselineRule` parse and the refusal of a
+   * search's candidates (`unit-required`) run before the run row is written; a point-in-time AsOfStrategy is refused on
+   * the run (`unit-required`); then the target entity is assembled, the locked holdout carved and the sidecar trained.
    */
   private async trainLegacyPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     // Validates the evaluation settings (an unknown MajorityBaselineRule is refused) before any row is written.
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
+    // A search over candidates runs under a protocol, which only a unit pipeline has: refused before any run row.
+    if (input.candidates && input.candidates.length > 0) {
+      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why: 'a search over several candidates needs a Prediction Unit' } });
+    }
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
@@ -260,7 +278,7 @@ export class TrainingEngine {
         MajorityBaselineRule: majorityBaselineRule,
       });
 
-      const dominance = this.checkLeakage(response, resolved.leakageGuard);
+      const dominance = this.checkLeakage(response.feature_importance ?? {}, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
       await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation);
       return { model, run };
@@ -346,10 +364,11 @@ export class TrainingEngine {
 
   /** A run is judged only under a protocol row that existed before it: both instants come from the database clock. */
   private static refuseProtocolNewerThanRun(protocol: LoadedProtocol, run: MJMLTrainingRunEntity): void {
-    if (ProtocolSearchGuard.ProtocolPrecedesRun(protocol.CreatedAt, run.__mj_CreatedAt)) return;
+    const runCreatedAt = run.__mj_CreatedAt;
+    if (ProtocolSearchGuard.ProtocolPrecedesRun(protocol.CreatedAt, runCreatedAt)) return;
     throw new TrainingRefusedError({
       stage: 'pipeline',
-      reason: { kind: 'protocol-created-after-run', protocolId: protocol.RowID, protocolCreatedAt: protocol.CreatedAt.toISOString(), runCreatedAt: new Date(run.__mj_CreatedAt).toISOString() },
+      reason: { kind: 'protocol-created-after-run', protocolId: protocol.RowID, protocolCreatedAt: protocol.CreatedAt.toISOString(), runCreatedAt: runCreatedAt.toISOString() },
     });
   }
 
@@ -430,7 +449,8 @@ export class TrainingEngine {
    * pipeline's own algorithm as the single candidate; the timeout is the protocol's compute budget, or less when an
    * enclosing budget has less left), record the result on the run (compute, code version, status), store every
    * returned artifact in `MJ: Files`, create the model row from the finalist's artifact and complete the run with the
-   * stored result (artifacts as file references, never bytes) and the request settings a retrain replays. A failed
+   * stored result (artifacts as file references, never bytes), the request settings a retrain replays and the leakage
+   * note of the single-feature-dominance check over the trainer's importance. A failed
    * result is the refusal `trainer-failed` and a result whose code version cannot be recorded is `lineage-incomplete`;
    * both keep the compute they recorded.
    */
@@ -446,8 +466,8 @@ export class TrainingEngine {
     const fileIds = await this.storeTrainerArtifacts(run, result, deps);
     const finalistFile = fileIds.get(result.finalist);
     if (finalistFile === undefined) throw new Error(`TrainingEngine: the trainer returned no artifact for its finalist '${result.finalist}'`);
-    const finalist = TrainingEngine.finalistCandidate(candidates, result.finalist);
-    const model = await this.createTrainerModelRow(x, result, finalistFile, finalist);
+    const outcome = this.trainerOutcome(x, result, candidates);
+    const model = await this.createTrainerModelRow(x, outcome, finalistFile);
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
       legacy: null, legacyRequest: null,
@@ -457,11 +477,28 @@ export class TrainingEngine {
     };
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(snapshot.Content.Header.featureSchema.map((f) => f.Name));
-    run.Hyperparameters = JSON.stringify(finalist ? finalist.hyperparameters : {});
+    run.Hyperparameters = JSON.stringify(outcome.Finalist ? outcome.Finalist.hyperparameters : {});
     run.ValidationResults = JSON.stringify(results);
-    run.Notes = TrainingEngine.withUncoveredNote(run.Notes || '', x.Uncovered);
+    // The trainer's note, then the same leakage note every run carries (a dominant feature is a LEAKAGE WARNING).
+    run.Notes = TrainingEngine.withUncoveredNote(`${run.Notes || ''} ${this.buildRunNotes(outcome.Dominance, outcome.Evaluation)}`.trim(), x.Uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
     return model;
+  }
+
+  /**
+   * What a completed trainer result decides about the run and its model, computed once: the finalist candidate, the
+   * held-out permutation importance as the stored share map, the evaluation record, and the single-feature-dominance
+   * check of that map against the pipeline's leakage guard (the check every run records).
+   */
+  private trainerOutcome(x: TrainerRunInputs, result: TrainerCompleted, candidates: readonly CandidateSpec[]): TrainerOutcome {
+    const importance = TrainerContract.FeatureImportanceOf(result.importance);
+    return {
+      Result: result,
+      Finalist: TrainingEngine.finalistCandidate(candidates, result.finalist),
+      Importance: importance,
+      Evaluation: EvaluationLineage.Build(x.Resolved.validation, { ValidationOutOfSample: true, ImportanceKind: TrainerContract.ImportanceKindOf(result.importance), MajorityBaselineRule: x.MajorityBaselineRule }),
+      Dominance: this.checkLeakage(importance, x.Resolved.leakageGuard),
+    };
   }
 
   /**
@@ -541,8 +578,9 @@ export class TrainingEngine {
    * importance per source column as `FeatureImportance` (the shares the legacy trainer stores; `{}` when the trainer
    * measured none, as for a forecast), and the split the trainer was sent (the snapshot's manifest roles).
    */
-  private async createTrainerModelRow(x: TrainerRunInputs, result: TrainerCompleted, artifactFileId: string, finalist: CandidateSpec | null): Promise<MJMLModelEntity> {
+  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, artifactFileId: string): Promise<MJMLModelEntity> {
     const { Resolved: resolved, Snapshot: snapshot, Deps: deps } = x;
+    const { Result: result, Finalist: finalist } = outcome;
     const content = snapshot.Content;
     const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
@@ -558,8 +596,8 @@ export class TrainingEngine {
     const inner = result.innerScores.find((s) => s.candidate === result.finalist);
     model.Metrics = JSON.stringify(inner ? { [inner.inner.metric]: inner.inner.value } : {});
     model.HoldoutMetrics = JSON.stringify(TrainerContract.HoldoutMetricsOf(result.holdout));
-    model.FeatureImportance = JSON.stringify(TrainerContract.FeatureImportanceOf(result.importance));
-    model.Lineage = JSON.stringify(this.trainerLineage(x, result, split));
+    model.FeatureImportance = JSON.stringify(outcome.Importance);
+    model.Lineage = JSON.stringify(this.trainerLineage(x, outcome, split));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(result.computeSeconds);
     model.TrainingRowCount = split.TrainingRowCount;
@@ -574,11 +612,10 @@ export class TrainingEngine {
    * out-of-sample scoring (the holdout rows are scored once by the finalist that never trained on them) and the kind of
    * the stored importance.
    */
-  private trainerLineage(x: TrainerRunInputs, result: TrainerCompleted, split: LockedHoldoutSplit): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
-    const evaluation = EvaluationLineage.Build(x.Resolved.validation, { ValidationOutOfSample: true, ImportanceKind: TrainerContract.ImportanceKindOf(result.importance), MajorityBaselineRule: x.MajorityBaselineRule });
+  private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
     return {
-      ...this.buildLineage(x.Resolved, x.Input, split, evaluation, x.UnitLineage),
-      sidecarVersion: result.codeVersion.sidecarVersion,
+      ...this.buildLineage(x.Resolved, x.Input, split, outcome.Evaluation, x.UnitLineage),
+      sidecarVersion: outcome.Result.codeVersion.sidecarVersion,
       evaluationProtocolId: x.Training.Protocol.RowID,
       artifactFormat: PREDICTOR_ARTIFACT_FORMAT,
     };
@@ -908,8 +945,8 @@ export class TrainingEngine {
   // region: leakage -------------------------------------------------------------
 
   /** Run the single-feature-dominance check against the leakage threshold (§6.4). */
-  private checkLeakage(response: TrainResponse, guard: LeakageGuard): DominanceResult {
-    return detectSingleFeatureDominance(response.feature_importance ?? {}, guard.SingleFeatureDominanceThreshold);
+  private checkLeakage(importance: FeatureImportance, guard: LeakageGuard): DominanceResult {
+    return detectSingleFeatureDominance(importance, guard.SingleFeatureDominanceThreshold);
   }
 
   // region: model persistence ---------------------------------------------------

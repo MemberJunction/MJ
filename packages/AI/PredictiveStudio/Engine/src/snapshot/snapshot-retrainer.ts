@@ -1,32 +1,25 @@
 /**
  * @module snapshot/snapshot-retrainer
  *
- * Training from a Training Snapshot: the rows the trainer sees are the snapshot's rows, split by the roles its row
- * manifest records, so what was frozen is exactly what was trained on. Retraining a completed run reads its snapshot
- * files back, verifies them against the hashes on the snapshot row, calls the trainer with the request the run logged
- * and compares the holdout metrics, so a run can be shown to reproduce from what it stored. A run is retrained through
- * the protocol trainer (`/trainer`) with its logged request settings and new downloads of the same snapshot files; a
- * run that logged no trainer request is refused. `TrainOnSnapshot` still sends a snapshot's rows to the legacy `/train`
- * call for callers outside the unit training path.
+ * Retraining from a Training Snapshot: a completed run's snapshot files are read back and verified against the hashes on
+ * the snapshot row, the protocol trainer (`/trainer`) is called again with the request settings the run logged and new
+ * downloads of the same files (it reads the rows by the roles the row manifest records, so what was frozen is exactly
+ * what is trained on), and the holdout metrics are compared, so a run can be shown to reproduce from what it stored. A
+ * run that logged no trainer request is refused.
  */
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import {
   PredictionUnit,
   TrainerContract,
   TrainingRunResultsParser,
-  type LegacyRequestConfig,
-  type MatrixData,
   type EvaluationProtocolSpec,
   type PredictionUnitSpec,
   type StoredTrainerResult,
   type TrainerRequestConfig,
   type TrainingRunResults,
-  type TrainResponse,
 } from '@memberjunction/predictive-studio-core';
-import { LockedHoldoutSplitter, type LockedHoldoutSplit } from '../training/locked-holdout';
-import { TrainRequestBuilder } from '../training/train-request';
 import { UtcDay } from '../prediction-unit/utc-day';
-import type { ISidecarTrainer, TrainingDeps } from '../training/types';
+import type { TrainingDeps } from '../training/types';
 import { TrainerRequestBuilder } from '../training/trainer-request';
 import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore } from '../training/evaluation-protocol-store';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
@@ -86,24 +79,9 @@ export interface LoggedTrainerRun {
   readonly Request: TrainerRequestConfig;
 }
 
-/** A snapshot column the trainer is sent that is not one of the matrix columns. */
-export class SnapshotColumnMissingError extends Error {
-  constructor(public readonly Column: string) {
-    super(`Snapshot header lists the feature-schema column "${Column}" that is not a matrix column`);
-    this.name = 'SnapshotColumnMissingError';
-  }
-}
-
-/** A training from a snapshot: the trainer's response and the manifest split it trained on (the one split the run records). */
-export interface SnapshotTraining {
-  readonly Response: TrainResponse;
-  readonly Split: LockedHoldoutSplit;
-}
-
 /**
- * Trains from Training Snapshots: `Retrain` re-runs a completed run through the protocol trainer from its verified
- * snapshot files, with its reads split into protected steps a subclass can replace; `TrainOnSnapshot` (static) sends a
- * snapshot's rows to the legacy `/train` call.
+ * Retrains from Training Snapshots: `Retrain` re-runs a completed run through the protocol trainer from its verified
+ * snapshot files, with its reads split into protected steps a subclass can replace.
  */
 export class SnapshotRetrainer {
   /** The default largest holdout-metric difference a retraining may show and still reproduce its run. */
@@ -271,38 +249,5 @@ export class SnapshotRetrainer {
     const actual = SnapshotHash.Sha256Hex(bytes);
     if (actual !== expected) throw new SnapshotIntegrityError(file, expected, actual);
     return actual;
-  }
-
-  /**
-   * Sends a snapshot's rows to the legacy `/train` call: rows split by manifest role, never re-carved; only the
-   * feature columns of `featureSchema` and the label are sent (the incumbent-score and slice columns stay in the
-   * snapshot for evaluation, never reach the model).
-   *
-   * @param content the snapshot content the rows come from
-   * @param request the algorithm, problem type, hyperparameters and validation to train with
-   * @param sidecar the trainer
-   * @returns the trainer's response and the split it was sent, with every snapshot column, its counts and holdout class counts
-   */
-  public static async TrainOnSnapshot(content: SnapshotContent, request: LegacyRequestConfig, sidecar: ISidecarTrainer): Promise<SnapshotTraining> {
-    const columns = [...content.Header.featureSchema.map((f) => f.Name), content.Header.labelColumn];
-    const at = columns.map((c) => {
-      const k = content.Header.columns.indexOf(c);
-      if (k < 0) throw new SnapshotColumnMissingError(c);
-      return k;
-    });
-    const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, request.problemType);
-    // `??`: 0, '' and false are real cells; only an absent cell becomes null.
-    const project = (m: MatrixData): MatrixData => ({ columns, rows: m.rows.map((row) => at.map((k) => row[k] ?? null)) });
-    const trainRequest = TrainRequestBuilder.Build({
-      Algorithm: request.algorithm,
-      ProblemType: request.problemType,
-      Hyperparameters: request.hyperparameters,
-      Validation: request.validation,
-      FeatureSchema: content.Header.featureSchema.map((f) => ({ Name: f.Name, Kind: f.Kind })),
-      Preprocessing: content.Header.preprocessing,
-      Target: content.Header.labelColumn,
-      Data: project(split.Training),
-    });
-    return { Response: await sidecar.train(trainRequest, project(split.LockedHoldout)), Split: split };
   }
 }

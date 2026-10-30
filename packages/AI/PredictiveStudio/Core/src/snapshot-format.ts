@@ -43,7 +43,7 @@ export interface SnapshotMatrixHeader {
   /** Slice field → its `__ps_slice:<field>` column. */
   readonly sliceColumns: Readonly<Record<string, string>>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly decision: DecisionSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  /** The sidecar feature schema, read by `TrainOnSnapshot` while the legacy trainer path exists. */
+  /** The sidecar feature schema: the run's `FeaturesUsed` and the model's `FeatureSchema` record it. */
   readonly featureSchema: readonly FeatureSchemaEntry[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly preprocessing: readonly PreprocessingOp[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
