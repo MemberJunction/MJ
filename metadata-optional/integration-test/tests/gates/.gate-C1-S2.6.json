@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S2.6",
+    "Description": "Gate G2.25 (phase 2, dataset C1, criterion S2.6): in new-entity mode 0 member keys are shared between training and holdout (the reference: sharedKeys=0 on 2,268 / 367 rows), and 0 between inner-CV folds. The C1 protocol holds out the newest 15% of members whole from 2024-01-01 with no holdout end, so the stored manifest holds every carved row; the shared keys are measured from the manifest's PersonID group keys and the run's report must equal that partition (the reference holds out a seeded 30% of members instead, so its row counts differ). It fails when new-entity mode carves rows instead of entities (shared member keys > 0).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.25\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S2.6\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "0 member keys shared between training and the new-entity holdout, the report equal to the manifest's partition, and 0 across inner folds (2 of 2 pytest cases)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s2-6"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "C337E14D-7F34-4C8C-89D0-5EEE870C7C3D"
+  }
+}

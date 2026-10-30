@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C2 -> S2.5",
+    "Description": "Gate G2.23 (phase 2, dataset C2, criterion S2.5): the holdout's positive rate lies inside the 95% interval of the population rate, 1 of 1; any reweighting is fitted inside the training folds; 0 row IDs are shared between training and holdout. A seeded-random 0.25 holdout; the population rate is the snapshot's class balance, the holdout rate the stored carve's class counts, the interval Wilson's; the in-fold half is the pytest node tests/test_selection.py::test_in_fold_undersampling_never_touches_validation_rows. It fails when the class reweighting is fitted before the inner folds are cut (the in-fold node fails).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.23\",\"owner:PR3\",\"phase:2\",\"dataset:C2\",\"criterion:S2.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Holdout positive rate inside the population rate's 95% interval; resampling in-fold (1 of 1 pytest case); 0 shared row ids."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c2-s2-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "53C3D9BD-8D9F-433F-8631-B99966168E03"
+  }
+}

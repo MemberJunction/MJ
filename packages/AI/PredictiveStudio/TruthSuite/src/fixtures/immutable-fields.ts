@@ -27,6 +27,8 @@ export const TRUTH_IMMUTABLE_FIELDS: readonly ImmutableFieldDeclaration[] = [
   // The planted scenarios the unit gates train on are loaded once and never edited: every column except the key.
   { BaseTable: 'Scn_T3', Fields: ['EntityKey', 'T', 'LagTarget', 'SamePeriodTarget', 'Target', 'TruthScore'] },
   { BaseTable: 'Scn_R3', Fields: ['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_C2', Fields: ['EntityKey', 'T', 'ClaimAmountZ', 'PriorClaims', 'NewPolicy', 'ReportDelayZ', 'NoiseZ', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_T2p', Fields: ['EntityKey', 'T', 'UsageZ', 'Discount', 'Target', 'TruthScore'] },
 ];
 
 /** The dataset prefixes a test-schema table name can carry. */

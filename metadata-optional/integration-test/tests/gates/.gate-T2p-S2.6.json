@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T2p -> S2.6",
+    "Description": "Gate G2.24 (phase 2, dataset T2p, criterion S2.6): in new-entity mode 0 entity keys are shared between training and holdout (the reference: sharedKeys=0 on 7,000 / 600 rows), and 0 between inner-CV training and validation folds. The T2p unit declares EntityKey as its group key (2,000 entities over 12,000 rows); the shared keys are measured from the stored manifest's group keys (the newest 30% of entities held out whole from the year cutoff), and the run's new-entity report must equal that partition; the fold half is the pytest nodes tests/test_folds.py::test_grouped_folds_share_zero_keys_and_repeat and ::test_blocked_time_folds_keep_gap_and_groups. It fails when new-entity mode carves rows instead of entities (shared entity keys > 0).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.24\",\"owner:PR3\",\"phase:2\",\"dataset:T2p\",\"criterion:S2.6\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "0 entity keys shared between training and the new-entity holdout, the report equal to the manifest's partition, and 0 across inner folds (2 of 2 pytest cases)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t2p-s2-6"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "DD7665A3-13EF-4205-9CFF-5C3E6B707E18"
+  }
+}

@@ -170,6 +170,17 @@ describe('PredictiveStudioTrainModelServerOperation — errors', () => {
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toContain('sidecar unreachable');
   });
+
+  it('returns a pipeline without an Evaluation Protocol as PROTOCOL_REQUIRED, not EXECUTION_ERROR', async () => {
+    class RefusingEngine extends TrainingEngine {
+      public override async trainModel(): Promise<TrainModelResult> {
+        throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } });
+      }
+    }
+    const result = await new TestableTrainOp(new RefusingEngine()).ExecuteServer({ pipelineId: 'p1' }, new CapturingContext());
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('PROTOCOL_REQUIRED');
+  });
 });
 
 describe('PredictiveStudioTrainModelServerOperation — an asOf input that asks for nothing', () => {

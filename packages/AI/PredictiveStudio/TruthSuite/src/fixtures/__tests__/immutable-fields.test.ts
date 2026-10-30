@@ -34,10 +34,12 @@ describe('ImmutableFieldDeclarations.AppliesTo', () => {
 });
 
 describe('TRUTH_IMMUTABLE_FIELDS scenario tables', () => {
-  it('declares every Scn_T3 and Scn_R3 column except the key', () => {
+  it('declares every Scn_T3, Scn_R3, Scn_C2 and Scn_T2p column except the key', () => {
     const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
     expect(fieldsOf('Scn_T3')).toEqual(['EntityKey', 'T', 'LagTarget', 'SamePeriodTarget', 'Target', 'TruthScore']);
     expect(fieldsOf('Scn_R3')).toEqual(['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_C2')).toEqual(['EntityKey', 'T', 'ClaimAmountZ', 'PriorClaims', 'NewPolicy', 'ReportDelayZ', 'NoiseZ', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T2p')).toEqual(['EntityKey', 'T', 'UsageZ', 'Discount', 'Target', 'TruthScore']);
     expect(fieldsOf('Scn_T3lag')).toEqual([]);
   });
 });

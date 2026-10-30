@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W6 -> S6.1",
+    "Description": "Gate G2.41 (phase 2, dataset W6, criterion S6.1): with out_of_time on StartDate at 2024-01-01, the holdout is the 6,950 rows from 2024 on, AUC is within 0.02 of 0.6447, and mean predicted minus observed is >= +0.15 (T6(a)). W6-drift s42, a date-carved holdout on StartDate; the bias is read from the stored calibration reliability bins. It fails when the out_of_time carve uses the decision date instead of the declared StartDate (holdout != 6,950 rows).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.41\",\"owner:PR3\",\"phase:2\",\"dataset:W6\",\"criterion:S6.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "6,950 holdout rows; holdout AUC within 0.02 of 0.6447; mean predicted minus observed at least +0.15."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w6-s6-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "2CBBB658-26AE-4F51-A72D-1643065E9551"
+  }
+}
