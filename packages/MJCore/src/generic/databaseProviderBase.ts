@@ -1,3 +1,4 @@
+import { CanonicalPrimaryKeyValue } from './util';
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
@@ -929,11 +930,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             return resultMap;
         }
 
+        // IS-A children share the parent's single key, so the parent's key type decides how values
+        // are canonicalized (UUIDs case-insensitively, anything else by exact text).
+        const pkIsUuid = Boolean(entityInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
         const uniquePKs: string[] = [];
         const seen = new Set<string>();
         for (const rawPk of recordPKValues) {
             if (!rawPk) continue;
-            const norm = String(rawPk).trim().toLowerCase();
+            const norm = CanonicalPrimaryKeyValue(rawPk, pkIsUuid);
             if (!seen.has(norm)) {
                 seen.add(norm);
                 uniquePKs.push(String(rawPk).trim());
@@ -966,7 +970,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             for (const row of rows) {
                 const entityName = row.EntityName ?? row.ChildEntityName;
                 if (!entityName || row.RecordPK == null) continue;
-                const pkKey = String(row.RecordPK).trim().toLowerCase();
+                const pkKey = CanonicalPrimaryKeyValue(row.RecordPK, pkIsUuid);
                 const priority =
                     typeof row.Priority === 'number'
                         ? row.Priority

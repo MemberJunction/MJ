@@ -30,8 +30,14 @@ function child(name: string, baseView: string, pk: string | null, schema = '__mj
   } as unknown as EntityInfo;
 }
 
-function parent(children: EntityInfo[]): EntityInfo {
-  return { Name: 'Products', ChildEntities: children } as unknown as EntityInfo;
+function parent(children: EntityInfo[], pkIsUuid = true): EntityInfo {
+  // IS-A children share the parent's single key; its type decides whether keys compare case-insensitively.
+  return {
+    Name: 'Products',
+    ChildEntities: children,
+    PrimaryKeys: [{ Name: 'ID', IsUniqueIdentifier: pkIsUuid }],
+    FirstPrimaryKey: { Name: 'ID', IsUniqueIdentifier: pkIsUuid },
+  } as unknown as EntityInfo;
 }
 
 function makeProvider(): { provider: ProviderTestSurface; executeSpy: ReturnType<typeof vi.fn> } {
@@ -134,6 +140,24 @@ describe('DatabaseProviderBase.FindISAChildEntitiesBatch (via SQLServerDataProvi
     expect(result.get('abc')).toEqual(['Meetings', 'Publications']);
     expect(result.get('def')).toEqual(['Meetings']);
     expect(result.has('ghi')).toBe(false); // no child row → absent, so callers treat it as a plain parent
+  });
+
+  it('keeps case-distinct keys apart for a case-sensitive (non-UUID) string key', async () => {
+    const { provider, executeSpy } = makeProvider();
+    executeSpy.mockResolvedValueOnce([
+      { EntityName: 'Meetings', RecordPK: 'ABC', Priority: 1 },
+      { EntityName: 'Publications', RecordPK: 'abc', Priority: 2 },
+    ]);
+    const result = await provider.FindISAChildEntitiesBatch(
+      parent([child('Meetings', 'vwMeetings', 'ID'), child('Publications', 'vwPublications', 'ID')], /* pkIsUuid */ false),
+      ['ABC', 'abc']
+    );
+    // Both keys were probed (no collapsing): each of the two child SELECTs carries both literals.
+    const sent = executeSpy.mock.calls[0][0] as string;
+    expect(sent.match(/'ABC'/g)).toHaveLength(2);
+    expect(sent.match(/'abc'/g)).toHaveLength(2);
+    expect(result.get('ABC')).toEqual(['Meetings']);
+    expect(result.get('abc')).toEqual(['Publications']);
   });
 
   it('returns an empty map without executing SQL when the parent has no children or no keys', async () => {

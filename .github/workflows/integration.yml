@@ -931,6 +931,11 @@ jobs:
       - name: Run cross-server invalidation rig
         env:
           RUN_CROSS_SERVER: '1'
+          # XS10/XS11 subscribe to the servers' own Redis pub/sub channel to assert what is
+          # broadcast (a compact row_delta, never the whole cached array). Without these two
+          # they self-skip, so the row_delta transport would never be asserted in CI.
+          REDIS_URL: redis://localhost:6379
+          REDIS_KEY_PREFIX: mj
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           MJAPI_A_URL: http://localhost:4000/
           MJAPI_B_URL: http://localhost:4001/

@@ -1,4 +1,5 @@
 import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { CanonicalPrimaryKeyValue } from './util';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -6636,7 +6637,7 @@ export abstract class BaseEntity<T = unknown> {
                     loadedParents.push(entity);
                 }
             } else {
-                LogError(`BaseEntity.LoadFromData() called on ${entity.EntityInfo.Name} with no primary keys defined. This is an error state and should not happen.`);
+                LogError(`BaseEntity.LoadFromDataBatchAsISAParent() called on ${entity.EntityInfo.Name} with no primary keys defined. This is an error state and should not happen.`);
                 entity._recordLoaded = false;
                 entity._everSaved = false;
             }
@@ -6687,8 +6688,9 @@ export abstract class BaseEntity<T = unknown> {
                 if (typeof entityProvider?.FindISAChildEntitiesBatch === 'function') {
                     const pks = groupParents.map(p => String(p.PrimaryKey.Values()));
                     const batchMap = await entityProvider.FindISAChildEntitiesBatch(parentInfo, pks, contextUser ?? sampleParent._contextCurrentUser);
+                    const pkIsUuid = Boolean(parentInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
                     for (const p of groupParents) {
-                        const pkKey = String(p.PrimaryKey.Values()).trim().toLowerCase();
+                        const pkKey = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), pkIsUuid);
                         const matched = batchMap.get(pkKey) ?? [];
                         p._childEntities = matched.map(name => ({ entityName: name }));
                     }
@@ -6700,6 +6702,7 @@ export abstract class BaseEntity<T = unknown> {
 
             // Disjoint subtypes: 1) Evaluate in-memory SubtypeSelector / EntitySubtypeResolver load hints
             const hintedByChild = new Map<string, BaseEntity[]>();
+            const hintedNameByParent = new Map<BaseEntity, string>();
             const needsDiscovery: BaseEntity[] = [];
 
             for (const p of groupParents) {
@@ -6715,6 +6718,7 @@ export abstract class BaseEntity<T = unknown> {
                             hintedByChild.set(childInfo.Name, bucket);
                         }
                         bucket.push(p);
+                        hintedNameByParent.set(p, childInfo.Name);
                     } else {
                         needsDiscovery.push(p);
                     }
@@ -6733,6 +6737,12 @@ export abstract class BaseEntity<T = unknown> {
                     nextLevelChildren
                 );
                 for (const unlinked of unlinkedFromHints) {
+                    // Same diagnostic the per-row path emits when a SubtypeSelector hint names a
+                    // child that has no row: operators need the signal that a selector is wrong.
+                    const hinted = hintedNameByParent.get(unlinked);
+                    if (hinted) {
+                        BaseEntity.logLoadFoundNoRow(hinted, unlinked.PrimaryKey);
+                    }
                     needsDiscovery.push(unlinked);
                 }
             }
@@ -6766,9 +6776,10 @@ export abstract class BaseEntity<T = unknown> {
     private static buildChildPkInFilter(pkField: EntityFieldInfo, rawPkValues: ReadonlyArray<string>): string {
         const formatted = rawPkValues.map(val => {
             if (!pkField.NeedsQuotes) {
-                const num = Number(val);
-                if (Number.isFinite(num)) {
-                    return String(num);
+                // Emit the digits as written: a bigint beyond 2^53 must not be rewritten by Number().
+                const text = String(val).trim();
+                if (/^-?\d+(\.\d+)?$/.test(text)) {
+                    return text;
                 }
             }
             return `'${EscapeSQLString(String(val))}'`;
@@ -6783,13 +6794,14 @@ export abstract class BaseEntity<T = unknown> {
         rvProvider: IRunViewProvider | null,
         contextUser?: UserInfo
     ): Promise<Map<string, BaseEntity[]>> {
+        const pkIsUuid = Boolean(parentInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
         const grouped = new Map<string, BaseEntity[]>();
         const pkValues = parents.map(p => String(p.PrimaryKey.Values()));
 
         if (typeof entityProvider?.FindISAChildEntitiesBatch === 'function') {
             const batchMap = await entityProvider.FindISAChildEntitiesBatch(parentInfo, pkValues, contextUser);
             for (const p of parents) {
-                const pkKey = String(p.PrimaryKey.Values()).trim().toLowerCase();
+                const pkKey = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), pkIsUuid);
                 const firstMatch = batchMap.get(pkKey)?.[0];
                 if (firstMatch) {
                     let bucket = grouped.get(firstMatch);
@@ -6834,7 +6846,7 @@ export abstract class BaseEntity<T = unknown> {
                     for (const row of res.Results) {
                         const rawVal = row[pkName];
                         if (rawVal != null) {
-                            const norm = String(rawVal).trim().toLowerCase();
+                            const norm = CanonicalPrimaryKeyValue(rawVal, pkIsUuid);
                             if (!winnerByPk.has(norm)) {
                                 winnerByPk.set(norm, child.Name);
                             }
@@ -6844,7 +6856,7 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             for (const p of parents) {
-                const norm = String(p.PrimaryKey.Values()).trim().toLowerCase();
+                const norm = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), pkIsUuid);
                 const childName = winnerByPk.get(norm);
                 if (childName) {
                     let bucket = grouped.get(childName);
@@ -6899,6 +6911,7 @@ export abstract class BaseEntity<T = unknown> {
         interface QuerySlice {
             childName: string;
             pkFieldName: string;
+            pkIsUuid: boolean;
             parents: BaseEntity[];
             param: RunViewParams;
         }
@@ -6919,6 +6932,7 @@ export abstract class BaseEntity<T = unknown> {
                 slices.push({
                     childName: childInfo.Name,
                     pkFieldName: pkField.Name,
+                    pkIsUuid: Boolean(pkField.IsUniqueIdentifier),
                     parents: sliceParents,
                     param: {
                         EntityName: childInfo.Name,
@@ -6942,10 +6956,14 @@ export abstract class BaseEntity<T = unknown> {
             contextUser
         );
 
+        const deniedChildLogged = new Set<string>();
         for (let sIdx = 0; sIdx < slices.length; sIdx++) {
             const slice = slices[sIdx];
             const res = batchResults[sIdx];
             if (!res?.Success || !Array.isArray(res.Results)) {
+                // Not silent: the per-row path surfaced a failed child load; here the parents stay
+                // unlinked (plain parent records) and the cause goes to the log.
+                LogError(`BaseEntity: batched IS-A child load of '${slice.childName}' failed (${res?.ErrorMessage || 'no result'}); ${slice.parents.length} parent record(s) continue without their subtype`);
                 for (const p of slice.parents) unlinkedParents.push(p);
                 continue;
             }
@@ -6954,12 +6972,12 @@ export abstract class BaseEntity<T = unknown> {
             for (const row of res.Results) {
                 const pkVal = row[slice.pkFieldName];
                 if (pkVal != null) {
-                    rowByPk.set(String(pkVal).trim().toLowerCase(), row);
+                    rowByPk.set(CanonicalPrimaryKeyValue(pkVal, slice.pkIsUuid), row);
                 }
             }
 
             for (const p of slice.parents) {
-                const pkKey = String(p.PrimaryKey.Values()).trim().toLowerCase();
+                const pkKey = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), slice.pkIsUuid);
                 const childRow = rowByPk.get(pkKey);
                 if (!childRow) {
                     unlinkedParents.push(p);
@@ -6967,6 +6985,12 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 const childEntity = await p.createChildEntityObject(slice.childName);
                 if (!childEntity || !childEntity.CheckPermissions(EntityPermissionType.Read, false)) {
+                    // The per-row path threw here (InnerLoad → CheckPermissions(Read, true)). The batch
+                    // path degrades to a plain parent record instead, and says so once per slice.
+                    if (!deniedChildLogged.has(slice.childName)) {
+                        deniedChildLogged.add(slice.childName);
+                        LogError(`BaseEntity: current user cannot read IS-A child '${slice.childName}'; matching parent records are returned without their subtype`);
+                    }
                     unlinkedParents.push(p);
                     continue;
                 }
@@ -7596,7 +7620,7 @@ export abstract class BaseEntity<T = unknown> {
                 const pkField = childEntity.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
                 return {
                     EntityName: childEntity.Name,
-                    ExtraFilter: `${pkField.Name} = '${pkValue}'`,
+                    ExtraFilter: `${pkField.Name} = '${EscapeSQLString(String(pkValue))}'`,
                     ResultType: 'simple',
                     Fields: [pkField.Name],
                     MaxRows: 1,
@@ -7616,7 +7640,7 @@ export abstract class BaseEntity<T = unknown> {
             const pkField = childEntity.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             const result = await rv.RunView({
                 EntityName: childEntity.Name,
-                ExtraFilter: `${pkField.Name} = '${pkValue}'`,
+                ExtraFilter: `${pkField.Name} = '${EscapeSQLString(String(pkValue))}'`,
                 ResultType: 'simple',
                 Fields: [pkField.Name],
                 MaxRows: 1
@@ -7726,7 +7750,7 @@ export abstract class BaseEntity<T = unknown> {
                 const childPK = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
                 return {
                     EntityName: child.Name,
-                    ExtraFilter: `${childPK.Name} = '${pkValue}'`,
+                    ExtraFilter: `${childPK.Name} = '${EscapeSQLString(String(pkValue))}'`,
                     ResultType: 'simple',
                     Fields: [childPK.Name],
                     MaxRows: 1,
@@ -7746,7 +7770,7 @@ export abstract class BaseEntity<T = unknown> {
             const childPK = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             const result = await rv.RunView({
                 EntityName: child.Name,
-                ExtraFilter: `${childPK.Name} = '${pkValue}'`,
+                ExtraFilter: `${childPK.Name} = '${EscapeSQLString(String(pkValue))}'`,
                 ResultType: 'simple',
                 Fields: [childPK.Name],
                 MaxRows: 1
@@ -7801,7 +7825,7 @@ export abstract class BaseEntity<T = unknown> {
 
         const viewParams = validSiblings.map(sibling => ({
             EntityName: sibling.Name,
-            ExtraFilter: `${sibling.FirstPrimaryKey.Name} = '${pkValue}'`, // first-pk-ok: IS-A shared key
+            ExtraFilter: `${sibling.FirstPrimaryKey.Name} = '${EscapeSQLString(String(pkValue))}'`, // first-pk-ok: IS-A shared key
             ResultType: 'simple' as const,
             Fields: [sibling.FirstPrimaryKey.Name], // first-pk-ok: IS-A shared key
             MaxRows: 1

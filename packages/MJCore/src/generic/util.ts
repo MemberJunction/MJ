@@ -2,6 +2,7 @@ import type { BaseEntity } from "./baseEntity";
 import type { EntityInfo } from "./entityInfo";
 import type { IEntityDataProvider, IMetadataProvider, IRunViewProvider } from "./interfaces";
 import { LogError } from "./logging";
+import { NormalizeUUID } from '@memberjunction/global';
 import type { UserInfo } from "./securityInfo";
 import {
     IsBooleanSQLType,
@@ -16,6 +17,22 @@ import {
     IsStringSQLType,
     IsUuidSQLType,
 } from "@memberjunction/sql-dialect";
+
+/**
+ * Canonical lookup key for a primary-key value when rows from different sources (a probe's
+ * `RecordPK` column, a loaded row, a `CompositeKey`) must be matched by value.
+ *
+ * UUID keys are case-insensitive by definition (SQL Server returns them upper-case, PostgreSQL
+ * lower-case), so they are normalized with {@link NormalizeUUID}. Every other type keeps its
+ * exact text after trimming: lower-casing a case-sensitive `nvarchar`/`text` key would merge
+ * `'ABC'` and `'abc'` into one record.
+ *
+ * Both sides of a match must use this function with the same `isUuid` for the same field.
+ */
+export function CanonicalPrimaryKeyValue(value: unknown, isUuid: boolean): string {
+    const text = String(value).trim();
+    return isUuid ? NormalizeUUID(text) : text;
+}
 
 /**
  * Whether a SQL type is the date-only `date` type: a calendar day with no time and no zone, as

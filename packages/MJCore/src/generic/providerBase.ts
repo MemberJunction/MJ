@@ -2576,7 +2576,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // revoked grants stay visible through the linger window.
         // SaveViewResults bypasses for the original reason: it creates DB
         // records and must not be deduplicated.
-        return params.some(p => p.SaveViewResults === true || p.BypassCache === true);
+        // CacheLocal:false is the server-side opt-out from the RunView cache (read AND write). A
+        // linger hit would hand back rows that were themselves served from that cache, so the
+        // opt-out has to cover the dedup window as well.
+        return params.some(p => p.SaveViewResults === true || p.BypassCache === true || p.CacheLocal === false);
     }
 
     /**

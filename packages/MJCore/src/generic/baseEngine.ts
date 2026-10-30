@@ -17,7 +17,7 @@ import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, CachePrimaryKeyValue, CacheRowDeltaPayload, CacheRowValue, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
-import { TransformSimpleObjectToEntityObject } from "./util";
+import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
@@ -3078,7 +3078,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return null;
             }
             const str = String(val);
-            parts.push(isUuidPk[i] ? str.trim().toLowerCase() : str.toLowerCase());
+            parts.push(CanonicalPrimaryKeyValue(str, isUuidPk[i]));
         }
         return parts.join('\u001f');
     }
@@ -3095,7 +3095,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return null;
             }
             const str = String(val);
-            parts.push(isUuidPk[i] ? str.trim().toLowerCase() : str.toLowerCase());
+            parts.push(CanonicalPrimaryKeyValue(str, isUuidPk[i]));
         }
         return parts.join('\u001f');
     }
