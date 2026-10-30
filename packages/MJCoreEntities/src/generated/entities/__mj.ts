@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { z } from "zod";
 
      
@@ -29048,6 +29048,27 @@ export const MJQuerySchema = z.object({
         * * Display Name: Approved Fingerprint
         * * SQL Data Type: nvarchar(100)
         * * Description: SHA-256 fingerprint of the definition that was approved: its SQL, dialect variants and parameter contract. The approval is current only while this matches the fingerprint of the current definition.`),
+    ExtractedSQLHash: z.string().nullable().describe(`
+        * * Field Name: ExtractedSQLHash
+        * * Display Name: Extracted SQL Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale.`),
+    ExtractionStatus: z.union([z.literal('Error'), z.literal('OK'), z.literal('Skipped'), z.literal('Warning')]).nullable().describe(`
+        * * Field Name: ExtractionStatus
+        * * Display Name: Extraction Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * OK
+    *   * Skipped
+    *   * Warning
+        * * Description: Outcome of the last extraction run. "OK" means all facts were extracted. "Warning" means extraction succeeded with findings (see ExtractionMessage). "Error" means the database server could not describe the query, so existing rows were kept. "Skipped" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted.`),
+    ExtractionMessage: z.string().nullable().describe(`
+        * * Field Name: ExtractionMessage
+        * * Display Name: Extraction Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -29263,7 +29284,7 @@ export const MJQueryEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29272,7 +29293,8 @@ export const MJQueryEntitySchema = z.object({
     * * Possible Values 
     *   * AI
     *   * Manual
-        * * Description: Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.`),
+    *   * Parser
+        * * Description: Who wrote this entity link. "Parser" means MJ's structural analysis of the query found a read of the entity's base view, base table or an alternate base view. "Manual" means a user authored the link. "AI" marks links written by the earlier LLM-based extraction.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
@@ -29379,7 +29401,7 @@ export const MJQueryFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Database'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29387,13 +29409,31 @@ export const MJQueryFieldSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * AI
+    *   * Database
     *   * Manual
-        * * Description: Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.`),
+    *   * Parser
+        * * Description: Who wrote this field row. "Database" means its facts (name, order, types, nullability, source) came from the database server describing the query output. "Parser" means they came from MJ's analysis of the query template and structure. "Manual" means a user authored the row. "AI" means an LLM wrote its description; an LLM never sets types or sources.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
         * * SQL Data Type: decimal(3, 2)
         * * Description: Confidence score (0.00-1.00) indicating how certain the AI was about this field detection. Only populated when DetectionMethod="AI". Factors include: clarity of the SELECT clause, complexity of any expressions or transformations, confidence in type inference, and ability to trace back to source entity/column. Complex computed fields or ambiguous aliases result in lower scores. This helps identify fields that may need manual verification.`),
+    SourceEntityFieldID: z.string().nullable().describe(`
+        * * Field Name: SourceEntityFieldID
+        * * Display Name: Source Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+        * * Description: The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted.`),
+    IsNullable: z.boolean().nullable().describe(`
+        * * Field Name: IsNullable
+        * * Display Name: Is Nullable
+        * * SQL Data Type: bit
+        * * Description: Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability.`),
+    SourceObjectName: z.string().nullable().describe(`
+        * * Field Name: SourceObjectName
+        * * Display Name: Source Object Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.`),
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -29401,6 +29441,10 @@ export const MJQueryFieldSchema = z.object({
     SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    SourceEntityField: z.string().nullable().describe(`
+        * * Field Name: SourceEntityField
+        * * Display Name: Source Entity Field
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -29463,7 +29507,7 @@ export const MJQueryParameterSchema = z.object({
         * * Display Name: Validation Filters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of Nunjucks filter definitions that validate and transform the parameter value. Each filter is an object with "name" and optional "args" properties. Filters are applied in order and can include: validation (required, email, min, max), transformation (trim, upper, lower), SQL safety (sqlsafe, sqljoin), and type conversion (number, date). Example: [{"name":"required"},{"name":"email"},{"name":"sqlsafe"}]. The filter chain ensures type safety and prevents SQL injection.`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29472,7 +29516,8 @@ export const MJQueryParameterSchema = z.object({
     * * Possible Values 
     *   * AI
     *   * Manual
-        * * Description: Indicates how this parameter was identified and added to the system. "AI" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. "Manual" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata.`),
+    *   * Parser
+        * * Description: Who wrote this parameter row. "Parser" means MJ's analysis of the query template found the parameter (its name, inferred type, whether it is required and its default). "Manual" means a user authored the row; its type, required flag, default, sample, validation filters and description are never overwritten by extraction, and it is kept (and flagged on the query) when the SQL no longer uses it. "AI" marks rows written by the earlier LLM-based extraction.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
@@ -41470,7 +41515,7 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
     */
     public ValidateTargetAgentNotEqualToCoAgent(result: ValidationResult) {
     	// If TargetAgentID is specified, it must not be the same as CoAgentID
-    	if (this.TargetAgentID != null && this.CoAgentID === this.TargetAgentID) {
+    	if (this.TargetAgentID != null && UUIDsEqual(this.CoAgentID, this.TargetAgentID)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TargetAgentID",
     			"The Target Agent cannot be the same as the Co-Agent.",
@@ -50257,7 +50302,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     * @method
     */
     public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
-    	if (this.OriginStepID === this.DestinationStepID) {
+    	if (UUIDsEqual(this.OriginStepID, this.DestinationStepID)) {
     		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
     	}
     }
@@ -56876,7 +56921,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`,
- *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`, `MJAIModelTypeEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
@@ -57242,6 +57287,21 @@ export interface MJAIModelTypeEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelTypeEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -57282,6 +57342,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57304,6 +57366,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57323,6 +57387,8 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57541,7 +57607,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`,
- *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`, `MJAIModelVendorEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
@@ -57907,6 +57973,21 @@ export interface MJAIModelVendorEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelVendorEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -57947,6 +58028,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57969,6 +58052,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57988,6 +58073,8 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58398,7 +58485,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`,
- *    `MJAIModelEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelEntity_PrivacyConfigurationSettings`, `MJAIModelEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
@@ -58764,6 +58851,21 @@ export interface MJAIModelEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -58804,6 +58906,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58826,6 +58930,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58845,6 +58951,8 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -59978,7 +60086,7 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
  *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`,
- *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`, `MJAIPromptModelEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
@@ -60344,6 +60452,21 @@ export interface MJAIPromptModelEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIPromptModelEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -60384,6 +60507,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60406,6 +60531,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60425,6 +60552,8 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -62781,7 +62910,7 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
  *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`,
- *    `MJAIPromptEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIPromptEntity_PrivacyConfigurationSettings`, `MJAIPromptEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
@@ -63147,6 +63276,21 @@ export interface MJAIPromptEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIPromptEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -63187,6 +63331,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63209,6 +63355,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63228,6 +63376,8 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63460,7 +63610,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @method
     */
     public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+    	if (this.ResultSelectorPromptID != null && UUIDsEqual(this.ResultSelectorPromptID, this.ID)) {
     		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
@@ -66168,7 +66318,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
  *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`,
- *    `MJAIVendorEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIVendorEntity_PrivacyConfigurationSettings`, `MJAIVendorEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
@@ -66534,6 +66684,21 @@ export interface MJAIVendorEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIVendorEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -66574,6 +66739,8 @@ export interface MJAIVendorEntity_IAIModelConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -66596,6 +66763,8 @@ export interface MJAIVendorEntity_IAIPromptConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -66615,6 +66784,8 @@ export interface MJAIVendorEntity_IAIPromptModelConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -121076,6 +121247,51 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: ExtractedSQLHash
+    * * Display Name: Extracted SQL Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale.
+    */
+    get ExtractedSQLHash(): string | null {
+        return this.Get('ExtractedSQLHash');
+    }
+    set ExtractedSQLHash(value: string | null) {
+        this.Set('ExtractedSQLHash', value);
+    }
+
+    /**
+    * * Field Name: ExtractionStatus
+    * * Display Name: Extraction Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * OK
+    *   * Skipped
+    *   * Warning
+    * * Description: Outcome of the last extraction run. "OK" means all facts were extracted. "Warning" means extraction succeeded with findings (see ExtractionMessage). "Error" means the database server could not describe the query, so existing rows were kept. "Skipped" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted.
+    */
+    get ExtractionStatus(): 'Error' | 'OK' | 'Skipped' | 'Warning' | null {
+        return this.Get('ExtractionStatus');
+    }
+    set ExtractionStatus(value: 'Error' | 'OK' | 'Skipped' | 'Warning' | null) {
+        this.Set('ExtractionStatus', value);
+    }
+
+    /**
+    * * Field Name: ExtractionMessage
+    * * Display Name: Extraction Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions.
+    */
+    get ExtractionMessage(): string | null {
+        return this.Get('ExtractionMessage');
+    }
+    set ExtractionMessage(value: string | null) {
+        this.Set('ExtractionMessage', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -121623,12 +121839,13 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     * * Possible Values 
     *   * AI
     *   * Manual
-    * * Description: Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.
+    *   * Parser
+    * * Description: Who wrote this entity link. "Parser" means MJ's structural analysis of the query found a read of the entity's base view, base table or an alternate base view. "Manual" means a user authored the link. "AI" marks links written by the earlier LLM-based extraction.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -121915,13 +122132,15 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * AI
+    *   * Database
     *   * Manual
-    * * Description: Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.
+    *   * Parser
+    * * Description: Who wrote this field row. "Database" means its facts (name, order, types, nullability, source) came from the database server describing the query output. "Parser" means they came from MJ's analysis of the query template and structure. "Manual" means a user authored the row. "AI" means an LLM wrote its description; an LLM never sets types or sources.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Database' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Database' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -121936,6 +122155,46 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     }
     set AutoDetectConfidenceScore(value: number | null) {
         this.Set('AutoDetectConfidenceScore', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityFieldID
+    * * Display Name: Source Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    * * Description: The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted.
+    */
+    get SourceEntityFieldID(): string | null {
+        return this.Get('SourceEntityFieldID');
+    }
+    set SourceEntityFieldID(value: string | null) {
+        this.Set('SourceEntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: IsNullable
+    * * Display Name: Is Nullable
+    * * SQL Data Type: bit
+    * * Description: Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability.
+    */
+    get IsNullable(): boolean | null {
+        return this.Get('IsNullable');
+    }
+    set IsNullable(value: boolean | null) {
+        this.Set('IsNullable', value);
+    }
+
+    /**
+    * * Field Name: SourceObjectName
+    * * Display Name: Source Object Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.
+    */
+    get SourceObjectName(): string | null {
+        return this.Get('SourceObjectName');
+    }
+    set SourceObjectName(value: string | null) {
+        this.Set('SourceObjectName', value);
     }
 
     /**
@@ -121954,6 +122213,15 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     */
     get SourceEntity(): string | null {
         return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: SourceEntityField
+    * * Display Name: Source Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntityField(): string | null {
+        return this.Get('SourceEntityField');
     }
 }
 
@@ -122122,12 +122390,13 @@ export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityTyp
     * * Possible Values 
     *   * AI
     *   * Manual
-    * * Description: Indicates how this parameter was identified and added to the system. "AI" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. "Manual" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata.
+    *   * Parser
+    * * Description: Who wrote this parameter row. "Parser" means MJ's analysis of the query template found the parameter (its name, inferred type, whether it is required and its default). "Manual" means a user authored the row; its type, required flag, default, sample, validation filters and description are never overwritten by extraction, and it is kept (and flagged on the query) when the SQL no longer uses it. "AI" marks rows written by the earlier LLM-based extraction.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -138897,7 +139166,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     * @method
     */
     public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
-    	if (this.TaskID === this.DependsOnTaskID) {
+    	if (UUIDsEqual(this.TaskID, this.DependsOnTaskID)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TaskID",
     			"A task cannot be dependent on itself.",

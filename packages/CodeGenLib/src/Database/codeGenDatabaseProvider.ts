@@ -709,11 +709,46 @@ export abstract class CodeGenDatabaseProvider {
      */
     GenerateForeignKeyIndexes(entity: EntityInfo): string[] {
         const verified = this.verifiedJoinColumnNames(entity);
-        const indexes = entity.Fields
-            .filter((f) => this.isIndexableForeignKey(f, verified))
-            .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+        const indexes: string[] = [];
+        const skipped: string[] = [];
+        for (const f of entity.Fields.filter((f) => this.isIndexableForeignKey(f, verified))) {
+            const reason = this.ForeignKeyIndexSkipReason(f);
+            if (reason) {
+                skipped.push(`--   ${f.Name} (${f.Type}): ${reason}`);
+            } else {
+                indexes.push(this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+            }
+        }
+        if (skipped.length > 0) {
+            indexes.push(this.skippedForeignKeyIndexDisclosure(entity, skipped));
+        }
         const declined = this.unindexableOrganicKeyDisclosure(entity);
         return declined ? [...indexes, declined] : indexes;
+    }
+
+    /**
+     * Why this dialect will not put an automatic foreign-key index on `f`, or `null` to index it.
+     *
+     * The base answer is always `null`: PostgreSQL keeps its btree index on an unbounded `text` FK,
+     * as it always has. SQL Server overrides this because it rejects some columns as index keys
+     * outright, and a `CREATE INDEX` that fails on every run is worse than a comment saying why the
+     * index is absent (#5985).
+     */
+    protected ForeignKeyIndexSkipReason(_f: EntityFieldInfo): string | null {
+        return null;
+    }
+
+    /**
+     * The generated-SQL note for foreign-key columns {@link ForeignKeyIndexSkipReason} declined,
+     * in the style of {@link GenerateSoftPrimaryKeyIndex}'s skip notice.
+     */
+    protected skippedForeignKeyIndexDisclosure(entity: EntityInfo, lines: string[]): string {
+        return [
+            `-- FK INDEX SKIPPED for ${entity.SchemaName}.${entity.BaseTable}`,
+            ...lines,
+            `-- Joins and related-record lookups on these columns run without an index. Give the`,
+            `-- column(s) a narrower explicit length in the source schema definition so they can be indexed.`,
+        ].join('\n');
     }
 
     /** @deprecated Use {@link GenerateForeignKeyIndexes}. */
