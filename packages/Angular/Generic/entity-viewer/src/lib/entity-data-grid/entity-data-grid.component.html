@@ -99,6 +99,17 @@
             <span class="button-text">Export</span>
           </button>
         }
+        <!-- Open in Excel Button (predefined): a saved view, when the host serves the Excel add-in -->
+        @if (CanOpenInExcel) {
+          <button
+            class="toolbar-button open-in-excel-button"
+            [title]="OpenInExcelTooltip"
+            [disabled]="IsOpeningInExcel"
+            (click)="OnOpenInExcelClick()">
+            <i class="fa-solid" [class.fa-table-cells]="!IsOpeningInExcel" [class.fa-spinner]="IsOpeningInExcel" [class.fa-spin]="IsOpeningInExcel"></i>
+            <span class="button-text">Open in Excel</span>
+          </button>
+        }
         <!-- Delete Button (predefined) -->
         @if (ShowDeleteButton && HasSelection) {
           <button

@@ -5,6 +5,7 @@ import { EntityInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { EntityDataGridComponent } from './entity-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
 
 // The grid checks, per entity, whether Send Message applies. These specs cover toolbar chrome with a
 // stub provider that has no RunViews, so the communication engine is stubbed to "no message types".
@@ -172,5 +173,55 @@ describe('EntityDataGridComponent (DOM) — stale cross-entity grid state (#4244
     const r = renderWithGridState(['CareType', 'CareDate']);
     expect(r.agGridRendered).toBe(true);
     expect(r.fields).toEqual(['CareType', 'CareDate']);
+  });
+});
+
+/**
+ * Open in Excel: offered only for a SAVED view on a host that serves the Excel add-in, and it asks the
+ * add-in client for exactly that view. The availability flag and the view are set directly, because the
+ * real path (a provider round trip) is the client's own concern and is covered in its package.
+ */
+const SAVED_VIEW_ID = '6C0E0E8B-1F2A-4B3C-9D4E-5F6A7B8C9D0E';
+
+function renderForExcel(viewID: string | null, addinEnabled: boolean, inputs: Record<string, unknown> = {}) {
+  vi.spyOn(EntityDataGridComponent.prototype as unknown as RefreshProto, 'Refresh').mockResolvedValue(undefined);
+  return renderComponentFixture(EntityDataGridComponent, {
+    imports: CHILDREN,
+    declarations: [EntityDataGridComponent],
+    providers: [{ provide: ExportService, useValue: {} }],
+    inputs: { ShowToolbar: true, ...inputs },
+    setup: (c) => {
+      const priv = c as unknown as { _viewEntity: { ID: string } | null; _excelAddinEnabled: boolean };
+      priv._viewEntity = viewID ? { ID: viewID } : null;
+      priv._excelAddinEnabled = addinEnabled;
+    },
+  });
+}
+
+describe('EntityDataGridComponent (DOM) — Open in Excel', () => {
+  it('shows Open in Excel for a saved view when the host serves the add-in', () => {
+    expect(query(renderForExcel(SAVED_VIEW_ID, true), '.open-in-excel-button')).not.toBeNull();
+  });
+
+  it('hides it for a dynamic view', () => {
+    expect(query(renderForExcel(null, true), '.open-in-excel-button')).toBeNull();
+  });
+
+  it('hides it when the host does not serve the add-in', () => {
+    expect(query(renderForExcel(SAVED_VIEW_ID, false), '.open-in-excel-button')).toBeNull();
+  });
+
+  it('hides it when the host turns the button off', () => {
+    expect(query(renderForExcel(SAVED_VIEW_ID, true, { ShowOpenInExcelButton: false }), '.open-in-excel-button')).toBeNull();
+  });
+
+  it('asks the add-in client for a workbook of exactly this saved view', async () => {
+    const open = vi.spyOn(ExcelAddinClient.Instance, 'OpenInExcel').mockResolvedValue({ Success: true, FileName: 'View.xlsx' });
+    const f = renderForExcel(SAVED_VIEW_ID, true);
+    (query(f, '.open-in-excel-button') as HTMLElement).click();
+    await f.whenStable();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toEqual([{ Kind: 'View', ID: SAVED_VIEW_ID }]);
+    expect(f.componentInstance.IsOpeningInExcel).toBe(false);
   });
 });

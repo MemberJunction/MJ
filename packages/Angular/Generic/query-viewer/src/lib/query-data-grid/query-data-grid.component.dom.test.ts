@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { renderComponentFixture, query, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { QueryDataGridComponent } from './query-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
 import type { QueryGridColumnConfig } from './models/query-grid-types';
 import { BuildColumnsForResult } from './models/query-grid-types';
 import type { MJQueryEntityExtended, MJQueryFieldEntity } from '@memberjunction/core-entities';
@@ -163,5 +164,54 @@ describe('QueryDataGridComponent (DOM)', () => {
       expect(columns).toHaveLength(1);
       expect(columns[0]).toMatchObject({ field: 'amount', title: 'amount', sqlBaseType: 'money', order: 0 });
     });
+  });
+});
+
+/**
+ * Open in Excel: offered only for a saved query on a host that serves the Excel add-in, while every
+ * required parameter has a value, and it sends the last run's values without the server-set ones.
+ * The query and the availability flag are set directly; the provider round trip is the client's concern.
+ */
+describe('QueryDataGridComponent (DOM) — Open in Excel', () => {
+  const QUERY_ID = '1B2C3D4E-5F60-4718-8293-A4B5C6D7E8F9';
+  const PARAMS = [
+    { Name: 'Region', IsRequired: true, IsServerSet: false, Type: 'string' },
+    { Name: 'TenantID', IsRequired: true, IsServerSet: true, Type: 'string' },
+  ];
+
+  afterEach(() => vi.restoreAllMocks());
+
+  const renderForExcel = (addinEnabled: boolean, inputs: Record<string, unknown> = {}) =>
+    renderComponentFixture(QueryDataGridComponent, {
+      imports: CHILDREN,
+      declarations: [QueryDataGridComponent],
+      providers: [provideNoopAnimations(), { provide: ExportService, useValue: {} }],
+      inputs: { Data: ROWS(3), ...inputs },
+      setup: (c) => {
+        const priv = c as unknown as { _queryInfo: unknown; _excelAddinEnabled: boolean };
+        priv._queryInfo = { ID: QUERY_ID, QueryParameters: PARAMS };
+        priv._excelAddinEnabled = addinEnabled;
+      },
+    });
+
+  it('shows Open in Excel when the add-in is on and the required values are there', () => {
+    expect(query(renderForExcel(true, { ParameterValues: { Region: 'West' } }), '.open-in-excel-btn')).not.toBeNull();
+  });
+
+  it('hides it while a required parameter has no value', () => {
+    expect(query(renderForExcel(true, { ParameterValues: {} }), '.open-in-excel-btn')).toBeNull();
+  });
+
+  it('hides it when the host does not serve the add-in', () => {
+    expect(query(renderForExcel(false, { ParameterValues: { Region: 'West' } }), '.open-in-excel-btn')).toBeNull();
+  });
+
+  it('sends the saved query with the last run\'s values, never a server-set one', async () => {
+    const open = vi.spyOn(ExcelAddinClient.Instance, 'OpenInExcel').mockResolvedValue({ Success: true, FileName: 'Query.xlsx' });
+    const f = renderForExcel(true, { ParameterValues: { Region: 'West', TenantID: 'forged' } });
+    (query(f, '.open-in-excel-btn') as HTMLElement).click();
+    await f.whenStable();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toEqual([{ Kind: 'Query', ID: QUERY_ID, Parameters: { Region: 'West' } }]);
   });
 });

@@ -48,6 +48,17 @@
             <span class="button-text">Export</span>
           </button>
         }
+        <!-- Open in Excel: a saved query, when the host serves the Excel add-in -->
+        @if (CanOpenInExcel) {
+          <button
+            [disabled]="IsOpeningInExcel"
+            [title]="OpenInExcelTooltip"
+            class="toolbar-btn open-in-excel-btn"
+            (click)="OpenInExcel()">
+            <i class="fa-solid" [class.fa-table-cells]="!IsOpeningInExcel" [class.fa-spinner]="IsOpeningInExcel" [class.fa-spin]="IsOpeningInExcel"></i>
+            <span class="button-text">Open in Excel</span>
+          </button>
+        }
       </div>
     </div>
   }

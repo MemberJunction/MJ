@@ -20,7 +20,10 @@ import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, Enti
 import { UUIDsEqual, MJGlobal, MJEvent } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
+import { CanOpenViewInExcel, OPEN_VIEW_IN_EXCEL_TOOLTIP } from './open-in-excel';
 import {
   BuildPkString,
   BuildUsablePkString,
@@ -954,6 +957,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._showExportButton;
   }
 
+  private _showOpenInExcelButton: boolean = true;
+  /**
+   * Show the "Open in Excel" button in the toolbar. It appears only for a saved view, and only when the
+   * MemberJunction host serves the Excel add-in; it downloads a workbook that loads the view in Excel.
+   */
+  @Input()
+  set ShowOpenInExcelButton(value: boolean) {
+    this._showOpenInExcelButton = value;
+  }
+  get ShowOpenInExcelButton(): boolean {
+    return this._showOpenInExcelButton;
+  }
+
   private _showDeleteButton: boolean = false;
   /**
    * Show the "Delete" button in toolbar (deletes selected rows)
@@ -1063,6 +1079,63 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     } catch {
       // Non-fatal: leave Send Message hidden, and retry on the next entity resolution.
       this._communicationCheckedForEntityID = null;
+    }
+  }
+
+  private _excelAddinEnabled = false;
+  /** True while Open in Excel is building the workbook. */
+  public IsOpeningInExcel = false;
+  /** The Open in Excel button's tooltip. */
+  public readonly OpenInExcelTooltip = OPEN_VIEW_IN_EXCEL_TOOLTIP;
+
+  /** True when the toolbar offers Open in Excel: a saved view is loaded and the host serves the add-in. */
+  get CanOpenInExcel(): boolean {
+    return CanOpenViewInExcel(this._showOpenInExcelButton, this._viewEntity?.ID, this._excelAddinEnabled);
+  }
+
+  /**
+   * Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in.
+   * Only a saved view can be opened in Excel, so a dynamic view never asks.
+   */
+  private async resolveExcelAddinAvailability(): Promise<void> {
+    const provider = this.ProviderToUse;
+    if (!this._viewEntity || this._excelAddinEnabled || !provider) {
+      return;
+    }
+    try {
+      this._excelAddinEnabled = await ExcelAddinClient.Instance.IsEnabled(provider);
+      if (this._excelAddinEnabled) {
+        this.cdr.detectChanges();
+      }
+    } catch (e) {
+      // Non-fatal: the button stays hidden. The client already treats an unreadable status as "off".
+      LogError(`EntityDataGrid: Excel add-in status check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /** Builds a workbook that loads the saved view in Excel, and downloads it. */
+  public async OnOpenInExcelClick(): Promise<void> {
+    const view = this._viewEntity;
+    if (!view || this.IsOpeningInExcel) {
+      return;
+    }
+    this.IsOpeningInExcel = true;
+    this.cdr.detectChanges();
+    try {
+      const result = await ExcelAddinClient.Instance.OpenInExcel([{ Kind: 'View', ID: view.ID }], this.ProviderToUse);
+      if (result.Success) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
+      } else {
+        MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage || 'The workbook could not be built.', 'error', 6000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      LogError(`EntityDataGrid: Open in Excel failed: ${message}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(`Open in Excel failed: ${message}`, 'error', 6000);
+    } finally {
+      this.IsOpeningInExcel = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -2383,6 +2456,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Entity is resolved by now — self-load its actions if auto-load is enabled.
       void this.maybeAutoLoadEntityActions();
       void this.resolveCommunicationSupport();
+      void this.resolveExcelAddinAvailability();
     }
   }
 
