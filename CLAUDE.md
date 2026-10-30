@@ -81,7 +81,7 @@ pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bu
 ```
 Unit tests passing is **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen. Details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
-**Repo-wide gates**: `check:guards` and `check:standards` must pass. `check:guards` is required (CI `Source guards` feeds `Run unit tests`); `check:standards` (`adopted standards`) is not, so a red one merges and breaks `next`. A hook runs both before `git push` / `gh pr create`.
+**Repo-wide gates**: `check:guards` (required) and `check:standards` (not required, so a red one merges and breaks `next`) must pass. A hook runs both before `git push` / `gh pr create`.
 
 ---
 
