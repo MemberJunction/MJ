@@ -88,7 +88,7 @@ const SAFE_ARRAY_VALUE_METHODS: ReadonlySet<string> = new Set<string>([
     'includes', 'indexOf', 'lastIndexOf', 'join', 'slice', 'concat', 'flat', 'at', 'toString',
 ]);
 
-const SAFE_NUMBER_METHODS: ReadonlySet<string> = new Set<string>(['toFixed', 'toString', 'valueOf']);
+const SAFE_NUMBER_METHODS: ReadonlySet<string> = new Set<string>(['toFixed', 'toPrecision', 'toString', 'valueOf']);
 const SAFE_BOOLEAN_METHODS: ReadonlySet<string> = new Set<string>(['toString', 'valueOf']);
 const SAFE_DATE_METHODS: ReadonlySet<string> = new Set<string>([
     'toISOString', 'getTime', 'getFullYear', 'getUTCFullYear',
@@ -146,6 +146,8 @@ export function CompileTransformExpression(expression: string): CompiledExpressi
             ['value', value],
             ['fields', safeFields],
             ['undefined', undefined],
+            ['NaN', NaN],
+            ['Infinity', Infinity],
         ]);
         const rootScope: EvalScope = { bindings: rootBindings, parent: null };
         const out = evaluateNode(parsed, rootScope, 0);
@@ -628,7 +630,16 @@ function invokeNamespaceMethod(ns: string, method: string, args: EvalValue[]): E
             return invokeMathMethod(method, args);
         case 'JSON':
             if (method === 'parse') return JSON.parse(String(args[0]));
-            if (method === 'stringify') return JSON.stringify(args[0]);
+            if (method === 'stringify') {
+                const replacer = Array.isArray(args[1]) ? (args[1] as (string | number)[]) : null;
+                const space =
+                    args[2] === undefined
+                        ? undefined
+                        : typeof args[2] === 'number'
+                            ? Math.min(Math.max(0, args[2]), 10)
+                            : String(args[2]).slice(0, 10);
+                return JSON.stringify(args[0], replacer, space);
+            }
             break;
         case 'Object':
             if (args[0] === null || args[0] === undefined) {
@@ -665,6 +676,7 @@ function invokeInstanceMethod(receiver: EvalValue, method: string, args: EvalVal
     }
     if (typeof receiver === 'number' && SAFE_NUMBER_METHODS.has(method)) {
         if (method === 'toFixed') return receiver.toFixed(args[0] === undefined ? undefined : Number(args[0]));
+        if (method === 'toPrecision') return receiver.toPrecision(args[0] === undefined ? undefined : Number(args[0]));
         if (method === 'toString') return receiver.toString(args[0] === undefined ? undefined : Number(args[0]));
         if (method === 'valueOf') return receiver.valueOf();
     }

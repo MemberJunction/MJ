@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { GetASTDialectAdapter } from '../ASTDialectAdapter.js';
+import { ClearRowCap, ReadRowCap, RowCapFieldFor, WriteRowCap } from '../legacy/nodeSqlRowCap.js';
+import type { RowCapField } from '../legacy/nodeSqlRowCap.js';
+
+/** The three row-cap operations for one AST field, so each block below reads as before. */
+function rowCapOps(field: RowCapField) {
+    return {
+        ReadRowCap: (root: Record<string, unknown>) => ReadRowCap(root, field),
+        WriteRowCap: (root: Record<string, unknown>, cap: number) => WriteRowCap(root, field, cap),
+        ClearRowCap: (root: Record<string, unknown>) => ClearRowCap(root, field),
+    };
+}
 
 const tsql = new SQLServerDialect();
 const pg = new PostgreSQLDialect();
@@ -9,32 +19,32 @@ const pg = new PostgreSQLDialect();
 // Registry
 // ════════════════════════════════════════════════════════════════════
 
-describe('getASTDialectAdapter', () => {
-    it('returns an adapter for the SQL Server dialect', () => {
-        expect(GetASTDialectAdapter(tsql)).toBeDefined();
+describe('RowCapFieldFor', () => {
+    it('keeps the SQL Server row cap on `top`', () => {
+        expect(RowCapFieldFor(tsql)).toBe('top');
     });
 
-    it('returns an adapter for the PostgreSQL dialect', () => {
-        expect(GetASTDialectAdapter(pg)).toBeDefined();
+    it('keeps the PostgreSQL row cap on `limit`', () => {
+        expect(RowCapFieldFor(pg)).toBe('limit');
     });
 
-    it('returns an adapter for the MySQL ParserDialect', () => {
+    it('keeps the MySQL row cap on `limit`', () => {
         const mysqlish = { ...tsql, ParserDialect: 'MySQL' } as typeof tsql;
-        expect(GetASTDialectAdapter(mysqlish)).toBeDefined();
+        expect(RowCapFieldFor(mysqlish)).toBe('limit');
     });
 
     it('throws an actionable error for an unregistered ParserDialect', () => {
         const unknown = { ...tsql, ParserDialect: 'OracleSQL' } as typeof tsql;
-        expect(() => GetASTDialectAdapter(unknown)).toThrow(/No ASTDialectAdapter registered/);
+        expect(() => RowCapFieldFor(unknown)).toThrow(/No row-cap form registered/);
     });
 });
 
 // ════════════════════════════════════════════════════════════════════
-// TransactSQLAdapter (root.top)
+// root.top (TransactSQL)
 // ════════════════════════════════════════════════════════════════════
 
-describe('TransactSQLAdapter', () => {
-    const adapter = GetASTDialectAdapter(tsql);
+describe('the `top` row cap (TransactSQL)', () => {
+    const adapter = rowCapOps('top');
 
     it('reads a numeric TOP', () => {
         expect(adapter.ReadRowCap({ top: { value: 5, percent: null } }))
@@ -71,11 +81,11 @@ describe('TransactSQLAdapter', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// LimitOffsetAdapter (root.limit)
+// root.limit (PostgresQL / MySQL / Snowflake / Hive)
 // ════════════════════════════════════════════════════════════════════
 
-describe('LimitOffsetAdapter', () => {
-    const adapter = GetASTDialectAdapter(pg);
+describe('the `limit` row cap (PostgresQL, MySQL, Snowflake, Hive)', () => {
+    const adapter = rowCapOps('limit');
 
     it('reads a numeric LIMIT', () => {
         expect(adapter.ReadRowCap({ limit: { seperator: '', value: [{ value: 5 }] } }))

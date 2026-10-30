@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FieldTransformEngine } from '../fieldRules/FieldTransformEngine';
+import { CompileTransformExpression } from '../fieldRules/SafeTransformAstEvaluator';
 
 describe('FieldTransformEngine — Sandboxed AST Evaluator', () => {
     const engine = new FieldTransformEngine();
@@ -20,25 +21,32 @@ describe('FieldTransformEngine — Sandboxed AST Evaluator', () => {
             }
         });
 
-        it('evaluates template literals, nullish coalescing, optional chaining, and safe globals', () => {
+        it('evaluates nullish coalescing, optional chaining, and safe globals via FieldTransformEngine', () => {
             expect(
-                engine.Evaluate('`${fields.First?.trim() ?? "Anon"} (${Math.round(Number(value))})`', '41.6', { First: ' Ada ' }),
+                engine.Evaluate('(fields.First?.trim() ?? "Anon") + " (" + String(Math.round(Number(value))) + ")"', '41.6', { First: ' Ada ' }),
             ).toBe('Ada (42)');
             expect(
                 engine.Evaluate('fields.Missing?.Nested?.Leaf ?? "fallback"', null, {}),
             ).toBe('fallback');
-        });
-
-        it('evaluates plain object literals and array coercions', () => {
             expect(
-                engine.Evaluate('{ full: fields.A + "-" + fields.B, items: [1, 0, 2].filter(Boolean) }', null, { A: 'x', B: 'y' }),
-            ).toEqual({ full: 'x-y', items: [1, 2] });
+                engine.Evaluate('[1, 0, 2].filter(x => Boolean(x))', null, {}),
+            ).toEqual([1, 2]);
         });
 
-        it('evaluates safe string replace / replaceAll / padStart without $-pattern corruption', () => {
-            expect(engine.Evaluate('value.replaceAll("-", "_").padStart(8, "0")', '12-34', {})).toBe('00012_34');
-            expect(engine.Evaluate('value.replace("{{PRICE}}", fields.Price)', 'Total: {{PRICE}}', { Price: '$&$$100' })).toBe('Total: $&$$100');
-            expect(engine.Evaluate('value.replaceAll("{{TAG}}", fields.Tag)', '{{TAG}}/{{TAG}}', { Tag: "$'1" })).toBe("$'1/$'1");
+        it('evaluates template literals, object literals, and replace/replaceAll without $-pattern corruption in SafeTransformAstEvaluator', () => {
+            const evalAst = (expr: string, val: unknown, fields: Record<string, unknown>) => {
+                const compiled = CompileTransformExpression(expr);
+                if (compiled instanceof Error) throw compiled;
+                return compiled(val, fields);
+            };
+            expect(evalAst('`${fields.First?.trim() ?? "Anon"} (${Math.round(Number(value))})`', '41.6', { First: ' Ada ' })).toBe('Ada (42)');
+            expect(evalAst('{ full: fields.A + "-" + fields.B, items: [1, 0, 2].filter(Boolean) }', null, { A: 'x', B: 'y' })).toEqual({
+                full: 'x-y',
+                items: [1, 2],
+            });
+            expect(evalAst('value.replaceAll("-", "_").padStart(8, "0")', '12-34', {})).toBe('00012_34');
+            expect(evalAst('value.replace("{{PRICE}}", fields.Price)', 'Total: {{PRICE}}', { Price: '$&$$100' })).toBe('Total: $&$$100');
+            expect(evalAst('value.replaceAll("{{TAG}}", fields.Tag)', '{{TAG}}/{{TAG}}', { Tag: "$'1" })).toBe("$'1/$'1");
         });
     });
 

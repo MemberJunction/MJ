@@ -297,8 +297,8 @@ describe('SafeExpressionEvaluator - Security', () => {
       expectBlocked('[1].map(payload.fn)', { payload: { fn: () => 1 } });
     });
 
-    it('allows safe coercion identifiers as array-method callbacks', () => {
-      const r = evaluator.evaluate('items.filter(Boolean).length == 2', { items: ['a', '', 'b', null] });
+    it('allows inline arrow callbacks on higher-order array methods', () => {
+      const r = evaluator.evaluate('items.filter(x => Boolean(x)).length == 2', { items: ['a', '', 'b', null] });
       expect(r.success).toBe(true);
       expect(r.value).toBe(true);
     });

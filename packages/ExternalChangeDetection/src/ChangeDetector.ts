@@ -195,7 +195,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             // Detect deletions (single call — bounded by RecordChange entries, not entity size)
             const deleteResult = await rq.RunQuery({
                 QueryName: 'ExternalChangeDetection_DetectDeletions',
-                Parameters: params.deletion
+                // Every detection parameter is server-set (identifiers and SQL fragments built here), so
+                // it goes in ServerParameters: a value for a server-set parameter in Parameters is refused.
+                ServerParameters: params.deletion
             }, this.ContextUser);
             if (deleteResult?.Success) {
                 for (const row of deleteResult.Results) {
@@ -275,11 +277,14 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * If a page query fails (timeout, connection error, etc.), logs the error
      * and stops pagination for this entity rather than retrying or crashing.
      * The caller's try/catch in DetectChangesForEntity will report partial results.
+     *
+     * The detection queries declare every parameter server-set, so the values go in
+     * `ServerParameters`.
      */
     private async detectPages(
         rq: RunQuery,
         queryName: string,
-        parameters: Record<string, string>,
+        serverParameters: Record<string, string>,
         handleRow: (row: Record<string, unknown>) => Promise<void>
     ): Promise<void> {
         let startRow = 0;
@@ -287,7 +292,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         for (;;) {
             const result = await rq.RunQuery({
                 QueryName: queryName,
-                Parameters: parameters,
+                ServerParameters: serverParameters,
                 MaxRows: DETECTION_PAGE_SIZE,
                 StartRow: startRow
             }, this.ContextUser);
