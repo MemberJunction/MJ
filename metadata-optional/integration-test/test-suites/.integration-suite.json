@@ -1599,6 +1599,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT156 - Widget Guest Row Isolation",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "51AEF347-7646-43D5-95BD-CA000E453594"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT133 - FLS Close-out (server)",
             "Sequence": 49,
             "Status": "Active"
