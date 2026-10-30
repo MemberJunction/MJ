@@ -1063,7 +1063,13 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
   };
 
   it("creates the kept GLM's model row: its artifact, its catalog algorithm, its holdout score, and no inner score, importance or hyperparameters", async () => {
-    const { engine, deps, pipeline, runs, models } = protocolHarness((r) => ({ ...cannedFor(r), importance: [importanceOf('EventsAttended', 0.4)] }));
+    // The finalist is the request's candidate (`xgboost`, with its own hyperparameters and inner score); the gate keeps the GLM.
+    const kept = (r: TrainerRequest): TrainerCompleted => {
+      const canned = cannedFor(r);
+      const renamed = TrainerResultFixtures.WithFinalist({ ...canned, importance: [importanceOf('EventsAttended', 0.4)] }, 'xgboost', r.snapshot.featureSchemaHash);
+      return { ...renamed, artifacts: [...renamed.artifacts, ...canned.artifacts.filter((a) => a.candidate !== 'xgb')] };
+    };
+    const { engine, deps, pipeline, runs, models } = protocolHarness(kept);
     const loader = new FakeRecordLoader(pipeline);
     deps.recordLoader = loader;
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
