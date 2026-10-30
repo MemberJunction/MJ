@@ -13,7 +13,7 @@ import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, EscapeSQLString } from '@memberjunction/global';
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -528,7 +528,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     protected BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
         if (recordPKValues.length === 0) return '';
         const escapedKeys = recordPKValues
-            .map(v => `'${String(v).replace(/'/g, "''")}'`)
+            .map(v => `'${EscapeSQLString(String(v))}'`)
             .join(', ');
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
@@ -536,7 +536,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 const schema = child.SchemaName || '__mj';
                 const sourceRef = this.QuoteSchemaAndView(schema, child.BaseView);
                 const pkRef = this.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A children share the parent's single key
-                const escapedName = `'${child.Name.replace(/'/g, "''")}'`;
+                const escapedName = `'${EscapeSQLString(child.Name)}'`;
                 return `SELECT ${escapedName} AS ${this.QuoteIdentifier('EntityName')}, CAST(${pkRef} AS VARCHAR(255)) AS ${this.QuoteIdentifier('RecordPK')}, ${idx + 1} AS ${this.QuoteIdentifier('Priority')} FROM ${sourceRef} WHERE ${pkRef} IN (${escapedKeys})`;
             });
         return unionParts.length > 0 ? unionParts.join(' UNION ALL ') : '';

@@ -1,4 +1,4 @@
-import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
+import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -6771,7 +6771,7 @@ export abstract class BaseEntity<T = unknown> {
                     return String(num);
                 }
             }
-            return `'${String(val).replace(/'/g, "''")}'`;
+            return `'${EscapeSQLString(String(val))}'`;
         });
         return `${pkField.Name} IN (${formatted.join(', ')})`;
     }
