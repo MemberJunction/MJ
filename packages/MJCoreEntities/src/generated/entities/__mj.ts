@@ -57027,10 +57027,14 @@ export type MJAIModelTypeEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'au
 export interface MJAIModelTypeEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelTypeEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;
@@ -57720,10 +57724,14 @@ export type MJAIModelVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | '
 export interface MJAIModelVendorEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelVendorEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;
@@ -58605,10 +58613,14 @@ export type MJAIModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioA
 export interface MJAIModelEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;
@@ -60213,10 +60225,14 @@ export type MJAIPromptModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | '
 export interface MJAIPromptModelEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIPromptModelEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;
@@ -63044,10 +63060,14 @@ export type MJAIPromptEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audio
 export interface MJAIPromptEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIPromptEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;
@@ -66459,10 +66479,14 @@ export type MJAIVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audio
 export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIVendorEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;

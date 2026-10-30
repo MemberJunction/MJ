@@ -125,7 +125,9 @@ export type TurnSettingFidelity = 'exact' | 'approximate';
 
 /**
  * The normalized turn settings a driver honours, keyed by field, with fidelity. A field absent from
- * the map is ignored by the driver; an absent map means the driver maps none.
+ * the map is ignored by the driver; an absent map means the driver maps none. A listed field can
+ * still depend on `Mode`: OpenAI-protocol drivers (OpenAI, Eleven Realtime) apply `Eagerness` only
+ * with `Mode: 'semanticVad'`.
  */
 export type SupportedTurnSettingsMap = Readonly<Partial<Record<keyof RealtimeTurnDetectionSettings, TurnSettingFidelity>>>;
 

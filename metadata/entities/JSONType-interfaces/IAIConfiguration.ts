@@ -152,10 +152,14 @@ export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVid
 export interface RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
     /**
-     * Server-VAD activation threshold (0–1); ignored without a mapping. Lossy on Gemini (two levels:
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
      * < 0.5 → high start sensitivity, >= 0.5 → low).
      */
     Threshold?: number;
