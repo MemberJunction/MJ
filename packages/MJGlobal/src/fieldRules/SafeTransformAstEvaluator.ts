@@ -692,16 +692,20 @@ function invokeStringMethod(s: string, method: string, args: EvalValue[]): EvalV
         case 'slice': return s.slice(args[0] === undefined ? undefined : Number(args[0]), args[1] === undefined ? undefined : Number(args[1]));
         case 'substring': return s.substring(Number(args[0] ?? 0), args[1] === undefined ? undefined : Number(args[1]));
         case 'split': return s.split(args[0] === undefined ? '' : String(args[0]), args[1] === undefined ? undefined : Number(args[1]));
-        case 'replace':
+        case 'replace': {
             if (typeof args[0] !== 'string' || typeof args[1] !== 'string') {
                 throw new TypeError('String.replace in safe expressions requires string search and replacement arguments');
             }
-            return s.replace(args[0], args[1]);
-        case 'replaceAll':
+            const replacement = args[1];
+            return s.replace(args[0], () => replacement);
+        }
+        case 'replaceAll': {
             if (typeof args[0] !== 'string' || typeof args[1] !== 'string') {
                 throw new TypeError('String.replaceAll in safe expressions requires string search and replacement arguments');
             }
-            return s.replaceAll(args[0], args[1]);
+            const replacement = args[1];
+            return s.replaceAll(args[0], () => replacement);
+        }
         case 'padStart': {
             const targetLen = Math.min(Number(args[0] ?? 0), MAX_PAD_LENGTH);
             return s.padStart(targetLen, args[1] === undefined ? undefined : String(args[1]));

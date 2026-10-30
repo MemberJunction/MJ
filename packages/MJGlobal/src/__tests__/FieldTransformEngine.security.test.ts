@@ -35,8 +35,10 @@ describe('FieldTransformEngine — Sandboxed AST Evaluator', () => {
             ).toEqual({ full: 'x-y', items: [1, 2] });
         });
 
-        it('evaluates safe string replace / replaceAll / padStart', () => {
+        it('evaluates safe string replace / replaceAll / padStart without $-pattern corruption', () => {
             expect(engine.Evaluate('value.replaceAll("-", "_").padStart(8, "0")', '12-34', {})).toBe('00012_34');
+            expect(engine.Evaluate('value.replace("{{PRICE}}", fields.Price)', 'Total: {{PRICE}}', { Price: '$&$$100' })).toBe('Total: $&$$100');
+            expect(engine.Evaluate('value.replaceAll("{{TAG}}", fields.Tag)', '{{TAG}}/{{TAG}}', { Tag: "$'1" })).toBe("$'1/$'1");
         });
     });
 
