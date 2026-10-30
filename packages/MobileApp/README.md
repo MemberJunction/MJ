@@ -77,9 +77,14 @@ targeting a migrated 5.x DB. If you run it on another port, set
 
 Runtime config lives in [`src/config/env.ts`](src/config/env.ts):
 
-- `graphqlUrl` — MJAPI GraphQL endpoint (default `http://localhost:4000/graphql`;
-  the iOS Simulator can reach `localhost` directly).
-- `graphqlWsUrl` — WebSocket subscription endpoint (`ws://localhost:4000/graphql`).
+- `graphqlUrl` / `graphqlWsUrl` — MJAPI GraphQL and WebSocket endpoints. Set
+  `EXPO_PUBLIC_MJ_GRAPHQL_URL` (the WebSocket URL derives from it, `https://` →
+  `wss://`; override with `EXPO_PUBLIC_MJ_WS_URL` if they differ). **Dev builds**
+  fall back to the developer's machine when unset (`http://localhost:4000/graphql`,
+  `10.0.2.2` from the Android emulator; `EXPO_PUBLIC_MJ_API_HOST` / `_PORT` for a
+  LAN device). **Release builds have no fallback**: a missing or non-`https://`
+  URL throws at startup, because iOS App Transport Security blocks cleartext to
+  remote hosts. Put the URL in the EAS build profile.
 - `auth0Domain` / `auth0ClientId` / `auth0Scopes` — Auth0 native app (primary path).
 - `msalTenantId` / `msalClientId` / `msalScopes` — Azure AD (ready, off the boot
   path until its RN redirect URI is registered).
