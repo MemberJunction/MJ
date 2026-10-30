@@ -2,6 +2,10 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
+    type ClientRealtimeSessionConfig,
+    type JSONObject,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeTurnDetectionSettings,
@@ -153,13 +157,26 @@ export const ELEVEN_REALTIME_PROFILE: OpenAIRealtimeProfile = {
  * 2. **Turn eagerness** uses `medium` where MJ says `auto` (see {@link MapElevenRealtimeEagerness}).
  *
  * `max_duration_seconds` (an ElevenLabs extension: the server closes the session with code 1000
- * once it is exceeded) passes through the Config bag untouched.
+ * once it is exceeded) is `min(provider cap, MaxSessionSeconds, Config-bag value)` through the one
+ * clamp in {@link BaseRealtimeModel}. Only a positive-integer number in the bag counts; any other
+ * bag value (e.g. the string `"600"`) is ignored AND never sent as-is. With no provider cap known,
+ * no host `MaxSessionSeconds` and no usable bag value the field is removed, so ElevenLabs applies
+ * its own ceiling. The bag is adjusted in {@link ElevenRealtime.withClampedMaxDuration} before the
+ * shared OpenAI payload builder runs, on both the mint ({@link ElevenRealtime.CreateClientSession})
+ * and the server-bridged ({@link ElevenRealtime.StartSession}) paths, so no payload code is duplicated.
  *
  * Registered as `ElevenRealtime`; the matching `MJ: AI Model Vendors` rows name it as their
  * `DriverClass`.
  */
 @RegisterClass(BaseRealtimeModel, 'ElevenRealtime')
 export class ElevenRealtime extends OpenAIRealtime {
+    /** The provider's session ceiling is not documented in-repo (`max_duration_seconds` is a per-session setting, not a ceiling), so it stays unknown. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        // What BuildElevenRealtimeTurnDetection maps: serverVad/semanticVad modes, eagerness (auto becomes
+        // medium, the documented equivalent), and the server-VAD threshold and silence duration.
+        SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' },
+    };
+
     public static override readonly SupportsDynamicToolSet = ELEVEN_REALTIME_PROFILE.supportsDynamicToolSet;
 
     /**
@@ -177,7 +194,7 @@ export class ElevenRealtime extends OpenAIRealtime {
 
     /** Returns the Eleven-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new ElevenRealtimeSession(connection);
+        return new ElevenRealtimeSession(connection, RealtimeDriverFactsOf(this));
     }
 
     /**
@@ -198,8 +215,35 @@ export class ElevenRealtime extends OpenAIRealtime {
         const secret = await this.mintClientSecret({ session: { type: 'realtime', model: params.Model } });
         const connection = this.createAuthenticatedConnection(params.Model, secret.value);
         const session = this.createSessionInstance(connection);
-        session.applyInitialConfig(params);
+        session.applyInitialConfig(this.withClampedMaxDuration(params));
         return session;
+    }
+
+    /**
+     * Client-direct mint: the shared OpenAI flow, with `max_duration_seconds` clamped first (see {@link withClampedMaxDuration}).
+     * The clamp is computed once: when it yields a wire value, that same value becomes `MaxSessionSeconds` for the
+     * shared flow, so the ClientConfig reports exactly what went on the wire (bag clamp included).
+     */
+    public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        const clamped = this.withClampedMaxDuration(params);
+        const wireValue = (clamped.Config as JSONObject | undefined)?.['max_duration_seconds'];
+        return super.CreateClientSession(typeof wireValue === 'number' ? { ...clamped, MaxSessionSeconds: wireValue } : clamped);
+    }
+
+    /**
+     * Returns `params` with the Config bag's `max_duration_seconds` replaced by
+     * `min(provider cap, params.MaxSessionSeconds, bag value)`, or removed when none of those is a
+     * usable positive integer (a non-number bag value is dropped, never forwarded). The caller's
+     * bag is copied, not mutated.
+     */
+    private withClampedMaxDuration(params: RealtimeSessionParams): RealtimeSessionParams {
+        const { max_duration_seconds: bagValue, ...bag } = (params.Config ?? {}) as JSONObject;
+        const clamped = this.ClampSessionSeconds(
+            RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds,
+            params.MaxSessionSeconds,
+            typeof bagValue === 'number' ? bagValue : undefined,
+        );
+        return { ...params, Config: clamped === undefined ? bag : { ...bag, max_duration_seconds: clamped } };
     }
 
     /**
@@ -234,8 +278,9 @@ export class ElevenRealtimeSession extends OpenAIRealtimeSession {
     /**
      * @param connection The provider connection (a real `OpenAIRealtimeWebSocket` in production, a
      * fake in tests).
+     * @param driverFacts The creating driver's static facts; defaults to Eleven Realtime's for direct construction.
      */
-    constructor(connection: IOpenAIRealtimeConnection) {
-        super(connection, ELEVEN_REALTIME_PROFILE);
+    constructor(connection: IOpenAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = ElevenRealtime.DriverFacts) {
+        super(connection, ELEVEN_REALTIME_PROFILE, driverFacts);
     }
 }

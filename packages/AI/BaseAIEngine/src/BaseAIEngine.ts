@@ -3144,6 +3144,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 ExtraFilter: `PromptText = '${escapedPrompt}' AND Status='Active'`,
                 OrderBy: 'RunAt DESC',
                 MaxRows: 1, // get only the latest one
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, this.ContextUser);
             if (result && result.Success && result.Results && result.Results.length > 0) {

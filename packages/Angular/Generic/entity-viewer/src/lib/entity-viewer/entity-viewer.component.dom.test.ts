@@ -175,3 +175,22 @@ describe('EntityViewerComponent — view persistence target', () => {
   });
 });
 
+describe('EntityViewerComponent — EffectiveSavedViewID', () => {
+  type SavedViewAccessor = {
+    _viewEntity: { ID: string; IsSaved?: boolean } | null;
+    EffectiveSavedViewID: string | null;
+  };
+
+  it('exposes the saved view ID only when a persisted UserView record is loaded', () => {
+    const f = render({ entity: ENTITY });
+    const c = f.componentInstance as unknown as SavedViewAccessor;
+    expect(c.EffectiveSavedViewID).toBeNull();
+
+    c._viewEntity = { ID: '9CB0CCEC-6A37-EF11-86D4-000D3A4E707E', IsSaved: true };
+    expect(c.EffectiveSavedViewID).toBe('9CB0CCEC-6A37-EF11-86D4-000D3A4E707E');
+
+    c._viewEntity = { ID: '9CB0CCEC-6A37-EF11-86D4-000D3A4E707E', IsSaved: false };
+    expect(c.EffectiveSavedViewID).toBeNull();
+  });
+});
+

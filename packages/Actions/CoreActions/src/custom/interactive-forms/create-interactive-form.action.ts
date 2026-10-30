@@ -64,6 +64,7 @@ export class CreateInteractiveFormAction extends BaseAction {
                 Fields: ['ID', 'Status'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, user);
             if (dupResult.Success && (dupResult.Results ?? []).length > 0) {
                 const existing = dupResult.Results![0];

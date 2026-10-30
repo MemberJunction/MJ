@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Chief of Staff",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "Description": "Personal, always-on Chief of Staff agent (one per user) that coordinates across organizational workstreams, tracks quarterly priorities and OKRs (Tasks & TaskCheckIns), monitors blocking Issues, writes executive briefings, manages approvals under narrowed per-user policies (MJ: AI Agent User Policies), schedules its own wake cycles via the 3-Tier Wake Gate on MJ: User Routines, and follows up across chat, email, and voice/telephony.",
+      "Description": "Personal, always-on Chief of Staff agent (one per user) that coordinates across organizational workstreams, keeps the user's stated priorities, sets reminders as one-shot wakes, writes executive briefings, manages approvals under narrowed per-user policies (MJ: AI Agent User Policies), schedules its own wake cycles via the 3-Tier Wake Gate on MJ: User Routines, and follows up across chat, email, and voice/telephony. Installed apps extend it with skills (for example business priorities and tasks).",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "AcceptsSkills": "All",

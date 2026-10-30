@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, RunViewParams } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RealtimeDelegationCardVM, RealtimeThreadItem } from '../components/realtime/realtime-session-state';
 import { ParsedDelegationArtifact, FormatToolName } from '@memberjunction/realtime-runtime';
@@ -9,7 +10,7 @@ import { ParsedDelegationArtifact, FormatToolName } from '@memberjunction/realti
  * (mirrors `MJAIAgentSessionEntity.CloseReason`). `null` means the session is still open OR a
  * legacy row was closed before the column existed.
  */
-export type RealtimeReviewCloseReason = 'Error' | 'Explicit' | 'Janitor' | 'Shutdown';
+export type RealtimeReviewCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 /**
  * One historical caption turn of a reviewed session (a persisted `MJ: Conversation Details` row).

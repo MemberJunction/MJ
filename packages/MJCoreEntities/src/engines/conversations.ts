@@ -2306,6 +2306,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ExtraFilter: `${pathFilter} AND Sequence < ${oldestSequence}`,
             OrderBy: 'Sequence DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple'
         }, contextUser);

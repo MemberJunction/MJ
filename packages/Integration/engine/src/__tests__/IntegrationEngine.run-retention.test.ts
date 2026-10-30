@@ -6,7 +6,7 @@
  * carry the FK. Two things are easy to get wrong and neither fails loudly: deleting in the wrong
  * order (FK violation, or orphaned details where the FK is not enforced), and treating "exactly
  * `keep` runs exist" as a backlog and deleting the oldest run it was supposed to keep. It counts the
- * rows it read, not TotalRowCount, which a `MaxRows: 1` read leaves at 0 or 1 (#6000).
+ * rows it read, not TotalRowCount.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
