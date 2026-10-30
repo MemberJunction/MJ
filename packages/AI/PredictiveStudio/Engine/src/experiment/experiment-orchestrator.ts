@@ -94,10 +94,21 @@ interface BudgetState {
   runs: number;
   /** USD every attempt so far spent. */
   computeCost: number;
-  /** Compute seconds every attempt so far spent. */
+  /** Compute seconds every settled attempt spent. */
   computeSeconds: number;
+  /**
+   * Compute seconds held by attempts still in flight: each attempt started under a seconds bound reserves the timeout
+   * it was handed until it settles, when the reservation is replaced by what it actually spent.
+   */
+  reservedSeconds: number;
   startedAtMs: number;
 }
+
+/**
+ * Whether an attempt may start, the timeout it is handed (null when the session has no seconds bound), and how it
+ * gives its reservation back when it settles.
+ */
+type SecondsClaim = { readonly Started: true; readonly TimeoutSeconds: number | null; readonly Release: () => void } | { readonly Started: false };
 
 /**
  * The deterministic experiment orchestrator. Stateless across calls; construct
@@ -131,7 +142,7 @@ export class ExperimentOrchestrator {
     const leaderboard: LeaderboardEntry[] = [];
     const modelsByIteration = new Map<string, MJMLModelEntity>();
     const remaining = [...plan.ProposedExperiments];
-    const budgetState: BudgetState = { runs: 0, computeCost: 0, computeSeconds: 0, startedAtMs: deps.clock.now() };
+    const budgetState: BudgetState = { runs: 0, computeCost: 0, computeSeconds: 0, reservedSeconds: 0, startedAtMs: deps.clock.now() };
 
     let stopReason: SessionStopReason = 'completed';
     let sequence = 0;
@@ -271,7 +282,10 @@ export class ExperimentOrchestrator {
    * Run a single wave: create + train its iterations with bounded concurrency,
    * link each run to its iteration, score the iteration, and fold results into
    * the leaderboard. Budget is re-checked per-iteration so the session pauses at
-   * the exact bound (no overrun).
+   * the bound. Under a compute-seconds bound each attempt reserves the seconds it is handed, so attempts in flight
+   * together never hold more than the bound; an attempt that finds every remaining second reserved waits for one to
+   * settle, and one that finds the bound spent never starts (its iteration stays `Pending`). A single attempt can
+   * still overrun the seconds it was handed by as much as the trainer overruns its own timeout.
    */
   private async runWave(
     wave: ProposedExperiment[],
@@ -298,14 +312,14 @@ export class ExperimentOrchestrator {
     // Fold each completed train into the leaderboard + budget IMMEDIATELY as it
     // finishes (not after the whole wave) so the `shouldStop` predicate below sees
     // up-to-date budget state and can halt further dispatch the instant a bound
-    // trips — no in-flight overrun (plan §8.4).
+    // trips; seconds in flight are bounded by the reservations.
     let stopReason: SessionStopReason = 'completed';
     const foldOutcome = (outcome: IterationOutcome): void => {
       if (outcome.model) {
         modelsByIteration.set(outcome.iterationId, outcome.model);
       }
       // Every attempt counts against the budget: a failed one, and a completed one whether or not its holdout measured
-      // the success metric. A failed attempt spends the compute seconds its trainer reported.
+      // the success metric. A failed attempt spends the compute its run recorded.
       budgetState.runs += 1;
       budgetState.computeCost += outcome.computeCost;
       budgetState.computeSeconds += outcome.computeSeconds;
@@ -318,16 +332,54 @@ export class ExperimentOrchestrator {
       }
     };
 
-    const tasks = created.map(({ iteration, experiment }) => async () => {
-      const outcome = await this.trainIteration(iteration, experiment, plan, session, deps, budget, budgetState);
-      foldOutcome(outcome);
-      return outcome;
+    const inFlight = new Set<Promise<void>>();
+    const tasks = created.map(({ iteration, experiment }) => async (): Promise<void> => {
+      const claim = await this.claimSeconds(budget, budgetState, inFlight);
+      if (claim.Started === false) return;
+      try {
+        foldOutcome(await this.trainIteration(iteration, experiment, plan, session, deps, claim.TimeoutSeconds));
+      } finally {
+        // Released in the same turn the actual spend is folded, before any waiting attempt looks again.
+        claim.Release();
+      }
     });
 
     // Stop pulling new iterations the moment a budget bound has tripped — workers
     // consult this before claiming their next task, so no extra train is dispatched.
     await RunBounded(tasks, concurrency, { shouldStop: () => stopReason !== 'completed' });
     return { stopReason };
+  }
+
+  /**
+   * Claim compute seconds for one attempt: every second neither spent nor reserved by an attempt in flight, reserved
+   * for this one. When none is left but attempts are in flight, wait for one to settle and look again; when none is
+   * left and nothing is in flight, the bound is spent and the attempt does not start. Without a seconds bound every
+   * attempt starts with no timeout.
+   */
+  private async claimSeconds(budget: Budget, state: BudgetState, inFlight: Set<Promise<void>>): Promise<SecondsClaim> {
+    for (;;) {
+      const remaining = ExperimentBudget.RemainingComputeSeconds(budget, state.computeSeconds + state.reservedSeconds);
+      if (remaining === null || remaining > 0) return this.reserve(state, inFlight, remaining);
+      if (inFlight.size === 0) return { Started: false };
+      await Promise.race(inFlight);
+    }
+  }
+
+  /**
+   * Reserve `seconds` (none when null) and register the attempt as in flight, in the same turn as the claim's check, so
+   * an attempt claiming right after sees both.
+   */
+  private reserve(state: BudgetState, inFlight: Set<Promise<void>>, seconds: number | null): SecondsClaim {
+    let settle: () => void = () => undefined;
+    const settled = new Promise<void>((resolve) => { settle = resolve; });
+    inFlight.add(settled);
+    state.reservedSeconds += seconds ?? 0;
+    const release = (): void => {
+      state.reservedSeconds -= seconds ?? 0;
+      inFlight.delete(settled);
+      settle();
+    };
+    return { Started: true, TimeoutSeconds: seconds, Release: release };
   }
 
   /** Create a `Pending` iteration row for an experiment, then mark it `Running`. */
@@ -351,10 +403,10 @@ export class ExperimentOrchestrator {
   }
 
   /**
-   * Train one iteration: mark it `Running`, call the trainer with the compute seconds the session has left as its
-   * timeout, link the run to the iteration, set the normalized Score + costs, and mark it `Completed` (or `Failed`).
-   * Returns a small outcome record for leaderboard/budget folding; a failed attempt carries the compute seconds its
-   * trainer reported ({@link TrainingAttemptFailedError}), any other failure none.
+   * Train one iteration: mark it `Running`, call the trainer with the compute seconds claimed for it as its timeout,
+   * link the run to the iteration, set the normalized Score + costs, and mark it `Completed` (or `Failed`). Returns a
+   * small outcome record for leaderboard/budget folding; a failed attempt carries the seconds and USD its run recorded
+   * ({@link TrainingAttemptFailedError}), a failure before any run existed none.
    */
   private async trainIteration(
     iteration: MJExperimentSessionIterationEntity,
@@ -362,8 +414,7 @@ export class ExperimentOrchestrator {
     plan: ModelingPlanSpec,
     session: MJExperimentSessionEntity,
     deps: ExperimentDeps,
-    budget: Budget,
-    budgetState: BudgetState,
+    timeoutSeconds: number | null,
   ): Promise<IterationOutcome> {
     iteration.Status = 'Running';
     await this.saveOrThrow(iteration, 'mark iteration Running');
@@ -376,7 +427,7 @@ export class ExperimentOrchestrator {
         sessionId: session.ID,
         contextUser: deps.contextUser,
         provider: deps.provider,
-        timeoutSeconds: ExperimentBudget.RemainingComputeSeconds(budget, budgetState.computeSeconds),
+        timeoutSeconds,
       });
 
       const computeCost = result.ComputeCost ?? 0;
@@ -387,9 +438,10 @@ export class ExperimentOrchestrator {
       await this.saveOrThrow(iteration, 'finalize iteration');
       return { iterationId: iteration.ID, score: result.Score, computeCost, computeSeconds: result.ComputeSeconds ?? 0, model: result.model };
     } catch (err) {
+      const spent = err instanceof TrainingAttemptFailedError ? { Seconds: err.ComputeSeconds, Cost: err.ComputeCost } : { Seconds: 0, Cost: 0 };
+      iteration.ComputeCost = spent.Cost;
       await this.failIteration(iteration, err);
-      const computeSeconds = err instanceof TrainingAttemptFailedError ? err.ComputeSeconds : 0;
-      return { iterationId: iteration.ID, score: null, computeCost: 0, computeSeconds, model: null };
+      return { iterationId: iteration.ID, score: null, computeCost: spent.Cost, computeSeconds: spent.Seconds, model: null };
     }
   }
 

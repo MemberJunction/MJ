@@ -113,6 +113,7 @@ function succeeded(score: number, klass?: string): RecordResult {
     score,
     class: klass,
     scoredAt: '2026-10-23T00:00:00.000Z',
+    inTraining: false,
   };
   return { Status: 'Succeeded', ResultPayload: payload };
 }

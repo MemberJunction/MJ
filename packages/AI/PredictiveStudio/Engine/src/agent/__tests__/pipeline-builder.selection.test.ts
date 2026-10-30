@@ -12,6 +12,7 @@ import { TrainingDelegation } from '../../operations/delegation';
 import type { TrainModelInput, TrainModelResult } from '../../training/types';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 const source = (file: string): string => readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
 
@@ -181,12 +182,14 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
   });
 
   it('refuses a plan with a bad experiment before any row is written, whichever branch it would take', async () => {
+    const errors = ConsoleCapture.Errors();
     const world = new BuildWorld();
     const calls = spyTraining(world, { ID: RUN_ID } as unknown as MJMLTrainingRunEntity);
     const spec = plan(['A', 'glm']);
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec, provider: world.Provider(), user, autoPublish: false });
     expect(result.errorMessage).toBe("Experiment label 'glm' is reserved for a baseline member; rename the experiment.");
     expect([world.Saves.length, calls.length]).toEqual([0, 0]);
+    expect(ConsoleCapture.Lines(errors)).toEqual(["PredictiveStudioPipelineBuilder.build failed: Experiment label 'glm' is reserved for a baseline member; rename the experiment."]);
   });
 
   it('runs one search over every approved experiment on a unit pipeline and ranks on the stored inner-fold means, the finalist the winner', async () => {

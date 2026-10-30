@@ -21,8 +21,9 @@ export interface Budget {
   /** Max total compute cost the session may spend, in USD. */
   MaxComputeCost?: number;
   /**
-   * Max total compute seconds the session's training attempts may spend, failed attempts included. Set from the bound
-   * Evaluation Protocol's `budgets.maxComputeSeconds`; a plan's `ProposedBudget` does not carry it.
+   * Max total compute seconds the session's training attempts may spend, failed attempts included. Set by a caller's
+   * budget override or by the bound Evaluation Protocol's `budgets.maxComputeSeconds` (the smaller wins); a plan's
+   * `ProposedBudget` does not carry it.
    */
   MaxComputeSeconds?: number;
   /** Max number of training runs/iterations the session may execute. */

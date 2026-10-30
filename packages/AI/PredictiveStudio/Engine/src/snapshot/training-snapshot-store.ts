@@ -17,6 +17,8 @@ export interface ITrainingSnapshotStore {
   LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null>;
   /** The training run with this ID, or null. */
   LoadRun(id: string): Promise<MJMLTrainingRunEntity | null>;
+  /** The training run hung off this Experiment Session Iteration, or null when none was written. */
+  FindRunForIteration(iterationId: string): Promise<MJMLTrainingRunEntity | null>;
 }
 
 /** Reads through the request's provider (never the global one), as the request's user. A failed read throws. */
@@ -41,6 +43,11 @@ export class RunViewTrainingSnapshotStore implements ITrainingSnapshotStore {
 
   public async LoadRun(id: string): Promise<MJMLTrainingRunEntity | null> {
     return this.first<MJMLTrainingRunEntity>('MJ: ML Training Runs', `ID='${EscapeSQLString(id)}'`, false);
+  }
+
+  /** Read past the cache: the run was written moments ago by the attempt that just failed. */
+  public async FindRunForIteration(iterationId: string): Promise<MJMLTrainingRunEntity | null> {
+    return this.first<MJMLTrainingRunEntity>('MJ: ML Training Runs', `ExperimentSessionIterationID='${EscapeSQLString(iterationId)}'`, true);
   }
 
   private async first<T extends MJTrainingSnapshotEntity | MJMLTrainingRunEntity>(entityName: string, filter: string, bypassCache: boolean): Promise<T | null> {

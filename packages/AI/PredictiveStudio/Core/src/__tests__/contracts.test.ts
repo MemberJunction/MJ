@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MetricDirections } from '../index';
+import { MetricDirections, ValidateBudget } from '../index';
 import type {
   TrainRequest,
   PredictResponse,
@@ -112,5 +112,14 @@ describe('predictive-studio-core contracts', () => {
     expect(plan.TargetDefinition.AsOfStrategy?.Mode).toBe('offset');
     expect(plan.ValidationStrategy.K).toBe(5);
     expect(plan.ProposedExperiments[0].AlgorithmName).toBe('xgboost');
+  });
+});
+
+describe('ValidateBudget', () => {
+  it('carries a compute-seconds bound through validation and refuses a non-positive one', () => {
+    const budget = { MaxRuns: 4, MaxComputeCost: 2.5, MaxWallclockMinutes: 30, MaxComputeSeconds: 120 };
+    expect(ValidateBudget(budget)).toEqual({ ok: true, value: budget });
+    expect(ValidateBudget(JSON.parse(JSON.stringify(budget)))).toEqual({ ok: true, value: budget });
+    expect(ValidateBudget({ MaxComputeSeconds: 0 })).toMatchObject({ ok: false, error: expect.stringContaining('MaxComputeSeconds') });
   });
 });

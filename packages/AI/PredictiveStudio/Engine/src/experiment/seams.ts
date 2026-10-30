@@ -11,6 +11,7 @@
  */
 
 import {
+  LogError,
   Metadata,
   type BaseEntity,
   type UserInfo,
@@ -18,8 +19,10 @@ import {
 } from '@memberjunction/core';
 import { JsonParse, MetricDirections } from '@memberjunction/predictive-studio-core';
 
-import { TrainingEngine, TrainingRefusedError } from '../training';
+import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import { TrainingEngine } from '../training';
 import type { TrainingDeps, TrainModelInput, TrainModelResult } from '../training';
+import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import { TrainingAttemptFailedError } from './budget';
 import type {
   IClock,
@@ -108,7 +111,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
    * The session's remaining compute seconds become the run's timeout (the engine takes the smaller of them and the
    * protocol's compute budget); a session with no seconds bound leaves the protocol's.
    *
-   * @throws TrainingAttemptFailedError when the trainer stopped (`trainer-failed`), carrying the compute seconds it spent
+   * @throws TrainingAttemptFailedError when the attempt failed after its run row existed, carrying the run's compute
    */
   public async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
     const pipelineId = await this.pipelineResolver.resolvePipelineId(input);
@@ -116,7 +119,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       pipelineId,
       experimentSessionIterationId: input.iterationId,
       ...(input.timeoutSeconds === null ? {} : { timeoutSeconds: input.timeoutSeconds }),
-    });
+    }, input.iterationId);
     return {
       model,
       run,
@@ -130,25 +133,34 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
   }
 
   /**
-   * Train through the engine. A run the trainer stopped is refused `trainer-failed`, and the refusal the engine throws is
-   * the one it stores on the run; it becomes a {@link TrainingAttemptFailedError} carrying that refusal's compute seconds,
-   * so the session charges the failed attempt what it spent. Every other error passes through unchanged.
+   * Train through the engine. When the attempt fails after its run row was written (a refusal at any stage after the
+   * run exists, or any other error), the run already recorded the compute it spent; the failure becomes a
+   * {@link TrainingAttemptFailedError} carrying that run's seconds and USD (the engine's error as its `cause`, its
+   * message unchanged), so the session charges the failed attempt what it spent. A failure before any run row exists
+   * spent nothing and passes through unchanged.
    */
-  private async trainPipeline(trainInput: TrainModelInput): Promise<TrainModelResult> {
+  private async trainPipeline(trainInput: TrainModelInput, iterationId: string): Promise<TrainModelResult> {
     try {
       return await this.engine.trainModel(trainInput, this.trainingDeps);
     } catch (err) {
-      const spent = TrainingEngineExperimentTrainer.failedTrainerSeconds(err);
-      if (spent !== null && err instanceof Error) throw new TrainingAttemptFailedError(err.message, spent);
-      throw err;
+      const run = await this.failedAttemptRun(iterationId);
+      if (run === null || !(err instanceof Error)) throw err;
+      throw new TrainingAttemptFailedError(err.message, run.ComputeSeconds ?? 0, run.ComputeCost ?? 0, err);
     }
   }
 
-  /** The compute seconds of a `trainer-failed` refusal, or null for any other error (`unknown`: a caught value has no narrower type). */
-  private static failedTrainerSeconds(err: unknown): number | null {
-    if (!(err instanceof TrainingRefusedError)) return null;
-    const refusal = err.Refusal;
-    return refusal.stage === 'trainer' && refusal.reason.kind === 'trainer-failed' ? refusal.reason.computeSeconds : null;
+  /**
+   * The run the failed attempt wrote, read through the training deps' run reader, or null when it wrote none. A failed
+   * read is logged and treated as no run, so it never masks the attempt's own error.
+   */
+  private async failedAttemptRun(iterationId: string): Promise<MJMLTrainingRunEntity | null> {
+    const runs = this.trainingDeps.snapshots || new RunViewTrainingSnapshotStore(this.trainingDeps.provider, this.trainingDeps.contextUser);
+    try {
+      return await runs.FindRunForIteration(iterationId);
+    } catch (readErr) {
+      LogError(`TrainingEngineExperimentTrainer: reading the run of failed iteration ${iterationId} failed: ${readErr instanceof Error ? readErr.message : String(readErr)}`);
+      return null;
+    }
   }
 }
 

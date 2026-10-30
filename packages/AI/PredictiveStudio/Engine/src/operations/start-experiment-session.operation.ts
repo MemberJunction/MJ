@@ -24,8 +24,8 @@ import {
 } from '@memberjunction/core-entities';
 import {
   ExperimentSessions,
-  validateModelingPlanSpec,
-  validateBudget,
+  ValidateModelingPlanSpec,
+  ValidateBudget,
   type ModelingPlanSpec,
   type Budget,
 } from '@memberjunction/predictive-studio-core';
@@ -108,7 +108,7 @@ export class PredictiveStudioStartExperimentSessionServerOperation extends Predi
     if (!rawPlan) {
       throw new Error('planSpec is required (the approved modeling plan to execute)');
     }
-    const validation = validateModelingPlanSpec(rawPlan);
+    const validation = ValidateModelingPlanSpec(rawPlan);
     if (!validation.ok) {
       const error = (validation as { error?: string }).error ?? 'unknown validation error';
       throw new Error(`planSpec is not a valid modeling plan: ${error}`);
@@ -151,7 +151,7 @@ export class PredictiveStudioStartExperimentSessionServerOperation extends Predi
     if (!raw) {
       return undefined;
     }
-    const validation = validateBudget(raw);
+    const validation = ValidateBudget(raw);
     return validation.ok ? validation.value : undefined;
   }
 }

@@ -5,6 +5,7 @@
  * the `ProtocolRowFixture` protocol. No live database, no live sidecar.
  */
 import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
@@ -399,6 +400,10 @@ export class FakeTrainingSnapshotStore implements ITrainingSnapshotStore {
   }
   public async LoadRun(id: string): Promise<MJMLTrainingRunEntity | null> {
     const found = this.factory.Runs.find((r) => r.ID === id);
+    return found ? (found as unknown as MJMLTrainingRunEntity) : null;
+  }
+  public async FindRunForIteration(iterationId: string): Promise<MJMLTrainingRunEntity | null> {
+    const found = this.factory.Runs.find((r) => r.ExperimentSessionIterationID !== null && UUIDsEqual(r.ExperimentSessionIterationID, iterationId));
     return found ? (found as unknown as MJMLTrainingRunEntity) : null;
   }
 }

@@ -9,9 +9,10 @@
  * exits 0 after saying so.
  *
  * Usage (from the repo root, against the database the harness resolves):
- *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-experiment-budget-check.ts <pipelineId> <algorithmName>…
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-experiment-budget-check.ts [--concurrency=<n>] <pipelineId> <algorithmName>…
  *
- * One approved experiment is proposed per algorithm name, in the order given.
+ * One approved experiment is proposed per algorithm name, in the order given. `--concurrency` sets how many attempts
+ * may run at once (default 1).
  *
  * Exit code: 0 = ran or refused (both printed), 2 = no pipeline ID or algorithm given, 1 = any other error.
  */
@@ -78,9 +79,12 @@ function planFor(pipeline: MJMLTrainingPipelineEntity, algorithmNames: readonly 
 
 /** Runs the session over the pipeline named on the command line and prints what happened. */
 async function main(): Promise<void> {
-  const [pipelineId, ...algorithmNames] = process.argv.slice(2);
-  if (!pipelineId || algorithmNames.length === 0) {
-    console.error('usage: ps-experiment-budget-check.ts <pipelineId> <algorithmName>…');
+  const args = process.argv.slice(2);
+  const concurrencyArg = args.find((a) => a.startsWith('--concurrency='));
+  const concurrency = concurrencyArg ? Number(concurrencyArg.slice('--concurrency='.length)) : 1;
+  const [pipelineId, ...algorithmNames] = args.filter((a) => a !== concurrencyArg);
+  if (!pipelineId || algorithmNames.length === 0 || !Number.isInteger(concurrency) || concurrency < 1) {
+    console.error('usage: ps-experiment-budget-check.ts [--concurrency=<n>] <pipelineId> <algorithmName>…');
     process.exit(2);
   }
   if (process.env.PS_INTEGRATION !== '1') {
@@ -99,7 +103,7 @@ async function main(): Promise<void> {
       contextUser: user,
       provider,
     };
-    const result = await new ExperimentOrchestrator().runSession(planFor(pipeline, algorithmNames), deps, { concurrency: 1, protocolBudgets });
+    const result = await new ExperimentOrchestrator().runSession(planFor(pipeline, algorithmNames), deps, { concurrency, protocolBudgets });
     console.log(JSON.stringify({
       sessionId: result.session.ID, status: result.session.Status, stopReason: result.stopReason, budget: result.session.Budget,
       iterations: result.iterations.map((it) => ({ label: it.Label, status: it.Status, score: it.Score })),

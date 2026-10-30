@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
 import { TRAINING_RUN_RESULTS_SCHEMA, type MetricWithInterval, type StoredTrainerResult, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import {
-  HarnessCleanup, RunRecords, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
+  HarnessCleanup, RunRecords, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
   type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
 } from '../cleanup';
 
@@ -20,7 +20,8 @@ const U3 = '11111111-0000-0000-0000-000000000003'; // its Version 3
 const TS1 = '22222222-0000-0000-0000-000000000001'; // the snapshot RUN-1 trained on
 const TS2 = '22222222-0000-0000-0000-000000000002'; // a snapshot of P1 no remaining run references
 const fileOf = (snapshot: string, n: number): string => `${snapshot}-file-${n}`; // each snapshot's three file IDs
-const EP1 = '33333333-0000-0000-0000-000000000001'; // an Evaluation Protocol the run saved
+const EP1 = '33333333-0000-0000-0000-000000000001'; // an Evaluation Protocol the run saved (a lineage root, Version 1)
+const EP2 = '33333333-0000-0000-0000-000000000002'; // its Version 2, which references EP1 as its lineage root
 const TF_GLM = '44444444-0000-0000-0000-000000000001'; // a trainer run's member artifact file (not a model's)
 const RUN_UUID = '55555555-0000-0000-0000-000000000001';
 
@@ -86,6 +87,12 @@ class FakeStore implements CleanupStore {
     this.Filters.push(`MJ: Prediction Units | ${filter}`);
     return [{ ...this.row('MJ: Prediction Units', U1), Version: 1 }, { ...this.row('MJ: Prediction Units', U3), Version: 3 }, { ...this.row('MJ: Prediction Units', U2), Version: 2 }];
   }
+  public async EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]> {
+    this.Filters.push(`MJ: Evaluation Protocols | ${filter}`);
+    const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
+    return ids.map((id) => ({ ...this.row('MJ: Evaluation Protocols', id), Version: versionOf[id] ?? 1 }));
+  }
   public async RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]> {
     this.Filters.push(`MJ: Record Processes | ${filter}`);
     const process = (id: string, modelId: string): CleanupRecordProcessRow => ({ ...this.row('MJ: Record Processes', id), Configuration: JSON.stringify({ modelId: modelId.toUpperCase() }) });
@@ -117,7 +124,6 @@ class FakeStore implements CleanupStore {
     if (entityName === 'MJ: Process Run Details') return [this.row(entityName, 'DETAIL-1')];
     if (entityName === 'MJ: Record Process Watermarks') return [];
     if (entityName === 'MJ: Files') return [...filter.matchAll(/'([^']+)'/g)].map((m) => this.row(entityName, m[1]));
-    if (entityName === 'MJ: Evaluation Protocols') return [this.row(entityName, EP1)];
     return [this.row(entityName, 'BINDING-1')];
   }
 }
@@ -243,6 +249,16 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const at = (entry: string): number => store.Deleted.indexOf(entry);
     expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: Evaluation Protocols:${EP1}`));
     expect(at(`MJ: Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: Prediction Units:${U1}`));
+    expect(records.EvaluationProtocolIDs.Size).toBe(0);
+  });
+
+  it('deletes a recorded protocol lineage newest Version first, so the lineage root goes last', async () => {
+    const records = new RunRecords();
+    records.RecordEvaluationProtocol(EP1);
+    records.RecordEvaluationProtocol(EP2);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted.filter((d) => d.startsWith('MJ: Evaluation Protocols'))).toEqual([`MJ: Evaluation Protocols:${EP2}`, `MJ: Evaluation Protocols:${EP1}`]);
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
   });
 

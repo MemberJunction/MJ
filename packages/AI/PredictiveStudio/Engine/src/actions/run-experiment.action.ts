@@ -27,7 +27,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import type { Budget, PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
-import { validateModelingPlanSpec, validateBudget, ExperimentSessions } from '@memberjunction/predictive-studio-core';
+import { ValidateModelingPlanSpec, ValidateBudget, ExperimentSessions } from '@memberjunction/predictive-studio-core';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
@@ -64,7 +64,7 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
       // discriminated-union return type does NOT narrow on `validation.ok`. We
       // therefore read the failure detail off the concrete failure shape rather
       // than relying on control-flow narrowing of the union member.
-      const validation = validateModelingPlanSpec(rawPlan);
+      const validation = ValidateModelingPlanSpec(rawPlan);
       if (!validation.ok) {
         const error = (validation as { error?: string }).error ?? 'unknown validation error';
         return this.fail('VALIDATION_ERROR', `PlanSpec is not a valid modeling plan: ${error}`);
@@ -121,7 +121,7 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
     if (!raw) {
       return undefined;
     }
-    const validation = validateBudget(raw);
+    const validation = ValidateBudget(raw);
     return validation.ok ? validation.value : undefined;
   }
 

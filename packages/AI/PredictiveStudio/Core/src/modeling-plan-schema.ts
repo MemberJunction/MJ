@@ -13,12 +13,13 @@
 import { z } from 'zod';
 import type { Budget, ModelingPlanSpec } from './modeling-plan-spec';
 
-/** zod schema for {@link Budget} — every bound optional, each a non-negative number. */
+/** zod schema for {@link Budget} — every bound optional, each a non-negative number (a compute-seconds bound positive). */
 export const BudgetSchema = z
   .object({
     MaxComputeCost: z.number().nonnegative().optional(),
     MaxRuns: z.number().int().nonnegative().optional(),
     MaxWallclockMinutes: z.number().nonnegative().optional(),
+    MaxComputeSeconds: z.number().positive().optional(),
   })
   .strip();
 
@@ -75,11 +76,6 @@ export function ValidateModelingPlanSpec(raw: unknown): PlanValidationResult {
   return { ok: false, error: formatZodError(parsed.error) };
 }
 
-/** @deprecated Use {@link ValidateModelingPlanSpec}. */
-export function validateModelingPlanSpec(raw: unknown): PlanValidationResult {
-  return ValidateModelingPlanSpec(raw);
-}
-
 /**
  * Validate an untrusted value as a {@link Budget}. Returns the typed budget or a
  * flattened error string.
@@ -87,14 +83,9 @@ export function validateModelingPlanSpec(raw: unknown): PlanValidationResult {
 export function ValidateBudget(raw: unknown): { ok: true; value: Budget } | { ok: false; error: string } {
   const parsed = BudgetSchema.safeParse(raw);
   if (parsed.success) {
-    return { ok: true, value: parsed.data as Budget };
+    return { ok: true, value: parsed.data };
   }
   return { ok: false, error: formatZodError(parsed.error) };
-}
-
-/** @deprecated Use {@link ValidateBudget}. */
-export function validateBudget(raw: unknown): { ok: true; value: Budget } | { ok: false; error: string } {
-  return ValidateBudget(raw);
 }
 
 /** Flatten a ZodError into a single `path: message; …` string. */

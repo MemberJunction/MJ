@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { UserInfo, BaseEntity } from '@memberjunction/core';
-import type { ModelingPlanSpec, LeaderboardEntry } from '@memberjunction/predictive-studio-core';
+import type { ModelingPlanSpec, LeaderboardEntry, TrainerCompleted, TrainerRequest } from '@memberjunction/predictive-studio-core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { ExperimentOrchestrator } from '../experiment-orchestrator';
@@ -24,6 +24,7 @@ import { FakeEvaluationProtocolStore, FakeTrainer as FakeProtocolTrainer, Traini
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { TrainingRefusedError } from '../../training/training-refusal';
 
 /**
  * Unit tests for the ExperimentOrchestrator. NO live DB, NO live sidecar, NO
@@ -289,6 +290,31 @@ function plan(experiments: ProposedExperiment[], budget: ModelingPlanSpec['Propo
 
 function deps(factory: FakeFactory, trainer: IExperimentTrainer, clock: FakeClock, strategist?: IWaveStrategist): ExperimentDeps {
   return { entityFactory: factory, trainer, clock, waveStrategist: strategist };
+}
+
+/**
+ * A trainer that runs concurrently with its siblings (it yields before finishing) and spends the seconds it is handed,
+ * or a fixed number of seconds; it records the timeouts, the total spent and the most attempts in flight at once.
+ */
+class TimeoutSpendingTrainer implements IExperimentTrainer {
+  public readonly Timeouts: Array<number | null> = [];
+  public SpentSeconds = 0;
+  public MaxConcurrent = 0;
+  private inFlight = 0;
+  constructor(private readonly fixedSeconds: number | null = null) {}
+
+  async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
+    this.Timeouts.push(input.timeoutSeconds);
+    this.inFlight++;
+    this.MaxConcurrent = Math.max(this.MaxConcurrent, this.inFlight);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    this.inFlight--;
+    const seconds = this.fixedSeconds ?? input.timeoutSeconds ?? 0;
+    this.SpentSeconds += seconds;
+    const run = new FakeRun();
+    run.ComputeSeconds = seconds;
+    return { model: new FakeModel() as unknown as MJMLModelEntity, run: run as unknown as MJMLTrainingRunEntity, Score: 0.5, ComputeCost: 0, ComputeSeconds: seconds, TokensUsed: 0 };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -655,7 +681,7 @@ describe('ExperimentOrchestrator.runSession', () => {
       public readonly Calls: TrainExperimentInput[] = [];
       async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
         this.Calls.push(input);
-        throw new TrainingAttemptFailedError('sidecar timeout', 6);
+        throw new TrainingAttemptFailedError('sidecar timeout', 6, 0);
       }
     }
     const trainer = new SpendingFailTrainer();
@@ -681,6 +707,66 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.stopReason).toBe('budget-maxRuns');
     expect(JSON.parse(result.session.Budget!)).toEqual({ MaxRuns: 3, MaxComputeCost: 1000, MaxComputeSeconds: 600 });
   });
+
+  it('stops when the seconds spent equal the bound exactly', async () => {
+    const trainer = new FakeTrainer({ A: 0.9, B: 0.8, C: 0.7 }, undefined, 0, 0, new Set(), 5);
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(new FakeFactory(), trainer, new FakeClock()),
+      { concurrency: 1, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    expect(trainer.Calls.map((c) => c.timeoutSeconds)).toEqual([10, 5]);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it('never hands attempts in flight more seconds than the bound (concurrency 3, each attempt spends its whole timeout)', async () => {
+    const factory = new FakeFactory();
+    const trainer = new TimeoutSpendingTrainer();
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 3, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    // The first attempt reserves every second of the bound; the other two find it spent once it settles and never start.
+    expect(trainer.Timeouts).toEqual([10]);
+    expect(trainer.SpentSeconds).toBe(10);
+    expect(trainer.MaxConcurrent).toBe(1);
+    expect(factory.Iterations.map((it) => it.Status)).toEqual(['Completed', 'Pending', 'Pending']);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it('starts a waiting attempt with the seconds a settled attempt left unspent (concurrency 3)', async () => {
+    const trainer = new TimeoutSpendingTrainer(4);
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
+      deps(new FakeFactory(), trainer, new FakeClock()),
+      { concurrency: 3, protocolBudgets: { maxComputeSeconds: 10, maxTokens: 0, maxCandidates: 50, hardStop: true } },
+    );
+    // Spent never exceeds the bound by more than the last attempt's own spend (4 s): 12 <= 10 + 4.
+    expect(trainer.Timeouts).toEqual([10, 6, 2]);
+    expect(trainer.SpentSeconds).toBe(12);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
+
+  it("charges a failed attempt's USD against MaxComputeCost", async () => {
+    class UsdFailTrainer implements IExperimentTrainer {
+      public readonly Calls: TrainExperimentInput[] = [];
+      async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
+        this.Calls.push(input);
+        throw new TrainingAttemptFailedError('lineage gap', 0, 3);
+      }
+    }
+    const factory = new FakeFactory();
+    const trainer = new UsdFailTrainer();
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)], { MaxComputeCost: 5 }),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1 },
+    );
+    expect(trainer.Calls.length).toBe(2);
+    expect(factory.Iterations.slice(0, 2).map((it) => [it.Status, it.ComputeCost])).toEqual([['Failed', 3], ['Failed', 3]]);
+    expect(result.stopReason).toBe('budget-maxComputeCost');
+  });
 });
 
 describe('ExperimentBudget', () => {
@@ -705,29 +791,64 @@ describe('ExperimentBudget', () => {
 });
 
 describe('TrainingEngineExperimentTrainer', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   /** A unit pipeline bound to the fixture protocol (600 compute seconds) over the unit-years world, with the trainer answering `answer`. */
-  function unitTrainer(answer: ConstructorParameters<typeof FakeProtocolTrainer>[0]): { trainer: TrainingEngineExperimentTrainer; protocolTrainer: FakeProtocolTrainer } {
+  function unitTrainer(answer: ConstructorParameters<typeof FakeProtocolTrainer>[0], pipelineProtocolID: string | null = ProtocolRowFixture.ID): { trainer: TrainingEngineExperimentTrainer; protocolTrainer: FakeProtocolTrainer; runs: ReturnType<typeof TrainingHarness.ForUnit>['runs'] } {
     const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
     const protocolTrainer = new FakeProtocolTrainer(answer);
     harness.deps.trainer = protocolTrainer;
+    harness.pipeline.EvaluationProtocolID = pipelineProtocolID;
     const resolver = { resolvePipelineId: async (): Promise<string> => harness.pipeline.ID };
-    return { trainer: new TrainingEngineExperimentTrainer(harness.deps, resolver, harness.engine), protocolTrainer };
+    return { trainer: new TrainingEngineExperimentTrainer(harness.deps, resolver, harness.engine), protocolTrainer, runs: harness.runs };
   }
 
   function input(timeoutSeconds: number | null): TrainExperimentInput {
     return { experiment: experiment('A', 1), plan: plan([experiment('A', 1)]), iterationId: 'iter-1', sessionId: 'sess-1', timeoutSeconds };
   }
 
-  it('hands the trainer the seconds the session has left and charges a failed run the seconds its stored refusal carries', async () => {
-    const { trainer, protocolTrainer } = unitTrainer((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
+  function canned(r: TrainerRequest): TrainerCompleted {
+    return TrainerResultFixtures.CannedCompleted(r.trainingRunId, ProtocolRowFixture.Spec(), r.snapshot.featureSchemaHash);
+  }
+
+  it("hands the trainer the seconds the session has left and charges a stopped trainer the seconds and USD its run recorded", async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.01');
+    const { trainer, protocolTrainer, runs } = unitTrainer((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
     const attempt = trainer.train(input(90));
     await expect(attempt).rejects.toBeInstanceOf(TrainingAttemptFailedError);
-    await expect(attempt).rejects.toMatchObject({ ComputeSeconds: 3.25, message: expect.stringContaining('Refused (trainer-failed)') });
+    await expect(attempt).rejects.toMatchObject({ ComputeSeconds: 3.25, ComputeCost: 0.0325, message: expect.stringContaining('Refused (trainer-failed)'), cause: expect.any(TrainingRefusedError) });
     expect(protocolTrainer.Requests.map((r) => r.timeoutSeconds)).toEqual([90]);
+    expect([runs[0].ComputeSeconds, runs[0].ComputeCost]).toEqual([3.25, 0.0325]);
+  });
+
+  it('charges a run refused after the trainer answered (lineage-incomplete, selection-invalid) the compute it recorded', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.01');
+    const lineageGap = unitTrainer((r) => { const c = canned(r); return { ...c, codeVersion: { ...c.codeVersion, threads: 0 } }; });
+    await expect(lineageGap.trainer.train(input(null))).rejects.toMatchObject({
+      name: 'TrainingAttemptFailedError', ComputeSeconds: 12.5, ComputeCost: 0.125, message: expect.stringContaining('lineage-incomplete'),
+    });
+    const pruned = unitTrainer((r) => {
+      const c = canned(r);
+      return { ...c, innerScores: [...c.innerScores, { candidate: 'rf', inner: TrainerResultFixtures.Mwi('log-loss', 0.5, 0.48, 0.52, 3668), folds: 5, optimistic: true }] };
+    });
+    await expect(pruned.trainer.train(input(null))).rejects.toMatchObject({
+      name: 'TrainingAttemptFailedError', ComputeSeconds: 12.5, ComputeCost: 0.125, message: expect.stringContaining('selection-invalid'),
+    });
+  });
+
+  it('passes a refusal from before any run row existed through unchanged (protocol-required)', async () => {
+    const { trainer, protocolTrainer, runs } = unitTrainer((r) => canned(r), null);
+    const attempt = trainer.train(input(90));
+    await expect(attempt).rejects.toBeInstanceOf(TrainingRefusedError);
+    await expect(attempt).rejects.not.toBeInstanceOf(TrainingAttemptFailedError);
+    await expect(attempt).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required' } } });
+    expect([runs.length, protocolTrainer.Requests.length]).toEqual([0, 0]);
   });
 
   it("leaves the protocol's timeout when the session has no seconds bound, and reports the run's compute seconds", async () => {
-    const { trainer, protocolTrainer } = unitTrainer((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, ProtocolRowFixture.Spec(), r.snapshot.featureSchemaHash));
+    const { trainer, protocolTrainer } = unitTrainer((r) => canned(r));
     const result = await trainer.train(input(null));
     expect(protocolTrainer.Requests.map((r) => r.timeoutSeconds)).toEqual([600]);
     expect(result.ComputeSeconds).toBe(result.run.ComputeSeconds);

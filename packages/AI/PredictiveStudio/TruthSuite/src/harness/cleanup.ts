@@ -1,7 +1,7 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
-  MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity, MJRecordProcessEntity,
-  MJTrainingSnapshotEntity,
+  MJEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity,
+  MJRecordProcessEntity, MJTrainingSnapshotEntity,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
@@ -110,6 +110,9 @@ export type CleanupRecordProcessRow = CleanupRow & Pick<MJRecordProcessEntity, '
 /** A Prediction Unit row: a cleanup row with its version (later versions are deleted before their lineage root). */
 export type CleanupPredictionUnitRow = CleanupRow & Pick<MJPredictionUnitEntity, 'Version'>;
 
+/** An Evaluation Protocol row: a cleanup row with its version (later versions are deleted before their lineage root). */
+export type CleanupEvaluationProtocolRow = CleanupRow & Pick<MJEvaluationProtocolEntity, 'Version'>;
+
 /** A training run row: a cleanup row with the Training Snapshot it trained on and its stored results (which name the trainer's artifact files). */
 export type CleanupTrainingRunRow = CleanupRow & Pick<MJMLTrainingRunEntity, 'TrainingSnapshotID' | 'ValidationResults'>;
 
@@ -123,6 +126,7 @@ export type CleanupFileRow = CleanupRow & Pick<MJFileEntity, 'ProviderID' | 'Pro
 export interface CleanupStore {
   Models(filter: string): Promise<CleanupModelRow[]>;
   PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]>;
+  EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]>;
   RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]>;
   TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]>;
   TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]>;
@@ -139,6 +143,7 @@ export class HarnessCleanup {
     return {
       Models: (filter) => HarnessCleanup.load<MJMLModelEntity>(provider, user, 'MJ: ML Models', filter),
       PredictionUnits: (filter) => HarnessCleanup.load<MJPredictionUnitEntity>(provider, user, 'MJ: Prediction Units', filter),
+      EvaluationProtocols: (filter) => HarnessCleanup.load<MJEvaluationProtocolEntity>(provider, user, 'MJ: Evaluation Protocols', filter),
       RecordProcesses: (filter) => HarnessCleanup.load<MJRecordProcessEntity>(provider, user, 'MJ: Record Processes', filter),
       TrainingRuns: (filter) => HarnessCleanup.load<MJMLTrainingRunEntity>(provider, user, 'MJ: ML Training Runs', filter),
       TrainingSnapshots: (filter) => HarnessCleanup.load<MJTrainingSnapshotEntity>(provider, user, 'MJ: Training Snapshots', filter),
@@ -185,7 +190,6 @@ export class HarnessCleanup {
     const fileFilter = HarnessCleanup.anyIn([['ID', new UUIDSet([...modelFileIds, ...trainerFiles.flatMap((t) => t.FileIDs)])]]);
     const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
-    const protocolFilter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs]]);
     const failures = [
       ...trainerFiles.flatMap((t) => (t.Failure === null ? [] : [t.Failure])),
       ...(await HarnessCleanup.deleteAll('MJ: ML Model Scoring Bindings', bindings)),
@@ -198,7 +202,7 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteSnapshots(store, snapshots)),
       ...(await HarnessCleanup.deleteAll('MJ: Files', files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', pipelines, (id) => records.PipelineIDs.Delete(id))),
-      ...(protocolFilter ? await HarnessCleanup.deleteAll('MJ: Evaluation Protocols', await store.Rows('MJ: Evaluation Protocols', protocolFilter), (id) => records.EvaluationProtocolIDs.Delete(id)) : []),
+      ...(await HarnessCleanup.deleteEvaluationProtocols(store, records)),
       ...(await HarnessCleanup.deletePredictionUnits(store, records)),
     ];
     return failures;
@@ -277,11 +281,22 @@ export class HarnessCleanup {
   private static async deletePredictionUnits(store: CleanupStore, records: RunRecords): Promise<string[]> {
     const filter = HarnessCleanup.anyIn([['ID', records.PredictionUnitIDs]]);
     const units = filter ? await store.PredictionUnits(filter) : [];
-    const versions = [...new Set(units.map((u) => u.Version))].sort((a, b) => b - a);
+    return HarnessCleanup.deleteNewestVersionFirst('MJ: Prediction Units', units, (id) => records.PredictionUnitIDs.Delete(id));
+  }
+
+  /** The recorded Evaluation Protocol versions, newest first: every later version references its lineage root (version 1). */
+  private static async deleteEvaluationProtocols(store: CleanupStore, records: RunRecords): Promise<string[]> {
+    const filter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs]]);
+    const protocols = filter ? await store.EvaluationProtocols(filter) : [];
+    return HarnessCleanup.deleteNewestVersionFirst('MJ: Evaluation Protocols', protocols, (id) => records.EvaluationProtocolIDs.Delete(id));
+  }
+
+  /** Delete versioned rows one Version at a time, highest first, so no row is deleted while a later version references it. */
+  private static async deleteNewestVersionFirst(entityName: string, rows: ReadonlyArray<CleanupRow & { readonly Version: number }>, onDeleted: (id: string) => void): Promise<string[]> {
+    const versions = [...new Set(rows.map((r) => r.Version))].sort((a, b) => b - a);
     const failures: string[] = [];
     for (const v of versions) {
-      const stage = units.filter((u) => u.Version === v);
-      failures.push(...(await HarnessCleanup.deleteAll('MJ: Prediction Units', stage, (id) => records.PredictionUnitIDs.Delete(id))));
+      failures.push(...(await HarnessCleanup.deleteAll(entityName, rows.filter((r) => r.Version === v), onDeleted)));
     }
     return failures;
   }

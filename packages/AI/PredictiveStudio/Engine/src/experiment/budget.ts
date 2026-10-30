@@ -13,16 +13,18 @@ import type { IEvaluationProtocolStore } from '../training/evaluation-protocol-s
 import { TrainingRefusedError } from '../training/training-refusal';
 
 /**
- * A training attempt that failed after spending compute: the trainer stopped (the run's stored `trainer-failed`
- * refusal), and the seconds it ran still count against the session's compute budget.
+ * A training attempt that failed after its run row existed: the compute the run recorded (seconds and USD) still counts
+ * against the session's budget. The engine's error is kept as `cause`.
  */
 export class TrainingAttemptFailedError extends Error {
   /**
-   * @param message why the attempt failed
-   * @param ComputeSeconds the compute seconds the failed attempt spent
+   * @param message why the attempt failed (the engine's message)
+   * @param ComputeSeconds the compute seconds the failed attempt's run recorded
+   * @param ComputeCost the USD the failed attempt's run recorded
+   * @param cause the engine's error
    */
-  constructor(message: string, public readonly ComputeSeconds: number) {
-    super(message);
+  constructor(message: string, public readonly ComputeSeconds: number, public readonly ComputeCost: number, cause?: Error) {
+    super(message, cause === undefined ? undefined : { cause });
     this.name = 'TrainingAttemptFailedError';
   }
 }

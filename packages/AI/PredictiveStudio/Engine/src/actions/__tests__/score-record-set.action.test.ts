@@ -324,7 +324,7 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
     return { EntityID: 'e1', RecordID: id };
   }
   function payload(score: number, klass?: string): MLInferenceResultPayload {
-    return { modelId: 'm1', target: 'Churned', problemType: 'classification', score, class: klass, scoredAt: '2026-10-23T00:00:00.000Z' };
+    return { modelId: 'm1', target: 'Churned', problemType: 'classification', score, class: klass, scoredAt: '2026-10-23T00:00:00.000Z', inTraining: false };
   }
   function baseRequest(): ScoreRecordSetRequest {
     return { modelId: 'm1', scope: { records: [] }, provider: SUMMARY_PROVIDER };

@@ -360,8 +360,11 @@ export class MLSidecar {
 
   /**
    * Run one protocol-driven training by POSTing a {@link TrainerRequest} to `/trainer`. The transport timeout is the
-   * request's own `timeoutSeconds` plus a 60 s margin: the sidecar stops itself at `timeoutSeconds` and answers
-   * `failed` at stage `timeout`, so the client only times out when the sidecar process is gone or wedged. The answer
+   * request's own `timeoutSeconds` plus a 60 s margin. The sidecar checks `timeoutSeconds` between steps (snapshot
+   * load, leakage audit, each inner-CV fold, the finalist refit, baselines and the holdout) and answers `failed` at stage
+   * `timeout` at the first check past it; a step already running is not interrupted, so one fit can run past the
+   * timeout. The client only times out when the sidecar process is gone or wedged, or a single step overruns the
+   * margin. The answer
    * is checked against the contract before it is returned, never cast.
    * @throws {SidecarError} when the sidecar refuses the request (4xx) or fails (5xx)
    * @throws {TrainerResultMalformedError} when a 2xx answer is not a {@link TrainerResult}
