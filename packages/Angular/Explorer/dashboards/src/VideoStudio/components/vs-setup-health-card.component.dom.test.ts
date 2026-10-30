@@ -142,12 +142,25 @@ describe('VSSetupHealthCardComponent DOM', () => {
     const recheckSpy = vi.fn();
     fixture.componentInstance.Recheck.subscribe(recheckSpy);
 
-    const recheckBtn = query(fixture, '[data-testid="vs-setup-health-recheck"]');
+    const recheckBtn = query(fixture, '[data-testid="vs-setup-health-recheck"] button');
     expect(recheckBtn).toBeTruthy();
     recheckBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(recheckSpy).toHaveBeenCalledTimes(1);
 
+    fixture.destroy();
+  });
+
+  it('renders <mj-loading> when Loading is true and Result is null', () => {
+    const fixture = renderComponentFixture(VSSetupHealthCardComponent, {
+      inputs: {
+        Result: null,
+        Loading: true,
+      },
+    });
+    fixture.detectChanges();
+
+    expect(query(fixture, '[data-testid="vs-setup-health-loading"] mj-loading')).toBeTruthy();
     fixture.destroy();
   });
 });

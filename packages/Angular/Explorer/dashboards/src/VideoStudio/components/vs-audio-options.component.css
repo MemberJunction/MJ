@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.vs-audio-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2-5);
+}
+
+.vs-audio-options__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-3);
+}
+
+.vs-audio-options__label {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+
+.vs-audio-options__captions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1-5);
+}
+
+.vs-audio-options__sublabel {
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-secondary);
+}
+
+.vs-audio-options__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-1-5);
+}

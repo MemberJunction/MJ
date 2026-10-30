@@ -25,6 +25,11 @@ import {
   ConversationsModule,
 } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import {
+  VSProductionBriefComponent,
+  VSProductionBriefStartEvent,
+  VSProductionBriefStateSnapshot,
+} from './vs-production-brief.component';
 
 /** Canonical AI agent name for the Video Studio orchestrator. */
 export const VIDEO_STUDIO_AGENT_NAME = 'Video Studio';
@@ -40,17 +45,14 @@ export interface VSCopilotConversationCreatedEvent {
 }
 
 /**
- * Shared Video Studio copilot panel wrapping `<mj-conversation-chat-area>` pinned
- * to the `'Video Studio'` orchestrator agent.
- *
- * Used by:
- * - `VideoStudioStudioResourceComponent` (always-present right pane in Studio)
- * - `VideoStudioProductionsResourceComponent` (docked Iterate pane for an existing production)
+ * Shared Video Studio slide-in panel wrapping `<mj-conversation-chat-area>` pinned
+ * to the `'Video Studio'` orchestrator agent, with `<vs-production-brief>` projected
+ * into the `emptyState` slot before the first message.
  */
 @Component({
   standalone: true,
   selector: 'vs-copilot-panel, mj-vs-copilot-panel',
-  imports: [CommonModule, ConversationsModule, SharedGenericModule],
+  imports: [CommonModule, ConversationsModule, SharedGenericModule, VSProductionBriefComponent],
   templateUrl: './vs-copilot-panel.component.html',
   styleUrls: ['./vs-copilot-panel.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -76,7 +78,7 @@ export class VSCopilotPanelComponent
   @Input() PendingArtifactId: string | null = null;
   @Input() PendingArtifactVersionNumber: number | null = null;
   @Input() AppContext: Record<string, unknown> | null = null;
-  @Input() HeaderTitle = 'Video Studio Copilot';
+  @Input() HeaderTitle = 'Video Studio';
   @Input() ShowCloseButton = false;
 
   @Output() ConversationCreated = new EventEmitter<VSCopilotConversationCreatedEvent>();
@@ -84,21 +86,53 @@ export class VSCopilotPanelComponent
   @Output() PendingArtifactConsumed = new EventEmitter<void>();
   @Output() NavigationRequest = new EventEmitter<NavigationRequest>();
   @Output() CloseRequested = new EventEmitter<void>();
+  @Output() BriefStateChange = new EventEmitter<VSProductionBriefStateSnapshot>();
+  @Output() BriefStartRequested = new EventEmitter<VSProductionBriefStartEvent>();
 
   @ViewChild('chatArea')
   private chatArea?: Pick<ConversationChatAreaComponent, 'OnEmptyStateMessageSent'>;
+
+  @ViewChild('briefComponent')
+  public BriefComponent?: VSProductionBriefComponent;
 
   public VideoStudioAgentId: string | null = null;
   public IsResolvingAgent = true;
   public AgentMissing = false;
   public ActiveConversation: MJConversationEntity | null = null;
   public ChatIsNewConversation = true;
+  public IsStartingBrief = false;
+  public BriefStartError: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
     this.syncConversationMode();
     await this.ResolveVideoStudioAgent();
+  }
+
+  public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
+    this.AppContext = snapshot.AppContext;
+    this.BriefStateChange.emit(snapshot);
+    this.cdr.markForCheck();
+  }
+
+  public async OnBriefStartRequested(event: VSProductionBriefStartEvent): Promise<void> {
+    this.IsStartingBrief = true;
+    this.BriefStartError = null;
+    this.AppContext = event.AppContext;
+    this.PendingMessage = event.Message;
+    this.BriefStartRequested.emit(event);
+    this.cdr.detectChanges();
+
+    try {
+      const started = await this.StartConversation(event.Message);
+      if (!started) {
+        this.BriefStartError = "Video Studio isn't ready yet.";
+      }
+    } finally {
+      this.IsStartingBrief = false;
+      this.cdr.markForCheck();
+    }
   }
 
   /**

@@ -1,10 +1,9 @@
 /**
  * @fileoverview Pure helpers for the Video Studio app's AI-agent integration
- * across all four resource surfaces:
- *   1. Productions (`VideoStudioProductionsResource`)
- *   2. Studio (`VideoStudioStudioResource`)
- *   3. Brand Kits (`VideoStudioBrandKitsResource`)
- *   4. Archetypes (`VideoStudioArchetypesResource`)
+ * across all three resource surfaces:
+ *   1. Productions (`VideoStudioProductionsResource`) + right-side slide-in Production Brief (`VSProductionBriefComponent`)
+ *   2. Brand Kits (`VideoStudioBrandKitsResource`)
+ *   3. Archetypes (`VideoStudioArchetypesResource`)
  *
  * These functions are intentionally free of Angular / DOM dependencies so they
  * can be unit-tested in Node via Vitest. Each Video Studio resource component
@@ -12,18 +11,18 @@
  * into the key-value `AgentContext` object published via
  * `this.navigationService.SetAgentContext(this, ...)`.
  *
- * 🚨 SAFETY BOUNDARY (READ / NAVIGATE / FILTER / SEARCH / REFRESH + STUDIO FORM-FILL):
+ * 🚨 SAFETY BOUNDARY (READ / NAVIGATE / FILTER / SEARCH / REFRESH + STUDIO BRIEF FORM-FILL):
  * Productions, Brand Kits, and Archetypes expose ONLY read, filter, search,
  * select/open-for-viewing, and refresh operations to the AI agent — never create,
- * edit, clone, share, upload, policy, or delete tools. Studio additionally exposes
- * four reversible in-memory form-fill tools (`SelectStudioArchetype`,
+ * edit, clone, share, upload, policy, or delete tools. Productions additionally exposes
+ * four reversible in-memory brief form-fill tools (`SelectStudioArchetype`,
  * `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`) while deliberately
  * excluding `StartProduction`:
  * - Productions: no create/delete production, no share/permission grant (`ArtifactShareModal`
- *   is user-confirm-only), no storyboard/render mutation.
- * - Studio: form-fill tools only (`SelectStudioArchetype`, `SelectStudioBrandKit`,
- *   `SetStudioFormats`, `SetStudioTopic`). `StartProduction` spends model/render tokens
- *   and creates a conversation, so it stays human-triggered in the UI.
+ *   is user-confirm-only), no storyboard/render mutation. Brief form-fill tools only
+ *   (`SelectStudioArchetype`, `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`);
+ *   `StartProduction` spends model/render tokens and creates a conversation, so it stays
+ *   human-triggered in the UI.
  * - Brand Kits: `OpenBrandKit` opens the `MJ: Brand Kits` entity form for viewing via
  *   `NavigationService.OpenEntityRecord`; no create, save, delete, or asset/policy write
  *   tool is exposed.
@@ -582,6 +581,7 @@ export interface ArchetypeCardSnapshot extends NamedVideoStudioItem {
     DefaultFormats: string;
     BeatCount: number;
     BeatLabels: readonly string[];
+    BeatItems?: readonly { Key: string; Label: string; Seconds: number; Detail?: string }[];
 }
 
 /**
@@ -901,73 +901,4 @@ export function BuildStudioAppContext(
     };
 }
 
-/**
- * Input snapshot used by {@link BuildStudioAgentContext}.
- */
-export interface StudioAgentContextInput {
-    AllArchetypes: readonly NamedVideoStudioItem[];
-    AllBrandKits: readonly NamedVideoStudioItem[];
-    SelectedArchetype: ArchetypeCardSnapshot | null;
-    SelectedBrandKit: BrandKitCardSnapshot | null;
-    SelectedFormats: readonly string[];
-    DurationSeconds: number;
-    Topic: string;
-    SelectedQueries: readonly StudioSavedQueryItem[];
-    ActiveConversationId: string | null;
-    IsLoading: boolean;
-}
-
-/**
- * Build the bounded, read-only agent context object for the Studio surface.
- */
-export function BuildStudioAgentContext(
-    input: StudioAgentContextInput,
-): Record<string, unknown> {
-    const archetypeNames = input.AllArchetypes.map((a) => a.Name);
-    const brandKitNames = input.AllBrandKits.map((b) => b.Name);
-    const queryNames = input.SelectedQueries.map((q) => q.Name);
-
-    const cappedArchetypes = CapVideoStudioNames(archetypeNames);
-    const cappedBrandKits = CapVideoStudioNames(brandKitNames);
-    const cappedQueries = CapVideoStudioNames(queryNames);
-
-    const trimmedTopic = (input.Topic ?? '').trim();
-    const canStart = trimmedTopic.length > 0 && input.SelectedArchetype !== null;
-
-    const context: Record<string, unknown> = {
-        Surface: 'VideoStudioStudio',
-        TotalArchetypeCount: input.AllArchetypes.length,
-        TotalBrandKitCount: input.AllBrandKits.length,
-        SelectedArchetypeId: input.SelectedArchetype?.ID ?? null,
-        SelectedArchetypeName: input.SelectedArchetype?.Name ?? null,
-        SelectedBrandKitId: input.SelectedBrandKit?.ID ?? null,
-        SelectedBrandKitName: input.SelectedBrandKit?.Name ?? null,
-        SelectedFormats: [...input.SelectedFormats],
-        DurationSeconds: input.DurationSeconds,
-        MinDurationSeconds: input.SelectedArchetype?.MinDurationSeconds ?? 5,
-        MaxDurationSeconds: input.SelectedArchetype?.MaxDurationSeconds ?? 180,
-        Topic: trimmedTopic,
-        HasTopic: trimmedTopic.length > 0,
-        CanStartProduction: canStart,
-        SelectedQueryIds: input.SelectedQueries.map((q) => q.ID),
-        SelectedQueryNames: cappedQueries,
-        AvailableArchetypeNames: cappedArchetypes,
-        AvailableBrandKitNames: cappedBrandKits,
-        AvailableFormats: [...STUDIO_VIDEO_FORMATS],
-        ActiveConversationId: input.ActiveConversationId,
-        IsLoading: input.IsLoading,
-    };
-
-    if (archetypeNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
-        context['AvailableArchetypeCount'] = archetypeNames.length;
-    }
-    if (brandKitNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
-        context['AvailableBrandKitCount'] = brandKitNames.length;
-    }
-    if (queryNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
-        context['SelectedQueryCount'] = queryNames.length;
-    }
-
-    return context;
-}
 

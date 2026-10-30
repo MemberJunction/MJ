@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import {
   Component,
+  Directive,
   EventEmitter,
   Input,
   Output,
@@ -49,6 +50,14 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 
 import { VSCopilotPanelComponent } from './vs-copilot-panel.component';
 
+@Directive({
+  standalone: true,
+  selector: '[mjChatSlot]',
+})
+class ChatSlotStubDirective {
+  @Input() mjChatSlot = '';
+}
+
 @Component({
   standalone: true,
   selector: 'mj-conversation-chat-area',
@@ -92,7 +101,9 @@ class ConversationChatAreaStubComponent {
   template: '',
 })
 class LoadingStubComponent {
+  @Input() Text = '';
   @Input() text = '';
+  @Input() Size = 'medium';
   @Input() size = 'medium';
 }
 
@@ -111,12 +122,22 @@ describe('VSCopilotPanelComponent DOM tests', () => {
 
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
-      imports: [VSCopilotPanelComponent, ConversationChatAreaStubComponent, LoadingStubComponent],
+      imports: [
+        VSCopilotPanelComponent,
+        ConversationChatAreaStubComponent,
+        LoadingStubComponent,
+        ChatSlotStubDirective,
+      ],
       providers: [provideZonelessChangeDetection()],
     })
       .overrideComponent(VSCopilotPanelComponent, {
         set: {
-          imports: [CommonModule, ConversationChatAreaStubComponent, LoadingStubComponent],
+          imports: [
+            CommonModule,
+            ConversationChatAreaStubComponent,
+            LoadingStubComponent,
+            ChatSlotStubDirective,
+          ],
         },
       })
       .compileComponents();

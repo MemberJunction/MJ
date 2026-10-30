@@ -9,8 +9,8 @@
         type="button"
         class="vs-copilot-panel__close-btn"
         data-testid="vs-copilot-close-button"
-        title="Close copilot"
-        aria-label="Close copilot"
+        title="Close Video Studio"
+        aria-label="Close Video Studio"
         (click)="OnCloseClick()"
       >
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -21,7 +21,7 @@
   <div class="vs-copilot-panel__body">
     @if (IsResolvingAgent) {
       <div class="vs-copilot-panel__loading" data-testid="vs-copilot-loading">
-        <mj-loading text="Connecting to Video Studio..." size="small"></mj-loading>
+        <mj-loading Text="Connecting to Video Studio..." Size="small"></mj-loading>
       </div>
     } @else if (AgentMissing || !VideoStudioAgentId) {
       <div
@@ -58,7 +58,18 @@
         (PendingMessageConsumed)="OnPendingMessageConsumed()"
         (PendingArtifactConsumed)="OnPendingArtifactConsumed()"
         (navigationRequest)="OnNavigationRequest($event)"
-      ></mj-conversation-chat-area>
+      >
+        <ng-template mjChatSlot="emptyState">
+          <vs-production-brief
+            #briefComponent
+            [Provider]="ProviderToUse"
+            [IsStarting]="IsStartingBrief"
+            [StartError]="BriefStartError"
+            (StateChange)="OnBriefStateChange($event)"
+            (StartRequested)="OnBriefStartRequested($event)"
+          ></vs-production-brief>
+        </ng-template>
+      </mj-conversation-chat-area>
     } @else {
       <div
         class="vs-copilot-panel__missing"
@@ -71,3 +82,4 @@
     }
   </div>
 </aside>
+

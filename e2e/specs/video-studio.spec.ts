@@ -230,8 +230,10 @@ test.describe('Video Studio — Right-Side Copilot Slide-In & Iterate (VS-UX-2)'
     const slideInDrawer = page.getByTestId('productions-copilot-slidein');
     await expect(slideInDrawer).toBeVisible({ timeout: 30_000 });
 
-    // Verify optional voiceover narration toggle in the slide-in options bar
-    const narrationToggle = slideInDrawer.getByTestId('copilot-narration-toggle');
+    // Verify optional voiceover narration toggle inside the guided production brief
+    const narrationToggle = slideInDrawer
+      .getByTestId('vs-audio-voiceover-switch')
+      .getByRole('switch');
     await expect(narrationToggle).toBeVisible();
     await expect(narrationToggle).toHaveAttribute('aria-checked', 'true');
     await narrationToggle.click();
@@ -259,8 +261,8 @@ test.describe('Video Studio — Right-Side Copilot Slide-In & Iterate (VS-UX-2)'
       copilotPanel.locator('mj-artifact-viewer-panel').first(),
     ).toBeVisible({ timeout: 60_000 });
 
-    // Close the new-production slide-in and verify the production card + Iterate
-    await openSlideInBtn.click();
+    // Close the slide-in via its header close button and verify the production card + Iterate
+    await copilotPanel.getByTestId('vs-copilot-close-btn').click();
     await expect(slideInDrawer).toBeHidden();
 
     const firstProductionCard = page.locator('[data-testid^="production-card-"]').first();
@@ -275,9 +277,8 @@ test.describe('Video Studio — Right-Side Copilot Slide-In & Iterate (VS-UX-2)'
     await expect(iterateBtn).toBeEnabled({ timeout: 30_000 });
     await iterateBtn.click();
 
-    const dockedCopilot = detailPane.getByTestId('production-iterate-copilot');
-    await expect(dockedCopilot).toBeVisible({ timeout: 30_000 });
-    const dockedChatArea = dockedCopilot.getByTestId('vs-copilot-chat-area');
+    await expect(slideInDrawer).toBeVisible({ timeout: 30_000 });
+    const dockedChatArea = slideInDrawer.getByTestId('vs-copilot-chat-area');
     await expect(dockedChatArea).toBeVisible({
       timeout: 30_000,
     });

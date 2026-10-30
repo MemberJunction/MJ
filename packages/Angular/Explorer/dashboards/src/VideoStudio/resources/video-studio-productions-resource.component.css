@@ -283,16 +283,6 @@
   overflow: hidden;
 }
 
-.vs-production-detail-copilot {
-  display: flex;
-  flex-direction: column;
-  width: 380px;
-  max-width: 50%;
-  min-height: 0;
-  min-width: 280px;
-  overflow: hidden;
-}
-
 .vs-productions-shell {
   position: relative;
   display: flex;
@@ -356,76 +346,7 @@
   flex-shrink: 0;
   background: var(--mj-bg-surface);
   border-left: 1px solid var(--mj-border-default);
-  box-shadow: var(--mj-shadow-lg, -4px 0 16px rgba(0, 0, 0, 0.08));
-}
-
-.vs-copilot-slidein__options {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--mj-bg-surface-sunken);
-  border-bottom: 1px solid var(--mj-border-subtle);
-  flex-shrink: 0;
-}
-
-.vs-copilot-option-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.vs-copilot-option-label {
-  font-size: var(--mj-text-xs, 11px);
-  font-weight: var(--mj-font-semibold, 600);
-  color: var(--mj-text-secondary);
-}
-
-.vs-copilot-narration-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--mj-radius-full, 9999px);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-secondary);
-  font-size: var(--mj-text-xs, 11px);
-  font-weight: var(--mj-font-semibold, 600);
-  cursor: pointer;
-  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
-}
-
-.vs-copilot-narration-toggle--active {
-  border-color: var(--mj-brand-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-card));
-  color: var(--mj-brand-primary);
-}
-
-.vs-copilot-captions-pills {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.vs-copilot-caption-pill {
-  padding: 3px 8px;
-  border-radius: var(--mj-radius-sm, 6px);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-secondary);
-  font-size: var(--mj-text-xs, 11px);
-  font-weight: var(--mj-font-medium, 500);
-  cursor: pointer;
-}
-
-.vs-copilot-caption-pill--active {
-  border-color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface-sunken);
-  color: var(--mj-brand-primary);
-  font-weight: var(--mj-font-semibold, 600);
+  box-shadow: var(--mj-shadow-lg);
 }
 
 .vs-copilot-slidein__body {
@@ -436,5 +357,6 @@
   min-width: 0;
   overflow: hidden;
 }
+
 
 

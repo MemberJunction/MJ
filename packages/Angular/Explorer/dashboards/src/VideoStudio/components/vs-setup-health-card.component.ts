@@ -11,7 +11,7 @@ import {
   VideoStudioSetupHealthCheckStatus,
   VideoStudioSetupHealthOutput,
 } from '@memberjunction/core-entities';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 /**
@@ -25,7 +25,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 @Component({
   standalone: true,
   selector: 'vs-setup-health-card, mj-vs-setup-health-card',
-  imports: [CommonModule, MJButtonDirective, SharedGenericModule],
+  imports: [CommonModule, MJRefreshButtonComponent, SharedGenericModule],
   templateUrl: './vs-setup-health-card.component.html',
   styleUrls: ['./vs-setup-health-card.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

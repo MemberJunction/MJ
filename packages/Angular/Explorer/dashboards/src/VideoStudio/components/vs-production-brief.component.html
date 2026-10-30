@@ -1,0 +1,228 @@
+<div class="vs-brief" data-testid="vs-production-brief">
+  <div class="vs-brief__scroll">
+    <!-- 1. Setup health -->
+    <section class="vs-brief__section" aria-label="Setup health">
+      <vs-setup-health-card
+        [Result]="SetupHealthResult"
+        [Loading]="IsCheckingSetupHealth"
+        (Recheck)="CheckSetupHealth()"
+      ></vs-setup-health-card>
+    </section>
+
+    <!-- 2. What's it about? -->
+    <section class="vs-brief__section">
+      <label class="vs-brief__heading" for="vs-brief-topic-input">
+        What's it about?
+      </label>
+      <textarea
+        id="vs-brief-topic-input"
+        class="vs-brief__textarea"
+        data-testid="vs-brief-topic-input"
+        rows="3"
+        placeholder="Describe the video topic, audience, and goal…"
+        [ngModel]="Topic"
+        (ngModelChange)="OnTopicChange($event)"
+      ></textarea>
+    </section>
+
+    <!-- 3. Shape -->
+    <section class="vs-brief__section" aria-labelledby="vs-brief-shape-heading">
+      <h3 class="vs-brief__heading" id="vs-brief-shape-heading">
+        Shape
+      </h3>
+      @if (IsLoading && AllArchetypes.length === 0) {
+        <div class="vs-brief__loading" data-testid="vs-brief-loading">
+          <mj-loading Text="Loading archetypes…" Size="small"></mj-loading>
+        </div>
+      } @else {
+        <div class="vs-brief__archetypes" role="group" aria-labelledby="vs-brief-shape-heading">
+          @for (arch of AllArchetypes; track arch.ID) {
+            <button
+              type="button"
+              class="vs-brief__archetype-card"
+              [class.vs-brief__archetype-card--selected]="IsArchetypeSelected(arch)"
+              [attr.aria-pressed]="IsArchetypeSelected(arch)"
+              [attr.data-testid]="'vs-brief-archetype-' + arch.ID"
+              (click)="SelectArchetype(arch)"
+            >
+              <div class="vs-brief__archetype-header">
+                <span class="vs-brief__archetype-name">{{ arch.Name }}</span>
+                <span class="vs-brief__archetype-time">
+                  {{ FormatTime(arch.DefaultDurationSeconds) }} ({{ FormatTimeRange(arch.MinDurationSeconds, arch.MaxDurationSeconds) }})
+                </span>
+              </div>
+              @if (arch.Description) {
+                <p class="vs-brief__archetype-desc">{{ arch.Description }}</p>
+              }
+              @if (GetArchetypeBeats(arch).length > 0) {
+                <mj-video-beat-strip
+                  [Beats]="GetArchetypeBeats(arch)"
+                  [ShowLabels]="true"
+                ></mj-video-beat-strip>
+              }
+            </button>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- 4. Where it plays -->
+    <section class="vs-brief__section" aria-labelledby="vs-brief-where-heading">
+      <h3 class="vs-brief__heading" id="vs-brief-where-heading">
+        Where it plays
+      </h3>
+      <div class="vs-brief__formats" role="group" aria-label="Output formats" data-testid="vs-brief-formats">
+        @for (fmt of AvailableFormats; track fmt) {
+          <button
+            type="button"
+            mjButton
+            Variant="outline"
+            Size="sm"
+            [Toggleable]="true"
+            [Selected]="IsFormatSelected(fmt)"
+            [attr.data-testid]="'vs-brief-format-' + fmt"
+            (click)="ToggleFormat(fmt)"
+          >
+            <mj-video-format-glyph
+              [Format]="fmt"
+              [ShowLabel]="true"
+              Size="sm"
+            ></mj-video-format-glyph>
+          </button>
+        }
+      </div>
+
+      <div class="vs-brief__field">
+        <label class="vs-brief__sublabel" for="vs-brief-duration-input">
+          Length ({{ FormatTimeRange(MinDurationSeconds, MaxDurationSeconds) }})
+        </label>
+        <div class="vs-brief__duration-row">
+          <mj-numeric-input
+            InputId="vs-brief-duration-input"
+            [AriaLabel]="'Length (' + FormatTimeRange(MinDurationSeconds, MaxDurationSeconds) + ')'"
+            data-testid="vs-brief-duration-input"
+            [Min]="MinDurationSeconds"
+            [Max]="MaxDurationSeconds"
+            [Step]="5"
+            [ngModel]="DurationSeconds"
+            (ngModelChange)="OnDurationChange($event)"
+          ></mj-numeric-input>
+          <span class="vs-brief__duration-value" data-testid="vs-brief-duration-formatted">
+            {{ FormatTime(DurationSeconds) }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Sound -->
+    <section class="vs-brief__section" aria-labelledby="vs-brief-sound-heading">
+      <h3 class="vs-brief__heading" id="vs-brief-sound-heading">
+        Sound
+      </h3>
+      <vs-audio-options
+        [NarrationEnabled]="NarrationEnabled"
+        (NarrationEnabledChange)="OnNarrationEnabledChange($event)"
+        [CaptionsMode]="CaptionsMode"
+        (CaptionsModeChange)="OnCaptionsModeChange($event)"
+      ></vs-audio-options>
+    </section>
+
+    <!-- 6. Brand kit (optional) -->
+    <section class="vs-brief__section" aria-labelledby="vs-brief-brand-heading">
+      <h3 class="vs-brief__heading" id="vs-brief-brand-heading">
+        Brand kit (optional)
+      </h3>
+      <div class="vs-brief__field-grid">
+        <div class="vs-brief__field">
+          <span class="vs-brief__sublabel" id="vs-brief-company-label">Company</span>
+          <mj-dropdown
+            AriaLabelledBy="vs-brief-company-label"
+            data-testid="vs-brief-company-select"
+            [Data]="CompanyDropdownOptions"
+            TextField="Name"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [ngModel]="SelectedCompanyId"
+            (ngModelChange)="OnCompanyFilterChange($event)"
+          ></mj-dropdown>
+        </div>
+
+        <div class="vs-brief__field">
+          <span class="vs-brief__sublabel" id="vs-brief-brand-kit-label">Brand kit</span>
+          <mj-dropdown
+            AriaLabelledBy="vs-brief-brand-kit-label"
+            data-testid="vs-brief-brand-kit-select"
+            Placeholder="None"
+            [Data]="BrandKitDropdownOptions"
+            TextField="DisplayName"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [ngModel]="SelectedBrandKit?.ID ?? ''"
+            (ngModelChange)="SelectBrandKitById($event || null)"
+          ></mj-dropdown>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Data (optional) -->
+    <section class="vs-brief__section" aria-labelledby="vs-brief-data-heading">
+      <h3 class="vs-brief__heading" id="vs-brief-data-heading">
+        Data (optional)
+      </h3>
+      <input
+        type="search"
+        class="vs-brief__search-input"
+        data-testid="vs-brief-query-search"
+        aria-label="Search saved queries"
+        placeholder="Filter saved queries by name…"
+        [ngModel]="QuerySearchText"
+        (ngModelChange)="SearchSavedQueries($event)"
+      />
+      @if (AvailableQueries.length > 0) {
+        <div class="vs-brief__queries" role="group" aria-label="Saved queries" data-testid="vs-brief-query-list">
+          @for (query of AvailableQueries; track query.ID) {
+            <button
+              type="button"
+              mjButton
+              Variant="outline"
+              Size="sm"
+              [Toggleable]="true"
+              [Selected]="IsQuerySelected(query.ID)"
+              [attr.data-testid]="'vs-brief-query-' + query.ID"
+              (click)="ToggleSavedQuery(query)"
+            >
+              <span>{{ query.Name }}</span>
+            </button>
+          }
+        </div>
+      }
+    </section>
+  </div>
+
+  <!-- 8. Sticky Start production footer -->
+  <footer class="vs-brief__footer" data-testid="vs-brief-footer">
+    <p
+      class="vs-brief__summary"
+      [class.vs-brief__summary--muted]="!CanStartProduction"
+      data-testid="vs-brief-summary"
+    >
+      {{ SummaryLine }}
+    </p>
+    @if (StartError) {
+      <p class="vs-brief__error" role="alert" data-testid="vs-brief-start-error">
+        {{ StartError }}
+      </p>
+    }
+    <button
+      type="button"
+      mjButton
+      Variant="primary"
+      class="vs-brief__start-btn"
+      data-testid="vs-brief-start-button"
+      [disabled]="!CanStartProduction"
+      (click)="OnStartClick()"
+    >
+      <span>{{ IsStarting ? 'Starting…' : 'Start production' }}</span>
+    </button>
+  </footer>
+</div>

@@ -10,7 +10,7 @@
   <div class="vs-health-card__bar">
     @if (Loading && !Result) {
       <div class="vs-health-card__summary" data-testid="vs-setup-health-loading">
-        <i class="fa-solid fa-spinner fa-spin vs-health-card__icon vs-health-card__icon--muted" aria-hidden="true"></i>
+        <mj-loading [ShowText]="false" Size="small"></mj-loading>
         <span class="vs-health-card__summary-text">Checking Video Studio setup…</span>
       </div>
     } @else if (IsHealthy) {
@@ -37,23 +37,16 @@
       </div>
     }
 
-    <button
-      mjButton
-      variant="flat"
-      size="sm"
-      type="button"
+    <mj-refresh-button
       class="vs-health-card__recheck"
       data-testid="vs-setup-health-recheck"
-      [disabled]="Loading"
-      (click)="OnRecheckClick()"
-    >
-      <i
-        class="fa-solid fa-rotate-right"
-        [class.fa-spin]="Loading"
-        aria-hidden="true"
-      ></i>
-      <span>Recheck</span>
-    </button>
+      Variant="flat"
+      Size="sm"
+      Label="Recheck"
+      Title="Recheck"
+      [Loading]="Loading"
+      (Clicked)="OnRecheckClick()"
+    ></mj-refresh-button>
   </div>
 
   @if (Result && NonOkChecks.length > 0) {

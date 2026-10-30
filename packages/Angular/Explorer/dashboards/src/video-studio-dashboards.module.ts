@@ -24,25 +24,24 @@ import {
   MJRefreshButtonComponent,
   MJStatBadgeComponent,
 } from '@memberjunction/ng-ui-components';
+import { VSAudioOptionsComponent } from './VideoStudio/components/vs-audio-options.component';
 import { VSCopilotPanelComponent } from './VideoStudio/components/vs-copilot-panel.component';
+import { VSProductionBriefComponent } from './VideoStudio/components/vs-production-brief.component';
 import { VSSetupHealthCardComponent } from './VideoStudio/components/vs-setup-health-card.component';
 import { VideoStudioArchetypesResourceComponent } from './VideoStudio/resources/video-studio-archetypes-resource.component';
 import { VideoStudioBrandKitsResourceComponent } from './VideoStudio/resources/video-studio-brand-kits-resource.component';
 import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources/video-studio-productions-resource.component';
-import { VideoStudioStudioResourceComponent } from './VideoStudio/resources/video-studio-studio-resource.component';
 
 /**
  * VideoStudioDashboardsModule — feature module providing the Video Studio
  * application resource components:
  * - `VideoStudioProductionsResourceComponent` (`VideoStudioProductionsResource`)
- * - `VideoStudioStudioResourceComponent` (`VideoStudioStudioResource`)
  * - `VideoStudioBrandKitsResourceComponent` (`VideoStudioBrandKitsResource`)
  * - `VideoStudioArchetypesResourceComponent` (`VideoStudioArchetypesResource`)
  */
 @NgModule({
   declarations: [
     VideoStudioProductionsResourceComponent,
-    VideoStudioStudioResourceComponent,
     VideoStudioBrandKitsResourceComponent,
     VideoStudioArchetypesResourceComponent,
   ],
@@ -53,6 +52,8 @@ import { VideoStudioStudioResourceComponent } from './VideoStudio/resources/vide
     ArtifactsModule,
     ArtifactShareModalComponent,
     ArtifactCollectionPickerModalComponent,
+    VSAudioOptionsComponent,
+    VSProductionBriefComponent,
     VSCopilotPanelComponent,
     VSSetupHealthCardComponent,
     MJAlertComponent,
@@ -73,9 +74,10 @@ import { VideoStudioStudioResourceComponent } from './VideoStudio/resources/vide
   ],
   exports: [
     VideoStudioProductionsResourceComponent,
-    VideoStudioStudioResourceComponent,
     VideoStudioBrandKitsResourceComponent,
     VideoStudioArchetypesResourceComponent,
+    VSAudioOptionsComponent,
+    VSProductionBriefComponent,
     VSCopilotPanelComponent,
     VSSetupHealthCardComponent,
   ],
@@ -84,11 +86,13 @@ export class VideoStudioDashboardsModule {}
 
 export {
   VideoStudioProductionsResourceComponent,
-  VideoStudioStudioResourceComponent,
   VideoStudioBrandKitsResourceComponent,
   VideoStudioArchetypesResourceComponent,
+  VSAudioOptionsComponent,
+  VSProductionBriefComponent,
   VSCopilotPanelComponent,
   VSSetupHealthCardComponent,
 };
+
 
 

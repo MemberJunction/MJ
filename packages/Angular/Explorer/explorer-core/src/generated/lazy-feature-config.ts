@@ -119,7 +119,7 @@ const loadNgDashboardsTestingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./video-studio-dashboards.module (4 entries) ---
+// --- @memberjunction/ng-dashboards → ./video-studio-dashboards.module (3 entries) ---
 const loadNgDashboardsVideoStudioDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/video-studio-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/video-studio-dashboards.module').then(() => {})
@@ -310,7 +310,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::VideoStudioArchetypesResource': loadNgDashboardsVideoStudioDashboardsModule,
   'BaseResourceComponent::VideoStudioBrandKitsResource': loadNgDashboardsVideoStudioDashboardsModule,
   'BaseResourceComponent::VideoStudioProductionsResource': loadNgDashboardsVideoStudioDashboardsModule,
-  'BaseResourceComponent::VideoStudioStudioResource': loadNgDashboardsVideoStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./work-queue-dashboards.module
   'BaseDashboard::WorkQueueDashboard': loadNgDashboardsWorkQueueDashboardsModule,
@@ -333,4 +332,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 133;
+export const LAZY_FEATURE_CONFIG_COUNT = 132;

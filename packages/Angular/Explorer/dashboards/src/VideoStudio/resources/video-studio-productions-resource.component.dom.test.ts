@@ -539,11 +539,12 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     iterateBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
-    expect(instance.IsIterating).toBe(true);
-    expect(instance.IteratePendingArtifactId).toBe('prod-iter-1');
-    expect(instance.IteratePendingArtifactVersionNumber).toBe(3);
-    const copilotEl = query(fixture, '[data-testid="production-iterate-copilot"]');
-    expect(copilotEl).not.toBeNull();
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(instance.SlideInConversationId).toBe('conv-777');
+    expect(instance.SlideInPendingArtifactId).toBe('prod-iter-1');
+    expect(instance.SlideInPendingArtifactVersionNumber).toBe(3);
+    expect(query(fixture, '[data-testid="production-iterate-copilot"]')).toBeNull();
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
 
     const copilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
     expect(copilotDebug).not.toBeNull();
@@ -551,6 +552,18 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     expect(copilotInstance.ConversationId).toBe('conv-777');
     expect(copilotInstance.PendingArtifactId).toBe('prod-iter-1');
     expect(copilotInstance.PendingArtifactVersionNumber).toBe(3);
+
+    // Clicking "New production" clears SlideInConversationId to null in the same slide-in and never changes its label
+    const newProdBtn = query(fixture, '[data-testid="productions-open-copilot-button"]');
+    expect(newProdBtn?.textContent?.trim()).toBe('New production');
+    newProdBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(newProdBtn?.textContent?.trim()).toBe('New production');
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(instance.SlideInConversationId).toBeNull();
+    expect(instance.SlideInPendingArtifactId).toBeNull();
+    expect(copilotInstance.ConversationId).toBeNull();
 
     fixture.destroy();
     vi.restoreAllMocks();
@@ -759,18 +772,18 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     const iterateBtn = query(fixture, '[data-testid="production-iterate-button"]');
     expect(iterateBtn).not.toBeNull();
     expect(iterateBtn!.hasAttribute('disabled')).toBe(true);
-    expect(iterateBtn!.getAttribute('title')).toBe('Made outside a conversation. Start a new production in Studio.');
+    expect(iterateBtn!.getAttribute('title')).toBe('Made outside a conversation. Start a new production in Video Studio.');
 
     iterateBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
-    expect(instance.IsIterating).toBe(false);
+    expect(instance.IsCopilotSlideInOpen).toBe(false);
     expect(query(fixture, '[data-testid="production-iterate-copilot"]')).toBeNull();
 
     fixture.destroy();
     vi.restoreAllMocks();
   });
 
-  it('opens the right-side ng-conversations slide-in panel pinned to Video Studio and toggles optional voiceover narration in CopilotAppContext', async () => {
+  it('opens the single right slide-in with New production (keeping its label unchanged) and registers the 4 Studio brief client tools that update brief state', async () => {
     const navStub = createNavigationServiceStub();
     const customProvider = createGraphQLProviderStub('user-1');
     const permStub = {
@@ -811,27 +824,43 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
 
     const openBtn = query(fixture, '[data-testid="productions-open-copilot-button"]');
     expect(openBtn).not.toBeNull();
+    expect(openBtn!.textContent?.trim()).toBe('New production');
     openBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
     expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(openBtn!.textContent?.trim()).toBe('New production');
     const slideIn = query(fixture, '[data-testid="productions-copilot-slidein"]');
     expect(slideIn).not.toBeNull();
+    expect(query(fixture, '[data-testid="copilot-audio-options"]')).toBeNull();
 
-    const narrationToggle = query(fixture, '[data-testid="copilot-narration-toggle"]');
-    expect(narrationToggle).not.toBeNull();
-    expect(narrationToggle!.getAttribute('aria-checked')).toBe('true');
-    expect((instance.CopilotAppContext['VideoStudio'] as Record<string, unknown>)['NarrationEnabled']).toBe(true);
+    // Verify the 4 Studio brief client tools are registered on Productions
+    expect(navStub.SetAgentClientTools).toHaveBeenCalled();
+    const registeredTools = navStub.SetAgentClientTools.mock.calls.at(-1)?.[1] as Array<{
+      Name: string;
+      Handler: (params: Record<string, unknown>) => Promise<{ Success: boolean; Message?: string; Data?: unknown }>;
+    }>;
+    const toolNames = registeredTools.map((t) => t.Name);
+    expect(toolNames).toContain('SelectStudioArchetype');
+    expect(toolNames).toContain('SelectStudioBrandKit');
+    expect(toolNames).toContain('SetStudioFormats');
+    expect(toolNames).toContain('SetStudioTopic');
 
-    narrationToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    fixture.detectChanges();
+    const setTopicTool = registeredTools.find((t) => t.Name === 'SetStudioTopic')!;
+    const topicResult = await setTopicTool.Handler({ topic: 'Q4 board highlights' });
+    expect(topicResult.Success).toBe(true);
 
-    expect(instance.NarrationEnabled).toBe(false);
-    expect(narrationToggle!.getAttribute('aria-checked')).toBe('false');
-    expect((instance.CopilotAppContext['VideoStudio'] as Record<string, unknown>)['NarrationEnabled']).toBe(false);
+    const setFormatsTool = registeredTools.find((t) => t.Name === 'SetStudioFormats')!;
+    const formatsResult = await setFormatsTool.Handler({ formats: ['16:9', '4:5'] });
+    expect(formatsResult.Success).toBe(true);
+    expect((instance.CopilotAppContext['VideoStudio'] as Record<string, unknown>)['Formats']).toEqual([
+      '16:9',
+      '4:5',
+    ]);
 
     fixture.destroy();
     vi.restoreAllMocks();
   });
 });
+
 
