@@ -288,21 +288,24 @@ export class ComponentRegistryAPIServer {
 
     // Auth middleware applies in both modes (if enabled)
     if (componentRegistrySettings?.requireAuth) {
+      const boundAuth = this.authMiddleware.bind(this);
       // In router mode, paths are relative to where router is mounted
       // In standalone mode, use full paths
       if (this.options.mode === 'router') {
-        // Apply auth to all /components routes relative to router mount point
-        target.use('/components', this.authMiddleware.bind(this));
+        // Apply auth to all /components and /feedback routes relative to router mount point
+        target.use('/components', boundAuth);
+        target.use('/feedback', boundAuth);
       } else {
-        // Apply auth to full path in standalone mode
-        target.use(`${this.options.basePath}/components`, this.authMiddleware.bind(this));
+        // Apply auth to full paths in standalone mode
+        target.use(`${this.options.basePath}/components`, boundAuth);
+        target.use(`${this.options.basePath}/feedback`, boundAuth);
       }
     }
   }
   
   /**
    * Authentication middleware that calls the checkAPIKey method.
-   * This middleware is automatically applied to /api/v1/components routes when requireAuth is true.
+   * This middleware is automatically applied to /components and /feedback routes when requireAuth is true.
    * 
    * @protected
    */
@@ -322,7 +325,8 @@ export class ComponentRegistryAPIServer {
   
   /**
    * Check if the API key in the request is valid.
-   * By default, this method always returns true (no authentication).
+   * By default, this method fails closed (returns `false`) and logs an error so enabling
+   * `requireAuth` without overriding `checkAPIKey` never silently admits unauthenticated callers.
    * 
    * Override this method to implement custom authentication logic.
    * Common patterns include:
@@ -349,9 +353,16 @@ export class ComponentRegistryAPIServer {
    * ```
    */
   protected async checkAPIKey(req: Request): Promise<boolean> {
-    // Default implementation: no authentication required
-    // Override this method in a subclass to implement custom authentication
-    return true;
+    // Fail closed: this base implementation validates nothing, so when requireAuth is on and no
+    // subclass has overridden this method, every request must be REFUSED rather than silently
+    // admitted. Returning true here would make `requireAuth: true` cosmetic — the registry would
+    // look protected while accepting any caller.
+    LogError(
+      'ComponentRegistryAPIServer.checkAPIKey: requireAuth is enabled but no checkAPIKey override is ' +
+      'registered — refusing the request. Subclass ComponentRegistryAPIServer and implement checkAPIKey ' +
+      'to validate your API keys.'
+    );
+    return false;
   }
   
   /**
@@ -441,7 +452,8 @@ export class ComponentRegistryAPIServer {
       const result = await rv.RunView({
         EntityName: 'MJ: Components',
         ExtraFilter: this.getComponentFilter(),
-        MaxRows: 1
+        // count_only: a MaxRows: 1 read skips the total count, so TotalRowCount would be 0 or 1
+        ResultType: 'count_only'
       });
       
       res.json({

@@ -239,6 +239,102 @@ const advancedGenerationFeatureSchema = z.object({
   options: advancedGenerationFeatureOptionSchema.array().nullish(),
 });
 
+/**
+ * Every feature name CodeGen reads through `AdvancedGeneration.featureEnabled()`. A configured
+ * feature whose name is not in this list does nothing; {@link FindUnknownAdvancedGenerationFeatures}
+ * reports such names so a typo or a retired name is not silently ignored (MJ issue #5822).
+ */
+export const KNOWN_ADVANCED_GENERATION_FEATURES: readonly string[] = [
+  'EntityNames',
+  'EntityDescriptions',
+  'EntityDisplayNames',
+  'SmartFieldIdentification',
+  'TransitiveJoinIntelligence',
+  'FormLayoutGeneration',
+  'ParseCheckConstraints',
+  'VirtualEntityFieldDecoration',
+];
+
+/**
+ * The default advanced-generation feature list, shared by the zod schema default and
+ * `DEFAULT_CODEGEN_CONFIG` so the two cannot drift apart.
+ */
+export const DEFAULT_ADVANCED_GENERATION_FEATURES: readonly Readonly<AdvancedGenerationFeature>[] = [
+  {
+    name: 'EntityNames',
+    description: 'Use AI to generate better entity names when creating new entities',
+    enabled: false,
+  },
+  {
+    name: 'EntityDescriptions',
+    description: 'Use AI to generate descriptions for entities, only used when creating new entities',
+    enabled: false,
+  },
+  {
+    name: 'EntityDisplayNames',
+    description:
+      "Use AI to improve Entity.DisplayName where the mechanical name conversion cannot — expanding schema abbreviations into readable names (ACCT_STAT_CD -> 'Account Status Codes'). By default only entities whose names still look opaque AFTER the deterministic conversion are sent to the LLM, so clean names like CustomerOrder cost nothing; set the 'alwaysGenerate' option to true to send every entity. Only writes where Entity.AutoUpdateDisplayName = 1. Every entity starts at 1 and editing DisplayName does not change it, so set it to 0 to freeze a display name an administrator has chosen. Like other entity-level features this runs for new and modified entities, or for all entities when forceRegeneration is enabled.",
+    enabled: false,
+    options: [
+      {
+        name: 'alwaysGenerate',
+        value: false,
+      },
+    ],
+  },
+  {
+    name: 'SmartFieldIdentification',
+    description:
+      'Use AI to determine the Name Field, Default In View fields, and Searchable fields for entities. This sets IsNameField, DefaultInView, and IncludeInUserSearchAPI properties on entity fields. Only applies when new entities/fields are created or when fields allow auto-update.',
+    enabled: true,
+  },
+  {
+    name: 'TransitiveJoinIntelligence',
+    description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
+    enabled: true,
+  },
+  {
+    name: 'FormLayoutGeneration',
+    description:
+      'Use AI to generate semantic field categories and layout for new entities, newly added fields, and fields whose upstream schema changes re-opened them for review.',
+    enabled: true,
+  },
+  {
+    name: 'ParseCheckConstraints',
+    description:
+      'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
+    enabled: true,
+  },
+  {
+    name: 'VirtualEntityFieldDecoration',
+    description:
+      'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
+    enabled: true,
+  },
+];
+
+/** A fresh, mutable copy of {@link DEFAULT_ADVANCED_GENERATION_FEATURES}, so no config object shares the constant's entries. */
+export function CopyDefaultAdvancedGenerationFeatures(): AdvancedGenerationFeature[] {
+  return DEFAULT_ADVANCED_GENERATION_FEATURES.map((f) => ({
+    ...f,
+    ...(f.options ? { options: f.options.map((o) => ({ ...o })) } : {}),
+  }));
+}
+
+/**
+ * Returns each configured feature name CodeGen does not read (see {@link KNOWN_ADVANCED_GENERATION_FEATURES}),
+ * once per name, in configured order.
+ */
+export function FindUnknownAdvancedGenerationFeatures(features: readonly AdvancedGenerationFeature[] | null | undefined): string[] {
+  const unknown = new Set<string>();
+  for (const f of features ?? []) {
+    if (!KNOWN_ADVANCED_GENERATION_FEATURES.includes(f.name)) {
+      unknown.add(f.name);
+    }
+  }
+  return Array.from(unknown);
+}
+
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
@@ -250,55 +346,49 @@ const advancedGenerationSchema = z.object({
   /** Number of entities to process in parallel during advanced generation (default: 5).
    *  Higher values speed up processing but increase concurrent LLM API calls. */
   batchSize: z.number().min(1).default(5),
+  /** Wall-clock ceiling, in milliseconds, on EACH model call advanced generation makes — per
+   *  failover candidate, mirroring `AIPromptParams.timeoutMS` semantics. `0` restores the previous
+   *  behaviour of no bound at all.
+   *
+   *  Advanced generation had no per-call bound of any kind. `AIPromptRunner` has carried the
+   *  machinery for one since the `timeoutMS` / `DefaultPromptTimeoutMS` work — it composes the
+   *  timeout with any cancellation token into a single AbortSignal that reaches the provider SDK,
+   *  so the socket is torn down rather than abandoned — but it is off unless a caller opts in, and
+   *  CodeGen never did. The consequence was not slowness: a provider that accepts the connection
+   *  and then stalls on keep-alive frames produced a promise that never settled, and because a
+   *  stall raises no error, the failover machinery below was never even entered. The run simply
+   *  stopped making progress.
+   *
+   *  90s is chosen to sit above a legitimately slow reasoning response on the largest prompt in the
+   *  feature set (form-layout generation over a wide table) while still being a small fraction of
+   *  the multi-minute stalls that caused the incident. */
+  callTimeoutMS: z.number().min(0).default(90_000),
+  /** Consecutive provider-side failures (stall/timeout, service unavailable, internal server error)
+   *  after which advanced generation stops issuing LLM calls for the remainder of the run. `0`
+   *  disables the check.
+   *
+   *  This deliberately STOPS ASKING rather than retrying: a second request aimed at a provider that
+   *  is already failing makes its queue worse, and the failover walk one layer down is already
+   *  issuing the retries. Rate limits are excluded — they are transient and per-vendor, and
+   *  failover handles them correctly — as are content and validation errors, which say nothing
+   *  about provider health. Mirrors the existing credential circuit breaker, and trips the same
+   *  one, so a run whose provider has gone away degrades the way a keyless run already does:
+   *  one clear message, then deterministic generation for the remaining entities. */
+  stallFailureCircuitThreshold: z.number().min(0).default(3),
+  /** Optional ceiling on the total USD advanced generation may spend in one run, measured from the
+   *  per-call cost the prompt runner already reports. `0` (the default) means no ceiling, which is
+   *  the behaviour that shipped.
+   *
+   *  Left off by default on purpose: the feature set issues one call per entity, per field and per
+   *  form, so the right number is a function of schema size and model choice, and a surprise cap
+   *  that aborted a developer's legitimate large run mid-way would be a new failure mode. It exists
+   *  so an operator running CodeGen unattended — a runtime schema update, a scheduled re-generation
+   *  — can bound spend, and so that bound is enforced in the one place every call is already
+   *  counted rather than estimated after the fact. */
+  maxRunCostUSD: z.number().min(0).default(0),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
-  features: advancedGenerationFeatureSchema.array().default([
-    {
-      name: 'EntityNames',
-      description: 'Use AI to generate better entity names when creating new entities',
-      enabled: false,
-    },
-    {
-      name: 'SmartFieldIdentification',
-      description:
-        'Use AI to determine the Name Field, Default In View fields, and Searchable fields for entities. This sets IsNameField, DefaultInView, and IncludeInUserSearchAPI properties on entity fields. Only applies when new entities/fields are created or when fields allow auto-update.',
-      enabled: false,
-    },
-    {
-      name: 'DefaultInViewFields',
-      description:
-        'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
-      enabled: false,
-    },
-    {
-      name: 'EntityDescriptions',
-      description: 'Use AI to generate descriptions for entities, only used when creating new entities',
-      enabled: false,
-    },
-    {
-      name: 'EntityFieldDescriptions',
-      description: 'Use AI to generate descriptions for fields, only used when new fields are detected',
-      enabled: false,
-    },
-    {
-      name: 'FormLayoutGeneration',
-      description:
-        'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-      enabled: true,
-    },
-    {
-      name: 'FormTabs',
-      description:
-        "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
-      enabled: false,
-    },
-    {
-      name: 'VirtualEntityFieldDecoration',
-      description:
-        'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
-      enabled: true,
-    },
-  ]),
+  features: advancedGenerationFeatureSchema.array().default(() => CopyDefaultAdvancedGenerationFeatures()),
 });
 
 /** The advanced-generation config schema, exported so its defaults can be checked against `DEFAULT_CODEGEN_CONFIG`. */
@@ -590,6 +680,13 @@ const configInfoSchema = z.object({
    * Leave off for Open Apps.
    */
   allowCrossSchemaCascadeDeletes: z.boolean().default(false),
+  /**
+   * After the entity-field sync, CodeGen looks for One To Many EntityRelationship rows whose join
+   * field no longer backs them (dropped or renamed FK column, or an FK now pointing at another
+   * entity), among in-scope entities and rows with AutoUpdateFromSchema set. Default false: each
+   * stale row is logged as a warning and kept. True: the stale rows are deleted (#2071).
+   */
+  cleanupStaleRelationships: z.boolean().default(false),
   excludeTables: excludeTableEntrySchema.array().default([
     { schema: '%', table: 'sys%' },
     { schema: '%', table: 'flyway_schema_history' }
@@ -1048,48 +1145,13 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     enableAdvancedGeneration: true,
     allowFullTextSearchAutoUpdate: false,
     batchSize: 5,
-    features: [
-      {
-        name: 'EntityNames',
-        description: 'Use AI to generate better entity names when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'DefaultInViewFields',
-        description: 'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
-        enabled: true,
-      },
-      {
-        name: 'EntityDescriptions',
-        description: 'Use AI to generate descriptions for entities, only used when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'SmartFieldIdentification',
-        description: 'Use AI to identify the best name field and default field to show in views for each entity',
-        enabled: true,
-      },
-      {
-        name: 'TransitiveJoinIntelligence',
-        description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
-        enabled: true,
-      },
-      {
-        name: 'FormLayoutGeneration',
-        description: 'Use AI to generate semantic field categories and layout for new entities, newly added fields, and fields whose upstream schema changes re-opened them for review.',
-        enabled: true,
-      },
-      {
-        name: 'ParseCheckConstraints',
-        description: 'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
-        enabled: true,
-      },
-      {
-        name: 'VirtualEntityFieldDecoration',
-        description: 'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions.',
-        enabled: true,
-      },
-    ],
+    // Kept in step with advancedGenerationSchema's own defaults. This literal is what a workspace
+    // with no advancedGeneration section gets, so a bound missing here is a bound that silently
+    // does not apply on exactly the config-less runs that most need it.
+    callTimeoutMS: 90_000,
+    stallFailureCircuitThreshold: 3,
+    maxRunCostUSD: 0,
+    features: CopyDefaultAdvancedGenerationFeatures(),
   },
   SQLOutput: {
     enabled: true,

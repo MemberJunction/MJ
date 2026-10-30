@@ -618,6 +618,16 @@ Test input definition JSON (stored in `TestEntity.InputDefinition`):
 }
 ```
 
+#### Test variables and literal braces
+
+String values in the configuration, input and expected outcomes can reference `{{name}}` variables. They resolve from the suite/test variables (or `MJ_TEST_VAR_name` environment variables) before the run. If `startUrl`, `goal` or an auth binding still holds a `{{name}}` after substitution, the test fails before the browser opens and names the missing variable.
+
+To write literal braces, for example in a goal that describes a template's mustache syntax, put a backslash before them: `\{{ placeholder }}`. It is never substituted or reported as missing, and the agent sees `{{ placeholder }}`. In JSON the backslash itself is escaped:
+
+```json
+{ "goal": "Check the template Text, which may include \\{{ placeholder }} parameters" }
+```
+
 ### ComputerUseExpectedOutcomes
 
 Expected test outcomes JSON (stored in `TestEntity.ExpectedOutcomes`):

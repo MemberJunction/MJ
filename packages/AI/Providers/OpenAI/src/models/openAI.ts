@@ -272,7 +272,7 @@ export class OpenAILLM extends BaseLLM {
         // cancellation/timeout aborts the underlying HTTP request instead of leaking the socket.
         let result: OpenAI.Chat.Completions.ChatCompletion;
         try {
-            result = await this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
+            result = await this.createChatCompletion(openAIParams, params);
         } catch (error) {
             if (this.IsCancellationError(error, params.cancellationToken)) {
                 return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
@@ -395,6 +395,80 @@ export class OpenAILLM extends BaseLLM {
         };
         
         return chatResult;
+    }
+
+    /**
+     * The models (per endpoint) that refused function tools while reasoning was on. Learned from the
+     * provider's own rejection, so a later request to the same model goes out right the first time.
+     * Process-wide because the prompt runner creates a new driver instance for every call.
+     */
+    private static readonly toolsWithoutReasoningModels = new Set<string>();
+
+    /**
+     * Sends a non-streaming Chat Completions request, turning reasoning off when the model accepts
+     * function tools only without it.
+     *
+     * Some reasoning models (GPT-6 Luna, for one) reject `tools` on Chat Completions unless
+     * `reasoning_effort` is `'none'`. Leaving the field out is not enough, because the model reasons
+     * by default. The provider's 400 says so in words, which is the signal used here: no model name
+     * is listed in code, and a model that later accepts both is never touched. On that rejection the
+     * request is resent once with `reasoning_effort: 'none'`, and the model is remembered so its later
+     * requests skip the failed round trip. The tools are kept, which is the point: without this the
+     * prompt runner retries on the envelope path and the model loses its tool declarations.
+     *
+     * The Responses API accepts tools and reasoning together for these models; moving tool calls to
+     * it would keep their reasoning, and is a larger change than this driver makes.
+     */
+    protected async createChatCompletion(
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+        params: ChatParams
+    ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+        const modelKey = this.toolsWithoutReasoningKey(request.model);
+        const first = request.tools?.length && OpenAILLM.toolsWithoutReasoningModels.has(modelKey)
+            ? this.withReasoningOffForTools(request)
+            : request;
+        try {
+            return await this.OpenAI.chat.completions.create(first, this.buildRequestOptions(params));
+        } catch (error) {
+            if (!this.isToolsWithReasoningRejection(error, first)) {
+                throw error;
+            }
+            OpenAILLM.toolsWithoutReasoningModels.add(modelKey);
+            return await this.OpenAI.chat.completions.create(this.withReasoningOffForTools(first), this.buildRequestOptions(params));
+        }
+    }
+
+    /** The memo key for a model: the same model name can mean different models on different endpoints. */
+    private toolsWithoutReasoningKey(model: string): string {
+        return `${this.OpenAI.baseURL ?? ''}|${model}`;
+    }
+
+    /** A copy of a request with `reasoning_effort: 'none'`, warning when that drops an effort the caller asked for. */
+    private withReasoningOffForTools(
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+    ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+        if (request.reasoning_effort && request.reasoning_effort !== 'none') {
+            console.warn(
+                `OpenAI provider: ${request.model} accepts function tools on Chat Completions only with reasoning off; ` +
+                `sending reasoning_effort 'none' instead of the requested '${request.reasoning_effort}'.`
+            );
+        }
+        return { ...request, reasoning_effort: 'none' };
+    }
+
+    /**
+     * Whether an error is the provider refusing function tools because reasoning is on — a 400 that
+     * names both — for a request that declared tools and did not already turn reasoning off.
+     */
+    private isToolsWithReasoningRejection(
+        error: unknown,
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+    ): boolean {
+        if (!request.tools?.length || request.reasoning_effort === 'none' || !(error instanceof Error)) {
+            return false;
+        }
+        const status = (error as Error & { status?: number }).status;
+        return status === 400 && /function tools/i.test(error.message) && /reasoning_effort/i.test(error.message);
     }
 
     /**
