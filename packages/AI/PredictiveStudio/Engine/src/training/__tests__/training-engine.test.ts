@@ -308,7 +308,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
   });
 });
 
-describe('TrainingEngine — evaluation record and the time-index containment (T4 → S6.5, F-SCN-1)', () => {
+describe('TrainingEngine — evaluation record and the time-index containment', () => {
   it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
     const { deps } = TrainingHarness.BuildDeps();
     const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);

@@ -260,7 +260,7 @@ describe('HiddenImportanceNote (M7)', () => {
   });
 });
 
-describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
+describe('GenerateMarkdownReport — copy', () => {
   const report = (features: Array<{ feature: string; importance: number }>, importanceHidden = true) =>
     GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Good', 'Right about 8 out of 10 times.', true, features, [], importanceHidden);
   it('prints the hidden-list note instead of inventing a ranking when importance is hidden', () => {

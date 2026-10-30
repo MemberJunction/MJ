@@ -298,7 +298,7 @@ describe('MLModelInferenceProcessor — empty feature assembly guardrail', () =>
   });
 });
 
-describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SCO-1)', () => {
+describe('MLModelInferenceProcessor — lifecycle status gate', () => {
   for (const status of ['Draft', 'Archived'] as const) {
     it(`refuses a ${status} model in Preflight before any record is scored or artifact is downloaded`, async () => {
       const model = new FakeMLModel();

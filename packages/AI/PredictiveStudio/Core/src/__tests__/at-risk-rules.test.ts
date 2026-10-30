@@ -225,7 +225,7 @@ describe('AtRiskRules.LabelFromRecord', () => {
   });
 });
 
-describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', () => {
+describe('driver direction follows the displayed risk', () => {
   it('a positive contribution to P(renew) lowers risk', () => {
     expect(AtRiskRules.DriverRaisesRisk(1.135756, true)).toBe(false);
   });
@@ -241,7 +241,7 @@ describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', ()
   });
 });
 
-describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () => {
+describe('the At-Risk list is the highest-risk rows', () => {
   // W1-shaped payloads: target "Renewed", classes "0"/"1", score = P("1") = P(renew).
   const truth: Record<string, number> = { a: 0.95, b: 0.9, c: 0.85, d: 0.6, e: 0.4, f: 0.3, g: 0.2 };
   const scores: Record<string, number> = { a: 0.96, b: 0.92, c: 0.88, d: 0.62, e: 0.41, f: 0.33, g: 0.18 };
