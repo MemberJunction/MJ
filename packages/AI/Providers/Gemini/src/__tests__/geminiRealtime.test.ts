@@ -158,6 +158,23 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(locked.outputAudioTranscription).toBeUndefined();
     });
 
+    // The token is a credential the browser holds: it must not outlive the session cap the host set, or a guest with
+    // a 5-minute cap could keep talking to Gemini directly for the token's full 30 minutes.
+    it('bounds the token by the session cap: expiry and connection count follow a short host cap', async () => {
+        const driver = new ClientDirectTestable('k');
+        const before = Date.now();
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 300 }));
+        const mintConfig = driver.MintParams!.config!;
+        const expiresMs = new Date(mintConfig.expireTime!).getTime();
+        expect(cfg.MaxSessionSeconds).toBe(300);
+        expect(expiresMs).toBeLessThanOrEqual(Date.now() + (300 + 60) * 1000);
+        expect(expiresMs).toBeGreaterThanOrEqual(before + 300 * 1000);
+        expect(mintConfig.newSessionExpireTime).toBe(mintConfig.expireTime);
+        expect(cfg.ExpiresAt).toBe(mintConfig.expireTime);
+        expect(mintConfig.uses).toBeLessThan(6);
+        expect(mintConfig.uses).toBeGreaterThanOrEqual(2);
+    });
+
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
         const driver = new ClientDirectTestable('k');
         const cfg = await driver.CreateClientSession(makeParams({

@@ -116,13 +116,16 @@ const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
 const MAX_HELD_INPUT_AUDIO_BYTES = 16000 * 2 * 2;
 
 /**
- * How many Live connections one minted client-direct token may open. Gemini ends a Live connection after about
- * 10 minutes, and the browser resumes on the SAME token, which Gemini counts as a new session: a single-use token
- * is refused "Token has been used too many times". Three connections cover the 30-minute token; three more cover a
- * resume after a dropped network or a `goAway`. A leaked token can open at most this many sessions, each locked to
- * the server-built config, until it expires.
+ * How long Gemini keeps one Live connection open (about 10 minutes, observed live). The browser then resumes on the
+ * SAME token, which Gemini counts as a new session: a single-use token is refused "Token has been used too many times".
  */
-const GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS = 6;
+const GEMINI_LIVE_CONNECTION_SECONDS = 600;
+
+/** Extra connections a token allows beyond one per {@link GEMINI_LIVE_CONNECTION_SECONDS}: resumes after a dropped network or a `goAway`. */
+const GEMINI_CLIENT_TOKEN_RESUME_MARGIN = 3;
+
+/** Slack past the session cap before the token dies, so the browser's own deadline alarm ends the call first. */
+const GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS = 60;
 
 /**
  * Total lifetime (ms) of a minted client-direct ephemeral token: messages on a Live session
@@ -229,7 +232,7 @@ interface GeminiOpenedConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiRealtime')
 export class GeminiRealtime extends BaseRealtimeModel {
-    /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS) and may open several connections (GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS), so session resumption continues a conversation past Gemini's ~10-minute connection, and the token bounds the session. */
+    /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS) and may open one connection per ~10 minutes of the cap plus a resume margin, so session resumption continues a conversation past Gemini's ~10-minute connection, and the token bounds the session. */
     public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
         ProviderMaxSessionSeconds: 1800,
         SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
@@ -359,20 +362,26 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * token-side lock is what makes the server's prompt and tool set authoritative.
      *
      * Expiry: the token opens connections (the first, and each resume, which Gemini counts as a new
-     * session) until {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}, at most
-     * {@link GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS} of them; the session's ability to send messages
-     * dies with it.
+     * session) until the session cap plus {@link GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS} (at most
+     * {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}), one per {@link GEMINI_LIVE_CONNECTION_SECONDS} of the cap plus
+     * {@link GEMINI_CLIENT_TOKEN_RESUME_MARGIN}; the session's ability to send messages dies with it.
      *
      * @param params Session configuration (model, system prompt, tools, config bag).
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const config = this.BuildConnectConfig(params);
+        const maxSessionSeconds = this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
+        // The token is a credential the browser holds, so it lives no longer than the session cap (plus a little slack)
+        // and opens only enough connections for that cap: a leaked token cannot outlast the host's deadline.
+        const capSeconds = maxSessionSeconds ?? GEMINI_CLIENT_TOKEN_EXPIRY_MS / 1000;
+        const lifetimeMs = Math.min(GEMINI_CLIENT_TOKEN_EXPIRY_MS, (capSeconds + GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS) * 1000);
+        const uses = Math.ceil(capSeconds / GEMINI_LIVE_CONNECTION_SECONDS) + GEMINI_CLIENT_TOKEN_RESUME_MARGIN;
         const now = Date.now();
-        const expireTime = new Date(now + GEMINI_CLIENT_TOKEN_EXPIRY_MS).toISOString();
+        const expireTime = new Date(now + lifetimeMs).toISOString();
         const token = await this.mintAuthToken({
             config: {
-                uses: GEMINI_CLIENT_TOKEN_MAX_CONNECTIONS,
+                uses,
                 expireTime,
                 // Each resume is a new session to Gemini, so the window to open one lasts as long as the token.
                 newSessionExpireTime: expireTime,
@@ -402,7 +411,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // values authoritative even if a client tampers.
             SessionConfig: this.SessionPactFor(params.Model, config),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
-            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
+            MaxSessionSeconds: maxSessionSeconds,
         };
     }
 
