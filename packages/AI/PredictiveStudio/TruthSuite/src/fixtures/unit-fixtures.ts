@@ -64,8 +64,11 @@ export interface T3PipelineOptions {
 
 /** A scenario pipeline: its date column (null for one fixed decision date), its group key and its protocol. */
 export interface ScenarioUnitPipelineOptions {
+  /** The scenario table's date column; null when every row has one fixed decision date. */
   readonly DateColumn: string | null;
+  /** The column the unit groups rows by (folds and the new-entity report); null for none. */
   readonly GroupKey: string | null;
+  /** The protocol the pipeline is bound to. */
   readonly Protocol: ProtocolChoice;
 }
 
@@ -272,6 +275,7 @@ export class UnitFixtures {
     return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), [], 'Logistic Regression', protocol, undefined, UnitFixtures.C1AssemblySteps(h));
   }
 
+  /** A world's renewal unit with the given features, algorithm and protocol (default the year cutoff). */
   public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: WorldRenewalPipelineOptions): Promise<ProvisionedUnitPipeline> {
     return UnitFixtures.provision(
       h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.Protocol || { Kind: 'year-cutoff' },

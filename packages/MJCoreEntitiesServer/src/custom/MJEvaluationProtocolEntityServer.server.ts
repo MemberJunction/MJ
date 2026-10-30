@@ -6,7 +6,9 @@ import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
 
 /** One version of a protocol lineage as read for validation: the row (null when absent), or the read error. */
 export interface ProtocolVersionRead {
+  /** The version's columns; null when it is absent or the read failed. */
   readonly Row: EvaluationProtocolColumns | null;
+  /** Why the read failed; null when it succeeded. */
   readonly Error: string | null;
 }
 
@@ -29,6 +31,7 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
     return VersionedRowGuard.AddProblems(this, super.Validate(), 'Version', 'Version', () => EvaluationProtocol.GetEvaluationProtocolShapeProblems(this));
   }
 
+  /** False: the rules that read the previous version run in {@link ValidateAsync} on every save. */
   public override get DefaultSkipAsyncValidation(): boolean {
     return false;
   }

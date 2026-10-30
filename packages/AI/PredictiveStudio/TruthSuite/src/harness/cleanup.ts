@@ -126,6 +126,7 @@ export type CleanupFileRow = CleanupRow & Pick<MJFileEntity, 'ProviderID' | 'Pro
 export interface CleanupStore {
   Models(filter: string): Promise<CleanupModelRow[]>;
   PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]>;
+  /** The `MJ: Evaluation Protocols` rows matching the filter. */
   EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]>;
   RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]>;
   TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]>;

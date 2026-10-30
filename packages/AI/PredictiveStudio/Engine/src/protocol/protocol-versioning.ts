@@ -31,7 +31,9 @@ export interface EvaluationProtocolVersionRow extends Pick<MJEvaluationProtocolE
   'PrimaryScore' | 'SecondaryMetrics' | 'Baselines' | 'Calibration' | 'Resampling' | 'Intervals' | 'Promotion' | 'AllowedOutcomes' |
   'LeakageAudit' | 'Exclusions' | 'Slices' | 'PredictionIntervals' | 'ResidualDiagnostics' | 'RetrainTriggers' | 'SearchStrategy' |
   'Budgets' | 'MinMinorityClassRows' | 'GuardFieldsEditableBy' | 'AuthoredBy'> {
+  /** Saves the row; false when the save (or its validation) failed. */
   Save(): Promise<boolean>;
+  /** The last save's result; its message explains a failed save. */
   readonly LatestResult: { readonly CompleteMessage: string } | null;
 }
 

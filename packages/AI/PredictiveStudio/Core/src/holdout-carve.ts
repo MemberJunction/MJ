@@ -38,6 +38,7 @@ export class HoldoutCarveDateError extends RangeError {
 
 /** One unit row as the date carve reads it. */
 export interface CarveRow {
+  /** The unit row's id (the snapshot manifest's `rowId`). */
   readonly RowId: string;
   /**
    * The row's value of the unit's group key (the Prediction Unit's `groupKey` field, or the row's entity key when the
@@ -56,25 +57,38 @@ export interface CarveRow {
 }
 
 /** A row kept in the snapshot and its role. */
-export interface CarvedRow { readonly RowId: string; readonly Role: 'development' | 'locked-holdout' }
+export interface CarvedRow {
+  /** The unit row's id. */
+  readonly RowId: string;
+  /** `locked-holdout` for a row inside the holdout window, `development` for a row before the cutoff. */
+  readonly Role: 'development' | 'locked-holdout';
+}
 
 /** The deployment carve of a date-carved holdout. */
 export interface DeploymentCarve {
   /** The rows kept in the snapshot, sorted by row id; rows on or after `holdoutEnd` are not among them. */
   readonly Rows: readonly CarvedRow[];
+  /** The ids of the rows inside the holdout window, in `Rows` order. */
   readonly HoldoutRowIds: readonly string[];
+  /** Rows before the cutoff. */
   readonly DevelopmentRowCount: number;
+  /** Rows on or after the cutoff and before `holdoutEnd` (every row on or after the cutoff when there is no end). */
   readonly HoldoutRowCount: number;
+  /** Rows on or after `holdoutEnd`, left out of the snapshot. */
   readonly ExcludedAfterHoldoutEnd: number;
   /** Holdout rows per label; null when no holdout row has a label. */
   readonly HoldoutClassCounts: Readonly<Record<string, number>> | null;
+  /** The carve date of each holdout row, in `HoldoutRowIds` order (the out-of-time slices are read from them). */
   readonly HoldoutCarveDates: readonly string[];
 }
 
 /** The new-entity report: the newest groups held out whole, every other group trained on before the cutoff. */
 export interface NewEntityCarve {
+  /** The group keys held out whole: the newest `holdoutFraction` of groups by first carve date, at least one. */
   readonly HoldoutEntityKeys: readonly string[];
+  /** The other groups' rows before the cutoff. */
   readonly TrainingRowIds: readonly string[];
+  /** The held-out groups' rows inside the holdout window. */
   readonly HoldoutRowIds: readonly string[];
   /** Rows in neither set: a held-out group's rows outside the holdout window, another group's rows on or after the cutoff. */
   readonly ExcludedRowCount: number;
@@ -105,12 +119,19 @@ export type CarveResult =
 
 /** The result of a seeded-random carve: every row is in exactly one of the two lists, each sorted by row id. */
 export interface SeededRandomCarveResult {
+  /** The rows whose seeded hash falls below the fraction. */
   readonly HoldoutRowIds: readonly string[];
+  /** Every other row. */
   readonly DevelopmentRowIds: readonly string[];
 }
 
 /** One row of a forecast series and the period it belongs to (ISO date of the period start). */
-export interface PeriodRow { readonly RowId: string; readonly Period: string }
+export interface PeriodRow {
+  /** The unit row's id. */
+  readonly RowId: string;
+  /** The ISO date of the start of the row's period. */
+  readonly Period: string;
+}
 
 /** The result of a rolling-origin carve. */
 export type RollingOriginCarveResult =
@@ -119,10 +140,15 @@ export type RollingOriginCarveResult =
 
 /** The new-entity counts of a stored carve. */
 export interface HoldoutCarveNewEntitySummary {
+  /** Groups held out whole. */
   readonly holdoutEntityKeys: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The other groups' rows before the cutoff. */
   readonly trainingRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The held-out groups' rows inside the holdout window. */
   readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Rows in neither set. */
   readonly excludedRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Group keys in both sets; zero when the report is sound. */
   readonly sharedEntityKeys: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /**
    * SHA-256 (lower-case hex) of the held-out group keys: each key as the carve groups rows (the unit row's group key
@@ -136,15 +162,23 @@ export interface HoldoutCarveNewEntitySummary {
 
 /** The carve as stored on the run (`ValidationResults.carve`), read by the gates (holdout class counts, periods) and the UI. */
 export interface HoldoutCarveSummary {
+  /** The protocol's holdout kind. */
   readonly kind: HoldoutSplit['kind'];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The date-carved cutoff; null for the other kinds. */
   readonly cutoff: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The date-carved holdout end; null when there is none. */
   readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Rows the development stage may read. */
   readonly developmentRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Rows in the locked holdout. */
   readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Rows on or after `holdoutEnd`, left out of the snapshot; 0 for the other kinds. */
   readonly excludedAfterHoldoutEnd: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Holdout rows per label for classification units; null otherwise. */
   readonly holdoutClassCounts: Readonly<Record<string, number>> | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Distinct period starts of the holdout rows at the unit's decision period (one out-of-time slice each). */
   readonly holdoutPeriods: readonly string[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The new-entity report's counts and group-key hashes; null when the protocol declares no report. */
   readonly newEntity: HoldoutCarveNewEntitySummary | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 

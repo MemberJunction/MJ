@@ -96,12 +96,19 @@ export interface BuildPredictionInput {
  * metric, or null when it was not measured — never a stand-in number.
  */
 export interface MLLeaderboardEntryPayload {
+  /** The experiment iteration (or training run) the row came from. */
   IterationID: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The row's score, as `score`; null when not measured. */
   Metric: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The model trained for the row: the one model of a build without a search, or a search's finalist (other candidates have none). */
   ModelID?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** 1 for the best row. */
   rank?: number;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The algorithm's display name. */
   algorithm?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The experiment's feature-set label. */
   featureSet?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The score in `metricName`; null when not measured. */
   score?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** Which metric `score` is (an inner-fold score such as `log-loss`, or a headline metric such as `AUC`); null when not measured. */
   metricName?: string | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
@@ -111,6 +118,7 @@ export interface MLLeaderboardEntryPayload {
   innerUpper?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** True for an inner-fold score: the search chose among these numbers, so they are optimistic. */
   optimistic?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The older lowercase spelling of `ModelID`. */
   modelId?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** True only for the selected candidate, and only when it was measured. */
   isWinner?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key

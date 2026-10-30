@@ -34,6 +34,7 @@ const DECISION_DATE_COLUMN = 'DecisionDate';
 export interface HoldoutCarveOutcome {
   /** A row absent from the map is left out of the snapshot (a date carve's rows on or after `holdoutEnd`); the summary counts it. */
   readonly Roles: ReadonlyMap<string, SnapshotRowRole>;
+  /** What the run stores as `ValidationResults.carve`. */
   readonly Summary: HoldoutCarveSummary;
 }
 

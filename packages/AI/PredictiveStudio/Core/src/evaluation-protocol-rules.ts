@@ -23,6 +23,7 @@ import type { TaskKind, TaskType } from './task-type';
 
 /** The protocol fields `GuardFieldsEditableBy` governs between versions. */
 export type GuardField = 'holdout' | 'promotion' | 'leakageAudit' | 'exclusions' | 'budgets' | 'guardFieldsEditableBy';
+/** Every guard field; `ChangedGuardFields` reports changed fields in this order. */
 export const GUARD_FIELDS: readonly GuardField[] = ['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'guardFieldsEditableBy'];
 
 /** One reason a protocol version may not be saved, or may not be used with a Prediction Unit version. */
@@ -43,6 +44,7 @@ export type ProtocolRefusal =
   | { readonly Kind: 'no-dummy-baseline' }
   | { readonly Kind: 'guard-field-edited-by-disallowed-author'; readonly Fields: readonly GuardField[]; readonly Author: Actor['kind']; readonly Setting: GuardFieldsEditableBy };
 
+/** What the save-time protocol rules read: the version being saved, the version before it and its author. */
 export interface ProtocolValidationInput {
   /** The parsed protocol version being saved. */
   readonly Protocol: EvaluationProtocolSpec;
@@ -55,21 +57,29 @@ export interface ProtocolValidationInput {
 /** A protocol before it has a row: everything except the row identity and the author. */
 export type EvaluationProtocolDraft = Omit<EvaluationProtocolSpec, 'id' | 'lineageRootId' | 'version' | 'authoredBy'>;
 
+/** What a default protocol is built from: the unit it evaluates, its holdout, the search size, its seed and name. */
 export interface DefaultProtocolArgs {
+  /** The Prediction Unit version the protocol will be bound to; its task kind picks the primary score and baselines. */
   readonly Unit: PredictionUnitSpec;
   /** Date-carved (dated tabular units, panels), seeded-random (units with one fixed decision date) or rolling-origin (forecasts). */
   readonly Holdout: HoldoutSplit;
   /** Number of candidates the search will train; sets the random-search size and `maxCandidates`. */
   readonly Candidates: number;
+  /** The protocol's seed (folds, resampling, search and the seeded-random carve). */
   readonly Seed: number;
+  /** The protocol row's `Name`. */
   readonly Name: string;
 }
 
 /** Row identity of a protocol version being written. */
 export interface ProtocolRowMeta {
+  /** `MJ: Evaluation Protocols`.ID of the new row. */
   readonly ID: string;
+  /** The ID of version 1 of the lineage (the row's own ID for version 1). */
   readonly LineageRootID: string;
+  /** The version number: 1 for a new lineage, the previous version + 1 after it. */
   readonly Version: number;
+  /** Who writes the version; the guard-field rule reads it. */
   readonly AuthoredBy: Actor;
 }
 

@@ -19,9 +19,11 @@ export type StoredEvaluationProtocol = EvaluationProtocolColumns & Pick<MJEvalua
 export interface LoadedProtocol {
   /** `MJ: Evaluation Protocols`.ID of this version's row. */
   readonly RowID: string;
+  /** The version number within the protocol's lineage. */
   readonly Version: number;
   /** The row's `__mj_CreatedAt` (the database clock, the same clock that stamps the run row). */
   readonly CreatedAt: Date;
+  /** The parsed protocol. */
   readonly Protocol: EvaluationProtocolSpec;
 }
 

@@ -15,6 +15,7 @@ import type { CandidateInnerScore, TrainerCompleted } from './trainer-contract';
 export const SELECTION_FAILURE_REASONS = [
   'missing-inner-scores', 'finalist-not-a-candidate', 'candidate-pruned', 'interval-missing', 'holdout-not-read-once-for-finalist',
 ] as const;
+/** One rule a trainer's report can break. */
 export type SelectionFailureReason = (typeof SELECTION_FAILURE_REASONS)[number];
 
 /** What the selection check found: the finalist it accepts, or the first rule the trainer's report breaks. */
@@ -24,12 +25,19 @@ export type SelectionCheck =
 
 /** One leaderboard row of a search: a candidate's inner-fold mean with its interval, best-first. */
 export interface LeaderboardRow {
+  /** 1 for the best inner-fold mean. */
   readonly Rank: number;
+  /** The candidate's name. */
   readonly Candidate: string;
+  /** The protocol's primary score the means are in. */
   readonly Metric: MetricKey;
+  /** The inner-fold mean. */
   readonly Mean: number;
+  /** The lower bound of the mean's interval. */
   readonly Lower: number;
+  /** The upper bound of the mean's interval. */
   readonly Upper: number;
+  /** The number of inner folds the mean is over. */
   readonly Folds: number;
   /** Always true: an inner-fold mean of a candidate the search chose among is optimistically biased. */
   readonly Optimistic: true;

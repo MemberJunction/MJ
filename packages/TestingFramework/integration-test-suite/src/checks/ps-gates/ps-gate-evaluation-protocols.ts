@@ -26,12 +26,15 @@ interface StoredRun { readonly Results: Completed; readonly Snapshot: MJTraining
  * out whole from the cutoff on), then checks it against the stored membership hashes.
  */
 export interface NewEntityManifestMeasurement {
+  /** Distinct group keys in the manifest. */
   readonly Groups: number;
+  /** Groups the rebuilt partition holds out whole. */
   readonly HeldGroups: number;
   /** Development-role rows of groups outside the held set: the rows the report must train on. */
   readonly TrainingRows: number;
   /** Rows of held groups on or after the cutoff: the report's holdout rows. */
   readonly HoldoutRows: number;
+  /** Manifest rows in neither set. */
   readonly ExcludedRows: number;
   /** The stored held-group hash equals the hash of the held set the gate rebuilt. */
   readonly HeldMembershipMatches: boolean;

@@ -9,19 +9,33 @@
 
 /** One leaderboard entry as an artifact stores it (canonical PascalCase keys and the older lowercase ones). */
 export interface LeaderboardEntryInput {
+  /** The experiment iteration (or training run) the row came from. */
   readonly IterationID?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The canonical score; read before `score`. */
   readonly Metric?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** 1 for the best row; a missing rank takes the row's position. */
   readonly rank?: number;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The algorithm's display name. */
   readonly algorithm?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** An older artifact's spelling of `algorithm`. */
   readonly algorithmName?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The experiment's feature-set label. */
   readonly featureSet?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The score, when `Metric` is absent; null when not measured. */
   readonly score?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The metric the score is in. */
   readonly metricName?: string | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The lower bound of an inner-fold mean's interval. */
   readonly innerLower?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The upper bound of an inner-fold mean's interval. */
   readonly innerUpper?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** True for an inner-fold score. */
   readonly optimistic?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** An older artifact's spelling of `ModelID`. */
   readonly modelId?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The model trained for the row. */
   readonly ModelID?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The row the artifact marks as the winner. */
   readonly isWinner?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** Written by older artifacts; never read. */
   readonly cvScore?: number;  // case-violation-ok-legacy-back-compat: artifact JSON key
@@ -29,16 +43,23 @@ export interface LeaderboardEntryInput {
 
 /** A leaderboard row as the viewer renders it. */
 export interface NormalizedLeaderboardRow {
+  /** The row's rank (1 = best). */
   readonly rank: number;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  /** The algorithm's display name; `Unknown` when the row names none. */
   readonly algorithm: string;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  /** The feature-set label; empty when the row names none. */
   readonly featureSet: string;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  /** The row's score; null when not measured. */
   readonly score: number | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
   /** The metric `score` is in, as the row states it; null when the row does not say. */
   readonly metricName: string | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
   /** The inner-fold mean's interval, or null when the row is not an inner-fold score. */
   readonly interval: readonly [number, number] | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  /** True for an inner-fold score. */
   readonly optimistic: boolean;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  /** The model trained for the row; null when it has none. */
   readonly modelId: string | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  /** The winning row (the artifact's mark, else a measured rank 1). */
   readonly isWinner: boolean;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
   /** Show the "optimistic" tag: only on the winner, and only when its score is an inner-fold score. */
   readonly optimisticTag: boolean;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
