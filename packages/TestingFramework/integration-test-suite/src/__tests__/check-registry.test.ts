@@ -37,6 +37,7 @@ import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellati
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
 import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
@@ -174,7 +175,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
-        ['user-routines', UserRoutinesChecks, 16],
+        ['user-routines', UserRoutinesChecks, 18],
+        ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT138)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
@@ -326,13 +328,14 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
-        'app-wiring': 10,
+        'app-wiring': 11,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
+        'chief-of-staff': 8,
         'class-resolution': 5,
         'client-cache': 14,
         'cloudflare-clef': 6,
@@ -454,7 +457,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
         'user-elevation': 4,
-        'user-routines': 16,
+        'user-routines': 18,
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
@@ -483,7 +486,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(165);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(166);
     });
 });
 
