@@ -8,7 +8,7 @@
 import { EntityInfo, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { IRecordSetSource, SourceDescriptor } from '../interfaces';
 import { ProcessCursor, RecordBatch, RecordRef } from '../types';
-import { SerializeRecordId } from './sourceUtil';
+import { ReadSizeForBatch, SerializeRecordId } from './sourceUtil';
 
 /** A source backed by a saved User View. */
 export class ViewSource implements IRecordSetSource {
@@ -47,12 +47,12 @@ export class ViewSource implements IRecordSetSource {
             Fields: entity.PrimaryKeys.map((pk) => pk.Name),
             ResultType: 'simple',
             StartRow: offset,
-            MaxRows: batchSize,
+            MaxRows: ReadSizeForBatch(batchSize),
         }, contextUser);
         if (!result.Success) {
             throw new Error(`ViewSource: failed running view '${this.viewID}': ${result.ErrorMessage}`);
         }
-        const rows = (result.Results ?? []) as Record<string, unknown>[];
+        const rows = ((result.Results ?? []) as Record<string, unknown>[]).slice(0, batchSize);
         const records: RecordRef[] = rows.map((row) => ({
             EntityID: entity.ID,
             RecordID: SerializeRecordId(entity, row),

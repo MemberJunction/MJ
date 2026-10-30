@@ -22,7 +22,7 @@
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import { ResolveType } from './TypeResolver.js';
-import { RemoveNPrefix } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveNPrefix } from './ExpressionHelpers.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
 
 interface DeclaredVar {
@@ -563,12 +563,15 @@ export class ExecBlockRule implements IConversionRule {
 
   /**
    * Convert a SET value expression from T-SQL to PostgreSQL.
-   * Handles: N-prefix removal, CAST type conversion, string concatenation.
+   * Handles: bracket identifiers (a subquery value such as `(SELECT [ID] FROM [__mj].[Entity] …)`,
+   * which the PostProcessor's bracket pass never reaches inside the `DO $mj$` block, #6074),
+   * N-prefix removal, CAST type conversion, string concatenation.
    * IMPORTANT: Only converts SQL syntax outside string literals — string content
    * (like stored SQL queries) is preserved as-is.
    */
   private convertValue(value: string): string {
-    let result = value;
+    // Convert bracket identifiers: [schema].[table] → schema."table" (string literals untouched)
+    let result = ConvertIdentifiers(value);
 
     // Remove N prefix from string literals
     result = RemoveNPrefix(result);

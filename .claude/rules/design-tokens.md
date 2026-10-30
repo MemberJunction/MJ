@@ -41,6 +41,7 @@ MemberJunction uses a comprehensive CSS custom property (design token) system de
 | `--mj-text-disabled` | Disabled/placeholder text |
 | `--mj-text-inverse` | Text on dark/colored backgrounds |
 | `--mj-text-link` | Clickable links |
+| `--mj-text-violet` | Violet text/accent (special features, role chips) |
 
 ### Background Colors
 | Token | Purpose |
@@ -76,6 +77,7 @@ MemberJunction uses a comprehensive CSS custom property (design token) system de
 | `--mj-status-warning` / `-bg` / `-text` / `-border` | Warning states (orange) |
 | `--mj-status-error` / `-bg` / `-text` / `-border` | Error states (red) |
 | `--mj-status-info` / `-bg` / `-text` / `-border` | Informational states |
+| `--mj-status-on-warning` | Text on a solid `--mj-status-warning` fill (dark in both themes) |
 
 ### Logo Tokens
 | Token | Purpose |
@@ -96,6 +98,8 @@ When migrating or reviewing code, use these mappings:
 | `#757575`, `#888`, `#64748b` | `--mj-text-muted` |
 | `#999`, `#94a3b8`, `#aaa` | `--mj-text-disabled` |
 | `#fff` (on colored bg) | `--mj-text-inverse` |
+| `white` (text on `--mj-brand-primary`) | `--mj-brand-on-primary` |
+| `black` (text on `--mj-status-warning`) | `--mj-status-on-warning` |
 | `white` (background) | `--mj-bg-surface` |
 | `#f5f5f5`, `#f8f9fa`, `#f9f9f9`, `#fafafa` | `--mj-bg-surface-card` |
 | `#f0f0f0`, `#f1f1f1`, `#f1f5f9` | `--mj-bg-surface-sunken` |
@@ -147,7 +151,7 @@ Don't override `.mj-btn` in component CSS — see [`packages/Angular/CLAUDE.md`]
 These rules are enforced by CI on PRs targeting `next`. Run them locally before pushing (requires your changes to be committed — the check diffs against `origin/next`):
 
 - `npm run check:ui` — both gates against changed CSS/SCSS vs `origin/next` (matches PR behavior)
-- `npm run check:ui-tokens` — hardcoded-color gate only (hex, rgb/rgba, hsl/hsla — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`)
+- `npm run check:ui-tokens` — hardcoded-color gate only (hex, rgb/rgba, hsl/hsla, and named colours like `white` on colour properties — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`, `black`/`white` inside `color-mix()`, `transparent` and `currentColor`); a single declaration with no token yet can carry `// color-exception: <reason>` on the line above
 - `npm run check:ui-buttons` — `.mj-btn` override gate only
 - `npm run check:ui:all` — audit the whole `packages/Angular/` tree (cleanup work; reports pre-existing violations CI doesn't gate on)
 - `npm run check:ui:adoption` — re-run the measurement script (writes to `plans/adoption-metrics.md`)

@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { z } from "zod";
 
      
@@ -41470,7 +41470,7 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
     */
     public ValidateTargetAgentNotEqualToCoAgent(result: ValidationResult) {
     	// If TargetAgentID is specified, it must not be the same as CoAgentID
-    	if (this.TargetAgentID != null && this.CoAgentID === this.TargetAgentID) {
+    	if (this.TargetAgentID != null && UUIDsEqual(this.CoAgentID, this.TargetAgentID)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TargetAgentID",
     			"The Target Agent cannot be the same as the Co-Agent.",
@@ -50257,7 +50257,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     * @method
     */
     public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
-    	if (this.OriginStepID === this.DestinationStepID) {
+    	if (UUIDsEqual(this.OriginStepID, this.DestinationStepID)) {
     		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
     	}
     }
@@ -63565,7 +63565,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @method
     */
     public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+    	if (this.ResultSelectorPromptID != null && UUIDsEqual(this.ResultSelectorPromptID, this.ID)) {
     		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
@@ -139023,7 +139023,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     * @method
     */
     public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
-    	if (this.TaskID === this.DependsOnTaskID) {
+    	if (UUIDsEqual(this.TaskID, this.DependsOnTaskID)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TaskID",
     			"A task cannot be dependent on itself.",
