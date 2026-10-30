@@ -380,7 +380,7 @@ async function main(): Promise<void> {
 
     const rv = new RunView();
     const agentResult = await rv.RunView<{ ID: string; Name: string }>({
-        EntityName: 'MJ: AI Agents', Fields: ['ID', 'Name'], MaxRows: 1, ResultType: 'simple',
+        EntityName: 'MJ: AI Agents', Fields: ['ID', 'Name'], MaxRows: 1, SkipTotalRowCount: true, ResultType: 'simple',
     }, contextUser);
     if (!agentResult.Success || !agentResult.Results?.length) throw new Error('No AI Agents found.');
     const agentId = agentResult.Results[0].ID;

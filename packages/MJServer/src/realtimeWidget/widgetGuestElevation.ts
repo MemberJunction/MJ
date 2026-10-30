@@ -190,6 +190,7 @@ async function loadWidgetById(
       EntityName: WIDGET_ENTITY,
       ExtraFilter: `ID = '${widgetId.replace(/'/g, "''")}'`,
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'entity_object',
     },
     elevatedUser,

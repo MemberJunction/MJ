@@ -120,6 +120,7 @@ export class HarnessAgent {
         ExtraFilter: `Name='${EscapeSQLString(name)}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       ctx.User,
     );

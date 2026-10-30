@@ -4126,7 +4126,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
     }
-    this.windowStore.SetPinnedCount(result.Success ? result.TotalRowCount : 0);
+    this.windowStore.SetPinnedCount(result.Success ? result.TotalRowCount ?? 0 : 0);
   }
 
   /**

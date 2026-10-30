@@ -1215,8 +1215,12 @@ export type RunViewResult<T = any> = {
      * Total number of rows that match the view criteria, not just the number returned in the Results[] array
      * This number will only be different when the view is configured to have a UserViewMaxRows value and the criteria of the view in question
      * has more than that # of rows. Otherwise it will be the same value as RowCount.
+     *
+     * A number here is always a real total. It is `undefined` only when the caller passed
+     * `SkipTotalRowCount: true`, which asks the provider not to count; a call without that flag
+     * always gets a number. `ResultType: 'count_only'` ignores the flag and always counts.
      */
-    TotalRowCount: number;
+    TotalRowCount?: number;
     /**
      * Time elapsed in executing the view (in milliseconds)
      */

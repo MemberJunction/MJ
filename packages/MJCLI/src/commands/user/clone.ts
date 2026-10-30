@@ -112,6 +112,7 @@ export default class UserClone extends Command {
         Fields: ['ID', 'Email', 'IsTemplate'],
         ResultType: 'simple',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser
     );

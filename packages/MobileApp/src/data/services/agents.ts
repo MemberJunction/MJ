@@ -270,6 +270,7 @@ export async function GetConversationDetailStatus(detailId: string, contextUser?
             ExtraFilter: `ID='${detailId}'`,
             Fields: ['ID', 'Status'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         },
         contextUser,
