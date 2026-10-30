@@ -45,7 +45,7 @@ Our goal is to **ship the first production cut of MJ Mobile to the iOS App Store
 
 | Surface | Current State | Key Gap to Close for v1.0 |
 | :--- | :---: | :--- |
-| **Build & Boot Health** | 🔴 Broken | `pnpm run typecheck` fails with **22 TS errors** across 4 screens; `BootGate` deadlocks on clean unauthenticated launch; `Env` hardcodes `http://...:4001`. |
+| **Build & Boot Health** | 🟢 Fixed (P0-1 – P0-6, 2026-10-30) | `pnpm run typecheck` 0 errors with `build` enforced by Turbo; unauthenticated launch, sign-out and second-user sign-in verified on the iOS Simulator; `Env` takes `EXPO_PUBLIC_MJ_GRAPHQL_URL` with a dev-only localhost fallback. Android Emulator run of the exit flow still outstanding. |
 | **Simple Views (`MJ: User Views`)** | 🔴 0% | Zero `MJ: User Views` or `ViewID` usage anywhere in `MobileApp`; `View` dashboard panels and `Views` app nav items show `"opens on desktop"`. |
 | **White-Label & Extension Architecture** | 🔴 15% | `"private": true` monorepo package, host-filesystem `app/` routes (Expo Router), static `app.json` (no icons/splash), hardcoded dev Auth0/MSAL & `mjmobile://`, static light-only `tokens.ts` (ignoring `@memberjunction/theme-engine`), hand-edited `registry.ts` (ignoring `mj codegen manifest`). |
 | **Store Compliance (iOS & Android)** | 🔴 25% | Play Store `READ_MEDIA_IMAGES` auto-rejection, Apple `NSPhotoLibraryAddUsageDescription` undeclared feature, Guideline 2.1 dead UI toggles & 90%-empty `Apps` tab, sign-out cross-user data leak, missing `eas.projectId` & privacy manifest. |
