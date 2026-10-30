@@ -133,6 +133,37 @@ describe('ExtractStage — reading', () => {
         const outcome = await new ExtractStage().Run(record, contextWith());
         expect(outcome.Status).toBe('Skipped');
     });
+
+    it('reads bytes from MJ: Files and FileStorageEngine when an item has FileID set instead of fetching over HTTP', async () => {
+        const { FileStorageEngine } = await import('@memberjunction/storage');
+        vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'uploads/blob-without-ext',
+            Driver: {
+                GetObject: async () => Buffer.from('<html>uploaded html</html>', 'utf8'),
+            },
+        } as never);
+
+        const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'upload://file-123', 'ITEM-UPLOAD'));
+        record.SetExtension('Pipeline', 'fileID', 'FILE-123');
+        record.Propose('Title', 'uploaded.html', 4, 'Upload');
+
+        const outcome = await new ExtractStage().Run(record, {
+            ...contextWith(),
+            Provider: {
+                GetEntityObject: async () => ({
+                    Name: 'uploaded.html',
+                    ContentType: 'text/html',
+                    ProviderID: 'P1',
+                    InnerLoad: async () => true,
+                }),
+            } as never,
+        });
+
+        expect(outcome.Status).toBe('Complete');
+        expect(fetchContent).not.toHaveBeenCalled();
+        expect(record.Get('FileType')).toBe('html');
+        expect(record.Get('Text')).toBe('read by the html extractor');
+    });
 });
 
 describe('ExtractStage — an artifact that expands into other items', () => {

@@ -338,5 +338,42 @@ describe('DeleteContentItemStage — dependent marking and dry-run isolation', (
         ).rejects.toThrow(/could not clear FileID on Content Item 'ITEM-1': item save refused/);
         expect(events).toEqual(['Driver.DeleteObject', 'item.Save(FileID=null)']);
     });
+
+    it('never deletes an uploaded file (MJ: Files row or storage object) that belongs to the caller rather than ExtractStage', async () => {
+        const events: string[] = [];
+        const resolveSpy = vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'uploads/user-doc.pdf',
+            Driver: {
+                DeleteObject: async () => {
+                    events.push('Driver.DeleteObject');
+                },
+            },
+        } as never);
+
+        const uploadedItem = new WorkingRecord(
+            new WorkingRecordIdentity('Content Item', 'upload://file-user-1', 'ITEM-UPLOAD-1'),
+        );
+        uploadedItem.SetExtension('Pipeline', 'fileID', 'FILE-USER-1');
+
+        const outcome = await new DeleteContentItemStage().Run(uploadedItem, {
+            ...contextWith(),
+            Provider: {
+                EntityByName: () => undefined,
+                RunViews: async () => [
+                    { Success: true, Results: [] },
+                    { Success: true, Results: [] },
+                ],
+                GetEntityObject: async () => {
+                    events.push('GetEntityObject');
+                    return {};
+                },
+            } as never,
+        });
+
+        expect(outcome.Status).toBe('Complete');
+        expect(resolveSpy).not.toHaveBeenCalled();
+        expect(events).toEqual([]);
+    });
 });
+
 

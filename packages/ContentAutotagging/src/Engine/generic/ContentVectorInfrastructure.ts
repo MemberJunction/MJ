@@ -114,6 +114,49 @@ export class ContentVectorInfrastructure {
     }
 
     /**
+     * Resolve the target `MJ: Vector Indexes` row ID for a content source using the pipeline's
+     * vector-index resolution cascade:
+     * 1. `ContentSource.VectorIndexID`
+     * 2. `ContentType.VectorIndexID`
+     * 3. `EntityDocument.VectorIndexID` (when `EntityDocumentID` is set on the source)
+     * 4. `ContentPipeline.DefaultVectorIndexID` on the active default `MJ: AI Configurations` row,
+     *    or the sole vector index when `VectorIndexes.length === 1`.
+     */
+    public async ResolveVectorIndexID(source: {
+        ID: string;
+        ContentTypeID?: string | null;
+        VectorIndexID?: string | null;
+        EntityDocumentID?: string | null;
+    }): Promise<string> {
+        if (source.VectorIndexID) {
+            return source.VectorIndexID;
+        }
+        const kh = KnowledgeHubMetadataEngine.Instance;
+        await kh.Config?.(false, this.contextUser, this.provider);
+        const cachedSource = kh.GetContentSourceByID(source.ID);
+        if (cachedSource?.VectorIndexID) {
+            return cachedSource.VectorIndexID;
+        }
+        const contentTypeID = source.ContentTypeID ?? cachedSource?.ContentTypeID;
+        if (contentTypeID) {
+            const contentType = kh.GetContentTypeByID(contentTypeID);
+            if (contentType?.VectorIndexID) {
+                return contentType.VectorIndexID;
+            }
+        }
+        const entityDocumentID = source.EntityDocumentID ?? cachedSource?.EntityDocumentID;
+        if (entityDocumentID) {
+            const entityDocument = kh.GetEntityDocumentByID?.(entityDocumentID);
+            if (entityDocument?.VectorIndexID) {
+                return entityDocument.VectorIndexID;
+            }
+        }
+        await AIEngine.Instance.Config(false, this.contextUser, this.provider);
+        const defaultIndex = await this.resolveDefaultVectorIndex();
+        return defaultIndex.ID;
+    }
+
+    /**
      * Each item's provider directives. A provider may refuse an item (a mandatory routing value is
      * missing); that item is reported, never written to a default namespace, and the rest proceed.
      */

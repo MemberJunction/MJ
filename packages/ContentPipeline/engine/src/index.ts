@@ -20,3 +20,5 @@ export * from './stages/index.js';
 export * from './DetectionCatalog.js';
 export * from './ManagedPromptClassifier.js';
 export * from './VectorRouting.js';
+export * from './ContentUploadIngestor.js';
+

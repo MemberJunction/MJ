@@ -184,5 +184,23 @@
       "lastModified": "2026-04-06T11:00:41.915Z",
       "checksum": "006f3337c74283b657f80732ae74cc0d20c1fea2252e1d697e66387421660b05"
     }
+  },
+  {
+    "_comments": [
+      "Upload — push-only source for user-uploaded files ingested via ContentUploadIngestor.",
+      "Discover and Sync skip push-only sources without walking or marking existing items as orphans."
+    ],
+    "fields": {
+      "Name": "Upload",
+      "Description": "User-uploaded files pushed into the content pipeline on demand",
+      "DriverClass": "AutotagUpload",
+      "Configuration": {
+        "IsPushOnly": true,
+        "RequiredFields": []
+      }
+    },
+    "primaryKey": {
+      "ID": "AFCB894F-ED26-4994-974D-523B86FA0A1D"
+    }
   }
 ]

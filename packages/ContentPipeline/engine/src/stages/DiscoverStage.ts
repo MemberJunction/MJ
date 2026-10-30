@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { AutotagBase } from '@memberjunction/content-autotagging';
+import { AutotagBase, AutotagUpload } from '@memberjunction/content-autotagging';
 import {
     BasePipelineStage,
     DiscoveredItem,
@@ -23,6 +23,8 @@ import {
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
 import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from '../ContentSourceConfigurationResolver.js';
+
+void AutotagUpload;
 
 /** The registered name. */
 export const DISCOVER_STAGE = 'Discover';
@@ -67,7 +69,12 @@ export class DiscoverStage extends BasePipelineStage {
             throw new FatalStageError('Discover was handed a Content Source that has not been persisted');
         }
         const isSync = IsSyncMode(context.Configuration);
-        const { resolved, driver } = await this.resolveWalkSource(contentSourceID, isSync, context);
+        const { resolved, driver, isPushOnly } = await this.resolveWalkSource(contentSourceID, isSync, context);
+        if (isPushOnly) {
+            return Outcome.Skipped(
+                `Driver '${resolved.DriverClass}' is push-only; ${isSync ? 'Sync' : 'Discover'} does not walk this source`,
+            );
+        }
         if (context.Signal.aborted) {
             return Outcome.Retry('cancelled before discovery started');
         }
@@ -101,7 +108,7 @@ export class DiscoverStage extends BasePipelineStage {
         contentSourceID: string,
         isSync: boolean,
         context: StageContext,
-    ): Promise<{ resolved: ResolvedSourceConfiguration; driver: AutotagBase }> {
+    ): Promise<{ resolved: ResolvedSourceConfiguration; driver: AutotagBase; isPushOnly: boolean }> {
         const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
         const resolved = await resolver.Resolve(contentSourceID, context.ContextUser);
         if (!resolved.IsValid) {
@@ -112,6 +119,13 @@ export class DiscoverStage extends BasePipelineStage {
             throw new FatalStageError("No Discover driver for this source. Set its Content Source Type's DriverClass.");
         }
         const driver = ResolveSourceDriver(resolved.DriverClass);
+        const isPushOnly =
+            driver.IsPushOnly === true ||
+            resolved.TypeConfiguration?.IsPushOnly === true ||
+            resolved.Configuration?.IsPushOnly === true;
+        if (isPushOnly) {
+            return { resolved, driver, isPushOnly: true };
+        }
         if (!driver.Discover) {
             throw new FatalStageError(`Driver '${resolved.DriverClass}' cannot discover: it has no Discover method`);
         }
@@ -120,7 +134,7 @@ export class DiscoverStage extends BasePipelineStage {
                 `Driver '${resolved.DriverClass}' does not support exhaustive walks (SupportsExhaustiveWalk = false), so Sync mode cannot run against this source`,
             );
         }
-        return { resolved, driver };
+        return { resolved, driver, isPushOnly: false };
     }
 
     /**

@@ -279,4 +279,34 @@ describe('discovery can need credentials too', () => {
             supportsExhaustiveWalk = false;
         }
     });
+
+    it('skips an Upload (push-only) source with Skipped in both Discover and Sync modes and never marks its items for deletion', async () => {
+        vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
+            ContentSourceID: 'SRC-UPLOAD',
+            URL: '',
+            DriverClass: 'AutotagUpload',
+            TypeConfiguration: { IsPushOnly: true },
+            Configuration: {},
+            Settings: {},
+            Parameters: {},
+            Confidence: {},
+            Problems: [],
+            IsValid: true,
+        } as never);
+
+        const discoverOutcome = await new DiscoverStage().Run(
+            new WorkingRecord(new WorkingRecordIdentity('Content Source', '', 'SRC-UPLOAD')),
+            contextWith(),
+        );
+        expect(discoverOutcome.Status).toBe('Skipped');
+        expect(discoverOutcome.Message).toMatch(/push-only/);
+
+        const syncOutcome = await new DiscoverStage().Run(
+            new WorkingRecord(new WorkingRecordIdentity('Content Source', '', 'SRC-UPLOAD')),
+            { ...contextWith(), Configuration: { Mode: 'Sync' } },
+        );
+        expect(syncOutcome.Status).toBe('Skipped');
+        expect(syncOutcome.Message).toMatch(/push-only/);
+    });
 });
+

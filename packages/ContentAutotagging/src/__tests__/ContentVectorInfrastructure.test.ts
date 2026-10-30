@@ -152,4 +152,41 @@ describe('vector infrastructure cascade', () => {
             /ContentSource\.VectorIndexID.*ContentType\.VectorIndexID.*ContentPipeline\.DefaultVectorIndexID/,
         );
     });
+
+    it('ResolveVectorIndexID resolves from ContentSource, then ContentType, then default vector index', async () => {
+        const infra = new ContentVectorInfrastructure({} as never, {} as never);
+        types.set('T-WITH-IDX', { EmbeddingModelID: null, VectorIndexID: 'VIDX-TYPE' });
+        types.set('T-NO-IDX', { EmbeddingModelID: null, VectorIndexID: null });
+        aiState.VectorIndexes = [
+            { ID: 'VIDX-DEFAULT', Name: 'DefaultIdx', EmbeddingModelID: 'M1', VectorDatabaseID: 'DB1' },
+        ];
+
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-1',
+                VectorIndexID: 'VIDX-SOURCE',
+                ContentTypeID: 'T-WITH-IDX',
+                EntityDocumentID: null,
+            }),
+        ).toBe('VIDX-SOURCE');
+
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-2',
+                VectorIndexID: null,
+                ContentTypeID: 'T-WITH-IDX',
+                EntityDocumentID: null,
+            }),
+        ).toBe('VIDX-TYPE');
+
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-3',
+                VectorIndexID: null,
+                ContentTypeID: 'T-NO-IDX',
+                EntityDocumentID: null,
+            }),
+        ).toBe('VIDX-DEFAULT');
+    });
 });
+

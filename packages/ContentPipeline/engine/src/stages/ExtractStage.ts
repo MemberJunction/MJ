@@ -85,8 +85,11 @@ export class ExtractStage extends BasePipelineStage {
         // Kept bytes are read back, not refetched: an archive member's URL points at the archive.
         const keptFileID = record.GetExtension<string>('Pipeline', 'fileID');
         const fetched = keptFileID ? await this.readKeptFile(keptFileID, context) : await this.fetch(url, source, context);
+        const rawHint = fetched.ResolvedURL ?? url;
+        const titleHint = record.Get('Title') as string | null;
+        const nameHint = !path.posix.extname(rawHint) && titleHint && path.posix.extname(titleHint) ? titleHint : rawHint;
         const archiveState: ArchiveTreeState = {};
-        const read = await this.detectAndRead(record, fetched.Content, fetched.ResolvedURL ?? url, source, context, archiveState, 0);
+        const read = await this.detectAndRead(record, fetched.Content, nameHint, source, context, archiveState, 0);
         switch (read.Kind) {
             case 'NonText':
                 return this.handleNonText(record, read.FileType, source, fetched, context);
@@ -359,7 +362,8 @@ export class ExtractStage extends BasePipelineStage {
             throw new FatalStageError(`No storage account is configured for provider '${file.ProviderID}', so '${fileID}' cannot be read`);
         }
         const bytes = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
-        return { Content: new Uint8Array(bytes), ContentType: file.ContentType ?? undefined, ResolvedURL: resolved.ObjectKey };
+        const resolvedURL = path.posix.extname(resolved.ObjectKey) ? resolved.ObjectKey : (file.Name || resolved.ObjectKey);
+        return { Content: new Uint8Array(bytes), ContentType: file.ContentType ?? undefined, ResolvedURL: resolvedURL };
     }
 
     /** Fetch through the source's driver when it reads its own locators, else over HTTP. */

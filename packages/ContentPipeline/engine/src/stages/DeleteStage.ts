@@ -12,8 +12,8 @@
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJContentItemEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { RegisterClass } from '@memberjunction/global';
-import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { AutotagBase, ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { IsRouteFailure, RouteVectorRecords } from '../VectorRouting.js';
 import {
     BasePipelineStage,
@@ -26,6 +26,7 @@ import {
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
+import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 import { WhereEqual } from '../Filters.js';
 
 /** The registered name for the chunk-level stage. */
@@ -110,12 +111,16 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
 
     /**
      * Remove the bytes this record was kept as, if any: the stored object and its `MJ: Files` row.
+     * Never deletes an uploaded file that belongs to the caller rather than a durable copy created by `ExtractStage`.
      *
      * @returns Whether a copy was removed, or null when there is one and it could not be reached.
      */
     private async removeDurableCopy(record: WorkingRecord, context: StageContext): Promise<boolean | null> {
         const fileID = record.GetExtension<string>('Pipeline', 'fileID');
         if (!fileID) {
+            return false;
+        }
+        if (await this.isCallerOwnedFile(record, context)) {
             return false;
         }
         if (context.IsTest) {
@@ -148,6 +153,50 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
                     `${error instanceof Error ? error.message : String(error)}`,
                 { cause: error },
             );
+        }
+    }
+
+    /**
+     * True when `FileID` points to a caller-uploaded file rather than a durable copy created by `ExtractStage`:
+     * - the item's locator uses the `upload://` scheme, or
+     * - `Pipeline.callerOwnedFile` is set on the working record, or
+     * - the item belongs to a push-only (`Upload`) source or a source without `ObjectKeyTemplate` configured.
+     */
+    private async isCallerOwnedFile(record: WorkingRecord, context: StageContext): Promise<boolean> {
+        const url = record.Identity.EphemeralID;
+        if (typeof url === 'string' && url.startsWith('upload://')) {
+            return true;
+        }
+        if (record.GetExtension<boolean>('Pipeline', 'callerOwnedFile') === true) {
+            return true;
+        }
+        const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
+        if (!contentSourceID) {
+            return false;
+        }
+        try {
+            const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
+            const resolved = await resolver.Resolve(contentSourceID, context.ContextUser);
+            if (!resolved.IsValid) {
+                return false;
+            }
+            if (resolved.TypeConfiguration.IsPushOnly === true) {
+                return true;
+            }
+            if (resolved.DriverClass) {
+                const driver = MJGlobal.Instance.ClassFactory.TryCreateInstance<AutotagBase>(AutotagBase, resolved.DriverClass);
+                if (driver.Instance?.IsPushOnly === true) {
+                    return true;
+                }
+            }
+            const objectKeyTemplate =
+                (context.Configuration.ObjectKeyTemplate as string | undefined) ??
+                (resolved.Configuration.ObjectKeyTemplate as string | undefined) ??
+                (resolved.Settings.ObjectKeyTemplate as string | undefined) ??
+                (resolved.TypeConfiguration.ObjectKeyTemplate as string | undefined);
+            return !objectKeyTemplate;
+        } catch {
+            return false;
         }
     }
 

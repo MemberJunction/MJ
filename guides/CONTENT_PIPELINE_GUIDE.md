@@ -568,6 +568,16 @@ For full retrieval configuration, see:
 
 ---
 
+## Uploads
+
+`ContentUploadIngestor` (`@memberjunction/content-pipeline`) is the server-side entry point for pushing caller-stored `MJ: Files` records into an `Upload` content source (`DriverClass: 'AutotagUpload'`). `ContentUploadIngestor.Ingest({ ContentSourceID, FileID, Name, Description, Origin, RunNow, ContextUser, Provider })` idempotently creates (or returns the existing) `MJ: Content Items` row with `FileID`, `URL = UploadItemURL(FileID)` (`upload://<normalized-file-id>`), and all stage statuses set to `'Pending'`; when `RunNow` is `true`, it runs `Extract`, `Tag`, `Segment`, and `Embed` in order through `RecordProcessExecutor.RunByID` with a `records` scope and logs stage failures without throwing past the caller. `ContentUploadIngestor.Remove({ ContentItemID, FileID, ContentSourceID, RunNow, ContextUser, Provider })` marks the `MJ: Content Items` row and its dependent chunks as `DeleteStatus = 'Pending'` via `ContentPipelineDeleteMarker` (and runs `DeleteContentItem` and `Delete` when `RunNow` is `true`), while `DeleteContentItemStage` never deletes the caller-owned `MJ: Files` row or storage object.
+
+When `Origin: { EntityName, RecordID }` is supplied to `Ingest`, `ContentUploadIngestor` finds or creates one `MJ: Entity Record Documents` row with `EntityID`, `RecordID` formatted in the canonical `ID|<id>` form (`CompositeKey.FromURLSegment(entityInfo, Origin.RecordID).ToRecordID()`), `EntityDocumentID` taken from `ContentSource.EntityDocumentID`, and `VectorIndexID` resolved via `ContentVectorInfrastructure.ResolveVectorIndexID`, then sets `ContentItem.EntityRecordDocumentID` to that row so `SearchEngine` promotes hits to the origin entity and enforces its row-level permissions and scope filters. When `Origin` is omitted, no `MJ: Entity Record Documents` row is created and `ContentItem.EntityRecordDocumentID` remains `null`.
+
+Because uploaded content is pushed rather than crawled, `AutotagUpload` declares `IsPushOnly = true` and `SupportsExhaustiveWalk = false` (mirrored by `"IsPushOnly": true` on the `Upload` `MJ: Content Source Types` row). Both `Discover` and `Sync` runs in `DiscoverStage` return `Outcome.Skipped` for any push-only source before walking or running `PipelineProcessor.reconcileSyncOrphans`, ensuring a scheduled `Sync` never fails the source or marks uploaded `MJ: Content Items` as orphans for deletion.
+
+---
+
 ## 9. Shipped Record Processes & Testing
 
 ### The 9 Shipped Record Processes
@@ -594,7 +604,7 @@ Setting `"IsTest": true` in `RecordProcess.Configuration` (or running a Record P
 
 - **Unit Tests**:
   - `packages/ContentPipeline/base/src/__tests__/` — `WorkingRecord.test.ts`, `ByteSignature.test.ts`, `FileTypeResolution.test.ts`, `DurableCopy.test.ts`, `PipelineTuning.test.ts`, and `Stage.test.ts`.
-  - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor.test.ts`, `AccessResolver.test.ts`, `ContentFetcher.test.ts`, `ContentSourceConfigurationResolver.test.ts`, `DetectionCatalog.test.ts`, `ExtractorCascade.test.ts`, `ArchiveExtractor.test.ts`, `DiscoverStage.test.ts`, `ExtractStage.test.ts`, `TagSegmentStages.test.ts`, `EmbedStage.test.ts`, `EmbedRouting.test.ts`, `DeleteStage.test.ts`, `Filters.test.ts`, `Reprocessing.test.ts`, `ReviewFixes.test.ts`, and `TestMode.test.ts`.
+  - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor.test.ts`, `AccessResolver.test.ts`, `ContentFetcher.test.ts`, `ContentSourceConfigurationResolver.test.ts`, `ContentUploadIngestor.test.ts`, `DetectionCatalog.test.ts`, `ExtractorCascade.test.ts`, `ArchiveExtractor.test.ts`, `DiscoverStage.test.ts`, `ExtractStage.test.ts`, `TagSegmentStages.test.ts`, `EmbedStage.test.ts`, `EmbedRouting.test.ts`, `DeleteStage.test.ts`, `Filters.test.ts`, `Reprocessing.test.ts`, `ReviewFixes.test.ts`, and `TestMode.test.ts`.
   - `packages/ContentAutotagging/src/__tests__/` — `AutotagBaseEngine.test.ts`, `AutotagEntity.test.ts`, `AutotagWebsite.test.ts`, `LocalFileSystemFetch.test.ts`, `ContentAutotagPrompt.test.ts`, `ContentDeduplication.test.ts`, `ContentVectorInfrastructure.test.ts`, `FieldPathResolver.test.ts`, `RunBudget.test.ts`, `ScopeContextResolver.test.ts`, and `content-types.test.ts`.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
   - [`content-pipeline.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-pipeline.checks.ts) (`IT137`, checks `CP1`–`CP15`, `RequiresMutation: true`) — Validates end-to-end `Discover` item creation and `ForceDiscovery` clearing, `Extract` + `Segment` chunk production, `Embed` namespace routing and `VectorRecordID` receipts, unchanged walk/extract no-ops, re-segmentation superseding all prior chunks, `Delete` vector removal and unreferenced chunk row purge, `MetadataOnly` in-place vector updates, item cascade deletion, incremental `Since` window, `Columns` whitelist and framework-owned column refusal, nested archive depth limit, `Sync` orphan removal/revival/empty-walk circuit breaker, and `Access` session resolution plus cross-origin header stripping against SQL Server.
