@@ -345,6 +345,13 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    */
   private recoveryAttempts = new Map<string, number>();
 
+  /**
+   * Private-network allow-lists, by agent-session key, for scopes whose browser must not reach the
+   * server's own network (a text conversation's). Applied to the live browser and to every browser the
+   * key starts later, a recovery replacement included. Cleared when the key is ended.
+   */
+  private privateNetworkPolicies = new Map<string, string[]>();
+
   /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
   private sessionCounter = 0;
 
@@ -488,6 +495,10 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     await this.Config(false, contextUser);
     const resolvedProviderName = this.resolveAgentSessionProviderName(providerName);
     const handle = await this.StartSession({ ProviderName: resolvedProviderName, ContextUser: contextUser });
+    const allowedHosts = this.privateNetworkPolicies.get(key);
+    if (allowedHosts) {
+      await this.applyPrivateNetworkPolicy(handle, allowedHosts);
+    }
     this.agentSessionToEngineSession.set(key, handle.SessionID);
     LogStatus(
       `[RemoteBrowserEngine] Lazily started browser for agent session ${agentSessionID} ` +
@@ -572,15 +583,46 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    */
   public async EndSessionForAgentSession(agentSessionID: string, instanceKey?: string): Promise<boolean> {
     const key = this.agentSessionKey(agentSessionID, instanceKey);
+    // A browser still launching is not in the map yet: wait for it, or it outlives this end and runs on.
+    await this.startingSessions.get(key)?.catch(() => undefined);
     // An explicit end is the surface going away for good, so its recovery budget goes with it — a
     // later surface reusing the key starts from a clean slate rather than inheriting a spent one.
     this.recoveryAttempts.delete(key);
+    this.privateNetworkPolicies.delete(key);
     const engineSessionID = this.agentSessionToEngineSession.get(key);
     if (!engineSessionID) {
       return false;
     }
     this.agentSessionToEngineSession.delete(key);
     return this.EndSession(engineSessionID);
+  }
+
+  /**
+   * Keeps an agent session's browser off the server's own network: no loopback, link-local or
+   * private-network host except `allowedHosts`. Applies to its live browser now and to any it starts
+   * later. Throws when the backend cannot enforce it, so such a scope gets no browser rather than an
+   * unrestricted one.
+   *
+   * @param agentSessionID The agent-session (or conversation) id the browser is keyed by.
+   * @param allowedHosts Private hosts still reachable, as `host` or `host:port`.
+   */
+  public async RestrictPrivateNetworkForAgentSession(agentSessionID: string, allowedHosts: string[], instanceKey?: string): Promise<void> {
+    const key = this.agentSessionKey(agentSessionID, instanceKey);
+    this.privateNetworkPolicies.set(key, allowedHosts);
+    const engineSessionID = this.agentSessionToEngineSession.get(key);
+    const handle = engineSessionID ? this.activeSessions.get(engineSessionID.toLowerCase()) : undefined;
+    if (handle) {
+      await this.applyPrivateNetworkPolicy(handle, allowedHosts);
+    }
+  }
+
+  /** Applies a private-network allow-list to a session, ending it when its backend cannot. */
+  private async applyPrivateNetworkPolicy(handle: RemoteBrowserSessionHandle, allowedHosts: string[]): Promise<void> {
+    if (!handle.Session.RestrictPrivateNetwork) {
+      await this.EndSession(handle.SessionID);
+      throw new Error(`The '${handle.Provider.Name}' remote-browser backend cannot keep a browser off the private network.`);
+    }
+    await handle.Session.RestrictPrivateNetwork(allowedHosts);
   }
 
   /**
