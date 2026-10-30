@@ -9,6 +9,7 @@ import {
   MJUserEntity
 } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -32,7 +33,7 @@ interface SharePermission {
         [Visible]="true"
         (Close)="onClose()">
         <div class="share-content">
-          @if (conversation?.ProjectID) {
+          @if (conversation?.ProjectID && IsConversationOwner) {
             <div class="folder-inheritance-section">
               <h4>Folder Access</h4>
               <label class="folder-inheritance-toggle">
@@ -44,8 +45,8 @@ interface SharePermission {
               </label>
               <p class="folder-inheritance-hint">
                 {{ InheritFolderAccess
-                    ? 'People with access to this folder automatically inherit access to this conversation.'
-                    : 'Folder access is restricted for this conversation. Only you and people explicitly added below have access.' }}
+                    ? 'People with access to this folder see this conversation in their list.'
+                    : 'People with access to this folder no longer see this conversation in their list. People added below still do.' }}
               </p>
             </div>
           }
@@ -280,6 +281,14 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
       this.loadPermissions();
       this.updateShareLink();
     }
+  }
+
+  /**
+   * True when the current user owns the conversation. Only the owner may change whether it inherits its
+   * folder's access; the server refuses anyone else (`MJConversationEntityServer`).
+   */
+  public get IsConversationOwner(): boolean {
+    return !!this.Conversation?.UserID && !!this.CurrentUser && UUIDsEqual(this.Conversation.UserID, this.CurrentUser.ID);
   }
 
   async OnToggleInheritFolderAccess(inherit: boolean): Promise<void> {

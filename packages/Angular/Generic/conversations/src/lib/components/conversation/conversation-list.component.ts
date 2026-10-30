@@ -98,8 +98,8 @@ interface ListContextMenu {
               </button>
               <button class="selection-bar-btn"
                       (click)="BarOpenMoveMenu($event)"
-                      [disabled]="!CanChangeAny(SelectedIds)"
-                      [title]="CanChangeAny(SelectedIds) ? 'Move to folder' : ChangeRefusedReason"
+                      [disabled]="!CanMoveAny(SelectedIds)"
+                      [title]="CanMoveAny(SelectedIds) ? 'Move to folder' : MoveRefusedReason"
                       aria-label="Move to folder">
                 <i class="fas fa-folder-tree"></i>
               </button>
@@ -366,7 +366,7 @@ interface ListContextMenu {
            [class.renamed]="IsConversationRenamed(conversation)"
            [class.dragging]="IsConversationDragging(conversation)"
            [style.paddingLeft.px]="depth ? 16 + depth * 14 : 16"
-           [draggable]="CanChange(conversation)"
+           [draggable]="CanMove(conversation)"
            (dragstart)="OnConversationDragStart(conversation, $event)"
            (dragend)="OnConversationDragEnd()"
            (dragover)="OnConversationRowDragOver(conversation, $event)"
@@ -406,7 +406,7 @@ interface ListContextMenu {
             }
             @if (conversation.ProjectID && !IsConversationInheritingFolderAccess(conversation)) {
               <i class="fas fa-lock shared-indicator restricted-indicator"
-                 title="Restricted — does not inherit folder access"></i>
+                 title="Not shown to folder members: does not inherit folder access"></i>
             }
           </div>
           <div class="conversation-preview">{{ conversation.Description }}</div>
@@ -489,8 +489,8 @@ interface ListContextMenu {
                 </button>
               }
               <button class="menu-item" (click)="OpenMoveSubmenu($event)"
-                      [disabled]="!CanChangeAny(ContextMenu.targets)"
-                      [attr.title]="CanChangeAny(ContextMenu.targets) ? null : ChangeRefusedReason">
+                      [disabled]="!CanMoveAny(ContextMenu.targets)"
+                      [attr.title]="CanMoveAny(ContextMenu.targets) ? null : MoveRefusedReason">
                 <i class="fas fa-folder-tree"></i>
                 <span>Move to folder</span>
                 <i class="fas fa-chevron-right submenu-arrow"></i>
@@ -505,8 +505,8 @@ interface ListContextMenu {
               @if (ContextMenu.targets.length === 1 && ContextMenu.conversation?.ProjectID) {
                 <button class="menu-item"
                         (click)="ContextToggleFolderInheritance()"
-                        [disabled]="!CanShareAny(ContextMenu.targets)"
-                        [attr.title]="CanShareAny(ContextMenu.targets) ? null : ShareRefusedReason">
+                        [disabled]="!CanMoveAny(ContextMenu.targets)"
+                        [attr.title]="CanMoveAny(ContextMenu.targets) ? null : MoveRefusedReason">
                   <i class="fas" [ngClass]="IsConversationInheritingFolderAccess(ContextMenu.conversation) ? 'fa-lock' : 'fa-folder-open'"></i>
                   <span>{{ IsConversationInheritingFolderAccess(ContextMenu.conversation) ? 'Restrict folder access' : 'Inherit folder access' }}</span>
                 </button>
@@ -1419,7 +1419,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public readonly FolderShareRefusedReason = 'Only the folder owner, or someone with Owner access, can share a folder';
 
   /** Why Move and Pin are unavailable, shown on their disabled buttons. */
-  public readonly ChangeRefusedReason = 'You need Edit access to move or pin a conversation shared with you';
+  public readonly ChangeRefusedReason = 'You need Edit access to pin a conversation shared with you';
+
+  /** Why moving a conversation, or changing its folder access, is refused. */
+  public readonly MoveRefusedReason = "Only the conversation's owner can move it or change its folder access";
 
   /** How long a touch must rest on a row before it selects the row. */
   private static readonly longPressDelayMs = 500;
@@ -2054,8 +2057,29 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   private async moveConversations(conversationIds: string[], projectId: string | null): Promise<void> {
     // Dropping onto a folder's own contents is easy to do by accident — skip the
     // conversations that already live there rather than re-saving them.
-    const toMove = conversationIds.filter(id => !this.isInProject(id, projectId));
-    if (toMove.length === 0) return;
+    const notThere = conversationIds.filter(id => !this.isInProject(id, projectId));
+    // Only an owner can move a conversation; the server refuses anyone else.
+    const toMove = notThere.filter(id => {
+      const conversation = this.engine.GetConversation(id);
+      return !!conversation && this.CanMove(conversation);
+    });
+    if (toMove.length === 0) {
+      if (notThere.length > 0) {
+        await this.dialogService.alert('Cannot Move', `${this.MoveRefusedReason}.`);
+      }
+      return;
+    }
+    // A Shared or Public folder shows the conversations in it to everyone it is shared with.
+    if (projectId && this.engine.GetProjectVisibilityTier(projectId) !== 'Private') {
+      const folder = this.engine.Projects.find(p => UUIDsEqual(p.ID, projectId));
+      const what = toMove.length === 1 ? 'this conversation' : `these ${toMove.length} conversations`;
+      const confirmed = await this.dialogService.confirm({
+        title: 'Move into a shared folder?',
+        message: `People with access to "${folder?.Name ?? 'this folder'}" will see ${what}.`,
+        okText: 'Move'
+      });
+      if (!confirmed) return;
+    }
 
     try {
       const result = await this.engine.MoveMultipleConversationsToProject(toMove, projectId, this.CurrentUser);
@@ -2345,8 +2369,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     const conversation = this.ContextMenu?.conversation;
     this.CloseContextMenu();
     if (!conversation || !conversation.ProjectID) return;
-    if (!this.canShare(conversation)) {
-      await this.dialogService.alert('Cannot Change Access', `${this.ShareRefusedReason}.`);
+    if (!this.CanMove(conversation)) {
+      await this.dialogService.alert('Cannot Change Access', `${this.MoveRefusedReason}.`);
       return;
     }
 
@@ -2369,7 +2393,21 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** True when the user may move or pin the conversation: they own it, or hold Edit or Owner access. */
+  /** True when at least one of the conversations can be moved by the current user (its owner). */
+  public CanMoveAny(ids: string[]): boolean {
+    return ids.some(id => {
+      const conversation = this.engine.GetConversation(id);
+      return !!conversation && this.CanMove(conversation);
+    });
+  }
+
+  /** True when the user may move the conversation or change its folder access: only its owner. */
+  public CanMove(conversation: MJConversationEntity): boolean {
+    if (!this.CurrentUser) return false;
+    return this.engine.CanMoveConversation(conversation, this.CurrentUser.ID);
+  }
+
+  /** True when the user may pin the conversation: they own it, or hold Edit or Owner access. */
   public CanChange(conversation: MJConversationEntity): boolean {
     if (!this.CurrentUser) return false;
     return this.engine.CanEditConversation(conversation, this.CurrentUser.ID);
@@ -2812,14 +2850,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   async BulkMoveToFolder(projectId: string | null, ids: string[] = this.actionTargetIds()): Promise<void> {
     this.CloseContextMenu();
     if (ids.length === 0) return;
-
-    try {
-      const result = await this.engine.MoveMultipleConversationsToProject(ids, projectId, this.CurrentUser);
-      await this.reportBulkOutcome(result, 'moved');
-    } catch (error) {
-      console.error('Error moving conversations:', error);
-      await this.dialogService.alert('Error', 'Failed to move the selected conversations. Please try again.');
-    }
+    // One move path for menus, drag and drop and the bar: owner-only, and it asks before sharing.
+    await this.moveConversations(ids, projectId);
     this.cdr.detectChanges();
   }
 

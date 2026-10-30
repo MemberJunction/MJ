@@ -15,17 +15,24 @@
 -- WHAT. Backfill `OwnerUserID` on legacy `Project` rows where `OwnerUserID IS NULL`
 -- and the folder was not explicitly converted from personal to shared (no Update
 -- in `RecordChange` touching `OwnerUserID`). Owner resolution order:
---   1. Earliest conversation directly inside the folder (`Conversation.UserID`)
---   2. Earliest conversation in any descendant subfolder
---   3. Earliest `RecordChange` audit entry for the folder (`Create` preferred)
---   4. Nearest ancestor folder's `OwnerUserID` (for empty nested subfolders)
+--   1. The user who created the folder (`RecordChange` Create entry)
+--   2. Earliest conversation directly inside the folder (`Conversation.UserID`)
+--   3. Earliest conversation in any descendant subfolder
+--   4. Earliest other `RecordChange` audit entry for the folder
+--   5. Nearest ancestor folder's `OwnerUserID` (for empty nested subfolders)
+--
+-- Then every existing conversation that sits in a Public folder, or in a folder
+-- owned by someone else, is stamped `"inheritFolderAccess": false` so the upgrade
+-- shows no conversation to anyone who could not see it before (Pass 3).
 -- ============================================================================
 
 DECLARE @ProjectEntityID UNIQUEIDENTIFIER = 'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A';
 
--- Pass 1: Backfill OwnerUserID from (1) direct conversations, (2) descendant
---         conversations, or (3) RecordChange audit history, excluding any folder
---         that was explicitly updated to shared (OwnerUserID -> NULL).
+-- Pass 1: Backfill OwnerUserID from (1) the folder's creator, (2) direct
+--         conversations, (3) descendant conversations, or (4) other RecordChange
+--         history, excluding any folder that was explicitly updated to shared
+--         (OwnerUserID -> NULL). The creator outranks conversation authorship: in a
+--         folder several people used, the first conversation's author is not the owner.
 ;WITH FolderHierarchy AS (
     SELECT
         p.ID AS RootProjectID,
@@ -49,7 +56,21 @@ ResolvedOwners AS (
     SELECT
         p.ID AS ProjectID,
         COALESCE(
-            -- 1. Earliest conversation directly inside this folder
+            -- 1. The user who created this folder
+            (
+                SELECT TOP 1 rc.UserID
+                FROM ${flyway:defaultSchema}.RecordChange rc
+                INNER JOIN ${flyway:defaultSchema}.[User] u ON u.ID = rc.UserID
+                WHERE rc.EntityID = @ProjectEntityID
+                  AND rc.RecordID IN (
+                      N'ID|' + CAST(p.ID AS NVARCHAR(50)),
+                      CAST(p.ID AS NVARCHAR(50))
+                  )
+                  AND rc.Type = N'Create'
+                  AND rc.UserID IS NOT NULL
+                ORDER BY rc.ChangedAt ASC, rc.ID ASC
+            ),
+            -- 2. Earliest conversation directly inside this folder
             (
                 SELECT TOP 1 c.UserID
                 FROM ${flyway:defaultSchema}.Conversation c
@@ -58,7 +79,7 @@ ResolvedOwners AS (
                   AND c.UserID IS NOT NULL
                 ORDER BY c.__mj_CreatedAt ASC, c.ID ASC
             ),
-            -- 2. Earliest conversation in any descendant subfolder
+            -- 3. Earliest conversation in any descendant subfolder
             (
                 SELECT TOP 1 c.UserID
                 FROM FolderHierarchy fh
@@ -69,7 +90,7 @@ ResolvedOwners AS (
                   AND c.UserID IS NOT NULL
                 ORDER BY fh.Depth ASC, c.__mj_CreatedAt ASC, c.ID ASC
             ),
-            -- 3. Earliest RecordChange user for this Project record
+            -- 4. Earliest other RecordChange user for this Project record
             (
                 SELECT TOP 1 rc.UserID
                 FROM ${flyway:defaultSchema}.RecordChange rc
@@ -80,10 +101,7 @@ ResolvedOwners AS (
                       CAST(p.ID AS NVARCHAR(50))
                   )
                   AND rc.UserID IS NOT NULL
-                ORDER BY
-                    CASE WHEN rc.Type = N'Create' THEN 0 ELSE 1 END ASC,
-                    rc.ChangedAt ASC,
-                    rc.ID ASC
+                ORDER BY rc.ChangedAt ASC, rc.ID ASC
             )
         ) AS InferredOwnerUserID
     FROM ${flyway:defaultSchema}.Project p
@@ -165,46 +183,27 @@ WHERE p.OwnerUserID IS NULL
   );
 GO
 
--- ============================================================================
--- Ensure the 'Projects' (Conversation Folders) ResourceType exists so folder-
--- level ResourcePermission grants satisfy FK_ResourcePermission_ResourceType
--- immediately after running Flyway migrations (before mj sync push).
--- ============================================================================
-DECLARE @ProjectsResourceTypeID UNIQUEIDENTIFIER = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
-DECLARE @ProjectsEntityID UNIQUEIDENTIFIER = 'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A';
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM ${flyway:defaultSchema}.ResourceType
-    WHERE ID = @ProjectsResourceTypeID
-       OR Name = N'Projects'
-)
-BEGIN
-    INSERT INTO ${flyway:defaultSchema}.ResourceType (
-        ID,
-        Name,
-        DisplayName,
-        Description,
-        Icon,
-        EntityID,
-        __mj_CreatedAt,
-        __mj_UpdatedAt,
-        CategoryEntityID,
-        DriverClass
-    )
-    VALUES (
-        @ProjectsResourceTypeID,
-        N'Projects',
-        N'Conversation Folders',
-        N'Conversation folders that organize conversations and support folder-level sharing',
-        N'fa-solid fa-folder',
-        @ProjectsEntityID,
-        GETUTCDATE(),
-        GETUTCDATE(),
-        NULL,
-        NULL
-    );
-END
+-- Pass 3: Keep every existing conversation exactly as visible as it was.
+--         Before v6.2.x a folder shared only its name; the conversations in it
+--         stayed private to their creators. Folders now share their conversations
+--         (a Public folder with everyone, a Shared folder with its grantees, and a
+--         folder's owner sees the conversations in it). So an existing conversation
+--         in a Public folder, or in a folder someone else owns, keeps its old
+--         visibility by opting out of folder inheritance. Conversations created after
+--         the upgrade inherit by default. Re-running sets the same value again.
+UPDATE c
+SET
+    c.AdditionalData = CASE
+        WHEN ISJSON(c.AdditionalData) = 1 AND LEFT(LTRIM(c.AdditionalData), 1) = N'{'
+            THEN JSON_MODIFY(c.AdditionalData, '$.inheritFolderAccess', CAST(0 AS BIT))
+        ELSE N'{"inheritFolderAccess":false}'
+    END,
+    c.__mj_UpdatedAt = GETUTCDATE()
+FROM ${flyway:defaultSchema}.Conversation c
+INNER JOIN ${flyway:defaultSchema}.Project p ON p.ID = c.ProjectID
+WHERE p.OwnerUserID IS NULL
+   OR c.UserID IS NULL
+   OR p.OwnerUserID <> c.UserID;
 GO
 
 -- ============================================================================
@@ -212,11 +211,16 @@ GO
 -- specific Users or Roles via MJ: Resource Permissions (ResourceType 'Projects',
 -- ID '88D0DF27-AF8F-43AC-9EC4-2AC314F49355') are readable alongside public
 -- folders (OwnerUserID IS NULL) and the user's own folders.
+--
+-- The folder's [ID] sits OUTSIDE the ResourcePermission subquery on purpose:
+-- inside it, an unqualified [ID] binds to [rp].[ID] (ResourcePermission has its
+-- own ID column), which matches no real grant and lets a grant that points at
+-- itself open every folder.
 -- ============================================================================
 DECLARE @OwnFoldersRLSID UNIQUEIDENTIFIER = '7596823D-CA3B-4CE5-A66E-FC929E0FEB02';
 
 UPDATE ${flyway:defaultSchema}.RowLevelSecurityFilter
-   SET FilterText = N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'' OR EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.[ResourcePermission] AS [rp] WHERE [rp].[ResourceTypeID] = ''88D0DF27-AF8F-43AC-9EC4-2AC314F49355'' AND [rp].[ResourceRecordID] = CAST([ID] AS NVARCHAR(255)) AND [rp].[Status] = N''Approved'' AND (([rp].[Type] = N''User'' AND [rp].[UserID] = ''{{UserID}}'') OR ([rp].[Type] = N''Role'' AND [rp].[RoleID] IN (SELECT [ur].[RoleID] FROM ${flyway:defaultSchema}.[UserRole] AS [ur] WHERE [ur].[UserID] = ''{{UserID}}'')))))',
+   SET FilterText = N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'' OR CAST([ID] AS NVARCHAR(36)) IN (SELECT [rp].[ResourceRecordID] FROM ${flyway:defaultSchema}.[ResourcePermission] AS [rp] WHERE [rp].[ResourceTypeID] = ''88D0DF27-AF8F-43AC-9EC4-2AC314F49355'' AND [rp].[Status] = N''Approved'' AND (([rp].[Type] = N''User'' AND [rp].[UserID] = ''{{UserID}}'') OR ([rp].[Type] = N''Role'' AND [rp].[RoleID] IN (SELECT [ur].[RoleID] FROM ${flyway:defaultSchema}.[UserRole] AS [ur] WHERE [ur].[UserID] = ''{{UserID}}'')))))',
        Description = N'Narrows MJ: Projects to folders the current user may see: public folders (OwnerUserID IS NULL), their own folders (OwnerUserID = {{UserID}}), and folders shared with them or their roles via MJ: Resource Permissions.',
        __mj_UpdatedAt = GETUTCDATE()
  WHERE ID = @OwnFoldersRLSID;

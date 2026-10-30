@@ -107,6 +107,49 @@ describe('ProjectFormModalComponent (DOM) — save failure reporting', () => {
   });
 });
 
+describe('ProjectFormModalComponent (DOM) — folder sharing failure reporting', () => {
+  let alertSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
+  });
+
+  it('keeps the dialog open and shows the reason when a folder grant is refused', async () => {
+    const project = { ...failingProject(''), ID: 'p1', Save: vi.fn().mockResolvedValue(true) } as unknown as MJProjectEntity;
+    const refusedGrant = {
+      ID: '',
+      Save: vi.fn().mockResolvedValue(false),
+      LatestResult: { Success: false, CompleteMessage: 'RoleID or UserID is required', Errors: [] }
+    };
+    const close = vi.fn();
+    const provider = {
+      GetEntityObject: vi.fn((name: string) => Promise.resolve(name === 'MJ: Projects' ? project : refusedGrant))
+    } as unknown as IMetadataProvider;
+    const f = renderComponentFixture(ProjectFormModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
+      inputs: { environmentId: 'env1', currentUser, dialogRef: { Close: close } as unknown as MJDialogRef, Provider: provider },
+    });
+    f.componentInstance.formData.name = 'Budget';
+    f.componentInstance.VisibilityTier = 'Shared';
+    f.componentInstance.FolderPermissions = [{ permissionId: null, type: 'User', userId: 'u2', permissionLevel: 'View' }];
+    const saved = vi.fn();
+    f.componentInstance.projectSaved.subscribe(saved);
+
+    await f.componentInstance.onSave();
+
+    expect(refusedGrant.Save).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(String(alertSpy.mock.calls[0][0])).toContain('RoleID or UserID is required');
+    expect(saved).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', () => {
   const SHARING_IS_ONE_WAY = "Once shared, a folder can't be made private again.";
 

@@ -66,6 +66,8 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   GetSharedByInfo: (_id: string): SharedByInfo | null => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
+  GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -546,11 +548,47 @@ describe('ConversationListComponent (DOM) — who can move and pin', () => {
     expect(findItem(f, 'Move to folder').disabled).toBe(true);
   });
 
-  it('offers Pin and Move for a conversation shared with you at Edit level', () => {
+  it('offers Pin but not Move for a conversation shared with you at Edit level: only its owner moves it', () => {
     const { f } = renderWithGrant('Edit');
     rightClickOn(f, rowFor(f, 'Loose Two'));
     expect(findItem(f, 'Pin').disabled).toBe(false);
-    expect(findItem(f, 'Move to folder').disabled).toBe(false);
+    expect(findItem(f, 'Move to folder').disabled).toBe(true);
+  });
+
+  it('moves only the conversations you own from a mixed selection', async () => {
+    const { f, engine } = renderWithGrant('Edit', (c) => selectRows(c, ['U1', 'U2']));
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
+    f.detectChanges();
+    findItem(f, 'Work').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1'], 'proj1', currentUser);
+  });
+
+  it('asks before moving into a shared folder, and moves nothing when you cancel', async () => {
+    const { f, engine } = render(undefined, { GetProjectVisibilityTier: () => 'Shared' });
+    const confirm = f.debugElement.injector.get(DialogService).confirm as unknown as ReturnType<typeof vi.fn>;
+    confirm.mockResolvedValueOnce(false);
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
+    f.detectChanges();
+    findItem(f, 'Work').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(String(confirm.mock.calls[0][0].message)).toContain('People with access to "Work" will see this conversation');
+    expect(engine['MoveMultipleConversationsToProject']).not.toHaveBeenCalled();
+  });
+
+  it('moves into a private folder without asking', async () => {
+    const { f, engine } = render();
+    const confirm = f.debugElement.injector.get(DialogService).confirm as unknown as ReturnType<typeof vi.fn>;
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
+    f.detectChanges();
+    findItem(f, 'Work').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1'], 'proj1', currentUser);
   });
 
   it('offers Pin and Move for a selection when any row in it can be changed', () => {

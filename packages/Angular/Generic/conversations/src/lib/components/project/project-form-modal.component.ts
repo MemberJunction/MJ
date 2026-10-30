@@ -1048,47 +1048,56 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       }
     }
 
-    let changed = false;
-    for (const permId of idsToDelete) {
-      const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', this.CurrentUser);
-      if (await permEntity.Load(permId)) {
-        await permEntity.Delete();
-        changed = true;
-      }
-    }
+    // Save() and Delete() report a refusal on LatestResult and return false. Throwing here sends
+    // it to OnSave's catch, which shows the reason and keeps the dialog open instead of closing on
+    // a folder whose sharing did not take.
+    const refused = (entity: MJResourcePermissionEntity, action: string): never => {
+      throw new Error(`Could not ${action} a folder permission: ${entity.LatestResult?.CompleteMessage || 'no reason given'}`);
+    };
 
-    if (tier === 'Shared') {
-      for (const perm of this.FolderPermissions) {
+    let changed = false;
+    try {
+      for (const permId of idsToDelete) {
         const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', this.CurrentUser);
-        if (perm.permissionId) {
-          if (await permEntity.Load(perm.permissionId)) {
-            if (permEntity.PermissionLevel !== perm.permissionLevel) {
-              permEntity.PermissionLevel = perm.permissionLevel;
-              await permEntity.Save();
-              changed = true;
+        if (await permEntity.Load(permId)) {
+          if (!(await permEntity.Delete())) refused(permEntity, 'remove');
+          changed = true;
+        }
+      }
+
+      if (tier === 'Shared') {
+        for (const perm of this.FolderPermissions) {
+          const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', this.CurrentUser);
+          if (perm.permissionId) {
+            if (await permEntity.Load(perm.permissionId)) {
+              if (permEntity.PermissionLevel !== perm.permissionLevel) {
+                permEntity.PermissionLevel = perm.permissionLevel;
+                if (!(await permEntity.Save())) refused(permEntity, 'update');
+                changed = true;
+              }
             }
-          }
-        } else {
-          permEntity.ResourceTypeID = PROJECTS_RESOURCE_TYPE_ID;
-          permEntity.ResourceRecordID = projectId;
-          permEntity.Type = perm.type;
-          permEntity.UserID = perm.type === 'User' ? (perm.userId ?? null) : null;
-          permEntity.RoleID = perm.type === 'Role' ? (perm.roleId ?? null) : null;
-          permEntity.PermissionLevel = perm.permissionLevel;
-          permEntity.Status = 'Approved';
-          if (await permEntity.Save()) {
+          } else {
+            permEntity.ResourceTypeID = PROJECTS_RESOURCE_TYPE_ID;
+            permEntity.ResourceRecordID = projectId;
+            permEntity.Type = perm.type;
+            permEntity.UserID = perm.type === 'User' ? (perm.userId ?? null) : null;
+            permEntity.RoleID = perm.type === 'Role' ? (perm.roleId ?? null) : null;
+            permEntity.PermissionLevel = perm.permissionLevel;
+            permEntity.Status = 'Approved';
+            if (!(await permEntity.Save())) refused(permEntity, 'add');
             perm.permissionId = permEntity.ID;
             changed = true;
           }
         }
       }
-    }
-
-    if (changed) {
-      try {
-        await ResourcePermissionEngine.Instance?.Config?.(true, this.CurrentUser);
-      } catch {
-        // Isolated test environments without a global Metadata.Provider may not support engine Config refresh.
+    } finally {
+      // Grants that did land before a refusal are real, so the engine still has to see them.
+      if (changed) {
+        try {
+          await ResourcePermissionEngine.Instance?.Config?.(true, this.CurrentUser);
+        } catch {
+          // Isolated test environments without a global Metadata.Provider may not support engine Config refresh.
+        }
       }
     }
   }

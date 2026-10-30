@@ -2764,11 +2764,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJVectorIndexEntityServer,
     QueryRefreshExtractionServerOperation,
     EntityDataGridRelatedEntityGenerator,
-    JoinGridRelatedEntityGenerator,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
@@ -2968,11 +2968,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
-    WorkQueueDiscardDeliveryServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    WorkQueueDiscardDeliveryServerOperation,
     WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
@@ -3005,7 +3005,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1215;
+export const CLASS_REGISTRATIONS_COUNT = 1216;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

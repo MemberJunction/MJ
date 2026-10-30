@@ -3170,7 +3170,50 @@ describe('ConversationEngine', () => {
             expect(engine.GetSharedByInfo('c-colleague')).toBeNull();
         });
 
-        it('classifies folders into Private, Shared (ACL), and Public tiers and inherits folder ACL permission levels', async () => {
+        it('keeps another user\'s folder-shared conversation when a save leaves it in the shared folder', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+
+            // Remote event: colleague renames the conversation; it stays in the shared folder
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                entityName: 'MJ: Conversations',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'c-colleague' }]),
+                    recordData: JSON.stringify({
+                        ID: 'c-colleague',
+                        Name: 'Renamed by colleague',
+                        UserID: 'user-2',
+                        ProjectID: 'proj-shared-1',
+                        EnvironmentID: 'env-1',
+                        IsArchived: false,
+                    }),
+                },
+            });
+
+            expect(engine.Conversations.map((c) => c.ID)).toEqual(['c-colleague']);
+            expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('View');
+        });
+
+        it('classifies folders into Private, Shared (ACL), and Public tiers from each folder\'s own grants, as the server does', async () => {
             const privateProject = createSharedOrPersonalProject({ ID: 'proj-priv', OwnerUserID: 'user-1' });
             const sharedProject = createSharedOrPersonalProject({ ID: 'proj-acl', OwnerUserID: 'user-2' });
             const childSubfolder = createSharedOrPersonalProject({
@@ -3208,21 +3251,26 @@ describe('ConversationEngine', () => {
             expect(engine.GetProjectVisibilityTier(sharedProject as never)).toBe('Shared');
             expect(engine.GetProjectVisibilityTier(publicProject as never)).toBe('Public');
 
-            // Subfolder inherits 'Edit' from parent 'proj-acl'
-            expect(engine.GetEffectiveProjectPermission('proj-sub', contextUser)).toEqual({
+            // The grant on 'proj-acl' gives Edit there...
+            expect(engine.GetEffectiveProjectPermission('proj-acl', contextUser)).toEqual({
                 Level: 'Edit',
                 SharedByUserID: 'user-2',
                 SharedByUser: 'Colleague Two',
             });
+            // ...but not on its subfolder: the server's read filter and write check see each folder's own
+            // grants only, so the subfolder is Private and carries only the View any visible folder gives.
+            expect(engine.GetProjectVisibilityTier(childSubfolder as never)).toBe('Private');
+            expect(engine.GetEffectiveProjectPermission('proj-sub', contextUser)?.Level).toBe('View');
 
-            // Conversation in the Shared folder (or its subfolder) inherits 'Edit' access
-            const colleagueConvoInSubfolder = createMockConversation({
-                ID: 'c-sub',
+            // A conversation directly in the Shared folder inherits its Edit access: it can be pinned,
+            // but only its owner can move it or change its folder inheritance.
+            const colleagueConvoInSharedFolder = createMockConversation({
+                ID: 'c-acl',
                 UserID: 'user-2',
                 User: 'Colleague Two',
-                ProjectID: 'proj-sub',
+                ProjectID: 'proj-acl',
             });
-            runViewResultQueue.push({ Success: true, Results: [colleagueConvoInSubfolder] });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvoInSharedFolder] });
             runViewResultQueue.push({
                 Success: true,
                 Results: [{ ID: 'user-2', Email: 'colleague@example.com' }],
@@ -3230,14 +3278,27 @@ describe('ConversationEngine', () => {
 
             await engine.LoadConversations('env-1', contextUser);
 
-            expect(engine.GetSharedByInfo('c-sub')?.Level).toBe('Edit');
-            expect(engine.CanEditConversation(colleagueConvoInSubfolder as never, 'user-1')).toBe(true);
+            expect(engine.GetSharedByInfo('c-acl')?.Level).toBe('Edit');
+            expect(engine.CanEditConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(true);
+            expect(engine.CanMoveConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(false);
+            expect(engine.CanMoveConversation(colleagueConvoInSharedFolder as never, 'user-2')).toBe(true);
         });
 
         it('narrows conversation access inside a Shared or Public folder when InheritFolderAccess is disabled', async () => {
             expect(IsInheritingFolderAccess({ AdditionalData: null })).toBe(true);
             expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess":true}' })).toBe(true);
             expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess":false}' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": false}' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": false, broken' })).toBe(false);
+
+            // The SQL clause the conversation list filters on agrees with the parser on both spellings.
+            // A LIKE '%x%' pattern with no other wildcards is a substring test.
+            const likePatterns = [...INHERIT_FOLDER_ACCESS_SQL_CLAUSE.matchAll(/NOT LIKE '%([^%']+)%'/g)].map((m) => m[1]);
+            const clauseInherits = (data: string) => likePatterns.every((pattern) => !data.includes(pattern));
+            for (const data of ['{"inheritFolderAccess":false}', '{"x":1,"inheritFolderAccess": false}']) {
+                expect(clauseInherits(data)).toBe(IsInheritingFolderAccess({ AdditionalData: data }));
+            }
+            expect(clauseInherits('{"x":1}')).toBe(true);
 
             const disabledJson = BuildUpdatedAdditionalDataForFolderInheritance('{"customKey":1}', false);
             expect(JSON.parse(disabledJson!)).toEqual({ customKey: 1, inheritFolderAccess: false });

@@ -398,6 +398,12 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 </mj-export-modal>
 ```
 
+#### Conversation folders
+
+A folder (`MJ: Projects`) is Private (only its owner sees it, the default), Shared (with chosen users or roles, through `MJ: Resource Permissions`) or Public (`OwnerUserID` null, everyone in the environment). Conversations in a Shared or Public folder appear, View-only, in the lists of the people the folder is shared with, unless a conversation is set not to inherit its folder's access. Each folder is shared on its own; a subfolder does not inherit its parent's grants. Only a conversation's owner can move it or change whether it inherits, and the server enforces that on save.
+
+Folder sharing controls which conversations are listed, not who can read them. Core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must add that RLS itself.
+
 ## Component Reference
 
 ### Messaging Components
