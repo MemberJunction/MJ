@@ -3345,6 +3345,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- User External Identities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJUserExternalIdentities"
+        SectionName="User External Identities"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJUserExternalIdentities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User External Identities','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: User External Identities','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJUserExternalIdentities')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserExternalIdentities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agent User Policies Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentUserPolicies"

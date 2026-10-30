@@ -245,7 +245,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (459 classes)
+// @memberjunction/core-entities (460 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -673,6 +673,7 @@ import {
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -2254,6 +2255,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,

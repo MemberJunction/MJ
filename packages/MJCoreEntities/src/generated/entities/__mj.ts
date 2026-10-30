@@ -37487,6 +37487,59 @@ export const MJUserApplicationSchema = z.object({
 export type MJUserApplicationEntityType = z.infer<typeof MJUserApplicationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: User External Identities
+ */
+export const MJUserExternalIdentitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The User this provider account signs in as.`),
+    Issuer: z.string().describe(`
+        * * Field Name: Issuer
+        * * Display Name: Issuer
+        * * SQL Data Type: nvarchar(400)
+        * * Description: The token's iss claim: the identity provider that issued the login.`),
+    Subject: z.string().describe(`
+        * * Field Name: Subject
+        * * Display Name: Subject
+        * * SQL Data Type: nvarchar(400)
+        * * Description: The provider's stable account ID: the sub claim, or tenant ID and object ID (tid:oid) for Microsoft Entra, whose sub differs per app registration.`),
+    ProviderName: z.string().nullable().describe(`
+        * * Field Name: ProviderName
+        * * Display Name: Provider Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The name of the configured auth provider that verified the login. Informational; matching uses Issuer and Subject.`),
+    LastLoginAt: z.date().nullable().describe(`
+        * * Field Name: LastLoginAt
+        * * Display Name: Last Login At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this binding last established a session. Written at most once a day, so it is accurate to the day.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJUserExternalIdentityEntityType = z.infer<typeof MJUserExternalIdentitySchema>;
+
+/**
  * zod schema definition for the entity MJ: User Favorites
  */
 export const MJUserFavoriteSchema = z.object({
@@ -144495,6 +144548,146 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
     */
     get Application(): string {
         return this.Get('Application');
+    }
+}
+
+
+/**
+ * MJ: User External Identities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UserExternalIdentity
+ * * Base View: vwUserExternalIdentities
+ * * @description Binds a User to an identity-provider account by token issuer and subject. Logins resolve to the bound User before any email match.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: User External Identities')
+export class MJUserExternalIdentityEntity extends BaseEntity<MJUserExternalIdentityEntityType> {
+    /**
+    * Loads the MJ: User External Identities record from the database
+    * @param ID: string - primary key value to load the MJ: User External Identities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJUserExternalIdentityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The User this provider account signs in as.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Issuer
+    * * Display Name: Issuer
+    * * SQL Data Type: nvarchar(400)
+    * * Description: The token's iss claim: the identity provider that issued the login.
+    */
+    get Issuer(): string {
+        return this.Get('Issuer');
+    }
+    set Issuer(value: string) {
+        this.Set('Issuer', value);
+    }
+
+    /**
+    * * Field Name: Subject
+    * * Display Name: Subject
+    * * SQL Data Type: nvarchar(400)
+    * * Description: The provider's stable account ID: the sub claim, or tenant ID and object ID (tid:oid) for Microsoft Entra, whose sub differs per app registration.
+    */
+    get Subject(): string {
+        return this.Get('Subject');
+    }
+    set Subject(value: string) {
+        this.Set('Subject', value);
+    }
+
+    /**
+    * * Field Name: ProviderName
+    * * Display Name: Provider Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the configured auth provider that verified the login. Informational; matching uses Issuer and Subject.
+    */
+    get ProviderName(): string | null {
+        return this.Get('ProviderName');
+    }
+    set ProviderName(value: string | null) {
+        this.Set('ProviderName', value);
+    }
+
+    /**
+    * * Field Name: LastLoginAt
+    * * Display Name: Last Login At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this binding last established a session. Written at most once a day, so it is accurate to the day.
+    */
+    get LastLoginAt(): Date | null {
+        return this.Get('LastLoginAt');
+    }
+    set LastLoginAt(value: Date | null) {
+        this.Set('LastLoginAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 

@@ -154,6 +154,10 @@ export const ExtractUserInfoFromPayload = (payload: JwtPayload): {
   lastName?: string;
   fullName?: string;
   preferredUsername?: string;
+  /** The provider's stable account ID; see `IAuthProvider.ExtractSubject`. Unset without a known provider. */
+  subject?: string;
+  /** The configured provider's name; unset without a known provider. */
+  providerName?: string;
 } => {
   const factory = AuthProviderFactory.Instance;
   const issuer = payload.iss;
@@ -185,7 +189,7 @@ export const ExtractUserInfoFromPayload = (payload: JwtPayload): {
     };
   }
 
-  return provider.extractUserInfo(payload);
+  return { ...provider.extractUserInfo(payload), subject: provider.ExtractSubject?.(payload), providerName: provider.name };
 };
 
 /** @deprecated Use {@link ExtractUserInfoFromPayload}. */
@@ -236,6 +240,37 @@ const isDomainAuthorized = (domain: string): boolean =>
     return regex.test(domain);
   });
 
+/** Cached users whose email matches, case-insensitively and trimmed. */
+const findCachedByEmail = (email: string): UserInfo[] =>
+  UserCache.Instance.Users.filter((u) => {
+    if (!u.Email || u.Email.trim() === '') {
+      // DB requires non-null, but a blank string is possible in theory
+      console.error(`SYSTEM METADATA ISSUE: User ${u.ID} has no email address`);
+      return false;
+    }
+    return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
+  });
+
+const countEmailMatches = (email: string): number => findCachedByEmail(email).length;
+
+/**
+ * Several User records share this email, and an email alone cannot say which one the login
+ * belongs to. Picking one (the lowest ID, as this path used to) is an unproven link between a
+ * verified identity and someone's data, so the login is refused until an operator merges the
+ * records. A login already bound to its provider account never reaches here; see
+ * `loginIdentityBinding.ts`.
+ */
+const refuseAmbiguousLogin = (email: string): undefined => {
+  const matches = findCachedByEmail(email);
+  LogError(
+    `AMBIGUOUS LOGIN REFUSED: ${matches.length} User records share the email '${email}' ` +
+      `(case-insensitively): ${matches.map((u) => `${u.ID} (${u.Email})`).join(', ')}. ` +
+      `The login is refused until the duplicates are merged. Find every affected user ` +
+      `with: SELECT LOWER(Email), COUNT(*) FROM __mj.[User] GROUP BY LOWER(Email) HAVING COUNT(*) > 1`
+  );
+  return undefined;
+};
+
 /**
  * Resolves a verified identity to an MJ `UserInfo`, optionally auto-provisioning a new user.
  *
@@ -258,36 +293,19 @@ export const VerifyUserRecord = async (
   // case-insensitively (see the duplicate-provisioning path below), and .find() then resolved to
   // whichever row happened to sit earlier in UserCache.Instance.Users — i.e. database row order.
   // That order changes when the cache is rebuilt, so an MJAPI restart silently moved a user onto a
-  // different record: their conversations, artifacts, items shared with them and their profile
-  // picture (UserImageURL lives on the User row) all vanished at once, and came back if the order
-  // flipped again. Observed in production 2026-09-15. Resolution must not depend on row order.
-  const emailMatches = UserCache.Instance.Users.filter((u) => {
-    if (!u.Email || u.Email.trim() === '') {
-      // this condition should never occur. If it doesn throw a console error including the user id
-      // DB requires non-null but this is just an extra check and we could in theory have a blank string in the DB
-      console.error(`SYSTEM METADATA ISSUE: User ${u.ID} has no email address`);
-      return false;
-    } else return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
-  });
-
-  if (emailMatches.length > 1) {
-    // Deterministic tie-break by ID so every process and every restart agrees, and a LOUD error
-    // because this is a data problem an operator has to resolve — silently picking a row is what
-    // made it look like data loss to the customer. Sorting by ID is arbitrary but stable; the point
-    // is that it never changes, not that it picks the "right" one.
-    emailMatches.sort((a, b) => a.ID.localeCompare(b.ID));
-    LogError(
-      `AMBIGUOUS LOGIN: ${emailMatches.length} User records share the email '${email}' ` +
-        `(case-insensitively): ${emailMatches.map((u) => `${u.ID} (${u.Email})`).join(', ')}. ` +
-        `Resolving to ${emailMatches[0].ID} by stable ID order. Until the duplicates are merged, ` +
-        `content owned by the other records is invisible to this login. Find every affected user ` +
-        `with: SELECT LOWER(Email), COUNT(*) FROM __mj.[User] GROUP BY LOWER(Email) HAVING COUNT(*) > 1`
-    );
+  // different record. Observed in production 2026-09-15.
+  if (countEmailMatches(email) > 1) {
+    return refuseAmbiguousLogin(email);
   }
 
   // Nothing cached: ask FindUser, which reads the database for a user this process has not loaded
-  // yet (created seconds ago on another server) instead of treating them as nonexistent.
-  let user = emailMatches[0] ?? (await UserCache.Instance.FindUser({ Email: email }));
+  // yet (created seconds ago on another server) instead of treating them as nonexistent. FindUser
+  // caches every row the email matched, so count again: the database may hold duplicates the cache
+  // did not.
+  let user = findCachedByEmail(email)[0] ?? (await UserCache.Instance.FindUser({ Email: email }));
+  if (user && countEmailMatches(email) > 1) {
+    return refuseAmbiguousLogin(email);
+  }
 
   if (!user) {
     // REFRESH THE CACHE BEFORE PROVISIONING. This block used to sit AFTER the auto-create below,
