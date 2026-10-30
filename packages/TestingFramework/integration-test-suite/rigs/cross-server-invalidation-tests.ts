@@ -680,16 +680,32 @@ async function main(): Promise<void> {
             const evt = JSON.parse(message) as { Action?: string; Category?: string; CacheKey?: string; Data?: string };
             if (evt.Category === CacheCategory.RunViewCache && (evt.CacheKey ?? '').toLowerCase().startsWith('mj: queries|')) seen.push(evt);
         });
+        /**
+         * Only an unfiltered, unordered, unlimited, non-aggregate, non-search slot is maintained in
+         * place on a save (LocalCacheManager's slot-maintenance matrix); every other slot is
+         * invalidated and lawfully repopulated by its next reader with a full 'set'. Fingerprint
+         * layout: EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|...].
+         */
+        const isMaintainableSlot = (key: string | undefined): boolean => {
+            const seg = (key ?? '').split('|');
+            return seg[1] === '_' && seg[2] === '_' && seg[3] === '-1' && seg[4] === '0' && seg[5] === '_' && seg[6] === '_';
+        };
+        const describe = (e: { Action?: string; CacheKey?: string; Data?: string }): string =>
+            `${e.Action} ${(e.Data ?? '').length}B ${(e.CacheKey ?? '').slice(0, 90)}`;
         const marker = `xs11-${Date.now()}`;
         const restore = await publishQueriesChangeFromA(marker);
         try {
             const arrived = await waitUntil(async () => seen.length > 0, PAYLOAD_WATCH_MS);
             Assert(arrived !== null, 'A\'s save must publish a RunViewCache event for its maintained MJ: Queries slot');
             await sleep(SETTLE_MS); // let any trailing events for the same save land
-            const fullSets = seen.filter(e => e.Action === 'set' && typeof e.Data === 'string' && /"results"\s*:\s*\[/.test(e.Data));
+            console.log(`      → events for MJ: Queries slots after A's save:\n${seen.map(e => `          ${describe(e)}`).join('\n')}`);
+            // Filtered / windowed slots are INVALIDATED by a save and lawfully repopulated by the next
+            // reader with a full 'set' (a cache miss). The regression is the MAINTAINED unfiltered slot
+            // re-broadcasting its whole array instead of a delta.
+            const fullSets = seen.filter(e => e.Action === 'set' && typeof e.Data === 'string' && /"results"\s*:\s*\[/.test(e.Data) && isMaintainableSlot(e.CacheKey));
             AssertEqual(fullSets.length, 0,
-                `a single-row save must not re-broadcast the whole cached array (saw ${fullSets.length} full 'set' payload(s), ` +
-                `largest ${Math.max(0, ...fullSets.map(e => e.Data!.length))} bytes)`);
+                `a single-row save must not re-broadcast the maintained slot's whole array (saw ${fullSets.length} full 'set' payload(s), ` +
+                `largest ${Math.max(0, ...fullSets.map(e => e.Data!.length))} bytes): ${fullSets.map(describe).join('; ')}`);
             const deltas = seen.filter(e => e.Action === 'row_delta');
             const notices = seen.filter(e => e.Action === 'set' && !e.Data);
             Assert(deltas.length + notices.length > 0, `expected a row_delta (full mode) or a bare set notice (notice mode); saw actions ${seen.map(e => e.Action).join(',')}`);
