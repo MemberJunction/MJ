@@ -323,6 +323,18 @@ describe('RealtimeSessionRuntime — session deadline alarm', () => {
         expect(provider.CloseReasons).toEqual(['Explicit']);
     });
 
+    // The deadline a host passes with its start belongs to that start: a start refused because another call holds the
+    // runtime must not arm it, or it would end the other call.
+    it('a start refused on a busy runtime does not arm the deadline it carried', async () => {
+        const { runtime, ended } = await startLive();
+        await expect(runtime.StartRealtimeSession('agent-2', null, null, null, null, null, null, null, null, null, null, null, { SessionDeadline: inMs(20) }))
+            .rejects.toThrow();
+        expect(runtime.SessionDeadline).toBeNull();
+        await sleep(60);
+        expect(ended).toEqual([]);
+        expect(runtime.IsActive).toBe(true);
+    });
+
     it('Reached$ with no live session emits nothing and ends nothing', async () => {
         const runtime = new RealtimeSessionRuntime(new Host());
         const reached: string[] = [];

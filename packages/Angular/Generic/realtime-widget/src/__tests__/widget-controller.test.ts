@@ -639,6 +639,23 @@ describe('WidgetController', () => {
       expect(h.runtime.SessionDeadline).toBe(foreign);
     });
 
+    // The runtime is idle when the launch begins and busy by the time it reaches the start: the host page started a
+    // call while the widget was still preparing (minting, loading the rasterizer). The refused launch must leave no
+    // deadline behind, or the guest's ceiling would end the host page's call.
+    it('leaves no deadline on the runtime when another call takes it between the launch and the start', async () => {
+      const h = buildHarness({ widgetKey: 'pk_live_abc', apiUrl: 'https://api.example.com' });
+      h.guest.Next = guestSession({ token: makeJwt(9_999_999_999), voiceMaxSessionMinutes: 10 });
+      let busy = false;
+      vi.spyOn(h.runtime, 'IsActive', 'get').mockImplementation(() => busy);
+      vi.spyOn(h.runtime, 'StartRealtimeSession').mockImplementation(async () => {
+        busy = true;
+        throw new Error('A realtime session is already active.');
+      });
+      await h.controller.Start();
+      expect(h.controller.Phase).toBe('error');
+      expect(h.runtime.SessionDeadline).toBeNull();
+    });
+
     it('ends only once: a call it did start is hung up by end(), and a later removal does not hang up again', async () => {
       const h = buildHarness({ token: makeJwt(9_999_999_999), agentId: 'agent-1', apiUrl: 'https://api.example.com' });
       await h.controller.Start();

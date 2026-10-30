@@ -1650,6 +1650,11 @@ export class RealtimeSessionRuntime {
       }
     }
     this.claimSessionSlot();
+    // Armed only now that the slot is ours: set before the claim, a refused start would leave its deadline to end
+    // the call that holds the runtime.
+    if (options?.SessionDeadline) {
+      this.SetSessionDeadline(options.SessionDeadline);
+    }
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
     this.sessionConversationId = conversationId ?? null;
