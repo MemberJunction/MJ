@@ -7,7 +7,7 @@
 | 1 | The shared core, and **Docs** | Minutes, policies, briefs and proposals written by people and agents in the same document |
 | 2 | **Slides** | Board decks and member presentations, with live MJ data on the slides |
 | 3 | **Sheets** | Budgets, rosters and trackers, with ranges filled from MJ queries and views |
-| A | **Excel add-in, Google Sheets add-on**, and generated files that carry them. The Excel add-in ships **first, as its own pull request** (§ 7.1) | MJ queries and views inside the spreadsheets people already use |
+| A | **Excel add-in, Google Sheets add-on**, and generated files that carry them. The Excel add-in's first release (**Open in Excel** plus in-pane browse & insert) **shipped in [#6214](https://github.com/MemberJunction/MJ/pull/6214)** (§ 7.1); Excel custom functions and the Google Sheets add-on remain | MJ entities, views and queries inside the spreadsheets people already use |
 
 **Why.** Associations on MemberJunction, starting with [BizApps Collaboration](https://github.com/MemberJunction/bizapps-collaboration)'s spaces, need somewhere to write and share documents without renting a separate tool for each relationship. Word and Google Docs stay: MJ imports from them, exports to them and links to them. What MJ adds that they can't:
 
@@ -17,7 +17,7 @@
 
 Collaboration keeps documents out of its own scope: its notes stay light, and becoming a document-management system is one of its non-goals ([its plan](https://github.com/MemberJunction/bizapps-collaboration/blob/next/plans/plan.md), D33 and the non-goals list). So this is core work that Collaboration, Committees, Contracts, Marketing and every other app consume, the way they consume the whiteboard.
 
-**Checked against:** MJ `next` at `a47488eb0` (2026-10-29). Paths are under `packages/` unless they start with `plans/`, `guides/`, `metadata/` or `.claude/`.
+**Checked against:** MJ `next` at `bf01635ce` (2026-10-30, after [#6214](https://github.com/MemberJunction/MJ/pull/6214) merged). Paths are under `packages/` unless they start with `plans/`, `guides/`, `metadata/` or `.claude/`.
 
 **Status:** draft for review. D1 to D11 are Amith's decisions from 2026-10-30.
 
@@ -57,8 +57,9 @@ Collaboration keeps documents out of its own scope: its notes stay light, and be
 | Theme | `ThemeEngine`: the full `--mj-*` token set from a few brand seeds | Slide themes (§ 5) |
 | Transport | MJServer's `ws` and `graphql-ws`; routes through `ApiRoute()`; REST in `MJServer/src/rest/RESTEndpointHandler.ts` (`POST /views/:entityName`, `POST /views/batch`, `POST /queries/run`, `GET /metadata/entities`) | The sync endpoint (§ 3.1) and the data API (§ 3.7) |
 | Sign-in for outside clients | `AI/MCPServer/src/auth/OAuthProxyRouter.ts`: authorization-server metadata, dynamic client registration, PKCE, sign-in through the host's identity provider, a consent page with API scopes, MJ-issued tokens; providers in `AuthProviders/src/providers` (MSAL, Auth0, Okta, Google, WorkOS, Cognito, magic link, host identity) | A later option for the Google add-on (§ 7.2) |
-| Per-user API keys | `APIKeys/Engine` (`CreateAPIKey`, `RevokeAPIKey`, expiry, hashed storage); MJAPI resolves an `X-API-Key` to its user, with its scopes and row filters (`MJServer/src/context.ts`); a key with scopes is denied everything outside them (`defaultBehaviorNoScopes: 'deny'`); GraphQL `RunViewByID` checks `view:run` and `GetQueryData` checks `query:run` | The Excel add-in's credential (D11) |
-| Explorer pages outside the app shell | `claims/redeem` and `oauth/callback` in `Angular/Explorer/explorer-core/src/app-routing.module.ts`: no route guard; the page waits for the session, then calls the server | The add-in's connect page (§ 7.1) |
+| Per-user API keys | `APIKeys/Engine` (`CreateAPIKey`, `RevokeAPIKey`, expiry, hashed storage); MJAPI resolves an `X-API-Key` to its user, with its scopes and row filters (`MJServer/src/context.ts`); a key with scopes is denied everything outside them (`defaultBehaviorNoScopes: 'deny'`); GraphQL `RunViewByID`, `RunDynamicView` and `GetQueryData` check `view:run` and `query:run` | The Excel add-in's credential (D11) |
+| Explorer pages outside the app shell & Generic Office sign-in panel | `claims/redeem`, `oauth/callback` and `office/connect` in `Angular/Explorer/explorer-core` + `standalone-routes.ts` in `Angular/Explorer/explorer-app`; router-free `<mj-office-connect-panel>` in `Angular/Generic/export-service` | Any MJ Angular host can mount the add-in consent page (§ 7.1, shipped in #6214) |
+| Excel add-in & server extension | `OfficeAddins/Excel` (`@memberjunction/excel-addin`) and `OfficeAddins/ExcelServer` (`@memberjunction/excel-addin-server`): workbook contract, `ExcelAddin.*` Remote Operations, ECDH/AES-GCM sign-in handoff, Office.js task pane, unified **Export ▾** menu (`Open in Excel` + snapshot export) in `entity-data-grid` and `query-data-grid` | Track A's Excel foundation, already on `next` (§ 7.1, #6214) |
 | Server Extensions | `ServerExtensionsCore`: a package mounts its own routes under `MJAPI_BASE_PATH`, configured in `mj.config.cjs` `serverExtensions` (`guides/SERVER_EXTENSIONS_GUIDE.md`) | Hosting the add-in on each MJ host |
 | Remote Operations | `BaseRemotableOperation`: one typed call site on browser and server, routed over GraphQL; a code-only operation needs no metadata row (`guides/REMOTE_OPERATIONS_GUIDE.md`) | Every new browser-to-server call in this plan |
 | Server-set query parameters | `MJ: Query Parameters.IsServerSet` | A block or add-in never sets these (§ 8) |
@@ -74,7 +75,7 @@ Collaboration keeps documents out of its own scope: its notes stay light, and be
 7. **Slides:** no type, no layout model, no PPTX writer.
 8. **Sheets:** no formula engine. AG Grid Community is a data grid of records, not a spreadsheet; range selection and the fill handle are Enterprise features.
 9. **Fan-out across MJAPI instances.** `RedisProvider` is a cache, not pub/sub.
-10. **A way for an add-in to sign in.** The MCP server's OAuth tokens are minted for the MCP server, and its client registry is an in-memory `Map` (`AI/MCPServer/src/auth/ClientRegistry.ts`), lost on restart and wrong with more than one instance. MJAPI's REST routes (`MJServer/src/rest/RESTEndpointHandler.ts`) don't check API-key scopes, so a scoped key used there reaches everything its user can; GraphQL does check them.
+10. **A way for non-Explorer add-ons (such as Google Apps Script) to sign in if D11 doesn't fit, and REST API-key scope enforcement.** Excel's sign-in is now solved on `next` via D11 (#6214). For a fallback OAuth flow (§ 7.3), the MCP server's OAuth tokens are minted for the MCP server, and its client registry is an in-memory `Map` (`AI/MCPServer/src/auth/ClientRegistry.ts`), lost on restart and wrong with more than one instance. MJAPI's REST routes (`MJServer/src/rest/RESTEndpointHandler.ts`) still don't check API-key scopes, so a scoped key used there reaches everything its user can; GraphQL does check them.
 
 ## 2. Decisions
 
@@ -102,7 +103,7 @@ Search, vector sync, export, diff and every existing reader of an artifact use t
 
 **D10. One data API for every consumer.** Blocks, sheet ranges, the add-ins and generated files all fetch rows the same way: a query (with parameters) or a view, run as the caller, through the field-level output projection, with server-set parameters taken only from the server. Phase 1 builds it, because blocks need it.
 
-**D11. The Excel add-in signs in through MJ Explorer and holds a scoped API key.** *(Revised 2026-10-30: replaces moving the MCP server's OAuth server into MJAPI.)* The add-in's sign-in window opens a page in Explorer, so the person signs in exactly as they always do, with whatever identity provider the host uses. Approving there mints an MJ API key for that person that can only run views and queries (`view:run`, `query:run`) and expires (90 days by default). That is everything the add-in needs, with no new table, no new OAuth server and no identity-provider redirect to register. The key is revocable on the API Keys page, is refused once its user is deactivated, and can't change data. It is handed back encrypted to a key pair the add-in made for that sign-in, so it never sits in a URL in plain text. The add-in calls GraphQL, where API-key scopes are enforced, not REST, where they aren't.
+**D11. The Excel add-in signs in through a Generic Office connect panel (served by MJ Explorer at `office/connect`) and holds a scoped API key.** *(Revised 2026-10-30; shipped in [#6214](https://github.com/MemberJunction/MJ/pull/6214).)* The add-in's sign-in window opens a standalone `office/connect` page in Explorer (a thin route wrapper around router-free `<mj-office-connect-panel>` in `@memberjunction/ng-export-service`, so any non-Explorer MJ Angular app can mount the same connect page alongside the Generic grids), where the person signs in exactly as they always do with whatever identity provider the host uses. Approving there mints an MJ API key for that person that can only run views and queries (`view:run`, `query:run`) and expires (90 days by default). That is everything the add-in needs, with no new table, no new OAuth server and no identity-provider redirect to register. The key is revocable on the API Keys page, is refused once its user is deactivated, and can't change data. It is handed back encrypted to a key pair the add-in made for that sign-in (either relayed through the Office Dialog window or copied as an encrypted connection code when connecting to a different MJ server in an external browser), so it never sits in a URL or clipboard in plain text. The add-in calls GraphQL, where API-key scopes are enforced, not REST, where they aren't.
 
 ## 3. The shared core
 
@@ -166,7 +167,7 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 
 - **One engine function** runs a source as a given user over the existing `RunView` and `RunQuery`, with paging, a row cap, the field-level output projection, and `IsServerSet` parameters filled only from server context.
 - **For the browser and agents:** a Remote Operation (`guides/REMOTE_OPERATIONS_GUIDE.md`).
-- **For the add-ins:** the existing GraphQL operations (`RunViewByID`, `GetQueryData`), which enforce API-key scopes; the REST routes don't (§ 1.2, item 10). Browsing from the pane later adds a discovery operation listing the queries and views the caller may run, with each query's parameters.
+- **For the add-ins:** the existing GraphQL operations (`RunViewByID`, `RunDynamicView` for `(Default)` entity views, and `GetQueryData`), which enforce API-key scopes; the REST routes don't (§ 1.2, item 10). In-pane discovery and source resolution shipped in [#6214](https://github.com/MemberJunction/MJ/pull/6214) via `ExcelAddin.GetCatalog`, `ExcelAddin.GetEntityViews` and `ExcelAddin.ResolveSource` over GraphQL `ExecuteRemoteOperation`.
 
 ### 3.8 Import, export and links
 
@@ -277,36 +278,37 @@ Before anything else in Phase 3, and able to run during Phase 1 because it depen
 
 ## 7. Track A: Excel add-in, Google Sheets add-on, generated files
 
-**Depends on** no editor. The Excel add-in uses GraphQL operations MJAPI already has (`RunViewByID`, `GetQueryData`) and the sign-in in D11, so it ships first, ahead of Phase 1, as its own pull request.
+**Depends on** no editor. The Excel add-in uses GraphQL operations MJAPI already has (`RunViewByID`, `RunDynamicView`, `GetQueryData`, `ExecuteRemoteOperation`) and the sign-in in D11, so its first release shipped ahead of Phase 1 in [#6214](https://github.com/MemberJunction/MJ/pull/6214).
 
-### 7.1 Excel add-in, first pull request: Open in Excel
+### 7.1 Excel add-in, first release: Open in Excel and in-pane browse & insert (shipped)
 
-**Pull request:** [MemberJunction/MJ#6214](https://github.com/MemberJunction/MJ/pull/6214).
+**Pull request:** [MemberJunction/MJ#6214](https://github.com/MemberJunction/MJ/pull/6214) *(merged into `next` at `bf01635ce`)*.
 
-**Where it starts.** An **Open in Excel** button beside Export in the two shared grids: the views grid (`Angular/Generic/entity-viewer`, `entity-data-grid`) and the query results grid (`Angular/Generic/query-viewer`, `query-data-grid`). Every screen that uses them gets it: view pages, Data Explorer, the query browser and dashboards. The button only shows when the host has the add-in turned on.
+**Where it starts.** A unified **Export ▾** toolbar dropdown in the two shared grids — the entity grid (`Angular/Generic/entity-viewer`, `entity-data-grid`, covering both `(Default)` dynamic entity views and saved `MJ: User Views`) and the query results grid (`Angular/Generic/query-viewer`, `query-data-grid`) — offers **Open in Excel** alongside **Export Snapshot...**. Every screen that uses them gets it: view pages, Data Explorer, the query browser and dashboards. When the host doesn't have the add-in turned on, the button stays a single-click snapshot export.
 
 **Export and Open in Excel differ.** Export is a copy of the rows as they are now. Open in Excel is a connected workbook that holds no rows until someone opens it, then fills from MJ as that person.
 
-**What the button does.**
-1. The `ExcelAddin.BuildWorkbook` Remote Operation reads the saved view or query as the user and writes an `.xlsx`: one sheet per source with its column headings, a hidden sheet recording each source (the view, or the query and the parameter values chosen), and the Office web-extension parts that open the add-in with the file. No rows, no token, no server secret.
-2. The browser downloads it.
-3. Opening it in Excel opens the MemberJunction pane. The person signs in once (D11), and the pane fills each sheet. **Refresh** and **Refresh all** bring current data.
+**What the button and pane do.**
+1. **From MJ (`Open in Excel`):** The `ExcelAddin.BuildWorkbook` Remote Operation resolves the saved view (`Kind: 'View'`), `(Default)` entity view (`Kind: 'Entity'`), or saved query (`Kind: 'Query'`) as the user and writes an `.xlsx`: one sheet per source with its column headings, a hidden `_mj_excel` sheet recording each source (entity/view ID, or query ID and parameter values chosen), and the Office web-extension parts (`webextension.xml` + `taskpanes.xml`) that open the add-in with the file. No rows, no token, no server secret.
+2. Opening it in Excel opens the MemberJunction pane. The person signs in once (D11), and the pane fills each sheet. **Refresh** and **Refresh all** bring current data.
+3. **Directly inside Excel (`Browse Data` & `Workbook` tabs):** Any blank or existing workbook can also browse Applications → Entities → `(Default)` or Saved Views, or Query Categories → Saved Queries (filling query parameters in the pane), insert new connected sheets or replace the active sheet, switch MJ servers via the **Server** picker, and refresh or manage every connected worksheet.
 
-**Saved views and saved queries only.** The file names a view or a query by ID, never filter SQL. A view with unsaved changes opens as last saved, and the button says so. A query's server-set parameters (`IsServerSet`) stay server-set.
+**No raw filter SQL.** The file and pane name a saved view by ID, an entity by ID (`(Default)` dynamic view, using the entity's default columns and no user-supplied SQL `WhereClause`), or a saved query by ID — never filter SQL. A saved view with unsaved changes opens as last saved, and the menu item says so. A query's server-set parameters (`IsServerSet`) stay server-set.
 
-**Hosting.** Each MJ host serves the add-in itself, from a Server Extension in `@memberjunction/excel-addin-server`, configured in `mj.config.cjs` `serverExtensions` and off unless listed. It serves the pane, the sign-in pages, a small `config.json`, and a manifest that already points at that host, so nobody types a server address and no central MemberJunction service sits in the path. An administrator deploys the manifest once from the Microsoft 365 admin center.
+**Hosting.** Each MJ host serves the add-in itself, from `ExcelAddinServerExtension` in `@memberjunction/excel-addin-server`, configured in `mj.config.cjs` `serverExtensions` and off unless listed. It serves the pane, the sign-in pages, a small `config.json` (including `storeType` for the generated workbook's web-extension binding), and a manifest that already points at that host (`guides/EXCEL_ADDIN_GUIDE.md`). An administrator deploys the manifest once from the Microsoft 365 admin center.
 
 **Sign-in.**
-1. The pane makes a one-time key pair and opens the Office sign-in window on the host's own page.
-2. That page sends the person to Explorer's `office/connect` page. They sign in as they always do, see what Excel will be able to do, and approve.
-3. `ExcelAddin.CreateConnection` mints their scoped API key (D11). The connect page encrypts it to the pane's public key and returns to the host's page, which hands it to the pane.
-4. The pane keeps the key in its own storage and sends it as `X-API-Key` to GraphQL.
+1. For the host serving the add-in, the pane makes a one-time ECDH P-256 key pair and opens the Office Dialog window (waiting on `Office.onReady()` so Mac desktop Excel's WebKit host bridges cleanly) on the host's own sign-in page, which forwards to `office/connect`. When connecting to a different MJ server URL, the pane opens that server's `office/connect` in the system browser and accepts the encrypted connection code back.
+2. `office/connect` renders the router-free Generic `<mj-office-connect-panel>` (`@memberjunction/ng-export-service`), wrapped as a standalone route by Explorer (`@memberjunction/ng-explorer-core`), so non-Explorer MJ Angular apps can serve the exact same connect endpoint. The person signs in as they always do, sees what Excel will be able to do, and approves.
+3. `ExcelAddin.CreateConnection` mints their scoped API key (D11). The connect panel encrypts it with AES-256-GCM to the pane's public key and either relays it through the Office Dialog return page or gives the user the encrypted code to paste.
+4. The pane keeps the per-server key in its own storage and sends it as `X-API-Key` to GraphQL.
 
 **Packages.**
-- `@memberjunction/excel-addin` (browser-safe): the workbook contract, the typed Remote Operation bases Explorer calls, and the pane, bundled with esbuild.
-- `@memberjunction/excel-addin-server`: the Server Extension, the manifest and workbook builders, and the operations' server bodies.
+- `@memberjunction/excel-addin` (browser-safe): the workbook contract, pure `/office/connect` helpers, typed `ExcelAddin.*` Remote Operation descriptors, encrypted handoff, and the Office.js pane bundled with esbuild.
+- `@memberjunction/excel-addin-server`: `ExcelAddinServerExtension`, manifest and workbook builders, and the operations' server bodies (`GetSettings`, `GetCatalog`, `GetEntityViews`, `ResolveSource`, `CreateConnection`, `BuildWorkbook`).
+- `@memberjunction/ng-export-service`: Generic `<mj-office-connect-panel>`, wrapped by Explorer's `office/connect` route in `@memberjunction/ng-explorer-core`.
 
-**Not in the first pull request:** browsing and inserting from the pane, `=MJ.QUERY(...)` and `=MJ.VIEW(...)` custom functions, and an AppSource listing. Each is a follow-up on the same packages. The pane runs in Excel for Windows, Mac and the web.
+**Remaining follow-ups on the Excel packages:** `=MJ.QUERY(...)` and `=MJ.VIEW(...)` Excel custom functions, and an AppSource listing. The pane runs in Excel for Windows, Mac (verified end-to-end on desktop Excel for Mac) and the web.
 
 ### 7.2 Google Sheets add-on
 
@@ -329,14 +331,14 @@ The Excel design (D11) carries over if an Apps Script sidebar can receive the ke
 
 **Without an add-in, for Entra hosts:** a Power Query against MJ's REST routes may refresh with the person's organizational account. Excel's Power Query only signs in to organizational accounts on Entra, so this can't serve Auth0, Okta or Google hosts (O8).
 
-**Accept (the first pull request):**
-1. From a saved view and from a saved query, Open in Excel downloads a workbook that holds headings and no rows.
-2. Opening it opens the pane; the user signs in through Explorer with the same account, and every sheet fills.
+**Accept (shipped in [#6214](https://github.com/MemberJunction/MJ/pull/6214)):**
+1. From a `(Default)` entity view, a saved view, and a saved query, **Export ▾ → Open in Excel** downloads a workbook that holds headings and no rows.
+2. Opening it and opening the pane lets the user sign in through `office/connect` (`<mj-office-connect-panel>`) with the same account, and every sheet fills; from any workbook, the pane can also browse entities, views and queries (with parameters) and insert new connected sheets.
 3. A colleague with narrower access opens the same file, signs in, refreshes, and sees only their own rows.
 4. A query's server-set parameters can't be set from the file or the pane.
 5. The add-in's key can't save, delete or run anything but views and queries.
 6. Revoking the key on the API Keys page, or deactivating the user, stops the next refresh.
-7. With the extension not configured, the button doesn't show and the operations refuse.
+7. With the extension not configured, the menu stays a plain snapshot export button and the operations refuse.
 
 ## 8. Security
 
@@ -350,11 +352,11 @@ The Excel design (D11) carries over if an Apps Script sidebar can receive the ke
 
 ## 9. Order and delivery
 
-1. **Track A, first pull request:** the Excel add-in's Open in Excel (§ 7.1, [#6214](https://github.com/MemberJunction/MJ/pull/6214)). It needs nothing else in this plan.
-2. **Phase 1:** the shared core (§ 3) and the docs editor, built together because the editor is what proves the core. Then the Collaboration integration.
+1. ~~**Track A, first pull request:**~~ **Done ([#6214](https://github.com/MemberJunction/MJ/pull/6214))** — the Excel add-in's Open in Excel, in-pane browse & insert, multi-server switcher, and Generic `<mj-office-connect-panel>` sign-in (§ 7.1).
+2. **Phase 1 (next up):** the shared core (§ 3) and the docs editor, built together because the editor is what proves the core. Then the Collaboration integration.
 3. **Phase 2:** slides.
 4. **Phase 3:** sheets. The engine spike (§ 6.1) runs during Phase 1.
-5. **Track A, the rest:** the Excel pane's browse and insert, custom functions, then the Google add-on (§ 7.2, § 7.3).
+5. **Track A, the rest:** Excel `=MJ.QUERY(...)` / `=MJ.VIEW(...)` custom functions and AppSource packaging, then the Google add-on (§ 7.2, § 7.3).
 
 Each phase lands as pull requests into `next`. Migrations ship T-SQL with a `minor` changeset, and each phase adds its checks to the deterministic integration tier.
 
@@ -367,7 +369,7 @@ Each phase lands as pull requests into `next`. Migrations ship T-SQL with a `min
 - **O5.** Who sees a frozen block whose source they can't read? Proposed: everyone who can read the document, because freezing is a recorded act of publishing, and the dialog says so.
 - **O6.** Slides: do live blocks refresh during a presentation, or freeze when it starts?
 - **O7.** The sheets engine, from the spike.
-- **O8.** Verify on real Excel: the add-in pane opening with a generated file on Windows, Mac and the web, for each deployment type (the web-extension part names a store type; Microsoft 365 centralized deployment is the default); single sign-on for Entra hosts; the Power Query path. For Google: whether an Apps Script sidebar can take the key back from Explorer's connect page (§ 7.3).
+- **O8.** Verify on real Excel across remaining deployment matrix: Mac desktop sideloading (`WEF` manifest + `Office.onReady()` dialog lifecycle) and `storeType` auto-open behavior were verified during [#6214](https://github.com/MemberJunction/MJ/pull/6214) (Mac `WEF` sideloads don't auto-pop `EXCatalog` web-extension bindings on file open without centralized M365 deployment, whereas manually opening the ribbon button immediately detects and hydrates the workbook's `_mj_excel` metadata); still verify Windows, Excel on the web, and real Microsoft 365 centralized deployment (`EXCatalog`), single sign-on for Entra hosts, and the Power Query path. For Google: whether an Apps Script sidebar can take the key back from `<mj-office-connect-panel>` (§ 7.3).
 - **O9.** Product names in Explorer: Docs, Slides, Sheets, or names of our own.
 - **O10.** The add-in's key is created as the signed-in user, so a role that may not create `MJ: API Keys` can't connect Excel, and the connect page says so. Is that the default we want, or should a host be able to let every user mint this one read-only key?
 
