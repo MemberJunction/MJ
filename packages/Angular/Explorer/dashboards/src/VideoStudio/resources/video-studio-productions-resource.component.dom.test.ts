@@ -189,12 +189,12 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     expect(prod3.VersionNumber).toBe(0);
 
     // Verify DOM badge classes for Delivered, Blocked, and Unknown
-    const card1Badge = query(fixture, '[data-testid="production-card-prod-1"] .vs-status-badge');
-    const card2Badge = query(fixture, '[data-testid="production-card-prod-2"] .vs-status-badge');
-    const card3Badge = query(fixture, '[data-testid="production-card-prod-3"] .vs-status-badge');
-    expect(card1Badge?.classList.contains('vs-status-badge--ready')).toBe(true);
-    expect(card2Badge?.classList.contains('vs-status-badge--error')).toBe(true);
-    expect(card3Badge?.classList.contains('vs-status-badge--draft')).toBe(true);
+    const card1Badge = query(fixture, '[data-testid="production-card-prod-1"] .mj-badge');
+    const card2Badge = query(fixture, '[data-testid="production-card-prod-2"] .mj-badge');
+    const card3Badge = query(fixture, '[data-testid="production-card-prod-3"] .mj-badge');
+    expect(card1Badge?.classList.contains('mj-badge-success')).toBe(true);
+    expect(card2Badge?.classList.contains('mj-badge-error')).toBe(true);
+    expect(card3Badge?.classList.contains('mj-badge-neutral')).toBe(true);
 
     // Status filter dropdown options list only statuses actually present in AllProductions
     const statusField = instance.FilterFields.find((f) => f.key === 'status');

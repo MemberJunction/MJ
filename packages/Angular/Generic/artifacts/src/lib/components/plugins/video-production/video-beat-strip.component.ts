@@ -41,7 +41,7 @@ export interface VideoBeatStripComputedBlock {
   styleUrls: ['./video-beat-strip.component.css'],
 })
 export class MJVideoBeatStripComponent {
-  @Input() Beats: VideoBeatStripItem[] = [];
+  @Input() Beats: readonly VideoBeatStripItem[] = [];
   @Input() ShowLabels = true;
   @Input() ActiveKey: string | null = null;
   @Output() BeatPicked = new EventEmitter<string>();

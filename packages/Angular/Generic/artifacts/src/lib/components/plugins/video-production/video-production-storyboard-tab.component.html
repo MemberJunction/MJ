@@ -1,0 +1,82 @@
+<div class="vp-storyboard-tab">
+  <section class="vp-storyboard-section">
+    <h3 class="vp-section-title">Storyboard beats</h3>
+    @if (BeatRows.length > 0) {
+      <mj-video-beat-strip
+        data-testid="storyboard-beat-strip"
+        [Beats]="BeatStripItems"
+        [ActiveKey]="ActiveBeatKey"
+        (BeatPicked)="OnBeatPicked($event)"
+      ></mj-video-beat-strip>
+
+      <div class="vp-table-wrapper">
+        <table class="vp-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Label</th>
+              <th>Purpose</th>
+              <th>On-screen text</th>
+              <th>Narration</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of BeatRows; track row.Beat.Key) {
+              <tr
+                class="vp-storyboard-beat-row"
+                [class.vp-storyboard-beat-row--active]="ActiveBeatKey === row.Beat.Key"
+                [attr.data-beat-key]="row.Beat.Key"
+                (click)="OnBeatPicked(row.Beat.Key)"
+              >
+                <td class="vp-cell-mono">{{ row.TimeRange }}</td>
+                <td class="vp-cell-strong">
+                  {{ row.Beat.Label }}
+                  @if (row.UsesGeneratedAsset) {
+                    <span class="vp-generated-chip">AI-generated</span>
+                  }
+                </td>
+                <td>{{ row.Beat.Purpose }}</td>
+                <td>{{ row.OnScreenTextJoined }}</td>
+                <td>{{ row.NarrationText }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <mj-empty-state
+        Icon="fa-solid fa-film"
+        Title="No storyboard beats"
+        Message="No storyboard beats have been defined for this production yet."
+      ></mj-empty-state>
+    }
+  </section>
+
+  @if (ContactSheets.length > 0) {
+    <section class="vp-storyboard-section">
+      <h3 class="vp-section-title">Contact sheets</h3>
+      <div class="vp-contact-sheets-grid">
+        @for (sheet of ContactSheets; track sheet.FileID) {
+          <div class="vp-contact-sheet-card">
+            <div class="vp-contact-sheet-header">
+              <mj-video-format-glyph [Format]="sheet.Format" Size="sm"></mj-video-format-glyph>
+            </div>
+            @if (sheet.Url) {
+              <img
+                class="vp-contact-sheet-img"
+                [src]="sheet.Url"
+                [alt]="'Contact sheet (' + sheet.Format + ')'"
+              />
+            } @else if (sheet.Failed) {
+              <div class="vp-contact-sheet-placeholder">Contact sheet unavailable.</div>
+            } @else {
+              <div class="vp-contact-sheet-placeholder">
+                <mj-loading size="small"></mj-loading>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  }
+</div>

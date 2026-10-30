@@ -3,8 +3,8 @@
     <mj-empty-state
       Variant="warning"
       Icon="fa-solid fa-triangle-exclamation"
-      Title="Invalid Video Production Content"
-      Message="The artifact content could not be parsed as a valid VideoGenerationSpec."
+      Title="This production can't be shown"
+      Message="The production data couldn't be read."
     ></mj-empty-state>
   } @else {
     <header class="vp-header">
@@ -46,11 +46,14 @@
             <span>{{ narrationText }}</span>
           </span>
         }
-        <span class="vp-badge vp-badge--status" [attr.data-status]="Spec.Status">
+        <span
+          [class]="'vp-badge vp-badge--status vp-badge--' + StatusBadgeVariant"
+          [attr.data-status]="Spec.Status"
+        >
           {{ Spec.Status }}
         </span>
         <span class="vp-badge vp-badge--duration">
-          {{ DurationSeconds }}s
+          {{ FormattedDuration }}
         </span>
       </div>
     </header>
@@ -59,16 +62,16 @@
       <div class="vp-format-switcher" role="group" aria-label="Video format switcher">
         @for (fmt of AvailableFormats; track fmt) {
           <button
-            #formatBtn
             type="button"
             mjButton
-            size="sm"
-            [variant]="SelectedFormat === fmt ? 'primary' : 'outline'"
-            [attr.aria-pressed]="SelectedFormat === fmt"
+            Size="sm"
+            Variant="outline"
+            [Toggleable]="true"
+            [Selected]="SelectedFormat === fmt"
             [attr.data-format]="fmt"
             (click)="SelectFormat(fmt)"
           >
-            {{ fmt }}
+            <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
           </button>
         }
       </div>
@@ -97,8 +100,7 @@
       } @else {
         <mj-empty-state
           Icon="fa-solid fa-clapperboard"
-          [Title]="'Status: ' + Spec.Status"
-          [Message]="'No rendered video output is available yet (current status: ' + Spec.Status + ').'"
+          Title="Not rendered yet"
         ></mj-empty-state>
       }
     </div>

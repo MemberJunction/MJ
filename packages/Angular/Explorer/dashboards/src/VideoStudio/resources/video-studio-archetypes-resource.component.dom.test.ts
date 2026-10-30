@@ -149,7 +149,9 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     expect(getProviderInstanceSpy).toHaveBeenCalledWith(customProvider, VideoStudioEngine);
     expect(instance.CategoryGroups).toHaveLength(2);
     expect(queryAll(fixture, '[data-testid^="archetype-card-"]')).toHaveLength(2);
-    expect(queryAll(fixture, '[data-testid="archetype-beat-block"]')).toHaveLength(3);
+    expect(queryAll(fixture, '[data-testid="archetype-beat-timeline"] button.vp-beat-strip__block')).toHaveLength(3);
+    expect(query(fixture, '[data-testid="archetype-duration-badge"]')?.textContent).toContain('1:00');
+    expect(query(fixture, '[data-testid="archetype-duration-badge"]')?.textContent).toContain('0:30–1:30');
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);
     expect(navStub.SetAgentContext).toHaveBeenCalledWith(
       instance,
@@ -169,8 +171,12 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
 
     const slideout = query(fixture, '[data-testid="archetype-slideout"]');
     expect(slideout).not.toBeNull();
-    expect(queryAll(fixture, '[data-testid="slideout-beat-item"]')).toHaveLength(2);
+    const slideoutBeats = queryAll(fixture, '[data-testid="slideout-beat-item"]');
+    expect(slideoutBeats).toHaveLength(2);
+    expect(slideoutBeats[0].textContent).toContain('0:13');
+    expect(slideoutBeats[0].textContent).toContain('0:05–0:10');
     expect(query(fixture, '[data-testid="slideout-pacing-section"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="slideout-pacing-section"]')?.textContent).toContain('0:05');
     expect(query(fixture, '[data-testid="slideout-guidance-section"]')).not.toBeNull();
     expect(query(fixture, '[data-testid="archetype-shipped-readonly-banner"]')).not.toBeNull();
 

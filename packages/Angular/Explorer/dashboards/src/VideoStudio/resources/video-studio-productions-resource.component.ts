@@ -20,7 +20,7 @@ import {
   GraphQLDataProvider,
   GraphQLFileStorageClient,
 } from '@memberjunction/graphql-dataprovider';
-import { FormatVideoTime } from '@memberjunction/ng-artifacts';
+import { FormatVideoTime, GetVideoStatusBadgeVariant } from '@memberjunction/ng-artifacts';
 import { ArtifactPermissionService } from '@memberjunction/ng-conversations';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
@@ -682,26 +682,21 @@ export class VideoStudioProductionsResourceComponent
     return FormatVideoTime(seconds);
   }
 
+  public ParseFormats(aspectRatio: string): string[] {
+    if (!aspectRatio || !aspectRatio.trim()) {
+      return [];
+    }
+    return ParseArchetypeDefaultFormats(aspectRatio);
+  }
+
+  public ResetFiltersAndSearch(): void {
+    this.ClearAllFilters();
+    this.OnSearchChange('');
+  }
+
   public StatusBadgeClass(status: ProductionCardStatus | string): string {
-    if (status === 'Delivered') {
-      return 'vs-status-badge vs-status-badge--ready';
-    }
-    if (status === 'Blocked') {
-      return 'vs-status-badge vs-status-badge--error';
-    }
-    if (
-      status === 'Briefing' ||
-      status === 'Styled' ||
-      status === 'Storyboarded' ||
-      status === 'Approved' ||
-      status === 'PreProduced' ||
-      status === 'Composed' ||
-      status === 'RoughCut' ||
-      status === 'Reviewed'
-    ) {
-      return 'vs-status-badge vs-status-badge--rendering';
-    }
-    return 'vs-status-badge vs-status-badge--draft';
+    const variant = GetVideoStatusBadgeVariant(status);
+    return `vs-production-poster__status mj-badge mj-badge-${variant}`;
   }
 
   protected override OnQueryParamsChanged(

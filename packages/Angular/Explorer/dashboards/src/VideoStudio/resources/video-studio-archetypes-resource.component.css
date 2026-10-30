@@ -4,8 +4,7 @@
   width: 100%;
 }
 
-.vs-loading-state,
-.vs-empty-state {
+.vs-loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -16,26 +15,6 @@
   background: var(--mj-bg-surface-card);
   border: 1px dashed var(--mj-border-default);
   border-radius: var(--mj-radius-lg, 12px);
-}
-
-.vs-empty-icon {
-  font-size: 36px;
-  color: var(--mj-text-muted);
-  margin-bottom: 12px;
-}
-
-.vs-empty-title {
-  margin: 0 0 6px;
-  font-size: var(--mj-text-lg, 18px);
-  font-weight: var(--mj-font-semibold, 600);
-  color: var(--mj-text-primary);
-}
-
-.vs-empty-subtitle {
-  margin: 0 0 16px;
-  max-width: 460px;
-  font-size: var(--mj-text-sm, 14px);
-  color: var(--mj-text-secondary);
 }
 
 .vs-archetypes-workspace {
@@ -81,18 +60,29 @@
   color: var(--mj-text-primary);
 }
 
-.vs-category-count {
+.mj-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
+  gap: var(--mj-space-1, 4px);
+  padding: var(--mj-space-1, 4px) var(--mj-space-2-5, 10px);
+  font-size: var(--mj-text-xs, 12px);
+  font-weight: var(--mj-font-medium, 500);
+  line-height: var(--mj-leading-tight, 1.25);
   border-radius: var(--mj-radius-full, 9999px);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mj-badge-neutral {
   background: var(--mj-bg-surface-sunken);
   color: var(--mj-text-secondary);
-  font-size: var(--mj-text-xs, 11px);
-  font-weight: var(--mj-font-semibold, 600);
+  border: 1px solid var(--mj-border-default);
+}
+
+.mj-badge-info {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  border: 1px solid var(--mj-status-info-border);
 }
 
 .vs-archetypes-grid {
@@ -138,16 +128,9 @@
   color: var(--mj-text-primary);
 }
 
-.vs-company-override-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--mj-radius-full, 9999px);
-  background: var(--mj-bg-surface-sunken);
+.vs-archetype-company-meta {
+  font-size: var(--mj-text-xs, 12px);
   color: var(--mj-text-secondary);
-  border: 1px solid var(--mj-border-subtle);
-  font-size: var(--mj-text-xs, 11px);
   flex-shrink: 0;
 }
 
@@ -161,69 +144,35 @@
   overflow: hidden;
 }
 
-.vs-archetype-meta-badges {
+.vs-archetype-meta-line {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.vs-archetype-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: var(--mj-radius-sm, 6px);
-  background: var(--mj-bg-surface-sunken);
+  font-size: var(--mj-text-xs, 12px);
   color: var(--mj-text-secondary);
-  border: 1px solid var(--mj-border-subtle);
-  font-size: var(--mj-text-xs, 11px);
 }
 
-.vs-beat-timeline-container {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: auto;
-  padding-top: 6px;
+.vs-archetype-duration-meta {
+  font-family: var(--mj-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--mj-text-secondary);
 }
 
-.vs-beat-timeline-label {
-  font-size: var(--mj-text-xs, 11px);
+.vs-archetype-meta-sep {
   color: var(--mj-text-muted);
 }
 
-.vs-beat-timeline-strip {
-  display: flex;
-  gap: 3px;
-  height: 26px;
-  width: 100%;
-  border-radius: var(--mj-radius-sm, 6px);
-  overflow: hidden;
-}
-
-.vs-beat-timeline-block {
-  display: flex;
+.vs-archetype-formats-meta {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  padding: 0 4px;
-  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface-sunken));
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 38%, var(--mj-border-subtle));
-  border-radius: var(--mj-radius-sm, 4px);
-  overflow: hidden;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.vs-beat-timeline-block:nth-child(even) {
-  background: color-mix(in srgb, var(--mj-brand-primary) 28%, var(--mj-bg-surface-sunken));
-}
-
-.vs-beat-timeline-block-label {
-  font-size: 10px;
-  font-weight: var(--mj-font-medium, 500);
-  color: var(--mj-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.vs-archetype-beat-strip-wrap {
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .vs-archetype-slideout {
@@ -255,8 +204,6 @@
 .vs-slideout-category-tag {
   font-size: var(--mj-text-xs, 11px);
   font-weight: var(--mj-font-semibold, 600);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--mj-brand-primary);
 }
 
@@ -298,7 +245,7 @@
 .vs-summary-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 10px 12px;
   border-radius: var(--mj-radius-md, 8px);
   background: var(--mj-bg-surface-sunken);
@@ -314,6 +261,11 @@
   font-size: var(--mj-text-sm, 13px);
   font-weight: var(--mj-font-semibold, 600);
   color: var(--mj-text-primary);
+}
+
+.vs-summary-value--mono {
+  font-family: var(--mj-font-family-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .vs-slideout-section {
@@ -375,17 +327,10 @@
 
 .vs-slideout-beat-duration {
   margin-left: auto;
+  font-family: var(--mj-font-family-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--mj-text-xs, 11px);
   color: var(--mj-text-muted);
-}
-
-.vs-data-binding-pill {
-  padding: 2px 6px;
-  border-radius: var(--mj-radius-sm, 4px);
-  background: var(--mj-status-info-bg, var(--mj-bg-surface-sunken));
-  color: var(--mj-brand-primary);
-  font-size: 10px;
-  font-weight: var(--mj-font-semibold, 600);
 }
 
 .vs-slideout-beat-purpose,
@@ -414,25 +359,17 @@
   color: var(--mj-text-primary);
 }
 
+.vs-pacing-stat strong {
+  font-family: var(--mj-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .vs-pacing-hold-rules,
 .vs-guidance-text {
   margin: 0;
   font-size: var(--mj-text-xs, 12px);
   color: var(--mj-text-secondary);
   line-height: 1.5;
-}
-
-.vs-shipped-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--mj-radius-full, 9999px);
-  background: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-muted);
-  border: 1px solid var(--mj-border-subtle);
-  font-size: var(--mj-text-xs, 11px);
-  flex-shrink: 0;
 }
 
 .vs-shipped-readonly-banner {
@@ -494,4 +431,3 @@
   color: var(--mj-text-primary);
   font-size: var(--mj-text-sm, 13px);
 }
-

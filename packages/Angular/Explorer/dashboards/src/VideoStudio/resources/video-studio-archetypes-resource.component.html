@@ -2,7 +2,7 @@
   <mj-page-header
     Title="Archetypes"
     Icon="fa-solid fa-layer-group"
-    Subtitle="Explore narrative beat templates, duration envelopes, and pacing rules for video productions"
+    Subtitle="Reusable beat templates, duration ranges, and pacing rules for video productions"
   >
     <div meta>
       <mj-stat-badge
@@ -48,40 +48,40 @@
         <mj-loading text="Loading video archetypes..." size="medium" />
       </div>
     } @else if (LoadError) {
-      <div class="vs-empty-state" role="alert" data-testid="archetypes-error">
-        <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
-        <h3 class="vs-empty-title">Unable to load archetypes</h3>
-        <p class="vs-empty-subtitle">{{ LoadError }}</p>
-        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
-          <i class="fa-solid fa-rotate"></i>
-          <span>Try Again</span>
-        </button>
-      </div>
+      <mj-empty-state
+        data-testid="archetypes-error"
+        Role="alert"
+        Variant="error"
+        Icon="fa-solid fa-triangle-exclamation"
+        Title="Unable to load archetypes"
+        [Message]="LoadError"
+        ActionText="Try again"
+        ActionIcon="fa-solid fa-rotate"
+        ActionVariant="secondary"
+        (Action)="Refresh()"
+      ></mj-empty-state>
     } @else if (FilteredArchetypes.length === 0) {
-      <div class="vs-empty-state" data-testid="archetypes-empty">
-        <i class="fa-solid fa-layer-group vs-empty-icon"></i>
-        @if (AllArchetypes.length === 0) {
-          <h3 class="vs-empty-title">No video archetypes available</h3>
-          <p class="vs-empty-subtitle">
-            Archetypes define reusable narrative structures, beat templates, and pacing rules.
-          </p>
-        } @else {
-          <h3 class="vs-empty-title">No archetypes match your filters</h3>
-          <p class="vs-empty-subtitle">
-            Try clearing your search query or adjusting the active category/scope filters.
-          </p>
-          <button
-            type="button"
-            mjButton
-            Variant="secondary"
-            data-testid="archetypes-clear-filters"
-            (click)="ClearAllFilters(); OnSearchChange('')"
-          >
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-            <span>Reset Filters</span>
-          </button>
-        }
-      </div>
+      @if (AllArchetypes.length === 0) {
+        <mj-empty-state
+          data-testid="archetypes-empty"
+          Variant="empty"
+          Icon="fa-solid fa-layer-group"
+          Title="No video archetypes available"
+          Message="Archetypes define reusable narrative structures, beat templates, and pacing rules."
+        ></mj-empty-state>
+      } @else {
+        <mj-empty-state
+          data-testid="archetypes-empty"
+          Variant="no-results"
+          Icon="fa-solid fa-layer-group"
+          Title="No archetypes match your filters"
+          Message="Try clearing your search query or adjusting the active category or scope filters."
+          ActionText="Reset filters"
+          ActionIcon="fa-solid fa-filter-circle-xmark"
+          ActionVariant="secondary"
+          (Action)="ResetFiltersAndSearch()"
+        ></mj-empty-state>
+      }
     } @else {
       <div
         class="vs-archetypes-workspace"
@@ -97,7 +97,7 @@
                 <h2 class="vs-category-title">
                   {{ FormatCategoryLabel(group.Category) }}
                 </h2>
-                <span class="vs-category-count">
+                <span class="mj-badge mj-badge-neutral">
                   {{ group.Archetypes.length }}
                 </span>
               </header>
@@ -121,18 +121,17 @@
 
                       @if (arch.CompanyName) {
                         <span
-                          class="vs-company-override-badge"
+                          class="vs-archetype-company-meta"
                           data-testid="archetype-company-badge"
                         >
-                          <i class="fa-solid fa-building"></i>
-                          <span>{{ arch.CompanyName }}</span>
+                          {{ arch.CompanyName }}
                         </span>
                       } @else if (arch.IsShipped) {
                         <span
-                          class="vs-shipped-badge"
+                          class="mj-badge mj-badge-neutral"
                           data-testid="archetype-shipped-badge"
                         >
-                          <i class="fa-solid fa-lock"></i>
+                          <i class="fa-solid fa-lock" aria-hidden="true"></i>
                           <span>Shipped</span>
                         </span>
                       }
@@ -142,39 +141,24 @@
                       <p class="vs-archetype-description">{{ arch.Description }}</p>
                     }
 
-                    <div class="vs-archetype-meta-badges">
-                      <span class="vs-archetype-badge" data-testid="archetype-duration-badge">
-                        <i class="fa-regular fa-clock"></i>
-                        <span>
-                          {{ arch.DefaultDurationSeconds }}s
-                          [{{ arch.MinDurationSeconds }}–{{ arch.MaxDurationSeconds }}s]
-                        </span>
+                    <div class="vs-archetype-meta-line">
+                      <span class="vs-archetype-duration-meta" data-testid="archetype-duration-badge">
+                        {{ FormatTime(arch.DefaultDurationSeconds) }}
+                        ({{ FormatTimeRange(arch.MinDurationSeconds, arch.MaxDurationSeconds) }})
                       </span>
-
-                      <span class="vs-archetype-badge" data-testid="archetype-formats-badge">
-                        <i class="fa-solid fa-expand"></i>
-                        <span>{{ arch.DefaultFormats }}</span>
+                      <span class="vs-archetype-meta-sep" aria-hidden="true">·</span>
+                      <span class="vs-archetype-formats-meta" data-testid="archetype-formats-badge">
+                        @for (fmt of ParseFormats(arch.DefaultFormats); track fmt) {
+                          <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+                        }
                       </span>
                     </div>
 
-                    <div class="vs-beat-timeline-container" data-testid="archetype-beat-timeline">
-                      <div class="vs-beat-timeline-label">
-                        <span>Beat Timeline ({{ arch.Beats.length }} beats)</span>
-                      </div>
-                      <div class="vs-beat-timeline-strip">
-                        @for (beat of arch.Beats; track beat.Key) {
-                          <div
-                            class="vs-beat-timeline-block"
-                            [style.flex-grow]="beat.ComputedDurationSeconds"
-                            [title]="beat.Label + ' (' + beat.ComputedDurationSeconds + 's): ' + beat.Purpose"
-                            data-testid="archetype-beat-block"
-                          >
-                            <span class="vs-beat-timeline-block-label">
-                              {{ beat.Label }}
-                            </span>
-                          </div>
-                        }
-                      </div>
+                    <div class="vs-archetype-beat-strip-wrap">
+                      <mj-video-beat-strip
+                        data-testid="archetype-beat-timeline"
+                        [Beats]="arch.BeatItems || []"
+                      ></mj-video-beat-strip>
                     </div>
                   </article>
                 }
@@ -203,7 +187,7 @@
                     data-testid="archetype-clone-button"
                     (click)="OpenCloneDialog(selected, $event)"
                   >
-                    <i class="fa-regular fa-copy"></i>
+                    <i class="fa-regular fa-copy" aria-hidden="true"></i>
                     <span>Clone</span>
                   </button>
                 } @else {
@@ -215,8 +199,8 @@
                     data-testid="archetype-edit-record-button"
                     (click)="EditArchetypeRecord(selected, $event)"
                   >
-                    <i class="fa-solid fa-pen-to-square"></i>
-                    <span>Edit Record</span>
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    <span>Edit record</span>
                   </button>
                 }
                 <button
@@ -228,7 +212,7 @@
                   data-testid="archetype-slideout-close"
                   (click)="CloseSlideOut()"
                 >
-                  <i class="fa-solid fa-xmark"></i>
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
               </div>
             </header>
@@ -236,7 +220,7 @@
             <div class="vs-slideout-body">
               @if (selected.IsShipped) {
                 <div class="vs-shipped-readonly-banner" data-testid="archetype-shipped-readonly-banner">
-                  <i class="fa-solid fa-circle-info"></i>
+                  <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                   <span>
                     Shipped archetypes are read-only templates. Clone this archetype to customize it for a specific company.
                   </span>
@@ -249,30 +233,39 @@
 
               <div class="vs-slideout-summary-grid">
                 <div class="vs-summary-item">
-                  <span class="vs-summary-label">Default Duration</span>
-                  <span class="vs-summary-value">{{ selected.DefaultDurationSeconds }}s</span>
-                </div>
-                <div class="vs-summary-item">
-                  <span class="vs-summary-label">Duration Range</span>
-                  <span class="vs-summary-value">
-                    {{ selected.MinDurationSeconds }}s – {{ selected.MaxDurationSeconds }}s
+                  <span class="vs-summary-label">Default duration</span>
+                  <span class="vs-summary-value vs-summary-value--mono">
+                    {{ FormatTime(selected.DefaultDurationSeconds) }}
                   </span>
                 </div>
                 <div class="vs-summary-item">
-                  <span class="vs-summary-label">Default Formats</span>
-                  <span class="vs-summary-value">{{ selected.DefaultFormats }}</span>
+                  <span class="vs-summary-label">Duration range</span>
+                  <span class="vs-summary-value vs-summary-value--mono">
+                    {{ FormatTimeRange(selected.MinDurationSeconds, selected.MaxDurationSeconds) }}
+                  </span>
                 </div>
                 <div class="vs-summary-item">
-                  <span class="vs-summary-label">Interaction Mode</span>
+                  <span class="vs-summary-label">Default formats</span>
+                  <span class="vs-summary-value vs-archetype-formats-meta">
+                    @for (fmt of ParseFormats(selected.DefaultFormats); track fmt) {
+                      <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+                    }
+                  </span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Interaction mode</span>
                   <span class="vs-summary-value">{{ selected.DefaultInteractionMode }}</span>
                 </div>
               </div>
 
               <section class="vs-slideout-section">
                 <h3 class="vs-slideout-section-title">
-                  <i class="fa-solid fa-timeline"></i>
-                  <span>Beat Template ({{ selected.Beats.length }})</span>
+                  <i class="fa-solid fa-timeline" aria-hidden="true"></i>
+                  <span>Beat template ({{ selected.Beats.length }})</span>
                 </h3>
+                <mj-video-beat-strip
+                  [Beats]="selected.BeatItems || []"
+                ></mj-video-beat-strip>
                 <div class="vs-slideout-beat-list">
                   @for (beat of selected.Beats; track beat.Key; let idx = $index) {
                     <div class="vs-slideout-beat-item" data-testid="slideout-beat-item">
@@ -280,11 +273,11 @@
                         <span class="vs-slideout-beat-index">{{ idx + 1 }}</span>
                         <strong class="vs-slideout-beat-name">{{ beat.Label }}</strong>
                         <span class="vs-slideout-beat-duration">
-                          {{ beat.ComputedDurationSeconds }}s
-                          ({{ beat.MinDurationSeconds }}–{{ beat.MaxDurationSeconds }}s)
+                          {{ FormatTime(beat.ComputedDurationSeconds) }}
+                          ({{ FormatTimeRange(beat.MinDurationSeconds, beat.MaxDurationSeconds) }})
                         </span>
                         @if (beat.RequiresDataBinding) {
-                          <span class="vs-data-binding-pill">Data Bound</span>
+                          <span class="mj-badge mj-badge-info">Data bound</span>
                         }
                       </div>
                       <p class="vs-slideout-beat-purpose">{{ beat.Purpose }}</p>
@@ -299,13 +292,13 @@
               @if (selected.Pacing) {
                 <section class="vs-slideout-section" data-testid="slideout-pacing-section">
                   <h3 class="vs-slideout-section-title">
-                    <i class="fa-solid fa-gauge-high"></i>
-                    <span>Pacing Rules</span>
+                    <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                    <span>Pacing rules</span>
                   </h3>
                   <div class="vs-pacing-box">
                     <div class="vs-pacing-stat">
-                      <span>Avg. Seconds Between Visual Changes:</span>
-                      <strong>{{ selected.Pacing.AvgSecondsBetweenChanges }}s</strong>
+                      <span>Average time between visual changes:</span>
+                      <strong>{{ FormatTime(selected.Pacing.AvgSecondsBetweenChanges) }}</strong>
                     </div>
                     @if (selected.Pacing.HoldRules) {
                       <p class="vs-pacing-hold-rules">{{ selected.Pacing.HoldRules }}</p>
@@ -317,8 +310,8 @@
               @if (selected.Guidance) {
                 <section class="vs-slideout-section" data-testid="slideout-guidance-section">
                   <h3 class="vs-slideout-section-title">
-                    <i class="fa-solid fa-compass"></i>
-                    <span>Producer Guidance</span>
+                    <i class="fa-solid fa-compass" aria-hidden="true"></i>
+                    <span>Producer guidance</span>
                   </h3>
                   <p class="vs-guidance-text">{{ selected.Guidance }}</p>
                 </section>
@@ -343,13 +336,13 @@
 
           @if (CloneError) {
             <div class="vs-clone-error" role="alert" data-testid="archetype-clone-error">
-              <i class="fa-solid fa-circle-exclamation"></i>
+              <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
               <span>{{ CloneError }}</span>
             </div>
           }
 
           <label class="vs-clone-field">
-            <span class="vs-clone-field-label">Archetype Name</span>
+            <span class="vs-clone-field-label">Archetype name</span>
             <input
               type="text"
               class="vs-clone-input"
@@ -384,8 +377,8 @@
             [disabled]="IsCloning"
             (click)="ConfirmClone()"
           >
-            <i class="fa-regular fa-copy"></i>
-            <span>{{ IsCloning ? 'Cloning...' : 'Clone & Edit' }}</span>
+            <i class="fa-regular fa-copy" aria-hidden="true"></i>
+            <span>{{ IsCloning ? 'Cloning...' : 'Clone & edit' }}</span>
           </button>
           <button
             type="button"

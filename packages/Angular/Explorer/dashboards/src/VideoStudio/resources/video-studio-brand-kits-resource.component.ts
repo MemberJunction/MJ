@@ -18,6 +18,7 @@ import {
   GraphQLDataProvider,
   GraphQLFileStorageClient,
 } from '@memberjunction/graphql-dataprovider';
+import { GetVideoStatusBadgeVariant } from '@memberjunction/ng-artifacts';
 import { DeleteBrandKitWithAssets } from '@memberjunction/ng-brand-kits';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
@@ -38,7 +39,7 @@ export type BrandKitCardItem = BrandKitCardSnapshot;
  * Brand Kits resource tab for the Video Studio application.
  *
  * Displays all `MJ: Brand Kits` from `BrandKitEngine` as cards showing the kit
- * name, primary logo thumbnail, company scope (or "Workspace Default"), default
+ * name, primary logo thumbnail, company scope (or "Workspace default"), default
  * star indicator, status badge, color palette swatch strip (`kit.StyleObject.Palette`),
  * and asset count (`engine.GetAssets(kit.ID).length`).
  */
@@ -177,6 +178,15 @@ export class VideoStudioBrandKitsResourceComponent
     this.applyFiltersAndSync();
   }
 
+  public ResetFiltersAndSearch(): void {
+    this.ClearAllFilters();
+    this.OnSearchChange('');
+  }
+
+  public StatusBadgeClass(status: string): string {
+    return `mj-badge mj-badge-${GetVideoStatusBadgeVariant(status)}`;
+  }
+
   public CreateNewBrandKit(): void {
     this.navigationService.OpenNewEntityRecord('MJ: Brand Kits');
   }
@@ -198,7 +208,7 @@ export class VideoStudioBrandKitsResourceComponent
       return;
     }
     const confirmed = await this.confirmService.ConfirmDelete({
-      title: 'Delete Brand Kit',
+      title: 'Delete brand kit',
       message: `Delete "${card.Name}" and its ${card.AssetCount} asset(s)?`,
     });
     if (!confirmed) {
@@ -420,10 +430,10 @@ export class VideoStudioBrandKitsResourceComponent
       },
       {
         key: 'companyId',
-        label: 'Company Scope',
+        label: 'Company scope',
         type: 'dropdown',
         options: [
-          { value: 'org-wide', text: 'Workspace Default' },
+          { value: 'org-wide', text: 'Workspace default' },
           ...Array.from(companies.entries())
             .sort((a, b) => a[1].localeCompare(b[1]))
             .map(([value, text]) => ({ value, text })),

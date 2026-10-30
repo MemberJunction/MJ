@@ -1,4 +1,4 @@
-import { AfterViewChecked, Component, ElementRef, OnInit, QueryList, Type, ViewChildren } from '@angular/core';
+import { Component, OnInit, Type } from '@angular/core';
 import { DataSnapshot, LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MediaTrack } from '@memberjunction/ng-media-player';
@@ -23,6 +23,11 @@ import {
 } from './video-production-markdown';
 import { VideoProductionReviewTabComponent } from './video-production-review-tab.component';
 import { VideoProductionStoryboardTabComponent } from './video-production-storyboard-tab.component';
+import {
+  FormatVideoTime,
+  GetVideoStatusBadgeVariant,
+  type VideoBadgeVariant,
+} from './video-time-format';
 
 /**
  * Artifact viewer plugin for the `Video Production` artifact type (`VideoGenerationSpec` JSON).
@@ -36,7 +41,7 @@ import { VideoProductionStoryboardTabComponent } from './video-production-storyb
 @RegisterClass(BaseArtifactViewerPluginComponent, 'VideoProductionViewerPlugin')
 export class VideoProductionViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit, AfterViewChecked
+  implements OnInit
 {
   public static readonly PreviewComponentType: Type<IArtifactPreviewComponent> =
     VideoProductionArtifactPreviewComponent;
@@ -53,9 +58,6 @@ export class VideoProductionViewerComponent
   private cachedAsOfInput: string | undefined = undefined;
   private cachedAsOfText = '';
 
-  @ViewChildren('formatBtn')
-  private formatButtonRefs?: QueryList<ElementRef<HTMLButtonElement>>;
-
   public override get hasDisplayContent(): boolean {
     return true;
   }
@@ -64,24 +66,12 @@ export class VideoProductionViewerComponent
     this.parseSpec();
   }
 
-  ngAfterViewChecked(): void {
-    // MJButtonDirective's @HostBinding('attr.aria-pressed') returns null when Toggleable is false,
-    // which runs after template attribute bindings and removes [attr.aria-pressed]. Re-apply it here.
-    this.formatButtonRefs?.forEach((ref) => {
-      const el = ref.nativeElement;
-      const fmt = el.getAttribute('data-format');
-      if (fmt) {
-        el.setAttribute('aria-pressed', String(this.SelectedFormat === fmt));
-      }
-    });
-  }
-
   public get Title(): string {
     const displayName = this.getDisplayName();
     if (displayName && displayName !== 'Untitled Artifact') {
       return displayName;
     }
-    return this.Spec?.Film?.OneSentence || 'Video Production';
+    return this.Spec?.Film?.OneSentence || 'Video production';
   }
 
   public get SelectedVideo(): VideoRenderedFormatOutput | null {
@@ -97,6 +87,14 @@ export class VideoProductionViewerComponent
 
   public get DurationSeconds(): number {
     return this.SelectedVideo?.DurationSeconds ?? this.Spec?.Film?.DurationSeconds ?? 0;
+  }
+
+  public get FormattedDuration(): string {
+    return FormatVideoTime(this.DurationSeconds);
+  }
+
+  public get StatusBadgeVariant(): VideoBadgeVariant {
+    return GetVideoStatusBadgeVariant(this.Spec?.Status);
   }
 
   public get HasDataBadge(): boolean {

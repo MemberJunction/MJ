@@ -312,12 +312,15 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     expect(text(fixture, '.vp-header__title')).toBe('Q3 Executive Film');
     expect(text(fixture, '.vp-header__one-sentence')).toBe('Q3 revenue grew 18% year-over-year.');
     expect(text(fixture, '.vp-badge--status')).toBe('Delivered');
-    expect(text(fixture, '.vp-badge--duration')).toBe('15s');
+    expect(query(fixture, '.vp-badge--status')?.classList.contains('vp-badge--success')).toBe(true);
+    expect(text(fixture, '.vp-badge--duration')).toBe('0:15');
 
     const formatBtns = queryAll(fixture, '.vp-format-switcher button');
     expect(formatBtns).toHaveLength(2);
     expect(formatBtns[0].getAttribute('aria-pressed')).toBe('true');
     expect(formatBtns[1].getAttribute('aria-pressed')).toBe('false');
+    expect(formatBtns[0].querySelector('mj-video-format-glyph')).not.toBeNull();
+    expect(formatBtns[1].querySelector('mj-video-format-glyph')).not.toBeNull();
 
     let storagePlayerDe = fixture.debugElement.query(By.directive(MJStorageMediaPlayerComponent));
     expect(storagePlayerDe).not.toBeNull();
@@ -488,11 +491,25 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     await flush();
     fixture.detectChanges();
 
+    const beatStrip = query(fixture, '[data-testid="storyboard-beat-strip"]');
+    expect(beatStrip).not.toBeNull();
+    const stripBtns = queryAll(fixture, 'button.vp-beat-strip__block');
+    expect(stripBtns).toHaveLength(2);
+
     const beatRows = queryAll(fixture, '.vp-storyboard-beat-row');
     expect(beatRows).toHaveLength(2);
+    expect(beatRows[0].textContent).toContain('0:00–0:05');
     expect(beatRows[0].textContent).toContain('Headline Metric');
     expect(beatRows[0].textContent).toContain('Revenue reached four point two million dollars in Q3.');
+    expect(beatRows[1].textContent).toContain('0:05–0:15');
     expect(beatRows[1].textContent).toContain('Regional Breakdown');
+
+    const scrollSpy = vi.fn();
+    (beatRows[1] as HTMLElement & { scrollIntoView: typeof scrollSpy }).scrollIntoView = scrollSpy;
+    (stripBtns[1] as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(beatRows[1].classList.contains('vp-storyboard-beat-row--active')).toBe(true);
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
 
     const executeGql = (provider as unknown as { ExecuteGQL: ReturnType<typeof vi.fn> }).ExecuteGQL;
     expect(executeGql).toHaveBeenCalledTimes(2);
@@ -823,10 +840,10 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
       'Abstract geometric dark slate background',
     );
 
-    // Row 1: intro-clip (fallback to ModelID when RunView omits it, C2PA none, Seconds 5s, Cost $0.35)
+    // Row 1: intro-clip (fallback to ModelID when RunView omits it, C2PA none, Duration 0:05, Cost $0.35)
     expect(genRows[1].textContent).toContain('intro-clip');
     expect(genRows[1].textContent).toContain('Video');
-    expect(genRows[1].textContent).toContain('5s');
+    expect(genRows[1].textContent).toContain('0:05');
     expect(genRows[1].textContent).toContain(modelIdFallback);
     expect(genRows[1].textContent).toContain('$0.35');
     expect(genRows[1].textContent).toContain('none');
@@ -876,8 +893,24 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
 
     const emptyState = query(fixture, 'mj-empty-state');
     expect(emptyState).not.toBeNull();
-    expect(emptyState?.textContent).toContain('Invalid Video Production Content');
+    expect(emptyState?.textContent).toContain("This production can't be shown");
     expect(fixture.componentInstance.GetAdditionalTabs()).toEqual([]);
+  });
+
+  it('renders "Not rendered yet" empty state when no video output exists', () => {
+    const unrenderedSpec = makeSpec({
+      Status: 'Storyboarded',
+      Output: undefined,
+    });
+    const unrenderedFixture = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(unrenderedSpec)),
+      },
+    });
+    const stageEmpty = query(unrenderedFixture, '.vp-stage mj-empty-state');
+    expect(stageEmpty).not.toBeNull();
+    expect(stageEmpty?.textContent).toContain('Not rendered yet');
   });
 
   it('renders vp-badge-audio with Voiceover segment count when narration is enabled', () => {

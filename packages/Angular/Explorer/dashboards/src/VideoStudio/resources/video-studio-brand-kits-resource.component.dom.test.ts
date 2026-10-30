@@ -198,7 +198,10 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     expect(logoImgs[0].getAttribute('src')).toBe('https://cdn.example/file-logo-1.png');
 
     expect(queryAll(fixture, '[data-testid^="brand-kit-card-"]')).toHaveLength(2);
-    expect(query(fixture, '[data-testid="brand-kit-default-star"]')).not.toBeNull();
+    const defaultStar = query(fixture, '[data-testid="brand-kit-default-star"]') as HTMLElement | null;
+    expect(defaultStar).not.toBeNull();
+    expect(defaultStar!.classList.contains('mj-badge')).toBe(true);
+    expect(defaultStar!.classList.contains('mj-badge-neutral')).toBe(true);
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);
     expect(navStub.SetAgentContext).toHaveBeenCalledWith(
       instance,
@@ -212,6 +215,8 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     // Pressing Enter on the Delete button does NOT bubble to the card and call OpenEntityRecord
     const deleteBtn = query(fixture, '[data-testid="brand-kit-delete-kit-default"]') as HTMLElement | null;
     expect(deleteBtn).not.toBeNull();
+    expect(deleteBtn!.getAttribute('aria-label')).toBe('Delete MJ Default Brand Kit');
+    expect(deleteBtn!.classList.contains('vs-brand-kit-delete-btn')).toBe(true);
     deleteBtn!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
     expect(navStub.OpenEntityRecord).not.toHaveBeenCalled();

@@ -13,6 +13,7 @@ import {
   VideoStudioEngine,
 } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { FormatVideoTime, FormatVideoTimeRange } from '@memberjunction/ng-artifacts';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import {
@@ -27,6 +28,7 @@ import {
   BuildArchetypesAgentContext,
   FilterArchetypeCards,
   GroupArchetypesByCategory,
+  ParseArchetypeDefaultFormats,
   ResolveVideoStudioItem,
 } from '../video-studio-agent-context';
 
@@ -71,7 +73,7 @@ export interface ArchetypeCompanyOption {
  * inline slide-out preview showing the full beat template, pacing rules,
  * and narrative guidance.
  *
- * Company archetypes (`CompanyID` non-null) provide an "Edit Record" button
+ * Company archetypes (`CompanyID` non-null) provide an "Edit record" button
  * that opens the generated `MJ: Video Archetypes` form, while shipped
  * archetypes (`CompanyID IS NULL`) are read-only with a "Clone" button that
  * creates a company copy and opens the copy's entity form.
@@ -106,7 +108,7 @@ export class VideoStudioArchetypesResourceComponent
       label: 'Category',
       type: 'dropdown',
       options: [
-        { value: 'all', text: 'All Categories' },
+        { value: 'all', text: 'All categories' },
         ...ARCHETYPE_CATEGORIES.map((cat) => ({
           value: cat,
           text: this.FormatCategoryLabel(cat),
@@ -118,9 +120,9 @@ export class VideoStudioArchetypesResourceComponent
       label: 'Scope',
       type: 'dropdown',
       options: [
-        { value: 'all', text: 'All Scopes' },
-        { value: 'shipped', text: 'Shipped (Read-Only)' },
-        { value: 'company', text: 'Company Overrides' },
+        { value: 'all', text: 'All scopes' },
+        { value: 'shipped', text: 'Shipped (read-only)' },
+        { value: 'company', text: 'Company overrides' },
       ],
     },
   ];
@@ -345,6 +347,23 @@ export class VideoStudioArchetypesResourceComponent
       return 'Data Story';
     }
     return category;
+  }
+
+  public FormatTime(seconds: number): string {
+    return FormatVideoTime(seconds);
+  }
+
+  public FormatTimeRange(minSeconds: number, maxSeconds: number): string {
+    return FormatVideoTimeRange(minSeconds, maxSeconds);
+  }
+
+  public ParseFormats(formatsRaw: string): string[] {
+    return ParseArchetypeDefaultFormats(formatsRaw);
+  }
+
+  public ResetFiltersAndSearch(): void {
+    this.ClearAllFilters();
+    this.OnSearchChange('');
   }
 
   private async loadAvailableCompanies(): Promise<void> {

@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
-import { FormatVideoTime, FormatVideoTimeRange } from './video-time-format';
+import {
+  FormatVideoTime,
+  FormatVideoTimeRange,
+  GetVideoStatusBadgeVariant,
+} from './video-time-format';
 import { MJVideoFormatGlyphComponent } from './video-format-glyph.component';
 import { MJVideoBeatStripComponent, VideoBeatStripItem } from './video-beat-strip.component';
 
-describe('FormatVideoTime & FormatVideoTimeRange', () => {
+describe('FormatVideoTime, FormatVideoTimeRange & GetVideoStatusBadgeVariant', () => {
   it('formats 0, 5, 45, 60, 90, and 3599 seconds as m:ss', () => {
     expect(FormatVideoTime(0)).toBe('0:00');
     expect(FormatVideoTime(5)).toBe('0:05');
@@ -17,6 +21,33 @@ describe('FormatVideoTime & FormatVideoTimeRange', () => {
   it('formats ranges using m:ss–m:ss', () => {
     expect(FormatVideoTimeRange(30, 90)).toBe('0:30–1:30');
     expect(FormatVideoTimeRange(5, 45)).toBe('0:05–0:45');
+  });
+
+  it('maps production, gate, rubric, defect, and brand kit statuses to semantic badge variants', () => {
+    for (const s of ['Delivered', 'Complete', 'Approved', 'Passed', 'Fixed', 'Active']) {
+      expect(GetVideoStatusBadgeVariant(s)).toBe('success');
+    }
+    for (const s of ['Blocked', 'Failed', 'Blocker']) {
+      expect(GetVideoStatusBadgeVariant(s)).toBe('error');
+    }
+    for (const s of ['Pending', 'Major']) {
+      expect(GetVideoStatusBadgeVariant(s)).toBe('warning');
+    }
+    for (const s of [
+      'Briefing',
+      'Styled',
+      'Storyboarded',
+      'PreProduced',
+      'Composed',
+      'RoughCut',
+      'Reviewed',
+      'Rendering',
+    ]) {
+      expect(GetVideoStatusBadgeVariant(s)).toBe('info');
+    }
+    for (const s of ['Draft', 'Unknown', 'Inactive', 'Minor', 'Archived', '', null, undefined]) {
+      expect(GetVideoStatusBadgeVariant(s)).toBe('neutral');
+    }
   });
 });
 

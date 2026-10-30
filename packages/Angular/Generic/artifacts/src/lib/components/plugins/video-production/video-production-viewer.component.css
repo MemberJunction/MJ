@@ -95,20 +95,39 @@
   color: var(--mj-text-muted);
 }
 
-.vp-badge--status[data-status='Approved'] {
+.vp-badge--neutral {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border-color: var(--mj-border-subtle);
+}
+
+.vp-badge--success {
   background: var(--mj-status-success-bg);
   color: var(--mj-status-success-text);
   border-color: var(--mj-status-success-border);
 }
 
-.vp-badge--status[data-status='Failed'] {
+.vp-badge--warning {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border-color: var(--mj-status-warning-border);
+}
+
+.vp-badge--error {
   background: var(--mj-status-error-bg);
   color: var(--mj-status-error-text);
   border-color: var(--mj-status-error-border);
 }
 
+.vp-badge--info {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  border-color: var(--mj-status-info-border);
+}
+
 .vp-badge--duration {
   font-family: var(--mj-font-family-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .vp-format-switcher {
