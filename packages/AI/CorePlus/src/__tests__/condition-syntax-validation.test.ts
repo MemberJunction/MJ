@@ -149,13 +149,16 @@ describe('UnknownConditionRoots — the door now answers what it can answer (R2-
     it('CALLS every method the shared namespace list claims', () => {
         // The per-name pinning above exercises one method per namespace. This catches the rest:
         // a method on the list that the policy screen refuses, or that is not a function at all.
+        // Approved globals are usable only in call position, so whether each listed member is a
+        // function is checked against the host directly; reading one as a value must be refused.
         const evaluator = new SafeExpressionEvaluator();
+        const host = globalThis as unknown as Record<string, Record<string, unknown>>;
         for (const [namespace, methods] of SAFE_GLOBAL_NAMESPACE_METHODS) {
             for (const method of methods) {
-                const expression = `typeof ${namespace}.${method} === 'function'`;
-                const verdict = evaluator.evaluate(expression, {});
-                expect(verdict.success, `${namespace}.${method} is refused: ${verdict.error}`).toBe(true);
-                expect(verdict.value, `${namespace}.${method} is not a function`).toBe(true);
+                expect(typeof host[namespace][method], `${namespace}.${method} is not a function`).toBe('function');
+
+                const asValue = evaluator.evaluate(`typeof ${namespace}.${method} === 'function'`, {});
+                expect(asValue.success, `${namespace}.${method} read as a value was not refused`).toBe(false);
 
                 const call = evaluator.validateSyntax(`${namespace}.${method}(payload.x)`);
                 expect(call.Valid, `${namespace}.${method}() is refused: ${call.Error}`).toBe(true);
