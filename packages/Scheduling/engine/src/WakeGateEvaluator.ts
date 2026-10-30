@@ -401,8 +401,7 @@ export class WakeGateEvaluator {
                         EntityName: rule.entityName,
                         ExtraFilter: baseFilter,
                         OrderBy: '__mj_UpdatedAt DESC',
-                        // 2, not 1: a MaxRows: 1 read skips the total count, and totalMatchingCount needs it
-                        MaxRows: 2,
+                        MaxRows: 1,
                         ResultType: 'simple',
                     },
                 ],
