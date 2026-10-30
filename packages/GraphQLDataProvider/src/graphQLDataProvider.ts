@@ -2416,11 +2416,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      *   writable fields (`f.IsPrimaryKey || (!f.ReadOnly && !f.NotLoaded && f.Dirty)`) in both
      *   `vars.input` and `vars.input.OldValues___`. Clean fields, read-only fields (`__mj_CreatedAt`,
      *   `__mj_UpdatedAt`), virtual fields, and `NotLoaded` fields are omitted from the mutation input.
-     * - **Delta response selection on Update**: Requests only primary keys, dirty fields,
-     *   `__mj_CreatedAt` / `__mj_UpdatedAt`, and (when any foreign key field was dirtied) virtual
-     *   fields so joined display names refresh from the server view. The delta response is merged
-     *   onto `entity.GetAll()` before `ApplyServerFieldAccess` so `BaseEntity.finalizeSave()` keeps
-     *   clean loaded fields intact and preserves `NotLoaded` on unloaded fields.
+     * - **Response selection on Update**: Requests primary keys, `__mj_CreatedAt` / `__mj_UpdatedAt`,
+     *   dirty fields, server-derived fields, and every other loaded non-binary field, so a concurrent
+     *   change the server preserved on an untouched column reaches the entity. `NotLoaded` and binary
+     *   fields are not requested. The response is merged onto `entity.GetAll()` before
+     *   `ApplyServerFieldAccess` so `BaseEntity.finalizeSave()` preserves `NotLoaded` on unloaded fields.
      * - **`datestamps_only` return mode**: Requests only primary keys and `__mj_CreatedAt` /
      *   `__mj_UpdatedAt` and merges the response onto `entity.GetAll()`.
      * - **Forced full save (`options?.IgnoreDirtyState === true`)**: Bypasses the dirty-only filter on
@@ -2539,16 +2539,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return f.IsPrimaryKey || f.EntityFieldInfo.IsSpecialDateField;
                 }
                 if (filterToDirtyOnly) {
+                    // Every loaded non-binary field comes back, not only the dirty ones: the server
+                    // merges a concurrent change to an untouched column into the saved row, and the
+                    // entity can only reflect that change if the response carries the column.
                     return (
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
                         Boolean(serverDerivedFields?.has(f.Name)) ||
-                        (!f.NotLoaded &&
-                            !f.EntityFieldInfo.IsBinaryFieldType &&
-                            (Boolean(f.EntityFieldInfo.IsVirtual) ||
-                                Boolean(f.EntityFieldInfo.IsComputed) ||
-                                f.ReadOnly))
+                        (!f.NotLoaded && !f.EntityFieldInfo.IsBinaryFieldType)
                     );
                 }
                 return true;
