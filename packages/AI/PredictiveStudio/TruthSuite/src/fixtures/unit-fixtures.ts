@@ -302,9 +302,19 @@ export class UnitFixtures {
     return UnitFixtures.provision(h, UnitFixtures.T3UnitDraft(h), o.Columns, 'Ridge Regression', o.Protocol || T3_ROLLING_ORIGIN, undefined, steps);
   }
 
+  /**
+   * The catalog algorithm a scenario pipeline of a task trains: logistic regression for a class, ridge for a continuous
+   * value, and a random forest (Poisson splits) for a count or non-negative value, which the trainer fits with neither
+   * GLM (its Poisson and Tweedie GLMs are baselines only).
+   */
+  public static ScenarioAlgorithm(task: TaskType): string {
+    if (task.kind === 'binary' || task.kind === 'multiclass') return 'Logistic Regression';
+    return task.kind === 'continuous' ? 'Ridge Regression' : 'Random Forest';
+  }
+
   /** A planted scenario with one fixed decision date; its rows are held out by a seeded row hash by default. */
   public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, protocol: ProtocolChoice = { Kind: 'seeded-random', Fraction: 0.25 }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.ScenarioUnitDraft(h, scenario, task), ['PastEventsZ', 'Member', 'DistanceZ'], 'Ridge Regression', protocol);
+    return UnitFixtures.provision(h, UnitFixtures.ScenarioUnitDraft(h, scenario, task), ['PastEventsZ', 'Member', 'DistanceZ'], UnitFixtures.ScenarioAlgorithm(task), protocol);
   }
 
   /** A planted scenario whose rows carry a date column: one row per scenario row, decided at that date. */
@@ -337,7 +347,7 @@ export class UnitFixtures {
       h,
       o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
       UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
-      task.kind === 'binary' || task.kind === 'multiclass' ? 'Logistic Regression' : 'Ridge Regression',
+      UnitFixtures.ScenarioAlgorithm(task),
       o.Protocol,
     );
   }

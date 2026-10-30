@@ -247,7 +247,10 @@ export interface TrainingDeps {
    * `Failed`, not as a `refused` envelope) rather than training from rows nothing recorded.
    */
   snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  /** Assigns each unit row its manifest role; defaults to a `TrailingFractionCarver` over the pipeline's `LockedHoldoutFraction`. */
+  /**
+   * Assigns each unit row its manifest role; defaults to `TrainingEngine.DefaultHoldoutCarver` (a forecast protocol's
+   * rolling-origin test periods, otherwise a `TrailingFractionCarver` over the pipeline's `LockedHoldoutFraction`).
+   */
   holdoutCarver?: IHoldoutCarver;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
   snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name

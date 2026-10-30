@@ -132,6 +132,8 @@ export class FakeTrainingSnapshot extends FakeEntity {
   public ManifestRowCount = 0;
   public HoldoutRowCount = 0;
   public CensoredRowsExcluded = 0;
+  /** The protocol version the snapshot was frozen under (the builder sets it). */
+  public EvaluationProtocolID: string | null = null;
   /** The data cutoff day at UTC midnight (the builder sets it). */
   public DataCutoff = new Date(0);
 

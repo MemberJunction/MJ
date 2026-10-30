@@ -136,10 +136,14 @@ function newRowOf<T extends object>(ctor: { prototype: T }, members: { IsSaved: 
   return row;
 }
 
-describe.each([
+/** A versioned server row class: the members the Save override reads. */
+type VersionedRowClass = { prototype: { IsSaved: boolean; Version: number; ID: string; LineageRootID: string; Save(): Promise<boolean> } };
+const versionedRowClasses: readonly (readonly [string, VersionedRowClass])[] = [
   ['MJ: Prediction Units', MJPredictionUnitEntityServer],
   ['MJ: Evaluation Protocols', MJEvaluationProtocolEntityServer],
-])('%s Save adopts the lineage root', (_name, ctor) => {
+];
+
+describe.each(versionedRowClasses)('%s Save adopts the lineage root', (_name, ctor) => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

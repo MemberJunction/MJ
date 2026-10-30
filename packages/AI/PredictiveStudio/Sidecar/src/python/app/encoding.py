@@ -215,16 +215,24 @@ def _numeric_pipe(policy: MissingPolicy) -> Pipeline:
     return Pipeline([("impute", imputer), ("scale", StandardScaler())])
 
 
+def _part_name(prefix: str, column_name: str) -> str:
+    """The ColumnTransformer name of one column's part. sklearn refuses `__` in a transformer name (it separates nested
+    parameter names), and the assembler names derived columns `<col>__<part>` (`JoinDate__days_since_decision`), so
+    `__` is written `.`; the output feature names are the columns' own names either way. Two columns differing only
+    in `__` against `.` would give one name twice, which sklearn refuses by name rather than mixing them up."""
+    return f"{prefix}:{column_name.replace('__', '.')}"
+
+
 def _numeric_parts(column: ColumnSpec) -> List[Tuple[str, Union[Pipeline, FunctionTransformer], List[str]]]:
     """The filled-and-scaled column and, when its policy asks, its `<col>__missing` indicator (always emitted, so the
     matrix width never depends on whether a fold's training rows happened to hold a missing value)."""
     policy = column.missing if column.missing is not None else DEFAULT_MISSING_POLICY
     parts: List[Tuple[str, Union[Pipeline, FunctionTransformer], List[str]]] = [
-        (f"num:{column.name}", _numeric_pipe(policy), [column.name])
+        (_part_name("num", column.name), _numeric_pipe(policy), [column.name])
     ]
     if policy.indicator:
         flags = FunctionTransformer(_missing_flags, feature_names_out=_missing_flag_names)
-        parts.append((f"missing:{column.name}", flags, [column.name]))
+        parts.append((_part_name("missing", column.name), flags, [column.name]))
     return parts
 
 
@@ -302,7 +310,7 @@ def build_preprocessor(columns: Sequence[ColumnSpec], target_type: TargetType, s
         if isinstance(c.encoding, NumericEncoding):
             parts.extend(_numeric_parts(c))
         elif isinstance(c.encoding, CategoricalEncoding):
-            parts.append((f"cat:{c.name}", _categorical_pipe(c, c.encoding, target_type, seed), [c.name]))
+            parts.append((_part_name("cat", c.name), _categorical_pipe(c, c.encoding, target_type, seed), [c.name]))
     if not parts:
         raise ValueError("no usable feature columns: every column is an excluded identifier")
     return ColumnTransformer(parts, remainder="drop", verbose_feature_names_out=False)

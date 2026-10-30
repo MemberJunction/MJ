@@ -107,6 +107,15 @@ def test_a_declared_mean_impute_fills_with_the_fold_mean() -> None:
     assert list(pre.get_feature_names_out()) == ["x"]
 
 
+def test_columns_named_with_a_double_underscore_are_encoded_under_their_own_names() -> None:
+    cols = [E.ColumnSpec("JoinDate__days_since_decision", "JoinDate", E.NumericEncoding("numeric"), E.MissingPolicy("median", None, True)),
+            E.ColumnSpec("Tier__code", "Tier", E.CategoricalEncoding(10, "onehot"), None, ("A", "B"))]
+    train = pd.DataFrame({"JoinDate__days_since_decision": [1.0, np.nan, 3.0, 4.0], "Tier__code": ["A", "B", "A", None]})
+    pre = E.build_preprocessor(cols, "binary", 0).fit(train, np.array([0, 1, 0, 1]))
+    assert list(pre.get_feature_names_out()) == [
+        "JoinDate__days_since_decision", "JoinDate__days_since_decision__missing", "Tier__code_A", "Tier__code_B"]
+
+
 def test_a_declared_mode_impute_fills_with_the_fold_mode() -> None:
     cols = [E.ColumnSpec("x", "x", E.NumericEncoding("numeric"), E.MissingPolicy("mode", None, True))]
     train = pd.DataFrame({"x": [3.0, 3.0, 1.0, np.nan]})

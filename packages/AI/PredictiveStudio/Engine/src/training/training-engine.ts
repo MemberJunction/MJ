@@ -38,9 +38,9 @@
  * (censored and label-known rows excluded and counted), the target is validated, and the matrix is
  * assembled as of each row's decision date by {@link TrainingEngine.AssembleForTraining} — the same
  * `AsOfFeatureAssembler` the scoring path calls. The assembled rows are frozen into an immutable
- * Training Snapshot (the trailing fraction of rows, in decision-date order, is the locked holdout;
- * identical content reuses the existing snapshot; the protocol decides the incumbent-score and slice
- * columns). The protocol trainer (`TrainingDeps.trainer`) is sent pre-authorised downloads of the
+ * Training Snapshot (the locked holdout is a forecast protocol's rolling-origin test periods, otherwise
+ * the trailing fraction of rows in decision-date order; identical content reuses the existing snapshot;
+ * the protocol decides the incumbent-score and slice columns). The protocol trainer (`TrainingDeps.trainer`) is sent pre-authorised downloads of the
  * snapshot files, its result is recorded on the run (compute, code version), every returned artifact
  * is stored in `MJ: Files`, and the model row is created from the finalist's artifact with the
  * trainer's held-out permutation importance. The run stores the trainer's result with its artifacts
@@ -101,7 +101,7 @@ import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '.
 import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingRefusedError } from './training-refusal';
-import { TrailingFractionCarver } from '../snapshot/holdout-carver';
+import { RollingOriginCarver, TrailingFractionCarver, type IHoldoutCarver } from '../snapshot/holdout-carver';
 import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapshot-builder';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
@@ -384,7 +384,7 @@ export class TrainingEngine {
 
   /**
    * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the holdout carver (by
-   * default the trailing `LockedHoldoutFraction` of the rows in decision-date order), and identical content reuses the
+   * default {@link DefaultHoldoutCarver}), and identical content reuses the
    * snapshot that already holds it. The bound protocol decides the evaluation columns: the incumbent-score column when
    * it declares an incumbent-heuristic baseline and the unit has a rule to score it, and one slice column per subgroup
    * field it declares.
@@ -394,7 +394,7 @@ export class TrainingEngine {
     loaded: LoadedProtocol, deps: TrainingDeps,
   ): Promise<BuiltSnapshot> {
     const protocol = loaded.Protocol;
-    const carver = deps.holdoutCarver || new TrailingFractionCarver(resolved.validation.LockedHoldoutFraction);
+    const carver = deps.holdoutCarver || TrainingEngine.DefaultHoldoutCarver(resolved, protocol, assembly.UnitRead);
     const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
     return new TrainingSnapshotBuilder().Build({
       PipelineID: resolved.pipeline.ID,
@@ -412,6 +412,17 @@ export class TrainingEngine {
       ContextUser: deps.contextUser,
       ExistingByContentHash: (contentHash) => snapshots.FindByContentHash(contentHash),
     });
+  }
+
+  /**
+   * The holdout carver a unit run uses unless the deps supply one: a forecast protocol's rolling-origin test periods
+   * (the trainer refuses a manifest whose holdout is not its design's test periods), otherwise the trailing
+   * `LockedHoldoutFraction` of the rows in decision-date order.
+   */
+  public static DefaultHoldoutCarver(resolved: Pick<ResolvedPipeline, 'validation'>, protocol: Pick<EvaluationProtocolSpec, 'holdout'>, unitRead: UnitRowsRead): IHoldoutCarver {
+    const holdout = protocol.holdout;
+    if (holdout.kind === 'rolling-origin') return new RollingOriginCarver(holdout, new Map(unitRead.Rows.map((r) => [r.RowId, r.Period])));
+    return new TrailingFractionCarver(resolved.validation.LockedHoldoutFraction);
   }
 
   /**

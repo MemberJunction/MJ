@@ -23,6 +23,7 @@ import { TrainingEngine } from '../training-engine';
 import { TrainingRefusedError } from '../training-refusal';
 import { TrainerRequestBuilder } from '../trainer-request';
 import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
+import { RollingOriginCarver, TrailingFractionCarver } from '../../snapshot/holdout-carver';
 import { InMemoryArtifactStore } from '../artifact-store';
 import { ProtocolRowFixture } from './fixtures/protocol-row';
 import { TrainerResultFixtures } from './fixtures/trainer-result';
@@ -735,6 +736,17 @@ describe('TrainingEngine — no unit pipeline trains without the protocol versio
     expect([snapshots.length, files.Saved.size, trainer.Requests.length]).toEqual([0, 0, 0]);
     expect(runs[0].Status).toBe('Failed');
     assemble.mockRestore();
+  });
+});
+
+describe('TrainingEngine.DefaultHoldoutCarver', () => {
+  it("carves a rolling-origin protocol's test periods and every other protocol's trailing fraction", async () => {
+    const { engine, deps, pipeline } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const assembly = await engine.AssembleForTraining(pipeline.ID, deps);
+    const resolved = { validation: { Strategy: 'train_test_split' as const, TestSize: 0.2, LockedHoldoutFraction: 0.2 } };
+    const rolling = { ...protocolSpec(), holdout: { kind: 'rolling-origin' as const, origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' as const } };
+    expect(TrainingEngine.DefaultHoldoutCarver(resolved, rolling, assembly.UnitRead)).toBeInstanceOf(RollingOriginCarver);
+    expect(TrainingEngine.DefaultHoldoutCarver(resolved, protocolSpec(), assembly.UnitRead)).toBeInstanceOf(TrailingFractionCarver);
   });
 });
 
