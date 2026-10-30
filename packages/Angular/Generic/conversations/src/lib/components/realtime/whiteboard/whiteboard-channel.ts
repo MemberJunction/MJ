@@ -798,6 +798,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * restore, exactly one save is requested carrying both. A failed restore requests nothing.
    */
   public override RestoreState(stateJson: string): boolean {
+    // A trailing widget-state save armed before the restore would fire after it as a second save.
+    if (this.widgetStateSaveTimer !== null) {
+      clearTimeout(this.widgetStateSaveTimer);
+      this.widgetStateSaveTimer = null;
+    }
     this.restoring = true;
     try {
       if (!this.State.LoadFromJSON(stateJson)) {

@@ -487,6 +487,19 @@ describe('RealtimeWhiteboardChannel — widget state save / restore', () => {
     expect(log.Saves.length).toBe(failedBefore); // a failed restore requests nothing
   });
 
+  it('a restore cancels a pending trailing widget-state save, so it still requests exactly one save (review round 2)', () => {
+    channel.Initialize(makeContext(log));
+    const id = addWidget();
+    channel.State.SetWidgetState(id, '"a"'); // leading-edge save
+    channel.State.SetWidgetState(id, '"b"'); // arms the trailing-edge timer
+    const payload = JSON.stringify({ ...JSON.parse(channel.State.ToJSON()), widgetStates: { [id]: '"restored"' } });
+    const before = log.Saves.length;
+    expect(channel.RestoreState(payload)).toBe(true);
+    vi.advanceTimersByTime(10_000); // the stale trailing timer must not fire a second save
+    const restoreSaves = log.Saves.slice(before).map((p) => JSON.parse(p)['widgetStates']);
+    expect(restoreSaves).toEqual([{ [id]: '"restored"' }]);
+  });
+
   it('a restore over in-memory widget states saves the RESTORED states, never the stale ones (review Q2)', () => {
     channel.Initialize(makeContext(log));
     const id = addWidget();
