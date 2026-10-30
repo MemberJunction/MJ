@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT150 - Ciphertext at Rest in the RunView Cache",
+    "Description": "A MJ: Credentials row with an encrypted Values field is read through RunView with a run-unique filter and the raw RunViewCache entry is inspected. CT0 the table column holds ciphertext; CT1 the miss returns plaintext and writes the cache; CT2 the cached entry holds ciphertext only; CT3 the hit returns plaintext without rewriting the cache; CT4 an entity_object result also decrypts. Mutating; self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The cache never holds plaintext for an encrypted field while every caller-facing path returns plaintext."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ciphertext-cache"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CA8BE1C5-A9E9-4464-A86C-4FD4EDCAB411"
+  }
+}

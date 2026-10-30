@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT148 - Entity Status Push Fan-out over WebSocket",
+    "Description": "Two WebSocket sessions of one user each subscribe to status updates. SF1 the saving session receives one save push for its own record; SF2 the other session of the same user receives that push too; SF3 an update reaches both sessions exactly once each. Mutating; self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every active session of the user receives each entity save push exactly once."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "entity-status-fanout-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "30EAD686-623F-4831-B00F-DF7CA6A5A1D4"
+  }
+}

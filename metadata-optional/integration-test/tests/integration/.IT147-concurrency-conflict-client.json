@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT147 - Optimistic Concurrency over GraphQL",
+    "Description": "Two independent GraphQL sessions of one user edit the same MJ: User Settings row. CC1 a stale overlapping save is refused with a conflict message naming the field and the stored value is untouched; CC2 a stale save that converges on the stored value is accepted; CC3 a stale save on a different column is accepted and the other session's column survives; CC4 the saving session's entity carries the merged row after the save; CC5 a refused two-field save writes neither field. Mutating; self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The server rejects only genuinely conflicting stale saves, merges non-overlapping ones, and the client entity reflects the merged row."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "concurrency-conflict-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "42D0B404-9265-400B-A459-C725096F340F"
+  }
+}

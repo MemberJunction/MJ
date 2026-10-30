@@ -1737,6 +1737,50 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT150 - Ciphertext at Rest in the RunView Cache",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2CAD1D25-0F21-4188-BCDF-290EF3FBBE46"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT147 - Optimistic Concurrency over GraphQL",
+            "Sequence": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0704F026-005E-487A-8558-26BA64228AA1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT148 - Entity Status Push Fan-out over WebSocket",
+            "Sequence": 81,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4F51824A-CAF6-44A8-8D09-7975DB6C5A20"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT149 - Encrypted Field Read over GraphQL",
+            "Sequence": 82,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "221D6079-D7DD-450F-861C-B8505873F32E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
             "Sequence": 49,
             "Status": "Active"

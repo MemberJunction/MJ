@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT149 - Encrypted Field Read over GraphQL",
+    "Description": "MJ: Credentials.Values is encrypted at rest with AllowDecryptInAPI on. ER1 Load over GraphQL returns plaintext; ER2 a first RunView returns plaintext; ER3 a repeated RunView (server cache hit) returns plaintext; ER4 an update of a plain field keeps the encrypted value intact. Mutating; self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A wire caller always receives the decrypted value, including from the server cache, and unrelated updates do not disturb it."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "encrypted-read-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "58633066-32BC-4B99-8E95-4C6C0C0C5BE6"
+  }
+}
