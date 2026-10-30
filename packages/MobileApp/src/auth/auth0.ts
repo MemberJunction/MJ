@@ -7,7 +7,8 @@
  * Required Auth0 setup (one-time, in Auth0 dashboard):
  *   1. Application type: Native
  *   2. Allowed Callback URLs: add `mjmobile://auth`
- *   3. Allowed Logout URLs (optional): add `mjmobile://auth`
+ *   3. Allowed Logout URLs: add `mjmobile://auth`, then set `Env.auth0EndSessionOnSignOut`
+ *      to true so sign-out opens `/v2/logout` and returns here (src/auth/auth0-session.ts)
  *   4. Refresh Token Rotation: enabled (Token Settings)
  *
  * Note on the ID token: Auth0's default flow returns an idToken with

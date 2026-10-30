@@ -16,6 +16,8 @@ against the iOS Simulator. These complement the two non-UI suites:
 | `02-new-conversation.yaml` | Tapping "New conversation" opens the composer / agent rail. |
 | `03-interactive-component.yaml` | An agent-authored React component compiles **on-device** (react-runtime + Babel + the web-primitive→RN shim) and is genuinely interactive — taps the compiled `<button>` and asserts the `useState` counter advances 0→1→2. |
 | `04-render-showcase.yaml` | The native renderers produce output without crashing — prismjs-highlighted code, the HTML→RN renderer, and the SVG charts. |
+| `10-appearance-preference.yaml` | Device → server: cycling the profile Appearance row to Dark writes `mobile.appearance` to `MJ: User Settings` (verify with a forced `UserInfoEngine.Config(true)` read-back). |
+| `11-appearance-boot-sync.yaml` | Server → device: with `mobile.appearance = light` set server-side, a cold launch hydrates the local mirror so the row reads Light. Run after changing the setting server-side. |
 
 Flows 03–04 deep-link into the dev-harness routes (`/interactive-demo`,
 `/markdown-preview`). The first custom-scheme open may raise an "Open in MJ Mobile?"

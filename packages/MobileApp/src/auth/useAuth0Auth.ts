@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAuthRequest, ResponseType } from 'expo-auth-session';
 import { Env } from '@/config/env';
+import { ClearFreshLoginRequired, IsFreshLoginRequired } from '@/auth/fresh-login';
 import {
     GetAuth0Discovery,
     GetAuth0RedirectUri,
@@ -21,6 +22,10 @@ import {
  */
 export function UseAuth0Auth() {
     const discovery = GetAuth0Discovery();
+    // After an explicit sign-out, force Auth0 to show the credentials form instead of silently
+    // reusing the previous user's SSO cookie (see src/auth/fresh-login.ts). `extraParams` is part
+    // of useAuthRequest's rebuild dependencies, so flipping the flag re-creates the request.
+    const freshLogin = IsFreshLoginRequired();
     const [request, , promptAsync] = useAuthRequest(
         {
             clientId: Env.auth0ClientId,
@@ -28,6 +33,7 @@ export function UseAuth0Auth() {
             redirectUri: GetAuth0RedirectUri(),
             responseType: ResponseType.Code,
             usePKCE: true,
+            extraParams: freshLogin ? { prompt: 'login' } : undefined,
         },
         discovery,
     );
@@ -45,7 +51,9 @@ export function UseAuth0Auth() {
         if (!code) throw new Error('No auth code returned by Auth0.');
         const verifier = request.codeVerifier;
         if (!verifier) throw new Error('PKCE code verifier missing.');
-        return ExchangeAuth0Code(code, verifier);
+        const tokens = await ExchangeAuth0Code(code, verifier);
+        ClearFreshLoginRequired();
+        return tokens;
     }, [request, promptAsync]);
 
     return { signIn, ready: !!request };

@@ -48,6 +48,14 @@ export const Env = {
   auth0Domain: 'bluecypress-dev.us.auth0.com',
   auth0ClientId: 'uRNpH3B0sFKVc2yrfBGBalfiUphUK5JI',
   auth0Scopes: ['openid', 'profile', 'email', 'offline_access'] as const,
+  /**
+   * Whether sign-out also ends the Auth0 tenant session via `/v2/logout` (see
+   * src/auth/auth0-session.ts). Requires `mjmobile://auth` under the Auth0 application's
+   * **Allowed Logout URLs**; with it unlisted, Auth0 renders an error page on every sign-out
+   * instead of redirecting back. Off until the tenant is updated. User switching still works
+   * without it because sign-out raises the one-shot `prompt=login` flag (src/auth/fresh-login.ts).
+   */
+  auth0EndSessionOnSignOut: false,
 
   // ---------------------------------------------------------------------
   // MSAL (Azure AD) — preserved for future enablement; not on the boot path
