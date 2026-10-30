@@ -15,7 +15,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app import artifacts, artifacts_v2, calibration as CAL, evaluation as EV, snapshot as SN, trainer as TR
+from app import artifacts, artifacts_v2, calibration as CAL, evaluation as EV, forecast as FC, snapshot as SN
+from app import temporal as T, trainer as TR
 from app.baselines import NIL_UUID
 from app.encoding import ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
@@ -435,3 +436,197 @@ def test_predict_returns_every_class_of_a_multiclass_v2_artifact() -> None:
         assert len(probs) == 3 and sum(probs) == pytest.approx(1.0)
         assert p["score"] == pytest.approx(max(probs)) and p["class"] == "abc"[int(np.argmax(probs))]
     assert [p["class"] for p in preds] == ["a", "b", "c"]
+
+
+# ------------------------------------------------------------------------------------------ forecast tasks --------
+
+SERIES_DRIVERS: list[DriverSpec] = [("ar1_const", "ar1_const", {}), ("trend_season_ols", "trend_season_ols", {}),
+                                    ("trend_season_ar1", "trend_season_ar1", {})]
+FORECAST_TASK: JsonObject = {"kind": "forecast", "valueKind": "continuous"}
+MONTHLY: JsonObject = {"action": "plan", "actorRole": "ops", "capacityPerPeriod": None, "period": "month"}
+
+
+def _monthly_series(n: int = 96, seed: int = 5) -> pd.DataFrame:
+    """One monthly series from January 2015: trend, a 12-month season and AR(1) noise."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n)
+    noise = np.zeros(n)
+    for i in range(1, n):
+        noise[i] = 0.5 * noise[i - 1] + rng.normal()
+    y = 50 + 0.1 * t + 5 * np.sin(2 * np.pi * t / 12) + noise
+    days = [f"{2015 + i // 12}-{i % 12 + 1:02d}-01" for i in range(n)]
+    return pd.DataFrame({"ID": [f"s{i}" for i in range(n)], "EntityKey": "series", "T": days, "Period": days,
+                         "Target": y})
+
+
+def _forecast_request(server: FileServer, df: pd.DataFrame, tag: str, origins: int = 5, horizon: int = 6,
+                      gap: int = 0, min_train: int = 24, window: str = "expanding",
+                      holdout_rows: int | None = None, **proto_over: JsonValue) -> JsonObject:
+    """A forecast request over `df` whose last `origins * horizon` rows (by position) are the locked holdout."""
+    n_hold = origins * horizon if holdout_rows is None else holdout_rows
+    hold = [str(i) for i in df["ID"].iloc[len(df) - n_hold:]]
+    m, n = snapshot_files(df, {}, hold, period_col="Period", decision=MONTHLY)
+    holdout: JsonObject = {"kind": "rolling-origin", "origins": origins, "horizonPeriods": horizon, "gapPeriods": gap,
+                           "minTrainPeriods": min_train, "window": window}
+    over: dict[str, JsonValue] = {"holdout": holdout, "secondaryMetrics": ["r2"],
+                                  "residualDiagnostics": {"acfLags": 12, "ljungBoxAlpha": 0.05}}
+    over.update(proto_over)
+    return request(server, m, n, FORECAST_TASK, protocol("forecast", **over), candidates("continuous", SERIES_DRIVERS),
+                   tag=tag)
+
+
+def test_a_forecast_runs_a_rolling_origin_backtest(server: FileServer) -> None:
+    r = _completed(_forecast_request(server, _monthly_series(), "fc-ok"))
+    assert r.forecast is not None and [o.k for o in r.forecast.origins] == [1, 2, 3, 4, 5]
+    first = 2015 * 12
+    assert [o.testPeriods[0] - first for o in r.forecast.origins] == [66, 72, 78, 84, 90]
+    assert all(o.lastTrainPeriod == o.testPeriods[0] - 1 for o in r.forecast.origins)
+    assert all(set(o.mase) == {"model", "mean", "naive", "seasonalNaive"} for o in r.forecast.origins)
+    assert r.holdout.primary.metric == "mase" and r.holdout.primary.n == 30
+    assert {b.baseline.kind for b in r.baselines} == {"dummy", "naive", "seasonal-naive"}
+    assert {"modelVsDummy", "modelVs:naive", "modelVs:seasonalNaive"} <= set(r.comparisons)
+    assert {a.candidate for a in r.artifacts} == {r.finalist, "naive", "seasonalNaive"}
+    assert {s.candidate for s in r.innerScores} == {"ar1_const", "trend_season_ols", "trend_season_ar1"}
+    assert r.residualDiagnostics is not None and r.residualDiagnostics.ljungBox.lags == 12
+    assert r.predictionIntervalCoverage == [] and r.importance == [] and r.incumbentDiff is None
+    assert r.innerSplitContrast is None and r.forecast.dieboldMarianoVsSeasonalNaive.horizon == 6
+    assert r.computeSeconds > 0 and r.cost.computeSeconds == r.computeSeconds
+
+
+def test_a_forecast_mase_is_the_mean_of_its_origins(server: FileServer) -> None:
+    """Equal-length origins: the pooled MASE of each member is the mean of its per-origin MASE."""
+    r = _completed(_forecast_request(server, _monthly_series(), "fc-pool"))
+    assert r.forecast is not None
+    pooled = float(np.mean([o.mase["model"] for o in r.forecast.origins]))
+    assert r.holdout.primary.value == pytest.approx(pooled, abs=1e-12)
+    seasonal = next(b for b in r.baselines if b.baseline.kind == "seasonal-naive")
+    per_origin = [o.mase["seasonalNaive"] for o in r.forecast.origins]
+    assert seasonal.holdout.value == pytest.approx(float(np.mean(per_origin)), abs=1e-12)
+
+
+def test_a_forecast_ranks_by_rmse_when_the_protocol_declares_it(server: FileServer) -> None:
+    """An `rmse` forecast protocol scores unscaled errors: the seasonal-naive baseline's holdout RMSE equals one
+    computed here from each origin's own training window."""
+    df = _monthly_series()
+    r = _completed(_forecast_request(server, df, "fc-rmse", primaryScore={"family": "forecast", "metric": "rmse"}))
+    assert r.holdout.primary.metric == "rmse"
+    y = df["Target"].to_numpy(dtype=np.float64)
+    errors = []
+    for start in range(66, 96, 6):
+        last_season = y[start - 12:start]
+        errors.append(y[start:start + 6] - last_season[np.arange(6) % 12])
+    expected = math.sqrt(float(np.mean(np.concatenate(errors) ** 2)))
+    seasonal = next(b for b in r.baselines if b.baseline.kind == "seasonal-naive")
+    assert seasonal.holdout.metric == "rmse" and seasonal.holdout.value == pytest.approx(expected, abs=1e-9)
+
+
+def test_a_forecast_origin_trains_up_to_the_gap_before_its_test_periods(server: FileServer) -> None:
+    r = _completed(_forecast_request(server, _monthly_series(), "fc-gap", gap=2))
+    assert r.forecast is not None
+    assert all(o.lastTrainPeriod == o.testPeriods[0] - 3 for o in r.forecast.origins)
+
+
+def _with_proto(req: JsonObject, key: str, value: JsonValue) -> JsonObject:
+    _obj(req["protocol"])[key] = value
+    return req
+
+
+@pytest.mark.parametrize("key,value,named", [
+    ("intervals", {"level": 0.95, "method": "bootstrap", "resamples": 1000, "pairedTest": "paired-bootstrap"},
+     "'bootstrap'"),
+    ("predictionIntervals", {"method": "split-conformal", "nominalCoverage": [0.8]}, "prediction-interval coverage"),
+    ("baselines", [{"kind": "dummy", "name": "training-window-mean"}, {"kind": "naive"}], "seasonal-naive"),
+])
+def test_a_forecast_protocol_the_backtest_cannot_honour_is_400(server: FileServer, key: str, value: JsonValue,
+                                                                named: str) -> None:
+    """An interval method other than the block bootstrap by origin, declared prediction intervals, or no
+    seasonal-naive baseline (the MASE scale and the gate need it) answer 400 before anything is fitted."""
+    req = _with_proto(_forecast_request(server, _monthly_series(), f"fc-400-{key}"), key, value)
+    resp = client.post("/trainer", json=req)
+    assert resp.status_code == 400 and named in resp.json()["detail"], resp.text
+
+
+def _two_series(df: pd.DataFrame) -> pd.DataFrame:
+    return df.assign(EntityKey=["a" if i % 2 else "b" for i in range(len(df))])
+
+
+def _repeated_period(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out.loc[10, "Period"] = out.loc[9, "Period"]
+    return out
+
+
+def _skipped_period(df: pd.DataFrame) -> pd.DataFrame:
+    return df.drop(index=10).reset_index(drop=True)
+
+
+@pytest.mark.parametrize("change,named", [(_two_series, "one series per snapshot"),
+                                          (_repeated_period, "2015-10-01"), (_skipped_period, "2015-11-01")])
+def test_a_forecast_snapshot_that_is_not_one_contiguous_series_fails_at_load(
+        server: FileServer, change: Callable[[pd.DataFrame], pd.DataFrame], named: str) -> None:
+    r = _failed(_forecast_request(server, change(_monthly_series()), f"fc-load-{change.__name__}"))
+    assert r.stage == "load-snapshot" and named in r.message, r.message
+
+
+def test_a_forecast_window_no_longer_than_the_season_fails_at_load(server: FileServer) -> None:
+    """A sliding 12-period window cannot carry a 12-period seasonal-naive scale."""
+    r = _failed(_forecast_request(server, _monthly_series(), "fc-short", min_train=12, window="sliding"))
+    assert r.stage == "load-snapshot" and "seasonal period 12" in r.message, r.message
+
+
+def test_a_forecast_manifest_off_the_design_fails_at_load(server: FileServer) -> None:
+    r = _failed(_forecast_request(server, _monthly_series(), "fc-manifest", holdout_rows=29))
+    assert r.stage == "load-snapshot" and "rolling-origin design" in r.message
+
+
+def test_a_forecast_origin_whose_window_has_no_seasonal_change_fails_the_holdout_stage(server: FileServer) -> None:
+    """Sliding windows over an exactly repeating stretch have MASE scale 0: `failed` naming the origin, never a
+    500 or an infinite score."""
+    df = _monthly_series()
+    y = df["Target"].to_numpy(dtype=np.float64).copy()
+    season = 50 + 5 * np.sin(2 * np.pi * np.arange(12) / 12)
+    y[36:] = season[np.arange(36, 96) % 12]
+    r = _failed(_forecast_request(server, df.assign(Target=y), "fc-flat", window="sliding"))
+    assert r.stage == "holdout" and "origin 1" in r.message, r.message
+
+
+def test_a_non_finite_forecast_statistic_fails_the_holdout_stage(server: FileServer,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Diebold-Mariano statistic that is undefined (NaN) never reaches the wire."""
+    monkeypatch.setattr(FC.T, "diebold_mariano",
+                        lambda a, b, h: T.DMResult(float("nan"), float("nan"), 0.0, len(a)))
+    r = _failed(_forecast_request(server, _monthly_series(), "fc-nan"))
+    assert r.stage == "holdout" and "dieboldMarianoVsSeasonalNaive" in r.message, r.message
+
+
+def test_a_forecast_artifact_that_cannot_ship_fails_the_holdout_stage(server: FileServer,
+                                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*_args: object, **_kwargs: object) -> NoReturn:
+        raise artifacts_v2.NotShippableError("refused")
+
+    monkeypatch.setattr(artifacts_v2, "build", refuse)
+    r = _failed(_forecast_request(server, _monthly_series(), "fc-ship"))
+    assert r.stage == "holdout" and "refused" in r.message
+
+
+def test_a_budget_crossed_while_building_forecast_artifacts_fails_the_run(server: FileServer,
+                                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    """The forecast path's last clock check follows the artifacts, so their time is enforced and counted."""
+    late = {"now": False}
+    elapsed = RunClock.compute_seconds
+
+    def clock(self: RunClock) -> float:
+        return 1e9 if late["now"] else elapsed(self)
+
+    monkeypatch.setattr(RunClock, "compute_seconds", clock)
+    monkeypatch.setattr(artifacts_v2, "build", _then(artifacts_v2.build, lambda: late.update(now=True)))
+    r = _failed(_forecast_request(server, _monthly_series(), "fc-clock"))
+    assert r.stage == "timeout" and "forecast statistics" in r.message, r.message
+
+
+def test_predict_refuses_a_series_forecast_artifact(server: FileServer) -> None:
+    """Serving forecasts is not built: a series model's envelope answers 400 naming the limitation."""
+    r = _completed(_forecast_request(server, _monthly_series(), "fc-predict"))
+    art = next(a for a in r.artifacts if a.candidate == r.finalist)
+    resp = client.post("/predict", json={"artifact_b64": art.bytesBase64, "rows": [{"x1": 1.0}]})
+    assert resp.status_code == 400 and "forecast" in resp.json()["detail"], resp.text

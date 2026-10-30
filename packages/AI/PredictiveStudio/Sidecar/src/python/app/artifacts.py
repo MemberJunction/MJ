@@ -15,7 +15,8 @@ wrapper, and lightgbm's sklearn wrapper all pickle cleanly). The ``format``
 field is kept for forward-compat with native booster dumps.
 
 Trainer predictors use their own envelope (``ps-predictor/v2``, see ``artifacts_v2``) and are loaded with
-``load_v2_envelope``; both envelopes go through the same restricted unpickler below.
+``load_v2_envelope``; a forecast's series model or baseline shares that envelope and is loaded with
+``load_v2_shippable``. Both envelopes go through the same restricted unpickler below.
 
 A process-wide ``OrderedDict``-backed LRU cache keeps recently deserialized
 ``(estimator, envelope)`` pairs keyed by a content hash of the artifact, so
@@ -40,7 +41,7 @@ from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
 from joblib.numpy_pickle_utils import _ensure_native_byte_order, _read_fileobject
 from pydantic import ValidationError
 
-from .artifacts_v2 import PredictorEnvelope
+from .artifacts_v2 import SHIPPABLE_TYPES, PredictorEnvelope, ShippablePredictor
 from .trainer import TrainedPredictor
 
 ENVELOPE_VERSION = 1
@@ -121,6 +122,9 @@ PREDICTOR_V2_GLOBALS: FrozenSet[Tuple[str, str]] = frozenset(
         ("app.encoding", "_missing_flag_names"),
         ("app.encoding", "_fold_overflow"),
         ("app.encoding", "_onehot_name"),
+        # a forecast's series model and series baselines
+        ("app.temporal", "SeriesModel"),
+        ("app.temporal", "SeriesBaseline"),
     }
 )
 
@@ -195,6 +199,11 @@ class DisallowedGlobalError(ArtifactRefusedError):
 
 class NotATrainerPredictorError(ArtifactRefusedError):
     """A v2 payload decoded to an allowed object that is not a trainer predictor."""
+
+
+class SeriesForecasterNotServedError(NotATrainerPredictorError):
+    """A v2 payload is a forecast's series model or baseline where a trainer predictor is needed: serving forecasts
+    (scoring periods rather than rows) is not available."""
 
 
 class NotAV2EnvelopeError(ArtifactRefusedError):
@@ -387,14 +396,14 @@ def load_estimator(
 # Trainer predictor envelopes (ps-predictor/v2)
 # ---------------------------------------------------------------------------
 
-def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, PredictorEnvelope]:
+def load_v2_shippable(envelope_bytes: bytes) -> Tuple[ShippablePredictor, PredictorEnvelope]:
     """Decode a ``ps-predictor/v2`` envelope (the bytes the engine stores) into ``(predictor, envelope)`` through the
-    restricted unpickler.
+    restricted unpickler; the predictor is a trainer predictor or a forecast's series model or baseline.
 
     Raises:
         NotAV2EnvelopeError: When the bytes are not JSON or name another format (a legacy envelope).
         ArtifactRefusedError: When the bytes are a malformed v2 envelope, the payload names a global outside the
-            allow-list or cannot be decoded, or the payload is not a trainer predictor.
+            allow-list or cannot be decoded, or the payload is none of ``artifacts_v2.SHIPPABLE_TYPES``.
     """
     try:
         envelope = PredictorEnvelope.model_validate_json(envelope_bytes)
@@ -406,6 +415,21 @@ def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, Predictor
     except (binascii.Error, UnicodeEncodeError) as exc:
         raise ArtifactRefusedError(f"Malformed ps-predictor/v2 envelope: {type(exc).__name__}: {exc}") from exc
     predictor = _bytes_to_model(payload)
-    if not isinstance(predictor, TrainedPredictor):
-        raise NotATrainerPredictorError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")
-    return predictor, envelope
+    if isinstance(predictor, SHIPPABLE_TYPES):
+        return predictor, envelope
+    raise NotATrainerPredictorError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")
+
+
+def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, PredictorEnvelope]:
+    """``load_v2_shippable`` for a caller that scores rows (``/predict``, the incumbent diff): only a trainer predictor.
+
+    Raises:
+        SeriesForecasterNotServedError: When the payload is a forecast's series model or baseline.
+        NotAV2EnvelopeError, ArtifactRefusedError: See ``load_v2_shippable``.
+    """
+    predictor, envelope = load_v2_shippable(envelope_bytes)
+    if isinstance(predictor, TrainedPredictor):
+        return predictor, envelope
+    raise SeriesForecasterNotServedError(
+        f"The v2 payload is a forecast {type(predictor).__name__}; scoring forecasts through /predict is not "
+        f"available, only trainer predictors score rows")

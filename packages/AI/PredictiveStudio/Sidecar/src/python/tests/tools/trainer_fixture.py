@@ -267,7 +267,9 @@ def protocol(family: str, **over: JsonValue) -> JsonObject:
         "calibration": ({"kind": "auto", "thresholdRows": 2000, "fitOn": "disjoint-calibration-fold"} if classify
                         else {"kind": "not-applicable", "reason": "regression-task"}),
         "resampling": {"kind": "none"},
-        "intervals": {"level": 0.95, "method": "bootstrap", "resamples": 1000, "pairedTest": "paired-bootstrap"},
+        # A forecast's intervals resample whole rolling origins (the only method its backtest implements).
+        "intervals": {"level": 0.95, "method": "block-bootstrap" if family == "forecast" else "bootstrap",
+                      "resamples": 1000, "pairedTest": "paired-bootstrap"},
         "promotion": {"comparators": [], "incumbent": "none", "margin": 0, "lowerBoundLevel": 0.95,
                       "pairedOn": "same-holdout-rows", "decisionTable": "Q13+Q14+Q15"},
         "allowedOutcomes": ["model", "keep-simple-baseline", "no-signal"],

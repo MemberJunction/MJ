@@ -7,6 +7,11 @@ flagged source column from every candidate and baseline (failing at `inner-cv` w
 select the finalist on the remaining columns; for a binary task whose snapshot carries a planted reference score
 (test fixtures only), apply the implausible-gain rule, which compares AUCs by paired DeLong and so is skipped for
 every other task kind; then the holdout stage (evaluation.py), which reports the audit's flags.
+
+A forecast task leaves that path right after the snapshot is loaded and runs its rolling-origin backtest instead
+(forecast.py: selection on inner origins before the first test period, then every outer origin scored once). It
+skips the leakage audit: a forecast snapshot is one series, so it has one entity, and the audit's grouped folds need at
+least 5 entities; the audit could only score NaN there.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from . import audit as AU, baselines as BL, code_version, encoding, evaluation a
 from . import trainer as TR
 from .array_types import FArr, IntArr
 from .failures import RequestRefused, RunClock, TrainerFailure
+from .forecast import run_forecast, refuse_invalid_forecast
 from .trainer_schemas import CandidateSpec, DropColumnFlag, LeakageFlag, TrainerCompleted, TrainerFailed, TrainerRequest
 
 TrainerOutcome = Union[TrainerCompleted, TrainerFailed]
@@ -32,7 +38,8 @@ def refuse_invalid(req: TrainerRequest) -> None:
     Raises:
         RequestRefused: For a primary score of another family than the task, a request seed other than the
             protocol's, duplicate candidate names, a candidate named as a gate member (or with the heuristic prefix),
-            a candidate on a baseline-only driver, or a holdout kind that does not fit the task.
+            a candidate on a baseline-only driver, a holdout kind that does not fit the task, or a forecast protocol
+            the rolling-origin backtest cannot honour (`forecast.refuse_invalid_forecast`).
     """
     p = req.protocol
     scores.refuse_cross_family(req.task.kind, p.primaryScore.family, p.primaryScore.metric)
@@ -50,6 +57,8 @@ def refuse_invalid(req: TrainerRequest) -> None:
                              f"({sorted(BL.BASELINE_ONLY_DRIVERS)})")
     if (p.holdout.kind == "rolling-origin") != (req.task.kind == "forecast"):
         raise RequestRefused("a rolling-origin holdout is for forecast tasks, and a forecast task needs one")
+    if req.task.kind == "forecast":
+        refuse_invalid_forecast(p)
 
 
 def run_trainer(req: TrainerRequest) -> TrainerOutcome:
@@ -88,6 +97,8 @@ def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
     periods = SN.period_ordinals(snap)
     code = code_version.code_version(req.threads, p.seed)
     clock.check("snapshot load")
+    if req.task.kind == "forecast":
+        return run_forecast(req, snap, enc, clock)
     columns, flags = _audited_columns(req, snap, enc, dev, periods)
     clock.check("leakage audit")
     out = TR.select_finalist(p, snap, columns, enc, dev, req.candidates, req.threads, clock, periods)

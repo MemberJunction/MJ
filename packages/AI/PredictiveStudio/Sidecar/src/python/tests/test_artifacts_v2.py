@@ -1,5 +1,6 @@
-"""Every predictor the trainer can ship round-trips through the restricted unpickler, and the allow-list holds exactly
-the globals those predictors pickle.
+"""Every predictor the trainer can ship (trainer predictors of every family and driver, a forecast's series models and
+series baselines) round-trips through the restricted unpickler, and the allow-list holds exactly the globals those
+predictors pickle.
 
 The dummy and the incumbent heuristic are yardsticks for the publishing gate and never ship, so building an artifact
 from either is refused. The v1 and v2 content hashes are pinned so neither convention drifts.
@@ -27,6 +28,7 @@ from joblib.numpy_pickle_utils import _read_fileobject
 from sklearn.linear_model import Ridge
 
 from app import artifacts, artifacts_v2, baselines as BL, calibration as CAL, encoding as E, folds as F, scores, trainer as TR
+from app import temporal as T
 from app.algorithms import TabularFamily
 from app.array_types import FArr
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol
@@ -122,7 +124,7 @@ class _RecordingUnpickler(NumpyUnpickler):
         return resolved
 
 
-def _pickled_globals(predictor: TR.TrainedPredictor) -> FrozenSet[Tuple[str, str]]:
+def _pickled_globals(predictor: artifacts_v2.ShippablePredictor) -> FrozenSet[Tuple[str, str]]:
     buf = io.BytesIO()
     joblib.dump(predictor, buf)
     seen: Set[Tuple[str, str]] = set()
@@ -141,12 +143,50 @@ def test_every_family_round_trips(family: TabularFamily, driver: str) -> None:
     assert np.allclose(loaded.predict(X), m.predict(X))
 
 
+SERIES_Y: FArr = np.asarray(40 + 0.2 * np.arange(60) + 4 * np.sin(2 * np.pi * np.arange(60) / 12)
+                            + RNG.normal(size=60), dtype=np.float64)
+SERIES_T = np.arange(60, dtype=np.int64)
+SERIES_NEXT = np.arange(60, 66, dtype=np.int64)
+
+
+def _series_forecasters() -> List[Tuple[str, artifacts_v2.ShippablePredictor]]:
+    """Every series model and series baseline a forecast run can ship, fitted on one monthly series."""
+    out: List[Tuple[str, artifacts_v2.ShippablePredictor]] = [
+        (algo, T.SeriesModel(algo, 12, 0).fit(SERIES_Y, SERIES_T)) for algo in T.SERIES_ALGOS]
+    out += [(kind, T.SeriesBaseline(kind, 12).fit(SERIES_Y, SERIES_T)) for _, kind in T.BASELINE_MEMBERS]
+    return out
+
+
+def _series_forecast(p: artifacts_v2.ShippablePredictor) -> FArr:
+    assert isinstance(p, (T.SeriesModel, T.SeriesBaseline))
+    return p.forecast(SERIES_NEXT)
+
+
+@pytest.mark.parametrize("name", [n for n, _ in _series_forecasters()])
+def test_every_series_forecaster_round_trips(name: str) -> None:
+    fitted = dict(_series_forecasters())[name]
+    art = artifacts_v2.build(name, fitted, [], "forecast", None, ZERO_HASH, None, None)
+    loaded, env = artifacts.load_v2_shippable(base64.b64decode(art.bytes_base64))
+    assert type(loaded) is type(fitted) and env.taskKind == "forecast" and env.featureColumns == []
+    assert np.array_equal(_series_forecast(loaded), _series_forecast(fitted))
+
+
+def test_a_series_forecaster_is_refused_where_rows_are_scored() -> None:
+    """`load_v2_envelope` (the /predict and incumbent loader) refuses a series forecaster, naming the limitation."""
+    name, fitted = _series_forecasters()[0]
+    art = artifacts_v2.build(name, fitted, [], "forecast", None, ZERO_HASH, None, None)
+    with pytest.raises(artifacts.SeriesForecasterNotServedError, match="scoring forecasts"):
+        artifacts.load_v2_envelope(base64.b64decode(art.bytes_base64))
+
+
 def test_allow_list_holds_exactly_the_globals_every_shipped_predictor_pickles() -> None:
     used: Set[Tuple[str, str]] = set()
-    for family, driver in PAIRS:
-        found = _pickled_globals(_fitted(family, driver))
+    shipped: List[Tuple[str, artifacts_v2.ShippablePredictor]] = [
+        (f"{family}/{driver}", _fitted(family, driver)) for family, driver in PAIRS]
+    for label, predictor in shipped + _series_forecasters():
+        found = _pickled_globals(predictor)
         refused = sorted(g for g in found if not artifacts._is_allowed_global(*g))
-        assert refused == [], f"{family}/{driver} pickles globals the allow-list refuses: {refused}"
+        assert refused == [], f"{label} pickles globals the allow-list refuses: {refused}"
         used |= found
     unused = sorted(artifacts.PREDICTOR_V2_GLOBALS - used)
     assert unused == [], f"predictor allow-list pairs no shipped predictor pickles: {unused}"

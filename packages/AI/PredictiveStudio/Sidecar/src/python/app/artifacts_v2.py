@@ -9,8 +9,11 @@ calibration map); it is loaded only through the restricted unpickler (`artifacts
      "taskKind": "...", "classOrder": [...] | null, "featureSchemaHash": "<sha256>",
      "driverBaseline": [...] | null, "transformedColumns": [...] | null}
 
-Only a trainer predictor ships. The dummy and the incumbent heuristic are yardsticks for the publishing gate: the
-heuristic reads a column `/predict` never receives, and neither is a model anyone should score with.
+A trainer predictor ships, and so does a forecast's series model or series baseline (`temporal.SeriesModel`,
+`temporal.SeriesBaseline`): they forecast periods of the one series they were fitted on and are stored for the engine,
+but `/predict` does not serve them (it scores rows, and a series forecaster takes period indices). The dummy and the
+incumbent heuristic are yardsticks for the publishing gate: the heuristic reads a column `/predict` never receives, and
+neither is a model anyone should score with.
 
 The legacy `/train` route's artifacts (`format: joblib`, `artifacts.serialize_envelope`) keep their own envelope and
 their own content hash (the SHA-256 of the base64 text).
@@ -32,10 +35,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from .array_types import FArr
 from .baselines import DUMMY_MEMBER, HEURISTIC_PREFIX
 from .encoding import CategoricalEncoding, ColumnSpec, NumericEncoding
+from .temporal import SeriesBaseline, SeriesModel
 from .trainer import TrainedPredictor
 
 FORMAT_V2: Final = "ps-predictor/v2"
 TaskKind = Literal["binary", "multiclass", "continuous", "count", "non-negative", "forecast"]
+# What an artifact may carry: a trainer predictor, or a forecast's series model or series baseline.
+ShippablePredictor = Union[TrainedPredictor, SeriesModel, SeriesBaseline]
+SHIPPABLE_TYPES: Final = (TrainedPredictor, SeriesModel, SeriesBaseline)
 
 
 class _Wire(BaseModel):
@@ -112,27 +119,28 @@ class BuiltArtifact:
 
 class NotShippableError(ValueError):
     """`build` was handed something that never ships: the dummy or an incumbent heuristic (by gate member name), or
-    any predictor that is not a trainer predictor."""
+    any predictor outside `SHIPPABLE_TYPES`."""
 
 
-def _refuse_yardstick(candidate: str, predictor: TrainedPredictor) -> None:
-    """The dummy and the incumbent heuristic never ship: refused by gate member name and by predictor type."""
+def _refuse_yardstick(candidate: str, predictor: ShippablePredictor) -> None:
+    """The dummy and the incumbent heuristic never ship: refused by gate member name, and anything outside the
+    allow-set of shippable types by type."""
     if candidate == DUMMY_MEMBER or candidate.startswith(HEURISTIC_PREFIX):
         raise NotShippableError(f"'{candidate}' is a publishing-gate yardstick; yardsticks never ship as artifacts")
-    if not isinstance(predictor, TrainedPredictor):
-        raise NotShippableError(f"'{candidate}' is a {type(predictor).__name__}, not a trainer predictor; only "
-                                f"trainer predictors ship as artifacts")
+    if not isinstance(predictor, SHIPPABLE_TYPES):
+        raise NotShippableError(f"'{candidate}' is a {type(predictor).__name__}; only trainer predictors and forecast "
+                                f"series models and baselines ship as artifacts")
 
 
-def build(candidate: str, predictor: TrainedPredictor, columns: Sequence[ColumnSpec], task_kind: TaskKind,
+def build(candidate: str, predictor: ShippablePredictor, columns: Sequence[ColumnSpec], task_kind: TaskKind,
           class_order: Optional[List[str]], feature_schema_hash: str,
           driver_baseline: Optional[FArr], transformed_columns: Optional[List[str]]) -> BuiltArtifact:
-    """The v2 artifact of one fitted trainer predictor. The envelope is canonical JSON (sorted keys, no spaces), so
-    the same predictor and arguments always produce the same bytes and hash.
+    """The v2 artifact of one fitted predictor. The envelope is canonical JSON (sorted keys, no spaces), so the same
+    predictor and arguments always produce the same bytes and hash.
 
     Raises:
-        NotShippableError: When `candidate` names the dummy or an incumbent heuristic, or `predictor` is not a trainer
-            predictor.
+        NotShippableError: When `candidate` names the dummy or an incumbent heuristic, or `predictor` is not one of
+            `SHIPPABLE_TYPES`.
     """
     _refuse_yardstick(candidate, predictor)
     buf = io.BytesIO()
