@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "T2p -> S-T.4",
-    "Description": "Gate G2.26 (phase 2, dataset T2p, criterion S-T.4): inner folds are blocked in time with a gap ≥ h and grouped by entity, with 0 entity keys shared across a fold boundary; the blocked-split RMSE lies inside the reference's [1.5123, 1.6082], and the random-row split's inflation is stored beside it. It fails when the blocked inner folds drop the gap h (shared keys across a boundary > 0 or the RMSE leaves the band).",
+    "Description": "Gate G2.26 (phase 2, dataset T2p, criterion S-T.4): every one of the 5 blocked-time inner folds, grouped by entity, shares 0 entity keys between training and validation and trains only on periods at least the gap before validation, at a gap of 1 period (the protocol's) and of 2 (measured: last training year 2022 at gap 1 and 2021 at gap 2, against validation from 2023); the shipped RMSE (glm, keep-simple-baseline) equals the reference pipeline's 1.5591 within 1e-9 and its entity-cluster interval [1.5116, 1.6087] lies within 0.001 of the reference's [1.5123, 1.6082]; the random-row contrast on the same 2,000 validation rows is reported beside the blocked score (blocked 1.5518, random-row 1.5520). It fails when the blocked inner folds drop the gap: at a 2-period gap a fold then trains on 2022 against 2023 validation and the 2-period gap assertion fails (2022 <= 2023 - 2); shared keys stay 0 and the shipped RMSE is unchanged.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.26\",\"owner:PR3\",\"phase:2\",\"dataset:T2p\",\"criterion:S-T.4\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "Blocked inner folds grouped by entity share 0 keys and keep the gap (1 and 2 periods); the shipped RMSE is the reference's 1.5591 with its interval at [1.5123, 1.6082]; the random-row contrast on the same 2,000 rows is reported (1 of 1 pytest case passes)."
+      "summary": "All 5 blocked inner folds grouped by entity share 0 keys and train at least 1 and 2 periods before validation (gaps 1 and 2); the shipped RMSE is 1.5591 with interval [1.5116, 1.6087], within 0.001 of the reference's [1.5123, 1.6082]; the random-row contrast on the same 2,000 rows is reported (1 of 1 pytest case passes)."
     },
     "Configuration": {
       "tier": "mutation",
