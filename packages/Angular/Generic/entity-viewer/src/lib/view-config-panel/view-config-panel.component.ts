@@ -549,9 +549,6 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (changes['PendingNewViewAlternateBaseView'] && Boolean(changes['PendingNewViewAlternateBaseView'].currentValue)) {
       return false;
     }
-    if (changes['CurrentGridState'] && !this.IsOpen) {
-      return false;
-    }
     return true;
   }
 

@@ -264,6 +264,44 @@ describe('ViewWorkspaceComponent — Default Layout switch & view operation noti
     expect(abvEvents).toEqual([null]);
   });
 
+  it('deselects the saved view (and ad-hoc AlternateBaseView) and emits SaveDefaultsRequested when AutoSaveView is false', async () => {
+    const existingView = makeFakeView({
+      ID: 'view-saved-x',
+      Name: 'Saved View X',
+    });
+
+    component.AutoSaveView = false;
+    component.AlternateBaseView = 'ActiveOnly';
+    component.CurrentViewEntity = asViewEntity(existingView);
+    component.SelectedViewId = existingView.ID;
+    component.PendingNewViewName = 'Draft View Name';
+    component.IsConfigPanelOpen = true;
+
+    const viewSelectedEvents: Array<MJUserViewEntityExtended | null> = [];
+    const selectedViewChangeEvents: Array<MJUserViewEntityExtended | null> = [];
+    const abvEvents: Array<string | null> = [];
+    const saveDefaultsRequestedEvents: ViewSaveEvent[] = [];
+    component.ViewSelected.subscribe(v => viewSelectedEvents.push(v));
+    component.SelectedViewChange.subscribe(v => selectedViewChangeEvents.push(v));
+    component.AlternateBaseViewChange.subscribe(abv => abvEvents.push(abv));
+    component.SaveDefaultsRequested.subscribe(e => saveDefaultsRequestedEvents.push(e));
+
+    const saveEvent = makeSaveEvent();
+    await component.OnSaveDefaultViewSettings(saveEvent);
+
+    expect(setSetting).not.toHaveBeenCalled();
+    expect(existingView.Save).not.toHaveBeenCalled();
+    expect(saveDefaultsRequestedEvents).toEqual([saveEvent]);
+    expect(component.CurrentViewEntity).toBeNull();
+    expect(component.SelectedViewId).toBeNull();
+    expect(component.EffectiveAlternateBaseView).toBeNull();
+    expect(component.IsConfigPanelOpen).toBe(false);
+    expect(component.PendingNewViewName).toBe('');
+    expect(viewSelectedEvents).toEqual([null]);
+    expect(selectedViewChangeEvents).toEqual([null]);
+    expect(abvEvents).toEqual([null]);
+  });
+
   it('preserves the selected view and emits no ViewSelected(null) when the user switches to Personal Default Layout and then cancels', () => {
     const existingView = makeFakeView({
       ID: 'view-saved-x',
