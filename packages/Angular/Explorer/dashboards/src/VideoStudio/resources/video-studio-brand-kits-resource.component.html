@@ -179,11 +179,9 @@
                 <button
                   type="button"
                   mjButton
-                  Variant="flat"
+                  Variant="icon"
                   Size="sm"
-                  class="vs-brand-kit-delete-btn"
                   [AriaLabel]="'Delete ' + kit.Name"
-                  [attr.aria-label]="'Delete ' + kit.Name"
                   [attr.data-testid]="'brand-kit-delete-' + kit.ID"
                   [disabled]="DeletingKitId === kit.ID"
                   (click)="DeleteBrandKit(kit, $event)"

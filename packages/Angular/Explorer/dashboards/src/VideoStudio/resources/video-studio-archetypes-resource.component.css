@@ -154,7 +154,6 @@
 }
 
 .vs-archetype-duration-meta {
-  font-family: var(--mj-font-family-mono);
   font-variant-numeric: tabular-nums;
   color: var(--mj-text-secondary);
 }
@@ -264,7 +263,6 @@
 }
 
 .vs-summary-value--mono {
-  font-family: var(--mj-font-family-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -327,7 +325,6 @@
 
 .vs-slideout-beat-duration {
   margin-left: auto;
-  font-family: var(--mj-font-family-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--mj-text-xs, 11px);
   color: var(--mj-text-muted);
@@ -360,7 +357,6 @@
 }
 
 .vs-pacing-stat strong {
-  font-family: var(--mj-font-family-mono);
   font-variant-numeric: tabular-nums;
 }
 

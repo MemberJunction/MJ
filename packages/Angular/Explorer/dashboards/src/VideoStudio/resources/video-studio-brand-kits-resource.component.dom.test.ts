@@ -8,7 +8,7 @@ import {
 } from '@memberjunction/graphql-dataprovider';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { VideoStudioBrandKitsResourceComponent } from './video-studio-brand-kits-resource.component';
 
 function createNavigationServiceStub(): {
@@ -174,6 +174,7 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     );
 
     const fixture = renderComponentFixture(VideoStudioBrandKitsResourceComponent, {
+      imports: [MJButtonDirective],
       inputs: { Provider: customProvider },
       providers: [
         { provide: NavigationService, useValue: navStub },
@@ -216,7 +217,7 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     const deleteBtn = query(fixture, '[data-testid="brand-kit-delete-kit-default"]') as HTMLElement | null;
     expect(deleteBtn).not.toBeNull();
     expect(deleteBtn!.getAttribute('aria-label')).toBe('Delete MJ Default Brand Kit');
-    expect(deleteBtn!.classList.contains('vs-brand-kit-delete-btn')).toBe(true);
+    expect(deleteBtn!.classList.contains('mj-btn--icon')).toBe(true);
     deleteBtn!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
     expect(navStub.OpenEntityRecord).not.toHaveBeenCalled();

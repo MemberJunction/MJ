@@ -126,7 +126,6 @@
 }
 
 .vp-badge--duration {
-  font-family: var(--mj-font-family-mono);
   font-variant-numeric: tabular-nums;
 }
 

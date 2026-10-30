@@ -16,11 +16,7 @@
           (click)="OnPickBeat(block.Key, $event)"
         >
           @if (block.ShowInnerLabel) {
-            <span
-              class="vp-beat-strip__label"
-              [class.vp-beat-strip__label--md]="block.LabelTier === 'md'"
-              [class.vp-beat-strip__label--lg]="block.LabelTier === 'lg'"
-            >{{ block.Label }}</span>
+            <span class="vp-beat-strip__label">{{ block.Label }}</span>
           }
         </button>
       </li>

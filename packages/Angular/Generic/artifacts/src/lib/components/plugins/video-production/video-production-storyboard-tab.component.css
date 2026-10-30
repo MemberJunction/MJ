@@ -68,7 +68,6 @@
 }
 
 .vp-cell-mono {
-  font-family: var(--mj-font-family-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--mj-text-secondary);

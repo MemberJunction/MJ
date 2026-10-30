@@ -24,7 +24,6 @@ export interface VideoBeatStripComputedBlock {
   TimeRangeText: string;
   WidthPercent: number;
   ShowInnerLabel: boolean;
-  LabelTier: 'sm' | 'md' | 'lg';
   TooltipAndAria: string;
 }
 
@@ -81,10 +80,6 @@ export class MJVideoBeatStripComponent {
         ? `${beat.Label} \u00B7 ${timeRangeText} \u00B7 ${detail}`
         : `${beat.Label} \u00B7 ${timeRangeText}`;
 
-      const labelLength = (beat.Label ?? '').trim().length;
-      const labelTier: 'sm' | 'md' | 'lg' =
-        labelLength >= 18 ? 'lg' : labelLength >= 13 ? 'md' : 'sm';
-
       return {
         Key: beat.Key,
         Label: beat.Label,
@@ -95,7 +90,6 @@ export class MJVideoBeatStripComponent {
         TimeRangeText: timeRangeText,
         WidthPercent: widthPercent,
         ShowInnerLabel: Boolean(this.ShowLabels),
-        LabelTier: labelTier,
         TooltipAndAria: tooltipAndAria,
       };
     });

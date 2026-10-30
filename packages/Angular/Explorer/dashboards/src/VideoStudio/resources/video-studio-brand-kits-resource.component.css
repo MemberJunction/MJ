@@ -204,11 +204,3 @@
   font-size: var(--mj-text-xs, 12px);
   color: var(--mj-text-secondary);
 }
-
-.vs-brand-kit-delete-btn {
-  color: var(--mj-text-muted);
-}
-
-.vs-brand-kit-delete-btn:hover:not(:disabled) {
-  color: var(--mj-status-error-text);
-}

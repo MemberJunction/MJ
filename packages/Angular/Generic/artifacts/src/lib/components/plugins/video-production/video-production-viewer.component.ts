@@ -24,10 +24,10 @@ import {
 import { VideoProductionReviewTabComponent } from './video-production-review-tab.component';
 import { VideoProductionStoryboardTabComponent } from './video-production-storyboard-tab.component';
 import {
-  FormatVideoTime,
   GetVideoStatusBadgeVariant,
   type VideoBadgeVariant,
-} from './video-time-format';
+} from './video-status-badge';
+import { FormatVideoTime } from './video-time-format';
 
 /**
  * Artifact viewer plugin for the `Video Production` artifact type (`VideoGenerationSpec` JSON).

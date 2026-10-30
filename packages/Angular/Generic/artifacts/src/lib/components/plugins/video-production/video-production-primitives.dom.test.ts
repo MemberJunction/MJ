@@ -3,8 +3,8 @@ import { renderComponentFixture, query, queryAll, text } from '@memberjunction/n
 import {
   FormatVideoTime,
   FormatVideoTimeRange,
-  GetVideoStatusBadgeVariant,
 } from './video-time-format';
+import { GetVideoStatusBadgeVariant } from './video-status-badge';
 import { MJVideoFormatGlyphComponent } from './video-format-glyph.component';
 import { MJVideoBeatStripComponent, VideoBeatStripItem } from './video-beat-strip.component';
 

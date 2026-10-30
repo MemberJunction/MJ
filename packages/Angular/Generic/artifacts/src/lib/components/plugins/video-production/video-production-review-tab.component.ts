@@ -12,10 +12,10 @@ import {
   type VideoReviewRecord,
 } from '@memberjunction/video-studio-core';
 import {
-  FormatVideoTime,
   GetVideoStatusBadgeVariant,
   type VideoBadgeVariant,
-} from './video-time-format';
+} from './video-status-badge';
+import { FormatVideoTime } from './video-time-format';
 
 @Component({
   selector: 'mj-video-production-review-tab',
