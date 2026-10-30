@@ -24,9 +24,16 @@ export function AppLockGate({ children }: { children: ReactNode }) {
     const isLocked = state !== 'unlocked';
     return (
         <View style={styles.container}>
-            {children}
+            {/* Hide the protected content from VoiceOver/TalkBack while locked, not just from sight. */}
+            <View
+                style={styles.container}
+                accessibilityElementsHidden={isLocked}
+                importantForAccessibility={isLocked ? 'no-hide-descendants' : 'auto'}
+            >
+                {children}
+            </View>
             {isLocked ? (
-                <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+                <View style={StyleSheet.absoluteFill} pointerEvents="auto" accessibilityViewIsModal>
                     <LockScreen authenticating={state === 'authenticating'} onUnlock={() => void unlock()} />
                 </View>
             ) : null}

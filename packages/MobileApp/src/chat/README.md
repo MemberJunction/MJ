@@ -209,7 +209,7 @@ The target is MJ Explorer's chat at its **responsive/phone breakpoint**, compare
 element rather than by memory. The workflow, reproducible:
 
 ```bash
-# MJAPI on 4001, MJExplorer on 4201
+# MJAPI on 4000, MJExplorer on 4201
 npx playwright-cli -s=mjchat open --browser=chrome http://localhost:4201
 npx playwright-cli -s=mjchat resize 390 844        # phone form factor
 npx playwright-cli -s=mjchat screenshot --filename=web-chat.png
@@ -218,9 +218,8 @@ npx playwright-cli -s=mjchat screenshot --filename=web-chat.png
 xcrun simctl io booted screenshot native-chat.png
 ```
 
-Note `environment.development.ts` is gitignored and ships pointing at port **4000**; a local MJAPI
-on 4001 needs it repointed or Explorer fails with `GraphQL Error (Code: unknown)` at the loading
-screen.
+Both Explorer's gitignored `environment.development.ts` and the mobile app's `env.ts` default to
+MJAPI on port **4000**, so one MJAPI serves both sides of the comparison.
 
 ---
 

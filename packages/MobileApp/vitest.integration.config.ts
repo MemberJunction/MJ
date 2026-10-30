@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
  *
  * Unlike the unit config (vitest.config.ts), these tests do NOT mock
  * @memberjunction/core — they exercise the real data/service layer against a
- * live MJAPI (GraphQL at http://localhost:4001/graphql). The suite is gated on
+ * live MJAPI (GraphQL at http://localhost:4000/graphql). The suite is gated on
  * `MJ_TEST_JWT`: with no token (or an unreachable backend) every describe block
  * skips gracefully, so this config is safe to run in CI.
  *

@@ -25,7 +25,7 @@ system prompt; the flows dismiss it automatically (optional step).
 
 1. **Maestro** + a JDK (`brew install openjdk`, then the Maestro install script).
 2. **Metro** running: `npm start` (from `packages/MobileApp/`).
-3. **MJAPI** running on `:4001` against a migrated 5.x database.
+3. **MJAPI** running on `:4000` against a migrated 5.x database.
 4. The app **installed and authenticated** on a booted simulator (a valid token in
    secure-store). Interactive Auth0 login (`mjmobile://auth`) or a seeded dev token
    both satisfy this.

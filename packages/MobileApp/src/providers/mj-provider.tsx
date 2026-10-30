@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { LocalCacheManager } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
 import { Env } from '@/config/env';
 import {
@@ -27,6 +28,38 @@ import { UnregisterDeviceToken } from '@/data/services/notifications';
 import { MMKVStorageProvider } from '@/providers/mmkv-storage-provider';
 
 const mobileCacheStorage = new MMKVStorageProvider();
+
+/** Upper bound on the best-effort push-token unregistration during sign-out. */
+const SIGN_OUT_UNREGISTER_TIMEOUT_MS = 3_000;
+
+/**
+ * Load the signed-in user's `MJ: User Settings` into `UserInfoEngine` so the
+ * preference mirror (`SyncPreferencesFromServer`) and the debounced setting
+ * writers have a user to act for. `Config()` force-refreshes when the user ID
+ * differs from the last load, which is what keeps User B from reading User A's
+ * settings on a shared device. Best-effort: a failure here must not block boot.
+ */
+async function loadUserSettingsForCurrentUser(): Promise<void> {
+    const currentUser = GraphQLDataProvider.Instance?.CurrentUser;
+    if (!currentUser?.ID) return;
+    try {
+        await UserInfoEngine.Instance.Config(false, currentUser);
+    } catch (e) {
+        console.warn('[MJProvider] UserInfoEngine.Config failed; server preferences unavailable this session:', e);
+    }
+}
+
+/**
+ * Best-effort push-token unregistration bounded by a timeout. `.catch()` alone
+ * covers a rejected request, not a hung one, and sign-out is the escape hatch
+ * BootGate offers when MJAPI is unreachable, so it must never block on MJAPI.
+ */
+async function unregisterPushTokenWithTimeout(): Promise<void> {
+    await Promise.race([
+        UnregisterDeviceToken().catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_UNREGISTER_TIMEOUT_MS)),
+    ]);
+}
 
 /**
  * MJ provider boot. Supports three auth paths in priority order:
@@ -147,7 +180,6 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 },
             );
 
-            config.LocalStorageProvider = mobileCacheStorage;
             if (!LocalCacheManager.Instance.IsInitialized) {
                 await LocalCacheManager.Instance.Initialize(mobileCacheStorage);
             } else {
@@ -162,6 +194,7 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                     setTimeout(() => reject(new Error(`Connection to ${Env.graphqlUrl} timed out after ${SETUP_TIMEOUT_MS}ms`)), SETUP_TIMEOUT_MS),
                 ),
             ]);
+            await loadUserSettingsForCurrentUser();
             SyncPreferencesFromServer();
             setAuthMethod(method);
             setStatus('ready');
@@ -305,8 +338,9 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
      */
     const signOut = useCallback(async () => {
         // 1. Best-effort push token unregistration while the departing user's
-        //    GraphQL credentials are still active.
-        await UnregisterDeviceToken().catch(() => undefined);
+        //    GraphQL credentials are still active. Bounded so an unreachable
+        //    MJAPI can't wedge sign-out (BootGate relies on it as an escape hatch).
+        await unregisterPushTokenWithTimeout();
 
         // 2. Clear stored credentials.
         await ClearAuth0Tokens();
@@ -318,7 +352,6 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         ClearOfflineQueue();
         ClearPendingChatHandoff();
         await LocalCacheManager.Instance.ClearAll().catch(() => undefined);
-        mobileCacheStorage.ClearAll();
         ClearUserPreferences();
 
         // 4. Drop process-wide singletons that cache permission-filtered rosters

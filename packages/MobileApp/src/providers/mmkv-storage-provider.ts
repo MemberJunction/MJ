@@ -183,8 +183,6 @@ export class MMKVStorageProvider implements ILocalStorageProvider {
      * never survive into the next user's session on a shared device.
      */
     ClearAll(): void {
-        if (typeof this._mmkv.clearAll === 'function') {
-            this._mmkv.clearAll();
-        }
+        this._mmkv.clearAll();
     }
 }
