@@ -56,6 +56,11 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 
+/** What some drivers put in a failed result's `exception`: the SDK error, wrapped with more context. */
+interface DriverExceptionWrapper {
+    exception?: Error;
+}
+
 /**
  * The composed bound applied to a single model call: the caller's cancellation token (if any) merged
  * with the prompt's configured `AIPrompt.TimeoutMS` (if any).
@@ -2083,7 +2088,7 @@ export abstract class BaseModelRunner {
         // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
         // instead of throwing, so we must check result.success here.
         if (!result.success && result.errorInfo?.canFailover) {
-          lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
+          lastError = this.failedResultError(result);
 
           // Use shared failover error handling logic
           const decision = await this.processFailoverError(
@@ -2462,6 +2467,29 @@ export abstract class BaseModelRunner {
     }
     const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
     wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError({ ...caught, message: caught?.errorMessage });
+    return wrapped;
+  }
+
+  /**
+   * The Error a failover attempt records for a failed result. A driver may put something other than
+   * an Error in `exception` (the Anthropic driver wraps the SDK error with the result it was building),
+   * and reading `.message` off that gave undefined, so both the run's error and its stored
+   * `FailoverErrors` said "Unknown error" instead of what the provider said. An Error is used as it
+   * is, and an Error inside such a wrapper is unwrapped; anything else becomes an Error carrying the
+   * result's own message, with the result's classification kept on it.
+   */
+  private failedResultError(result: BaseResult): Error {
+    const exception: Error | DriverExceptionWrapper | string | null | undefined = result.exception;
+    if (exception instanceof Error) {
+      return exception;
+    }
+    if (exception && typeof exception === 'object' && exception.exception instanceof Error) {
+      return exception.exception;
+    }
+    const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(result.errorMessage || 'Model execution failed');
+    if (result.errorInfo) {
+      wrapped.errorInfo = result.errorInfo;
+    }
     return wrapped;
   }
 

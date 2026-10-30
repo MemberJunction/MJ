@@ -172,6 +172,20 @@ When a Loop agent (such as `Sage`) emits `nextStep.type: 'Tasks'`, `LoopAgentTyp
 - **Single-node task graphs (1 task of kind `'Agent'` or `'Action'`)**: Automatically fold inline into a standard in-process `'Sub-Agents'` or `'Actions'` step — even when `taskGraph.continuation === 'reinvoke'` is specified (`terminateAfter: false` so the parent Loop agent gets another turn to synthesize the specialist's output). This avoids durable task-graph dispatch overhead for 1-step specialist delegations (e.g., `Query Builder`, `Visualization Agent`) and keeps live sub-agent streaming in the active chat turn.
 - **Multi-node task graphs (2+ tasks with `dependsOn` / `payloadMapping` or non-trivial scheduling)**: Dispatch as durable `MJ: Tasks` rows through [`@memberjunction/task-graph`](../../TaskGraph/README.md), broadcasting real-time step transitions via `TaskGraphFrameBroadcaster` and delivering synthesized continuation replies and artifacts back to the conversation via `TaskGraphContinuationDeliverer`.
 
+##### Execution Primitive Hierarchy & Native Tool-Calling JSON Envelope Bridge
+
+Loop agents choose from four structured execution primitives depending on dataflow, iteration, and durability needs:
+
+| Primitive | When to Use | Execution & Persistence |
+|---|---|---|
+| `Actions` / Native tool calls | 1–3 independent calls whose raw results the LLM needs in context | In-turn `Actions` / `Sub-Agents` run steps |
+| `Pipeline` (`nextStep.type = 'Pipeline'`) | Linear server-side tool chains (`tool`, `jsonpath`, `select`, `grep`, `slice`, `head`, `tail`, `count`, `unique`, `sort`, `parse_json`) where intermediate outputs stay out of context | Single `Tool` (`Pipeline: N step(s)`) run step; `StructureActionResult` automatically coerces structured JSON `ActionResult.Message` payloads when an action declares no `Output` params |
+| `ForEach` / `While` (`nextStep.type = 'ForEach' \| 'While'`) | In-turn batch iteration or bounded convergence, either with a single `action` / `subAgent` body or an ordered multi-step `steps?: LoopBodyActionStep[]` sequence chaining outputs via `{{steps.<id>.<field>}}` | Single `ForEach` / `While` run step plus linked child `Actions` / `Sub-Agents` steps |
+| `Tasks` (`nextStep.type = 'Tasks'`) | Durable DAGs (`Agent`, `Action`, `Human`, `Prompt`, `ForEach` including `steps[]`, `While`, `Decision`), conditional/XOR `exclusiveGroup` forks, or long-running sleep/wake (`continuation: 'reinvoke'`) | Persisted `StepType = 'TaskGraph'` run step; submitting `AIAgentRun` parks in `Paused` until `TaskGraphDispatcher` settles the graph to `Completed` |
+
+- **Native tool-calling JSON envelope bridge**: When a model runs in `Native` (hybrid) or `NativeImplicit` tool-calling mode (`ResolveNativeToolCalling`), it uses native tool calls for ordinary `Actions` / `Sub-Agent` / `ClientTools` turns, and bridges cleanly to `Pipeline`, `ForEach`, `While`, or `Tasks` by emitting **no native tool call on that turn** and replying with a `LoopAgentResponse` JSON envelope (`{ "taskComplete": false, "nextStep": { "type": "..." } }`).
+- **Sanitized tool-name normalization**: `PipelineToolRegistry`, `BaseAgent` (`Actions`, `Sub-Agent`, `ForEach`/`While`, and `validateTasksNextStep`), and `TaskGraphService` / `TaskGraphDispatcher` normalize sanitized native tool names (`calculate_expression` → `"Calculate Expression"`, `delegate_to_query_builder` → `"Query Builder"`) via `SanitizeToolName` so JSON envelopes work seamlessly whether the model writes canonical MJ names or native tool identifiers.
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.

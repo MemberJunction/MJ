@@ -299,6 +299,7 @@ export class EnableFieldEncryptionAction {
                 EntityName: entityName,
                 ExtraFilter: `${fieldName} LIKE '$ENC$%'`,
                 MaxRows: 1, // Just checking count
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, contextUser);
 

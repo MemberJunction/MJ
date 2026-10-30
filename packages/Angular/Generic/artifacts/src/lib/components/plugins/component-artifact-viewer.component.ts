@@ -723,6 +723,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       const result = await rv.RunView<BaseEntity>({
         EntityName: entity.Name,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         OrderBy: orderBy,
         ResultType: 'entity_object',
       }, this.ProviderToUse.CurrentUser);
@@ -939,6 +940,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
         Fields: ['Specification'],
         OrderBy: 'VersionSequence DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       });
       if (result.Success && result.Results?.length > 0 && result.Results[0].Specification) {

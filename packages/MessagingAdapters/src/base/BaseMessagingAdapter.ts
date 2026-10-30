@@ -323,6 +323,7 @@ export abstract class BaseMessagingAdapter {
                     Fields: ['ID', 'Visibility'],
                     ResultType: 'simple',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 },
                 contextUser
             );
@@ -1053,7 +1054,7 @@ export abstract class BaseMessagingAdapter {
     private async resolveEnvironmentID(contextUser: UserInfo): Promise<string | null> {
         if (this.cachedEnvironmentID) return this.cachedEnvironmentID;
         const res = await new RunView().RunView<{ ID: string }>(
-            { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+            { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser,
         );
         this.cachedEnvironmentID = res.Results?.[0]?.ID ?? null;

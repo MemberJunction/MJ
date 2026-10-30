@@ -188,6 +188,7 @@ export async function ResolveActiveFileStorageProviderId(
       // Priority is "lower numbers are preferred" — take the most-preferred active provider.
       OrderBy: 'Priority ASC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
     },
     contextUser,

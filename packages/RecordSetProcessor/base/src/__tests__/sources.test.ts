@@ -3,13 +3,14 @@
  * No database — the RunView static provider is mocked with a lightweight fake.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityInfo, IMetadataProvider, IRunViewProvider, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import {
     ArraySource,
     FilterSource,
     ListSource,
     RecordRef,
+    ViewSource,
     canUseKeyset,
     serializeRecordId,
 } from '../index';
@@ -50,6 +51,7 @@ beforeEach(() => {
 
 afterEach(() => {
     RunView.Provider = previousProvider;
+    vi.restoreAllMocks();
 });
 
 // --- sourceUtil --------------------------------------------------------------------------------
@@ -223,5 +225,64 @@ describe('ListSource', () => {
         expect(detailCall?.AfterKey).toBeUndefined();
         // returned cursor is keyset from here on
         expect(batch.NextCursor.Key).toBe('ld-11');
+    });
+});
+
+describe('batch size 1', () => {
+    it('FilterSource returns one record, the real total, and a cursor at that record', async () => {
+        fake.entities.set('Widgets', fakeEntity([{ Name: 'ID', Type: 'uniqueidentifier' }]));
+        fake.handler = () => ({ Success: true, Results: [{ ID: 'k1' }], TotalRowCount: 42 });
+
+        const batch = await new FilterSource('Widgets').NextBatch(undefined, 1, USER, asProvider(fake));
+
+        expect(fake.calls[0].MaxRows).toBe(1);
+        expect(batch.Records.map((r) => r.RecordID)).toEqual(['k1']);
+        expect(batch.NextCursor.Key).toBe('k1');
+        expect(batch.Exhausted).toBe(false);
+        expect(batch.TotalRowCount).toBe(42);
+    });
+
+    it('ListSource returns one record, the real total, and a cursor at that record', async () => {
+        fake.handler = (params) => {
+            if (params.EntityName === 'MJ: Lists') {
+                return { Success: true, Results: [{ EntityID: 'ENT-9' }], TotalRowCount: 1 };
+            }
+            return { Success: true, Results: [{ ID: 'ld-1', RecordID: 'a' }], TotalRowCount: 7 };
+        };
+
+        const batch = await new ListSource('LIST-1').NextBatch(undefined, 1, USER, asProvider(fake));
+
+        const detailCall = fake.calls.find((c) => c.EntityName === 'MJ: List Details');
+        expect(detailCall?.MaxRows).toBe(1);
+        expect(batch.Records).toEqual([{ EntityID: 'ENT-9', RecordID: 'a' }]);
+        expect(batch.NextCursor.Key).toBe('ld-1');
+        expect(batch.Exhausted).toBe(false);
+        expect(batch.TotalRowCount).toBe(7);
+    });
+
+    it('ViewSource returns one record, the real total, and an offset past that record', async () => {
+        const entity = fakeEntity([{ Name: 'ID', Type: 'uniqueidentifier' }]);
+        fake.entities.set(entity.Name, entity);
+        vi.spyOn(RunView, 'GetEntityNameFromRunViewParams').mockResolvedValue(entity.Name);
+        const src = new ViewSource('VIEW-1');
+        fake.handler = () => ({ Success: true, Results: [{ ID: 'v1' }], TotalRowCount: 9 });
+
+        const batch = await src.NextBatch({ Offset: 3 }, 1, USER, asProvider(fake));
+
+        expect(fake.calls[0].MaxRows).toBe(1);
+        expect(batch.Records.map((r) => r.RecordID)).toEqual(['v1']);
+        expect(batch.NextCursor.Offset).toBe(4);
+        expect(batch.Exhausted).toBe(false);
+        expect(batch.TotalRowCount).toBe(9);
+    });
+
+    it('marks the batch exhausted when the read returns no rows', async () => {
+        fake.entities.set('Widgets', fakeEntity([{ Name: 'ID', Type: 'uniqueidentifier' }]));
+        fake.handler = () => ({ Success: true, Results: [], TotalRowCount: 0 });
+
+        const batch = await new FilterSource('Widgets').NextBatch(undefined, 1, USER, asProvider(fake));
+
+        expect(batch.Records).toEqual([]);
+        expect(batch.Exhausted).toBe(true);
     });
 });

@@ -680,6 +680,22 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
         expect(h.created).toHaveLength(0);
         expect(notify).toHaveBeenCalledOnce();
     });
+
+    it('under Always mode, addressing a person starts no turn and shows no error notification', async () => {
+        const personMention: MentionParseResult = {
+            mentions: [{ type: 'user', id: 'user-2', name: 'Marcus Chen' }],
+            agentMention: null,
+            userMentions: [{ type: 'user', id: 'user-2', name: 'Marcus Chen' }],
+            entityMentions: [],
+            skillMentions: [],
+        };
+
+        await h.route(userMessage('@Marcus Chen can you review?'), personMention);
+
+        expect(h.before).toHaveLength(0);
+        expect(h.created).toHaveLength(0);
+        expect(notify).not.toHaveBeenCalled();
+    });
 });
 
 describe('MessageInputComponent — only the server writes agent replies (A19)', () => {

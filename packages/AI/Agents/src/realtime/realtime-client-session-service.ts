@@ -1605,6 +1605,7 @@ export class RealtimeClientSessionService {
                 EntityName: 'MJ: Applications',
                 ExtraFilter: `ID='${EscapeSQLString(appId)}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, contextUser);
             if (!result.Success || !result.Results || result.Results.length === 0) {

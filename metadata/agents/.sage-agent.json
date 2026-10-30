@@ -30,9 +30,9 @@
       },
       "RerankerConfiguration": {
         "enabled": true,
-        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v5.0-fast",
         "retrievalMultiplier": 3,
-        "minRelevanceThreshold": 0.5,
+        "minRelevanceThreshold": 0.02,
         "fallbackOnError": true
       },
       "TypeConfiguration": {

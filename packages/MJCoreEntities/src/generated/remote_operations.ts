@@ -409,6 +409,66 @@ export interface PredictiveStudioTrainModelOutput {
     status: string;
 }
 
+/** Input for `Query.RefreshExtraction`. Selectors combine as a union; give at least one. */
+export interface QueryRefreshExtractionInput {
+    /** Query IDs to refresh. With exactly one ID and no other selector, a query that does not exist or that the caller may not refresh is reported as unavailable. */
+    queryIDs?: string[];
+    /** Query names, or full paths (`Category/Sub/Name`); a bare name selects every query with that name. */
+    queryNames?: string[];
+    /** A category path (`Category/Sub`): the queries in that category and every category below it. */
+    categoryPath?: string;
+    /** Entity names: the queries that read any of these entities. */
+    entityNames?: string[];
+    /** Every query the caller can read. */
+    all?: boolean;
+    /** Work out and report the changes without writing anything. */
+    dryRun?: boolean;
+    /** Queue the LLM description pass for rows still without a description (default false). */
+    withAI?: boolean;
+}
+
+/** One child row a refresh adds, updates or removes. */
+export interface QueryRefreshRowChange {
+    /** The child collection: Fields, Parameters, Entities or Dependencies. */
+    collection: 'Fields' | 'Parameters' | 'Entities' | 'Dependencies';
+    /** The field or parameter name, the entity name, or the dependency's reference path. */
+    name: string;
+    /** For an update, the columns that change. */
+    changedColumns: string[];
+}
+
+/** One query's refresh. */
+export interface QueryRefreshQueryReport {
+    /** The query's ID; for `Unavailable`, the identifier the caller supplied. */
+    queryID: string;
+    /** The query's name; empty for `Unavailable`. */
+    queryName: string;
+    /** Refreshed (with dryRun: would change), Unchanged, NotPermitted (skipped, no reason given), Unavailable (does not exist or may not be refreshed) or Failed (nothing written). */
+    outcome: 'Refreshed' | 'Unchanged' | 'NotPermitted' | 'Unavailable' | 'Failed';
+    /** The extraction status the run records (with dryRun: would record); absent when it did not run. */
+    extractionStatus?: 'OK' | 'Warning' | 'Error' | 'Skipped';
+    /** The columns of the query row itself the run changes (UsesTemplate and the Extraction columns). */
+    queryColumns: string[];
+    added: QueryRefreshRowChange[];
+    updated: QueryRefreshRowChange[];
+    removed: QueryRefreshRowChange[];
+    /** Authored parameters the SQL no longer uses: kept, and flagged on the query. */
+    flagged: string[];
+    /** The run's diagnostics, or why it was not completed. */
+    diagnostics: string[];
+}
+
+/** Output of `Query.RefreshExtraction`. */
+export interface QueryRefreshExtractionOutput {
+    dryRun: boolean;
+    /** One report per query, in the order refreshed (the queries a composition depends on first). */
+    reports: QueryRefreshQueryReport[];
+    /** Queries that compose each other in a cycle, by name; each was refreshed once. */
+    cycles: string[][];
+    /** A one-line summary of the run. */
+    summary: string;
+}
+
 /** A single primary-key field/value pair identifying a record. */
 export interface RecordCloneKeyValuePair {
     /** Primary-key field name (e.g. "ID"). */
@@ -1646,6 +1706,22 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly OperationKey = "PredictiveStudio.TrainModel";
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Query.RefreshExtraction — Refresh Query Extraction
+// ============================================================
+/**
+ * Refresh Query Extraction
+ * Re-establish saved queries' parameters, fields, entities and dependencies from their SQL and the database server, without changing the SQL: one query, or a selection by ID, name, category, entity read, or all. Optionally a dry run that reports the changes without writing. Requires Update on MJ: Queries and Create/Update/Delete on its child entities, and read access to every entity a query reads. Long-running, with per-query progress. Implemented by QueryRefreshExtractionServerOperation in @memberjunction/core-entities-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Query.RefreshExtraction'. This generated base provides the typed contract only (client-safe).
+ */
+export class QueryRefreshExtractionOperation extends BaseRemotableOperation<QueryRefreshExtractionInput, QueryRefreshExtractionOutput> {
+    public readonly OperationKey = "Query.RefreshExtraction";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "query:refresh";
     public readonly RequiresSystemUser = false;
 }
 

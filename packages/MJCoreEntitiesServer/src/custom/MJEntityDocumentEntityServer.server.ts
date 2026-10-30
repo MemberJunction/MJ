@@ -157,6 +157,7 @@ export class MJEntityDocumentEntityServer extends MJEntityDocumentEntityExtended
                 OrderBy: "__mj_CreatedAt ASC",
                 ResultType: 'entity_object',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, this.ContextCurrentUser);
 
             let tc: MJTemplateContentEntity | undefined;

@@ -33,11 +33,13 @@ All thirteen deterministic bundles honor the family's **anti-vacuity / loud-skip
 | `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT109 | Deterministic |
 | `perplexity-decider` | 5 | PX1–PX5 | deterministic | server | IT110 | Deterministic |
 | `subq-mercury-decisions` | 8 | SM1–SM8 | deterministic | server | IT121 (provisional) | Deterministic |
+| `agent-execution-primitives` | 6 | AEP1–AEP6 | deterministic (RequiresMutation) | server | IT147 | Deterministic |
 | `video-studio-production` | 5 | VSP1–VSP5 | deterministic | server | IT151 | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
 | `agent-runner` | 1 | AR1 | live-model | server | IT17 | Live Model |
 | `concurrent` | 2 | CC1–CC2 (bundle-prefixed `concurrent.CC*`) | live-model | server | IT18 | Live Model |
 | `remote-op-ai-authoring` | 3 | RO4-1–RO4-3 | live-model | server | IT19 | Live Model |
+| `agent-execution-primitives-live` | 4 | AEPL1–AEPL4 | live-model | server | IT148 | Live Model |
 | `video-studio-live-smoke` | 1 | VSLS1 | live-model | server | IT152 | Live Model |
 
 Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle count table is itself a coverage-loss guard), and bundle-to-IT-record parity by `sibling-parity.test.ts`.

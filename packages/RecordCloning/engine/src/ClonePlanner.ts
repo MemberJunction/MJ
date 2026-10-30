@@ -917,7 +917,7 @@ export class ClonePlanner {
      */
     private async isTemplateSource(entityName: string, key: CompositeKey, field: string, contextUser: UserInfo): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
-            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1 },
+            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         const value = res?.Success ? res.Results?.[0]?.[field] : undefined;
