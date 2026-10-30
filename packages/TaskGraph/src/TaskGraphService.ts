@@ -47,7 +47,7 @@ import {
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AgentDecisionService, SanitizeToolName, SUB_AGENT_TOOL_PREFIX } from '@memberjunction/ai-agents';
+import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
@@ -1399,127 +1399,54 @@ export class TaskGraphService {
         const names = [...new Set(spec.tasks.flatMap(agentNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${EscapeSQLString(n)}'`).join(',');
-        const rv = RunView.FromMetadataProvider(context.Provider);
-        const result = await rv.RunView<{
-            ID: string;
-            Name: string;
-            Status: MJAIAgentEntity['Status'];
-        }>(
-            {
-                EntityName: 'MJ: AI Agents',
-                ExtraFilter: `Name IN (${quoted}) AND Status = 'Active'`,
-                Fields: ['ID', 'Name', 'Status'],
-                ResultType: 'simple',
-            },
-            context.ContextUser,
-        );
-        if (!result.Success) {
-            const reason = result.ErrorMessage || 'RunView on "MJ: AI Agents" failed';
-            LogError(`[TaskGraph] Failed to resolve "MJ: AI Agents" by name: ${reason}`);
-            return { Success: false, ErrorMessage: reason };
-        }
-
-        const activeRows = result.Results ?? [];
-        const activeByName = new Map(activeRows.map((r) => [r.Name, r]));
-
         const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
-        const runnableRows =
-            activeRows.length > 0
-                ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
-                : [];
-        const runnableByName = new Map<string, string>();
-        for (const r of runnableRows) {
-            if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
-                const permitted = await AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
-                if (!permitted) {
+        const resolved = await ResolveRecordsByNameOrToolName({
+            EntityName: 'MJ: AI Agents',
+            Names: names,
+            Provider: context.Provider,
+            ContextUser: context.ContextUser,
+            ActiveOnly: true,
+            StripSubAgentPrefix: true,
+            FilterCandidates: (rows) =>
+                AIAgentPermissionHelper.FilterRunnableAgents(
+                    rows as Array<Pick<MJAIAgentEntity, 'ID' | 'Name' | 'Status'>>,
+                    context.ContextUser,
+                ),
+            AllowCandidate: async (r) => {
+                if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                    return AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
+                }
+                return true;
+            },
+        });
+        if (!resolved.Success || !resolved.Map) {
+            return { Success: false, ErrorMessage: resolved.ErrorMessage };
+        }
+        const missing = resolved.Missing ?? [];
+        if (missing.length > 0) {
+            const rejected = resolved.Rejected ?? new Map();
+            const unknownOrInactive: string[] = [];
+            const notRunnable: string[] = [];
+            for (const name of missing) {
+                const row = rejected.get(name);
+                if (!row) {
+                    unknownOrInactive.push(name);
                     continue;
                 }
-            }
-            runnableByName.set(r.Name, r.ID);
-        }
-
-        const unresolvedForToolFallback = names.filter((n) => {
-            if (runnableByName.has(n) || activeByName.has(n)) return false;
-            const trimmed = n.trim();
-            return trimmed.length > 0 && (trimmed.includes('_') || trimmed === trimmed.toLowerCase());
-        });
-        if (unresolvedForToolFallback.length > 0) {
-            const fallback = await rv.RunView<{
-                ID: string;
-                Name: string;
-                Status?: MJAIAgentEntity['Status'];
-            }>(
-                {
-                    EntityName: 'MJ: AI Agents',
-                    ExtraFilter: `Status='Active'`,
-                    Fields: ['ID', 'Name', 'Status'],
-                    ResultType: 'simple',
-                },
-                context.ContextUser,
-            );
-            if (!fallback.Success) {
-                const reason = fallback.ErrorMessage || 'Fallback RunView on "MJ: AI Agents" failed';
-                LogError(`[TaskGraph] Failed to query active "MJ: AI Agents" for tool-name resolution: ${reason}`);
-                return { Success: false, ErrorMessage: reason };
-            }
-            const subAgentPrefix = (SUB_AGENT_TOOL_PREFIX ?? 'delegate_to_').toLowerCase();
-            const activePool = (fallback.Results ?? []).map((r) => ({
-                ...r,
-                Status: (r.Status ?? 'Active') as MJAIAgentEntity['Status'],
-            }));
-            for (const rawName of unresolvedForToolFallback) {
-                const trimmed = rawName.trim();
-                const stripped = trimmed.toLowerCase().startsWith(subAgentPrefix)
-                    ? trimmed.slice(subAgentPrefix.length)
-                    : trimmed;
-                const targetSanitized = SanitizeToolName(stripped);
-                if (!targetSanitized) continue;
-                const matches = activePool.filter((r) => SanitizeToolName(r.Name) === targetSanitized);
-                if (matches.length === 1) {
-                    const candidate = matches[0];
-                    activeByName.set(rawName, candidate);
-                    const allowedByHelper = engineLoaded
-                        ? (await AIAgentPermissionHelper.FilterRunnableAgents([candidate], context.ContextUser)).length > 0
-                        : true;
-                    const allowedByEngine =
-                        engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function'
-                            ? await AIEngine.Instance.CanUserRunAgent(candidate.ID, context.ContextUser)
-                            : true;
-                    if (allowedByHelper && allowedByEngine) {
-                        runnableByName.set(rawName, candidate.ID);
-                    }
+                let canView = false;
+                try {
+                    canView = await AIAgentPermissionHelper.HasPermission(row.ID, context.ContextUser, 'view');
+                } catch (error) {
+                    LogError(
+                        `TaskGraphService.resolveAgents: view permission check failed for agent '${row.ID}': ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+                if (!canView) {
+                    unknownOrInactive.push(name);
+                } else {
+                    notRunnable.push(name);
                 }
             }
-        }
-
-        const unknownOrInactive: string[] = [];
-        const notRunnable: string[] = [];
-        for (const name of names) {
-            if (runnableByName.has(name)) {
-                continue;
-            }
-            const row = activeByName.get(name);
-            if (!row) {
-                unknownOrInactive.push(name);
-                continue;
-            }
-            let canView = false;
-            try {
-                canView = await AIAgentPermissionHelper.HasPermission(row.ID, context.ContextUser, 'view');
-            } catch (error) {
-                LogError(
-                    `TaskGraphService.resolveAgents: view permission check failed for agent '${row.ID}': ${error instanceof Error ? error.message : String(error)}`,
-                );
-            }
-            if (!canView) {
-                unknownOrInactive.push(name);
-            } else {
-                notRunnable.push(name);
-            }
-        }
-
-        if (unknownOrInactive.length > 0 || notRunnable.length > 0) {
             const parts: string[] = [];
             if (unknownOrInactive.length > 0) {
                 parts.push(
@@ -1538,7 +1465,7 @@ export class TaskGraphService {
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
-        return { Success: true, Map: runnableByName };
+        return { Success: true, Map: resolved.Map };
     }
 
     /**
