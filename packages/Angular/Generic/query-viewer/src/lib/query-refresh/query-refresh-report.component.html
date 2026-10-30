@@ -1,0 +1,125 @@
+@if (Output; as output) {
+  <div class="qrr">
+    <div class="qrr-summary">
+      <span class="qrr-summary-text">{{ output.summary }}</span>
+      @if (Totals; as totals) {
+        <span class="qrr-totals">
+          @if (totals.Refreshed > 0) { <span class="qrr-pill outcome-refreshed">{{ totals.Refreshed }} {{ output.dryRun ? 'would change' : 'refreshed' }}</span> }
+          @if (totals.Unchanged > 0) { <span class="qrr-pill outcome-unchanged">{{ totals.Unchanged }} unchanged</span> }
+          @if (totals.Failed > 0) { <span class="qrr-pill outcome-failed">{{ totals.Failed }} failed</span> }
+          @if (totals.NotPermitted + totals.Unavailable > 0) { <span class="qrr-pill outcome-notpermitted">{{ totals.NotPermitted + totals.Unavailable }} skipped</span> }
+        </span>
+      }
+    </div>
+
+    @if (output.cycles.length > 0) {
+      <div class="qrr-cycles">
+        <i class="fa-solid fa-rotate"></i>
+        These queries compose each other in a cycle and were each refreshed once:
+        @for (cycle of output.cycles; track $index) {
+          <span class="qrr-cycle">{{ cycle.join(' → ') }}</span>
+        }
+      </div>
+    }
+
+    @if (Reports.length === 0) {
+      <div class="qrr-empty">No queries matched.</div>
+    } @else {
+      <table class="qrr-table">
+        <thead>
+          <tr>
+            <th class="qrr-col-toggle"><span class="qrr-sr-only">Details</span></th>
+            <th>Query</th>
+            <th>Outcome</th>
+            <th>Extraction</th>
+            <th class="qrr-num">Added</th>
+            <th class="qrr-num">Updated</th>
+            <th class="qrr-num">Removed</th>
+            <th class="qrr-num">Flagged</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (report of Reports; track KeyOf(report, i); let i = $index) {
+            @let counts = CountsOf(report);
+            <tr class="qrr-row" [class.qrr-row--expanded]="IsExpanded(report, i)">
+              <td class="qrr-col-toggle">
+                @if (HasDetails(report)) {
+                  <button type="button" class="qrr-toggle" (click)="ToggleExpanded(report, i)"
+                    [attr.aria-expanded]="IsExpanded(report, i)" [attr.aria-label]="(IsExpanded(report, i) ? 'Hide' : 'Show') + ' details for ' + (report.queryName || report.queryID)">
+                    <i class="fa-solid" [class.fa-chevron-down]="IsExpanded(report, i)" [class.fa-chevron-right]="!IsExpanded(report, i)"></i>
+                  </button>
+                }
+              </td>
+              <td class="qrr-name">
+                @if (AllowOpenQuery && report.queryName) {
+                  <button type="button" class="qrr-open" (click)="OpenQuery.emit(report.queryID)">{{ report.queryName }}</button>
+                } @else {
+                  {{ report.queryName || report.queryID }}
+                }
+              </td>
+              <td><span class="qrr-pill" [class]="'qrr-pill ' + OutcomeClass(report)">{{ OutcomeLabel(report) }}</span></td>
+              <td>
+                @if (report.extractionStatus) {
+                  <span class="qrr-status" [class]="'qrr-status ' + StatusClass(report)">{{ report.extractionStatus }}</span>
+                } @else {
+                  <span class="qrr-muted">—</span>
+                }
+              </td>
+              <td class="qrr-num" [class.qrr-zero]="counts.Added === 0">{{ counts.Added }}</td>
+              <td class="qrr-num" [class.qrr-zero]="counts.Updated === 0">{{ counts.Updated }}</td>
+              <td class="qrr-num" [class.qrr-zero]="counts.Removed === 0">{{ counts.Removed }}</td>
+              <td class="qrr-num" [class.qrr-zero]="counts.Flagged === 0">{{ counts.Flagged }}</td>
+            </tr>
+            @if (IsExpanded(report, i)) {
+              <tr class="qrr-detail-row">
+                <td></td>
+                <td colspan="7">
+                  <div class="qrr-detail">
+                    @for (group of ChangesOf(report); track group.Collection) {
+                      <div class="qrr-group">
+                        <div class="qrr-group-title">{{ group.Collection }}</div>
+                        <ul class="qrr-changes">
+                          @for (c of group.Added; track $index) {
+                            <li class="qrr-change qrr-change--added"><span class="qrr-sign">+</span> {{ c.name }}</li>
+                          }
+                          @for (c of group.Updated; track $index) {
+                            <li class="qrr-change qrr-change--updated"><span class="qrr-sign">~</span> {{ c.name }}
+                              @if (c.changedColumns.length > 0) { <span class="qrr-cols">({{ c.changedColumns.join(', ') }})</span> }
+                            </li>
+                          }
+                          @for (c of group.Removed; track $index) {
+                            <li class="qrr-change qrr-change--removed"><span class="qrr-sign">−</span> {{ c.name }}</li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                    @if (report.flagged.length > 0) {
+                      <div class="qrr-group">
+                        <div class="qrr-group-title">Parameters the SQL no longer uses (kept)</div>
+                        <ul class="qrr-changes">
+                          @for (name of report.flagged; track name) {
+                            <li class="qrr-change qrr-change--flagged"><span class="qrr-sign">!</span> {{ name }}</li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                    @if (report.queryColumns.length > 0) {
+                      <div class="qrr-group">
+                        <div class="qrr-group-title">Query columns</div>
+                        <div class="qrr-cols">{{ report.queryColumns.join(', ') }}</div>
+                      </div>
+                    }
+                    @if (report.diagnostics.length > 0) {
+                      <mj-query-diagnostics [Diagnostics]="DiagnosticsOf(report)"
+                        [Severity]="report.outcome === 'Failed' || report.extractionStatus === 'Error' ? 'error' : 'warning'" />
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+}

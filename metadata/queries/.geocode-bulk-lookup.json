@@ -26,12 +26,89 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "EntityID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "123e4567-e89b-12d3-a456-426614174000",
+            "Description": "EntityID of the entity whose RecordGeoCode rows are being retrieved",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B5F6A291-72B0-4C9D-B744-AEAF91533C13"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ID",
+            "Description": "Unique identifier of the RecordGeoCode row",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "360773ED-FA47-4352-B5DA-A14249461CBE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecordID",
+            "Description": "Record identifier associated with the geo‑code",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C5AEB8BA-D2F1-4BA0-A5C3-8A9366B5979C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LocationType",
+            "Description": "Type of location (e.g., address, coordinates) for the geo‑code",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A29AEF3F-C32C-4265-8951-A0B065B78113"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceFieldHash",
+            "Description": "Hash of the source field used to generate the geo‑code",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CA95D33F-6D92-4D39-8FCE-99C737240EEA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Status",
+            "Description": "Current status of the geo‑code processing",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0F92639B-BA32-4BFC-8922-A647688E2E5D"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C0A11C4B-7C68-4A42-AC5E-F5268193CDAA"
     },
     "sync": {
-      "lastModified": "2026-05-03T05:57:44.248Z",
-      "checksum": "eab06a8762c33f5277d31f6e32737e0be4b5000ff2cc845bc6baf667927d9277"
+      "lastModified": "2026-10-28T22:14:01.973Z",
+      "checksum": "436cf4b262aa3f938267a8b83352d6431f16213f1b86c25024bd474149f80d94"
     }
   }
 ]

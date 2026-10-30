@@ -318,4 +318,96 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             expect(r.role).toBe('Structural');
         });
     });
+
+    describe('structure read from the author\'s text', () => {
+        const pair = (a: string, b: string, dialect: SQLServerDialect | PostgreSQLDialect = tsql) => VerifyParamRole([a, b], dialect);
+
+        it('a WITH-headed query: the outer WHERE is the top-level WHERE', () => {
+            const cte = 'WITH r AS (SELECT ID, Status FROM Orders)';
+            const r = pair(`${cte} SELECT ID FROM r WHERE Status = 'A'`, `${cte} SELECT ID FROM r WHERE Status = 'B'`);
+            expect(r.role).toBe('RowFilter');
+            expect(r.filterColumn).toBe('Status');
+        });
+
+        it('a literal inside a CTE body is not the top-level WHERE', () => {
+            const r = pair(
+                "WITH r AS (SELECT ID FROM Orders WHERE Status = 'A') SELECT ID FROM r",
+                "WITH r AS (SELECT ID FROM Orders WHERE Status = 'B') SELECT ID FROM r",
+            );
+            expect(r.role).toBe('Unbounded');
+        });
+
+        it('a conjunct inside a parenthesized AND group is still clean', () => {
+            const r = pair(
+                "SELECT ID FROM Orders WHERE (Status = 'A' AND ChapterID = 1) AND Region = 'E'",
+                "SELECT ID FROM Orders WHERE (Status = 'B' AND ChapterID = 1) AND Region = 'E'",
+            );
+            expect(r.role).toBe('RowFilter');
+            expect(r.filterColumn).toBe('Status');
+        });
+
+        it('AND binds tighter than OR: a predicate in `a AND b OR c` is tainted', () => {
+            const r = pair(
+                "SELECT ID FROM Orders WHERE Status = 'A' AND ChapterID = 1 OR IsAdmin = 1",
+                "SELECT ID FROM Orders WHERE Status = 'B' AND ChapterID = 1 OR IsAdmin = 1",
+            );
+            expect(r.role).toBe('Unbounded');
+        });
+
+        it('a predicate under NOT is tainted', () => {
+            const r = pair("SELECT ID FROM Orders WHERE NOT Status = 'A'", "SELECT ID FROM Orders WHERE NOT Status = 'B'");
+            expect(r.role).toBe('Unbounded');
+        });
+
+        it('a literal inside a CASE in the WHERE is tainted', () => {
+            const r = pair(
+                "SELECT ID FROM Orders WHERE CASE WHEN Status = 'A' AND ID > 0 THEN 1 ELSE 0 END = 1",
+                "SELECT ID FROM Orders WHERE CASE WHEN Status = 'B' AND ID > 0 THEN 1 ELSE 0 END = 1",
+            );
+            expect(r.role).toBe('Unbounded');
+        });
+
+        it('BETWEEN bounds are a list value; the conjunct after the BETWEEN is separate', () => {
+            const r = pair(
+                'SELECT ID FROM Members WHERE Score BETWEEN 10 AND 50 AND ChapterID = 2',
+                'SELECT ID FROM Members WHERE Score BETWEEN 20 AND 50 AND ChapterID = 2',
+            );
+            expect(r.role).toBe('RowFilter');
+            expect(r.filterColumn).toBe('Score');
+            expect(r.filterOperator).toBe('BETWEEN');
+            expect(r.filterKind).toBe('list');
+        });
+
+        it('comments and whitespace do not count as a change of shape', () => {
+            const r = pair(
+                "SELECT ID FROM Orders /* a */ WHERE Status = 'A'",
+                "SELECT ID\nFROM Orders WHERE Status = 'B' -- b",
+            );
+            expect(r.role).toBe('RowFilter');
+        });
+
+        it('a literal whose category changes (string to number) is a change of shape', () => {
+            const r = pair("SELECT ID FROM Orders WHERE Code = 'A'", 'SELECT ID FROM Orders WHERE Code = 1');
+            expect(r.role).toBe('Structural');
+        });
+
+        it('a SELECT ... INTO cannot host a clean row filter', () => {
+            const r = pair("SELECT ID INTO #t FROM Orders WHERE Status = 'A'", "SELECT ID INTO #t FROM Orders WHERE Status = 'B'");
+            expect(r.role).toBe('Unbounded');
+        });
+
+        it('a UNION cannot host a clean row filter', () => {
+            const r = pair(
+                "SELECT ID FROM Orders WHERE Status = 'A' UNION SELECT ID FROM Archive",
+                "SELECT ID FROM Orders WHERE Status = 'B' UNION SELECT ID FROM Archive",
+            );
+            expect(r.role).toBe('Unbounded');
+        });
+
+        it('PostgreSQL: a quoted column resolves to its name; TRUE/FALSE are literals', () => {
+            const r = pair('SELECT "ID" FROM "Orders" WHERE "IsActive" = TRUE', 'SELECT "ID" FROM "Orders" WHERE "IsActive" = FALSE', pg);
+            expect(r.role).toBe('RowFilter');
+            expect(r.filterColumn).toBe('IsActive');
+        });
+    });
 });

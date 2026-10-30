@@ -69,7 +69,7 @@ import type {
     PlatformSQL,
     UserInfo
 } from '@memberjunction/core';
-import { Assert, AssertEqual, AssertRowShape } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, AssertRowShape, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -488,8 +488,7 @@ const RVM5: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const target = await discoverNumericOrderTarget(ctx);
         if (!target) {
-            console.warn('      ⚠ RVM5 SKIPPED — no readable entity with a non-PK numeric field and 3–3000 non-null rows exists in this deployment.');
-            return;
+            SkipCheck('no readable entity with a non-PK numeric field and 3–3000 non-null rows exists in this deployment.');
         }
         const { Entity: entity, Field: field, Count: count } = target;
         const pk = entity.FirstPrimaryKey.Name;
@@ -774,13 +773,12 @@ const RVM11: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const target = await discoverUserViewMaxRowsTarget(ctx);
         if (!target) {
-            console.warn('      ⚠ RVM11 SKIPPED — no entity in this deployment has a BINDING UserViewMaxRows cap (cap set AND total rows > cap ≤ 5000).');
             // KNOWN COVERAGE GAP (adversarial review): standard deployments never carry a
             // BINDING UserViewMaxRows, so this skip is effectively permanent — the
             // IgnoreMaxRows override is NOT exercised read-only. A mutation-gated variant
             // (temporarily set+restore UserViewMaxRows on a fixture-safe entity) is the
             // designed follow-up; barred tonight (no mutation of existing product rows).
-            return;
+            SkipCheck('no entity in this deployment has a BINDING UserViewMaxRows cap (cap set AND total rows > cap ≤ 5000).');
         }
         const { Entity: entity, Total: total } = target;
         const rv = new RunView();
@@ -838,8 +836,7 @@ const RVM12: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const target = await discoverWalkTarget(ctx);
         if (!target) {
-            console.warn('      ⚠ RVM12 SKIPPED — no readable 12–2000-row single-PK entity (besides MJ: Entity Fields) exists in this deployment.');
-            return;
+            SkipCheck('no readable 12–2000-row single-PK entity (besides MJ: Entity Fields) exists in this deployment.');
         }
         const entity = target.Entity;
         const rv = new RunView();
@@ -884,8 +881,7 @@ const RVM13: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const target = await discoverWalkTarget(ctx);
         if (!target) {
-            console.warn('      ⚠ RVM13 SKIPPED — no readable 12–2000-row single-PK entity (besides MJ: Entity Fields) exists in this deployment.');
-            return;
+            SkipCheck('no readable 12–2000-row single-PK entity (besides MJ: Entity Fields) exists in this deployment.');
         }
         const entity = target.Entity;
         const rv = new RunView();
@@ -1272,8 +1268,7 @@ const RVM19: NamedCheck = {
         // term below becomes a documented no-op (that leg is RVM9's job, not this one).
         const target = await discoverSearchTarget(ctx);
         if (!target) {
-            console.warn('      ⚠ RVM19 SKIPPED — no LIKE-path searchable entity with a plain-text seed exists in this deployment.');
-            return;
+            SkipCheck('no LIKE-path searchable entity with a plain-text seed exists in this deployment.');
         }
         const entity = target.Entity;
         const pkName = entity.PrimaryKeys[0].Name;
@@ -1295,8 +1290,7 @@ const RVM19: NamedCheck = {
         );
         requireSuccess(control, `RVM19 control probe on ${entity.Name}`);
         if ((control.TotalRowCount ?? 0) >= baseline) {
-            console.warn(`      ⚠ RVM19 SKIPPED — ${entity.Name} has no effective search predicate (every search field is skipped by createViewUserSearchSQL), so no leg here would discriminate.`);
-            return;
+            SkipCheck(`${entity.Name} has no effective search predicate (every search field is skipped by createViewUserSearchSQL), so no leg here would discriminate.`);
         }
 
         // Leg 1 — every free-text term is ACCEPTED (not refused at the boundary) and is APPLIED

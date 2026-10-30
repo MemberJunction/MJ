@@ -52,7 +52,7 @@ import {
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
-import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, SkipCheck } from '@memberjunction/testing-integration';
 
 /** The reason `MJConversationDetailEntityExtended`'s owner gate records for a non-owner without a grant. */
 const CONVERSATION_ACCESS_DENIED = 'You do not have access to this conversation.';
@@ -200,8 +200,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const agentID = await firstID('MJ: AI Agents', ctx.User);
             if (!agentID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA1 SKIPPED — no MJ: AI Agents seeded in this deployment');
-                return;
+                SkipCheck('no MJ: AI Agents rows are seeded in this deployment.');
             }
             const anon = makeScopedAnonPrincipal(ctx.User);
             const run = await buildAgentRunFixture(anon, agentID);
@@ -245,8 +244,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const sys = systemUser();
             const agentID = await firstID('MJ: AI Agents', ctx.User);
             if (!sys || !agentID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA3 SKIPPED — needs a system user and a seeded MJ: AI Agents row');
-                return;
+                SkipCheck('needs a system user and a seeded MJ: AI Agents row.');
             }
             const run = await buildAgentRunFixture(sys, agentID);
             // The elevated write stamps the VISITOR as the run owner — the createCoAgentRun /
@@ -277,8 +275,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const sys = systemUser();
             const agentID = await firstID('MJ: AI Agents', ctx.User);
             if (!sys || !agentID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA4 SKIPPED — needs a system user and a seeded MJ: AI Agents row');
-                return;
+                SkipCheck('needs a system user and a seeded MJ: AI Agents row.');
             }
             const run = await buildAgentRunFixture(sys, agentID);
             let runID: string | undefined;
@@ -326,8 +323,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
                 firstID('MJ: AI Vendors', ctx.User),
             ]);
             if (!sys || !promptID || !modelID || !vendorID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA5 SKIPPED — needs a system user plus seeded AI Prompts/Models/Vendors');
-                return;
+                SkipCheck('needs a system user plus seeded MJ: AI Prompts, MJ: AI Models and MJ: AI Vendors rows.');
             }
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const promptRun = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', sys);
@@ -400,9 +396,8 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const anonymousUser = findMagicLinkAnonymousUser();
             const claimedRole = findRoleByName(VISITOR_CLAIMED_ROLE);
             if (!sys || !anonymousUser || !claimedRole) {
-                console.warn('  ⚠ scoped-anon-elevation.SA6 SKIPPED — needs a system user, the magic-link Anonymous user '
-                    + `(${MAGIC_LINK_ANONYMOUS_EMAIL}) and the '${VISITOR_CLAIMED_ROLE}' role`);
-                return;
+                SkipCheck('needs a system user, the magic-link Anonymous user '
+                    + `(${MAGIC_LINK_ANONYMOUS_EMAIL}) and the '${VISITOR_CLAIMED_ROLE}' role.`);
             }
             const owner = makeScopedAnonPrincipal(anonymousUser, [claimedRole]);
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design

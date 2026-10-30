@@ -16,6 +16,7 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  SqlDialectKey,
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
@@ -300,9 +301,9 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
     }));
   }
 
-  /** Quote a SQL identifier, escaping embedded double-quotes. */
-  protected quoteIdent(name: string): string {
-    return `"${name.replace(/"/g, '""')}"`;
+  /** This source's SQL dialect: its writer quotes identifiers and its rules screen native SQL. */
+  protected sqlDialectKey(): SqlDialectKey {
+    return 'postgresql';
   }
 
   /** PostgreSQL sorts NULL last in an ascending ORDER BY, so a keyset seek reaches the NULL run at the end. */

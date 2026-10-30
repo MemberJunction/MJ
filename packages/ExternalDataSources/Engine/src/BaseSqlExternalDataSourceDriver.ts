@@ -2,7 +2,8 @@ import { ExternalObjectType, ExternalSchemaRelationship, EntityInfo } from "@mem
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
 import { ExternalFkRow, ExternalViewParams, ExternalQueryParameter, ExternalSeekAfter } from "./types";
-import { AssertReadOnlyNativeQuery, AssertReadOnlyClause, type SqlDialectKey } from "./sqlReadOnlyScreen";
+import type { QueryDialect } from "@memberjunction/sql-dialect";
+import { AssertReadOnlyNativeQuery, AssertReadOnlyClause, GetScreenDialect, type SqlDialectKey } from "./sqlReadOnlyScreen";
 
 /**
  * Intermediate base for the relational (SQL) external data source drivers
@@ -11,7 +12,7 @@ import { AssertReadOnlyNativeQuery, AssertReadOnlyClause, type SqlDialectKey } f
  * mapping, composite-key-aware FK grouping, and the SELECT skeleton — so each
  * concrete driver only supplies the bits that actually differ per dialect:
  *
- *  - {@link quoteIdent}        — identifier quoting (brackets / backticks / double-quotes)
+ *  - {@link sqlDialectKey}     — the source's SQL dialect, which drives identifier quoting and the read-only screen
  *  - {@link orderAndPageClause} — the ORDER BY + paging suffix (LIMIT/OFFSET vs OFFSET/FETCH vs TOP)
  *  - {@link selectTopClause}    — optional leading row-cap clause (T-SQL `TOP (n)`); default none
  *
@@ -20,17 +21,34 @@ import { AssertReadOnlyNativeQuery, AssertReadOnlyClause, type SqlDialectKey } f
  * @typeParam TConnection - the concrete connection/pool type the driver manages.
  */
 export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> extends BaseExternalDataSourceDriver<TConnection> {
-  /** Quote a single SQL identifier for this dialect, escaping the dialect's embedded quote char. */
-  protected abstract quoteIdent(name: string): string;
+  private resolvedDialect: QueryDialect | null = null;
 
   /**
-   * Parser dialect used to screen native-query text for read-only safety (see
-   * {@link screenReadOnlyNativeQuery}). Defaults to `'ansi'` (PostgreSQL grammar), which covers
-   * PostgreSQL / MySQL / Oracle / Snowflake; the SQL Server driver overrides this to `'sqlserver'`
-   * so T-SQL specifics (brackets, `TOP`, `@vars`) parse correctly.
+   * The source's SQL dialect (see `@memberjunction/sql-dialect`): its lexical rules and grammar
+   * screen native-query text and clause fragments for read-only safety, and its writer quotes
+   * identifiers. Each built-in driver returns its own key. Defaults to `'ansi'`, the PostgreSQL
+   * dialect, for a driver that does not say.
    */
   protected sqlDialectKey(): SqlDialectKey {
     return 'ansi';
+  }
+
+  /** The registered key of {@link SourceDialect} (`'ansi'` reads as the PostgreSQL dialect). */
+  public override get QueryDialectKey(): string | null {
+    return this.SourceDialect.Key;
+  }
+
+  /** The {@link QueryDialect} for {@link sqlDialectKey}, resolved once. */
+  protected get SourceDialect(): QueryDialect {
+    if (!this.resolvedDialect) {
+      this.resolvedDialect = GetScreenDialect(this.sqlDialectKey());
+    }
+    return this.resolvedDialect;
+  }
+
+  /** Quote a single SQL identifier with the source dialect's writer, escaping its embedded quote character. */
+  protected quoteIdent(name: string): string {
+    return this.SourceDialect.Writer.QuoteIdentifier(name);
   }
 
   /**

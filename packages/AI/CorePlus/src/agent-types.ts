@@ -2309,6 +2309,18 @@ export type AgentChatMessageMetadata = {
     isConversationSummary?: boolean;
     /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
     summaryBoundarySequence?: number;
+    /** ID of the user who wrote this message, when populated on `ConversationDetail` */
+    userId?: string | null;
+    /** Display name of the user who wrote this message, when available */
+    userName?: string | null;
+    /** ID of the AI agent that wrote this message, when populated on `ConversationDetail` */
+    agentId?: string | null;
+    /** Display name of the AI agent that wrote this message, when available */
+    agentName?: string | null;
+    /** Parent `ConversationDetail.ID` when this message replies to an earlier row */
+    parentId?: string | null;
+    /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
+    rawContent?: string;
     /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
