@@ -156,3 +156,133 @@ describe('AreClassesRelated', () => {
         expect(AreClassesRelated('DerivedA', DerivedA)).toBe(false);
     });
 });
+
+// ── Second physical copies of a package ─────────────────────────────────
+// Each call returns a distinct constructor with identical source text, which is what a second
+// installed copy of the defining package produces when its module-level registrations run again.
+class EntityBase {}
+const loadGeneratedCopy = () =>
+    class OrderHeader extends EntityBase {
+        Kind(): string { return 'generated'; }
+    };
+
+describe('ClassFactory.Register — second physical copy of a package', () => {
+    let factory: ClassFactory;
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        factory = new ClassFactory();
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        warnSpy.mockRestore();
+    });
+
+    function lines(marker: string): string[] {
+        const calls = warnSpy.mock.calls as unknown[][];
+        return calls
+            .map((args: unknown[]) => args.map((a) => String(a)).join(' '))
+            .filter((line: string) => line.includes(marker));
+    }
+    const copyWarnings = (): string[] => lines('ignored a second copy');
+    const collisionWarnings = (): string[] => lines('is registering for base class');
+
+    it('keeps a real subclass winning when a copy of its parent registers after it', () => {
+        const Generated = loadGeneratedCopy();
+        class OrderHeaderServer extends Generated {}
+        factory.Register(EntityBase, Generated, 'Orders');
+        factory.Register(EntityBase, OrderHeaderServer, 'Orders');
+
+        const copy = loadGeneratedCopy();
+        expect(copy).not.toBe(Generated);
+        factory.Register(EntityBase, copy, 'Orders');
+
+        expect(factory.CreateInstance<EntityBase>(EntityBase, 'Orders')).toBeInstanceOf(OrderHeaderServer);
+        expect(factory.GetAllRegistrations(EntityBase, 'Orders')).toHaveLength(2);
+    });
+
+    it('keeps a same-named subclass of a same-named class (class X extends X) as an override', () => {
+        const Generated = loadGeneratedCopy();
+        const makeOverride = (Parent: typeof Generated) =>
+            class OrderHeader extends Parent {
+                override Kind(): string { return 'override'; }
+            };
+        factory.Register(EntityBase, Generated, 'Orders');
+        const Override = makeOverride(Generated);
+        factory.Register(EntityBase, Override, 'Orders');
+        // a second copy of the overriding package: same name, same source, parent shares its name
+        const OverrideCopy = makeOverride(Generated);
+        factory.Register(EntityBase, OverrideCopy, 'Orders');
+
+        expect(copyWarnings()).toHaveLength(0);
+        expect(factory.GetAllRegistrations(EntityBase, 'Orders')).toHaveLength(3);
+
+        // a later copy of the generated class does not displace the override
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders');
+        const winner = factory.CreateInstance<InstanceType<typeof Generated>>(EntityBase, 'Orders');
+        expect(winner).toBeInstanceOf(OverrideCopy);
+        expect(winner?.Kind()).toBe('override');
+        expect(copyWarnings()).toHaveLength(1);
+        expect(factory.GetAllRegistrations(EntityBase, 'Orders')).toHaveLength(3);
+    });
+
+    it('still auto-increments and warns for a same-named class with different source', () => {
+        const Generated = loadGeneratedCopy();
+        factory.Register(EntityBase, Generated, 'Orders');
+        const Different = class OrderHeader extends EntityBase {
+            Kind(): string { return 'different'; }
+        };
+        factory.Register(EntityBase, Different, 'Orders');
+
+        const regs = factory.GetAllRegistrations(EntityBase, 'Orders');
+        expect(regs).toHaveLength(2);
+        expect(regs.map((r) => r.Priority)).toEqual([1, 2]);
+        expect(factory.CreateInstance<EntityBase>(EntityBase, 'Orders')).toBeInstanceOf(Different);
+        expect(copyWarnings()).toHaveLength(0);
+    });
+
+    it('still warns on an unrelated collision with a different-source class of another name', () => {
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders');
+        class OtherHeader extends EntityBase {}
+        factory.Register(EntityBase, OtherHeader, 'Orders');
+
+        expect(collisionWarnings()).toHaveLength(1);
+        expect(copyWarnings()).toHaveLength(0);
+    });
+
+    it('leaves explicit-priority registrations unchanged, copies included', () => {
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders', 5);
+        const copy = loadGeneratedCopy();
+        factory.Register(EntityBase, copy, 'Orders', 5);
+
+        expect(factory.GetAllRegistrations(EntityBase, 'Orders')).toHaveLength(2);
+        expect(factory.CreateInstance<EntityBase>(EntityBase, 'Orders')).toBeInstanceOf(copy);
+        expect(copyWarnings()).toHaveLength(0);
+        expect(lines('registrations already exist for that combination')).toHaveLength(1);
+    });
+
+    it('does not treat a re-registration of the same constructor as a second copy', () => {
+        const Generated = loadGeneratedCopy();
+        factory.Register(EntityBase, Generated, 'Orders');
+        factory.Register(EntityBase, Generated, 'Orders');
+
+        expect(copyWarnings()).toHaveLength(0);
+        expect(factory.GetAllRegistrations(EntityBase, 'Orders')).toHaveLength(2);
+    });
+
+    it('emits the warning once however many copies register, naming the class', () => {
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders');
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders');
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders');
+        factory.Register(EntityBase, loadGeneratedCopy(), 'Orders');
+
+        const warned = copyWarnings();
+        expect(warned).toHaveLength(1);
+        expect(warned[0]).toContain('OrderHeader');
+        expect(warned[0]).toContain('EntityBase');
+        expect(warned[0]).toContain('Orders');
+        expect(collisionWarnings()).toHaveLength(0);
+        expect(factory.GetAllRegistrations(EntityBase, 'Orders')).toHaveLength(1);
+    });
+});

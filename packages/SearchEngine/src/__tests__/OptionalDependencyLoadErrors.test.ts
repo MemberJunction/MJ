@@ -21,8 +21,8 @@ vi.mock('@elastic/elasticsearch', () => {
     throw new Error("Cannot find package '@elastic/elasticsearch'");
 });
 
-vi.mock('@xenova/transformers', () => {
-    throw new Error("Cannot find package '@xenova/transformers'");
+vi.mock('@huggingface/transformers', () => {
+    throw new Error("Cannot find package '@huggingface/transformers'");
 });
 
 import { ElasticsearchSearchProvider, ResetElasticsearchClientLoaderForTests } from '../providers/ElasticsearchSearchProvider';
@@ -61,7 +61,7 @@ describe('optional SDK load failures', () => {
         expect(logged).not.toContain("Add it to your project's dependencies");
     });
 
-    it('BGE names @xenova/transformers as an optional dependency of search-engine', async () => {
+    it('BGE names @huggingface/transformers as an optional dependency of search-engine', async () => {
         const item: SearchResultItem = {
             ID: 'a', EntityName: 'E', RecordID: 'a', SourceType: 'vector', ResultType: 'entity-record',
             Title: 'A', Snippet: 's', Score: 1, ScoreBreakdown: { Vector: 1 }, Tags: [], MatchedAt: new Date(),
@@ -69,7 +69,7 @@ describe('optional SDK load failures', () => {
         const result = await new BGEReRanker().ReRank('q', [item], 1, fakeUser);
         expect(result).toEqual([item]);
         const logged = loggedMessages();
-        expect(logged).toContain("could not load '@xenova/transformers', an optional dependency of @memberjunction/search-engine");
+        expect(logged).toContain("could not load '@huggingface/transformers', an optional dependency of @memberjunction/search-engine");
         expect(logged).not.toContain("Add it to your project's dependencies");
     });
 });

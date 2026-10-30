@@ -3,10 +3,11 @@ paths:
   - ".changeset/**"
 ---
 
-# Changeset bump levels
+# Changeset bump levels and package lists
 
 Loads when you open anything under `.changeset/`. The rule is short; the reason it needs its own
-file is that **you cannot infer it from the neighbouring files**.
+file is that **you cannot infer it from the neighbouring files**. Which packages to list is in
+[its own section](#which-packages-to-list).
 
 ---
 
@@ -136,6 +137,34 @@ message, and has 15 passing tests, so wiring it into CI later is a workflow file
 
 **It also does not check that a database branch declares a changeset at all** — only the level of the
 ones it declares. A DB branch with no changeset passes here.
+
+## Which packages to list
+
+**List every package whose tracked files the branch changes** — generated files (the bootstrap
+class-registration manifests, for example) and test-only changes included. A file belongs to the
+package of its nearest `package.json`, not to the first folder under `packages/`
+(`packages/Angular/Explorer/explorer-settings/…` is `@memberjunction/ng-explorer-settings`, not
+`Angular`).
+
+**Every listed package carries the same level** — the branch's level from the table above. The
+level is a release-wide fact, so a mixed list says nothing a single level does not.
+
+**Membership does not carry semver.** The `fixed` group (below) bumps every package whatever the
+list says. What the list decides is **whose `CHANGELOG.md` the entry lands in**. Someone reading
+`server-bootstrap`'s changelog to find out why its manifest moved gets an answer only if the
+changeset listed it; a regenerated file with no changelog line is a change nobody can trace. So do
+not trim the list to the package that "really" changed.
+
+**Files outside `packages/`:**
+
+| The branch changes | List |
+|---|---|
+| A migration or `metadata/` and no package files | `"@memberjunction/core": minor` |
+| A migration or `metadata/` plus package files | `@memberjunction/core` and those packages, all `minor` |
+| Only docs, guides, CI or `.claude/` | No changeset |
+
+A database branch must declare at least one changeset entry, because that entry is what carries its
+`minor` into the release; `core` is the package that takes it when no other package changed.
 
 ## Format
 

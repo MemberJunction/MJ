@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { BaseEntity, EntityInfo, PotentialDuplicateRequest } from '@memberjunction/core';
-import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import type { MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
 
 /**
  * The entity document's record filter (`Configuration.recordFilter.extraFilter`) in duplicate
@@ -19,8 +19,9 @@ import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 // Hoisted mocks
 // ─────────────────────────────────────────────
 
-const { mockRunViewFn } = vi.hoisted(() => ({
+const { mockRunViewFn, mockEntityByID } = vi.hoisted(() => ({
     mockRunViewFn: vi.fn(),
+    mockEntityByID: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -69,11 +70,16 @@ vi.mock('@memberjunction/core-entities', () => ({
 vi.mock('@memberjunction/ai-vectors', () => ({
     VectorBase: class VectorBase {
         _runView = { RunView: mockRunViewFn, RunViews: vi.fn() };
+        _metadata = { EntityByID: mockEntityByID, EntityByName: vi.fn() };
         _currentUser: Record<string, unknown> = { ID: 'user-1' };
 
+        get Metadata() { return this._metadata; }
         get RunView() { return this._runView; }
         get CurrentUser() { return this._currentUser; }
         set CurrentUser(user: unknown) { this._currentUser = user as Record<string, unknown>; }
+        SaveEntity = vi.fn().mockResolvedValue(true);
+        /** A saved view that exists: LoadRecordIDsFromView only checks that it does. */
+        RunViewForSingleValue = vi.fn().mockResolvedValue({ ID: 'view-1' });
     },
 }));
 
@@ -237,6 +243,18 @@ describe('DuplicateRecordDetector — the entity document\'s record filter', () 
             expect(await detector.idsToCheck({ ListID: 'list-1' }, null)).toEqual(['42', '43']);
             expect(mockRunViewFn).toHaveBeenCalledTimes(1);
         });
+
+        it('narrows a view run to the rows that pass the filter', async () => {
+            mockRunViewFn
+                .mockResolvedValueOnce({ Success: true, Results: [{ individual_id: '42' }, { individual_id: '43' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [{ individual_id: '42' }] });
+
+            const ids = await detector.idsToCheck({ ViewID: 'view-1' }, NOT_DELETED);
+
+            expect(ids).toEqual(['42']);
+            expect(runViewCalls()[0].ViewID).toBe('view-1');
+            expect(runViewCalls()[1].ExtraFilter).toBe(`(individual_id IN ('42','43')) AND (${NOT_DELETED})`);
+        });
     });
 
     describe('the candidates offered', () => {
@@ -293,5 +311,108 @@ describe('DuplicateRecordDetector — the entity document\'s record filter', () 
             expect(mockRunViewFn).not.toHaveBeenCalled();
             expect(result?.Duplicates.Duplicates).toHaveLength(2);
         });
+    });
+});
+
+// ─────────────────────────────────────────────
+// The batch run: GetDuplicateRecords wires the filter through every step
+// ─────────────────────────────────────────────
+
+function duplicateRun(): MJDuplicateRunEntity {
+    return {
+        ID: 'run-1',
+        LastProcessedOffset: 0,
+        CancellationRequested: false,
+        Load: vi.fn().mockResolvedValue(true),
+    } as unknown as MJDuplicateRunEntity;
+}
+
+/**
+ * Drives the REAL batch loop (GetDuplicateRecords → processBatch) with the setup and persistence
+ * stubbed. The record-id load, the candidate query width, the existence check and the trim to TopK
+ * all run as shipped; what reaches persistence is recorded per source record.
+ */
+class BatchHarness extends TestableDetector {
+    /** The candidate ids each source record carried into persistence, in order. */
+    public Persisted: string[][] = [];
+    private readonly entityDocument: MJEntityDocumentEntity;
+
+    constructor(entityDocument: MJEntityDocumentEntity) {
+        super();
+        this.entityDocument = entityDocument;
+    }
+
+    protected override async ValidateEntityDocument(): Promise<MJEntityDocumentEntity | null> {
+        return this.entityDocument;
+    }
+    protected override async InitializeProviders(): Promise<void> {
+        // the embedding runner and vector query are stubbed
+    }
+    protected override async ResolveOrCreateDuplicateRun(): Promise<MJDuplicateRunEntity> {
+        return duplicateRun();
+    }
+    protected override async LoadRecordsByKeys(compositeKeys: CompositeKey[]): Promise<BaseEntity[]> {
+        return compositeKeys.map(() => ({}) as unknown as BaseEntity);
+    }
+    protected override buildSourceMetadataMap(): Map<string, string> {
+        return new Map();
+    }
+    protected override async CreateRunDetailRecords(): Promise<MJDuplicateRunDetailEntity[]> {
+        return [];
+    }
+    protected override AssertDocumentVectorsFound(): void {
+        // no vector DB here; the document-scope check is covered by duplicateRecordDetectorDocumentScope.test.ts
+    }
+    protected override async PersistMatchResults(queryResults: RecordQueryResult[]): Promise<PotentialDuplicateResult[]> {
+        this.Persisted.push(...queryResults.map((qr) => qr.Duplicates.Duplicates.map((d) => d.ToCompactURLSegment())));
+        return [];
+    }
+    protected override async ProcessAutoMerges(): Promise<void> {
+        // nothing to merge: persistence is stubbed
+    }
+}
+
+describe('DuplicateRecordDetector — a batch run with a record filter', () => {
+    const RUN = { EntityDocumentID: 'doc-1', ExtraFilter: "State = 'MD'", Options: { TopK: 3 } } as unknown as PotentialDuplicateRequest;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockRunViewFn.mockReset();
+        mockEntityByID.mockReturnValue(INDIVIDUALS);
+    });
+
+    it('loads only filtered records, over-fetches 3× TopK, filters the candidates, and keeps TopK', async () => {
+        const harness = new BatchHarness(FILTERED);
+        harness.QueryResults = [queryResult('1', ['10', '11', '12', '13', '14', '15', '16'])];
+        mockRunViewFn
+            // the records to check
+            .mockResolvedValueOnce({ Success: true, Results: [{ individual_id: '1' }] })
+            // the candidates that exist and pass the filter (11 and 13 are flagged deleted)
+            .mockResolvedValueOnce({ Success: true, Results: ['10', '12', '14', '15', '16'].map((id) => ({ individual_id: id })) });
+
+        const response = await harness.GetDuplicateRecords(RUN);
+
+        expect(response.Status).toBe('Success');
+        expect(runViewCalls()[0].ExtraFilter).toBe(`(State = 'MD') AND (${NOT_DELETED})`);
+        expect(harness.QueriedTopK).toEqual([9]);
+        expect(runViewCalls()[1].ExtraFilter).toBe(
+            `(individual_id IN ('10','11','12','13','14','15','16')) AND (${NOT_DELETED})`
+        );
+        expect(harness.Persisted).toEqual([['10', '12', '14']]);
+    });
+
+    it('without a filter: the run\'s own ExtraFilter, TopK, and an existence-only check', async () => {
+        const harness = new BatchHarness(UNFILTERED);
+        harness.QueryResults = [queryResult('1', ['10', '11'])];
+        mockRunViewFn
+            .mockResolvedValueOnce({ Success: true, Results: [{ individual_id: '1' }] })
+            .mockResolvedValueOnce({ Success: true, Results: [{ individual_id: '10' }, { individual_id: '11' }] });
+
+        await harness.GetDuplicateRecords(RUN);
+
+        expect(runViewCalls()[0].ExtraFilter).toBe("State = 'MD'");
+        expect(harness.QueriedTopK).toEqual([3]);
+        expect(runViewCalls()[1].ExtraFilter).toBe("individual_id IN ('10','11')");
+        expect(harness.Persisted).toEqual([['10', '11']]);
     });
 });

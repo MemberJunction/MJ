@@ -1,111 +1,129 @@
 /**
- * @fileoverview Cohere Rerank API integration (P2D.2).
+ * @fileoverview Cohere Rerank integration for SearchEngine scopes (P2D.2 + Rerank 5 Context Focus).
  *
- * Wraps Cohere's `rerank-v3.5` (English) and `rerank-multilingual-v3.0` endpoints
- * for use as a SearchEngine re-ranker. Distinct from `@memberjunction/ai-cohere`'s
- * `CohereReranker` which is purpose-built for memory-note rerank with a specific
- * augmented prompt — scope search needs the raw query passed through unchanged
- * for accurate semantic similarity.
+ * The Cohere call itself is the AI layer's `CohereReranker` (registered by `@memberjunction/ai-cohere`,
+ * which both server bootstraps load), resolved through the ClassFactory so SearchEngine takes no
+ * Cohere dependency. This file adds only what scope search needs on top: the relevance threshold,
+ * Context Focus snippets on the result items, and per-search cost reporting.
  *
  * **Cost model.** Cohere bills per "search," where one search reranks up to 100
- * documents. Above 100 docs, larger requests count as multiple searches.
- * Pricing as of 2026-04: $2.00 per 1k searches → 0.2¢ / search.
+ * documents. Above 100 docs, larger requests count as multiple searches. The estimate
+ * uses 0.2¢ per search ($2.00 per 1k, Cohere's rerank-v3.5 price as of 2026-04) for every
+ * model; it is not adjusted per model.
  *
- * **API key resolution.** Uses `GetAIAPIKey('CohereLLM')` — same key the AI-layer
- * Cohere reranker uses, sourced from the AIAPIKey registry (driver class
- * `CohereLLM` → env var `AI_VENDOR_API_KEY__COHERELLM`).
- *
- * **Optional peer dependency.** `cohere-ai` is declared in `optionalDependencies`
- * so SearchEngine consumers who don't use Cohere don't pay the bundle cost.
- * Loaded via a dynamic import per CLAUDE.md rule #8 case 2 (optional peer).
+ * **API key resolution.** Checks `GetAIAPIKey('CohereReranker')` first (matching
+ * `metadata/ai-models/.cohere-reranker-models.json` → `AI_VENDOR_API_KEY__COHERERERANKER`)
+ * and falls back to `GetAIAPIKey('CohereLLM')` (`AI_VENDOR_API_KEY__COHERELLM`).
  *
  * @module @memberjunction/search-engine
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { LogError, UserInfo } from '@memberjunction/core';
-import {
-    BaseReranker as AIBaseReranker,
-    RerankParams,
-    RerankResult,
-    GetAIAPIKey,
-} from '@memberjunction/ai';
+import { BaseReranker as AIBaseReranker, RerankParams, RerankResult, GetAIAPIKey } from '@memberjunction/ai';
 import { BaseReRanker } from '../generic/BaseReRanker';
 import { SearchResultItem } from '../generic/search.types';
 
-/**
- * Memoized loader for the Cohere SDK. The dynamic import is the **single** approved
- * use of `import()` in this file (CLAUDE.md #8 case 2 — optional peer dep). Caching
- * the resolved client constructor avoids paying the dynamic import cost on every
- * Rerank call.
- */
-let cohereClientCtorPromise: Promise<new (opts: { token: string }) => CohereClientLike> | null = null;
-interface CohereClientLike {
-    rerank(input: {
-        model: string;
-        query: string;
-        documents: string[];
-        topN: number;
-        returnDocuments: boolean;
-    }): Promise<{ results: Array<{ index: number; relevanceScore: number }> }>;
-}
-
-async function getCohereClientCtor(): Promise<new (opts: { token: string }) => CohereClientLike> {
-    if (!cohereClientCtorPromise) {
-        cohereClientCtorPromise = (async () => {
-            try {
-                const mod = await import('cohere-ai');
-                return mod.CohereClient as unknown as new (opts: { token: string }) => CohereClientLike;
-            } catch (err) {
-                throw new Error(
-                    `CohereReRanker: could not load 'cohere-ai', an optional dependency of @memberjunction/search-engine. It is skipped when its install fails or optional dependencies are omitted (--no-optional, --omit=optional); reinstall with optional dependencies to use the Cohere reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
-                );
-            }
-        })();
-    }
-    return cohereClientCtorPromise;
-}
+type RelevantSpans = NonNullable<SearchResultItem['RelevantSpans']>;
 
 /**
- * Inline AI-layer reranker that calls Cohere's `rerank` endpoint with the raw query
- * (no enhanced prompt). Distinct from `@memberjunction/ai-cohere`'s `CohereReranker`
- * which augments the query for memory-note semantics.
+ * Wraps the AI layer's `CohereReranker` for scope search: maps the scope config onto its options,
+ * applies the threshold, narrows snippets to Context Focus spans, and records whether the call succeeded
+ * so cost is only reported for real calls.
  */
 class CohereScopeAIReranker extends AIBaseReranker {
-    private _clientPromise: Promise<CohereClientLike>;
+    public LastCallSucceeded = false;
 
-    constructor(apiKey: string, modelName: string) {
+    constructor(private readonly cohere: AIBaseReranker, apiKey: string, modelName: string) {
         super(apiKey, modelName);
-        this._clientPromise = getCohereClientCtor().then(Ctor => new Ctor({ token: this.apiKey }));
     }
 
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
-        const client = await this._clientPromise;
-        const response = await client.rerank({
-            model: this._modelName,
-            query: params.query,
-            documents: params.documents.map(d => d.text),
-            topN: params.topK ?? params.documents.length,
-            returnDocuments: false,
+        this.LastCallSucceeded = false;
+        const config = params.options ?? {};
+        const response = await this.cohere.Rerank({
+            ...params,
+            options: { RelevantSpans: relevantSpansOption(config['relevantSpans']) },
         });
-        return response.results.map((r, idx) => ({
-            id: params.documents[r.index].id,
-            relevanceScore: r.relevanceScore,
-            document: params.documents[r.index],
-            rank: idx,
-        }));
+        if (!response.success) {
+            throw new Error(response.errorMessage ?? 'Cohere rerank failed');
+        }
+        this.LastCallSucceeded = true;
+
+        const focusSnippet = config['focusSnippet'] !== false;
+        const results = response.results.map(r => withRelevantSpans(r, focusSnippet));
+        const threshold = config['minRelevanceThreshold'];
+        if (typeof threshold !== 'number') {
+            return results;
+        }
+        // Like the agents' reranker threshold, this never empties the list: when no result reaches
+        // it, the reranked list is returned unfiltered.
+        const kept = results.filter(r => r.relevanceScore >= threshold);
+        return kept.length > 0 ? kept : results;
     }
 }
 
+/** Scope config `relevantSpans` (`true` or `{ threshold, maxSpans }`) as the provider's `RelevantSpans` option. */
+function relevantSpansOption(raw: unknown): boolean | { Threshold?: number; MaxSpans?: number } | undefined {
+    if (raw === true) {
+        return true;
+    }
+    if (raw && typeof raw === 'object') {
+        const { threshold, maxSpans } = raw as { threshold?: number; maxSpans?: number };
+        return { Threshold: threshold, MaxSpans: maxSpans };
+    }
+    return undefined;
+}
+
+/** Copy a result's Context Focus spans onto its search item, narrowing the snippet to them when asked. */
+function withRelevantSpans(result: RerankResult, focusSnippet: boolean): RerankResult {
+    const spans = result.document.metadata?.['RelevantSpans'] as RelevantSpans | undefined;
+    const original = result.document.metadata?.['__mjSearchItem'] as SearchResultItem | undefined;
+    if (!spans?.length || !original) {
+        return result;
+    }
+    const item: SearchResultItem = {
+        ...original,
+        RelevantSpans: spans,
+        Snippet: (focusSnippet && focusedSnippet(result.document.text, original.Snippet, spans)) || original.Snippet,
+    };
+    return { ...result, document: { ...result.document, metadata: { ...result.document.metadata, __mjSearchItem: item } } };
+}
+
 /**
- * Cohere `rerank-v3.5` re-ranker for SearchEngine. Configured per scope via
+ * The spans' text from the snippet onward, in document order. Spans index the text that was sent for
+ * reranking (`buildRerankText`, overridable) in Unicode code points, so the snippet's position is found
+ * in that text rather than assumed. '' when the snippet isn't in it, which keeps the original snippet.
+ */
+function focusedSnippet(rerankText: string, snippet: string | undefined, spans: RelevantSpans): string {
+    const at = snippet ? rerankText.indexOf(snippet) : -1;
+    if (at < 0) {
+        return '';
+    }
+    const snippetStart = Array.from(rerankText.slice(0, at)).length;
+    return [...spans]
+        .sort((a, b) => a.Start - b.Start)
+        .map(s => Array.from(s.Text).slice(Math.max(0, snippetStart - s.Start)).join('').trim())
+        .filter(Boolean)
+        .join(' … ');
+}
+
+/**
+ * Cohere re-ranker for SearchEngine (defaults to `rerank-v5.0-fast`). Configured per scope via
  * `SearchScope.ScopeConfig.reRanker.driverClass = 'CohereReRanker'`.
  *
- * The model name can be overridden via `ScopeConfig.reRanker.config.model`
- * (e.g. `'rerank-multilingual-v3.0'`).
+ * Configuration keys in `ScopeConfig.reRanker.config`:
+ * - `model`: Cohere model ID (`'rerank-v5.0-fast'`, `'rerank-v5.0-pro'`, `'rerank-v4.0-pro'`, `'rerank-v3.5'`, etc.)
+ * - `relevantSpans`: `true` or `{ threshold?: number, maxSpans?: number }` to extract passage-level
+ *   spans with Cohere Rerank 5 Context Focus.
+ * - `focusSnippet`: When Context Focus returns spans, whether to narrow `Snippet` to them (default: `true`).
+ * - `minRelevanceThreshold`: Calibrated relevance cutoff (0.0-1.0). Results below it are dropped,
+ *   unless none reaches it, in which case all are kept.
  */
 @RegisterClass(BaseReRanker, 'CohereReRanker')
 export class CohereReRanker extends BaseReRanker {
+    private currentAIReranker: CohereScopeAIReranker | null = null;
+
     public get DriverClass(): string {
         return 'CohereReRanker';
     }
@@ -126,8 +144,7 @@ export class CohereReRanker extends BaseReRanker {
 
     /**
      * Cohere bills per "search". 1 search reranks up to 100 documents; above 100,
-     * count as `ceil(N/100)` searches. As of 2026-04, $2.00 per 1k searches = 0.2¢
-     * per search. Override via `config.cents_per_search` if Cohere's pricing changes.
+     * count as `ceil(N/100)` searches, each estimated at 0.2¢ (see the file header).
      */
     public override EstimateCostCents(resultCount: number): number {
         const searches = Math.max(1, Math.ceil(resultCount / 100));
@@ -138,20 +155,26 @@ export class CohereReRanker extends BaseReRanker {
         config: Record<string, unknown> | undefined,
         _contextUser: UserInfo,
     ): AIBaseReranker | null {
-        const apiKey = GetAIAPIKey('CohereLLM');
+        if (this.currentAIReranker) return this.currentAIReranker;
+
+        const apiKey = GetAIAPIKey('CohereReranker') || GetAIAPIKey('CohereLLM');
         if (!apiKey) {
-            LogError('CohereReRanker: no API key found for driver "CohereLLM" — set AI_VENDOR_API_KEY__COHERELLM or register an AIAPIKeys subclass.');
+            LogError('CohereReRanker: no API key found for driver "CohereReranker" or "CohereLLM" — set AI_VENDOR_API_KEY__COHERERERANKER (or AI_VENDOR_API_KEY__COHERELLM) or register an AIAPIKeys subclass.');
             return null;
         }
-        const modelName = (config?.['model'] as string | undefined) ?? 'rerank-v3.5';
-        return new CohereScopeAIReranker(apiKey, modelName);
+        const modelName = (config?.['model'] as string | undefined) ?? 'rerank-v5.0-fast';
+        const cohere = MJGlobal.Instance.ClassFactory.TryCreateInstance<AIBaseReranker>(AIBaseReranker, 'CohereReranker', apiKey, modelName);
+        if (!cohere.Resolved || !cohere.Instance) {
+            LogError(`CohereReRanker: the "CohereReranker" AI reranker is not registered (is @memberjunction/ai-cohere loaded?): ${cohere.Reason}`);
+            return null;
+        }
+        this.currentAIReranker = new CohereScopeAIReranker(cohere.Instance, apiKey, modelName);
+        return this.currentAIReranker;
     }
 
     /**
-     * Override `ReRank` to record actual cost via the inherited `reportCost` helper
-     * after a successful Cohere call. Cohere bills per request (not per token), so
-     * the post-call cost equals the pre-call estimate — no separate measurement
-     * required.
+     * Override `ReRank` to record actual cost via `reportCost` only after a successful
+     * Cohere call (matching `VoyageReRanker`'s `super.ReRank` pattern).
      */
     public override async ReRank(
         query: string,
@@ -161,13 +184,20 @@ export class CohereReRanker extends BaseReRanker {
         config?: Record<string, unknown>,
     ): Promise<SearchResultItem[]> {
         if (topN <= 0 || candidates.length === 0) return [];
-        const result = await super.ReRank(query, candidates, topN, contextUser, config);
-        // Charge cost only when the call actually went out — when getAIReranker
-        // returns null, super.ReRank short-circuits to a slice and we shouldn't bill.
-        if (this.getAIReranker(config, contextUser)) {
-            this.reportCost(this.EstimateCostCents(candidates.length));
+        this.currentAIReranker = null;
+        const apiReranker = this.getAIReranker(config, contextUser) as CohereScopeAIReranker | null;
+        try {
+            if (!apiReranker) {
+                return candidates.slice(0, topN);
+            }
+            const result = await super.ReRank(query, candidates, topN, contextUser, config);
+            if (apiReranker.LastCallSucceeded) {
+                this.reportCost(this.EstimateCostCents(candidates.length));
+            }
+            return result;
+        } finally {
+            this.currentAIReranker = null;
         }
-        return result;
     }
 }
 

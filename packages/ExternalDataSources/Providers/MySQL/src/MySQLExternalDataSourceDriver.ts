@@ -16,6 +16,7 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  SqlDialectKey,
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
@@ -301,20 +302,8 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
     }));
   }
 
-  /** Quote a SQL identifier with backticks, escaping embedded backticks. */
-  protected quoteIdent(name: string): string {
-    return `\`${name.replace(/`/g, '``')}\``;
-  }
-
-  /**
-   * MySQL native queries are screened with the ANSI/PostgreSQL grammar (no MySQL grammar in
-   * @memberjunction/sql-dialect). Neutralize the two MySQL-isms that grammar rejects — positional `?`
-   * placeholders and backtick-quoted identifiers — for STRUCTURE analysis only; the original SQL +
-   * bound params still execute. In MySQL `?` is always a placeholder (JSON uses functions/`->`, not
-   * the PG `?` operator), and identifier/string content is irrelevant to read-only detection, so this
-   * never turns a write into a read.
-   */
-  protected normalizeForReadOnlyParse(sql: string): string {
-    return sql.replace(/`/g, '"').replace(/\?/g, '1');
+  /** This source's SQL dialect: its writer quotes identifiers and its rules screen native SQL. */
+  protected sqlDialectKey(): SqlDialectKey {
+    return 'mysql';
   }
 }
