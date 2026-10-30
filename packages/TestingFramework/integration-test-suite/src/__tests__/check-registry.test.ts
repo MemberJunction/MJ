@@ -419,7 +419,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,
-        'runview-features': 6,
+        'runview-features': 7,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
