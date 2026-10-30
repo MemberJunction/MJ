@@ -417,7 +417,8 @@ def load_v2_shippable(envelope_bytes: bytes) -> Tuple[ShippablePredictor, Predic
     predictor = _bytes_to_model(payload)
     if isinstance(predictor, SHIPPABLE_TYPES):
         return predictor, envelope
-    raise NotATrainerPredictorError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")
+    raise NotATrainerPredictorError(f"The v2 payload is a {type(predictor).__name__}, neither a trainer predictor nor "
+                                    f"a forecast's series model or baseline")
 
 
 def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, PredictorEnvelope]:
