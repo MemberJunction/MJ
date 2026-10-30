@@ -2991,7 +2991,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** The loaded rows split for the window view, and the rows shown from that split. */
   private displayCache: {
     Messages: MJConversationDetailEntity[];
+    Length: number;
     View: ConversationOpenView;
+    CollapseThreads: boolean;
     Split: ForkRows<MJConversationDetailEntity>;
     Rows: MJConversationDetailEntity[];
   } | null = null;
@@ -5851,6 +5853,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * When true, messages whose `ParentID` matches another message in the loaded window are omitted
+   * from top-level `DisplayMessages` so they can be rendered inside a collapsed thread under their
+   * root message.
+   */
+  @Input() CollapseThreadReplies: boolean = false;
+
+  /**
    * The rows the message list shows for the window view; the same array until the rows or the view
    * change. Main shows every loaded row; a fork shows every inherited row, then its own rows; a draft
    * shows the rows up to its anchor.
@@ -5863,13 +5872,41 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private displayState(): { Split: ForkRows<MJConversationDetailEntity>; Rows: MJConversationDetailEntity[] } {
     const messages = this.messages ?? [];
     const view = this.WindowView;
+    const collapseThreads = this.CollapseThreadReplies;
     const cache = this.displayCache;
-    if (cache && cache.Messages === messages && cache.View === view) {
+    if (
+      cache &&
+      cache.Messages === messages &&
+      cache.Length === messages.length &&
+      cache.View === view &&
+      cache.CollapseThreads === collapseThreads
+    ) {
       return cache;
     }
     const split = SplitForkRows(messages, view);
-    const rows = view.Kind === 'Main' ? messages : [...split.Inherited, ...split.Own];
-    const next = { Messages: messages, View: view, Split: split, Rows: rows };
+    const rawRows = view.Kind === 'Main' ? messages : [...split.Inherited, ...split.Own];
+    let rows = rawRows;
+    if (collapseThreads && rawRows.length > 0) {
+      const idSet = new Set<string>();
+      for (const m of rawRows) {
+        const id = m?.ID?.trim().toLowerCase();
+        if (id) {
+          idSet.add(id);
+        }
+      }
+      rows = rawRows.filter((m) => {
+        const pid = m?.ParentID?.trim().toLowerCase();
+        return !pid || pid === 'null' || !idSet.has(pid);
+      });
+    }
+    const next = {
+      Messages: messages,
+      Length: messages.length,
+      View: view,
+      CollapseThreads: collapseThreads,
+      Split: split,
+      Rows: rows,
+    };
     this.displayCache = next;
     return next;
   }
