@@ -1346,6 +1346,12 @@ export class RealtimeSessionRuntime {
   public IdentityVerifiedSpokenResponse: string | ((payload: IdentityVerifiedEventPayload) => string | null) | null = null;
 
   private readonly clientDeadline = new ClientSessionDeadline();
+  /**
+   * The deadline the clock reached while no session id existed yet (the host set a deadline that passed, or one nearer
+   * than the mint takes), or `null`. The mint path consumes it as soon as the session id is adopted, so the call still
+   * ends at its deadline; Set, Extend and session teardown drop it, since each replaces or forgets that deadline.
+   */
+  private pendingDeadlineReached: Date | null = null;
   private readonly _sessionDeadlineWarning$ = new Subject<{ sessionId: string; deadline: Date; remainingMs: number }>();
   private readonly _sessionDeadlineReached$ = new Subject<{ sessionId: string; deadline: Date }>();
 
@@ -1359,7 +1365,8 @@ export class RealtimeSessionRuntime {
   /**
    * Fires once when the session deadline is reached, with the live session's id — BEFORE the runtime's own auto-end, so
    * a host that ends the call here (`autoEnd: false`, or a goodbye of its own) is the end that counts; a second end is
-   * coalesced onto the first. Emits only while a session is live.
+   * coalesced onto the first. Emits only while a session is live; a deadline reached while the session is still being
+   * minted fires (and auto-ends) as soon as the mint adopts the session id.
    */
   public readonly SessionDeadlineReached$: Observable<{ sessionId: string; deadline: Date }> = this._sessionDeadlineReached$.asObservable();
 
@@ -1388,6 +1395,7 @@ export class RealtimeSessionRuntime {
    * The runtime never arms this by itself.
    */
   public SetSessionDeadline(deadline: Date | null, options?: SessionDeadlineOptions): void {
+    this.pendingDeadlineReached = null;
     this.clientDeadline.Set(deadline, options);
   }
 
@@ -1407,18 +1415,48 @@ export class RealtimeSessionRuntime {
     this.clientDeadline.Reached$.subscribe((reached) => this.onSessionDeadlineReached(reached.deadline));
   }
 
-  /** Tells the host first, then auto-ends unless the host opted out or already ended the call from inside the event. */
+  /**
+   * Tells the host first, then auto-ends unless the host opted out, already ended the call, or moved the deadline from
+   * inside the event. Reached before the mint adopted a session id (and with no teardown running), the reach is kept
+   * in {@link pendingDeadlineReached} for the mint path to replay.
+   */
   private onSessionDeadlineReached(deadline: Date): void {
     const sessionId = this.liveDeadlineSessionId();
     if (!sessionId) {
+      if (!this.teardownInFlight && this.holdsDeadline(deadline)) {
+        this.pendingDeadlineReached = deadline;
+      }
       return;
     }
     this._sessionDeadlineReached$.next({ sessionId, deadline });
-    if (this.clientDeadline.Options.autoEnd && this.liveDeadlineSessionId() === sessionId) {
+    if (this.clientDeadline.Options.autoEnd && this.liveDeadlineSessionId() === sessionId && this.holdsDeadline(deadline)) {
       this.teardown('deadline').catch((error: unknown) => {
         console.error(`[RealtimeSession] Ending session ${sessionId} at its deadline failed:`, error);
       });
     }
+  }
+
+  /** Whether the clock still holds `deadline`: a host that set or extended it (even from inside `Reached$`) has replaced it. */
+  private holdsDeadline(deadline: Date): boolean {
+    return this.clientDeadline.Value?.getTime() === deadline.getTime();
+  }
+
+  /**
+   * Replays a deadline reached before the mint, once the mint has adopted the session id. On the next tick, so the
+   * host's `SessionDeadlineReached$` handler runs outside the start and the start's own code after the id finishes
+   * first; the auto-end's teardown then abandons the start at its next await.
+   */
+  private replayPendingDeadlineReached(): void {
+    const pending = this.pendingDeadlineReached;
+    if (!pending) {
+      return;
+    }
+    this.pendingDeadlineReached = null;
+    setTimeout(() => {
+      if (this.holdsDeadline(pending)) {
+        this.onSessionDeadlineReached(pending);
+      }
+    }, 0);
   }
 
   /**
@@ -1489,7 +1527,9 @@ export class RealtimeSessionRuntime {
       return;
     }
     const payload = event.Payload;
-    this.clientDeadline.Extend(payload.MaxSessionDeadlineIso);
+    if (this.clientDeadline.Extend(payload.MaxSessionDeadlineIso)) {
+      this.pendingDeadlineReached = null;
+    }
     this.SendContextNote(
       `[identity] verified ${JSON.stringify({ email: payload.VerifiedEmail, name: payload.VerifiedName, method: payload.Method })} ` +
         '(background context — the user has proven they control this email address; treat them as verified. Do not read this note aloud.)'
@@ -1796,6 +1836,7 @@ export class RealtimeSessionRuntime {
       // `SessionStarted$` — activating after the id is set would announce every channel twice.
       this.applySessionClientPolicy(session);
       this.agentSessionId = session.AgentSessionId;
+      this.replayPendingDeadlineReached();
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
       // it on close, and auto-name it (via the shared naming helper).
@@ -2339,7 +2380,9 @@ export class RealtimeSessionRuntime {
     if (!this.IsActive && !this.agentSessionId) {
       return;
     }
-    await this.teardown(reason);
+    // A JS caller wiring this straight to a click handler passes the event object; anything but 'deadline' is explicit.
+    const end: SessionEndReason = reason === 'deadline' ? 'deadline' : 'explicit';
+    await this.teardown(end);
   }
 
   /**
@@ -5515,6 +5558,7 @@ export class RealtimeSessionRuntime {
     this.teardownDelegationProgress();
     this.stopSessionEvents();
     this.clientDeadline.Clear();
+    this.pendingDeadlineReached = null;
 
     // Channels first: flush any unsaved channel state WHILE the live session id is still
     // set (the captured per-save id covers the race anyway), then dispose the plugins.

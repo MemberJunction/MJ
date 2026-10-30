@@ -240,6 +240,59 @@ describe('RealtimeSessionRuntime — session deadline alarm', () => {
         await runtime.EndRealtimeSession();
     });
 
+    it('a deadline reached while the session is minted ends the call once it is minted', async () => {
+        const runtime = new RealtimeSessionRuntime(new Host());
+        const provider = new DeadlineProvider();
+        runtime.Provider = provider as unknown as IMetadataProvider;
+        const order: string[] = [];
+        runtime.SessionDeadlineReached$.subscribe((e) => order.push(`reached:${e.sessionId}`));
+        runtime.SessionEnded$.subscribe((e) => order.push(`ended:${e.reason}`));
+        runtime.SetSessionDeadline(inMs(-1000));
+        await sleep(20); // the clock's Reached$ fires now, before any session id exists
+        expect(order).toEqual([]);
+        await runtime.StartRealtimeSessionFromResult(mintedSession());
+        await waitUntil(() => order.some((o) => o.startsWith('ended:')), 'the session to end');
+        await sleep(20);
+        expect(order).toEqual([`reached:${SESSION}`, 'ended:deadline']);
+        expect(provider.CloseReasons).toEqual(['TimeLimit']);
+    });
+
+    it('a deadline set again before the mint drops the pending reach', async () => {
+        const runtime = new RealtimeSessionRuntime(new Host());
+        runtime.Provider = new DeadlineProvider() as unknown as IMetadataProvider;
+        const order: string[] = [];
+        runtime.SessionDeadlineReached$.subscribe((e) => order.push(`reached:${e.sessionId}`));
+        runtime.SessionEnded$.subscribe((e) => order.push(`ended:${e.reason}`));
+        runtime.SetSessionDeadline(inMs(-1000));
+        await sleep(20);
+        runtime.SetSessionDeadline(inMs(60_000));
+        await runtime.StartRealtimeSessionFromResult(mintedSession());
+        await sleep(40);
+        expect(order).toEqual([]);
+        expect(runtime.IsActive).toBe(true);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a host that extends the deadline inside Reached$ is not ended', async () => {
+        const { runtime, order, ended } = await startLive();
+        runtime.SessionDeadlineReached$.subscribe(() => runtime.SetSessionDeadline(inMs(60_000)));
+        runtime.SetSessionDeadline(inMs(20));
+        await waitUntil(() => order.includes(`reached:${SESSION}`), 'the deadline to be reached');
+        await sleep(30);
+        expect(ended).toEqual([]);
+        expect(runtime.IsActive).toBe(true);
+        await runtime.EndRealtimeSession();
+        expect(ended).toEqual(['explicit']);
+    });
+
+    it('EndRealtimeSession given a non-reason (a JS caller passing an event object) ends as explicit', async () => {
+        const { runtime, provider, ended } = await startLive();
+        const click = { type: 'click' } as unknown as 'explicit';
+        await runtime.EndRealtimeSession(click);
+        expect(ended).toEqual(['explicit']);
+        expect(provider.CloseReasons).toEqual(['Explicit']);
+    });
+
     it('Reached$ with no live session emits nothing and ends nothing', async () => {
         const runtime = new RealtimeSessionRuntime(new Host());
         const reached: string[] = [];
