@@ -1195,6 +1195,24 @@ export class PullService {
     return '.' + keys.map(k => String(k).replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase()).join('-') + '.json';
   }
 
+  /** Sets each non-empty composition axis on `result`, in the order a pulled record writes them. */
+  private assignCompositionAxes(
+    result: RecordData,
+    collections: RecordData['collections'],
+    embeds: RecordData['embeds'],
+    extension: RecordData['extension']
+  ): void {
+    if (collections && Object.keys(collections).length > 0) {
+      result.collections = collections;
+    }
+    if (embeds && Object.keys(embeds).length > 0) {
+      result.embeds = embeds;
+    }
+    if (extension && Object.keys(extension).length > 0) {
+      result.extension = extension;
+    }
+  }
+
   private async mergeRecords(
     existing: RecordData,
     newData: RecordData,
@@ -1220,6 +1238,9 @@ export class PullService {
         }
       }
 
+      // Composition axes follow fields, in the order a pulled record writes them
+      this.assignCompositionAxes(result, newData.collections, newData.embeds, newData.extension);
+
       // Add relatedEntities before primaryKey and sync
       if (newData.relatedEntities) {
         result.relatedEntities = newData.relatedEntities;
@@ -1244,6 +1265,17 @@ export class PullService {
         }
       }
     }
+
+    // Composition axes: a pulled collection or embed replaces the existing one of the same
+    // name, and one the pull did not produce is kept. Without this, a merge drops every
+    // `collections`, `embeds` and `extension` block from a file that already exists — for
+    // example the parameters a query declares.
+    this.assignCompositionAxes(
+      result,
+      existing.collections || newData.collections ? { ...existing.collections, ...newData.collections } : undefined,
+      existing.embeds || newData.embeds ? { ...existing.embeds, ...newData.embeds } : undefined,
+      newData.extension ?? existing.extension
+    );
 
     // Add relatedEntities before primaryKey and sync
     if (existing.relatedEntities || newData.relatedEntities) {

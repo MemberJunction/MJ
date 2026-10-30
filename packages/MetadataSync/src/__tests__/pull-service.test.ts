@@ -334,3 +334,58 @@ describe('PullService.pull — mergeStrategy skip', () => {
     expect(await fs.readFile(file, 'utf8')).toBe(before);
   });
 });
+
+describe('PullService.mergeRecords — composition axes', () => {
+  type MergeRecords = (
+    existing: RecordData,
+    newData: RecordData,
+    strategy: 'overwrite' | 'merge' | 'skip',
+    preserveFields: string[]
+  ) => Promise<RecordData>;
+
+  const user = new UserInfo(null, { ID: 'user-1', Name: 'Test', Email: 'test@example.com' });
+  const merge = (existing: RecordData, newData: RecordData, strategy: 'overwrite' | 'merge') => {
+    const service = new PullService(new SyncEngine(user), user);
+    return (service as unknown as { mergeRecords: MergeRecords }).mergeRecords(existing, newData, strategy, []);
+  };
+
+  const declared: RecordData = {
+    fields: { Name: 'Get Agent Run Tree' },
+    collections: { Parameters: [{ fields: { Name: 'agentRunID', DetectionMethod: 'Manual' } }] },
+    embeds: { ShipToAddressID: { fields: { City: 'Ames' } } },
+    extension: { entity: 'Event Order Lines', fields: { Venue: 'Hall' } },
+    primaryKey: { ID: 'q-1' },
+  };
+  const pulledWithoutAxes: RecordData = { fields: { Name: 'Get Agent Run Tree' }, primaryKey: { ID: 'q-1' } };
+
+  it('keeps collections, embeds and extension the pull did not produce under merge', async () => {
+    const result = await merge(declared, pulledWithoutAxes, 'merge');
+    expect(result.collections).toEqual(declared.collections);
+    expect(result.embeds).toEqual(declared.embeds);
+    expect(result.extension).toEqual(declared.extension);
+  });
+
+  it('replaces a collection the pull produced under merge', async () => {
+    const pulled: RecordData = {
+      ...pulledWithoutAxes,
+      collections: { Parameters: [{ fields: { Name: 'maxDepth', DetectionMethod: 'Manual' } }] },
+    };
+    const result = await merge(declared, pulled, 'merge');
+    expect(result.collections?.Parameters.map((p) => p.fields.Name)).toEqual(['maxDepth']);
+  });
+
+  it('writes the pulled composition axes under overwrite', async () => {
+    const pulled: RecordData = { ...declared, collections: { Parameters: [{ fields: { Name: 'maxDepth' } }] } };
+    const result = await merge(declared, pulled, 'overwrite');
+    expect(result.collections?.Parameters.map((p) => p.fields.Name)).toEqual(['maxDepth']);
+    expect(result.embeds).toEqual(declared.embeds);
+    expect(result.extension).toEqual(declared.extension);
+  });
+
+  it('emits no empty composition blocks', async () => {
+    const result = await merge(pulledWithoutAxes, pulledWithoutAxes, 'merge');
+    expect(result).not.toHaveProperty('collections');
+    expect(result).not.toHaveProperty('embeds');
+    expect(result).not.toHaveProperty('extension');
+  });
+});
