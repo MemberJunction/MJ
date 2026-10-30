@@ -87,6 +87,12 @@ const done = await egress.StopRecording(rec.EgressID);
 
 Egress output storage (S3 / GCS / Azure / LiveKit Cloud) is configured on the LiveKit project.
 
+The composite recording includes every participant's video, an agent's avatar among them: the avatar is a
+camera track (`agent-avatar`), so it is recorded as a participant tile, neither excluded nor badged. LiveKit's
+default composite template hides participant names, so nothing in the file marks that video as synthetic.
+Operators who deploy avatars in recorded rooms should tell participants that recordings include the agent's
+synthetic video. See `plans/realtime/livekit-recording-governance.md` §5.
+
 ## Meeting-recording registration (egress → MJStorage → Conversation)
 
 When the browser stops a room recording, MJServer's `RealtimeBridgeResolver.StopLiveKitRecording` calls

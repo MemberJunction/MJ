@@ -81,7 +81,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--mj-brand-on-primary);
     font-size: 20px;
     flex-shrink: 0;
 }
@@ -256,7 +256,7 @@
     height: 18px;
     padding: 0 5px;
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
     font-size: 10px;
     font-weight: 600;
     border-radius: 9999px;
@@ -390,7 +390,7 @@
 
 .toggle-btn.active {
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 /* Depth Selector */
@@ -436,7 +436,7 @@
 
 .depth-btn.active {
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 /* Header Controls (view mode + expand/collapse) */
@@ -594,7 +594,7 @@
 .list-row:hover .seq-num,
 .list-row.selected .seq-num {
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .col-name {
@@ -702,12 +702,12 @@
 
 .flag-badge.fk {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .flag-badge.encrypted {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .col-desc {
@@ -1287,7 +1287,7 @@
 
 .field-chip.outgoing:hover {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .field-chip.incoming {
@@ -1298,7 +1298,7 @@
 
 .field-chip.incoming:hover {
     background: var(--mj-status-success);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .field-chip .bundle-icon {
@@ -1375,7 +1375,7 @@
     height: 20px;
     border-radius: var(--radius-sm);
     background: var(--warning-color);
-    color: white;
+    color: var(--mj-text-inverse);
     font-size: 10px;
     font-weight: 600;
     display: flex;
@@ -1486,7 +1486,7 @@
     gap: 8px;
     padding: 24px 32px;
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border-radius: var(--radius-lg);
     font-weight: 600;
 }
@@ -2066,7 +2066,7 @@
 
 .isa-node.current {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .isa-node.parent {

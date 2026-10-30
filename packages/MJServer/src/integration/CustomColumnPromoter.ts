@@ -48,6 +48,7 @@ import {
     type CustomKeyStat,
     type InferredColumnType,
     BuildCatalogWriter,
+    WithCatalogScope,
 } from '@memberjunction/integration-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -393,12 +394,19 @@ export class IntegrationCustomColumnPromoter {
      * Idempotent, because a pending row is marked Completed only after success and so stays
      * re-processable after a crash: field maps are filtered against those already active, and the
      * spread only fills a destination that is still empty.
+     *
+     * One entity's failure does not stop the others, but it is not swallowed either: after every
+     * entry has run, any failure is THROWN, so the caller fails the pending row instead of marking
+     * it Completed over columns that exist in the database and are never mapped.
+     *
+     * @throws PROMOTION_INCOMPLETE naming each entity that failed.
      */
     public async CompletePromotion(
         promoted: NonNullable<RSUPendingWork['PromotedColumns']>,
         knownEntities?: ReadonlyMap<string, EntityInfo>,
     ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
         const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
+        const failures: string[] = [];
         for (const entry of promoted) {
             try {
                 // Provider first — post-restart it holds the REGENERATED class, which is the whole
@@ -407,6 +415,7 @@ export class IntegrationCustomColumnPromoter {
                 const entityInfo = this.provider.EntityByName(entry.EntityName) ?? knownEntities?.get(entry.EntityName);
                 if (!entityInfo) {
                     LogError(`[CustomColumnPromoter] Post-restart: entity '${entry.EntityName}' not found; skipping.`);
+                    failures.push(`${entry.EntityName}: entity not found`);
                     continue;
                 }
                 // Destination names are CARRIED, never recomputed: uniqueColumnName may have
@@ -439,9 +448,15 @@ export class IntegrationCustomColumnPromoter {
                 LogStatus(`[CustomColumnPromoter] Post-restart: completed ${named.length} promoted column(s) on ${entry.EntityName}: ${named.map(n => n.columnName).join(', ')}`);
                 columnsAdded.push(...named.map(n => ({ EntityName: entry.EntityName, ColumnName: n.columnName })));
             } catch (err) {
-                // One entity must not abort the others; the pending row stays open for retry.
+                // One entity must not abort the others; the failure is thrown once they have all run.
                 LogError(`[CustomColumnPromoter] Post-restart completion failed for '${entry.EntityName}': ${this.msg(err)}`);
+                failures.push(`${entry.EntityName}: ${this.msg(err)}`);
             }
+        }
+        if (failures.length > 0) {
+            throw new Error(
+                `PROMOTION_INCOMPLETE: ${failures.length} of ${promoted.length} entity(ies) failed to complete — ${failures.join('; ')}`
+            );
         }
         return columnsAdded;
     }
@@ -805,6 +820,24 @@ export class IntegrationCustomColumnPromoter {
             LogError(`[CustomColumnPromoter] Could not resolve the connection behind entity map ${entityMapID}; catalog rows skipped for '${externalObjectName}'.`);
             return;
         }
+        // In the connection's own scope, entered here per entry: the post-restart consumer calls
+        // in with no scope, and unscoped a connection with per-connection rows reads as having none,
+        // so BuildCatalogWriter throws PER_CONNECTION_CATALOG_MISSING. Per entry, so a batch that
+        // spans connections resolves each one to its own catalog.
+        await WithCatalogScope(
+            companyIntegration.ID,
+            () => this.writeIntegrationObjectFields(companyIntegration, integrationID, externalObjectName, named),
+            this.user,
+        );
+    }
+
+    /** The catalog writes of {@link createIntegrationObjectFields}, run inside the connection's scope. */
+    private async writeIntegrationObjectFields(
+        companyIntegration: MJCompanyIntegrationEntity,
+        integrationID: string,
+        externalObjectName: string,
+        named: WorkItem[],
+    ): Promise<void> {
         const writer = BuildCatalogWriter(this.provider, companyIntegration, this.user);
         const objectID = (await writer.ObjectsInScope())
             .find(o => o.Name.toLowerCase() === externalObjectName.toLowerCase())?.ID ?? null;
