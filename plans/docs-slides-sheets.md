@@ -281,6 +281,8 @@ Before anything else in Phase 3, and able to run during Phase 1 because it depen
 
 ### 7.1 Excel add-in, first pull request: Open in Excel
 
+**Pull request:** [MemberJunction/MJ#6214](https://github.com/MemberJunction/MJ/pull/6214).
+
 **Where it starts.** An **Open in Excel** button beside Export in the two shared grids: the views grid (`Angular/Generic/entity-viewer`, `entity-data-grid`) and the query results grid (`Angular/Generic/query-viewer`, `query-data-grid`). Every screen that uses them gets it: view pages, Data Explorer, the query browser and dashboards. The button only shows when the host has the add-in turned on.
 
 **Export and Open in Excel differ.** Export is a copy of the rows as they are now. Open in Excel is a connected workbook that holds no rows until someone opens it, then fills from MJ as that person.
@@ -348,7 +350,7 @@ The Excel design (D11) carries over if an Apps Script sidebar can receive the ke
 
 ## 9. Order and delivery
 
-1. **Track A, first pull request:** the Excel add-in's Open in Excel (§ 7.1). It needs nothing else in this plan.
+1. **Track A, first pull request:** the Excel add-in's Open in Excel (§ 7.1, [#6214](https://github.com/MemberJunction/MJ/pull/6214)). It needs nothing else in this plan.
 2. **Phase 1:** the shared core (§ 3) and the docs editor, built together because the editor is what proves the core. Then the Collaboration integration.
 3. **Phase 2:** slides.
 4. **Phase 3:** sheets. The engine spike (§ 6.1) runs during Phase 1.
