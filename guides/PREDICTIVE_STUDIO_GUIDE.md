@@ -296,7 +296,7 @@ For forward prediction, features should be assembled as they were at the decisio
 | `column` | a decision-date column on each training unit defines that record's cutoff |
 | `offset` | `OffsetDays` before the label event defines the cutoff |
 
-The time-relative helpers (`daysSinceLastActivityAsOf`, `activityCountAsOf`) filter dated source rows to each record's
+The time-relative helpers (`DaysSinceLastActivityAsOf`, `ActivityCountAsOf`) filter dated source rows to each record's
 cutoff, but training passes no dated sources and reads every other feature as it stands today, so **an as-of mode
 changes nothing in a trained model** (all three modes produced byte-identical models in the assessment). Training
 therefore **refuses** `column` and `offset` before it starts, and so does `PredictiveStudio.TrainModel` when its `asOf`
