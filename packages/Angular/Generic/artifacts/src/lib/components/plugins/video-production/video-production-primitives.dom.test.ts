@@ -4,7 +4,8 @@ import {
   FormatVideoTime,
   FormatVideoTimeRange,
 } from './video-time-format';
-import { GetVideoStatusBadgeVariant } from './video-status-badge';
+import { GetVideoStatusBadgeVariant, type VideoBadgeVariant } from './video-status-badge';
+import { MJVideoBadgeComponent } from './video-badge.component';
 import { MJVideoFormatGlyphComponent } from './video-format-glyph.component';
 import { MJVideoBeatStripComponent, VideoBeatStripItem } from './video-beat-strip.component';
 
@@ -47,6 +48,30 @@ describe('FormatVideoTime, FormatVideoTimeRange & GetVideoStatusBadgeVariant', (
     }
     for (const s of ['Draft', 'Unknown', 'Inactive', 'Minor', 'Archived', '', null, undefined]) {
       expect(GetVideoStatusBadgeVariant(s)).toBe('neutral');
+    }
+  });
+});
+
+describe('MJVideoBadgeComponent (DOM)', () => {
+  it('renders each VideoBadgeVariant with its vp-video-badge--* class and optional icon', () => {
+    const variants: VideoBadgeVariant[] = ['neutral', 'success', 'warning', 'error', 'info'];
+    for (const variant of variants) {
+      const fixture = renderComponentFixture(MJVideoBadgeComponent, {
+        inputs: {
+          Variant: variant,
+          Icon: variant === 'neutral' ? 'fa-solid fa-lock' : null,
+        },
+      });
+      const pill = query(fixture, '.vp-video-badge');
+      expect(pill).not.toBeNull();
+      expect(pill!.classList.contains(`vp-video-badge--${variant}`)).toBe(true);
+      const icon = query(fixture, '.vp-video-badge__icon');
+      if (variant === 'neutral') {
+        expect(icon).not.toBeNull();
+        expect(icon!.classList.contains('fa-lock')).toBe(true);
+      } else {
+        expect(icon).toBeNull();
+      }
     }
   });
 });
@@ -138,3 +163,4 @@ describe('MJVideoBeatStripComponent (DOM)', () => {
     expect(pickedSpy).toHaveBeenCalledWith('cta');
   });
 });
+

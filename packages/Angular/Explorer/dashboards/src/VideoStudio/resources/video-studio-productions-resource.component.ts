@@ -21,7 +21,11 @@ import {
   GraphQLDataProvider,
   GraphQLFileStorageClient,
 } from '@memberjunction/graphql-dataprovider';
-import { FormatVideoTime, GetVideoStatusBadgeVariant } from '@memberjunction/ng-artifacts';
+import {
+  FormatVideoTime,
+  GetVideoStatusBadgeVariant,
+  type VideoBadgeVariant,
+} from '@memberjunction/ng-artifacts';
 import { ArtifactPermissionService } from '@memberjunction/ng-conversations';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
@@ -849,9 +853,8 @@ export class VideoStudioProductionsResourceComponent
     this.OnSearchChange('');
   }
 
-  public StatusBadgeClass(status: ProductionCardStatus | string): string {
-    const variant = GetVideoStatusBadgeVariant(status);
-    return `vs-production-poster__status mj-badge mj-badge-${variant}`;
+  public StatusBadgeVariant(status: ProductionCardStatus | string): VideoBadgeVariant {
+    return GetVideoStatusBadgeVariant(status);
   }
 
   protected override OnQueryParamsChanged(

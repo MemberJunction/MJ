@@ -147,20 +147,23 @@
                     {{ kit.Name }}
                   </h3>
                   @if (kit.IsDefault) {
-                    <span
-                      class="mj-badge mj-badge-neutral"
+                    <mj-video-badge
+                      Variant="neutral"
+                      Icon="fa-solid fa-star"
                       title="Default brand kit"
                       data-testid="brand-kit-default-star"
                     >
-                      <i class="fa-solid fa-star" aria-hidden="true"></i>
-                      <span>Default</span>
-                    </span>
+                      Default
+                    </mj-video-badge>
                   }
                 </div>
 
-                <span [class]="StatusBadgeClass(kit.Status)">
+                <mj-video-badge
+                  [Variant]="StatusBadgeVariant(kit.Status)"
+                  data-testid="brand-kit-status-badge"
+                >
                   {{ kit.Status }}
-                </span>
+                </mj-video-badge>
               </div>
 
               <div class="vs-brand-kit-footer">

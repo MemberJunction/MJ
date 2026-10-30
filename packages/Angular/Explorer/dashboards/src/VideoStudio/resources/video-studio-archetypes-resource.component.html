@@ -98,9 +98,9 @@
                 <h2 class="vs-category-title">
                   {{ FormatCategoryLabel(group.Category) }}
                 </h2>
-                <span class="mj-badge mj-badge-neutral">
+                <mj-video-badge Variant="neutral" data-testid="archetype-category-count">
                   {{ group.Archetypes.length }}
-                </span>
+                </mj-video-badge>
               </header>
 
               <div class="vs-archetypes-grid">
@@ -129,13 +129,13 @@
                           {{ arch.CompanyName }}
                         </span>
                       } @else if (arch.IsShipped) {
-                        <span
-                          class="mj-badge mj-badge-neutral"
+                        <mj-video-badge
+                          Variant="neutral"
+                          Icon="fa-solid fa-lock"
                           data-testid="archetype-shipped-badge"
                         >
-                          <i class="fa-solid fa-lock" aria-hidden="true"></i>
-                          <span>Shipped</span>
-                        </span>
+                          Shipped
+                        </mj-video-badge>
                       }
                     </div>
 
@@ -279,7 +279,7 @@
                           ({{ FormatTimeRange(beat.MinDurationSeconds, beat.MaxDurationSeconds) }})
                         </span>
                         @if (beat.RequiresDataBinding) {
-                          <span class="mj-badge mj-badge-info">Data bound</span>
+                          <mj-video-badge Variant="info">Data bound</mj-video-badge>
                         }
                       </div>
                       <p class="vs-slideout-beat-purpose">{{ beat.Purpose }}</p>

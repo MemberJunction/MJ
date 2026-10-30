@@ -189,13 +189,16 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     expect(prod3.BrandKitID).toBeNull();
     expect(prod3.VersionNumber).toBe(0);
 
-    // Verify DOM badge classes for Delivered, Blocked, and Unknown
-    const card1Badge = query(fixture, '[data-testid="production-card-prod-1"] .mj-badge');
-    const card2Badge = query(fixture, '[data-testid="production-card-prod-2"] .mj-badge');
-    const card3Badge = query(fixture, '[data-testid="production-card-prod-3"] .mj-badge');
-    expect(card1Badge?.classList.contains('mj-badge-success')).toBe(true);
-    expect(card2Badge?.classList.contains('mj-badge-error')).toBe(true);
-    expect(card3Badge?.classList.contains('mj-badge-neutral')).toBe(true);
+    // Verify DOM status badges render inside mj-video-badge for Delivered, Blocked, and Unknown
+    const card1Badge = query(fixture, '[data-testid="production-card-prod-1"] mj-video-badge .vp-video-badge');
+    const card2Badge = query(fixture, '[data-testid="production-card-prod-2"] mj-video-badge .vp-video-badge');
+    const card3Badge = query(fixture, '[data-testid="production-card-prod-3"] mj-video-badge .vp-video-badge');
+    expect(card1Badge?.classList.contains('vp-video-badge--success')).toBe(true);
+    expect(card1Badge?.textContent?.trim()).toBe('Delivered');
+    expect(card2Badge?.classList.contains('vp-video-badge--error')).toBe(true);
+    expect(card2Badge?.textContent?.trim()).toBe('Blocked');
+    expect(card3Badge?.classList.contains('vp-video-badge--neutral')).toBe(true);
+    expect(card3Badge?.textContent?.trim()).toBe('Unknown');
 
     // Status filter dropdown options list only statuses actually present in AllProductions
     const statusField = instance.FilterFields.find((f) => f.key === 'status');

@@ -18,7 +18,7 @@ import {
   GraphQLDataProvider,
   GraphQLFileStorageClient,
 } from '@memberjunction/graphql-dataprovider';
-import { GetVideoStatusBadgeVariant } from '@memberjunction/ng-artifacts';
+import { GetVideoStatusBadgeVariant, type VideoBadgeVariant } from '@memberjunction/ng-artifacts';
 import { DeleteBrandKitWithAssets } from '@memberjunction/ng-brand-kits';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
@@ -198,8 +198,8 @@ export class VideoStudioBrandKitsResourceComponent
     this.OnSearchChange('');
   }
 
-  public StatusBadgeClass(status: string): string {
-    return `mj-badge mj-badge-${GetVideoStatusBadgeVariant(status)}`;
+  public StatusBadgeVariant(status: string): VideoBadgeVariant {
+    return GetVideoStatusBadgeVariant(status);
   }
 
   public CreateNewBrandKit(): void {

@@ -201,10 +201,9 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     expect(logoImgs[0].getAttribute('src')).toBe('https://cdn.example/file-logo-1.png');
 
     expect(queryAll(fixture, '[data-testid^="brand-kit-card-"]')).toHaveLength(2);
-    const defaultStar = query(fixture, '[data-testid="brand-kit-default-star"]') as HTMLElement | null;
+    const defaultStar = query(fixture, '[data-testid="brand-kit-default-star"] .vp-video-badge') as HTMLElement | null;
     expect(defaultStar).not.toBeNull();
-    expect(defaultStar!.classList.contains('mj-badge')).toBe(true);
-    expect(defaultStar!.classList.contains('mj-badge-neutral')).toBe(true);
+    expect(defaultStar!.classList.contains('vp-video-badge--neutral')).toBe(true);
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);
     const registeredTools = navStub.SetAgentClientTools.mock.calls.at(-1)?.[1] as Array<{ Name: string }>;
     const toolNames = registeredTools.map((t) => t.Name);

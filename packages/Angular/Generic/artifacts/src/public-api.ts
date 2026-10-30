@@ -63,8 +63,10 @@ export * from './lib/components/previews/video-production-artifact-preview.compo
 export * from './lib/components/plugins/video-production/video-production-markdown';
 export * from './lib/components/plugins/video-production/video-time-format';
 export * from './lib/components/plugins/video-production/video-status-badge';
+export * from './lib/components/plugins/video-production/video-badge.component';
 export * from './lib/components/plugins/video-production/video-format-glyph.component';
 export * from './lib/components/plugins/video-production/video-beat-strip.component';
 export * from './lib/components/plugins/video-production/video-production-storyboard-tab.component';
 export * from './lib/components/plugins/video-production/video-production-review-tab.component';
 export * from './lib/components/plugins/video-production/video-production-viewer.component';
+

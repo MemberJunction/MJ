@@ -44,6 +44,7 @@ import { AudioArtifactViewerComponent } from './components/plugins/audio-artifac
 import { VideoProductionViewerComponent } from './components/plugins/video-production/video-production-viewer.component';
 import { VideoProductionStoryboardTabComponent } from './components/plugins/video-production/video-production-storyboard-tab.component';
 import { VideoProductionReviewTabComponent } from './components/plugins/video-production/video-production-review-tab.component';
+import { MJVideoBadgeComponent } from './components/plugins/video-production/video-badge.component';
 import { MJVideoFormatGlyphComponent } from './components/plugins/video-production/video-format-glyph.component';
 import { MJVideoBeatStripComponent } from './components/plugins/video-production/video-beat-strip.component';
 
@@ -131,6 +132,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MJEmptyStateComponent,
     MJAlertComponent,
     MJButtonDirective,
+    MJVideoBadgeComponent,
     MJVideoFormatGlyphComponent,
     MJVideoBeatStripComponent,
   ],
@@ -155,6 +157,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     VideoProductionViewerComponent,
     VideoProductionStoryboardTabComponent,
     VideoProductionReviewTabComponent,
+    MJVideoBadgeComponent,
     MJVideoFormatGlyphComponent,
     MJVideoBeatStripComponent,
 

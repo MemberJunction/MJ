@@ -152,9 +152,13 @@
                       </div>
                     }
 
-                    <span [class]="StatusBadgeClass(item.Status)" data-testid="production-status-badge">
+                    <mj-video-badge
+                      class="vs-production-poster__status"
+                      [Variant]="StatusBadgeVariant(item.Status)"
+                      data-testid="production-status-badge"
+                    >
                       {{ item.Status }}
-                    </span>
+                    </mj-video-badge>
 
                     @if (item.DurationSeconds !== null) {
                       <span class="vs-production-duration">
