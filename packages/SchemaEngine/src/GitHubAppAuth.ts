@@ -22,24 +22,24 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 export interface GitHubAppCredentials {
-  appId: string;
-  installationId: string;
+  AppId: string;
+  InstallationId: string;
   /** PEM, with real newlines. */
-  privateKey: string;
+  PrivateKey: string;
 }
 
 /** The environment names the platform deploy writes and the feedback resolver reads. */
-export function readGitHubAppCredentials(env: NodeJS.ProcessEnv = process.env): GitHubAppCredentials | null {
+export function ReadGitHubAppCredentials(env: NodeJS.ProcessEnv = process.env): GitHubAppCredentials | null {
   const appId = (env.GITHUB_APP_ID ?? '').trim();
   const installationId = (env.GITHUB_APP_INSTALLATION_ID ?? '').trim();
   if (!appId || !installationId) {
     return null;
   }
-  const privateKey = readPrivateKey(env);
+  const privateKey = ReadPrivateKey(env);
   if (!privateKey) {
     return null;
   }
-  return { appId, installationId, privateKey };
+  return { AppId: appId, InstallationId: installationId, PrivateKey: privateKey };
 }
 
 /**
@@ -47,7 +47,7 @@ export function readGitHubAppCredentials(env: NodeJS.ProcessEnv = process.env): 
  * (`\n` as two characters) when it was set through a shell or an app-settings form; a PEM with
  * literal backslash-n never parses, so they are turned back into newlines here.
  */
-export function readPrivateKey(env: NodeJS.ProcessEnv = process.env): string | null {
+export function ReadPrivateKey(env: NodeJS.ProcessEnv = process.env): string | null {
   const keyPath = (env.GITHUB_APP_PRIVATE_KEY_PATH ?? '').trim();
   if (keyPath) {
     const resolved = keyPath.startsWith('~/') ? resolve(homedir(), keyPath.slice(2)) : resolve(keyPath);
@@ -74,7 +74,7 @@ function base64url(input: Buffer | string): string {
  * Issued 60 s in the past to absorb clock skew between this box and GitHub, and valid for the
  * maximum GitHub allows (10 minutes) — it is used exactly once, to mint the installation token.
  */
-export function buildAppJwt(appId: string, privateKey: string, nowSeconds: number = Math.floor(Date.now() / 1000)): string {
+export function BuildAppJwt(appId: string, privateKey: string, nowSeconds: number = Math.floor(Date.now() / 1000)): string {
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const payload = base64url(JSON.stringify({ iat: nowSeconds - 60, exp: nowSeconds + 600, iss: appId }));
   const signer = createSign('RSA-SHA256');
@@ -84,7 +84,7 @@ export function buildAppJwt(appId: string, privateKey: string, nowSeconds: numbe
 }
 
 /** The minimum an RSU commit + PR needs, on the one repository it targets. */
-export function installationTokenRequest(installationId: string, repo: string): {
+export function InstallationTokenRequest(installationId: string, repo: string): {
   url: string;
   body: { repositories: string[]; permissions: Record<string, string> };
 } {
@@ -99,6 +99,7 @@ export function installationTokenRequest(installationId: string, repo: string): 
 
 /** The slice of an Octokit instance the mint needs, so a test can hand in a stub. */
 export interface AppTokenRequester {
+  // case-violation-ok-legacy-back-compat: Octokit's own method name — an Octokit instance is passed in as this type
   request(route: string, params: Record<string, unknown>): Promise<{ data: { token?: string } }>;
 }
 
@@ -106,21 +107,21 @@ export interface AppTokenRequester {
  * Exchange the App JWT for an installation access token scoped to `repo`.
  * Returns the token; throws with a message that names what was missing, never one that echoes a secret.
  */
-export async function mintInstallationToken(
+export async function MintInstallationToken(
   requester: AppTokenRequester,
   creds: GitHubAppCredentials,
   repo: string,
   nowSeconds?: number,
 ): Promise<string> {
-  const jwt = buildAppJwt(creds.appId, creds.privateKey, nowSeconds);
-  const { url, body } = installationTokenRequest(creds.installationId, repo);
+  const jwt = BuildAppJwt(creds.AppId, creds.PrivateKey, nowSeconds);
+  const { url, body } = InstallationTokenRequest(creds.InstallationId, repo);
   const res = await requester.request(url, {
     ...body,
     headers: { authorization: `Bearer ${jwt}`, accept: 'application/vnd.github+json' },
   });
   const token = res?.data?.token;
   if (!token) {
-    throw new Error(`GitHub App installation ${creds.installationId} returned no access token for repository "${repo}"`);
+    throw new Error(`GitHub App installation ${creds.InstallationId} returned no access token for repository "${repo}"`);
   }
   return token;
 }
