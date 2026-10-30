@@ -25,7 +25,7 @@
  * WHY PAUSE IS IDEMPOTENT AT THE RECORD, NOT AT THE WRITE. Deactivating an already-deactivated
  * connection finds every job already Paused, so the set it "moved" is empty. Writing that empty
  * set over the real record is the bug that loses the state — resume would then restore nothing
- * and both schedules would stay off forever, with no error anywhere. {@link decidePauseWrite}
+ * and both schedules would stay off forever, with no error anywhere. {@link DecidePauseWrite}
  * is the guard: the FIRST pause's record stands until a resume consumes it.
  *
  * Everything here is a pure function over plain values. The resolver owns the reads and writes.
@@ -59,7 +59,7 @@ export const PAUSED_SCHEDULES_KEY = 'pausedSchedules';
  * status, is left exactly as found and is deliberately absent from the record — that absence
  * is what stops resume from turning it on.
  */
-export function decideSchedulesToPause(jobs: ReadonlyArray<ScheduleJobState>): PausedScheduleRecord[] {
+export function DecideSchedulesToPause(jobs: ReadonlyArray<ScheduleJobState>): PausedScheduleRecord[] {
     return jobs
         .filter(j => j.Status === 'Active')
         .map(j => ({ ID: j.ID, Kind: j.Kind }));
@@ -72,7 +72,7 @@ export function decideSchedulesToPause(jobs: ReadonlyArray<ScheduleJobState>): P
  * an already-paused connection moves nothing, and must not overwrite the first pause's record
  * with its own empty one — see the class comment.
  */
-export function decidePauseWrite(
+export function DecidePauseWrite(
     stored: ReadonlyArray<PausedScheduleRecord>,
     newlyPaused: ReadonlyArray<PausedScheduleRecord>
 ): PausedScheduleRecord[] | null {
@@ -89,7 +89,7 @@ export function decidePauseWrite(
  * already moved back to Active must not be written again for no reason. Jobs absent from the
  * record are never touched, however they look now.
  */
-export function decideSchedulesToResume(
+export function DecideSchedulesToResume(
     stored: ReadonlyArray<PausedScheduleRecord>,
     jobs: ReadonlyArray<ScheduleJobState>
 ): string[] {
@@ -100,7 +100,7 @@ export function decideSchedulesToResume(
 }
 
 /** Reads the stored record out of a CompanyIntegration.Configuration JSON blob. */
-export function readPausedSchedules(configuration: string | null | undefined): PausedScheduleRecord[] {
+export function ReadPausedSchedules(configuration: string | null | undefined): PausedScheduleRecord[] {
     if (!configuration) return [];
     let parsed: unknown;
     try {
@@ -132,7 +132,7 @@ export function readPausedSchedules(configuration: string | null | undefined): P
  * alternative is refusing to pause because of unrelated corruption, and losing one broken blob
  * is the better failure.
  */
-export function writePausedSchedules(
+export function WritePausedSchedules(
     configuration: string | null | undefined,
     record: ReadonlyArray<PausedScheduleRecord>
 ): string {
@@ -177,7 +177,7 @@ export type CancelScope = 'durable' | 'this-process' | 'unknown' | 'none';
  * that only exists on newer tenants, so the SAME code has to tell the truth on a tenant where
  * that column is absent and the in-process registry is the only signal there is.
  */
-export function describeCancelScope(facts: {
+export function DescribeCancelScope(facts: {
     liveRunPresent: boolean;
     durableRequestRecorded: boolean;
     runningInThisProcess: boolean;
@@ -189,7 +189,7 @@ export function describeCancelScope(facts: {
 }
 
 /** Operator-facing sentence for a cancel scope. Never claims a stop it cannot deliver. */
-export function describeCancelOutcome(scope: CancelScope): string {
+export function DescribeCancelOutcome(scope: CancelScope): string {
     switch (scope) {
         case 'durable':
         case 'this-process':
@@ -202,7 +202,7 @@ export function describeCancelOutcome(scope: CancelScope): string {
 }
 
 /** Operator-facing sentence for what pause did to the schedules. */
-export function describePauseOutcome(paused: ReadonlyArray<PausedScheduleRecord>, alreadyPaused: boolean): string {
+export function DescribePauseOutcome(paused: ReadonlyArray<PausedScheduleRecord>, alreadyPaused: boolean): string {
     if (alreadyPaused) return 'Schedules were already paused.';
     if (paused.length === 0) return 'No active schedules to pause.';
     const kinds = paused.map(p => p.Kind);

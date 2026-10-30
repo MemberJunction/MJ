@@ -13,7 +13,7 @@
 import { readFile, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import v8 from 'node:v8';
-import { PressureBytes, resolveThresholds, SHED_ABOVE_FRACTION } from './MemoryGovernor.js';
+import { PressureBytes, ResolveThresholds, SHED_ABOVE_FRACTION } from './MemoryGovernor.js';
 
 export interface ResourcePressureReading {
     /** V8 heap in use, bytes. */
@@ -147,7 +147,7 @@ export function EvaluatePressure(
     r: ResourcePressureReading,
     heapWarnFraction = HEAP_WARN_FRACTION,
     diskWarnFreeBytes = DISK_WARN_FREE_BYTES,
-    residentWarnFraction = resolveThresholds().ShedAbove,
+    residentWarnFraction = ResolveThresholds().ShedAbove,
 ): PressureFinding[] {
     const out: PressureFinding[] = [];
     // Two independent ways to run out of memory, and the RSS one is the one that kills. Report the

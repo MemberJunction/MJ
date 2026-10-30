@@ -62,7 +62,7 @@ import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
-import { decidePauseWrite, decideSchedulesToPause, decideSchedulesToResume, describeCancelOutcome, describeCancelScope, describePauseOutcome, readPausedSchedules, writePausedSchedules } from "../integration/ConnectionPause.js";
+import { DecidePauseWrite, DecideSchedulesToPause, DecideSchedulesToResume, DescribeCancelOutcome, DescribeCancelScope, DescribePauseOutcome, ReadPausedSchedules, WritePausedSchedules } from "../integration/ConnectionPause.js";
 import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPause.js";
 import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
 import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
@@ -719,7 +719,7 @@ class DeactivateConnectionOutput {
     @Field({ nullable: true }) InFlightSyncRunID?: string;
     /** True when a live run existed AND a cancel was signalled for it. */
     @Field() CancelRequested: boolean;
-    /** 'durable' | 'this-process' | 'unknown' | 'none' — see ConnectionPause.describeCancelScope. */
+    /** 'durable' | 'this-process' | 'unknown' | 'none' — see ConnectionPause.DescribeCancelScope. */
     @Field() CancelScope: string;
 }
 
@@ -3604,24 +3604,24 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const notes: string[] = [];
 
             // 2. Schedules. A pause of an already-paused connection moves nothing and must not
-            //    overwrite the record the FIRST pause left — decidePauseWrite is that guard.
+            //    overwrite the record the FIRST pause left — DecidePauseWrite is that guard.
             let schedulesPaused = 0;
             try {
                 const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
-                const toPause = decideSchedulesToPause(jobs);
+                const toPause = DecideSchedulesToPause(jobs);
                 for (const rec of toPause) {
                     if (await this.setScheduledJobStatus(rec.ID, 'Paused', user, md)) schedulesPaused++;
                 }
-                const stored = readPausedSchedules(ci.Configuration);
-                const write = decidePauseWrite(stored, toPause);
+                const stored = ReadPausedSchedules(ci.Configuration);
+                const write = DecidePauseWrite(stored, toPause);
                 if (write) {
-                    ci.Configuration = writePausedSchedules(ci.Configuration, write);
+                    ci.Configuration = WritePausedSchedules(ci.Configuration, write);
                 }
                 // Mirror onto the connection row the way the post-restart scheduler does, so a
                 // reader that only knows about ScheduleEnabled still sees a paused connection.
                 if (schedulesPaused > 0) ci.ScheduleEnabled = false;
                 if (write || schedulesPaused > 0) await ci.Save();
-                notes.push(describePauseOutcome(toPause, stored.length > 0 && toPause.length === 0));
+                notes.push(DescribePauseOutcome(toPause, stored.length > 0 && toPause.length === 0));
             } catch (schedErr) {
                 // A schedule we could not pause is worth saying out loud: the connection IS
                 // paused, but a cron may still wake it and write refused runs.
@@ -3637,12 +3637,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 if (live) {
                     inFlightRunID = live.RunID ?? undefined;
                     const durable = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, md);
-                    scope = describeCancelScope({
+                    scope = DescribeCancelScope({
                         liveRunPresent: true,
                         durableRequestRecorded: durable,
                         runningInThisProcess: IntegrationEngine.IsSyncRunningInThisProcess(companyIntegrationID),
                     });
-                    const sentence = describeCancelOutcome(scope);
+                    const sentence = DescribeCancelOutcome(scope);
                     if (sentence) notes.push(sentence);
                 }
             } catch (cancelErr) {
@@ -3726,16 +3726,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // written at pause is the only thing that can tell those apart.
             let schedulesResumed = 0;
             try {
-                const stored = readPausedSchedules(ci.Configuration);
+                const stored = ReadPausedSchedules(ci.Configuration);
                 if (stored.length > 0) {
                     const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
-                    for (const id of decideSchedulesToResume(stored, jobs)) {
+                    for (const id of DecideSchedulesToResume(stored, jobs)) {
                         if (await this.setScheduledJobStatus(id, 'Active', user, md)) schedulesResumed++;
                     }
                     // Consume the record whether or not every job came back: a job that was
                     // deleted while paused is never coming back, and keeping the record would make
-                    // the next pause a no-op via decidePauseWrite's already-paused guard.
-                    ci.Configuration = writePausedSchedules(ci.Configuration, []);
+                    // the next pause a no-op via DecidePauseWrite's already-paused guard.
+                    ci.Configuration = WritePausedSchedules(ci.Configuration, []);
                     if (schedulesResumed > 0) ci.ScheduleEnabled = true;
                     await ci.Save();
                 }

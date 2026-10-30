@@ -123,7 +123,7 @@ export const SHED_DOWN_TO_FRACTION = 0.75;
  * forever, and a nonsense value silently ignored is worse than one rejected, so both fall back
  * together to the defaults rather than half-applying.
  */
-export function resolveThresholds(env: Record<string, string | undefined> = process.env): {
+export function ResolveThresholds(env: Record<string, string | undefined> = process.env): {
     ShedAbove: number;
     ShedDownTo: number;
 } {
@@ -159,21 +159,21 @@ export const CALIBRATION_MAX = 4;
  * merely "very good" — it has to outrank every costed lever no matter how large that one's saving,
  * because taking a free lever first is never wrong.
  */
-export function scoreLever(l: Lever): number {
+export function ScoreLever(l: Lever): number {
     if (l.FreesBytes <= 0) return -1;
     if (l.ThroughputCost <= 0) return Number.POSITIVE_INFINITY;
     return l.FreesBytes / l.ThroughputCost;
 }
 
 /** Order: best score, then reversible before not, then soonest effect. */
-export function rankLevers(levers: readonly Lever[]): Lever[] {
+export function RankLevers(levers: readonly Lever[]): Lever[] {
     return levers
         .filter(l => l.FreesBytes > 0)
         .slice()
         .sort((a, b) => {
-            const d = scoreLever(b) - scoreLever(a);
+            const d = ScoreLever(b) - ScoreLever(a);
             if (d !== 0 && Number.isFinite(d)) return d;
-            if (scoreLever(a) !== scoreLever(b)) return scoreLever(b) === Number.POSITIVE_INFINITY ? 1 : -1;
+            if (ScoreLever(a) !== ScoreLever(b)) return ScoreLever(b) === Number.POSITIVE_INFINITY ? 1 : -1;
             if (a.Reversible !== b.Reversible) return a.Reversible ? -1 : 1;
             return a.LatencyBatches - b.LatencyBatches;
         });
@@ -190,7 +190,7 @@ export function rankLevers(levers: readonly Lever[]): Lever[] {
  * and nothing left to give. Exhausted is the honest signal that the workspace is too small for the
  * work — it is not a reason to keep cutting past the point of progress.
  */
-export function planShedding(
+export function PlanShedding(
     reading: GovernorReading,
     contributors: readonly Contributor[],
     calibration = 1,
@@ -211,7 +211,7 @@ export function planShedding(
     const targetBytes = total * shedDownTo;
     const mustFree = used - targetBytes;
 
-    const ranked = rankLevers(contributors.flatMap(c => c.Levers));
+    const ranked = RankLevers(contributors.flatMap(c => c.Levers));
     const taken: Lever[] = [];
     let freed = 0;
     for (const lever of ranked) {
@@ -256,7 +256,7 @@ export function PressureBytes(reading: GovernorReading): number {
  * swing the estimate, and clamped so a pathological reading cannot drive the governor into either
  * doing nothing or shedding everything.
  */
-export function calibrate(previous: number, projectedFreedBytes: number, actualFreedBytes: number): number {
+export function Calibrate(previous: number, projectedFreedBytes: number, actualFreedBytes: number): number {
     if (projectedFreedBytes <= 0) return previous;
     const observed = Math.max(0, actualFreedBytes) / projectedFreedBytes;
     const next = previous * (1 - CALIBRATION_DAMPING) + observed * CALIBRATION_DAMPING;
@@ -269,7 +269,7 @@ export function calibrate(previous: number, projectedFreedBytes: number, actualF
  * `observedBatchSize` is what the connector ACTUALLY returned, never what was asked for — the gap
  * between the two is the whole reason this exists.
  */
-export function estimateEntityMapBytes(observedBatchSize: number, bytesPerRecord: number): number {
+export function EstimateEntityMapBytes(observedBatchSize: number, bytesPerRecord: number): number {
     if (observedBatchSize <= 0 || bytesPerRecord <= 0) return 0;
     return observedBatchSize * bytesPerRecord;
 }
@@ -281,7 +281,7 @@ export function estimateEntityMapBytes(observedBatchSize: number, bytesPerRecord
  * still RETURNED, with a zero saving, rather than omitted — so a caller can see that it was
  * considered and rejected on evidence, instead of wondering whether anyone looked.
  */
-export function batchSizeLever(
+export function BatchSizeLever(
     contributorID: string,
     currentBytes: number,
     honoursBatchSize: boolean
