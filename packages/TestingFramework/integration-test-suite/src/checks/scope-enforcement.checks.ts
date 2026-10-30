@@ -72,25 +72,19 @@ import {
 } from '@memberjunction/core-entities';
 import { GetAPIKeyEngine, ScopeEvaluator } from '@memberjunction/api-keys';
 import type { APIKeyEngine, AuthorizationRequest } from '@memberjunction/api-keys';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /** Tag on every throwaway row this bundle creates, so a stranded fixture is identifiable. */
 const TEST_TAG = '(mj-integration-test — safe to delete)';
 
-/** Loud, uniform skip-as-pass note. Returns false so a caller can `if (!skip(...)) return;`. */
-function skipNote(checkId: string, reason: string): false {
-    console.warn(`  ⚠ scope-enforcement.${checkId} SKIPPED — ${reason}`);
-    return false;
-}
-
 /** A reversible cleanup step (delete one fixture row). Run LIFO so children precede parents. */
 type Cleanup = () => Promise<unknown>;
 
 /**
  * Resolve a seeded API Scope ID by its FullPath from the loaded engine cache, or undefined when the
- * scope is not seeded in this deployment (→ the caller skips-as-pass rather than asserting vacuously).
+ * scope is not seeded in this deployment (→ the caller calls SkipCheck rather than asserting vacuously).
  */
 function scopeIdByPath(engine: APIKeyEngine, fullPath: string): string | undefined {
     return engine.Scopes.find(s => s.FullPath === fullPath)?.ID;
@@ -227,8 +221,7 @@ export async function CheckSe1DenyPrecedence(ctx: IntegrationCheckContext): Prom
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!readScopeId) {
-        skipNote('SE1', "seeded scope 'entity:read' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -275,8 +268,7 @@ export async function CheckSe2AppCeilingCapsKey(ctx: IntegrationCheckContext): P
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     const execScopeId = scopeIdByPath(engine, 'agent:execute');
     if (!readScopeId || !execScopeId) {
-        skipNote('SE2', "seeded scopes 'entity:read' and/or 'agent:execute' not present");
-        return;
+        SkipCheck("seeded scopes 'entity:read' and/or 'agent:execute' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -321,12 +313,10 @@ export async function CheckSe3AppBinding(ctx: IntegrationCheckContext): Promise<
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!readScopeId) {
-        skipNote('SE3', "seeded scope 'entity:read' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' not present");
     }
     if (!engine.Applications.some(a => a.Name.toLowerCase() === 'mjapi')) {
-        skipNote('SE3', "seeded application 'MJAPI' not present (needed as the foreign application)");
-        return;
+        SkipCheck("seeded application 'MJAPI' not present (needed as the foreign application)");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -374,8 +364,7 @@ export async function CheckSe4UnscopedKeyDefault(ctx: IntegrationCheckContext): 
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     const mjapi = engine.Applications.find(a => a.Name.toLowerCase() === 'mjapi');
     if (!readScopeId || !mjapi) {
-        skipNote('SE4', "seeded scope 'entity:read' and/or application 'MJAPI' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' and/or application 'MJAPI' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -394,8 +383,7 @@ export async function CheckSe4UnscopedKeyDefault(ctx: IntegrationCheckContext): 
         };
         const openResult = await ceilingProbe.EvaluateAccess(request, ctx.User);
         if (!openResult.Allowed) {
-            skipNote('SE4', `MJAPI ceiling does not admit entity:read here (reason: '${openResult.Reason}') — cannot isolate the key-level default`);
-            return;
+            SkipCheck(`MJAPI ceiling does not admit entity:read here (reason: '${openResult.Reason}') — cannot isolate the key-level default`);
         }
 
         // Same key + cache, deny default → the unscoped key is CLOSED.
@@ -437,8 +425,7 @@ export async function CheckSe5FullAccessIsOrdinaryAtEngine(ctx: IntegrationCheck
     const fullAccessId = scopeIdByPath(engine, 'full_access');
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!fullAccessId || !readScopeId) {
-        skipNote('SE5', "seeded scopes 'full_access' and/or 'entity:read' not present");
-        return;
+        SkipCheck("seeded scopes 'full_access' and/or 'entity:read' not present");
     }
     const cleanup: Cleanup[] = [];
     try {

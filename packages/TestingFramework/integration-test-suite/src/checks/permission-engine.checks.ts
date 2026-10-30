@@ -79,7 +79,7 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { PermissionEngine } from '@memberjunction/core-entities';
 import type { MJPermissionDomainEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillPermissionEntity } from '@memberjunction/core-entities';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { IsTierEnabled } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, PermissionEngineFixture } from '@memberjunction/testing-integration';
@@ -557,8 +557,7 @@ export async function CheckPe5AgentProviderDenies(ctx: IntegrationCheckContext):
     const engine = await configuredEngine(ctx);
     const provider = engine.GetProvider('AI Agent Permissions');
     if (!provider) {
-        skipNote('PE5', "the 'AI Agent Permissions' domain is not active in this deployment");
-        return;
+        SkipCheck("the 'AI Agent Permissions' domain is not active in this deployment");
     }
 
     const nullResource = await provider.CheckPermission(ctx.User, 'AI Agents', null, 'Read');
@@ -601,10 +600,9 @@ export async function CheckPe6AgentDualPathDefault(ctx: IntegrationCheckContext)
     const identity = await nonOwnerIdentity(ctx);
     const agent = findZeroGrantNonOwnedAgent(ai, identity.User);
     if (!agent) {
-        skipNote('PE6', `no agent with zero 'MJ: AI Agent Permissions' rows that '${identity.Label}' does not own ` +
+        SkipCheck(`no agent with zero 'MJ: AI Agent Permissions' rows that '${identity.Label}' does not own ` +
             `(${ai.Agents.length} agents, ${ai.AgentPermissions.length} grant rows)` +
             (identity.Seeded ? '' : ` — seed a low-privilege identity with: ${SEED_FIXTURES_COMMAND}`));
-        return;
     }
 
     // Path 1 — cached runtime helper: OPEN by default for a non-owner.
@@ -649,17 +647,15 @@ export async function CheckPe6_AgentDualPathDefault(ctx: IntegrationCheckContext
 export async function CheckPe7SkillDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
     const ai = await configuredAIEngine(ctx);
     if (ai.Skills.length === 0) {
-        skipNote('PE7', 'no AI Skills in metadata — the skill permission paths are unexercised');
-        return;
+        SkipCheck('no AI Skills in metadata — the skill permission paths are unexercised');
     }
 
     const identity = await nonOwnerIdentity(ctx);
     const skill = findZeroGrantNonOwnedSkill(ai, identity.User);
     if (!skill) {
-        skipNote('PE7', `no skill with zero 'MJ: AI Skill Permissions' rows that '${identity.Label}' does not own ` +
+        SkipCheck(`no skill with zero 'MJ: AI Skill Permissions' rows that '${identity.Label}' does not own ` +
             `(${ai.Skills.length} skills, ${ai.SkillPermissions.length} grant rows)` +
             (identity.Seeded ? '' : ` — seed a low-privilege identity with: ${SEED_FIXTURES_COMMAND}`));
-        return;
     }
 
     const helper = await AISkillPermissionHelper.GetEffectivePermissions(skill.ID, identity.User);
@@ -708,9 +704,8 @@ export async function CheckPe8SkillGrantsCloseTheDefault(ctx: IntegrationCheckCo
     const identity = await nonOwnerIdentity(ctx);
     const skill = ai.Skills.find(s => !UUIDsEqual(s.CreatedByUserID, identity.User.ID));
     if (!skill) {
-        skipNote('PE8', `no AI Skill owned by someone other than '${identity.Label}' — the non-owner policy is unexercised` +
+        SkipCheck(`no AI Skill owned by someone other than '${identity.Label}' — the non-owner policy is unexercised` +
             (identity.Seeded ? '' : ` — seed a low-privilege identity with: ${SEED_FIXTURES_COMMAND}`));
-        return;
     }
     const other = STRANGER_RESOURCE_ID; // a grantee id that is definitively not the evaluated user
 
@@ -764,22 +759,19 @@ export async function CheckPe8_SkillGrantsCloseTheDefault(ctx: IntegrationCheckC
 export async function CheckPe9EntityPermissionsDenyRolelessUser(ctx: IntegrationCheckContext): Promise<void> {
     const noGrant = await loadSeededNoGrantUser(ctx);
     if (!noGrant) {
-        skipNote('PE9', `seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
-        return;
+        SkipCheck(`seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
     }
     AssertEqual(noGrant.UserRoles.length, 0, `fixture invalid: '${SEEDED_NOGRANT_EMAIL}' has ${noGrant.UserRoles.length} role(s); it must have none`);
 
     const entity = ctx.Provider.EntityByName(SEEDED_RLS_ENTITY);
     if (!entity) {
-        skipNote('PE9', `entity '${SEEDED_RLS_ENTITY}' not present in metadata`);
-        return;
+        SkipCheck(`entity '${SEEDED_RLS_ENTITY}' not present in metadata`);
     }
 
     const mine = entity.GetUserPermisions(ctx.User);
     const theirs = entity.GetUserPermisions(noGrant);
     if (!mine.CanRead) {
-        skipNote('PE9', `the context user cannot Read '${SEEDED_RLS_ENTITY}' either — no privilege DIFFERENCE to assert`);
-        return;
+        SkipCheck(`the context user cannot Read '${SEEDED_RLS_ENTITY}' either — no privilege DIFFERENCE to assert`);
     }
     AssertEqual(theirs.CanRead, false, `role-less user '${SEEDED_NOGRANT_EMAIL}' was granted Read on '${SEEDED_RLS_ENTITY}' (SECURITY)`);
     AssertEqual(theirs.CanCreate, false, `role-less user was granted Create on '${SEEDED_RLS_ENTITY}' (SECURITY)`);
@@ -804,13 +796,11 @@ export async function CheckPe9_EntityPermissionsDenyRolelessUser(ctx: Integratio
 export async function CheckPe10RolelessUserHasNoAuthorizations(ctx: IntegrationCheckContext): Promise<void> {
     const auths: AuthorizationInfo[] = ctx.Provider.Authorizations ?? [];
     if (auths.length === 0) {
-        skipNote('PE10', 'no MJ: Authorizations defined in this deployment — the capability gate is unexercised');
-        return;
+        SkipCheck('no MJ: Authorizations defined in this deployment — the capability gate is unexercised');
     }
     const noGrant = await loadSeededNoGrantUser(ctx);
     if (!noGrant) {
-        skipNote('PE10', `seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
-        return;
+        SkipCheck(`seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
     }
     AssertEqual(noGrant.UserRoles.length, 0, `fixture invalid: '${SEEDED_NOGRANT_EMAIL}' has roles; it must have none`);
 
@@ -890,8 +880,7 @@ async function withDomainRow(
 export async function CheckPe11UnresolvableProviderIsContained(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.PermissionEngineFixture;
     if (!fx) {
-        skipNote('PE11', 'mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
-        return;
+        SkipCheck('mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
     }
     const name = `${FIXTURE_DOMAIN_PREFIX}Unresolvable ${Date.now()}`;
     await withDomainRow(ctx, fx, name, UNREGISTERED_PROVIDER_CLASS, async (engine) => {
@@ -942,8 +931,7 @@ export async function CheckPe11_UnresolvableProviderIsContained(ctx: Integration
 export async function CheckPe12ThrowingProviderDoesNotCrashFanOut(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.PermissionEngineFixture;
     if (!fx) {
-        skipNote('PE12', 'mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
-        return;
+        SkipCheck('mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
     }
     // The domain row's Name must equal the provider class's DomainName for the engine map to agree.
     await withDomainRow(ctx, fx, THROWING_DOMAIN_NAME, THROWING_PROVIDER_CLASS, async (engine) => {
@@ -1004,8 +992,7 @@ export async function CheckPe12_ThrowingProviderDoesNotCrashFanOut(ctx: Integrat
 export async function CheckPe13UnresolvableProviderPoisonsFanOut(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.PermissionEngineFixture;
     if (!fx) {
-        skipNote('PE13', 'mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
-        return;
+        SkipCheck('mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
     }
     const name = `${FIXTURE_DOMAIN_PREFIX}Poison ${Date.now()}`;
     await withDomainRow(ctx, fx, name, UNREGISTERED_PROVIDER_CLASS, async (engine) => {
@@ -1103,7 +1090,7 @@ for (const check of PermissionEngineChecks) {
 /**
  * Bundle lifecycle. Setup is GATED on the mutation tier: on the deterministic path it creates
  * NOTHING and leaves the fixture undefined (so PE1–PE10 run fully read-only and PE11–PE13
- * skip-as-pass). When RUN_MUTATION_TESTS=1 it only registers the throwing provider class on the
+ * are recorded as skipped). When RUN_MUTATION_TESTS=1 it only registers the throwing provider class on the
  * ClassFactory — each mutation check creates and deletes its OWN catalog row inside its own
  * try/finally (see `withDomainRow`), so no two checks ever share a mutated catalog. Teardown is a
  * best-effort sweep for rows stranded by a check that died mid-flight, plus a re-Config so a later

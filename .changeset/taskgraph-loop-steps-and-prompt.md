@@ -1,7 +1,9 @@
 ---
+"@memberjunction/core": minor
 "@memberjunction/ai-core-plus": minor
 "@memberjunction/task-graph": minor
 "@memberjunction/ai-agents": minor
+"@memberjunction/testing-integration": minor
 ---
 
 Add multi-step action loop bodies (`steps?: LoopBodyActionStep[]`) to `ForEach` and `While` operations across `@memberjunction/ai-core-plus`, `@memberjunction/task-graph`, and `@memberjunction/ai-agents`, together with sanitized native tool-name normalization, structured JSON action-message projection in `Pipeline`, and an updated Loop Agent system prompt covering the full execution primitive hierarchy and single-channel native tool-calling JSON envelope bridge.
