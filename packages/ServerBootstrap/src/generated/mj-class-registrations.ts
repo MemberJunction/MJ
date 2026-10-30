@@ -245,7 +245,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (462 classes)
+// @memberjunction/core-entities (459 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -490,7 +490,6 @@ import {
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
-    MJEvaluationProtocolEntity,
     MJExperimentEntity,
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
@@ -568,7 +567,6 @@ import {
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJPredictionUnitEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -672,7 +670,6 @@ import {
     MJTestTypeEntity,
     MJThemeEntity,
     MJThemeEntityExtended,
-    MJTrainingSnapshotEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1124,7 +1121,7 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/storage (8 classes)
+// @memberjunction/storage (7 classes)
 import {
     AWSFileStorage,
     AzureFileStorage,
@@ -1132,7 +1129,6 @@ import {
     DropboxFileStorage,
     GoogleDriveFileStorage,
     GoogleFileStorage,
-    LocalFileSystemStorage,
     SharePointFileStorage,
 } from '@memberjunction/storage';
 
@@ -1403,7 +1399,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (68 classes)
+// @memberjunction/core-entities-server (66 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1439,14 +1435,12 @@ import {
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
-    MJEvaluationProtocolEntityServer,
     MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
-    MJPredictionUnitEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
@@ -1466,13 +1460,13 @@ import {
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJTrainingSnapshotEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
 // @memberjunction/codegen-lib (5 classes)
@@ -2074,7 +2068,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
-    MJEvaluationProtocolEntity,
     MJExperimentEntity,
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
@@ -2152,17 +2145,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJPredictionUnitEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
+    MJQueryCategoryEntity,
+    MJQueryDependencyEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJQueryCategoryEntity,
-    MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
@@ -2260,7 +2252,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestTypeEntity,
     MJThemeEntity,
     MJThemeEntityExtended,
-    MJTrainingSnapshotEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -2361,13 +2352,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
+    GetActivitiesByContactAction,
+    LogActivityAction,
+    MergeContactsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    GetActivitiesByContactAction,
-    LogActivityAction,
-    MergeContactsAction,
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
@@ -2528,7 +2519,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DropboxFileStorage,
     GoogleDriveFileStorage,
     GoogleFileStorage,
-    LocalFileSystemStorage,
     SharePointFileStorage,
     DefaultArchiveDriver,
     ArchiveDataAction,
@@ -2565,14 +2555,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     GetRubricConsensusAction,
     GetRubricSubjectAction,
     HumanRubricEvaluator,
     LLMRubricEvaluator,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
@@ -2739,14 +2729,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
-    MJEvaluationProtocolEntityServer,
     MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
-    MJPredictionUnitEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
@@ -2766,19 +2754,19 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJTrainingSnapshotEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
@@ -2973,16 +2961,16 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AutotagAndVectorizeContentAction,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
     MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
@@ -3015,7 +3003,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1221;
+export const CLASS_REGISTRATIONS_COUNT = 1215;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

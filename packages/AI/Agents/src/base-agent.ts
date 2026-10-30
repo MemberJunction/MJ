@@ -2743,8 +2743,8 @@ export class BaseAgent {
             // no I/O — safe to do before launching the parallel phase).
             const userId = params.userId || params.contextUser?.ID;
             const companyId = params.companyId;
-            const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop();
-            const inputText = lastUserMessage?.content || '';
+            const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop() as AgentChatMessage | undefined;
+            const inputText = lastUserMessage?.metadata?.rawContent ?? (lastUserMessage?.content || '');
 
             // The run's scope exactly as initializeAgentRun validated it in Phase 1 — what the run row records and every
             // action is handed — so notes, RAG and scoped prompt parts search the same tenant and dimensions.
@@ -3756,8 +3756,8 @@ export class BaseAgent {
      * @returns The concatenated context text (empty string when nothing was injected).
      */
     private async assembleRealtimeContext(params: ExecuteAgentParams): Promise<string> {
-        const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop();
-        const inputText = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '';
+        const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop() as AgentChatMessage | undefined;
+        const inputText = lastUserMessage?.metadata?.rawContent ?? (typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '');
         const scratch: ChatMessage[] = [];
 
         const builder = new AgentMemoryContextBuilder();
@@ -5132,6 +5132,12 @@ export class BaseAgent {
                         block.content = ConversationUtility.ToPlainText(block.content);
                     }
                 }
+            }
+
+            // Also convert rawContent in metadata when speaker attribution is active
+            const agentMessage = message as AgentChatMessage;
+            if (typeof agentMessage.metadata?.rawContent === 'string') {
+                agentMessage.metadata.rawContent = ConversationUtility.ToPlainText(agentMessage.metadata.rawContent);
             }
         }
     }

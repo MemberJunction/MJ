@@ -222,7 +222,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (462 classes)
+// @memberjunction/core-entities (459 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -467,7 +467,6 @@ import {
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
-    MJEvaluationProtocolEntity,
     MJExperimentEntity,
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
@@ -545,7 +544,6 @@ import {
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJPredictionUnitEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -649,7 +647,6 @@ import {
     MJTestTypeEntity,
     MJThemeEntity,
     MJThemeEntityExtended,
-    MJTrainingSnapshotEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1158,7 +1155,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (68 classes)
+// @memberjunction/core-entities-server (66 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1194,14 +1191,12 @@ import {
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
-    MJEvaluationProtocolEntityServer,
     MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
-    MJPredictionUnitEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
@@ -1221,13 +1216,13 @@ import {
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJTrainingSnapshotEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
 // @memberjunction/core-actions (165 classes)
@@ -1767,7 +1762,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
-    MJEvaluationProtocolEntity,
     MJExperimentEntity,
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
@@ -1845,7 +1839,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJPredictionUnitEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1861,12 +1854,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
+    MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJQueueTypeEntity,
-    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1953,7 +1946,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestTypeEntity,
     MJThemeEntity,
     MJThemeEntityExtended,
-    MJTrainingSnapshotEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -2065,13 +2057,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
     GetSurveyMonkeyResponsesAction,
+    GetSurveyMonkeyStatisticsAction,
+    GetTypeformAction,
+    GetTypeformFileContentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    GetSurveyMonkeyStatisticsAction,
-    GetTypeformAction,
-    GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
     GetTypeformStatisticsAction,
@@ -2269,13 +2261,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
+    RecordProcessRunNowServerOperation,
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
-    RecordProcessRunNowServerOperation,
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
@@ -2350,14 +2342,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
-    MJEvaluationProtocolEntityServer,
     MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
-    MJPredictionUnitEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
@@ -2377,13 +2367,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJTrainingSnapshotEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    QueryRefreshExtractionServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
@@ -2473,15 +2463,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     IntegrationActionExecutor,
     InviteToListAction,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
@@ -2598,7 +2588,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1105;
+export const CLASS_REGISTRATIONS_COUNT = 1100;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

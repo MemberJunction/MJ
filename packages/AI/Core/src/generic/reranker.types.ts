@@ -95,6 +95,13 @@ export interface RerankParams {
      * cancellation as `Cancelled`, which is never failed over.
      */
     CancellationToken?: AbortSignal;
+
+    /**
+     * The longest document, in tokens, the model takes: its model-vendor row's `MaxInputTokens`,
+     * which `AIRerankerRunner` fills in. A driver whose API truncates documents to a set length sends
+     * it; unset leaves the API's own default.
+     */
+    MaxTokensPerDocument?: number;
 }
 
 /**
