@@ -10,7 +10,7 @@ import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTraini
 import { JsonParse, StoreSchemas, TrainingRunResultsParser, type ClassBalanceEntry, type HoldoutCarveSummary, type SnapshotRowKey, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import { SnapshotManifest, StorageProviderSnapshotFileStore } from '@memberjunction/predictive-studio';
 import { EscapeSQLString, OrdinalCompare, UUIDMap, UUIDSet } from '@memberjunction/global';
-import { C1CorpusFixture, C1_CORPUS_DIR, ContainmentProbe, UnitFixtures, type GateMeasurement, type ProvisionedUnitPipeline, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { C1CorpusFixture, C1_CORPUS_DIR, ContainmentProbe, UnitFixtures, type GateMeasurement, type ProtocolChoice, type ProvisionedUnitPipeline, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGatePytest, type PytestRunResult } from './ps-gate-pytest';
 
 type Completed = Extract<TrainingRunResults, { status: 'completed' }>;
@@ -68,6 +68,13 @@ const W6_MIN_BIAS = 0.14;
 
 /** Evaluation Protocol gate bodies (static members on one owner, coding standards §2). */
 export class EvaluationProtocolGates {
+  /**
+   * C1's reference split: date-carved at 2024-01-01 with rows from 2025-01-01 on left out (the reference pipeline's
+   * 1,205 test keys). C1 → S6.1 measures this carve; the gates that need a C1 model train on it too, because on the
+   * default year-cutoff holdout C1's gate decides no-signal and ships no model.
+   */
+  public static readonly C1ReferenceProtocol: ProtocolChoice = { Kind: 'explicit', Holdout: { kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: C1_CUTOFF, holdoutEnd: '2025-01-01', newEntityReport: null } };
+
   /** A pytest half passes when every requested node was collected and every collected case passed. */
   private static pytestPassed(r: PytestRunResult): boolean {
     return r.NotCollected.length === 0 && r.Failed + r.Errors === 0 && r.Collected > 0 && r.Passed === r.Collected;
@@ -174,7 +181,7 @@ export class EvaluationProtocolGates {
 
   /** C1 → S6.1: date-carved after the cutoff, stored keys after it, none in training, equal to the reference's 1,205. */
   public static async MeasureC1DateCarvedHoldout(h: TruthHarness): Promise<GateMeasurement> {
-    const { Pipeline: pipeline } = await UnitFixtures.ProvisionC1RenewalPipeline(h, { Kind: 'explicit', Holdout: { kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: C1_CUTOFF, holdoutEnd: '2025-01-01', newEntityReport: null } });
+    const { Pipeline: pipeline } = await UnitFixtures.ProvisionC1RenewalPipeline(h, EvaluationProtocolGates.C1ReferenceProtocol);
     const s = await EvaluationProtocolGates.trainAndRead(h, pipeline);
     if (typeof s === 'string') return EvaluationProtocolGates.fail(s);
     const holdout = s.Manifest.filter((k) => k.role === 'locked-holdout');

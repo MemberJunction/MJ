@@ -10,6 +10,7 @@ import type { MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity }
 import { DOMINANCE_THRESHOLD_DEFAULT, JsonParse, TrainingRunResultsParser, type FeatureImportance, type PredictionUnitSpec, type SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { DetectSingleFeatureDominance, PredictionUnitRowReader, ProviderAssemblyMetadata, RunViewDataAccess, PredictionUnitVersioning, SnapshotManifest, StorageProviderSnapshotFileStore, type UnitRowReadResult } from '@memberjunction/predictive-studio';
 import { C1CorpusFixture, C1_CORPUS_DIR, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** The Training Snapshot columns the snapshot assertions read. */
 type SnapshotCounts = Pick<MJTrainingSnapshotEntity, 'ManifestRowCount' | 'CensoredRowsExcluded' | 'LabelKnownRowsExcluded' | 'RowManifestFileID' | 'RowManifestSha256'>;
@@ -177,7 +178,8 @@ export class PredictionUnitGates {
 
   /** G1.6 C1 → S2.3 */
   public static async MeasureC1LabelVersioning(h: TruthHarness): Promise<GateMeasurement> {
-    const { Pipeline: pipeline, UnitRow: unitRow } = await UnitFixtures.ProvisionC1RenewalPipeline(h);
+    // Trained on C1's reference split: the gate needs the run's model, and the default year-cutoff holdout ships none.
+    const { Pipeline: pipeline, UnitRow: unitRow } = await UnitFixtures.ProvisionC1RenewalPipeline(h, EvaluationProtocolGates.C1ReferenceProtocol);
     await h.Train(pipeline);
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);
     const rv = RunView.FromMetadataProvider(h.Provider);
