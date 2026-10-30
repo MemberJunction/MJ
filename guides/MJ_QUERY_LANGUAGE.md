@@ -15,7 +15,7 @@ MemberJunction developers and for the AI agents that write queries (Skip's query
   MJ SQL filters.
 - **Strictness.** A query that breaks a rule is refused when it is saved new or edited (a save that changes its SQL).
   Queries already saved keep running, unless they use a construct outside the language or put a value tag inside a
-  SQL string literal (see [Running a saved query](#running-a-saved-query)). A refresh of an existing query reports what breaks the rules, and
+  SQL string literal or a quoted identifier (see [Running a saved query](#running-a-saved-query)). A refresh of an existing query reports what breaks the rules, and
   three rules are only warnings there (see [Save-time checks reference](#12-save-time-checks-reference)).
 
 The reference implementation is `@memberjunction/sql-parser`:
@@ -608,7 +608,7 @@ re-extracts a query uses `Mode: 'Refresh'`. **Error** refuses the save. **Warnin
 |---|---|---|---|
 | `MJQ_UNCLOSED_TAG` | Error | `{{`, `{%` or `{#` with no closer | Close the tag, or remove the opener. |
 | `MJQ_TAG_IN_STRING_LITERAL` | Error; **also stops a run** for a `{{ }}` value tag | A tag inside a SQL string literal | Put the tag outside the quotes and use a filter (`sqlString` for `'{{ x }}'`, `sqlLikeContains` for `'%…%'`). |
-| `MJQ_TAG_IN_QUOTED_IDENTIFIER` | Error | A tag inside `[…]`, `"…"` or `` `…` `` | Use `sqlIdentifier` outside any quotes, or write the identifier out. |
+| `MJQ_TAG_IN_QUOTED_IDENTIFIER` | Error; **also stops a run** for a `{{ }}` value tag | A tag inside `[…]`, `"…"` or `` `…` `` | Use `sqlIdentifier` outside any quotes, in place of `[{{ x }}]`, or write the identifier out. |
 | `MJQ_EXPRESSION_IN_COMMENT` | Info | A template tag mentioned inside a SQL comment: inert, never rendered or analyzed | Write template notes in a `{# #}` comment. |
 | `MJQ_UNCLOSED_BLOCK` | Error | An `if` or `for` with no `endif` / `endfor`, or left open when an outer block closes | Close the block. |
 | `MJQ_UNEXPECTED_TAG` | Error | `elif`, `else`, `endif` or `endfor` with no block to belong to | Remove the tag, or add its block. |
@@ -655,7 +655,7 @@ Where they come from: lexing, structure and expression-syntax codes (and `MJQ_CO
 
 Before a saved query is rendered, it is validated in `Refresh` mode (without a composition resolver). These errors
 are authoring rules that a query saved before the language existed may rely on, so they never stop a run:
-`MJQ_TAG_IN_QUOTED_IDENTIFIER`, `MJQ_UNFILTERED_VALUE`, `MJQ_UNFILTERED_UNTYPED`,
+`MJQ_UNFILTERED_VALUE`, `MJQ_UNFILTERED_UNTYPED`,
 `MJQ_ARITHMETIC_IN_HOLE`, `MJQ_HOLE_NOT_A_VALUE`, `MJQ_DEFAULT_NOT_LITERAL`, `MJQ_FOR_ITERABLE`,
 `MJQ_FILTER_TYPE_MISMATCH`, `MJQ_PARAMETER_TYPE_CONFLICT` and `MJQ_COMPOSITION_POSITION`. Every other error refuses
 the run, so a construct outside the language (an unsupported tag, a function call, attribute access other than
@@ -672,6 +672,16 @@ query with the problem as an `Error`. The run is authorized first (the query's r
 query it composes), so a caller who may not run the query gets the usual not-found message, never these details.
 A composition tag (`'{{query:"…"}}'`), a block or a `{# #}` comment inside a literal pastes no value and does not
 stop a run.
+
+A `{{ }}` value tag inside a quoted identifier (`MJQ_TAG_IN_QUOTED_IDENTIFIER`: `[{{ Col }}]` on SQL Server,
+`"{{ Col }}"` on PostgreSQL, `` `{{ Col }}` `` on MySQL and Databricks, as each dialect's lexer defines quoted
+identifiers) refuses the run in the same way, with the same authorization first. The value is pasted inside the
+identifier quotes without escaping, so a value that contains the closing quote character (`]`, `"` or `` ` ``) can
+end the identifier and change the statement. The fix: replace `[{{ Col }}]` with `{{ Col | sqlIdentifier }}` and drop
+the surrounding brackets or quotes; `sqlIdentifier` quotes the name for the dialect and refuses a value that is not a
+plain name (letters, digits and underscores, not starting with a digit). A composition tag, a block or a `{# #}`
+comment inside an identifier does not stop a run. When a query has tags of both kinds, one refusal lists every tag
+and gives both fixes; refresh reports each as an `Error`.
 
 ### Error examples: bad, then good
 

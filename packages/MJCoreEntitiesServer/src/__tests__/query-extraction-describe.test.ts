@@ -357,6 +357,17 @@ describe('ComputeQueryExtraction — refusals (R10, save-time rules)', () => {
         expect(refresh.Messages.join('\n')).toContain('MJQ_TAG_IN_STRING_LITERAL');
     });
 
+    it('refuses a value tag inside a quoted identifier at save, and records it as an Error on a refresh', async () => {
+        const sql = 'SELECT u.ID, u.[{{ Col }}] FROM __mj.vwUsers u';
+        const save = await ComputeQueryExtraction(input(sql));
+        const refresh = await ComputeQueryExtraction(input(sql, { Mode: 'Refresh' }));
+
+        expect(save.Refusal).toContain('MJQ_TAG_IN_QUOTED_IDENTIFIER');
+        expect(refresh.Refusal).toBeNull();
+        expect(refresh.Status).toBe('Error');
+        expect(refresh.Messages.join('\n')).toContain('MJQ_TAG_IN_QUOTED_IDENTIFIER');
+    });
+
     it('writes each rule error with its line, column and fix, in the form clients read back', async () => {
         const sql = "SELECT u.ID\nFROM __mj.vwUsers u\nWHERE u.Name = '{{ Who }}'";
         const save = await ComputeQueryExtraction(input(sql));

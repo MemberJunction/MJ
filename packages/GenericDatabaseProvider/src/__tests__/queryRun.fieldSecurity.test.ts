@@ -587,6 +587,68 @@ describe('a saved query that writes a value tag inside a SQL string literal is r
     });
 });
 
+describe('a saved query that writes a value tag inside a quoted identifier is refused at run time', () => {
+    const BRACKETED = 'SELECT ID, [{{ Col }}] FROM vwProjects';
+    let provider: QueryFlsProvider;
+
+    beforeEach(() => {
+        provider = new QueryFlsProvider();
+        provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function seed(sql: string, permissionRoles?: string[]): void {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', Name: 'Project Column', SQL: sql, UsesTemplate: true, PermissionRoles: permissionRoles })]);
+    }
+
+    it('refuses the run before anything executes, naming the query, the parameter, the position and the sqlIdentifier fix', async () => {
+        seed(BRACKETED);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name] FROM vwPayroll --' } }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/^Query "Project Column" cannot run: .*\{\{ Col \}\} \(parameter "Col"\) at line 1, column 13: \[\{\{ Col \}\}\]\./);
+        expect(result.ErrorMessage).toContain('a value that contains the closing ] can end the identifier and change the statement');
+        expect(result.ErrorMessage).toContain('Fix: replace [{{ Col }}] with {{ Col | sqlIdentifier }} and drop the surrounding brackets');
+        expect(result.ErrorMessage).toContain('mj query refresh --all --dry-run');
+        expect(result.ErrorMessage).toContain('MJQ_TAG_IN_QUOTED_IDENTIFIER');
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('gives a caller who may not run the query the not-found message, never the detail', async () => {
+        seed(BRACKETED, [HR_ROLE]);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name' } }, staff);
+        expect(result.ErrorMessage).toBe("Query 'q-1' does not exist or you do not have permission to run it.");
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Col: 'Name' } } }], staff);
+        expect(batch.results.map(r => r.errorMessage)).toEqual(["Query 'q-1' does not exist or you do not have permission to run it."]);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('refuses an authorized caller in a cache-checked batch with the same detail, running nothing', async () => {
+        seed(BRACKETED);
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Col: 'Name' } } }], staff);
+        expect(batch.results[0].status).toBe('error');
+        expect(batch.results[0].errorMessage).toMatch(/^Query "Project Column" cannot run: .*sqlIdentifier/);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('runs the same query written with sqlIdentifier and no brackets', async () => {
+        seed('SELECT ID, {{ Col | sqlIdentifier }} FROM vwProjects');
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name' } }, staff);
+        expect(result.Success).toBe(true);
+        expect(provider.Executed).toEqual(['SELECT ID, [Name] FROM vwProjects']);
+    });
+
+    it('lists a string-literal tag and an identifier tag in one refusal', async () => {
+        seed("SELECT ID, [{{ Col }}] FROM vwProjects WHERE OwnerID = '{{ Owner }}'");
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name', Owner: 'a' } }, staff);
+        expect(result.ErrorMessage).toMatch(/^Query "Project Column" cannot run: .*\[\{\{ Col \}\}\]; \{\{ Owner \}\} \(parameter "Owner"\) at line 1, column 57: '\{\{ Owner \}\}'\./);
+        expect(result.ErrorMessage).toContain("Fix: replace '{{ Owner }}' with {{ Owner | sqlString }}");
+        expect(result.ErrorMessage).toContain('Fix: replace [{{ Col }}] with {{ Col | sqlIdentifier }}');
+        expect(provider.Executed).toEqual([]);
+    });
+});
+
 /**
  * A server-side result cache that keeps whatever a run returned, already narrowed for its caller,
  * under the slot key the provider hands its cache hooks. Keeping narrowed rows is the careless

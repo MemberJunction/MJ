@@ -4,7 +4,7 @@ import type {
     CompositionReference, DeclaredTemplateParameter, Diagnostic, TemplateExpression, TemplateLiteralValue,
 } from '@memberjunction/sql-parser';
 import type { QueryParameterDefinition } from '@memberjunction/query-processor';
-import { IsQuotedValueTag, QuotedTagRefusalMessage } from './quotedTagRefusal.js';
+import { IsQuotedTagCode, IsQuotedValueTag, QuotedTagRefusalMessage } from './quotedTagRefusal.js';
 
 /** The body of a composition tag, `query:"…"`. */
 const COMPOSITION_TAG = /^\s*query\s*:/;
@@ -21,13 +21,14 @@ export const COMPOSITION_RECORDER_NAME = '__mjComposition';
  * call, attribute access other than `.length`, a subscript, an unknown filter, a malformed tag)
  * never reaches Nunjucks. A code added later stops a run until it is listed here.
  *
- * A value tag inside a SQL string literal (`MJQ_TAG_IN_STRING_LITERAL`) is not listed: its value
- * is pasted between the quotes unescaped, so a value holding a quote can change the statement, and
- * a run stops for it whenever the query was saved. A composition tag, block or comment inside a
- * literal pastes no value and does not stop a run.
+ * A value tag inside quotes is not listed, whenever the query was saved: inside a SQL string
+ * literal (`MJQ_TAG_IN_STRING_LITERAL`, `'{{ Region }}'`) or a quoted identifier
+ * (`MJQ_TAG_IN_QUOTED_IDENTIFIER`, `[{{ Col }}]`, `"{{ Col }}"`, `` `{{ Col }}` ``), its value is
+ * pasted between the quotes unescaped, so a value holding the closing quote can end the literal or
+ * identifier and change the statement; a run stops for it. A composition tag, block or comment in
+ * either place pastes no value and does not stop a run.
  */
 export const SAVE_TIME_ONLY_RULES: ReadonlySet<string> = new Set([
-    MJQueryDiagnosticCodes.TagInQuotedIdentifier,
     MJQueryDiagnosticCodes.UnfilteredValue,
     MJQueryDiagnosticCodes.UnfilteredUntyped,
     MJQueryDiagnosticCodes.ArithmeticInHole,
@@ -76,8 +77,8 @@ export class TemplateUnit {
     /**
      * The interpreter gate: validates the template by the MJ Query language in Refresh mode and
      * refuses it on any error other than the {@link SAVE_TIME_ONLY_RULES}. Nunjucks only ever
-     * evaluates a template that passed. A tag inside a SQL string literal is refused with a message
-     * for the query's owners ({@link QuotedTagRefusalMessage}): where each tag is, why, the fix,
+     * evaluates a template that passed. A value tag inside a SQL string literal or a quoted
+     * identifier is refused with one message for the query's owners ({@link QuotedTagRefusalMessage}): where each tag is, why, the fix,
      * and how to find every query with the same problem.
      *
      * Callers authorize the run (`UserCanRun`, for the query and each query it composes) before
@@ -91,9 +92,9 @@ export class TemplateUnit {
         const check = this.Template.Validate({ Mode: 'Refresh', DeclaredParameters: declaredParameters(declared) });
         const refusals = check.Diagnostics.filter(d => d.Severity === 'Error' && this.stopsRun(d));
         if (refusals.length === 0) return;
-        const quoted = refusals.some(d => d.Code === MJQueryDiagnosticCodes.TagInStringLiteral)
+        const quoted = refusals.some(d => IsQuotedTagCode(d.Code))
             ? QuotedTagRefusalMessage(queryName, this.source, this.dialect) : null;
-        const others = refusals.filter(d => d.Code !== MJQueryDiagnosticCodes.TagInStringLiteral);
+        const others = refusals.filter(d => !IsQuotedTagCode(d.Code));
         const rest = others.length > 0 ? `Query template ${label} cannot be rendered: ${others.map(describe).join(' ')}` : null;
         throw new Error([quoted, rest].filter((m): m is string => m !== null).join(' ')
             || `Query template ${label} cannot be rendered: ${refusals.map(describe).join(' ')}`);
@@ -101,10 +102,11 @@ export class TemplateUnit {
 
     /**
      * Whether an error stops a run: every error but the {@link SAVE_TIME_ONLY_RULES}, and, of the
-     * tags inside a SQL string literal, those that paste a value ({@link IsQuotedValueTag}).
+     * tags inside a SQL string literal or a quoted identifier, those that paste a value
+     * ({@link IsQuotedValueTag}).
      */
     private stopsRun(diagnostic: Diagnostic): boolean {
-        if (diagnostic.Code === MJQueryDiagnosticCodes.TagInStringLiteral) {
+        if (IsQuotedTagCode(diagnostic.Code)) {
             return IsQuotedValueTag(this.SQL.substring(diagnostic.Span.Start, diagnostic.Span.End));
         }
         return !SAVE_TIME_ONLY_RULES.has(diagnostic.Code);

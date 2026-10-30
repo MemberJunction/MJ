@@ -201,8 +201,8 @@ describe('Nunjucks templates', () => {
 
     // SQL quoting does not hide a tag (guides/MJ_QUERY_LANGUAGE.md §1): a tag inside a string literal or a quoted
     // identifier is still a tag (B12). Save refuses both placements (MJQ_TAG_IN_STRING_LITERAL,
-    // MJQ_TAG_IN_QUOTED_IDENTIFIER). A value tag inside a string literal also stops every run, since its value would be
-    // pasted between the quotes unescaped; a tag in a quoted identifier keeps running, as it did when flagged.
+    // MJQ_TAG_IN_QUOTED_IDENTIFIER). A value tag in either place also stops every run, since its value would be pasted
+    // between the quotes unescaped.
     it('refuses to run a value tag inside a string literal, with the fix (B12)', () => {
         stubMetadata();
         const sql = `SELECT 'literal {{ word }} text' AS s FROM t`;
@@ -216,14 +216,50 @@ describe('Nunjucks templates', () => {
         expect(result.FinalSQL).toBe(`SELECT 'O''Brien' AS s FROM t`);
     });
 
-    it('renders a tag inside a bracket identifier (B12; refused at save)', () => {
+    it('refuses to run a value tag inside a bracket identifier, with the sqlIdentifier fix (B12)', () => {
         stubMetadata();
-        const result = RenderPipeline.Run('SELECT [{{ col }}] FROM t', {
-            Platform: 'sqlserver',
-            UsesTemplate: false,
-            Parameters: { col: 'Name' },
-        });
+        expect(() => RenderPipeline.Run('SELECT [{{ col }}] FROM t', { Platform: 'sqlserver', UsesTemplate: false, Parameters: { col: 'Name] FROM t; --' } }))
+            .toThrow(/^This query cannot run: .*\{\{ col \}\} \(parameter "col"\) at line 1, column 9: \[\{\{ col \}\}\].*a value that contains the closing \] can end the identifier.*Fix: replace \[\{\{ col \}\}\] with \{\{ col \| sqlIdentifier \}\} and drop the surrounding brackets/);
+    });
+
+    it('refuses to run a value tag inside a PostgreSQL double-quoted identifier', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT "{{ col }}" FROM t', { Platform: 'postgresql', UsesTemplate: false, Parameters: { col: 'Name' } }))
+            .toThrow(/^This query cannot run: .*at line 1, column 9: "\{\{ col \}\}".*closing " can end the identifier.*Fix: replace "\{\{ col \}\}" with \{\{ col \| sqlIdentifier \}\} and drop the surrounding double quotes/);
+    });
+
+    it('runs the same name written with sqlIdentifier and no brackets', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT {{ col | sqlIdentifier }} FROM t', { Platform: 'sqlserver', UsesTemplate: false, Parameters: { col: 'Name' } });
         expect(result.FinalSQL).toBe('SELECT [Name] FROM t');
+    });
+
+    it('lists a string-literal tag and an identifier tag in one refusal, with both fixes', () => {
+        stubMetadata();
+        let message = '';
+        try {
+            RenderPipeline.Run("SELECT [{{ col }}] FROM t WHERE Region = '{{ Region }}'", { Platform: 'sqlserver', UsesTemplate: true, Parameters: { col: 'Name', Region: 'West' } });
+        } catch (e) {
+            message = e instanceof Error ? e.message : String(e);
+        }
+        expect(message).toMatch(/^This query cannot run: .*\[\{\{ col \}\}\]; \{\{ Region \}\} \(parameter "Region"\) at line 1, column 43: '\{\{ Region \}\}'\./);
+        expect(message).toContain("Fix: replace '{{ Region }}' with {{ Region | sqlString }}");
+        expect(message).toContain('Fix: replace [{{ col }}] with {{ col | sqlIdentifier }}');
+        expect(message).toContain('MJQ_TAG_IN_STRING_LITERAL or MJQ_TAG_IN_QUOTED_IDENTIFIER');
+        expect(message).not.toContain('cannot be rendered');
+    });
+
+    it('refuses the composing run when a dependency writes a value tag inside a quoted identifier, naming the dependency', () => {
+        stubMetadata();
+        const deps = [{ Name: 'ByColumn', CategoryPath: '/Test/', UsesTemplate: true, SQL: 'SELECT ID, [{{ Col }}] AS V FROM t' }];
+        expect(() => RenderPipeline.Run('SELECT x.V FROM {{query:"Test/ByColumn(Col=Col)"}} x', { Platform: 'sqlserver', UsesTemplate: true, Dependencies: deps, Parameters: { Col: 'Name' } }))
+            .toThrow(/^Query "Test\/ByColumn" cannot run: .*\{\{ Col \}\} \(parameter "Col"\) at line 1, column 13: \[\{\{ Col \}\}\].*Fix: replace \[\{\{ Col \}\}\] with \{\{ Col \| sqlIdentifier \}\}/);
+    });
+
+    it('does not stop a run for a block inside a quoted identifier', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT [Total{% if Net %}Net{% endif %}] FROM t', { Platform: 'sqlserver', UsesTemplate: true, Parameters: { Net: true } });
+        expect(result.FinalSQL).toBe('SELECT [TotalNet] FROM t');
     });
 
     it('throws when a template processing error occurs', () => {
