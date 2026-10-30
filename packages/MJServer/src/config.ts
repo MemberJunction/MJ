@@ -6,6 +6,14 @@ import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import {
+  AgentRunWatchdogSchema,
+  AgentSessionsSchema,
+  DEFAULT_AGENT_RUN_WATCHDOG_SETTINGS,
+  DEFAULT_SESSION_JANITOR_SETTINGS,
+  IntervalMsFromEnv,
+  SessionJanitorEnabledDefault,
+} from './backgroundSweepConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -904,6 +912,8 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  agentSessions: AgentSessionsSchema.optional().default({}),
+  agentRunWatchdog: AgentRunWatchdogSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
@@ -1112,6 +1122,35 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
     staleLockCleanupInterval: 300000
+  },
+
+  // AI Agent Session janitor defaults (on, 60s tick). MJ_SESSION_JANITOR_ENABLED=false turns the
+  // periodic tick off; MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS changes it. Read here, not in the
+  // schema, because this object is the merge base (see the telemetry note below).
+  agentSessions: {
+    janitor: {
+      enabled: SessionJanitorEnabledDefault(process.env.MJ_SESSION_JANITOR_ENABLED),
+      sweepIntervalMs: IntervalMsFromEnv(
+        'MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS',
+        process.env.MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS,
+        DEFAULT_SESSION_JANITOR_SETTINGS.sweepIntervalMs,
+        false
+      ),
+      closeThresholdMinutes: DEFAULT_SESSION_JANITOR_SETTINGS.closeThresholdMinutes,
+    },
+  },
+
+  // Agent-run watchdog defaults (5-min stale-run sweep while runs are in flight).
+  // MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS=0 leaves only the startup sweep.
+  agentRunWatchdog: {
+    sweepIntervalMs: IntervalMsFromEnv(
+      'MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS',
+      process.env.MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS,
+      DEFAULT_AGENT_RUN_WATCHDOG_SETTINGS.sweepIntervalMs,
+      true
+    ),
+    heartbeatIntervalMs: DEFAULT_AGENT_RUN_WATCHDOG_SETTINGS.heartbeatIntervalMs,
+    staleThresholdMinutes: DEFAULT_AGENT_RUN_WATCHDOG_SETTINGS.staleThresholdMinutes,
   },
 
   // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)

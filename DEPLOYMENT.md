@@ -12,6 +12,7 @@ This document is the **build-engineering guide**: the deep checklist that prepar
 > | Looking for policy — channels, certification gates, support windows, backport rules | [`plans/lts-process.md`](plans/lts-process.md) (canon) |
 > | Decoding a version string or choosing a channel | [`VERSIONING.md`](VERSIONING.md); machine-readable release state in [`release-lines.json`](release-lines.json) |
 > | Preparing the release content itself — metadata sync, integration gate, PG migrations, new packages | **This document** (Steps 0–8) |
+> | Configuring a deployed MJAPI so an idle server stops querying its database (serverless SQL auto-pause) — every background poller and its switch | [`packages/MJServer/README.md` → Idle databases](packages/MJServer/README.md#idle-databases-serverless-sql-auto-pause) |
 >
 > **When do Steps 0–8 run?** They are content-prep, not button-prep: run them whenever their inputs have changed — pending `metadata/` changes need a Metadata_Sync migration (Step 3), new SS migrations need PG counterparts (Step 8), new packages need npm placeholders (Step 5) — *before the release that ships that content, whichever channel it ships on*. The LTS candidate cut assumes all of this is already done. **Nothing downstream re-checks this list** — CI going green says nothing about whether Steps 0–8 were run, and Step 3 in particular has no automated detection at all.
 

@@ -1414,3 +1414,79 @@ describe('SessionJanitor.Configure', () => {
         expect(sessionSweepCalls()).toHaveLength(0);
     });
 });
+
+describe('SessionJanitor.StartWithSettings (agentSessions.janitor)', () => {
+    const HOUR = 60 * 60_000;
+    const DEFAULTS = { enabled: true, sweepIntervalMs: 60_000, closeThresholdMinutes: 15 };
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        SessionJanitor.Instance.Stop();
+        SessionJanitor.Instance.Configure({ sweepIntervalMs: DEFAULTS.sweepIntervalMs, closeThresholdMinutes: DEFAULTS.closeThresholdMinutes });
+        vi.clearAllTimers();
+        vi.useRealTimers();
+    });
+
+    it('enabled: runs startup recovery, then ticks on the configured interval with the configured threshold', async () => {
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, sweepIntervalMs: 120_000, closeThresholdMinutes: 30 }, provider, makeUser());
+        expect(sessionSweepCalls()).toHaveLength(1); // startup recovery
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(true);
+
+        vi.setSystemTime(new Date('2026-10-29T12:00:00.000Z'));
+        await vi.advanceTimersByTimeAsync(120_000);
+
+        const staleness = sessionSweepCalls().map(c => c[0].ExtraFilter).find(f => f.includes('LastActiveAt <'));
+        expect(staleness).toBeTruthy();
+        // 30 minutes before the tick, not the default 15.
+        expect(staleness).toContain('2026-10-29T11:32:00.000Z');
+    });
+
+    it('disabled: runs startup recovery once and then issues no queries at all', async () => {
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, enabled: false }, provider, makeUser());
+        expect(sessionSweepCalls()).toHaveLength(1);
+        runViewMock.mockClear();
+
+        await vi.advanceTimersByTimeAsync(HOUR);
+
+        expect(runViewMock).not.toHaveBeenCalled();
+        expect(ledgerMock.PurgeClosedBefore).not.toHaveBeenCalled();
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(false);
+    });
+
+    it('disabled: still drains this host\'s live sessions on graceful shutdown', async () => {
+        sessionPages = [
+            { Success: true, Results: [] },                                   // startup recovery
+            { Success: true, Results: [{ ID: 'mine-3', Status: 'Active' }] }, // shutdown drain
+        ];
+        const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['mine-3', 'Active']]);
+        const { provider, closedIds, closedReasons } = makeProvider(store);
+
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, enabled: false }, provider, makeUser());
+        await SessionJanitor.Instance.Shutdown();
+
+        expect(closedIds).toContain('mine-3');
+        expect(closedReasons.get('mine-3')).toBe('Shutdown');
+    });
+
+    it('disabled after an earlier Start stops the tick that Start scheduled', async () => {
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.Start(provider, makeUser());
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(true);
+
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, enabled: false }, provider, makeUser());
+
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(false);
+    });
+
+    it('rejects an invalid interval before doing any work', async () => {
+        const { provider } = makeProvider(new Map());
+        await expect(SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, sweepIntervalMs: 0 }, provider, makeUser()))
+            .rejects.toThrow(/sweepIntervalMs must be a finite number greater than 0/);
+        expect(sessionSweepCalls()).toHaveLength(0);
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(false);
+    });
+});

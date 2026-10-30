@@ -2906,17 +2906,26 @@ export class BaseAgent {
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
             this._runAbortController = null;
-            // A cancellation, or an error thrown out of the step loop, leaves any held decision
-            // requests unasked. The terminate path has already logged and cleared its own.
-            this.skipHeldDecisions(params, this.runEndForHeldDecisions());
-            this.releasePerRunDataCache();
-            await this.finalizeRun(this.deriveRunOutcome());
-            if (this._agentRun?.ID) {
-                AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
-            }
-            // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
-            this.clearRunBoundState();
+            await this.endRun(params);
         }
+    }
+
+    /**
+     * {@link Execute}'s per-run teardown, called from its top-level `finally` on every exit path.
+     * The run leaves the watchdog first, before the subclass {@link finalizeRun} hook, so a hook
+     * that throws can never leave a finished run being heart-beaten for the life of the process.
+     */
+    private async endRun(params: ExecuteAgentParams): Promise<void> {
+        if (this._agentRun?.ID) {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
+        // A cancellation, or an error thrown out of the step loop, leaves any held decision
+        // requests unasked. The terminate path has already logged and cleared its own.
+        this.skipHeldDecisions(params, this.runEndForHeldDecisions());
+        this.releasePerRunDataCache();
+        await this.finalizeRun(this.deriveRunOutcome());
+        // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
+        this.clearRunBoundState();
     }
 
     /**

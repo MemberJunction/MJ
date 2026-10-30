@@ -302,6 +302,17 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 - Sub-agent data
 - Prompt configurations
 
+### AgentRunWatchdog
+
+Process-wide guard that keeps an `AIAgentRun` from being left `Running` forever when its process dies or its final save fails. `BaseAgent` calls `Track()` once the run row exists and `Untrack()` as soon as the run leaves `Running` (Completed, Failed, Cancelled, AwaitingFeedback or Paused) — first thing in `Execute()`'s teardown, before any subclass `finalizeRun` hook.
+
+- **Heartbeat** — every `heartbeatIntervalMs` (30s) it stamps `LastHeartbeatAt` on this process's in-flight runs.
+- **Sweep** — every `sweepIntervalMs` (5 min) it force-fails `Running` runs whose heartbeat went stale (`staleThresholdMinutes`, 5) and drops finished runs from its tracked set. The host also runs `SweepOrphanedRuns` once at startup.
+- **Stop relay** — every 3s it checks whether one of its runs was marked `Cancelled` (the Stop button) and aborts that run.
+- **Idle** — every timer runs only while at least one run is tracked. The last run leaving stops them all, and the next `Track()` starts them again, so an idle process issues no periodic database statements.
+
+Tune it with `AgentRunWatchdog.Instance.Configure({ ... })`; MJServer passes its `agentRunWatchdog` settings through at startup. `sweepIntervalMs: 0` turns the periodic sweep off (the startup sweep still runs, and the tracked-set prune moves to the heartbeat). Other values must be greater than 0; an invalid value throws.
+
 > 📖 **Memory is a big topic.** For the complete architecture — the three-tier model, injection and scoping, the in-flight write pipeline, and the Memory Manager's hardening/consolidation/decay phases — see the **[Agent Memory Guide](../../../guides/AGENT_MEMORY_GUIDE.md)**. The sections below are component-level summaries.
 
 ### MemoryWriteManager (In-Flight Memory Writes)

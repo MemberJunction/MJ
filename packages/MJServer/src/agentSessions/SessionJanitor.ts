@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/ai-agents';
 import { GetCurrentHostInstance, GetHostInstanceID, HostInstanceIdentity } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
+import type { SessionJanitorSettings } from '../backgroundSweepConfigUnits.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -316,6 +317,39 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         this.ensureRegistered();
         await this.RunStartupRecovery(provider, systemUser);
         this.scheduleSweep();
+    }
+
+    /**
+     * Starts the janitor the way the host's `agentSessions.janitor` settings ask: applies the interval
+     * and close threshold, then {@link Start} when enabled, or {@link StartRecoveryOnly} when not.
+     * Throws (before doing any work) on an invalid interval or threshold; see {@link Configure}.
+     */
+    public async StartWithSettings(settings: SessionJanitorSettings, provider: DatabaseProviderBase, systemUser: UserInfo): Promise<void> {
+        this.Configure({ sweepIntervalMs: settings.sweepIntervalMs, closeThresholdMinutes: settings.closeThresholdMinutes });
+        if (settings.enabled) {
+            await this.Start(provider, systemUser);
+        } else {
+            await this.StartRecoveryOnly(provider, systemUser);
+        }
+    }
+
+    /**
+     * {@link Start} without the periodic tick, for hosts that turned the janitor off: run own-host
+     * startup recovery once and register for the graceful-shutdown drain, but schedule nothing, so an
+     * idle process issues no periodic queries. Stale-session, max-duration and recording-recovery
+     * sweeps then do not run in this process. Stops a tick an earlier {@link Start} scheduled.
+     */
+    public async StartRecoveryOnly(provider: DatabaseProviderBase, systemUser: UserInfo): Promise<void> {
+        this.Stop();
+        this._provider = provider;
+        this._systemUser = systemUser;
+        this.ensureRegistered();
+        await this.RunStartupRecovery(provider, systemUser);
+    }
+
+    /** Whether the periodic tick is currently scheduled (diagnostics and tests). */
+    public get IsSweepScheduled(): boolean {
+        return this._sweepTimer !== null;
     }
 
     /**

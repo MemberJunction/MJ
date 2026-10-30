@@ -1603,6 +1603,9 @@ const setupComplete$ = new ReplaySubject(1);
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
 
+  // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
+  AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+
   // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
   //
   // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
@@ -1702,7 +1705,7 @@ const setupComplete$ = new ReplaySubject(1);
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       const sweepUser = resumeUser;
       const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser, configInfo.agentRunWatchdog)
         .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
 
       // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
@@ -1726,7 +1729,8 @@ const setupComplete$ = new ReplaySubject(1);
     // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
     // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-      SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      // `agentSessions.janitor.enabled: false` keeps the boot recovery and shutdown drain but schedules no tick.
+      SessionJanitor.Instance.StartWithSettings(configInfo.agentSessions.janitor, Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
         .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
       // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
       // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
