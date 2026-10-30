@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["office-js"]
+  },
+  "include": ["src/web/**/*.ts", "src/contract.ts", "src/handoff.ts"],
+  "exclude": ["node_modules", "**/*.test.ts", "**/__tests__/**"]
+}

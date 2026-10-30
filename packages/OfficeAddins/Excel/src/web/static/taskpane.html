@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemberJunction</title>
+  <!-- Office add-ins must load office.js from Microsoft's CDN. -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="pane.css">
+  <script type="module" src="taskpane.js"></script>
+</head>
+<body>
+  <header class="pane-header">
+    <img src="assets/icon-32.png" alt="" width="24" height="24">
+    <div>
+      <div class="pane-title">MemberJunction</div>
+      <div class="pane-subtitle" id="server-name"></div>
+    </div>
+  </header>
+
+  <div class="notice" id="notice" role="status" hidden></div>
+
+  <section class="card" id="signed-out" hidden>
+    <p>Sign in with your MemberJunction account to load this workbook's data. You only need to do this once on this computer.</p>
+    <button type="button" class="button button-primary" id="sign-in">Sign in</button>
+  </section>
+
+  <section class="card" id="signed-in" hidden>
+    <p>Signed in as <strong id="signed-in-as"></strong>.</p>
+    <p class="muted" id="expires"></p>
+    <button type="button" class="button button-link" id="sign-out">Sign out on this computer</button>
+  </section>
+
+  <section class="card" id="no-sources">
+    <p>This workbook has no MemberJunction data yet.</p>
+    <p class="muted">In MemberJunction, open a saved view or a saved query and choose <strong>Open in Excel</strong>. The workbook it downloads fills in here.</p>
+  </section>
+
+  <div class="notice is-error" id="sources-error" role="alert" hidden></div>
+
+  <section id="sources" hidden>
+    <div class="sources-header">
+      <h2>Data in this workbook</h2>
+      <button type="button" class="button button-primary" id="refresh-all">Refresh all</button>
+    </div>
+    <ul class="source-list" id="source-list"></ul>
+    <p class="muted">Each refresh loads what your MemberJunction account can see right now.</p>
+  </section>
+</body>
+</html>

@@ -1,0 +1,145 @@
+/*
+ * The Excel pane runs inside Excel, not MJ Explorer, so MJ's design tokens are not defined here.
+ * Every colour uses the token's name with a fallback, so a host that injects the tokens restyles
+ * the pane and every other host gets MJ's default light theme.
+ */
+:root {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--mj-text-primary, #1f2937);
+  background: var(--mj-bg-page, #f8fafc);
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pane-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.pane-subtitle,
+.muted {
+  color: var(--mj-text-muted, #64748b);
+  font-size: 12px;
+}
+
+.card {
+  background: var(--mj-bg-surface, #ffffff);
+  border: 1px solid var(--mj-border-default, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.card p {
+  margin: 0 0 8px;
+}
+
+.notice {
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--mj-status-info-bg, #eff6ff);
+  color: var(--mj-status-info-text, #1e40af);
+  border: 1px solid var(--mj-status-info-border, #bfdbfe);
+}
+
+.notice.is-error {
+  background: var(--mj-status-error-bg, #fef2f2);
+  color: var(--mj-status-error-text, #b91c1c);
+  border-color: var(--mj-status-error-border, #fecaca);
+}
+
+.sources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sources-header h2 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.source-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+
+.source {
+  background: var(--mj-bg-surface, #ffffff);
+  border: 1px solid var(--mj-border-default, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.source-title {
+  font-weight: 600;
+}
+
+.source-detail {
+  color: var(--mj-text-secondary, #475569);
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+
+.source-detail.is-error {
+  color: var(--mj-status-error-text, #b91c1c);
+}
+
+.button {
+  font: inherit;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--mj-border-focus, #264faf);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.button-primary {
+  background: var(--mj-brand-primary, #264faf);
+  color: var(--mj-brand-on-primary, #ffffff);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--mj-brand-primary-hover, #1e3f8c);
+}
+
+.button-secondary {
+  background: var(--mj-bg-surface, #ffffff);
+  color: var(--mj-text-primary, #1f2937);
+  border-color: var(--mj-border-strong, #cbd5e1);
+}
+
+.button-link {
+  background: none;
+  color: var(--mj-text-link, #264faf);
+  padding: 0;
+}
+
+.dialog-message {
+  margin: 24px;
+  font-size: 15px;
+}
