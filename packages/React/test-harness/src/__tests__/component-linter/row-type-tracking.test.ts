@@ -86,6 +86,22 @@ describe('row-type tracking for field-access validation', () => {
     expect(await misnamedFields(code)).toEqual(['Regin']);
   });
 
+  it('follows rows on the right of `||` when the left side is not rows', async () => {
+    const code = component(
+      `const useCache = false; const list = useCache || result.Results; setRows(list.map(r => r.Regin));`,
+      `return <div>{rows.length}</div>;`
+    );
+    expect(await misnamedFields(code)).toEqual(['Regin']);
+  });
+
+  it('follows rows on the right of `??` when the left side is not rows', async () => {
+    const code = component(
+      `const cached = null; const list = cached ?? result.Results; setRows(list.map(r => r.AcountName));`,
+      `return <div>{rows.length}</div>;`
+    );
+    expect(await misnamedFields(code)).toEqual(['AcountName']);
+  });
+
   it('follows rows stored in React state and read in render', async () => {
     const code = component(
       `if (result.Success) setRows(result.Results);`,
