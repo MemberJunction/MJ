@@ -65,6 +65,11 @@ const ALGORITHM_ALIASES: Readonly<Record<string, string>> = {
   neuralnetwork: 'multilayerperceptron',
 };
 
+/** A name as the tolerant matchers compare it: lower-case letters and digits only (`Random Forest` → `randomforest`). */
+function normalizeName(s: string | null | undefined): string {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 /** An `MJ: ML Algorithms` row an experiment's algorithm name resolved to. */
 export type ResolvedAlgorithm = Pick<MJMLAlgorithmEntity, 'ID' | 'DriverClass'>;
 /** The `MJ: ML Algorithms` columns an algorithm name is matched on. */
@@ -246,10 +251,9 @@ export class PredictiveStudioPipelineBuilder {
    * @throws Error listing the available algorithms when nothing matches, or naming both rows when two match
    */
   public static MatchAlgorithm(algorithmName: string, rows: readonly AlgorithmRow[]): ResolvedAlgorithm {
-    const normalize = (s: string | null | undefined): string => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const normalized = normalize(algorithmName);
+    const normalized = normalizeName(algorithmName);
     const want = ALGORITHM_ALIASES[normalized] || normalized;
-    const matches = rows.filter((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
+    const matches = rows.filter((a) => normalizeName(a.Name) === want || normalizeName(a.DriverClass) === want);
     if (matches.length === 0) {
       const available = rows.map((a) => a.Name).join(', ');
       throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. Available: ${available || '(none)'}.`);
@@ -542,8 +546,7 @@ export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): 
   if (direct) return direct;
 
   const trimmed = nameOrView.trim().toLowerCase();
-  const normalize = (s: string | null | undefined): string => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const normalizedTarget = normalize(nameOrView);
+  const normalizedTarget = normalizeName(nameOrView);
 
   for (const e of provider.Entities) {
     if (e.Name.trim().toLowerCase() === trimmed) return e;
@@ -553,12 +556,12 @@ export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): 
     if (e.SchemaName && e.BaseView && `${e.SchemaName}.${e.BaseView}`.trim().toLowerCase() === trimmed) return e;
     if (e.SchemaName && e.BaseTable && `${e.SchemaName}.${e.BaseTable}`.trim().toLowerCase() === trimmed) return e;
 
-    if (normalize(e.Name) === normalizedTarget) return e;
-    if (e.BaseView && normalize(e.BaseView) === normalizedTarget) return e;
-    if (e.BaseTable && normalize(e.BaseTable) === normalizedTarget) return e;
+    if (normalizeName(e.Name) === normalizedTarget) return e;
+    if (e.BaseView && normalizeName(e.BaseView) === normalizedTarget) return e;
+    if (e.BaseTable && normalizeName(e.BaseTable) === normalizedTarget) return e;
 
     const strippedPrefix = e.Name.replace(/^[^:]+:\s*/, '').trim().toLowerCase();
-    if (strippedPrefix === trimmed || normalize(strippedPrefix) === normalizedTarget) return e;
+    if (strippedPrefix === trimmed || normalizeName(strippedPrefix) === normalizedTarget) return e;
   }
   return undefined;
 }
