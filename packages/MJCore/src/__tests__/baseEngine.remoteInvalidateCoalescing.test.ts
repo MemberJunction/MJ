@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { BaseEngine, BaseEnginePropertyConfig, RemoteInvalidatePayload } from '../generic/baseEngine';
 import { BaseEntityEvent } from '../generic/baseEntity';
 import { UserInfo } from '../generic/securityInfo';
@@ -121,11 +121,41 @@ function newEngine(): TestEngine {
     return engine;
 }
 
+const SHIPPED_FOLLOW_UP_DELAY_MS = BaseEngine.ExternalChangeFollowUpDelayMs;
+
+beforeEach(() => {
+    // Most checks here are about which reloads run, not when: no wait before a follow-up.
+    BaseEngine.ExternalChangeFollowUpDelayMs = 0;
+});
+
 afterEach(() => {
     vi.useRealTimers();
+    BaseEngine.ExternalChangeFollowUpDelayMs = SHIPPED_FOLLOW_UP_DELAY_MS;
 });
 
 describe('BaseEngine remote-invalidate reload coalescing', () => {
+    it('reloads a steady stream of events without a row at most once per follow-up delay', async () => {
+        vi.useFakeTimers();
+        BaseEngine.ExternalChangeFollowUpDelayMs = 1000;
+        const engine = newEngine();
+        const handled: Promise<boolean>[] = [];
+        // An event every 100 ms for 3 s; each reload finishes as soon as the test releases it.
+        for (let version = 1; version <= 30; version++) {
+            engine.Database = [{ ID: 'a', Version: version }];
+            handled.push(engine.Handle(remoteEvent('MJ: Query Fields')));
+            await settle();
+            engine.ReleaseOldest();
+            await vi.advanceTimersByTimeAsync(100);
+        }
+        // The first reload at 0 s, then one per second of delay, against 30 back to back.
+        expect(engine.LoadCount).toBe(4);
+        await vi.advanceTimersByTimeAsync(1000);
+        engine.ReleaseOldest();
+        await Promise.all(handled);
+        expect(engine.LoadCount).toBe(4);
+        expect(engine.Rows).toEqual([{ ID: 'a', Version: 30 }]);
+    });
+
     it('reloads at most twice for a burst of events without a row, and ends on the last change', async () => {
         const engine = newEngine();
         const handled: Promise<boolean>[] = [];

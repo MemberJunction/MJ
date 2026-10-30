@@ -453,6 +453,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
 
     /**
+     * The least time, in milliseconds, between the end of one reload from
+     * {@link reloadAfterExternalChange} and the start of the next for the same property. A change
+     * that arrives after this long since the last reload reloads at once; one that arrives sooner
+     * (including while a reload is running) waits out the rest of it, and every change that arrives
+     * meanwhile shares that one reload.
+     *
+     * Without it, a steady stream of changes (a server writing rows of one entity a few times a
+     * second) keeps a property reloading back to back. Each full reload costs time proportional to
+     * the table, so the process spends most of its time reloading and the cost of the stream grows
+     * with the square of its length. With it, a property reloads at most once per this delay plus
+     * one reload's duration, and its data is never more than that far behind the last change.
+     * 0 restores back-to-back reloads.
+     */
+    public static ExternalChangeFollowUpDelayMs: number = 1000;
+
+    /** When the last reload from {@link reloadAfterExternalChange} ended, per config PropertyName (epoch ms). */
+    private _externalChangeReloadEndedAt: Map<string, number> = new Map();
+
+    /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
      * current array immediately (BehaviorSubject semantics), then re-receive the same array
      * reference whenever the engine mutates it (save, delete, remote-invalidate, refresh).
@@ -2787,6 +2806,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * that arrives while a reload for the same property is running asks for one more reload after
      * it instead of starting its own. Every caller's promise settles only after a reload that began
      * after its event, so no change is missed, but N events in a burst cost at most two reloads.
+     * Successive reloads of one property are at least {@link ExternalChangeFollowUpDelayMs} apart.
      * Requests for different properties never share a reload.
      *
      * @param bypassCache - Read past the cache. When any request folded into a reload asks for
@@ -2815,10 +2835,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         try {
             let lastError: Error | null = null;
             do {
+                const wait = this.reloadSpacingRemainingMs(config.PropertyName);
+                if (wait > 0) {
+                    // Requests that arrive during the wait join the reload that follows it.
+                    await new Promise<void>(resolve => setTimeout(resolve, wait));
+                }
                 const bypassCache = reload.BypassCache;
                 reload.Again = false;
                 reload.BypassCache = false;
                 lastError = await this.runOneExternalChangeReload(config, bypassCache);
+                this._externalChangeReloadEndedAt.set(config.PropertyName, Date.now());
                 if (lastError && reload.Again) {
                     LogError(lastError);
                 }
@@ -2829,6 +2855,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         } finally {
             this._externalChangeReloads.delete(config.PropertyName);
         }
+    }
+
+    /** How long the next reload of the property must still wait for {@link ExternalChangeFollowUpDelayMs}; 0 when it may start now. */
+    private reloadSpacingRemainingMs(propertyName: string): number {
+        const endedAt = this._externalChangeReloadEndedAt.get(propertyName);
+        return endedAt === undefined ? 0 : Math.max(0, endedAt + BaseEngine.ExternalChangeFollowUpDelayMs - Date.now());
     }
 
     /** One reload for {@link runExternalChangeReloads}. Returns the error it threw, or null. */
