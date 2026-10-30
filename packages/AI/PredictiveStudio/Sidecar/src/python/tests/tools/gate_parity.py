@@ -5,7 +5,8 @@ built `dist`) decide seeded random gate inputs through a Node script (`scripts/g
 draws, same order as the reference generator). Each Python gate under test recomputes every decision, and every interval
 boolean as `lower > margin`; the two must agree on every case, and every branch must be hit in each loop.
 
-Both gates are compared from here: the sidecar's `app.gate.gate_decision` (tests/test_gate_parity.py, sidecar venv)
+This module imports only the standard library (each caller injects its gate), so the TruthSuite test can load it by
+file path without putting the sidecar's `app` or `tests` packages on the import path. Both gates are compared from here: the sidecar's `app.gate.gate_decision` (tests/test_gate_parity.py, sidecar venv)
 and the reference pipeline's `truthsuite.refpipe.run.gate_decision` (the TruthSuite package's
 tests/test_gate_parity_refpipe.py, TruthSuite venv). Each caller supplies only its `gate_decision` and `GATE_BRANCHES`.
 """
@@ -73,7 +74,11 @@ def load_cases(seed: int, n: int) -> Cases:
     assert CORE_ENTRY.exists(), (
         f"the built Core is missing ({CORE_ENTRY}): run `cd packages/AI/PredictiveStudio/Core && pnpm run build` first"
     )
-    done = subprocess.run([node, str(SCRIPT), str(seed), str(n)], check=True, capture_output=True, text=True, cwd=SIDECAR_ROOT)
+    done = subprocess.run([node, str(SCRIPT), str(seed), str(n)], check=False, capture_output=True, text=True, cwd=SIDECAR_ROOT)
+    assert done.returncode == 0, (
+        "the case generator failed (a stale Core build lacks the gate: run "
+        f"`cd packages/AI/PredictiveStudio/Core && pnpm run build`):\n{done.stderr}"
+    )
     data: Cases = json.loads(done.stdout)
     return data
 
@@ -83,8 +88,8 @@ def _assert_all_branches(branches: Counter[str], expected: Sequence[str], loop: 
     assert not missing, f"{loop} loop never reached branches {missing}; counts {dict(branches)}"
 
 
-def check_decision_loop(seed: int, n: int, gate_decision: GateDecisionFn, gate_branches: Sequence[str]) -> Counter[str]:
-    """Every TypeScript decision of the decision-table loop equals the Python gate's; returns the branch counts."""
+def check_decision_loop(seed: int, n: int, gate_decision: GateDecisionFn, gate_branches: Sequence[str]) -> None:
+    """Every TypeScript decision of the decision-table loop equals the Python gate's, and every branch is reached."""
     cases = load_cases(seed, n)
     assert len(cases["out"]) == n
     branches: Counter[str] = Counter()
@@ -94,11 +99,10 @@ def check_decision_loop(seed: int, n: int, gate_decision: GateDecisionFn, gate_b
         branches[str(py[1])] += 1
         assert py == k["g"], f"first differing decision case: inputs {i}, Python {py}, TypeScript {k['g']}"
     _assert_all_branches(branches, gate_branches, "decision")
-    return branches
 
 
-def check_interval_loop(seed: int, n: int, gate_decision: GateDecisionFn, gate_branches: Sequence[str]) -> Counter[str]:
-    """Every TypeScript interval-derived input and decision equals `lower > margin` fed to the Python gate."""
+def check_interval_loop(seed: int, n: int, gate_decision: GateDecisionFn, gate_branches: Sequence[str]) -> None:
+    """Every TypeScript interval-derived input and decision equals `lower > margin` fed to the Python gate, and every branch is reached."""
     cases = load_cases(seed, n)
     assert len(cases["iv"]) == n
     branches: Counter[str] = Counter()
@@ -114,4 +118,3 @@ def check_interval_loop(seed: int, n: int, gate_decision: GateDecisionFn, gate_b
         assert derived == k["b"], f"first differing interval-derived inputs: case {k['s']}, margin {mg}, Python {derived}, TypeScript {k['b']}"
         assert py == k["g"], f"first differing interval decision: case {k['s']}, margin {mg}, Python {py}, TypeScript {k['g']}"
     _assert_all_branches(branches, gate_branches, "interval")
-    return branches
