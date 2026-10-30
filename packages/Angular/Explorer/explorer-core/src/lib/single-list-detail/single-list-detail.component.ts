@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, ListMembershipFilter, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
@@ -1249,7 +1249,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     if (entityInfo.PrimaryKeys.length === 1) {
       const listDetailInfo = this.ProviderToUse.EntityByName('MJ: List Details');
       const listDetailsView = `${listDetailInfo?.SchemaName ?? '__mj'}.${listDetailInfo?.BaseView ?? 'vwListDetails'}`;
-      return `${entityInfo.FirstPrimaryKey.Name} IN (SELECT RecordID FROM ${listDetailsView} WHERE ListID='${listId}')`; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+      return ListMembershipFilter(entityInfo.FirstPrimaryKey, listDetailsView, listId); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
     }
     const members = await rv.RunView<{ RecordID: string }>({
       EntityName: 'MJ: List Details',

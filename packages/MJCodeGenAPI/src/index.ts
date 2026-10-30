@@ -9,6 +9,7 @@ import './generated/class-registrations-manifest.js';
 
 import { ServerPort } from "./config";
 import { ___runObject, HandleServerInit } from './util';
+import { CreateRunCodeGenHandler, RequireCodeGenAuth, ResolveCodeGenBindHost } from './codegenRunRoute';
 import { MJGlobal } from '@memberjunction/global';
 import { RunCodeGenBase, SQLCodeGenBase } from '@memberjunction/codegen-lib';
 import { Metadata } from '@memberjunction/core';
@@ -17,7 +18,20 @@ const app = express();
 
 app.use(express.json());
 // get the server up and running
-app.listen(ServerPort, () => console.log('Server starting up...'));
+const bindHost = ResolveCodeGenBindHost();
+if (bindHost) {
+  app.listen(ServerPort, bindHost, () => console.log(`Server starting up on ${bindHost}:${ServerPort}...`));
+} else {
+  app.listen(ServerPort, () => console.log('Server starting up...'));
+}
+
+const handleRunCodeGen = CreateRunCodeGenHandler(async () => {
+  const codeGen = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
+  if (!codeGen) {
+    throw new Error("Couldn't get CodeGenRun object!!!");
+  }
+  await codeGen.Run();
+});
 
 // start the initialization process
 const serverInit$ = from(HandleServerInit()).pipe(
@@ -28,34 +42,10 @@ serverInit$.subscribe({
   next: () => {
     // Start listening for requests only after initialization is complete
 //    app.post ('/api/entity-permissions', handleEntityPermissions);
-    app.post ('/api/run', handleRunCodeGen);
+    app.post ('/api/run', RequireCodeGenAuth, handleRunCodeGen);
   },
   error: (err) => console.error(`Initialization failed: ${err}`),
 });
-
-
-let runningPromise: Promise<void> | null = null;
-async function handleRunCodeGen() {
-  try {
-    if (runningPromise) {
-      return runningPromise;
-    }
-    else {
-      runningPromise = new Promise(async () => {
-        // We now need to process the entity permissions for the entities specified
-        const codeGen = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
-        if (!codeGen) {
-          throw new Error("Couldn't get CodeGenRun object!!!")
-        }
-
-        await codeGen?.Run();
-      });
-    }
-  } 
-  catch (e) {
-
-  } 
-}
 
 // async function handleEntityPermissions(req: any, res: any) {
 //   if (!req || !req.body) 

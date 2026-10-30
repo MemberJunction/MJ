@@ -7,7 +7,7 @@
  */
 
 import { Injectable } from '@angular/core';
-import { LogError, LogStatus, LogStatusEx, Metadata, RunView } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, Metadata, RunView, IsTransportError as CoreIsTransportError, DescribeTransportError } from '@memberjunction/core';
 import { MJThemeEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
@@ -185,12 +185,13 @@ export class WorkspaceInitializerService {
       };
     }
 
-    // Network errors
-    if (err.message?.includes('network') || err.message?.includes('fetch')) {
+    // Network / transport errors — see IsTransportError for why this is not a
+    // two-word substring test any more.
+    if (WorkspaceInitializerService.IsTransportError(err)) {
       return {
         type: 'network',
-        message: err.message,
-        userMessage: 'Network error. Please check your connection and try again.',
+        message: err.message || WorkspaceInitializerService.describeTransportError(err),
+        userMessage: 'We could not reach the server. Please check your connection and try again.',
         shouldRetry: true
       };
     }
@@ -207,6 +208,30 @@ export class WorkspaceInitializerService {
   /** @deprecated Use {@link ClassifyError}. */
   classifyError(err: any): WorkspaceInitError {
     return this.ClassifyError(err);
+  }
+
+  /**
+   * True when the error describes the transport failing rather than the server refusing.
+   *
+   * One definition, shared with the metadata provider in `@memberjunction/core`
+   * ({@link CoreIsTransportError}), so a shape that counts as transport for the bootstrap
+   * banner counts as transport for the provider's cache fallback too — and a refusal (a key
+   * without the scope, a user without the role) is "not transport" in both places.
+   *
+   * Static and public so the classification can be tested directly and reused without
+   * standing up the service's four injected dependencies.
+   */
+  public static IsTransportError(err: unknown): boolean {
+    return CoreIsTransportError(err);
+  }
+
+  /**
+   * A message for a transport error that carries no `message` of its own — a bare
+   * `{ response: { status: 504 } }`, for example. Without this the surfaced text would be
+   * empty and the banner would show nothing at all.
+   */
+  private static describeTransportError(err: unknown): string {
+    return DescribeTransportError(err);
   }
 
   /**
