@@ -51,6 +51,9 @@ export type SessionChannelState = 'open' | 'closed';
  * session deadline ended it, stamped `TimeLimit` on the row). `'unknown'`
  * covers any other client-observable end path. Janitor/shutdown happen
  * out-of-process and never reach the runtime — see the module-level scope cut.
+ *
+ * An intentional superset copy of the realtime runtime's `SessionEndReason` (adds `'unknown'`); it does not import
+ * `@memberjunction/realtime-runtime`, to keep this domain runtime free of driver dependencies.
  */
 export type SessionEndReason = 'explicit' | 'error' | 'deadline' | 'unknown';
 

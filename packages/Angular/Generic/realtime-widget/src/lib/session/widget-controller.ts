@@ -91,8 +91,15 @@ const PRE_LIVE_PHASES: ReadonlySet<WidgetPhase> = new Set<WidgetPhase>(['booting
 /** Phases a connection state must never move the widget OUT of: ended/failed stays ended/failed. */
 const TERMINAL_PHASES: ReadonlySet<WidgetPhase> = new Set<WidgetPhase>(['ended', 'error']);
 
-/** `setTimeout` takes a 32-bit delay; a deadline further out than this is re-armed in hops. */
-const MAX_TIMER_MS = 2_147_000_000;
+/**
+ * How the widget names a call's end when the widget did not end it itself. Keyed by every runtime reason so a new one
+ * fails to compile here instead of silently reading as `'remote'`.
+ */
+const RUNTIME_END_TO_WIDGET_END: Readonly<Record<SessionEndReason, WidgetEndReason>> = {
+  explicit: 'remote',
+  error: 'error',
+  deadline: 'deadline',
+};
 
 export const CONNECTION_LOST_MESSAGE = 'The connection was interrupted. Please try again.';
 
@@ -153,7 +160,6 @@ export class WidgetController {
   private guest: WidgetGuestSession | null = null;
   private guestSource: WidgetGuestSessionSource | null = null;
   private disposed = false;
-  private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   /** Bumped by every start/end/dispose; a launch that finds it changed has been abandoned. */
   private launchGeneration = 0;
   private endReason: WidgetEndReason | null = null;
@@ -330,7 +336,6 @@ export class WidgetController {
     }
     this.disposed = true;
     this.launchGeneration++;
-    this.clearDeadlineTimer();
     if (this.deps.pageClose.IsArmed) {
       this.deps.pageClose.OnHostTeardown();
     }
@@ -417,7 +422,6 @@ export class WidgetController {
     this.ownsRuntimeCall = false;
     this.sawOwnState = false;
     this.guest = null;
-    this.clearDeadlineTimer();
     this.deps.runtime.SetSessionDeadline(null);
   }
 
@@ -619,7 +623,6 @@ export class WidgetController {
     this.subs.add(runtime.SessionEnded$.subscribe((e) => this.onSessionEnded(e.sessionId, e.reason)));
     this.subs.add(runtime.SessionEvents$.subscribe((event) => this.onSessionEvent(event)));
     this.subs.add(runtime.ActiveChannels$.subscribe((channels) => this.syncChannelSubscriptions(channels)));
-    this.subs.add(runtime.SessionDeadline$.subscribe((deadline) => this.armDeadlineTimer(deadline)));
   }
 
   private onSessionStarted(sessionId: string, channels: string[]): void {
@@ -634,9 +637,8 @@ export class WidgetController {
 
   private onSessionEnded(sessionId: string, runtimeReason: SessionEndReason): void {
     this.deps.pageClose.Disarm();
-    this.clearDeadlineTimer();
     this.surfaceOpenSubject.next(false);
-    const reason: WidgetEndReason = this.endReason ?? (runtimeReason === 'error' ? 'error' : 'remote');
+    const reason: WidgetEndReason = this.endReason ?? RUNTIME_END_TO_WIDGET_END[runtimeReason];
     this.emit({ name: 'mj-session-ended', detail: { sessionId, reason } });
   }
 
@@ -757,29 +759,6 @@ export class WidgetController {
           this.setPhase('ended');
         }
         break;
-    }
-  }
-
-  // ── Deadline ───────────────────────────────────────────────────────────────
-
-  /** Ends the call when the (server-confirmed) deadline passes, so the visitor sees why instead of a dead line. */
-  private armDeadlineTimer(deadline: Date | null): void {
-    this.clearDeadlineTimer();
-    if (deadline === null || this.disposed) {
-      return;
-    }
-    const remaining = deadline.getTime() - this.now();
-    if (remaining <= 0) {
-      void this.End('deadline');
-      return;
-    }
-    this.deadlineTimer = setTimeout(() => this.armDeadlineTimer(deadline), Math.min(remaining, MAX_TIMER_MS));
-  }
-
-  private clearDeadlineTimer(): void {
-    if (this.deadlineTimer !== null) {
-      clearTimeout(this.deadlineTimer);
-      this.deadlineTimer = null;
     }
   }
 

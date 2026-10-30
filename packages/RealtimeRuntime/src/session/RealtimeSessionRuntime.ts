@@ -1383,7 +1383,9 @@ export class RealtimeSessionRuntime {
    * Sets the baseline deadline a host knows at session start (`null` clears) and arms the alarm. See
    * {@link SessionDeadline$}. By default the runtime ends the call with reason `'deadline'` when it is reached; pass
    * `{ autoEnd: false }` to own the hang-up (then end with `EndRealtimeSession('deadline')` to stamp `TimeLimit`), and
-   * `warnBeforeMs` for {@link SessionDeadlineWarning$}. The runtime never arms this by itself.
+   * `warnBeforeMs` for {@link SessionDeadlineWarning$}. The server's verified deadline (`identity.verified`) also arms the
+   * alarm with the current options (default `autoEnd: true`); a host that owns the hang-up calls `SetSessionDeadline(d, { autoEnd: false })`.
+   * The runtime never arms this by itself.
    */
   public SetSessionDeadline(deadline: Date | null, options?: SessionDeadlineOptions): void {
     this.clientDeadline.Set(deadline, options);

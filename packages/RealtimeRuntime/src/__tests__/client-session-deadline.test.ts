@@ -86,6 +86,12 @@ describe('ClientSessionDeadline alarm', () => {
     expect(reached).toHaveLength(1);
   });
 
+  it('Clear resets the options, so a reused runtime does not inherit the previous call\'s autoEnd or warnings', () => {
+    deadline.Set(inMs(1000), { autoEnd: false, warnBeforeMs: [500] });
+    deadline.Clear();
+    expect(deadline.Options).toEqual({ autoEnd: true, warnBeforeMs: [] });
+  });
+
   it('Set(null), Clear and Dispose cancel pending timers', () => {
     deadline.Set(inMs(1000), { warnBeforeMs: [500] });
     deadline.Set(null);

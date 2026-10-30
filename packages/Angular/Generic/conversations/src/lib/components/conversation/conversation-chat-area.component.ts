@@ -3163,12 +3163,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // runtime itself, which closes the call surface with it: say why, or the call just vanishes.
     this.RealtimeSession.SessionEnded$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((ended) => {
-        if (ended.reason === 'error') {
-          const notice = DescribeCallFailureNotice(this.RealtimeSession.LastStartError, this.RealtimeSession.LastSessionError);
-          MJNotificationService.Instance.CreateSimpleNotification(notice, 'error', 6000);
-        }
-      });
+      .subscribe((ended) => this.notifyIfCallFailed(ended.reason));
     let voiceWasActive = false;
     this.RealtimeSession.Active$
       .pipe(takeUntil(this.destroy$))
@@ -8025,6 +8020,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     void this.engine.EnsureConversationLoaded(created, this.CurrentUser);
     this.RealtimeConversationReady.emit({ conversationId: created, select: false });
+  }
+
+  /**
+   * Says why a call ended only when it ended over a failure. A `'deadline'` end (the runtime's time-limit auto-end) is
+   * a normal end: the call surface closes on its own and the visitor needs no error toast.
+   */
+  private notifyIfCallFailed(reason: 'explicit' | 'error' | 'deadline'): void {
+    if (reason !== 'error') {
+      return;
+    }
+    const notice = DescribeCallFailureNotice(this.RealtimeSession.LastStartError, this.RealtimeSession.LastSessionError);
+    MJNotificationService.Instance.CreateSimpleNotification(notice, 'error', 6000);
   }
 
   /**

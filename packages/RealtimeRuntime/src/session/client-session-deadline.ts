@@ -104,12 +104,13 @@ export class ClientSessionDeadline {
     return true;
   }
 
-  /** Forgets the deadline (session ended) and cancels every timer. */
+  /** Forgets the deadline (session ended), cancels every timer and restores the default options, so the next call does not inherit this one's. */
   public Clear(): void {
     if (this.disposed) {
       return;
     }
     this.cancelTimers();
+    this.options = ClientSessionDeadline.DEFAULT_OPTIONS;
     this.subject.next(null);
   }
 

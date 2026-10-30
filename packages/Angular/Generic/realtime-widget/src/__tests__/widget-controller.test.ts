@@ -334,6 +334,29 @@ describe('WidgetController', () => {
       }
     });
 
+    it("reports a runtime 'deadline' end as mj-session-ended with reason 'deadline'", async () => {
+      const h = buildHarness(base);
+      h.guest.Next = guestSession({ token: makeJwt(9_999_999_999) });
+      await h.controller.Start();
+      await h.runtime.EndRealtimeSession('deadline');
+      expect(h.events.find((e) => e.name === 'mj-session-ended')?.detail).toMatchObject({ reason: 'deadline' });
+    });
+
+    it('owns no deadline timer: with the runtime told not to auto-end, passing the deadline leaves the call live', async () => {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+      try {
+        const h = buildHarness(base);
+        h.guest.Next = guestSession({ token: makeJwt(9_999_999_999), voiceMaxSessionMinutes: 10 });
+        await h.controller.Start();
+        h.runtime.SetSessionDeadline(new Date(Date.now() + 10 * 60_000), { autoEnd: false });
+        await vi.advanceTimersByTimeAsync(10 * 60_000 + 1);
+        expect(h.controller.Phase).toBe('live');
+        expect(h.events.find((e) => e.name === 'mj-session-ended')).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('extends the deadline when the server announces a verification, so the call survives the original ceiling', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
       try {
