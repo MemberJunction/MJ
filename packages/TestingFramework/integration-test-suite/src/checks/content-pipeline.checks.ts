@@ -39,7 +39,7 @@
 import { gzipSync } from 'node:zlib';
 import { BaseEntity, CompositeKey, RunView } from '@memberjunction/core';
 import { MJGlobal, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckContext, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckContext, IntegrationCheckRegistry, NamedCheck, SkipCheck } from '@memberjunction/testing-integration';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
@@ -278,12 +278,11 @@ const URL_C = 'it-pipeline://docs/c.txt';
 const URL_OLD = 'it-pipeline://docs/old.txt';
 const URL_ARCHIVE = 'it-pipeline://docs/nested.txt.gz.gz';
 
-function guardSkip(id: string): boolean {
+/** Skips the running check (SkipCheck) when bundle Setup could not provision its fixtures. */
+function guardSkip(): void {
     if (S?.Skip) {
-        console.warn(`  ⚠ content-pipeline.${id} SKIPPED — ${S.SkipReason}`);
-        return true;
+        SkipCheck(S.SkipReason);
     }
-    return false;
 }
 
 /** The processor over the given stages, configured as a shipped Record Process would be. */
@@ -425,7 +424,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP1: Discover walks the source into Content Items and clears ForceDiscovery only once they are all committed',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP1')) return;
+            guardSkip();
             await buildFixture(ctx);
             await run(ctx, ['Discover'], [S.SourceID]);
 
@@ -445,7 +444,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP2: Extract reads each item through its own driver, computes its SHA-256 content checksum, and Segment splits it into chunks',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP2')) return;
+            guardSkip();
             await run(ctx, ['Extract'], S.ItemIDs);
             await run(ctx, ['Segment'], S.ItemIDs);
 
@@ -463,7 +462,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: "CP3: Embed writes each chunk's vector under its own id, in its source's namespace, and records the receipt",
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP3')) return;
+            guardSkip();
             resetStore();
             const all = (await Promise.all(S.ItemIDs.map((id) => liveChunks(ctx, id)))).flat();
             Assert(all.length > 0, 'precondition: there are chunks to embed');
@@ -486,7 +485,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP4: an unchanged re-walk is a no-op — unmodified since LastDiscoveredAt, nothing reset',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP4')) return;
+            guardSkip();
             await run(ctx, ['Discover'], [S.SourceID]);
             const after = await items(ctx);
             AssertEqual(after.length, 2, 'no duplicate items');
@@ -499,7 +498,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP5: a changed document re-extracts, saves its new SHA-256 checksum, and re-segmenting SUPERSEDES every old chunk',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP5')) return;
+            guardSkip();
             const previousChecksum = (await itemByURL(ctx, URL_A)).Checksum;
             await new Promise((r) => setTimeout(r, 5));
             Documents.set(URL_A, { Text: SENTENCE.repeat(3), ModifiedAt: new Date() });
@@ -537,7 +536,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: "CP6: Delete removes the superseded vectors in the namespace they were written to, and purges the unreferenced rows",
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP6')) return;
+            guardSkip();
             Assert(S.FirstChunkIDs.length > 0, 'precondition: there are superseded chunks to delete');
             resetStore();
             await run(ctx, ['Delete'], S.FirstChunkIDs);
@@ -556,7 +555,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP7: a metadata-only refresh updates the stored vector in place and sends NO values',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP7')) return;
+            guardSkip();
             const b = await itemByURL(ctx, URL_B);
             const tag = await ctx.Provider.GetEntityObject<MJContentItemTagEntity>('MJ: Content Item Tags', ctx.User);
             tag.NewRecord();
@@ -589,7 +588,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP8: deleting an item removes its vectors through its chunks, routed to their namespace',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP8')) return;
+            guardSkip();
             const b = await itemByURL(ctx, URL_B);
             const chunkIDs = (await liveChunks(ctx, b.ID)).map((c) => c.ID);
             Assert(chunkIDs.length > 0, "precondition: item B has chunks whose vectors must be removed");
@@ -614,7 +613,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP9: incremental Discover passes Since (with clock-skew overlap), skips items older than the window, and ingests new items',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP9')) return;
+            guardSkip();
             const prevDocA = Documents.get(URL_A)!;
             const olderThanWindow = new Date(Date.now() - 120_000);
             Documents.set(URL_A, { Text: SENTENCE.repeat(3), ModifiedAt: olderThanWindow });
@@ -649,7 +648,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP10: re-discovering an item whose ModifiedAt bumped without changing its content re-extracts once, sees the SAME SHA-256 checksum, and leaves downstream stages and chunks untouched',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP10')) return;
+            guardSkip();
             const beforeC = await itemByURL(ctx, URL_C);
             const beforeChecksum = beforeC.Checksum;
             const beforeChunkIDs = (await liveChunks(ctx, beforeC.ID)).map((ch) => ch.ID);
@@ -680,7 +679,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP11: metadata-only changes (Title and driver Columns) promote existing chunks to MetadataOnly and update vectors in place without re-segmenting',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP11')) return;
+            guardSkip();
             const beforeC = await itemByURL(ctx, URL_C);
             const beforeChunkIDs = (await liveChunks(ctx, beforeC.ID)).map((ch) => ch.ID);
             const currentDoc = Documents.get(URL_C)!;
@@ -718,7 +717,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP12: WorkingRecordCommitter refuses driver Columns that target framework-owned status or checksum columns',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP12')) return;
+            guardSkip();
             const prevDoc = Documents.get(URL_C)!;
             Documents.set(URL_C, {
                 ...prevDoc,
@@ -745,7 +744,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP13: ArchiveExtractor refuses nested archives that exceed MaxArchiveDepth',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP13')) return;
+            guardSkip();
             const nestedGzip = gzipSync(gzipSync(Buffer.from('deeply nested archive payload', 'utf8')));
             Documents.set(URL_ARCHIVE, { Bytes: new Uint8Array(nestedGzip), ModifiedAt: new Date() });
 
@@ -782,7 +781,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP14: Sync walks exhaustively, refuses to orphan items on an empty walk, marks removed items Pending delete, revives reappearing items, and updates LastSyncedAt',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP14')) return;
+            guardSkip();
             const savedA = Documents.get(URL_A)!;
             const savedC = Documents.get(URL_C)!;
             const syncConfig = { Mode: 'Sync', Tuning: { ClockSkewOverlapMs: 0 } };
@@ -855,7 +854,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
         Name: 'CP15: AccessResolver opens the configured BaseAccessDriver session for Discover and Extract, and SessionApplies strips session headers on cross-origin requests',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CP15')) return;
+            guardSkip();
             const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
             source.Configuration = JSON.stringify({
                 AccessDriverKey: ACCESS_DRIVER_KEY,

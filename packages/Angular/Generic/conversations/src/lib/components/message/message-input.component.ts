@@ -1095,6 +1095,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   // ── Voice session (Realtime Co-Agent) ───────────────────────────────
   /** True while a live voice session is active — drives the overlay + mic state. */
   public VoiceActive: boolean = false;
+  /** True when THIS composer instance initiated the currently-open realtime call. */
+  private startedRealtimeSession: boolean = false;
+
+  /**
+   * True when this composer owns active work or unsent attachments that would be
+   * disrupted or lost if the parent chat area unmounted this hidden instance.
+   */
+  public get HasActiveWork(): boolean {
+    return Boolean(
+      this.IsSending ||
+      this.IsProcessing ||
+      this.IsUploadingAttachments ||
+      (this.registeredCallbacks?.size ?? 0) > 0 ||
+      (this.inFlightWatches?.size ?? 0) > 0 ||
+      (this.pendingAttachments?.length ?? 0) > 0 ||
+      (this.ConversationId && this.realtimeSession?.IsActiveFor?.(this.ConversationId))
+    );
+  }
 
   /** @deprecated Use {@link VoiceActive}. */
   public get voiceActive(): boolean {
@@ -1118,6 +1136,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Reflect the live voice-session Active flag into a local field for the template.
     this.realtimeActiveSub = this.realtimeSession.Active$.subscribe(active => {
       this.VoiceActive = active;
+      if (!active) {
+        this.startedRealtimeSession = false;
+      }
     });
 
     this.ConverationManagerAgent = await this.agentService.getConversationManagerAgent();
@@ -1204,8 +1225,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.unregisterAllCallbacks();
     this.clearInFlightWatches();
     this.realtimeActiveSub?.unsubscribe();
-    // If the user navigates away mid-call, tear the session down.
-    if (this.realtimeSession.IsActive) {
+    // Only end a live voice session if THIS composer owns it — cached hidden composers
+    // for older conversations are unmounted on LRU eviction and must not hang up a
+    // minimized call running on another conversation (or one minted from the empty state).
+    const ownsActiveCall = this.ConversationId
+      ? Boolean(this.realtimeSession?.IsActiveFor?.(this.ConversationId))
+      : Boolean(
+          this.startedRealtimeSession &&
+          this.realtimeSession?.IsActive &&
+          !this.realtimeSession.SessionCreatedConversationId
+        );
+    if (ownsActiveCall) {
       void this.realtimeSession.EndRealtimeSession();
     }
   }
@@ -1593,6 +1623,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     recordingConsent?: boolean | null
   ): Promise<void> {
     try {
+      this.startedRealtimeSession = true;
       await this.realtimeSession.StartRealtimeSession(
         agentId,
         this.ConversationId,
@@ -1613,6 +1644,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         { ...ConversationCallStartOptions(), ConversationBranchID: this.TargetBranchID }
       );
     } catch (error) {
+      this.startedRealtimeSession = false;
       console.error('Failed to start voice session:', error);
       this.toastService.error('Could not start the voice session.');
     }

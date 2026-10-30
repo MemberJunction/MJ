@@ -6404,12 +6404,19 @@ export class BaseAgent {
      * Keeps the system-prompt-and-tools fingerprint of the request just sent, for the next one. When
      * it changed, the runner sent this request without replayed reasoning; the history drops it too,
      * so no later request replays a block made under the old prompt or tools.
+     *
+     * A result with no fingerprint (a request that failed before or while it was sent, such as a
+     * failover that ran out of candidates) leaves the baseline as it was. Clearing it would let the
+     * next request skip the comparison and replay thinking made under a prompt or tools it no longer has.
      */
     private trackSentPrefix(params: ExecuteAgentParams, promptResult: AIPromptRunResult): void {
         const sent = GetSentPrefixFingerprint(promptResult.chatResult);
+        if (sent === undefined) {
+            return;
+        }
         const previous = this._lastSentPrefix;
         this._lastSentPrefix = sent;
-        if (previous === undefined || sent === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
+        if (previous === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
             return;
         }
         params.conversationMessages.forEach((m, i) => {
@@ -6495,8 +6502,10 @@ export class BaseAgent {
      * declares native tools to a driver whose replayed reasoning needs the history before it
      * unchanged is append-only too (see {@link ResolveAppendOnlyState}).
      *
-     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
-     * immediately. Otherwise the answer is frozen at the first model selection and reused for every
+     * Decided ONCE per run. An explicit `trailingStateMode` answers immediately, and so does a runtime
+     * model override that names a vendor, or whose catalog says the cache is a byte-prefix cache.
+     * Otherwise (no override, or one that names no vendor and whose catalog does not say yes) the
+     * answer is frozen at the first model selection and reused for every
      * later turn, so a failover to another vendor cannot flip the layout mid-run — a flip after turn 2
      * would leave stale fragments in the history or, worse, restore the wrong turn's fragment. On turn 1,
      * before any selection is known, the answer is replace-in-place: turn 1's fragment is kept and, if
@@ -9293,13 +9302,13 @@ The context is now within limits. Please retry your request with the recovered c
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
-        const guardrailCheckedStep = await this.checkExecutionGuardrails<P>(
+        const guardrailCheckedStep = this.noteDiscardedCompletionChange(nextStep, await this.checkExecutionGuardrails<P>(
             params, 
             validatedNextStep, 
             currentPayload, 
             this._agentRun!, 
             currentStep
-        );
+        ));
         
         this.logStatus(`📌 Next step determined: ${guardrailCheckedStep.step}${guardrailCheckedStep.terminate ? ' (terminating)' : ''}`, true, params);
 
@@ -9346,6 +9355,26 @@ The context is now within limits. Please retry your request with the recovered c
         return guardrailCheckedStep;
     }
  
+    /**
+     * A completion refused with a payload change in hand: the change is discarded (the prompt step
+     * commits it only for an accepted completion), so the refusal the model reads says so, and asks
+     * for the change again with the next completion. Otherwise the model would take the change as
+     * saved and its work would be lost. The change is removed from the step, so nothing later
+     * applies it. Any other step is returned as it is.
+     */
+    private noteDiscardedCompletionChange<P>(original: BaseAgentNextStep<P>, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+        if (!BaseAgent.carriesCompletionChange(original) || step.step === 'Success') {
+            return step;
+        }
+        const native = !!step.payloadToolCallId && this.nativeToolNameForCall(step, step.payloadToolCallId) === COMPLETE_TASK_TOOL;
+        const note = native
+            ? 'The payloadChangeRequest sent with this complete_task call was NOT applied. Send it again with your next complete_task call.'
+            : 'The payloadChangeRequest sent with this completion was NOT applied. Send it again with your next completion.';
+        const field = step.retryInstructions ? 'retryInstructions' : step.message ? 'message' : 'errorMessage';
+        const { payloadChangeRequest: _discarded, ...rest } = step;
+        return { ...rest, [field]: step[field] ? `${step[field]}\n\n${note}` : note };
+    }
+
     /**
      * Answers a retried native tool-call turn in the protocol itself: every call gets an `is_error`
      * result carrying the retry reason, and no user message follows.
@@ -15521,6 +15550,68 @@ The context is now within limits. Please retry your request with the recovered c
      * 
      * @private
      */
+    /** Whether a step is a completion that carries a payload change, which is held until the completion is accepted. */
+    private static carriesCompletionChange(step: BaseAgentNextStep): boolean {
+        return step.step === 'Success' && !!step.payloadChangeRequest;
+    }
+
+    /**
+     * Applies a turn's `payloadChangeRequest` to `current` and returns the result; `current` is not
+     * changed. Honours `PayloadSelfWritePaths`. A brand-new artifact whose payload is still the one
+     * inherited from a prior run (or that uses `replaceElements`) is built on an empty object, so
+     * keys from the previous artifact cannot bleed in.
+     */
+    private applyTurnPayloadChange<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, current: P, isUnmodifiedInheritedPayload: boolean): PayloadManagerResult<P> {
+        const change = step.payloadChangeRequest!;
+        const allowedPaths = params.agent.PayloadSelfWritePaths
+            ? JSON.parse(params.agent.PayloadSelfWritePaths)
+            : this.getDefaultPayloadSelfWritePaths();
+        const basePayload = (step.artifactDirective?.behavior === 'create-new'
+            && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(change.replaceElements)))
+            ? ({} as P)
+            : current;
+        const changeResult = this._payloadManager.applyAgentChangeRequest(basePayload, change, {
+            validateChanges: true,
+            logChanges: true,
+            agentName: params.agent.Name,
+            analyzeChanges: true,
+            generateDiff: true,
+            allowedPaths,
+            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+        });
+        if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+            LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
+        }
+        return changeResult;
+    }
+
+    /**
+     * The payload a completion would leave behind: the committed payload with the completion's
+     * change applied. Success validation (the minimum-execution check, then `FinalPayloadValidation`)
+     * checks this draft, and it becomes the payload only if the completion is accepted. The
+     * opt-in payload change check is not asked here: it never runs on a step that ends the run.
+     */
+    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary } {
+        const changeResult = this.applyTurnPayloadChange(params, step, committed, isUnmodifiedInheritedPayload);
+        return { payload: changeResult.result, summary: this.buildPayloadChangeResultSummary(changeResult) };
+    }
+
+    /**
+     * The payload a turn leaves behind. A held completion draft is committed only when the step is
+     * still `Success` after validation; on a refusal the committed payload stands (a subclass that
+     * set a payload of its own still wins). Without a draft, a subclass's `newPayload` wins as before.
+     */
+    private resolveTurnPayload<P>(step: BaseAgentNextStep<P>, committed: P, draft: { payload: P } | undefined): { payload: P; committedDraft: boolean } {
+        if (!draft) {
+            return { payload: step.newPayload || committed, committedDraft: false };
+        }
+        if (step.step === 'Success') {
+            return { payload: step.newPayload || draft.payload, committedDraft: true };
+        }
+        const own = step.newPayload && step.newPayload !== draft.payload ? step.newPayload : undefined;
+        return { payload: own || committed, committedDraft: false };
+    }
+
     private async executePromptStep<P = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
@@ -15800,46 +15891,15 @@ The context is now within limits. Please retry your request with the recovered c
                 && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload))
                 ? ({} as P)
                 : payload; // Start with current payload
-            let currentStepPayloadChangeResult = undefined;
-            if (initialNextStep.payloadChangeRequest) {
-                // Parse the allowed paths if configured
-                const allowedPaths = params.agent.PayloadSelfWritePaths 
-                    ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                    : this.getDefaultPayloadSelfWritePaths();
-
-                // When creating a brand-new artifact where the current payload is still the inherited
-                // payload from a prior conversation run (even if read-only action steps ran first) or when
-                // replaceElements is used with behavior='create-new', apply against a clean empty object
-                // so keys from the previous artifact cannot bleed in.
-                const basePayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
-                    && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(initialNextStep.payloadChangeRequest.replaceElements)))
-                    ? ({} as P)
-                    : payload;
-
-                // Apply the changes to the payload with operation control
-                const changeResult = this._payloadManager.applyAgentChangeRequest(
-                    basePayload,
-                    initialNextStep.payloadChangeRequest,
-                    {
-                        validateChanges: true,
-                        logChanges: true,
-                        agentName: params.agent.Name,
-                        analyzeChanges: true,
-                        generateDiff: true,
-                        allowedPaths: allowedPaths,
-                        verbose: params.verbose === true || IsVerboseLoggingEnabled()
-                    }
-                );
-                
-                if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
-                    LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
-                }
-                
-                // Store payload change metadata for audit trail
-                // This will be merged into outputData later
+            let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
+            // A completion's payload change is held as a draft until Success validation accepts it
+            // (see buildCompletionDraft); every other step's change is applied now, as it always was.
+            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep);
+            if (initialNextStep.payloadChangeRequest && !holdsCompletionChange) {
+                const changeResult = this.applyTurnPayloadChange(params, initialNextStep, payload, isUnmodifiedInheritedPayload);
+                // Store payload change metadata for audit trail; merged into outputData later
                 currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
-
-                // Set the final payload - the changeResult already respects the allowed paths
+                // The changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
 
                 // Opt-in payload change check: asks whether the flagged changes were intended. It never
@@ -15933,12 +15993,24 @@ The context is now within limits. Please retry your request with the recovered c
                 await this.processTurnDecisions(decisions, initialNextStep, finalPayload, agentTypePromptParams, params);
             }
 
+            // A completion's change is validated as a draft (the committed payload with the change
+            // applied), and committed only if the completion is accepted.
+            const draft = holdsCompletionChange && initialNextStep.step === 'Success'
+                ? this.buildCompletionDraft(params, initialNextStep, finalPayload, finalPayload === params.payload)
+                : undefined;
+            currentStepPayloadChangeResult = draft?.summary ?? currentStepPayloadChangeResult;
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
-            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
+            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, draft ? draft.payload : finalPayload, stepEntity);
 
             // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
-            finalPayload = updatedNextStep.newPayload || finalPayload;
+            const resolved = this.resolveTurnPayload(updatedNextStep, finalPayload, draft);
+            finalPayload = resolved.payload;
+            const discardedCompletionChange = holdsCompletionChange && !resolved.committedDraft;
+            if (discardedCompletionChange && currentStepPayloadChangeResult) {
+                currentStepPayloadChangeResult = { ...currentStepPayloadChangeResult, applied: { additions: 0, updates: 0, deletions: 0 } };
+            }
 
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
@@ -15952,6 +16024,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
                     payloadChangeResult: currentStepPayloadChangeResult
+                }),
+                // A completion's change that was not applied because the completion was refused
+                ...(discardedCompletionChange && {
+                    payloadChangeDiscarded: 'The payload change was sent with a completion that was refused, so it was not applied.'
                 }),
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
