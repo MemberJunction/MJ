@@ -434,50 +434,60 @@ export class EvaluationProtocol {
 
   private static parseHoldout(v: JsonObject | null, errors: string[]): HoldoutSplit | null {
     if (v === null) return null;
-    const kind = JsonParse.JsonString(v, 'kind');
-    if (kind === 'date-carved') {
-      const dateColumn = JsonParse.JsonString(v, 'dateColumn');
-      const cutoff = JsonParse.JsonString(v, 'cutoff');
-      const endRaw = v['holdoutEnd'];
-      const holdoutEnd = endRaw === undefined || endRaw === null ? null : JsonParse.JsonString(v, 'holdoutEnd');
-      const reportRaw = v['newEntityReport'];
-      if (reportRaw !== undefined && reportRaw !== null && !JsonParse.IsJsonObject(reportRaw)) {
-        errors.push('HoldoutSplit.newEntityReport must be null or {groupKey, holdoutFraction in (0,1)}');
-        return null;
-      }
-      const reportObj = reportRaw === undefined || reportRaw === null ? null : reportRaw;
-      const groupKey = reportObj === null ? null : JsonParse.JsonString(reportObj, 'groupKey');
-      const fraction = reportObj === null ? null : JsonParse.JsonNumber(reportObj, 'holdoutFraction');
-      const reportOk = reportObj === null || (groupKey !== null && fraction !== null && fraction > 0 && fraction < 1);
-      const endOk = holdoutEnd === null || (ISO_DAY.test(holdoutEnd) && cutoff !== null && holdoutEnd > cutoff);
-      if (dateColumn && cutoff && ISO_DAY.test(cutoff) && endOk && reportOk && (endRaw === undefined || endRaw === null || holdoutEnd !== null)) {
-        return {
-          kind, dateColumn, cutoff, holdoutEnd,
-          newEntityReport: reportObj === null || groupKey === null || fraction === null ? null : { groupKey, holdoutFraction: fraction },
-        };
-      }
-      errors.push('Holdout date-carved needs dateColumn, cutoff yyyy-mm-dd, holdoutEnd null or a later yyyy-mm-dd, newEntityReport null or {groupKey, holdoutFraction in (0,1)}');
+    switch (JsonParse.JsonString(v, 'kind')) {
+      case 'date-carved': return EvaluationProtocol.parseDateCarvedHoldout(v, errors);
+      case 'rolling-origin': return EvaluationProtocol.parseRollingOriginHoldout(v, errors);
+      case 'seeded-random': return EvaluationProtocol.parseSeededRandomHoldout(v, errors);
+      default: return null; // the shape check already reported an unknown kind
+    }
+  }
+
+  /** A date-carved holdout: the cutoff, an optional later `holdoutEnd` and an optional new-entity report. */
+  private static parseDateCarvedHoldout(v: JsonObject, errors: string[]): HoldoutSplit | null {
+    const dateColumn = JsonParse.JsonString(v, 'dateColumn');
+    const cutoff = JsonParse.JsonString(v, 'cutoff');
+    const endRaw = v['holdoutEnd'];
+    const holdoutEnd = endRaw === undefined || endRaw === null ? null : JsonParse.JsonString(v, 'holdoutEnd');
+    const reportRaw = v['newEntityReport'];
+    if (reportRaw !== undefined && reportRaw !== null && !JsonParse.IsJsonObject(reportRaw)) {
+      errors.push('HoldoutSplit.newEntityReport must be null or {groupKey, holdoutFraction in (0,1)}');
       return null;
     }
-    if (kind === 'rolling-origin') {
-      const origins = EvaluationProtocol.intAtLeast(v, 'origins', MIN_ROLLING_ORIGINS);
-      const horizonPeriods = EvaluationProtocol.intAtLeast(v, 'horizonPeriods', 1);
-      const gapPeriods = EvaluationProtocol.intAtLeast(v, 'gapPeriods', 0);
-      const minTrainPeriods = EvaluationProtocol.intAtLeast(v, 'minTrainPeriods', 1);
-      const window = JsonParse.JsonString(v, 'window');
-      if (origins !== null && horizonPeriods !== null && gapPeriods !== null && minTrainPeriods !== null && (window === 'expanding' || window === 'sliding')) {
-        return { kind, origins, horizonPeriods, gapPeriods, minTrainPeriods, window };
-      }
-      errors.push(`Holdout rolling-origin needs origins>=${MIN_ROLLING_ORIGINS}, horizonPeriods>=1, gapPeriods>=0, minTrainPeriods>=1, window expanding|sliding`);
-      return null;
+    const reportObj = reportRaw === undefined || reportRaw === null ? null : reportRaw;
+    const groupKey = reportObj === null ? null : JsonParse.JsonString(reportObj, 'groupKey');
+    const fraction = reportObj === null ? null : JsonParse.JsonNumber(reportObj, 'holdoutFraction');
+    const reportOk = reportObj === null || (groupKey !== null && fraction !== null && fraction > 0 && fraction < 1);
+    const endOk = holdoutEnd === null || (ISO_DAY.test(holdoutEnd) && cutoff !== null && holdoutEnd > cutoff);
+    if (dateColumn && cutoff && ISO_DAY.test(cutoff) && endOk && reportOk && (endRaw === undefined || endRaw === null || holdoutEnd !== null)) {
+      return {
+        kind: 'date-carved', dateColumn, cutoff, holdoutEnd,
+        newEntityReport: reportObj === null || groupKey === null || fraction === null ? null : { groupKey, holdoutFraction: fraction },
+      };
     }
-    if (kind === 'seeded-random') {
-      const fraction = JsonParse.JsonNumber(v, 'fraction');
-      if (EvaluationProtocol.isOpenUnitFraction(fraction)) return { kind, fraction };
-      if (!errors.includes(SEEDED_RANDOM_FRACTION_PROBLEM)) errors.push(SEEDED_RANDOM_FRACTION_PROBLEM);
-      return null;
+    errors.push('Holdout date-carved needs dateColumn, cutoff yyyy-mm-dd, holdoutEnd null or a later yyyy-mm-dd, newEntityReport null or {groupKey, holdoutFraction in (0,1)}');
+    return null;
+  }
+
+  /** A rolling-origin holdout: at least the minimum number of origins, a horizon, a gap, a minimum training span and a window. */
+  private static parseRollingOriginHoldout(v: JsonObject, errors: string[]): HoldoutSplit | null {
+    const origins = EvaluationProtocol.intAtLeast(v, 'origins', MIN_ROLLING_ORIGINS);
+    const horizonPeriods = EvaluationProtocol.intAtLeast(v, 'horizonPeriods', 1);
+    const gapPeriods = EvaluationProtocol.intAtLeast(v, 'gapPeriods', 0);
+    const minTrainPeriods = EvaluationProtocol.intAtLeast(v, 'minTrainPeriods', 1);
+    const window = JsonParse.JsonString(v, 'window');
+    if (origins !== null && horizonPeriods !== null && gapPeriods !== null && minTrainPeriods !== null && (window === 'expanding' || window === 'sliding')) {
+      return { kind: 'rolling-origin', origins, horizonPeriods, gapPeriods, minTrainPeriods, window };
     }
-    return null; // the shape check already reported an unknown kind
+    errors.push(`Holdout rolling-origin needs origins>=${MIN_ROLLING_ORIGINS}, horizonPeriods>=1, gapPeriods>=0, minTrainPeriods>=1, window expanding|sliding`);
+    return null;
+  }
+
+  /** A seeded-random holdout: a fraction strictly between 0 and 1; a bad fraction is reported once, even when the shape check reported it. */
+  private static parseSeededRandomHoldout(v: JsonObject, errors: string[]): HoldoutSplit | null {
+    const fraction = JsonParse.JsonNumber(v, 'fraction');
+    if (EvaluationProtocol.isOpenUnitFraction(fraction)) return { kind: 'seeded-random', fraction };
+    if (!errors.includes(SEEDED_RANDOM_FRACTION_PROBLEM)) errors.push(SEEDED_RANDOM_FRACTION_PROBLEM);
+    return null;
   }
 
   private static parseInnerValidation(v: JsonObject | null, errors: string[]): InnerValidation | null {
