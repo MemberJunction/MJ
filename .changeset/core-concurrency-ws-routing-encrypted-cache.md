@@ -1,7 +1,7 @@
 ---
-"@memberjunction/core": minor
-"@memberjunction/generic-database-provider": minor
-"@memberjunction/server": minor
+"@memberjunction/core": patch
+"@memberjunction/generic-database-provider": patch
+"@memberjunction/server": patch
 "@memberjunction/integration-test-suite": patch
 "@memberjunction/graphql-dataprovider": patch
 ---
