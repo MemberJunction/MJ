@@ -207,7 +207,7 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
   });
 
   describe('Storage check states', () => {
-    it('reports Error with exact message and action when storage source is None', async () => {
+    it('reports Warning with exact message and action when storage source is None', async () => {
       storageResolution = {
         AccountID: null,
         Source: 'None',
@@ -218,15 +218,18 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
       const res = await op.ExecuteServer({}, makeServerContext());
 
       expect(res.Success).toBe(true);
-      expect(res.Output?.Healthy).toBe(false);
+      expect(res.Output?.Healthy).toBe(true);
       const storage = res.Output?.Checks.find((c) => c.Key === 'Storage');
       expect(storage).toEqual({
         Key: 'Storage',
-        Status: 'Error',
+        Status: 'Warning',
         Title: 'File Storage',
-        Message: SETUP_HEALTH_NO_STORAGE_MESSAGE,
-        Action: SETUP_HEALTH_STORAGE_ACTION,
+        Message:
+          'No file storage connected. Videos up to 2 MB are kept in the database; larger videos and sharing need file storage.',
+        Action: 'An admin can add a file storage account; any active account works.',
       });
+      expect(storage?.Message).toBe(SETUP_HEALTH_NO_STORAGE_MESSAGE);
+      expect(storage?.Action).toBe(SETUP_HEALTH_STORAGE_ACTION);
     });
 
     it('reports Warning naming the chosen account when storage is Fallback + Ambiguous', async () => {
@@ -526,7 +529,7 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
     });
 
     it('reports Warning when the primary candidate lacks credentials and a fallback candidate has credentials', async () => {
-      previewByConfig[STANDARD_CONFIG_ID] = [
+      previewByConfig[HIGH_CONFIG_ID] = [
         {
           ModelID: 'm-opus',
           ModelName: 'Claude Opus 4.6',
@@ -550,7 +553,9 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
       expect(res.Output?.Healthy).toBe(true);
       const models = res.Output?.Checks.find((c) => c.Key === 'Models');
       expect(models?.Status).toBe('Warning');
-      expect(models?.Message).toBe('Standard will use Gemini 3.1 Pro instead of Claude Opus 4.6');
+      expect(models?.Message).toBe(
+        'The High setting will use a backup model (Gemini 3.1 Pro) because no Anthropic key is set.',
+      );
       expect(models?.Action).toBe('Add a credential for Anthropic');
     });
 

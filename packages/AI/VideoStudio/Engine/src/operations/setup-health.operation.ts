@@ -47,17 +47,17 @@ export const MIN_SETUP_HEALTH_RENDER_TIMEOUT_MS = 1_000;
 /** Maximum clamped render worker health probe timeout in milliseconds (30 s). */
 export const MAX_SETUP_HEALTH_RENDER_TIMEOUT_MS = 30_000;
 
-/** Exact error message when no file storage account is configured for Video Studio. */
+/** Exact warning message when no file storage account is configured for Video Studio. */
 export const SETUP_HEALTH_NO_STORAGE_MESSAGE =
-    'No file storage account. Runs fall back to inline storage (capped at 2 MB) with a delivery warning; configure a storage account before sharing productions.' as const;
+    'No file storage connected. Videos up to 2 MB are kept in the database; larger videos and sharing need file storage.' as const;
 
 /** Exact remediation action when no explicit storage account is configured for Video Studio. */
 export const SETUP_HEALTH_STORAGE_ACTION =
-    "Set Default Storage Account on the 'Content Creation' agent category (or on the Video Studio agent)." as const;
+    'An admin can add a file storage account; any active account works.' as const;
 
 /** Warning message shown when the active render driver is not network-isolated. */
 export const SETUP_HEALTH_RENDER_NETWORK_WARNING_MESSAGE =
-    'Renders can reach the network. Use the Docker driver for untrusted content.' as const;
+    "Videos are made on this server. That's fine for your own content; for content from outside your organization, an admin should switch rendering to Docker." as const;
 
 /** Remediation action shown when the active render driver is not network-isolated. */
 export const SETUP_HEALTH_RENDER_NETWORK_WARNING_ACTION =
@@ -164,7 +164,7 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         if (resolution.Source === 'None' || !resolution.AccountID) {
             return {
                 Key: 'Storage',
-                Status: 'Error',
+                Status: 'Warning',
                 Title: 'File Storage',
                 Message: SETUP_HEALTH_NO_STORAGE_MESSAGE,
                 Action: SETUP_HEALTH_STORAGE_ACTION,
@@ -376,14 +376,15 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
             if (!firstWithCreds) {
                 const firstCandidate = candidates[0];
                 const firstModel = firstCandidate?.ModelName || 'configured model';
-                const vendor = firstCandidate?.VendorName || firstCandidate?.DriverClass || 'configured vendor';
+                const vendor = firstCandidate?.VendorName || 'configured vendor';
                 const msg = `${presetName} can't run: no credentials for ${firstModel} (${vendor})`;
                 errorMessages.push(msg);
                 details.push(msg);
                 recordMissingVendor(vendor);
             } else if (!candidates[0].HasCredentials) {
                 const primary = candidates[0];
-                const msg = `${presetName} will use ${firstWithCreds.ModelName} instead of ${primary.ModelName}`;
+                const vendor = primary.VendorName || 'primary vendor';
+                const msg = `The ${presetName} setting will use a backup model (${firstWithCreds.ModelName}) because no ${vendor} key is set.`;
                 warningMessages.push(msg);
                 details.push(msg);
                 if (primary.VendorName) {

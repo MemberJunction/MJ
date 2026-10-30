@@ -4,31 +4,25 @@ import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test
 import { VSSetupHealthCardComponent } from './vs-setup-health-card.component';
 
 describe('VSSetupHealthCardComponent DOM', () => {
-  it('renders Error and Warning rows with title, message, action, details, and role="status" aria-live="polite"', () => {
+  it('renders error line ("Video Studio can\'t make videos yet: <title>"), message, and Details toggle when an Error check is present', () => {
     const result: VideoStudioSetupHealthOutput = {
       Healthy: false,
       Checks: [
         {
-          Key: 'Storage',
-          Status: 'Error',
-          Title: 'File Storage',
-          Message: 'No active file storage account is configured.',
-          Action: 'Add an active File Storage Account in Settings -> File Storage, or set StorageAccountID on the Video Studio agent.',
-        },
-        {
           Key: 'Render',
-          Status: 'Warning',
-          Title: 'Render Sandbox',
-          Message: 'Renders can reach the network. Use the Docker driver for untrusted content.',
-          Action: 'Set VIDEO_STUDIO_RENDER_DRIVER=docker to isolate renders from the network.',
-          Details: ['driver=local, version=1.0.0'],
+          Status: 'Error',
+          Title: 'Render Worker',
+          Message: "The render worker didn't answer in 10 s (driver LocalWorker).",
+          Action: 'Install ffmpeg and check @memberjunction/video-studio-render-worker.',
+          Details: ['ffmpeg binary not found on PATH'],
         },
         {
-          Key: 'Models',
+          Key: 'Storage',
           Status: 'Warning',
-          Title: 'AI Models',
-          Message: 'Prompts are using fallback model selection: Narrative Director -> gemini-pro (env Credential)',
-          Action: 'Add an active AI Credential for the primary model on each prompt in AI -> Credentials.',
+          Title: 'File Storage',
+          Message:
+            'No file storage connected. Videos up to 2 MB are kept in the database; larger videos and sharing need file storage.',
+          Action: 'An admin can add a file storage account; any active account works.',
         },
       ],
     };
@@ -47,23 +41,123 @@ describe('VSSetupHealthCardComponent DOM', () => {
     expect(card?.getAttribute('aria-live')).toBe('polite');
     expect(card?.classList.contains('vs-health-card--unhealthy')).toBe(true);
 
+    const headline = query(fixture, '[data-testid="vs-setup-health-error-headline"]');
+    expect(headline?.textContent?.trim()).toBe("Video Studio can't make videos yet: Render Worker");
+
+    const message = query(fixture, '[data-testid="vs-setup-health-error-message"]');
+    expect(message?.textContent?.trim()).toBe(
+      "The render worker didn't answer in 10 s (driver LocalWorker).",
+    );
+
+    const detailsToggle = query(fixture, '[data-testid="vs-setup-health-error-details-toggle"]');
+    expect(detailsToggle).toBeTruthy();
+    expect(detailsToggle?.textContent).toContain('Details');
+    expect(detailsToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(query(fixture, '[data-testid="vs-setup-health-non-ok-list"]')).toBeNull();
+
+    // Clicking "Details" reveals the non-OK rows with Action and Details tucked behind "Details for admins"
+    detailsToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(detailsToggle?.getAttribute('aria-expanded')).toBe('true');
     const rows = queryAll(fixture, '.vs-health-card__row');
-    expect(rows.length).toBe(3);
+    expect(rows.length).toBe(2);
+    expect(query(fixture, '[data-testid="vs-setup-health-action-Render"]')).toBeNull();
+    expect(query(fixture, '[data-testid="vs-setup-health-details-Render"]')).toBeNull();
+
+    const adminToggle = query(fixture, '[data-testid="vs-setup-health-admin-toggle-Render"]');
+    expect(adminToggle?.textContent).toContain('Details for admins');
+    adminToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(query(fixture, '[data-testid="vs-setup-health-action-Render"]')?.textContent).toContain(
+      'Install ffmpeg',
+    );
+    expect(query(fixture, '[data-testid="vs-setup-health-details-Render"]')?.textContent).toContain(
+      'ffmpeg binary not found on PATH',
+    );
+
+    fixture.destroy();
+  });
+
+  it('renders one quiet collapsed "Ready, with 2 notes" line when only warnings exist, and expands notes + admin details on click', () => {
+    const result: VideoStudioSetupHealthOutput = {
+      Healthy: true,
+      Checks: [
+        {
+          Key: 'Storage',
+          Status: 'Warning',
+          Title: 'File Storage',
+          Message:
+            'No file storage connected. Videos up to 2 MB are kept in the database; larger videos and sharing need file storage.',
+          Action: 'An admin can add a file storage account; any active account works.',
+        },
+        {
+          Key: 'Render',
+          Status: 'Warning',
+          Title: 'Render Worker',
+          Message:
+            "Videos are made on this server. That's fine for your own content; for content from outside your organization, an admin should switch rendering to Docker.",
+          Action: "Switch videoStudio.render.driver to 'Docker' when rendering untrusted content.",
+          Details: ['Node v24.18.0', 'HyperFrames 0.8.134', 'Chromium 146.0.0', 'ffmpeg 7.1.1'],
+        },
+        {
+          Key: 'Models',
+          Status: 'OK',
+          Title: 'Model Credentials',
+          Message: 'All 3 presets have model credentials.',
+        },
+      ],
+    };
+
+    const fixture = renderComponentFixture(VSSetupHealthCardComponent, {
+      inputs: {
+        Result: result,
+        Loading: false,
+      },
+    });
+    fixture.detectChanges();
+
+    const card = query(fixture, '[data-testid="vs-setup-health-card"]');
+    expect(card?.classList.contains('vs-health-card--warning')).toBe(true);
+    expect(card?.classList.contains('vs-health-card--unhealthy')).toBe(false);
+
+    const warningsToggle = query(fixture, '[data-testid="vs-setup-health-warnings-toggle"]');
+    expect(warningsToggle).toBeTruthy();
+    expect(warningsToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(query(fixture, '[data-testid="vs-setup-health-warnings-label"]')?.textContent?.trim()).toBe(
+      'Ready, with 2 notes',
+    );
+    expect(query(fixture, '[data-testid="vs-setup-health-non-ok-list"]')).toBeNull();
+
+    // Clicking the quiet summary line expands the 2 warning notes
+    warningsToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(warningsToggle?.getAttribute('aria-expanded')).toBe('true');
+    const rows = queryAll(fixture, '.vs-health-card__row');
+    expect(rows.length).toBe(2);
 
     const storageRow = query(fixture, '[data-testid="vs-setup-health-row-Storage"]');
     expect(storageRow?.textContent).toContain('File Storage');
-    expect(storageRow?.textContent).toContain('No active file storage account is configured.');
-    expect(storageRow?.textContent).toContain('Add an active File Storage Account');
+    expect(storageRow?.textContent).toContain(
+      'No file storage connected. Videos up to 2 MB are kept in the database; larger videos and sharing need file storage.',
+    );
+    // Action and Details are tucked behind "Details for admins" until clicked
+    expect(query(fixture, '[data-testid="vs-setup-health-action-Storage"]')).toBeNull();
+    expect(query(fixture, '[data-testid="vs-setup-health-details-Render"]')).toBeNull();
 
-    const renderRow = query(fixture, '[data-testid="vs-setup-health-row-Render"]');
-    expect(renderRow?.textContent).toContain('Render Sandbox');
-    expect(renderRow?.textContent).toContain('Renders can reach the network. Use the Docker driver for untrusted content.');
-    expect(renderRow?.textContent).toContain('driver=local, version=1.0.0');
+    const renderAdminToggle = query(fixture, '[data-testid="vs-setup-health-admin-toggle-Render"]');
+    expect(renderAdminToggle?.textContent).toContain('Details for admins');
+    renderAdminToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
 
-    const modelsRow = query(fixture, '[data-testid="vs-setup-health-row-Models"]');
-    expect(modelsRow?.textContent).toContain('AI Models');
-    expect(modelsRow?.textContent).toContain('Prompts are using fallback model selection');
-    expect(modelsRow?.textContent).toContain('Add an active AI Credential');
+    expect(query(fixture, '[data-testid="vs-setup-health-action-Render"]')?.textContent).toContain(
+      "Switch videoStudio.render.driver to 'Docker'",
+    );
+    expect(query(fixture, '[data-testid="vs-setup-health-details-Render"]')?.textContent).toContain(
+      'Node v24.18.0',
+    );
 
     fixture.destroy();
   });
