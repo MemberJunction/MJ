@@ -239,6 +239,87 @@ const advancedGenerationFeatureSchema = z.object({
   options: advancedGenerationFeatureOptionSchema.array().nullish(),
 });
 
+/**
+ * Every feature name CodeGen reads through `AdvancedGeneration.featureEnabled()`. A configured
+ * feature whose name is not in this list does nothing; {@link FindUnknownAdvancedGenerationFeatures}
+ * reports such names so a typo or a retired name is not silently ignored (MJ issue #5822).
+ */
+export const KNOWN_ADVANCED_GENERATION_FEATURES: readonly string[] = [
+  'EntityNames',
+  'EntityDescriptions',
+  'EntityDisplayNames',
+  'SmartFieldIdentification',
+  'TransitiveJoinIntelligence',
+  'FormLayoutGeneration',
+  'ParseCheckConstraints',
+  'VirtualEntityFieldDecoration',
+];
+
+/**
+ * The default advanced-generation feature list, shared by the zod schema default and
+ * `DEFAULT_CODEGEN_CONFIG` so the two cannot drift apart.
+ */
+export const DEFAULT_ADVANCED_GENERATION_FEATURES: readonly Readonly<AdvancedGenerationFeature>[] = [
+  {
+    name: 'EntityNames',
+    description: 'Use AI to generate better entity names when creating new entities',
+    enabled: false,
+  },
+  {
+    name: 'EntityDescriptions',
+    description: 'Use AI to generate descriptions for entities, only used when creating new entities',
+    enabled: false,
+  },
+  {
+    name: 'SmartFieldIdentification',
+    description:
+      'Use AI to determine the Name Field, Default In View fields, and Searchable fields for entities. This sets IsNameField, DefaultInView, and IncludeInUserSearchAPI properties on entity fields. Only applies when new entities/fields are created or when fields allow auto-update.',
+    enabled: true,
+  },
+  {
+    name: 'TransitiveJoinIntelligence',
+    description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
+    enabled: true,
+  },
+  {
+    name: 'FormLayoutGeneration',
+    description:
+      'Use AI to generate semantic field categories and layout for new entities, newly added fields, and fields whose upstream schema changes re-opened them for review.',
+    enabled: true,
+  },
+  {
+    name: 'ParseCheckConstraints',
+    description:
+      'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
+    enabled: true,
+  },
+  {
+    name: 'VirtualEntityFieldDecoration',
+    description:
+      'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
+    enabled: true,
+  },
+];
+
+/** A fresh, mutable copy of {@link DEFAULT_ADVANCED_GENERATION_FEATURES}, so no config object shares the constant's entries. */
+export function CopyDefaultAdvancedGenerationFeatures(): AdvancedGenerationFeature[] {
+  return DEFAULT_ADVANCED_GENERATION_FEATURES.map((f) => ({ ...f }));
+}
+
+/**
+ * Returns each configured feature name CodeGen does not read (see {@link KNOWN_ADVANCED_GENERATION_FEATURES}),
+ * once per name, in configured order.
+ */
+export function FindUnknownAdvancedGenerationFeatures(features: readonly AdvancedGenerationFeature[] | null | undefined): string[] {
+  const unknown = new Set<string>();
+  for (const f of features ?? []) {
+    if (!KNOWN_ADVANCED_GENERATION_FEATURES.includes(f.name)) {
+      unknown.add(f.name);
+    }
+  }
+  return Array.from(unknown);
+}
+
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
@@ -292,53 +373,7 @@ const advancedGenerationSchema = z.object({
   maxRunCostUSD: z.number().min(0).default(0),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
-  features: advancedGenerationFeatureSchema.array().default([
-    {
-      name: 'EntityNames',
-      description: 'Use AI to generate better entity names when creating new entities',
-      enabled: false,
-    },
-    {
-      name: 'SmartFieldIdentification',
-      description:
-        'Use AI to determine the Name Field, Default In View fields, and Searchable fields for entities. This sets IsNameField, DefaultInView, and IncludeInUserSearchAPI properties on entity fields. Only applies when new entities/fields are created or when fields allow auto-update.',
-      enabled: false,
-    },
-    {
-      name: 'DefaultInViewFields',
-      description:
-        'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
-      enabled: false,
-    },
-    {
-      name: 'EntityDescriptions',
-      description: 'Use AI to generate descriptions for entities, only used when creating new entities',
-      enabled: false,
-    },
-    {
-      name: 'EntityFieldDescriptions',
-      description: 'Use AI to generate descriptions for fields, only used when new fields are detected',
-      enabled: false,
-    },
-    {
-      name: 'FormLayoutGeneration',
-      description:
-        'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-      enabled: true,
-    },
-    {
-      name: 'FormTabs',
-      description:
-        "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
-      enabled: false,
-    },
-    {
-      name: 'VirtualEntityFieldDecoration',
-      description:
-        'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
-      enabled: true,
-    },
-  ]),
+  features: advancedGenerationFeatureSchema.array().default(() => CopyDefaultAdvancedGenerationFeatures()),
 });
 
 /** The advanced-generation config schema, exported so its defaults can be checked against `DEFAULT_CODEGEN_CONFIG`. */
@@ -1094,48 +1129,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     callTimeoutMS: 90_000,
     stallFailureCircuitThreshold: 3,
     maxRunCostUSD: 0,
-    features: [
-      {
-        name: 'EntityNames',
-        description: 'Use AI to generate better entity names when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'DefaultInViewFields',
-        description: 'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
-        enabled: true,
-      },
-      {
-        name: 'EntityDescriptions',
-        description: 'Use AI to generate descriptions for entities, only used when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'SmartFieldIdentification',
-        description: 'Use AI to identify the best name field and default field to show in views for each entity',
-        enabled: true,
-      },
-      {
-        name: 'TransitiveJoinIntelligence',
-        description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
-        enabled: true,
-      },
-      {
-        name: 'FormLayoutGeneration',
-        description: 'Use AI to generate semantic field categories and layout for new entities, newly added fields, and fields whose upstream schema changes re-opened them for review.',
-        enabled: true,
-      },
-      {
-        name: 'ParseCheckConstraints',
-        description: 'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
-        enabled: true,
-      },
-      {
-        name: 'VirtualEntityFieldDecoration',
-        description: 'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions.',
-        enabled: true,
-      },
-    ],
+    features: CopyDefaultAdvancedGenerationFeatures(),
   },
   SQLOutput: {
     enabled: true,

@@ -137,6 +137,12 @@ export interface QueryCacheAuthorization {
      * provider cannot compute one (a client, whose slots the server validates instead).
      */
     definition?: QueryDefinitionSignature;
+    /**
+     * The user's field-security profile (`FieldSecuritySQLGate.CatalogDenialProfileKey`) when the
+     * run drops denied columns from its rows; it joins the fingerprint, so users with different
+     * denials never share a slot. Undefined when the rows are the same for every authorized user.
+     */
+    fieldSecurityKey?: string;
 }
 
 export const AllMetadataArrays = [
@@ -2709,7 +2715,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ...(params.Parameters ?? {}),
                 __maxRows: params.MaxRows ?? -1,
                 __startRow: params.StartRow ?? 0,
-                ...serverSegment
+                ...serverSegment,
+                ...(queryAuth.fieldSecurityKey ? { __fieldSecurity: queryAuth.fieldSecurityKey } : {})
             };
             if (serverSegment !== null) {
                 queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
