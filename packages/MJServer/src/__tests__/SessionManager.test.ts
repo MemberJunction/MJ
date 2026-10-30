@@ -559,6 +559,16 @@ describe('SessionManager.CloseSession', () => {
             expect(logStatusMock).not.toHaveBeenCalled();
         });
 
+        it('tells channel plugins the verified reason: Explicit for a downgraded claim, TimeLimit for a backed one', async () => {
+            const far = makeSessionEntity({ ID: 'session-far2', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: new Date(Date.now() + 10 * 60_000).toISOString() }) });
+            await new SessionManager().CloseSession('session-far2', makeUser(), makeProvider(() => far).provider, 'TimeLimit');
+            expect(hostSessionClosedMock).toHaveBeenLastCalledWith('session-far2', 'Explicit');
+
+            const due = makeSessionEntity({ ID: 'session-due2', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: new Date(Date.now() - 1_000).toISOString() }) });
+            await new SessionManager().CloseSession('session-due2', makeUser(), makeProvider(() => due).provider, 'TimeLimit');
+            expect(hostSessionClosedMock).toHaveBeenLastCalledWith('session-due2', 'TimeLimit');
+        });
+
         it('is downgraded to Explicit when the session stores no deadline', async () => {
             const session = makeSessionEntity({ ID: 'session-none', Status: 'Active', Config_: null });
             const { provider } = makeProvider(() => session);

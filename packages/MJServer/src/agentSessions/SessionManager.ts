@@ -221,7 +221,9 @@ export class SessionManager {
             return true;
         }
 
-        const closed = await this.markSessionClosed(session, this.verifiedCloseReason(session, closeReason));
+        // Verified once: the stamped reason and the plugin notification must agree, so a client's unbacked claim steers neither.
+        const verifiedReason = this.verifiedCloseReason(session, closeReason);
+        const closed = await this.markSessionClosed(session, verifiedReason);
         if (!closed) {
             return false;
         }
@@ -234,7 +236,7 @@ export class SessionManager {
         }
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
-        await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
+        await this.notifyChannelPluginsSessionClosed(agentSessionID, verifiedReason);
         // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
         // summarize it into an Active memory note so the visitor's next session opens with prior context.
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.

@@ -136,13 +136,14 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
     return { provider, closedIds, closedReasons };
 }
 
+/** Config_/LastActiveAt of rows a test swept, by session ID: sessionPages is consumed by the sweep before CloseSession loads the row. */
+const sweptRows = new Map<string, { Config_?: string | null; LastActiveAt?: Date | string | null }>();
+
 /**
  * Queue of result-sets for the *session* sweep pages (entity 'MJ: AI Agent Sessions'). Channel
  * sweeps (entity 'MJ: AI Agent Session Channels', issued by CloseSession) always resolve empty so
  * they never consume a queued session page. This keeps page assertions deterministic.
  */
-/** Config_/LastActiveAt of rows a test swept, by session ID: sessionPages is consumed by the sweep before CloseSession loads the row. */
-const sweptRows = new Map<string, { Config_?: string | null; LastActiveAt?: Date | string | null }>();
 let sessionPages: Array<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }> = [];
 
 /** Only the RunView calls that paged the session sweep (ignores the channel-sweep calls). */
@@ -153,6 +154,7 @@ function sessionSweepCalls(): Array<[{ EntityName: string; ExtraFilter: string; 
 }
 
 beforeEach(() => {
+    sweptRows.clear();
     runViewMock.mockReset();
     logErrorMock.mockReset();
     logStatusMock.mockReset();
