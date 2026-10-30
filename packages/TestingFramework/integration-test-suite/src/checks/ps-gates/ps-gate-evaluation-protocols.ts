@@ -192,7 +192,7 @@ export class EvaluationProtocolGates {
 
   /** Mean predicted minus observed over the stored reliability bins, weighted by their rows (NaN without bins). */
   private static calibrationBias(trainer: NonNullable<Completed['trainer']>): number {
-    const bins = trainer.calibration?.reliability ?? [];
+    const bins = trainer.calibration?.reliability || [];
     const n = bins.reduce((t, b) => t + b.n, 0);
     return n === 0 ? Number.NaN : bins.reduce((t, b) => t + b.n * (b.meanPredicted - b.observedRate), 0) / n;
   }
@@ -267,13 +267,13 @@ export class EvaluationProtocolGates {
     const balance = EvaluationProtocolGates.classBalance(s.Snapshot);
     if (typeof balance === 'string') return EvaluationProtocolGates.fail(balance);
     const population = balance.reduce((t, b) => t + b.rows, 0);
-    const popRate = (balance.find((b) => b.label === '1')?.rows ?? 0) / population;
+    const popRate = (balance.find((b) => b.label === '1')?.rows || 0) / population;
     const holdIds = s.Manifest.filter((k) => k.role === 'locked-holdout').map((k) => k.rowId);
     const positives = await EvaluationProtocolGates.scenarioPositives(h, 'C2', holdIds);
     if (typeof positives === 'string') return EvaluationProtocolGates.fail(positives);
     const holdRows = holdIds.length;
     const holdRate = positives / holdRows;
-    const carveAgrees = s.Results.carve?.holdoutRowCount === holdRows && (s.Results.carve?.holdoutClassCounts?.['1'] ?? 0) === positives;
+    const carveAgrees = s.Results.carve?.holdoutRowCount === holdRows && (s.Results.carve?.holdoutClassCounts?.['1'] || 0) === positives;
     const [lo, hi] = EvaluationProtocolGates.wilson(popRate, holdRows);
     const shared = EvaluationProtocolGates.sharedRowIds(s.Manifest);
     const inFoldRun = await PsGatePytest.Run([IN_FOLD_RESAMPLING_NODE]);
@@ -297,7 +297,7 @@ export class EvaluationProtocolGates {
   private static newestGroups(manifest: readonly SnapshotRowKey[], fraction: number): { readonly Groups: number; readonly Held: ReadonlySet<string> } {
     const firstSeen = new Map<string, string>();
     for (const k of manifest) {
-      const key = k.groupKey ?? '';
+      const key = k.groupKey || '';
       const prev = firstSeen.get(key);
       if (prev === undefined || k.decisionDate < prev) firstSeen.set(key, k.decisionDate);
     }
@@ -317,7 +317,7 @@ export class EvaluationProtocolGates {
     let training = 0;
     let holdout = 0;
     for (const k of manifest) {
-      const key = k.groupKey ?? '';
+      const key = k.groupKey || '';
       if (held.has(key)) { if (k.decisionDate >= cutoff) holdout++; }
       else if (k.role === 'development') { training++; trainingGroups.add(key); }
     }
@@ -347,7 +347,7 @@ export class EvaluationProtocolGates {
     const s = await EvaluationProtocolGates.trainAndRead(h, pipeline);
     if (typeof s === 'string') return EvaluationProtocolGates.fail(s);
     const carve = s.Results.carve;
-    const report = carve?.newEntity ?? null;
+    const report = carve?.newEntity || null;
     if (carve === null || report === null || carve.cutoff === null) return EvaluationProtocolGates.fail('the stored carve has no new-entity report');
     if (carve.holdoutEnd !== null) return EvaluationProtocolGates.fail(`the carve has a holdout end (${carve.holdoutEnd}): the manifest does not hold every carved row`);
     if (s.Manifest.some((k) => k.groupKey === null)) return EvaluationProtocolGates.fail('a manifest row has no group key');

@@ -170,7 +170,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
         return;
       }
 
-      this.LeaderboardRows = LeaderboardRows.NormalizeLeaderboardRows(this.Spec.Leaderboard ?? this.Spec.leaderboard ?? []);
+      this.LeaderboardRows = LeaderboardRows.NormalizeLeaderboardRows(this.Spec.Leaderboard || this.Spec.leaderboard || []);
       this.ScoreColumnLabel = LeaderboardRows.ScoreColumnLabel(this.LeaderboardRows, this.TargetMetricLabel);
       this.ShowRowMetric = LeaderboardRows.RowsDisagreeOnMetric(this.LeaderboardRows);
       this.FeatureBars = this.buildFeatureBars(this.Spec.FeatureImportance ?? this.Spec.featureImportance ?? []);
@@ -225,7 +225,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** The hero's label: the winning row's own metric (a search's inner-fold metric), else the artifact's target metric. */
   public get HeadlineMetricLabel(): string {
-    return this.WinningRow?.metricName ?? this.TargetMetricLabel;
+    return this.WinningRow?.metricName || this.TargetMetricLabel;
   }
 
   public get TargetMetricLabel(): string {
@@ -268,7 +268,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     // Synthesize a single metric from the headline score when nothing explicit was provided.
     const row = this.WinningRow;
     if (row?.score != null) {
-      return [{ label: row.metricName ?? this.firstMetricName() ?? 'Score', value: this.FormatScore(row.score) }];
+      return [{ label: row.metricName || this.firstMetricName() || 'Score', value: this.FormatScore(row.score) }];
     }
     return [];
   }

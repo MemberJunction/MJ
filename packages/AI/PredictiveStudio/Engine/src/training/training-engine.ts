@@ -289,7 +289,7 @@ export class TrainingEngine {
         MajorityBaselineRule: majorityBaselineRule,
       });
 
-      const dominance = this.checkLeakage(response.feature_importance ?? {}, resolved.leakageGuard);
+      const dominance = this.checkLeakage(response.feature_importance || {}, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
       await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation);
       return { model, run };

@@ -49,15 +49,15 @@ export class LeaderboardRows {
   /** Normalized rows, best-first by rank; the winner is the marked one, else a measured rank 1. */
   public static NormalizeLeaderboardRows(entries: readonly LeaderboardEntryInput[]): readonly NormalizedLeaderboardRow[] {
     const rows = entries.map((e, i) => ({
-      rank: e.rank ?? i + 1,   // canonical leaderboards are best-first; a missing rank takes the position
-      algorithm: e.algorithm ?? e.algorithmName ?? 'Unknown',
-      featureSet: e.featureSet ?? '',
+      rank: e.rank || i + 1,   // canonical leaderboards are best-first; a missing rank takes the position
+      algorithm: e.algorithm || e.algorithmName || 'Unknown',
+      featureSet: e.featureSet || '',
       // canonical `Metric` first, then lowercase `score`; an unmeasured row stays null (a score of 0 is a real score)
       score: LeaderboardRows.isNumber(e.Metric) ? e.Metric : LeaderboardRows.isNumber(e.score) ? e.score : null,
       metricName: e.metricName || null,
       interval: LeaderboardRows.isNumber(e.innerLower) && LeaderboardRows.isNumber(e.innerUpper) ? [e.innerLower, e.innerUpper] as const : null,
       optimistic: e.optimistic === true,
-      modelId: e.ModelID ?? e.modelId ?? null,
+      modelId: e.ModelID || e.modelId || null,
       isWinner: e.isWinner === true,
     })).sort((a, b) => a.rank - b.rank);
     // Entries that do not say which one won: rank 1 wins, but only when it has a measured score.

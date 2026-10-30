@@ -152,8 +152,8 @@ async function main(): Promise<void> {
     check(!!result.trust && ['Poor', 'Fair', 'Good', 'Excellent'].includes(result.trust.grade), 'a plain-language trust verdict was produced');
     console.log(`  Leaderboard: ${JSON.stringify(result.leaderboard)}`);
     console.log(`  Untrained experiments: ${JSON.stringify(result.untrainedExperiments)}`);
-    check((result.leaderboard ?? []).length === 1, 'one training run gives one leaderboard row (no search without a Prediction Unit)');
-    check(!JSON.stringify(result.leaderboard ?? []).includes('cvScore'), 'no leaderboard row carries a cvScore');
+    check((result.leaderboard || []).length === 1, 'one training run gives one leaderboard row (no search without a Prediction Unit)');
+    check(!JSON.stringify(result.leaderboard || []).includes('cvScore'), 'no leaderboard row carries a cvScore');
     check(JSON.stringify(result.untrainedExperiments) === JSON.stringify(['XGB challenger']), 'the experiment that was not trained is named');
 
     // The core invariant: a model is published IFF the trust verdict clears the bar AND no leakage flag.

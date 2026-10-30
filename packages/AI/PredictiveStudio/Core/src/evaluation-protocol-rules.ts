@@ -279,7 +279,7 @@ export class EvaluationProtocolRules {
 
   private static checkInnerGap(inner: InnerValidation, holdout: HoldoutSplit, unit: PredictionUnitSpec): ProtocolRefusal[] {
     if (inner.kind !== 'blocked-time') return [];
-    const horizon = holdout.kind === 'rolling-origin' ? holdout.horizonPeriods : unit.temporal?.horizonPeriods ?? null;
+    const horizon = holdout.kind === 'rolling-origin' ? holdout.horizonPeriods : unit.temporal?.horizonPeriods || null;
     if (horizon === null || inner.gapPeriods >= horizon) return [];
     return [{ Kind: 'inner-gap-below-horizon', GapPeriods: inner.gapPeriods, HorizonPeriods: horizon }];
   }

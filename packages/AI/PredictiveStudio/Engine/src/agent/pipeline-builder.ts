@@ -181,7 +181,7 @@ export class PredictiveStudioPipelineBuilder {
       const approved = PredictiveStudioPipelineBuilder.ApprovedExperiments(spec);
       const algorithms = await this.resolveAlgorithms([config.algorithmName, ...approved.map((e) => e.AlgorithmName)], provider, user);
       const candidates = PredictiveStudioPipelineBuilder.BuildCandidateSpecs(approved, algorithms);
-      if (approved.some((e) => (e.FeatureSet ?? []).length > 0)) {
+      if (approved.some((e) => (e.FeatureSet || []).length > 0)) {
         LogStatus('PredictiveStudioPipelineBuilder: per-experiment feature sets are not candidates of one search; every candidate uses the pipeline feature schema.');
       }
       const pipeline = await this.savePipeline(config, entity, PredictiveStudioPipelineBuilder.algorithmOf(algorithms, config.algorithmName).ID, provider, user);
@@ -213,8 +213,8 @@ export class PredictiveStudioPipelineBuilder {
 
   /** The plan's proposed experiments, highest priority (lowest `Priority`) first; ties keep plan order. */
   public static ApprovedExperiments(spec: ModelingPlanSpec): ProposedExperiment[] {
-    return [...(spec.ProposedExperiments ?? [])]
-      .sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
+    return [...(spec.ProposedExperiments || [])]
+      .sort((a, b) => (a.Priority || 0) - (b.Priority || 0))
       .map((e) => ({ ...e, AlgorithmName: e.AlgorithmName.trim() }));
   }
 
@@ -246,9 +246,9 @@ export class PredictiveStudioPipelineBuilder {
    * @throws Error listing the available algorithms when nothing matches, or naming both rows when two match
    */
   public static MatchAlgorithm(algorithmName: string, rows: readonly AlgorithmRow[]): ResolvedAlgorithm {
-    const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalize = (s: string | null | undefined): string => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalized = normalize(algorithmName);
-    const want = ALGORITHM_ALIASES[normalized] ?? normalized;
+    const want = ALGORITHM_ALIASES[normalized] || normalized;
     const matches = rows.filter((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
     if (matches.length === 0) {
       const available = rows.map((a) => a.Name).join(', ');
@@ -271,7 +271,7 @@ export class PredictiveStudioPipelineBuilder {
   /** A plan experiment's hyperparameters as candidate values: scalars and null kept, nested objects and arrays dropped. */
   private static scalarHyperparameters(raw: Record<string, unknown> | undefined): Record<string, HyperparameterValue> {
     const hyperparameters: Record<string, HyperparameterValue> = {};
-    for (const [key, value] of Object.entries(raw ?? {})) {
+    for (const [key, value] of Object.entries(raw || {})) {
       if (PredictiveStudioPipelineBuilder.isHyperparameterValue(value)) hyperparameters[key] = value;
     }
     return hyperparameters;
@@ -542,7 +542,7 @@ export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): 
   if (direct) return direct;
 
   const trimmed = nameOrView.trim().toLowerCase();
-  const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalize = (s: string | null | undefined): string => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const normalizedTarget = normalize(nameOrView);
 
   for (const e of provider.Entities) {

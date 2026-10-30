@@ -127,7 +127,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
       // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
-      ComputeSeconds: run.ComputeSeconds ?? 0,
+      ComputeSeconds: run.ComputeSeconds || 0,
       TokensUsed: 0,
     };
   }
@@ -145,7 +145,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
     } catch (err) {
       const run = await this.failedAttemptRun(iterationId);
       if (run === null || !(err instanceof Error)) throw err;
-      throw new TrainingAttemptFailedError(err.message, run.ComputeSeconds ?? 0, run.ComputeCost ?? 0, err);
+      throw new TrainingAttemptFailedError(err.message, run.ComputeSeconds || 0, run.ComputeCost || 0, err);
     }
   }
 

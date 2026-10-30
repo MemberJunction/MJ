@@ -373,9 +373,9 @@ export class ExperimentOrchestrator {
     let settle: () => void = () => undefined;
     const settled = new Promise<void>((resolve) => { settle = resolve; });
     inFlight.add(settled);
-    state.reservedSeconds += seconds ?? 0;
+    state.reservedSeconds += seconds || 0;
     const release = (): void => {
-      state.reservedSeconds -= seconds ?? 0;
+      state.reservedSeconds -= seconds || 0;
       inFlight.delete(settled);
       settle();
     };
@@ -436,7 +436,7 @@ export class ExperimentOrchestrator {
       iteration.TokensUsed = result.TokensUsed ?? 0;
       iteration.Status = 'Completed';
       await this.saveOrThrow(iteration, 'finalize iteration');
-      return { iterationId: iteration.ID, score: result.Score, computeCost, computeSeconds: result.ComputeSeconds ?? 0, model: result.model };
+      return { iterationId: iteration.ID, score: result.Score, computeCost, computeSeconds: result.ComputeSeconds || 0, model: result.model };
     } catch (err) {
       const spent = err instanceof TrainingAttemptFailedError ? { Seconds: err.ComputeSeconds, Cost: err.ComputeCost } : { Seconds: 0, Cost: 0 };
       iteration.ComputeCost = spent.Cost;

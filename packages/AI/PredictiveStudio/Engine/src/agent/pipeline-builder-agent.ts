@@ -346,7 +346,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         leaderboard,
         importanceHidden,
         HiddenImportanceNote(result.model?.Lineage),
-        result.untrainedExperiments ?? [],
+        result.untrainedExperiments || [],
       );
 
       newPayloadObj = {
