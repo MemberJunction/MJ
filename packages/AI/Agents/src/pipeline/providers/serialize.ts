@@ -9,12 +9,16 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { PipeValue } from '../pipeline.types';
 
 /**
- * Structure an Action's output as a value: one output param → its value; many → an object keyed by
- * name; none → the Message. String values that are clearly JSON are parsed so structured operators
- * work on real action payloads (e.g. a RunView that returns its rows as a JSON string).
+ * Structure an Action's output as a value:
+ * - Includes both `'Output'` and `'Both'` parameters (many MJ actions — e.g. `Calculate Expression`'s
+ *   `Result` or in-place transform actions — declare their return parameter as `'Both'`).
+ * - One output/both param → its value; many → an object keyed by parameter name; none → `result.Message`.
+ * - String values (including `result.Message`) that unambiguously open and close as a JSON object/array
+ *   are parsed so structured Pipeline operators (`where`/`select`/…) bind directly to fields returned by
+ *   actions that serialize structured results into `Message` (e.g. `Create Document` returning `{ handle, ... }`).
  */
 export function StructureActionResult(result: ActionResult): PipeValue {
-    const outputs = (result.Params ?? []).filter((p) => p.Type === 'Output');
+    const outputs = (result.Params ?? []).filter((p) => p.Type === 'Output' || p.Type === 'Both');
     if (outputs.length === 1) {
         return coerceMaybeJson(outputs[0].Value);
     }
@@ -24,7 +28,7 @@ export function StructureActionResult(result: ActionResult): PipeValue {
             return acc;
         }, {});
     }
-    return result.Message ?? null;
+    return result.Message != null ? coerceMaybeJson(result.Message) : null;
 }
 
 /** @deprecated Use {@link StructureActionResult}. */
