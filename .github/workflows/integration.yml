@@ -500,7 +500,7 @@ jobs:
           key: ${{ steps.dbkey.outputs.key }}
 
       # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
-      # processes that write them: MJAPI (IT149 over the wire) and the mj test process (IT150
+      # processes that write them: MJAPI (IT151 over the wire) and the mj test process (IT152
       # in-process). Without one the save is refused and those bundles can only skip. A per-run
       # throwaway is enough — the database was provisioned for this run, so there is no earlier
       # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
@@ -795,6 +795,11 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # One definition for both MJAPI processes AND the rig: the servers swap to
+      # RedisLocalStorageProvider from REDIS_URL, and the rig's XS10/XS11 subscribe to the same
+      # Redis + key prefix to assert what the servers broadcast. Defined here so the two cannot drift.
+      REDIS_URL: redis://localhost:6379
+      REDIS_KEY_PREFIX: mj
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
@@ -887,7 +892,6 @@ jobs:
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
-          REDIS_URL: redis://localhost:6379
         run: |
           (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
           (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)

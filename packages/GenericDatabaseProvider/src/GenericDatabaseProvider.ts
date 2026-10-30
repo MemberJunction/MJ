@@ -2100,6 +2100,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['Status', 'ViewName'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 BypassCache: true,
             },
             contextUser,
@@ -3103,34 +3104,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed && !skipCount) {
+            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed && !skipCount) {
                 // A row-limited read that came back FULL may have been truncated, so the total is
                 // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
-                // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
-                // probe. Those callers ask "does a row exist / give me the one row" — a
-                // record-map lookup, a single-key resolve — and never read TotalRowCount. The
-                // count they triggered was pure cost, and SEQUENTIAL cost: it runs after the data
-                // query has already resolved, so it is a full extra round trip on the critical
-                // path, not a parallel one.
                 //
-                // Measured on a live tenant over a 120-second census: 1,000 record-map lookups
-                // fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round
-                // trips totalling 9,760 ms, 11.4% of ALL SQL time in the window. Nothing read a
-                // single one of the results.
-                //
-                // Everything with `maxRowsUsed > 1` is untouched, so the "100 of 299" behaviour
-                // is preserved exactly; only the degenerate single-row probe changes.
-                //
-                // What DOES change for `MaxRows:1`, stated plainly: with no `rowCount`, the return
-                // below falls back to `rowCount ?? retData.length`, so a hit now reports
-                // `TotalRowCount: 1` instead of the whole view's row count. That is the entire
-                // observable difference, and it is confined to a limit of exactly one row — a shape
-                // no caller asks for in order to learn a total, because a total is the one thing a
-                // single-row limit cannot tell it anything about.
-                //
-                // `!skipCount`: a caller that never reads TotalRowCount can also opt out of this count
-                // on a full multi-row page (RunViewParams.SkipTotalRowCount); the pagination count
-                // above honours the same flag.
+                // That round trip is SEQUENTIAL: it runs after the data query has already resolved,
+                // so it is a full extra trip on the critical path, not a parallel one. For a
+                // single-row probe it fires on every hit. Measured on a live tenant over a
+                // 120-second census: 1,000 record-map lookups fired 721 of these counts and 800 row
+                // lookups fired 600 — 1,321 extra round trips totalling 9,760 ms, 11.4% of ALL SQL
+                // time in the window, with nothing reading a single result. Callers that only read
+                // `Results` opt out explicitly with RunViewParams.SkipTotalRowCount; the provider
+                // never infers that from the value of MaxRows.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
@@ -3176,7 +3161,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             return {
                 RowCount: params.ResultType === 'count_only' ? rowCount : retData.length,
-                TotalRowCount: rowCount ?? retData.length,
+                TotalRowCount: skipCount ? undefined : rowCount ?? retData.length,
                 Results: retData as T[],
                 UserViewRunID: userViewRunID,
                 ExecutionTime: stopTime.getTime() - startTime.getTime(),
@@ -6083,6 +6068,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['MaterializedResultID'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -6120,6 +6106,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName', 'LastRefreshedAt'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 BypassCache: true,
             },
             contextUser,

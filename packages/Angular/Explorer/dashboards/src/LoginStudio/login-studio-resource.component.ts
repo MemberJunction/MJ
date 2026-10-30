@@ -161,6 +161,7 @@ export class LoginStudioResourceComponent extends BaseResourceComponent implemen
         ExtraFilter: `IsDefault = 1 AND Status = 'Active'`,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       });
       if (rv.Success) {

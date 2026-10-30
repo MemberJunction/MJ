@@ -254,23 +254,25 @@ export class RunViewParams {
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
      *
      * `TotalRowCount` with `MaxRows`: when the page comes back full, a second query counts the
-     * matching rows, except for `MaxRows: 1`, where `TotalRowCount` is the number of rows returned
-     * (0 or 1). A caller that needs a total alongside one row should use `MaxRows: 2` or more, or a
-     * separate `ResultType: 'count_only'` read.
+     * matching rows, whatever the limit. A caller that only reads `Results`, such as a single-row
+     * lookup, should pass `SkipTotalRowCount: true` to avoid paying for that count.
      */
     MaxRows?: number;
     /**
      * optional - when true, the provider skips the EXTRA count query it would otherwise run to
      * populate `TotalRowCount` when the returned page comes back exactly full
-     * (`Results.length === MaxRows`); `TotalRowCount` then reports the rows actually returned.
-     * That fallback count is a second, sequential round trip after the data query — and for a
-     * single-row existence/lookup read (`MaxRows: 1`) it fires on every HIT, so a hot lookup path
-     * pays double round trips to compute a total it never reads. Set this on reads that only
-     * consume `Results`. Ignored for `ResultType: 'count_only'`, whose entire point is the count.
+     * (`Results.length === MaxRows`). That fallback count is a second, sequential round trip after
+     * the data query — and for a single-row existence/lookup read (`MaxRows: 1`) it fires on every
+     * HIT, so a hot lookup path pays double round trips to compute a total it never reads. Set
+     * this on reads that only consume `Results`. Ignored for `ResultType: 'count_only'`, whose
+     * entire point is the count.
      *
      * Scope: it also suppresses the up-front count a PAGINATED read (`StartRow` with `MaxRows`)
-     * runs, so a paginated caller that needs "1-100 of N" must leave it unset. With the flag,
-     * `TotalRowCount` is always the number of rows returned. Calls with and without it get
+     * runs, so a paginated caller that needs "1-100 of N" must leave it unset.
+     *
+     * With the flag, `TotalRowCount` is always `undefined`, even on a page that was not full, so
+     * a read of it fails the same way on every data size instead of working only until the data
+     * grows. A caller that needs a total must not pass the flag. Calls with and without it get
      * separate cache slots, since their `TotalRowCount` differs.
      */
     SkipTotalRowCount?: boolean;

@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT149 - Encrypted Field Read over GraphQL",
+    "Name": "IT151 - Encrypted Field Read over GraphQL",
     "Description": "MJ: Credentials.Values is encrypted at rest with AllowDecryptInAPI on. ER1 Load over GraphQL returns plaintext; ER2 a first RunView returns plaintext; ER3 a repeated RunView (server cache hit) returns plaintext; ER4 an update of a plain field keeps the encrypted value intact. Mutating; self-cleaning.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

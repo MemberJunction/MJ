@@ -1,5 +1,5 @@
 /**
- * Entity status push fan-out over WebSocket (IT148, client transport, mutating).
+ * Entity status push fan-out over WebSocket (IT150, client transport, mutating).
  *
  * Two sessions of one user each hold a `statusUpdates` subscription. A save in either session must
  * produce one `EntityObjectStatusMessage` with event type `save` in BOTH sessions, naming the saved

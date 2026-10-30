@@ -2217,6 +2217,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             EntityName: 'MJ: Company Integrations',
             ExtraFilter: `ID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             Fields: ['ID']
         }, user);
@@ -3336,6 +3337,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND ExternalObjectName='${escapedObjectName}'`,
                     OrderBy: '__mj_CreatedAt ASC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                     BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
                 }, user);
@@ -3720,6 +3722,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(input.CompanyIntegrationID, 'CompanyIntegrationID')}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 BypassCache: true,
             }, user);
@@ -3953,6 +3956,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND ExternalObjectName='${escapedObjectName}'`,
                 OrderBy: '__mj_CreatedAt ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
                 BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
             }, user);
@@ -4078,6 +4082,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND Status='In Progress'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
@@ -4385,6 +4390,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND StartedAt >= '${firedAtFilter}'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     Fields: ['ID', 'Status', 'StartedAt']
                 }, user);
@@ -4518,6 +4524,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, user);
 
@@ -4535,6 +4542,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Integrations',
                 ExtraFilter: `ID='${companyIntegration.IntegrationID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, user);
             if (!integResult.Success || integResult.Results.length === 0) {
@@ -4601,6 +4609,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Scheduled Job Types',
                 ExtraFilter: `DriverClass='${driverClass}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
@@ -4691,6 +4700,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             OrderBy: '__mj_CreatedAt DESC',
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // uniqueness must see committed jobs, not a stale filtered cache
         }, user);
@@ -5140,6 +5150,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords'],
                     BypassCache: true
@@ -5804,6 +5815,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Scheduled Job Types',
                 ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);

@@ -467,6 +467,34 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
  * unsubscribe();
  * ```
  */
+export type CacheRowValue = string | number | boolean | Date | object | null | undefined;
+export type CachePrimaryKeyValue = string | number | boolean | null;
+
+/**
+ * Compact row-level mutation payload broadcast over pub/sub when `LocalCacheManager.ApplyRowChanges`
+ * maintains an existing cached `RunView` slot in place.
+ *
+ * The backing storage key (e.g. Redis) still holds the full authoritative `CachedRunViewData`
+ * snapshot for cold-boot and cache-miss reads, while already-warm `BaseEngine` peers apply only
+ * the mutated rows in $O(\Delta)$ instead of transferring and re-materializing all $N$ rows.
+ */
+export interface CacheRowDeltaPayload {
+    /** Full row objects for created or updated records, shaped identically to the cached slot rows. */
+    upsertedRows: Array<Record<string, CacheRowValue>>;
+    /** Primary-key field-value maps for deleted records, e.g. `[{ ID: '...' }]`. */
+    deletedPrimaryKeys: Array<Record<string, CachePrimaryKeyValue>>;
+    /** Ordered primary-key column names for this entity (supports single and composite PKs). */
+    primaryKeyFields: string[];
+    /** Post-mutation `maxUpdatedAt` ISO timestamp of the cached slot. */
+    maxUpdatedAt: string;
+    /** Authoritative post-mutation row count of the cached slot (used by peers to detect drift or missed deltas). */
+    rowCount: number;
+    /** Authoritative post-mutation `TotalRowCount` of the cached slot. */
+    totalRowCount: number;
+    /** Entity schema hash (`CachedRunViewData.schemaHash`), validated by peers before applying the delta. */
+    schemaHash?: string;
+}
+
 export interface CacheChangedEvent {
     /**
      * The cache key that changed. For RunView results, this is the fingerprint
@@ -484,10 +512,11 @@ export interface CacheChangedEvent {
     /**
      * What happened to the cache entry.
      * - `'set'` — a new value was stored (create or replace)
+     * - `'row_delta'` — one or more rows were upserted/deleted in place (`Data` encodes {@link CacheRowDeltaPayload})
      * - `'removed'` — a single key was deleted
      * - `'category_cleared'` — all keys in the category were deleted
      */
-    Action: 'set' | 'removed' | 'category_cleared';
+    Action: 'set' | 'removed' | 'category_cleared' | 'row_delta';
 
     /**
      * UTC Unix timestamp in milliseconds when the change occurred (`Date.now()`).
@@ -932,6 +961,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Returns true when a cached `RunView` slot identified by `fingerprint` is eligible for
+     * in-place maintenance across entity saves (unfiltered, unordered, uncapped, no aggregates
+     * or narrowing segments).
+     */
+    public IsRunViewFingerprintMaintainableOnSave(fingerprint: string): boolean {
+        if (!fingerprint || !fingerprint.includes('|')) {
+            return false;
+        }
+        return !this.isSubsetFingerprint(fingerprint) && !this.isFilteredFingerprint(fingerprint);
+    }
+
+    /**
      * Returns true if the slot was cached under an ORDER BY (fingerprint segment [2]).
      *
      * An ordered slot's row SET can be maintained in place, but its ORDER cannot: an upsert
@@ -1348,7 +1389,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param fingerprint - The slot key
      * @param expiresAt - Absolute expiry (ms since epoch), when the slot has one
      */
-    private runViewWriteOptions(fingerprint: string, expiresAt?: number): LocalStorageWriteOptions {
+    private runViewWriteOptions(
+        fingerprint: string,
+        expiresAt?: number,
+        pubSubOverride?: { pubSubAction: 'row_delta'; pubSubData: string }
+    ): LocalStorageWriteOptions {
         const options: LocalStorageWriteOptions = {};
         const entity = this.extractEntityFromFingerprint(fingerprint);
         if (entity) {
@@ -1356,6 +1401,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         if (expiresAt) {
             options.TTLSeconds = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
+        }
+        if (pubSubOverride) {
+            options.pubSubAction = pubSubOverride.pubSubAction;
+            options.pubSubData = pubSubOverride.pubSubData;
         }
         return options;
     }
@@ -1591,7 +1640,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        totalRowCount: number,
+        totalRowCount: number | undefined,
         provider?: IMetadataProvider,
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) {
@@ -2340,7 +2389,24 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 }
             }
         } else {
-            // For set/removed, dispatch only to callbacks for the specific fingerprint
+            this._lastVerifiedAt.delete(event.CacheKey);
+            if (event.Action === 'row_delta' && event.Data) {
+                const existingEntry = this._registry.get(event.CacheKey);
+                if (existingEntry) {
+                    try {
+                        const parsedDelta = JSON.parse(event.Data) as Partial<CacheRowDeltaPayload>;
+                        if (typeof parsedDelta.rowCount === 'number') {
+                            existingEntry.rowCount = parsedDelta.rowCount;
+                        }
+                        if (typeof parsedDelta.maxUpdatedAt === 'string') {
+                            existingEntry.maxUpdatedAt = parsedDelta.maxUpdatedAt;
+                        }
+                    } catch {
+                        // Best-effort local registry metadata update; callbacks handle invalid payloads safely.
+                    }
+                }
+            }
+            // For set/row_delta/removed, dispatch only to callbacks for the specific fingerprint
             const callbacks = this._changeCallbacks.get(event.CacheKey);
             if (callbacks) {
                 for (const cb of callbacks) {
@@ -3692,12 +3758,29 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 }
                 const pkFieldNames = changes[0].Key.KeyValuePairs.map(kv => kv.FieldName);
                 const resultMap = this.indexRowsByKey(cached.results, pkFieldNames);
-                if (!this.applyChangesToRowMap(resultMap, changes)) {
+                const deltaChanges = this.applyChangesToRowMap(resultMap, changes);
+                if (!deltaChanges.changed) {
                     return true; // only removals of rows the slot does not hold
                 }
-                return await this.storeCachedResults(fingerprint, Array.from(resultMap.values()), newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
-                      schemaStamp: cached.schemaStamp, providerInternalScaffolding: cached.providerInternalScaffolding });
+                return await this.storeCachedResults(
+                    fingerprint,
+                    Array.from(resultMap.values()),
+                    newMaxUpdatedAt,
+                    {
+                        totalRowCount: cached.totalRowCount,
+                        rowCount: cached.results.length,
+                        schemaHash: cached.schemaHash,
+                        schemaStamp: cached.schemaStamp,
+                        providerInternalScaffolding: cached.providerInternalScaffolding,
+                    },
+                    cached.providerInternalScaffolding
+                        ? undefined
+                        : {
+                              upsertedRows: deltaChanges.upsertedRows,
+                              deletedPrimaryKeys: deltaChanges.deletedPrimaryKeys,
+                              primaryKeyFields: pkFieldNames,
+                          }
+                );
             } catch (e) {
                 LogError(`LocalCacheManager.ApplyRowChanges failed: ${e}`);
                 return false;
@@ -3720,19 +3803,44 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         return resultMap;
     }
 
-    /** Applies `changes` to `rows` in order. @returns True when anything changed. */
-    private applyChangesToRowMap(rows: Map<string, unknown>, changes: ReadonlyArray<CachedRowChange>): boolean {
+    /** Applies `changes` to `rows` in order and collects the collapsed net row delta for pub/sub. */
+    private applyChangesToRowMap(
+        rows: Map<string, unknown>,
+        changes: ReadonlyArray<CachedRowChange>
+    ): {
+        changed: boolean;
+        upsertedRows: Array<Record<string, CacheRowValue>>;
+        deletedPrimaryKeys: Array<Record<string, CachePrimaryKeyValue>>;
+    } {
         let changed = false;
+        const upsertsByKey = new Map<string, Record<string, CacheRowValue>>();
+        const deletesByKey = new Map<string, Record<string, CachePrimaryKeyValue>>();
         for (const change of changes) {
             const keyStr = this.cheapKeyFromCompositeKey(change.Key);
             if (change.Row) {
                 rows.set(keyStr, change.Row);
+                deletesByKey.delete(keyStr);
+                upsertsByKey.set(keyStr, change.Row as Record<string, CacheRowValue>);
                 changed = true;
             } else if (rows.delete(keyStr)) {
+                upsertsByKey.delete(keyStr);
+                const pkRecord: Record<string, CachePrimaryKeyValue> = {};
+                for (const kv of change.Key.KeyValuePairs) {
+                    const v = kv.Value;
+                    pkRecord[kv.FieldName] =
+                        typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null
+                            ? v
+                            : String(v);
+                }
+                deletesByKey.set(keyStr, pkRecord);
                 changed = true;
             }
         }
-        return changed;
+        return {
+            changed,
+            upsertedRows: Array.from(upsertsByKey.values()),
+            deletedPrimaryKeys: Array.from(deletesByKey.values()),
+        };
     }
 
     /**
@@ -3753,7 +3861,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         fingerprint: string,
         updatedResults: unknown[],
         newMaxUpdatedAt: string,
-        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; schemaStamp?: string; providerInternalScaffolding?: boolean }
+        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; schemaStamp?: string; providerInternalScaffolding?: boolean },
+        rowDelta?: {
+            upsertedRows: Array<Record<string, CacheRowValue>>;
+            deletedPrimaryKeys: Array<Record<string, CachePrimaryKeyValue>>;
+            primaryKeyFields: string[];
+        }
     ): Promise<boolean> {
         // Stamp the slot the way the fill path does — the newest row's __mj_UpdatedAt — so the
         // stamp means the same thing whichever funnel wrote the slot and matches what the database
@@ -3810,8 +3923,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
 
+        let pubSubOverride: { pubSubAction: 'row_delta'; pubSubData: string } | undefined;
+        if (rowDelta) {
+            const deltaPayload: CacheRowDeltaPayload = {
+                upsertedRows: rowDelta.upsertedRows,
+                deletedPrimaryKeys: rowDelta.deletedPrimaryKeys,
+                primaryKeyFields: rowDelta.primaryKeyFields,
+                maxUpdatedAt,
+                rowCount: updatedResults.length,
+                totalRowCount: data.totalRowCount ?? updatedResults.length,
+                schemaHash: data.schemaHash,
+            };
+            pubSubOverride = {
+                pubSubAction: 'row_delta',
+                pubSubData: JSON.stringify(deltaPayload),
+            };
+        }
+
         await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
-            this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt));
+            this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt, pubSubOverride));
 
         this._lastVerifiedAt.set(fingerprint, now);
         if (existingEntry) {

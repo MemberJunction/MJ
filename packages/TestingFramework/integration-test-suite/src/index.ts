@@ -171,6 +171,8 @@ export * from './checks/query-security.checks';
 export * from './checks/sqlpipe-matrix.checks';
 export * from './checks/sqlpipe-extraction-fixtures.checks';
 export * from './checks/sqlpipe-matrix-client.checks';
+export * from './checks/agent-execution-primitives.checks';
+export * from './checks/agent-execution-primitives-live.checks';
 export * from './checks/ciphertext-cache.checks';
 export * from './checks/concurrency-conflict-client.checks';
 export * from './checks/entity-status-fanout-client.checks';

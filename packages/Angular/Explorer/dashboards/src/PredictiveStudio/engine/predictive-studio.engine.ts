@@ -372,6 +372,7 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
             ExtraFilter: `ProcessRunID = '${EscapeSQLString(runId)}'`,
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             AfterKey: CompositeKey.FromEntityRecord(entityInfo, page.Results[page.Results.length - 1]),
             ResultType: 'simple',
           },

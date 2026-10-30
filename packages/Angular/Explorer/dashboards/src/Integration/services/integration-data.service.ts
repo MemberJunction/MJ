@@ -817,6 +817,7 @@ export class IntegrationDataService {
         EntityName: 'MJ: Company Integration Run Details',
         ExtraFilter: `CompanyIntegrationRunID='${run.ID}' AND EntityID='${entityID}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         Fields: ['EntityID'],
         ResultType: 'simple'
       });
@@ -1002,6 +1003,7 @@ export class IntegrationDataService {
       ExtraFilter: `Name='${actionName}'`,
       Fields: ['ID'],
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple'
     });
     return result.Results.length > 0 ? result.Results[0].ID : null;
