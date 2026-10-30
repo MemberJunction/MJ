@@ -108,6 +108,8 @@ import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID, IsValidUUID } from '@m
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
 import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
+import { ConversationRemoteBrowserController } from './conversation-remote-browser-controller';
+import { RemoteBrowserSurfaceComponent } from '../realtime/remote-browser/remote-browser-surface.component';
 import { DescribeCallFailureNotice } from '../realtime/realtime-call-failure-notice';
 import type {
   IMJChatAgentPresenceComponent,
@@ -257,7 +259,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ConversationId = value;
   }
 
-  @Input() Conversation: MJConversationEntity | null = null;
+  private _conversation: MJConversationEntity | null = null;
+  @Input()
+  set Conversation(value: MJConversationEntity | null) {
+    this._conversation = value;
+    if (value?.ID && value.Name) {
+      this.syncCachedMessageInputName(value.ID, value.Name);
+    }
+  }
+  get Conversation(): MJConversationEntity | null {
+    return this._conversation;
+  }
 
   /** @deprecated Use {@link Conversation}. */
   @Input() set conversation(value: MJConversationEntity | null) {
@@ -399,6 +411,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * that authorization to a role to stop the server creating forks as well.
    */
   @Input() AllowForking = true;
+
+  /**
+   * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
+   * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
+   * that wants an agent-driven browser beside the chat sets true.
+   */
+  @Input() AllowRemoteBrowser = false;
 
   /**
    * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
@@ -1600,7 +1619,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly initialDraftSnapshots = new Map<string, string | null>();
 
   public GetInitialDraftFor(conversationId: string | null): string | null {
-    const key = conversationId ? conversationId.trim().toLowerCase() : 'new';
+    const key = conversationId ? NormalizeUUID(conversationId) : 'new';
     if (!this.initialDraftSnapshots.has(key)) {
       let snapshot: string | null;
       if (this._composerAgentMention) {
@@ -1637,14 +1656,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     // New/unsaved conversations render the empty-state composer; established ones
     // use the active cached input. Both resolve the agent to a pill.
-    const target = this.emptyStateComponent ? 'empty-state' : this.messageInputComponents?.first ? 'active-input' : null;
+    const activeInput =
+      this.getActiveMessageInputComponent() ??
+      this.messageInputComponents?.last ??
+      this.messageInputComponents?.first;
+    const target = this.emptyStateComponent ? 'empty-state' : activeInput ? 'active-input' : null;
     if (attempt === 0 || attempt % 10 === 0 || target) {
       console.log(`[Omnibar→Chat] chat-area apply('${agentName}') attempt ${attempt}: target=${target ?? 'none-mounted'}`);
     }
     const insert: Promise<boolean> | null = this.emptyStateComponent
       ? this.emptyStateComponent.InsertAgentMention(agentName, true)
-      : this.messageInputComponents?.first
-        ? this.messageInputComponents.first.InsertAgentMention(agentName, true)
+      : activeInput
+        ? activeInput.InsertAgentMention(agentName, true)
         : null;
     if (insert) {
       void insert.then((applied: boolean) => {
@@ -1758,6 +1781,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private reconcileInFlight: Promise<void> | null = null;
   /** Reason for one more reconcile pass, requested while a pass was running. */
   private reconcileRerunReason: string | null = null;
+  /**
+   * Set when a TRANSPORT reconnect asks for a pass; consumed by the next pass that starts. Held as a
+   * flag rather than read off the pass's reason because {@link ReconcileNow} folds requests that
+   * arrive mid-pass into one follow-up carrying only the LAST reason — a reconnect followed by a
+   * tab-visible would otherwise lose the window refresh the reconnect needs.
+   */
+  private reconcileWindowRefreshPending = false;
   public IsProcessing: boolean = false;
 
   /** @deprecated Use {@link IsProcessing}. */
@@ -1903,6 +1933,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
   public ShowArtifactPanel: boolean = false;
   public SelectedTaskGraphPanel: { parentTaskId: string; workflowTitle: string } | null = null;
+  public ShowRemoteBrowserPanel: boolean = false;
+  public RemoteBrowserUrlInput: string = '';
+  public IsRemoteBrowserNavigating: boolean = false;
+
+  /** Whether this conversation's browser is running, shown or not (the header button stays lit while it is). */
+  public get IsRemoteBrowserLive(): boolean {
+    return this.remoteBrowser?.ConversationId != null;
+  }
+
+  /** The conversation's browser, built on first open so a chat area that never opens one pays nothing. */
+  private remoteBrowser: ConversationRemoteBrowserController | null = null;
+
+  private ensureRemoteBrowser(): ConversationRemoteBrowserController {
+    if (!this.remoteBrowser) {
+      const browser = new ConversationRemoteBrowserController({
+        OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
+        // Fires on open, close and a real URL change, never per screencast frame.
+        OnStateChange: () => {
+          this.RemoteBrowserUrlInput = browser.CurrentUrl ?? '';
+          this.cdr.detectChanges();
+        },
+        OnSessionRefused: (message) => {
+          this.ShowRemoteBrowserPanel = false;
+          MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 6000);
+          this.cdr.detectChanges();
+        },
+      });
+      const provider = this.ProviderToUse;
+      browser.Initialize(this.agentClientService, provider instanceof GraphQLDataProvider ? provider : null);
+      this.remoteBrowser = browser;
+    }
+    return this.remoteBrowser;
+  }
+
+  @ViewChild('conversationRemoteBrowserSurface')
+  set ConversationRemoteBrowserSurface(surface: RemoteBrowserSurfaceComponent | undefined) {
+    if (surface) {
+      this.remoteBrowser?.BindSurface(surface);
+    } else {
+      this.remoteBrowser?.UnbindSurface();
+    }
+  }
 
   /** @deprecated Use {@link ShowArtifactPanel}. */
   public get showArtifactPanel(): boolean {
@@ -3534,11 +3606,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.clearStopFallbackTimer(id);
     }
 
+    // Leaving the chat surface altogether ends any live voice call (including
+    // minimized calls or calls minted from the empty state).
+    if (this.RealtimeSession?.IsActive) {
+      void this.RealtimeSession.EndRealtimeSession();
+    }
+
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.boundOnResizeMove);
-    window.removeEventListener('mouseup', this.boundOnResizeEnd);
-    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
-    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mousemove', this.boundOnResizeMove);
+      window.removeEventListener('mouseup', this.boundOnResizeEnd);
+      window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+      window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+    }
+
+    this.remoteBrowser?.Dispose();
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
@@ -3559,6 +3641,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
+    // A conversation's browser ends with it: the next conversation starts without one. Reloading the SAME
+    // conversation (the overlay-to-workspace handoff) keeps it.
+    const browserConversation = this.remoteBrowser?.ConversationId;
+    if (!browserConversation || !UUIDsEqual(browserConversation, this._conversationId)) {
+      this.ShowRemoteBrowserPanel = false;
+      void this.remoteBrowser?.Close();
+    }
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -3641,12 +3730,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         this.artifactMapConversationId = conversationId;
       }
 
-      if (!this.messageInputMetadataCache.has(conversationId)) {
-        this.messageInputMetadataCache.set(conversationId, {
-          conversationId: conversationId,
-          conversationName: this.Conversation?.Name || null
-        });
-      }
+      this.touchMessageInputCache(conversationId);
 
       // Only show loading spinner if the engine doesn't have cached data for this conversation.
       // This prevents the "no messages" flash when switching between conversations.
@@ -3713,6 +3797,123 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private _cachedInputsArray: Array<{conversationId: string; conversationName: string | null}> = [];
   private _cachedInputsKey = '';
 
+  /** Max hidden composers kept mounted for draft/state preservation; older idle ones are unmounted. */
+  private static readonly MAX_CACHED_MESSAGE_INPUTS = 10;
+
+  /** Stable case-normalized track key for `@for` so case-only UUID changes reuse the mounted composer. */
+  public NormalizeCachedInputId(conversationId: string): string {
+    return NormalizeUUID(conversationId);
+  }
+
+  private findMessageInputCacheEntry(
+    conversationId: string
+  ): { key: string; meta: { conversationId: string; conversationName: string | null } } | undefined {
+    const exact = this.messageInputMetadataCache.get(conversationId);
+    if (exact) {
+      return { key: conversationId, meta: exact };
+    }
+    for (const [key, meta] of this.messageInputMetadataCache.entries()) {
+      if (UUIDsEqual(key, conversationId)) {
+        return { key, meta };
+      }
+    }
+    return undefined;
+  }
+
+  private resolveConversationNameForCache(conversationId: string): string | null {
+    const activeConv = this.Conversation;
+    if (activeConv?.Name && (!activeConv.ID || UUIDsEqual(activeConv.ID, conversationId))) {
+      return activeConv.Name;
+    }
+    return this.engine?.GetConversation?.(conversationId)?.Name || null;
+  }
+
+  private syncCachedMessageInputName(conversationId: string, name: string): void {
+    if (!this.messageInputMetadataCache || !conversationId || !name) {
+      return;
+    }
+    const found = this.findMessageInputCacheEntry(conversationId);
+    if (found && found.meta.conversationName !== name) {
+      this.messageInputMetadataCache.set(found.key, {
+        ...found.meta,
+        conversationName: name,
+      });
+    }
+  }
+
+  private findMessageInputComponent(conversationId: string): MessageInputComponent | undefined {
+    if (!this.messageInputComponents || !conversationId) {
+      return undefined;
+    }
+    return this.messageInputComponents.find(component =>
+      UUIDsEqual(component.ConversationId ?? component.conversationId, conversationId)
+    );
+  }
+
+  /**
+   * True when a cached hidden composer for `candidateId` is idle and safe to unmount.
+   * Never evicts the newly-activated conversation, a conversation awaiting auto-send of
+   * `PendingMessage`, a conversation hosting a live voice session, a conversation with
+   * running tasks in `ActiveTasksService`, or a mounted composer with in-flight streaming
+   * callbacks / DB watches / unsent file attachments (`HasActiveWork`).
+   */
+  private canEvictCachedMessageInput(candidateId: string, activeConversationId: string): boolean {
+    if (UUIDsEqual(candidateId, activeConversationId) || UUIDsEqual(candidateId, this.ConversationId)) {
+      return false;
+    }
+    if (this._pendingMessage && this.ShouldDeliverPendingMessageTo(candidateId)) {
+      return false;
+    }
+    if (this.RealtimeSession?.IsActiveFor?.(candidateId)) {
+      return false;
+    }
+    if (this.activeTasks?.HasActiveTasksForConversation?.(candidateId)) {
+      return false;
+    }
+    const mounted = this.findMessageInputComponent(candidateId);
+    if (mounted?.HasActiveWork) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Registers `conversationId` as the most-recently-used composer and unmounts the
+   * least-recently-used idle ones beyond the cap. Each cache entry keeps a live
+   * `mj-message-input` component, so without a bound memory grows with every
+   * conversation visited. Composers actively running an agent turn, holding unsent
+   * file attachments, or hosting a live voice call are skipped until idle. Drafts
+   * live in the draft store, so an evicted composer's frozen restore snapshot is
+   * dropped to let a remount re-read the latest draft.
+   */
+  private touchMessageInputCache(conversationId: string): void {
+    const existing = this.findMessageInputCacheEntry(conversationId);
+    if (existing) {
+      this.messageInputMetadataCache.delete(existing.key); // re-insert to refresh recency & align casing
+    }
+    const conversationName =
+      existing?.meta.conversationName ?? this.resolveConversationNameForCache(conversationId);
+    this.messageInputMetadataCache.set(conversationId, {
+      conversationId,
+      conversationName,
+    });
+
+    if (this.messageInputMetadataCache.size <= ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+      return;
+    }
+
+    for (const [candidateKey, entry] of [...this.messageInputMetadataCache.entries()]) {
+      if (this.messageInputMetadataCache.size <= ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+        break;
+      }
+      if (!this.canEvictCachedMessageInput(entry.conversationId, conversationId)) {
+        continue;
+      }
+      this.messageInputMetadataCache.delete(candidateKey);
+      this.initialDraftSnapshots?.delete(NormalizeUUID(entry.conversationId));
+    }
+  }
+
   /**
    * Returns array of cached message-input metadata for rendering.
    * This allows multiple message-input components to exist simultaneously (hidden)
@@ -3757,12 +3958,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * we need to find the one that matches the current conversationId.
    */
   private getActiveMessageInputComponent(): MessageInputComponent | undefined {
-    if (!this.messageInputComponents || !this.ConversationId) {
+    if (!this.ConversationId) {
       return undefined;
     }
-    return this.messageInputComponents.find(
-      component => component.conversationId === this.ConversationId
-    );
+    return this.findMessageInputComponent(this.ConversationId);
   }
 
   private async loadMessages(conversationId: string, loadToken: number): Promise<void> {
@@ -7334,6 +7533,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     this.SelectedTaskGraphPanel = null;
+    this.ShowRemoteBrowserPanel = false;
     this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
@@ -7362,6 +7562,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     this.ShowArtifactPanel = false;
+    this.ShowRemoteBrowserPanel = false;
     this.SelectedArtifactId = null;
     this.SelectedTaskGraphPanel = {
       parentTaskId: data.parentTaskId,
@@ -7377,6 +7578,76 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
   }
+
+  public ToggleRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel) {
+      this.CloseRemoteBrowserPanel();
+    } else {
+      this.OpenRemoteBrowserPanel();
+    }
+  }
+
+  public OpenRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel || !this.AllowRemoteBrowser || !this.ConversationId) {
+      return;
+    }
+    // Open before the drawer renders: binding its surface starts the screencast for this conversation.
+    this.ensureRemoteBrowser().Open(this.ConversationId);
+    this.ShowArtifactPanel = false;
+    this.SelectedTaskGraphPanel = null;
+    this.SelectedArtifactId = null;
+    this.ShowRemoteBrowserPanel = true;
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  public CloseRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    void this.remoteBrowser?.Close();
+    this.cdr.detectChanges();
+  }
+
+  public async NavigateRemoteBrowserFromInput(): Promise<void> {
+    const rawUrl = this.RemoteBrowserUrlInput?.trim();
+    if (!rawUrl || this.IsRemoteBrowserNavigating) {
+      return;
+    }
+    this.IsRemoteBrowserNavigating = true;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.remoteBrowser?.Navigate(rawUrl);
+      // A refused session already said why (OnSessionRefused) and closed the browser.
+      if (result && !result.Success && this.IsRemoteBrowserLive) {
+        MJNotificationService.Instance.CreateSimpleNotification(result.ErrorMessage ?? 'The page could not be opened.', 'error', 5000);
+      }
+    } finally {
+      this.IsRemoteBrowserNavigating = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   */
+  public get EffectiveAppContext(): Record<string, unknown> | null {
+    const controller = this.remoteBrowser;
+    if (!controller) {
+      return this.AppContext;
+    }
+    const owns = controller.ConversationId !== null && controller.OwnsTools;
+    let memo = this.effectiveAppContextMemo;
+    if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {
+      memo = { Base: this.AppContext, Version: controller.StateVersion, Owns: owns, Value: controller.WithBrowserContext(this.AppContext) };
+      this.effectiveAppContextMemo = memo;
+    }
+    return memo.Value;
+  }
+  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable
@@ -7710,6 +7981,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   OnConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     LogStatusEx({message: '🎉 Conversation renamed', verboseOnly: true, additionalArgs: [event]});
+    if (event?.conversationId && event.name) {
+      this.syncCachedMessageInputName(event.conversationId, event.name);
+    }
     // Pass the event up to workspace component for animation
     this.ConversationRenamed.emit(event);
   }
@@ -9161,6 +9435,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * @param reason What prompted it — carried only for logging.
    */
   public async ReconcileNow(reason: string): Promise<void> {
+    if (ConversationChatAreaComponent.TRANSPORT_RECONNECT_REASONS.includes(reason)) {
+      this.reconcileWindowRefreshPending = true;
+    }
     if (this.reconcileInFlight) {
       this.reconcileRerunReason = reason;
       return this.reconcileInFlight;
@@ -9183,6 +9460,55 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /**
+   * Supervisor reasons that mean the transport itself was down, so anything published meanwhile
+   * was dropped. Only these pay for {@link refreshNewestWindow}; the other triggers
+   * (tab-visible, browser-online, message-liveness, completion-for-unloaded-message) keep the
+   * narrow run-row refresh alone.
+   */
+  private static readonly TRANSPORT_RECONNECT_REASONS: readonly string[] = ['socket-reconnected', 'stream-reconnected'];
+
+  /**
+   * After a transport reconnect, re-read the newest window page before reconciling, when any AI
+   * message is still unsettled.
+   *
+   * Two things {@link refreshAgentRunsForInProgress} alone does not cover:
+   *
+   * - **Error-status messages.** {@link correctStaleErrorMessages} can repair a message the client
+   *   marked Error while the server went on to complete the run — but only against a fresh run
+   *   row, and the narrow refresh reads runs for In-Progress messages only. Rebuilding the
+   *   peripherals from the refreshed window gives it current runs for every message in view.
+   * - **Rows written while the socket was down.** Their events were dropped, so only a re-read
+   *   brings them into the window.
+   *
+   * Newest page only, the same choice the poll-completion path makes: a full-history refresh
+   * would replace the loaded window with every row. Only called when
+   * {@link hasUnsettledAgentReplies} is true, so a quiet conversation costs one array scan.
+   *
+   * @returns false when the conversation changed underneath, so the caller abandons the pass.
+   */
+  private async refreshNewestWindow(conversationId: string, loadToken: number): Promise<boolean> {
+    await this.windowStore.RefreshLatest(this.currentUser);
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return false;
+    }
+
+    const refreshed = this.windowStore.GetSnapshot();
+    this.messages = refreshed.Details;
+    // loadPeripheralData short-circuits when it has already run for this conversation; clearing
+    // the marker is what lets it rebuild the run map from the fresh window.
+    this.lastLoadedConversationId = null;
+    await this.loadPeripheralData(conversationId, refreshed, loadToken);
+    return this.isActiveConversationLoad(conversationId, loadToken);
+  }
+
+  /** Whether any agent reply is still In-Progress, or is Error and may have completed server-side. */
+  private hasUnsettledAgentReplies(): boolean {
+    return (this.messages ?? []).some(
+      m => m.Role === 'AI' && (m.Status === 'In-Progress' || m.Status === 'Error')
+    );
+  }
+
   /** One reconcile pass over the in-progress messages of the active conversation. */
   private async reconcileOnce(reason: string): Promise<void> {
     const conversationId = this.conversationId;
@@ -9197,6 +9523,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     LogStatusEx({ message: `🔁 Reconciling in-progress runs (${reason})`, verboseOnly: true });
     try {
+      if (this.reconcileWindowRefreshPending) {
+        this.reconcileWindowRefreshPending = false;
+        // Decided synchronously so a pass with nothing unsettled adds no await to next's path.
+        if (this.hasUnsettledAgentReplies()) {
+          const stillActive = await this.refreshNewestWindow(conversationId, loadToken);
+          if (!stillActive) {
+            return;
+          }
+        }
+      }
       await this.refreshAgentRunsForInProgress(conversationId, loadToken);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;

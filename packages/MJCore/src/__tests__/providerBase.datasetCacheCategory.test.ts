@@ -366,4 +366,71 @@ describe('ProviderBase dataset freshness — the comparison the dead category ma
         expect(provider.RowCountsMatch(dataset(2), status(2))).toBe(true);
         expect(provider.RowCountsMatch(dataset(3), status(2))).toBe(false);
     });
+
+    it('does not cache a failed dataset result or throw on null LatestUpdateDate (MJ#5926, MJ#6106)', async () => {
+        provider.DatasetToReturn = {
+            DatasetID: '',
+            DatasetName: DATASET,
+            Success: false,
+            Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+            LatestUpdateDate: null as unknown as Date,
+            Results: null as unknown as DatasetResultType['Results'],
+        };
+
+        const result = await provider.GetAndCacheDatasetByName(DATASET);
+
+        expect(result.Success).toBe(false);
+        expect(result.Status).toContain('does not have read permissions');
+        expect(await provider.KeysIn(ProviderBase.DatasetCacheCategory)).toHaveLength(0);
+    });
+
+    it('CacheDataset refuses a failed or undated dataset without writing a dangling data key (MJ#5926)', async () => {
+        const failedDataset: DatasetResultType = {
+            DatasetID: '',
+            DatasetName: DATASET,
+            Success: false,
+            Status: 'Permission denied',
+            LatestUpdateDate: null as unknown as Date,
+            Results: [],
+        };
+
+        await expect(provider.CacheDataset(DATASET, undefined, failedDataset)).resolves.toBeUndefined();
+        expect(await provider.KeysIn(ProviderBase.DatasetCacheCategory)).toHaveLength(0);
+
+        const undatedDataset: DatasetResultType = {
+            DatasetID: 'D1',
+            DatasetName: DATASET,
+            Success: true,
+            Status: 'OK',
+            LatestUpdateDate: null as unknown as Date,
+            Results: [],
+        };
+
+        await expect(provider.CacheDataset(DATASET, undefined, undatedDataset)).resolves.toBeUndefined();
+        expect(await provider.KeysIn(ProviderBase.DatasetCacheCategory)).toHaveLength(0);
+    });
+
+    it('handles a failed status response (LatestUpdateDate: null) on a warm cache without throwing (MJ#5926, MJ#6106)', async () => {
+        await provider.CacheDataset(DATASET, null, dataset(2));
+        provider.StatusToReturn = {
+            DatasetID: '',
+            DatasetName: DATASET,
+            Success: false,
+            Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+            LatestUpdateDate: null as unknown as Date,
+            EntityUpdateDates: null as unknown as DatasetStatusResultType['EntityUpdateDates'],
+        };
+        provider.DatasetToReturn = {
+            DatasetID: '',
+            DatasetName: DATASET,
+            Success: false,
+            Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+            LatestUpdateDate: null as unknown as Date,
+            Results: [],
+        };
+
+        await expect(provider.IsDatasetCacheUpToDate(DATASET)).resolves.toBe(false);
+        const result = await provider.GetAndCacheDatasetByName(DATASET);
+        expect(result.Success).toBe(false);
+    });
 });

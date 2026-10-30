@@ -124,5 +124,19 @@
       "lastModified": "2026-10-02T21:42:50.419Z",
       "checksum": "d4d281674bd094e032d2289aea0db934379b268676572d5bcce0ba131f397f09"
     }
+  },
+  {
+    "fields": {
+      "Name": "Queries",
+      "Description": "Operations over MJ: Queries (refresh extraction).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "76C1A748-06B8-4B3B-844F-65F85EF5546D"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T22:16:26.880Z",
+      "checksum": "8625339b28cfb0ec1aeb63773283e5a1ecc74d259eae269d28384b65d0b18e0c"
+    }
   }
 ]
