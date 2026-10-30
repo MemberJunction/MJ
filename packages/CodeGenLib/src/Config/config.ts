@@ -271,6 +271,18 @@ export const DEFAULT_ADVANCED_GENERATION_FEATURES: readonly Readonly<AdvancedGen
     enabled: false,
   },
   {
+    name: 'EntityDisplayNames',
+    description:
+      "Use AI to improve Entity.DisplayName where the mechanical name conversion cannot — expanding schema abbreviations into readable names (ACCT_STAT_CD -> 'Account Status Codes'). By default only entities whose names still look opaque AFTER the deterministic conversion are sent to the LLM, so clean names like CustomerOrder cost nothing; set the 'alwaysGenerate' option to true to send every entity. Only writes where Entity.AutoUpdateDisplayName = 1. Every entity starts at 1 and editing DisplayName does not change it, so set it to 0 to freeze a display name an administrator has chosen. Like other entity-level features this runs for new and modified entities, or for all entities when forceRegeneration is enabled.",
+    enabled: false,
+    options: [
+      {
+        name: 'alwaysGenerate',
+        value: false,
+      },
+    ],
+  },
+  {
     name: 'SmartFieldIdentification',
     description:
       'Use AI to determine the Name Field, Default In View fields, and Searchable fields for entities. This sets IsNameField, DefaultInView, and IncludeInUserSearchAPI properties on entity fields. Only applies when new entities/fields are created or when fields allow auto-update.',
@@ -303,7 +315,10 @@ export const DEFAULT_ADVANCED_GENERATION_FEATURES: readonly Readonly<AdvancedGen
 
 /** A fresh, mutable copy of {@link DEFAULT_ADVANCED_GENERATION_FEATURES}, so no config object shares the constant's entries. */
 export function CopyDefaultAdvancedGenerationFeatures(): AdvancedGenerationFeature[] {
-  return DEFAULT_ADVANCED_GENERATION_FEATURES.map((f) => ({ ...f }));
+  return DEFAULT_ADVANCED_GENERATION_FEATURES.map((f) => ({
+    ...f,
+    ...(f.options ? { options: f.options.map((o) => ({ ...o })) } : {}),
+  }));
 }
 
 /**
