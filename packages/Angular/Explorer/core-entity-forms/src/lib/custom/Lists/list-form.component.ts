@@ -683,9 +683,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             ]);
 
             this.Stats = {
-                itemCount: itemsResult.Success ? itemsResult.TotalRowCount : 0,
-                shareCount: sharesResult.Success ? sharesResult.TotalRowCount : 0,
-                invitationCount: invitationsResult.Success ? invitationsResult.TotalRowCount : 0,
+                itemCount: itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0,
+                shareCount: sharesResult.Success ? sharesResult.TotalRowCount ?? 0 : 0,
+                invitationCount: invitationsResult.Success ? invitationsResult.TotalRowCount ?? 0 : 0,
                 lastUpdated: this.record.__mj_UpdatedAt
             };
         } catch (error) {

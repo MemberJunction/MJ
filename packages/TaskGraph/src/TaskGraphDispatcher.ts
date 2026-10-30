@@ -4576,6 +4576,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Fields: ['StepNumber'],
                 OrderBy: 'StepNumber DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 BypassCache: true,
             },

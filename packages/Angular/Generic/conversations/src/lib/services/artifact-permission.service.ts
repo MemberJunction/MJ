@@ -144,6 +144,7 @@ export class ArtifactPermissionService {
             EntityName: 'MJ: Artifact Permissions',
             ExtraFilter: `ArtifactID='${artifactId}' AND UserID='${userId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, currentUser);
 
@@ -515,6 +516,7 @@ export class ArtifactPermissionService {
             EntityName: 'MJ: Artifacts',
             ExtraFilter: `ID='${artifactId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, currentUser);
 
