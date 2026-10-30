@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ExpiryCloseReason, ParseSessionDeadlineMs } from '../agentSessions/sessionDeadline.js';
+import { ExpiryCloseReason, ParseSessionDeadlineMs, VerifyTimeLimitClaim } from '../agentSessions/sessionDeadline.js';
 
 const T = Date.parse('2026-10-29T12:00:00Z');
 const MIN = 60_000;
@@ -39,4 +39,13 @@ describe('ParseSessionDeadlineMs', () => {
     expect(ParseSessionDeadlineMs('not json')).toBeNull();
     expect(ParseSessionDeadlineMs(null)).toBeNull();
   });
+});
+
+describe('VerifyTimeLimitClaim', () => {
+  it('deadline passed → TimeLimit', () => expect(VerifyTimeLimitClaim(row(T - MIN, T - MIN), T)).toBe('TimeLimit'));
+  it('50 s ahead (inside the skew) → TimeLimit', () => expect(VerifyTimeLimitClaim(row(T - MIN, T + 50_000), T)).toBe('TimeLimit'));
+  it('10 min ahead → Explicit', () => expect(VerifyTimeLimitClaim(row(T - MIN, T + 10 * MIN), T)).toBe('Explicit'));
+  it('no stored deadline → Explicit', () => expect(VerifyTimeLimitClaim(row(T - MIN), T)).toBe('Explicit'));
+  it('Config_ null → Explicit', () => expect(VerifyTimeLimitClaim({ LastActiveAt: new Date(T), Config_: null }, T)).toBe('Explicit'));
+  it('a long-idle session is never promoted to TimeLimit by idleness', () => expect(VerifyTimeLimitClaim(row(T - 999 * MIN), T)).toBe('Explicit'));
 });

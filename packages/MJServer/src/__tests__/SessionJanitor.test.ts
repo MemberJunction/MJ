@@ -81,6 +81,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string };
     ClosedAt?: Date | null;
     CloseReason?: string | null;
+    Config_?: string | null;
+    LastActiveAt?: Date | string | null;
 }
 
 function makeUser(): UserInfo {
@@ -111,6 +113,10 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
                     if (status == null) return false;
                     entity.ID = id;
                     entity.Status = status;
+                    // CloseSession verifies a TimeLimit against the loaded row's stored deadline, so the
+                    // fake row carries the swept row's Config_ like the real table row does.
+                    entity.Config_ = sweptRows.get(id)?.Config_ ?? null;
+                    entity.LastActiveAt = sweptRows.get(id)?.LastActiveAt ?? null;
                     return true;
                 }),
                 Save: vi.fn(async () => {
@@ -135,6 +141,8 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
  * sweeps (entity 'MJ: AI Agent Session Channels', issued by CloseSession) always resolve empty so
  * they never consume a queued session page. This keeps page assertions deterministic.
  */
+/** Config_/LastActiveAt of rows a test swept, by session ID: sessionPages is consumed by the sweep before CloseSession loads the row. */
+const sweptRows = new Map<string, { Config_?: string | null; LastActiveAt?: Date | string | null }>();
 let sessionPages: Array<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }> = [];
 
 /** Only the RunView calls that paged the session sweep (ignores the channel-sweep calls). */
@@ -313,6 +321,7 @@ describe('SessionJanitor close reasons (#6182): sweeps stamp TimeLimit / Idle vi
         row: Record<string, unknown>,
     ): Promise<{ count: number; reason: string | null | undefined; closed: boolean }> {
         const id = row.ID as string;
+        sweptRows.set(id, { Config_: row.Config_ as string | null, LastActiveAt: row.LastActiveAt as Date | string | null });
         sessionPages = [{ Success: true, Results: [row] }];
         const { provider, closedIds, closedReasons } = makeProvider(new Map([[id, 'Active']]));
         const count = await SessionJanitor.Instance[sweep](provider, makeUser());

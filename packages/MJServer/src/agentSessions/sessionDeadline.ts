@@ -54,3 +54,26 @@ export function ExpiryCloseReason(
     }
     return idlePassed ? 'Idle' : null;
 }
+
+/**
+ * How far ahead of a stored deadline a browser's `TimeLimit` claim is still believed. The browser's
+ * alarm runs on its own clock and a skewed or throttled tab may fire a little early; a minute covers that
+ * without letting a client end a session meant to run for minutes more.
+ */
+export const DEADLINE_CLAIM_SKEW_MS = 60_000;
+
+/**
+ * Verifies a `TimeLimit` close claim against the session's stored deadline. The browser claims, the server
+ * verifies: the claim holds when the stored deadline has passed or falls within {@link DEADLINE_CLAIM_SKEW_MS},
+ * otherwise (no deadline, or one far in the future) the close is recorded as `Explicit`. The janitor's own
+ * `TimeLimit` trivially passes, so every caller shares one path, and this module remains the single place that
+ * answers "did the deadline pass?" for both the sweep and the client claim. Idleness never counts here.
+ */
+export function VerifyTimeLimitClaim(
+    session: { LastActiveAt: Date | string | null | undefined; Config_: string | null | undefined },
+    nowMs: number,
+): 'TimeLimit' | 'Explicit' {
+    return ExpiryCloseReason(session, nowMs + DEADLINE_CLAIM_SKEW_MS, Number.POSITIVE_INFINITY) === 'TimeLimit'
+        ? 'TimeLimit'
+        : 'Explicit';
+}

@@ -42,10 +42,12 @@ vi.mock('../realtimeSessions/RecordingAssemblyScheduler.js', () => ({
 // --- Mock RunView.FromMetadataProvider so channel sweeps and run-id lookups are controllable,
 //     while leaving the rest of @memberjunction/core intact. RunViews runs each view through runViewMock. ---
 const runViewMock = vi.fn();
+const logStatusMock = vi.fn();
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
+        LogStatus: (...args: unknown[]) => logStatusMock(...args),
         RunView: {
             FromMetadataProvider: () => ({
                 RunView: runViewMock,
@@ -528,6 +530,44 @@ describe('SessionManager.CloseSession', () => {
             expect(session.CloseReason).toBe(reason);
         },
     );
+
+    describe('a TimeLimit close is verified against the stored deadline', () => {
+        beforeEach(() => logStatusMock.mockClear());
+
+        it('is downgraded to Explicit and logged when the stored deadline is far away', async () => {
+            const deadline = new Date(Date.now() + 10 * 60_000).toISOString();
+            const session = makeSessionEntity({ ID: 'session-far', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: deadline }) });
+            const { provider } = makeProvider(() => session);
+
+            const ok = await new SessionManager().CloseSession('session-far', makeUser(), provider, 'TimeLimit');
+
+            expect(ok).toBe(true);
+            expect(session.CloseReason).toBe('Explicit');
+            const logged = logStatusMock.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(logged).toContain('session-far');
+            expect(logged).toContain(deadline);
+        });
+
+        it('is stamped TimeLimit when the stored deadline has passed', async () => {
+            const deadline = new Date(Date.now() - 1_000).toISOString();
+            const session = makeSessionEntity({ ID: 'session-due', Status: 'Active', Config_: JSON.stringify({ maxSessionDeadlineIso: deadline }) });
+            const { provider } = makeProvider(() => session);
+
+            await new SessionManager().CloseSession('session-due', makeUser(), provider, 'TimeLimit');
+
+            expect(session.CloseReason).toBe('TimeLimit');
+            expect(logStatusMock).not.toHaveBeenCalled();
+        });
+
+        it('is downgraded to Explicit when the session stores no deadline', async () => {
+            const session = makeSessionEntity({ ID: 'session-none', Status: 'Active', Config_: null });
+            const { provider } = makeProvider(() => session);
+
+            await new SessionManager().CloseSession('session-none', makeUser(), provider, 'TimeLimit');
+
+            expect(session.CloseReason).toBe('Explicit');
+        });
+    });
 
     it('does not overwrite the original CloseReason on an idempotent re-close', async () => {
         const session = makeSessionEntity({ ID: 'session-1', Status: 'Closed', CloseReason: 'Janitor' });
