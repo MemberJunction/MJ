@@ -7,7 +7,7 @@
  * and genuine duplicates fell below the threshold. These tests pin the shared behavior both now use.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { EntityInfo, RunView, UserInfo } from '@memberjunction/core';
+import type { EntityInfo, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import type { MJTemplateEntityExtended } from '@memberjunction/core-entities';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -74,6 +74,29 @@ describe('EntityDocumentTemplateDataBuilder', () => {
             expect(await builder.LoadRelatedData(INDIVIDUALS, [], TEMPLATE)).toEqual(related);
         });
 
+        it('renders a related row\'s date-only field as its stored day, as the main record\'s is', async () => {
+            const jobs = {
+                Name: 'Jobs',
+                Fields: [
+                    { Name: 'individual_id', Type: 'nvarchar' },
+                    { Name: 'StartDate', Type: 'date' },
+                ],
+            } as unknown as EntityInfo;
+            const withJobs = new EntityDocumentTemplateDataBuilder(
+                { RunView: async () => ({ Success: true, Results: [{ individual_id: 'A', StartDate: new Date('1984-05-07T00:00:00.000Z') }] }) } as unknown as RunView,
+                USER,
+                { Entities: [jobs] } as unknown as IMetadataProvider,
+            );
+            const jobsTemplate = {
+                ID: 'tpl-3',
+                Params: [{ Name: 'Jobs', Type: 'Entity', Entity: 'Jobs', LinkedParameterField: 'individual_id', ExtraFilter: null }],
+            } as unknown as MJTemplateEntityExtended;
+
+            const related = await withJobs.LoadRelatedData(INDIVIDUALS, [{ individual_id: 'A' }], jobsTemplate);
+
+            expect(related).toEqual([{ ParamName: 'Jobs', Data: [{ individual_id: 'A', StartDate: '1984-05-07' }] }]);
+        });
+
         it('leaves a param whose rows fail to load out of the result, and MissingRelatedParams names it', async () => {
             runViewFn.mockImplementation(async (params: { EntityName: string }) => params.EntityName === 'Phones'
                 ? { Success: false, Results: [], ErrorMessage: 'boom' }
@@ -100,6 +123,42 @@ describe('EntityDocumentTemplateDataBuilder', () => {
                 Emails: [],
                 Nickname: '',
             });
+        });
+
+        // A `date` column arrives as a Date at UTC midnight. Rendered as-is it became
+        // "Sun May 06 1984 20:00:00 GMT-0400 (Eastern Daylight Time)" for a stored 1984-05-07 (#6055).
+        it('renders a date-only field as its stored day and a timestamp as ISO 8601', () => {
+            const people = {
+                Name: 'People',
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                Fields: [
+                    { Name: 'ID', Type: 'uniqueidentifier' },
+                    { Name: 'DateOfBirth', Type: 'date' },
+                    { Name: 'LastSeenAt', Type: 'datetimeoffset' },
+                ],
+            } as unknown as EntityInfo;
+            const recordOnly = { ID: 'tpl-2', Params: [{ Name: 'Entity', Type: 'Record' }] } as unknown as MJTemplateEntityExtended;
+
+            const data = builder.BuildTemplateData(people, {
+                ID: 'P1',
+                DateOfBirth: new Date('1984-05-07T00:00:00.000Z'),
+                LastSeenAt: new Date('2026-10-22T18:53:06.123Z'),
+            }, recordOnly, []);
+
+            expect(data).toEqual({ ID: 'P1', DateOfBirth: '1984-05-07', LastSeenAt: '2026-10-22T18:53:06.123Z' });
+        });
+
+        it('gives a Scalar param that names a date field the stored day', () => {
+            const people = {
+                Name: 'People',
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                Fields: [{ Name: 'ID', Type: 'uniqueidentifier' }, { Name: 'DateOfBirth', Type: 'date' }],
+            } as unknown as EntityInfo;
+            const scalarOnly = { ID: 'tpl-4', Params: [{ Name: 'DateOfBirth', Type: 'Scalar' }] } as unknown as MJTemplateEntityExtended;
+
+            const data = builder.BuildTemplateData(people, { ID: 'P1', DateOfBirth: new Date('1984-05-07T00:00:00.000Z') }, scalarOnly, []);
+
+            expect(data).toEqual({ DateOfBirth: '1984-05-07' });
         });
     });
 });
