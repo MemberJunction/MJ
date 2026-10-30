@@ -3231,6 +3231,65 @@ describe('BaseAgent.Execute — the system prompt or tools change mid-run', () =
         // c2's thinking was made under prefix B, which request 3 still has.
         expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c2')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
     });
+
+    const turnOf = (messages: AgentChatMessage[] | undefined, id: string) => messages?.find((m) => m.toolCalls?.some((c) => c.id === id));
+
+    it('keeps the previous fingerprint across a failed request, so the request after it is still compared', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        // Request 2 fails before the runner records a fingerprint (failover had nowhere to go); request 3
+        // is sent under a new prefix, so its result says prefix B.
+        const runner = new ScriptedPromptRunner([
+            () => thinkingCall('c1', 'prefix-A'),
+            () => llmFailure('Rate limit exceeded — 429'),
+            () => thinkingCall('c2', 'prefix-B'),
+            () => llmEnvelope(successEnvelope())
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(4);
+        // Request 3 is compared with request 1's prefix, not with nothing.
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-A', 'prefix-B']);
+        // Request 3 came back under prefix B, so the history drops c1's thinking, made under prefix A.
+        expect(turnOf(runner.Calls[3].conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+    });
+
+    it('keeps the history\'s reasoning while the prefix is unchanged', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1', 'prefix-A'), () => thinkingCall('c2', 'prefix-A'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-A']);
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+
+    it('starts each run without a previous fingerprint', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        const runner = new ScriptedPromptRunner([
+            () => thinkingCall('c1', 'prefix-A'),
+            () => llmEnvelope(successEnvelope()),
+            () => thinkingCall('c2', 'prefix-B'),
+            () => llmEnvelope(successEnvelope())
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls).toHaveLength(4);
+        // The second run's first request has no earlier request of its own to be compared with.
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', undefined, 'prefix-B']);
+    });
 });
 
 describe('BaseAgent — a native complete_task refused by validation', () => {

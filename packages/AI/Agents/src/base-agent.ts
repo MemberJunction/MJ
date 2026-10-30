@@ -6398,12 +6398,19 @@ export class BaseAgent {
      * Keeps the system-prompt-and-tools fingerprint of the request just sent, for the next one. When
      * it changed, the runner sent this request without replayed reasoning; the history drops it too,
      * so no later request replays a block made under the old prompt or tools.
+     *
+     * A result with no fingerprint (a request that failed before or while it was sent, such as a
+     * failover that ran out of candidates) leaves the baseline as it was. Clearing it would let the
+     * next request skip the comparison and replay thinking made under a prompt or tools it no longer has.
      */
     private trackSentPrefix(params: ExecuteAgentParams, promptResult: AIPromptRunResult): void {
         const sent = GetSentPrefixFingerprint(promptResult.chatResult);
+        if (sent === undefined) {
+            return;
+        }
         const previous = this._lastSentPrefix;
         this._lastSentPrefix = sent;
-        if (previous === undefined || sent === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
+        if (previous === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
             return;
         }
         params.conversationMessages.forEach((m, i) => {
@@ -6489,8 +6496,10 @@ export class BaseAgent {
      * declares native tools to a driver whose replayed reasoning needs the history before it
      * unchanged is append-only too (see {@link ResolveAppendOnlyState}).
      *
-     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
-     * immediately. Otherwise the answer is frozen at the first model selection and reused for every
+     * Decided ONCE per run. An explicit `trailingStateMode` answers immediately, and so does a runtime
+     * model override that names a vendor, or whose catalog says the cache is a byte-prefix cache.
+     * Otherwise (no override, or one that names no vendor and whose catalog does not say yes) the
+     * answer is frozen at the first model selection and reused for every
      * later turn, so a failover to another vendor cannot flip the layout mid-run — a flip after turn 2
      * would leave stale fragments in the history or, worse, restore the wrong turn's fragment. On turn 1,
      * before any selection is known, the answer is replace-in-place: turn 1's fragment is kept and, if
