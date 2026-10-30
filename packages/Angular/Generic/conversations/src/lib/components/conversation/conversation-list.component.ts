@@ -319,9 +319,15 @@ interface ListContextMenu {
                role, an aria-label is not reliably exposed, and the <i> carrying the glyph
                is aria-hidden. -->
           <span class="folder-shared" role="img"
-                title="Shared — everyone can see this folder and view the conversations in it"
-                aria-label="Shared folder">
+                title="Public — everyone can see this folder and view the conversations in it"
+                aria-label="Public folder">
             <i class="fas fa-users" aria-hidden="true"></i>
+          </span>
+        } @else if (GetProjectVisibilityTier(node.project) === 'Shared') {
+          <span class="folder-shared" role="img"
+                title="Shared — people and roles granted access can see this folder and its conversations"
+                aria-label="Shared folder">
+            <i class="fas fa-user-group" aria-hidden="true"></i>
           </span>
         }
         <span class="folder-spacer"></span>
@@ -3429,5 +3435,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** @deprecated Use {@link HandleConversationClick}. */
   public handleConversationClick(conversation: MJConversationEntity, event?: MouseEvent): void {
     return this.HandleConversationClick(conversation, event);
+  }
+
+  public GetProjectVisibilityTier(project: MJProjectEntity): 'Private' | 'Shared' | 'Public' {
+    return this.engine.GetProjectVisibilityTier?.(project) ?? (project.OwnerUserID ? 'Private' : 'Public');
   }
 }

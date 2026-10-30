@@ -1,6 +1,13 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
+import {
+  BuildUpdatedAdditionalDataForFolderInheritance,
+  ConversationEngine,
+  IsInheritingFolderAccess,
+  MJConversationEntity,
+  MJResourcePermissionEntity,
+  MJUserEntity
+} from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -25,6 +32,23 @@ interface SharePermission {
         [Visible]="true"
         (Close)="onClose()">
         <div class="share-content">
+          @if (conversation?.ProjectID) {
+            <div class="folder-inheritance-section">
+              <h4>Folder Access</h4>
+              <label class="folder-inheritance-toggle">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="InheritFolderAccess"
+                  (ngModelChange)="OnToggleInheritFolderAccess($event)" />
+                <span>Inherit access from folder</span>
+              </label>
+              <p class="folder-inheritance-hint">
+                {{ InheritFolderAccess
+                    ? 'People with access to this folder automatically inherit access to this conversation.'
+                    : 'Folder access is restricted for this conversation. Only you and people explicitly added below have access.' }}
+              </p>
+            </div>
+          }
           <div class="add-user-section">
             <h4>Add People</h4>
             <div class="add-user-form">
@@ -110,9 +134,13 @@ interface SharePermission {
   styles: [`
     .share-content { display: flex; flex-direction: column; gap: 24px; }
 
+    .folder-inheritance-section h4,
     .add-user-section h4,
     .permissions-section h4,
     .link-section h4 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; }
+
+    .folder-inheritance-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+    .folder-inheritance-hint { margin: 6px 0 0 0; font-size: 12px; color: #666; line-height: 1.4; }
 
     .add-user-form { display: flex; gap: 8px; }
 
@@ -220,6 +248,8 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     this.ShareLink = value;
   }
 
+  public InheritFolderAccess: boolean = true;
+
   public AccessLevels = [
     { label: 'Can View', value: 'View' },
     { label: 'Can Edit', value: 'Edit' },
@@ -246,8 +276,46 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
 
   ngOnInit() {
     if (this.Conversation) {
+      this.InheritFolderAccess = IsInheritingFolderAccess(this.Conversation);
       this.loadPermissions();
       this.updateShareLink();
+    }
+  }
+
+  async OnToggleInheritFolderAccess(inherit: boolean): Promise<void> {
+    if (!this.Conversation) return;
+    try {
+      const engine = ConversationEngine.Instance;
+      let saved = false;
+      if (engine?.SetConversationFolderInheritance && engine.GetConversation(this.Conversation.ID)) {
+        saved = await engine.SetConversationFolderInheritance(
+          this.Conversation.ID,
+          inherit,
+          this.CurrentUser
+        );
+      } else {
+        this.Conversation.AdditionalData = BuildUpdatedAdditionalDataForFolderInheritance(
+          this.Conversation.AdditionalData,
+          inherit
+        );
+        saved = await this.Conversation.Save();
+      }
+      if (!saved) {
+        this.InheritFolderAccess = !inherit;
+        this.toastService.error('Failed to update folder access inheritance');
+      } else {
+        this.toastService.success(
+          inherit
+            ? 'Folder access inheritance enabled'
+            : 'Folder access restricted for this conversation'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update folder inheritance:', err);
+      this.InheritFolderAccess = !inherit;
+      this.toastService.error('Failed to update folder access inheritance');
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 

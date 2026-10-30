@@ -1,16 +1,37 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJDialogRef } from '@memberjunction/ng-ui-components';
-import { MJProjectEntity } from '@memberjunction/core-entities';
-import { UserInfo, Metadata } from '@memberjunction/core';
+import {
+  ConversationEngine,
+  MJProjectEntity,
+  MJResourcePermissionEntity,
+  MJUserEntity,
+  PROJECTS_RESOURCE_TYPE_ID,
+  ProjectVisibilityTier,
+  ResourcePermissionEngine
+} from '@memberjunction/core-entities';
+import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+
+export interface FolderSharePermission {
+  permissionId: string | null;
+  type: 'User' | 'Role';
+  userId?: string | null;
+  userEmail?: string;
+  userName?: string;
+  roleId?: string | null;
+  roleName?: string;
+  permissionLevel: 'View' | 'Edit' | 'Owner';
+}
 
 export interface ProjectFormData {
   name: string;
   description: string;
   color: string;
   icon: string;
-  /** true = only the owner sees it; false = everyone in the environment does. */
+  /** true = owned folder (Private or Shared ACL); false = Public (everyone in the environment). */
   isPersonal: boolean;
+  /** Three-tier Google Drive-style folder visibility ('Private' | 'Shared' | 'Public'). */
+  visibility?: ProjectVisibilityTier;
 }
 
 const DEFAULT_PROJECT_COLORS = [
@@ -138,21 +159,82 @@ const DEFAULT_PROJECT_ICONS = [
             <fieldset class="visibility-set" aria-describedby="projectVisibilityHint">
               <legend>Visibility</legend>
               <label class="visibility-choice">
-                <input type="radio" name="projectVisibility" [value]="true"
-                       [(ngModel)]="FormData.isPersonal" />
-                <span>Only me</span>
+                <input type="radio" name="projectVisibility" value="Private"
+                       [checked]="VisibilityTier === 'Private'"
+                       (change)="SelectVisibility('Private')" />
+                <span>Only me (Private)</span>
               </label>
               <label class="visibility-choice">
-                <input type="radio" name="projectVisibility" [value]="false"
-                       [(ngModel)]="FormData.isPersonal" />
-                <span>Everyone</span>
+                <input type="radio" name="projectVisibility" value="Shared"
+                       [checked]="VisibilityTier === 'Shared'"
+                       (change)="SelectVisibility('Shared')" />
+                <span>Specific people &amp; roles (Shared)</span>
+              </label>
+              <label class="visibility-choice">
+                <input type="radio" name="projectVisibility" value="Public"
+                       [checked]="VisibilityTier === 'Public'"
+                       (change)="SelectVisibility('Public')" />
+                <span>Everyone (Public)</span>
               </label>
               <p class="visibility-hint" id="projectVisibilityHint">
-                {{ FormData.isPersonal
-                    ? 'Only you can see this folder.'
-                    : "Everyone can see this folder and view the conversations in it. Once shared, a folder can't be made private again." }}
+                {{ VisibilityHint }}
               </p>
             </fieldset>
+
+            @if (VisibilityTier === 'Shared') {
+              <div class="folder-acl-panel">
+                <div class="folder-acl-add">
+                  <input
+                    type="email"
+                    [(ngModel)]="NewShareEmail"
+                    placeholder="Add person by email..."
+                    class="mj-input folder-acl-email"
+                    (keydown.enter)="$event.preventDefault(); OnAddFolderUser()" />
+                  <select [(ngModel)]="NewShareLevel" class="mj-select folder-acl-level">
+                    <option value="View">Can View</option>
+                    <option value="Edit">Can Edit</option>
+                    <option value="Owner">Owner</option>
+                  </select>
+                  <button type="button" mjButton variant="flat" (click)="OnAddFolderUser()">
+                    Add
+                  </button>
+                </div>
+                @if (ShareError) {
+                  <div class="error-message">{{ ShareError }}</div>
+                }
+                @if (FolderPermissions.length > 0) {
+                  <div class="folder-acl-list">
+                    @for (perm of FolderPermissions; track perm) {
+                      <div class="folder-acl-row">
+                        <div class="folder-acl-identity">
+                          <span class="folder-acl-name">{{ perm.userName || perm.roleName || perm.userEmail }}</span>
+                          @if (perm.userEmail && perm.userName) {
+                            <span class="folder-acl-sub">{{ perm.userEmail }}</span>
+                          }
+                        </div>
+                        <div class="folder-acl-actions">
+                          <select
+                            [ngModel]="perm.permissionLevel"
+                            (ngModelChange)="OnFolderPermissionLevelChange(perm, $event)"
+                            class="mj-select folder-acl-level">
+                            <option value="View">Can View</option>
+                            <option value="Edit">Can Edit</option>
+                            <option value="Owner">Owner</option>
+                          </select>
+                          <button
+                            type="button"
+                            class="folder-acl-remove"
+                            (click)="OnRemoveFolderPermission(perm)"
+                            title="Remove access">
+                            <i class="fa-solid fa-times"></i>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
           }
         </div>
 
@@ -346,6 +428,79 @@ const DEFAULT_PROJECT_ICONS = [
       font-size: 12px;
       line-height: 1.4;
       color: var(--mj-text-muted);
+    }
+
+    .folder-acl-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 6px;
+      padding: 12px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 10px;
+      background: var(--mj-bg-surface);
+    }
+    .folder-acl-add {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .folder-acl-email {
+      flex: 1;
+      min-width: 0;
+    }
+    .folder-acl-level {
+      width: 112px;
+    }
+    .folder-acl-list {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--mj-border-subtle);
+      padding-top: 8px;
+      gap: 6px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .folder-acl-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .folder-acl-identity {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+    }
+    .folder-acl-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .folder-acl-sub {
+      font-size: 11px;
+      color: var(--mj-text-muted);
+    }
+    .folder-acl-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .folder-acl-remove {
+      padding: 4px 6px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: var(--mj-text-muted);
+      border-radius: 4px;
+    }
+    .folder-acl-remove:hover {
+      color: var(--mj-status-error);
     }
 
     .color-picker-section {
@@ -542,7 +697,8 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     // NAMES are user-authored free text, and before OwnerUserID existed every one of
     // them was readable by every user of the environment, which is what prompted
     // this. Existing folders are untouched: they carry NULL, which still means shared.
-    isPersonal: true
+    isPersonal: true,
+    visibility: 'Private'
   };
 
   /** @deprecated Use {@link FormData}. */
@@ -553,6 +709,12 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
   public set formData(value: ProjectFormData) {
     this.FormData = value;
   }
+
+  public FolderPermissions: FolderSharePermission[] = [];
+  public RemovedFolderPermissionIds: string[] = [];
+  public NewShareEmail = '';
+  public NewShareLevel: 'View' | 'Edit' | 'Owner' = 'View';
+  public ShareError = '';
 
   public ShowNameError = false;
 
@@ -596,27 +758,41 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
   }
 
   /**
-   * True when this dialog is editing a folder that is currently SHARED — in which case
-   * visibility is shown as a statement rather than a control.
-   *
-   * Sharing is one-way by design, and the reason is in the data model rather than the UI.
-   * NULL-means-shared conflates "shared" with "unowned": the moment a folder is shared its
-   * `OwnerUserID` goes to NULL and there is no column anywhere recording who created it
-   * (`Project` has `__mj_CreatedAt`, but no created-by). So `OwnerUserID = currentUser.ID`
-   * on a shared folder is indistinguishable from any other user claiming it — the system
-   * cannot tell reclaiming from appropriating, which makes "take it back" an affordance
-   * that was never really there.
-   *
-   * What that would cost on day one is the deciding argument. Every folder that exists
-   * today carries NULL, so without this the whole team's folder structure — subfolders
-   * included — is one radio button away from belonging to whichever person opens its
-   * settings first. A confirm does not fix that; it only narrates it.
-   *
-   * Personal -> shared stays available, because it only ever adds. Someone who wants a
-   * private copy makes a private folder. If personal folders later grow features that need
-   * a stable creator (sharing with named users, transfer, recovering a departed employee's
-   * folders), the fix is a separate IsShared flag so ownership stops being erased by
-   * sharing — a bigger change, and deliberately not this one.
+   * Current three-tier visibility selection (`'Private' | 'Shared' | 'Public'`).
+   * Keeps `FormData.isPersonal` in sync (`false` iff `'Public'`).
+   */
+  public get VisibilityTier(): ProjectVisibilityTier {
+    if (!this.FormData.isPersonal) {
+      return 'Public';
+    }
+    return this.FormData.visibility === 'Shared' ? 'Shared' : 'Private';
+  }
+
+  public set VisibilityTier(tier: ProjectVisibilityTier) {
+    this.FormData.visibility = tier;
+    this.FormData.isPersonal = tier !== 'Public';
+  }
+
+  public SelectVisibility(tier: ProjectVisibilityTier): void {
+    this.VisibilityTier = tier;
+    this.ShareError = '';
+    this.cdr.detectChanges();
+  }
+
+  public get VisibilityHint(): string {
+    const tier = this.VisibilityTier;
+    if (tier === 'Public') {
+      return "Everyone can see this folder and view the conversations in it. Once shared, a folder can't be made private again.";
+    }
+    if (tier === 'Shared') {
+      return 'People and roles you add below can see this folder and inherit its permission on conversations in it.';
+    }
+    return 'Only you can see this folder.';
+  }
+
+  /**
+   * True when this dialog is editing a folder that is currently PUBLIC (`OwnerUserID IS NULL`) —
+   * in which case visibility is shown as a statement rather than a control.
    */
   public get VisibilityIsLocked(): boolean {
     return this.IsEditMode && !this.Project?.OwnerUserID;
@@ -642,11 +818,18 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
 
     if (this.Project) {
       this.loadProjectData();
+      if (this.Project.ID && this.Project.OwnerUserID) {
+        void this.loadFolderPermissions();
+      }
     }
   }
 
   private loadProjectData(): void {
     if (!this.Project) return;
+
+    const initialTier =
+      ConversationEngine.Instance?.GetProjectVisibilityTier?.(this.Project) ??
+      (this.Project.OwnerUserID ? 'Private' : 'Public');
 
     this.FormData = {
       name: this.Project.Name || '',
@@ -655,8 +838,124 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       icon: this.Project.Icon || 'fa-folder',
       // Reflect what the folder IS, not the create-time default — otherwise opening
       // a shared folder's settings and pressing Save would silently make it private.
-      isPersonal: !!this.Project.OwnerUserID
+      isPersonal: !!this.Project.OwnerUserID,
+      visibility: initialTier
     };
+  }
+
+  private async loadFolderPermissions(): Promise<void> {
+    if (!this.Project?.ID) return;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<MJResourcePermissionEntity>({
+        EntityName: 'MJ: Resource Permissions',
+        ExtraFilter: `ResourceTypeID='${PROJECTS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.Project.ID}' AND Status='Approved'`,
+        ResultType: 'entity_object'
+      });
+      if (!result?.Success || !result.Results) return;
+
+      const loaded: FolderSharePermission[] = [];
+      for (const perm of result.Results) {
+        if (perm.Type === 'Role' && perm.RoleID) {
+          loaded.push({
+            permissionId: perm.ID,
+            type: 'Role',
+            roleId: perm.RoleID,
+            roleName: perm.Role || perm.RoleID,
+            permissionLevel: (perm.PermissionLevel as 'View' | 'Edit' | 'Owner') || 'View'
+          });
+        } else if (perm.UserID) {
+          let userEmail = '';
+          let userName = perm.User || '';
+          const userResult = await rv.RunView<MJUserEntity>({
+            EntityName: 'MJ: Users',
+            ExtraFilter: `ID='${perm.UserID}'`,
+            ResultType: 'entity_object'
+          });
+          if (userResult?.Success && userResult.Results?.length) {
+            userEmail = userResult.Results[0].Email || '';
+            userName = userResult.Results[0].Name || userName;
+          }
+          loaded.push({
+            permissionId: perm.ID,
+            type: 'User',
+            userId: perm.UserID,
+            userEmail,
+            userName: userName || userEmail || perm.UserID,
+            permissionLevel: (perm.PermissionLevel as 'View' | 'Edit' | 'Owner') || 'View'
+          });
+        }
+      }
+      this.FolderPermissions = loaded;
+      if (loaded.length > 0 && this.Project.OwnerUserID) {
+        this.VisibilityTier = 'Shared';
+      }
+      this.cdr.detectChanges();
+    } catch (err) {
+      console.warn('Failed to load folder permissions:', err);
+    }
+  }
+
+  async OnAddFolderUser(): Promise<void> {
+    const email = this.NewShareEmail.trim();
+    this.ShareError = '';
+    if (!email) return;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.ShareError = 'Please enter a valid email address.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    if (this.FolderPermissions.some((p) => p.userEmail?.toLowerCase() === email.toLowerCase())) {
+      this.ShareError = 'This user already has access.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const userResult = await rv.RunView<MJUserEntity>({
+        EntityName: 'MJ: Users',
+        ExtraFilter: `Email='${email.replace(/'/g, "''")}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (!userResult?.Success || !userResult.Results?.length) {
+        this.ShareError = 'No user found with that email address.';
+        this.cdr.detectChanges();
+        return;
+      }
+
+      const user = userResult.Results[0];
+      this.FolderPermissions.push({
+        permissionId: null,
+        type: 'User',
+        userId: user.ID,
+        userEmail: user.Email,
+        userName: user.Name || user.Email,
+        permissionLevel: this.NewShareLevel
+      });
+      this.NewShareEmail = '';
+      this.cdr.detectChanges();
+    } catch (err) {
+      console.error('Error looking up user:', err);
+      this.ShareError = 'Failed to look up user.';
+      this.cdr.detectChanges();
+    }
+  }
+
+  OnFolderPermissionLevelChange(perm: FolderSharePermission, level: 'View' | 'Edit' | 'Owner'): void {
+    perm.permissionLevel = level;
+    this.cdr.detectChanges();
+  }
+
+  OnRemoveFolderPermission(perm: FolderSharePermission): void {
+    if (perm.permissionId) {
+      this.RemovedFolderPermissionIds.push(perm.permissionId);
+    }
+    this.FolderPermissions = this.FolderPermissions.filter((p) => p !== perm);
+    this.cdr.detectChanges();
   }
 
   SelectColor(color: string): void {
@@ -692,11 +991,10 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     try {
       const md = this.ProviderToUse;
 
-      // A shared folder cannot be taken private — the control is not rendered for one
+      // A Public folder cannot be taken private — the control is not rendered for one
       // (see VisibilityIsLocked). This is the same rule expressed where the write happens,
       // so a future template change, a stale `formData` from a reopened dialog, or anything
       // else that sets the flag cannot quietly appropriate a folder the whole team uses.
-      // It resolves to the folder's CURRENT state, so it is a no-op in every other case.
       const isPersonal = this.VisibilityIsLocked ? false : this.FormData.isPersonal;
 
       const project = this.Project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
@@ -706,11 +1004,9 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       project.Color = this.FormData.color;
       project.Icon = this.FormData.icon;
 
-      // Settable on edit, in one direction: a personal folder can be shared with the team.
-      // Null means shared, which is what every folder created before this column existed
-      // carries — and, because sharing erases the owner, is also why the reverse is not on
-      // offer. See VisibilityIsLocked.
-      project.OwnerUserID = isPersonal ? this.CurrentUser.ID : null;
+      // Both Private and Shared folders stay owned by their creator (OwnerUserID set).
+      // Public folders set OwnerUserID = null so everyone in the environment can view them.
+      project.OwnerUserID = isPersonal ? (this.Project?.OwnerUserID || this.CurrentUser.ID) : null;
 
       if (!this.IsEditMode) {
         project.EnvironmentID = this.EnvironmentId;
@@ -722,6 +1018,7 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
 
       const saved = await project.Save();
       if (saved) {
+        await this.syncFolderPermissions(project.ID);
         this.ProjectSaved.emit(project);
         this.DialogRef.Close();
       } else {
@@ -737,6 +1034,65 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     }
   }
 
+  private async syncFolderPermissions(projectId: string): Promise<void> {
+    if (!projectId) return;
+    const md = this.ProviderToUse;
+    const tier = this.VisibilityIsLocked ? 'Public' : this.VisibilityTier;
+
+    const idsToDelete = [...this.RemovedFolderPermissionIds];
+    if (tier !== 'Shared') {
+      for (const perm of this.FolderPermissions) {
+        if (perm.permissionId) {
+          idsToDelete.push(perm.permissionId);
+        }
+      }
+    }
+
+    let changed = false;
+    for (const permId of idsToDelete) {
+      const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', this.CurrentUser);
+      if (await permEntity.Load(permId)) {
+        await permEntity.Delete();
+        changed = true;
+      }
+    }
+
+    if (tier === 'Shared') {
+      for (const perm of this.FolderPermissions) {
+        const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', this.CurrentUser);
+        if (perm.permissionId) {
+          if (await permEntity.Load(perm.permissionId)) {
+            if (permEntity.PermissionLevel !== perm.permissionLevel) {
+              permEntity.PermissionLevel = perm.permissionLevel;
+              await permEntity.Save();
+              changed = true;
+            }
+          }
+        } else {
+          permEntity.ResourceTypeID = PROJECTS_RESOURCE_TYPE_ID;
+          permEntity.ResourceRecordID = projectId;
+          permEntity.Type = perm.type;
+          permEntity.UserID = perm.type === 'User' ? (perm.userId ?? null) : null;
+          permEntity.RoleID = perm.type === 'Role' ? (perm.roleId ?? null) : null;
+          permEntity.PermissionLevel = perm.permissionLevel;
+          permEntity.Status = 'Approved';
+          if (await permEntity.Save()) {
+            perm.permissionId = permEntity.ID;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (changed) {
+      try {
+        await ResourcePermissionEngine.Instance?.Config?.(true, this.CurrentUser);
+      } catch {
+        // Isolated test environments without a global Metadata.Provider may not support engine Config refresh.
+      }
+    }
+  }
+
   /** @deprecated Use {@link OnSave}. */
   async onSave(): Promise<void> {
     return this.OnSave();
@@ -746,3 +1102,4 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     this.DialogRef.Close();
   }
 }
+

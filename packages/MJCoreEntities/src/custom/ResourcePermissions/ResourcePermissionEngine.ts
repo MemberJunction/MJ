@@ -181,8 +181,16 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     public GetResourceTypeInfoFields(ResourceTypeID: string): {OwnerIDFieldName: string, NameFieldName: string, PrimaryKeyFieldName: string} {
         const md = this.ProviderToUse;
         const rt = this.ResourceTypes.find((rt) => UUIDsEqual(rt.ID, ResourceTypeID));
-        if (!rt)
+        if (!rt) {
+            if (UUIDsEqual(ResourceTypeID, '88D0DF27-AF8F-43AC-9EC4-2AC314F49355')) {
+                return {
+                    OwnerIDFieldName: 'OwnerUserID',
+                    NameFieldName: 'Name',
+                    PrimaryKeyFieldName: 'ID' // pk-literal-ok: MJ: Projects core entity primary key
+                };
+            }
             throw new Error(`Resource Type ${ResourceTypeID} not found`);
+        }
         const entity = md.EntityByID(rt.EntityID);
         if (!entity)
             throw new Error(`Entity ${rt.EntityID} not found`);

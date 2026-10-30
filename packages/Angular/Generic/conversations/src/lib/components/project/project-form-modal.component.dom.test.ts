@@ -132,4 +132,84 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
     expect(hint).toContain('Only you can see this folder.');
     expect(hint).not.toContain(SHARING_IS_ONE_WAY);
   });
+
+  it('shows the ACL panel and saves ResourcePermission records when Shared tier is selected', async () => {
+    const createdPermissions: Array<Record<string, unknown>> = [];
+    const savedProject = {
+      ID: 'proj-new-shared',
+      Name: '',
+      Description: null,
+      Color: null,
+      Icon: null,
+      OwnerUserID: null as string | null,
+      EnvironmentID: '',
+      ParentID: null,
+      IsArchived: false,
+      Save: vi.fn().mockResolvedValue(true),
+      LatestResult: { Success: true, Message: '', CompleteMessage: '', Errors: [] }
+    } as unknown as MJProjectEntity;
+
+    const provider = {
+      GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+        if (entityName === 'MJ: Projects') {
+          return savedProject;
+        }
+        const perm: Record<string, unknown> = {
+          ID: 'perm-1',
+          Save: vi.fn().mockImplementation(async () => {
+            createdPermissions.push(perm);
+            return true;
+          }),
+          Load: vi.fn().mockResolvedValue(true),
+          Delete: vi.fn().mockResolvedValue(true)
+        };
+        return perm;
+      })
+    } as unknown as IMetadataProvider;
+
+    const close = vi.fn();
+    const saved = vi.fn();
+    const f = renderComponentFixture(ProjectFormModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
+      inputs: {
+        environmentId: 'env1',
+        currentUser,
+        dialogRef: { Close: close } as unknown as MJDialogRef,
+        Provider: provider
+      },
+      setup: (instance) => {
+        instance.formData.name = 'Team Roadmap';
+        instance.SelectVisibility('Shared');
+        instance.FolderPermissions = [
+          {
+            permissionId: null,
+            type: 'User',
+            userId: 'u2',
+            userEmail: 'colleague@example.com',
+            userName: 'Colleague',
+            permissionLevel: 'Edit'
+          }
+        ];
+      }
+    });
+    f.componentInstance.projectSaved.subscribe(saved);
+
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('#projectVisibilityHint')?.textContent).toContain(
+      'People and roles you add below can see this folder'
+    );
+    expect(el.querySelector('.folder-acl-panel')).not.toBeNull();
+
+    await f.componentInstance.onSave();
+
+    expect(savedProject.OwnerUserID).toBe('u1');
+    expect(createdPermissions).toHaveLength(1);
+    expect(createdPermissions[0]['ResourceRecordID']).toBe('proj-new-shared');
+    expect(createdPermissions[0]['UserID']).toBe('u2');
+    expect(createdPermissions[0]['PermissionLevel']).toBe('Edit');
+    expect(saved).toHaveBeenCalledWith(savedProject);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
 });
+

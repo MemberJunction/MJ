@@ -1,6 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewContainerRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MJProjectEntity, MJConversationEntity, BuildProjectVisibilityFilter } from '@memberjunction/core-entities';
+import {
+  MJProjectEntity,
+  MJConversationEntity,
+  BuildProjectVisibilityFilter,
+  PROJECTS_RESOURCE_TYPE_ID,
+  ResourcePermissionEngine
+} from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
@@ -229,6 +235,12 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
   private async loadProjects(): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const sharedProjectIds = this.CurrentUser
+        ? (ResourcePermissionEngine.Instance?.GetUserAvailableResources?.(
+            this.CurrentUser,
+            PROJECTS_RESOURCE_TYPE_ID
+          ) ?? []).map((p) => p.ResourceRecordID)
+        : [];
 
       // Load projects and conversation counts in parallel
       const [projectsResult, conversationsResult] = await rv.RunViews([
@@ -238,7 +250,7 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
           // it this modal listed every personal folder in the environment by name, which
           // is the exposure OwnerUserID exists to close.
           ExtraFilter: `EnvironmentID='${this.EnvironmentId}' AND IsArchived=0`
-            + ` AND ${BuildProjectVisibilityFilter(this.CurrentUser?.ID)}`,
+            + ` AND ${BuildProjectVisibilityFilter(this.CurrentUser?.ID, sharedProjectIds)}`,
           OrderBy: 'Name ASC',
           ResultType: 'entity_object'
         },

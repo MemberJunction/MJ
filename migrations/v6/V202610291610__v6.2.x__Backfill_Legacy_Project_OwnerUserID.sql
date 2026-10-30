@@ -164,3 +164,19 @@ WHERE p.OwnerUserID IS NULL
         AND rcSwitch.ChangesJSON LIKE N'%"OwnerUserID"%'
   );
 GO
+
+-- ============================================================================
+-- Update UI role's Read RLS filter on MJ: Projects so folders shared with
+-- specific Users or Roles via MJ: Resource Permissions (ResourceType 'Projects',
+-- ID '88D0DF27-AF8F-43AC-9EC4-2AC314F49355') are readable alongside public
+-- folders (OwnerUserID IS NULL) and the user's own folders.
+-- ============================================================================
+DECLARE @OwnFoldersRLSID UNIQUEIDENTIFIER = '7596823D-CA3B-4CE5-A66E-FC929E0FEB02';
+
+UPDATE ${flyway:defaultSchema}.RowLevelSecurityFilter
+   SET FilterText = N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'' OR EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.[ResourcePermission] AS [rp] WHERE [rp].[ResourceTypeID] = ''88D0DF27-AF8F-43AC-9EC4-2AC314F49355'' AND [rp].[ResourceRecordID] = CAST([ID] AS NVARCHAR(255)) AND [rp].[Status] = N''Approved'' AND (([rp].[Type] = N''User'' AND [rp].[UserID] = ''{{UserID}}'') OR ([rp].[Type] = N''Role'' AND [rp].[RoleID] IN (SELECT [ur].[RoleID] FROM ${flyway:defaultSchema}.[UserRole] AS [ur] WHERE [ur].[UserID] = ''{{UserID}}'')))))',
+       Description = N'Narrows MJ: Projects to folders the current user may see: public folders (OwnerUserID IS NULL), their own folders (OwnerUserID = {{UserID}}), and folders shared with them or their roles via MJ: Resource Permissions.',
+       __mj_UpdatedAt = GETUTCDATE()
+ WHERE ID = @OwnFoldersRLSID;
+GO
+

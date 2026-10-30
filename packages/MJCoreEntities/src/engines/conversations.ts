@@ -28,6 +28,98 @@ import { ResourcePermissionEngine } from "../custom/ResourcePermissions/Resource
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 
 /**
+ * `MJ: Resource Types.ID` for Projects (Conversation Folders). Used for Google Drive-style
+ * folder ACL sharing (`MJ: Resource Permissions`) where users/roles granted access to a
+ * folder inherit access to conversations inside it.
+ */
+export const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/**
+ * Three-tier folder visibility model:
+ * - `'Private'`: Owned by a user (`OwnerUserID != null`) with no active folder shares.
+ * - `'Shared'`: Owned by a user (`OwnerUserID != null`) and shared with specific Users/Roles via `MJ: Resource Permissions`.
+ * - `'Public'`: Environment-wide folder (`OwnerUserID == null`) visible to everyone in the environment.
+ */
+export type ProjectVisibilityTier = 'Private' | 'Shared' | 'Public';
+
+/**
+ * SQL predicate matching conversations that inherit access from their folder (the default).
+ * Turning off folder inheritance writes `"inheritFolderAccess":false` into `Conversation.AdditionalData`.
+ */
+export const INHERIT_FOLDER_ACCESS_SQL_CLAUSE =
+    `(AdditionalData IS NULL OR AdditionalData NOT LIKE '%"inheritFolderAccess":false%')`;
+
+/**
+ * Returns true when `conversation` inherits permissions from its parent folder (`ProjectID`).
+ * Defaults to `true` for all conversations unless `"inheritFolderAccess": false` is stored
+ * in `conversation.AdditionalData`.
+ */
+export function IsInheritingFolderAccess(
+    conversation: { AdditionalData?: string | null } | null | undefined
+): boolean {
+    const raw = conversation?.AdditionalData;
+    if (!raw || raw.trim().length === 0) {
+        return true;
+    }
+    try {
+        const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+        if (parsed && typeof parsed === 'object' && parsed['inheritFolderAccess'] === false) {
+            return false;
+        }
+        return true;
+    } catch {
+        return !raw.includes('"inheritFolderAccess":false');
+    }
+}
+
+/**
+ * Returns the updated `AdditionalData` JSON string after setting or clearing `inheritFolderAccess`.
+ * Preserves any other keys already present in `existingAdditionalData`. When `inheritFolderAccess`
+ * is `true` (the default) and no other keys exist, returns `null`.
+ */
+export function BuildUpdatedAdditionalDataForFolderInheritance(
+    existingAdditionalData: string | null | undefined,
+    inheritFolderAccess: boolean
+): string | null {
+    let dataObj: Record<string, unknown> = {};
+    if (existingAdditionalData && existingAdditionalData.trim().length > 0) {
+        try {
+            const parsed = JSON.parse(existingAdditionalData);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                dataObj = { ...(parsed as Record<string, unknown>) };
+            }
+        } catch {
+            // If existing AdditionalData is non-JSON, replace with clean object
+        }
+    }
+    if (inheritFolderAccess) {
+        delete dataObj['inheritFolderAccess'];
+    } else {
+        dataObj['inheritFolderAccess'] = false;
+    }
+    return Object.keys(dataObj).length === 0 ? null : JSON.stringify(dataObj);
+}
+
+/**
+ * Returns the higher of two `MJ: Resource Permissions` levels (`'Owner' > 'Edit' > 'View' > null`).
+ */
+export function ComparePermissionLevels(
+    a: 'View' | 'Edit' | 'Owner' | null | undefined,
+    b: 'View' | 'Edit' | 'Owner' | null | undefined
+): 'View' | 'Edit' | 'Owner' | null {
+    const rank = (lvl: 'View' | 'Edit' | 'Owner' | null | undefined): number => {
+        if (lvl === 'Owner') return 3;
+        if (lvl === 'Edit') return 2;
+        if (lvl === 'View') return 1;
+        return 0;
+    };
+    const rA = rank(a);
+    const rB = rank(b);
+    if (rA === 0 && rB === 0) return null;
+    return rA >= rB ? (a ?? null) : (b ?? null);
+}
+
+/**
  * Display info about the user who shared a conversation with the current user,
  * plus the `PermissionLevel` the grantee was granted. Exposed via
  * {@link ConversationEngine.GetSharedByInfo} for UI surfaces that render
@@ -740,10 +832,23 @@ function mergeArtifactJSON(
  * without an identity there is nobody to be the owner of, and widening on absent input
  * is how a personal folder reaches a stranger's list.
  */
-export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
+export function BuildProjectVisibilityFilter(
+    userId: string | null | undefined,
+    sharedProjectIds: string[] = []
+): string {
     const id = String(userId ?? '').trim();
-    return id.length > 0
-        ? `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}')`
+    const cleanedSharedIds = sharedProjectIds
+        .map((pid) => String(pid ?? '').trim())
+        .filter((pid) => pid.length > 0);
+    const sharedClause =
+        cleanedSharedIds.length > 0
+            ? ` OR ID IN (${cleanedSharedIds.map((pid) => `'${EscapeSQLString(pid)}'`).join(',')})`
+            : '';
+    if (id.length > 0) {
+        return `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}'${sharedClause})`;
+    }
+    return cleanedSharedIds.length > 0
+        ? `(OwnerUserID IS NULL${sharedClause})`
         : `OwnerUserID IS NULL`;
 }
 
@@ -1108,11 +1213,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Populates {@link _explicitSharedConversationIds} and {@link _sharedByByConversationId}
-     * from both explicit `MJ: Resource Permissions` grants and implicit View-only folder
-     * sharing on conversations inside shared folders (`OwnerUserID IS NULL`).
+     * from both explicit `MJ: Resource Permissions` grants and folder-inherited permissions
+     * on conversations inside Shared or Public folders (when {@link IsInheritingFolderAccess}
+     * is true).
      *
-     * Explicit grants take precedence over folder-level View access so a user who holds an
-     * `Edit` or `Owner` grant on a conversation inside a shared folder keeps write access.
+     * Explicit grants and folder-inherited grants combine via {@link ComparePermissionLevels}
+     * (`Owner > Edit > View`), while conversations with `inheritFolderAccess: false` do not
+     * inherit folder access and are only visible to their owner or explicit conversation grantees.
      */
     private async applyConversationSharingMetadata(
         rv: RunView,
@@ -1140,6 +1247,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         );
 
         const sharedProjectIdSet = new Set(sharedProjectIds.map((id) => NormalizeUUID(id)));
+        const convById = new Map<string, MJConversationEntity>(
+            conversations.map((c) => [NormalizeUUID(c.ID), c])
+        );
+
+        const effectiveExplicitPermissions = trulySharedPermissions.map((p) => {
+            const conv = convById.get(NormalizeUUID(p.ResourceRecordID));
+            const inherited =
+                conv && conv.ProjectID && IsInheritingFolderAccess(conv) && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
+                    ? this.GetEffectiveProjectPermission(conv.ProjectID, contextUser)
+                    : null;
+            return {
+                ResourceRecordID: p.ResourceRecordID,
+                SharedByUserID: p.SharedByUserID ?? null,
+                SharedByUser: p.SharedByUser ?? null,
+                PermissionLevel: ComparePermissionLevels(p.PermissionLevel ?? 'View', inherited?.Level) ?? 'View'
+            };
+        });
+
         const folderSharedPermissions: Array<{
             ResourceRecordID: string;
             SharedByUserID: string | null;
@@ -1147,25 +1272,42 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             PermissionLevel: 'View' | 'Edit' | 'Owner' | null;
         }> = [];
 
+        const visibleConversations: MJConversationEntity[] = [];
+        let filteredAny = false;
+
         for (const conv of conversations) {
             const normId = NormalizeUUID(conv.ID);
-            if (ownedConversationIds.has(normId) || this._explicitSharedConversationIds.has(normId)) {
+            const isOwned = !conv.UserID || ownedConversationIds.has(normId);
+            if (isOwned || this._explicitSharedConversationIds.has(normId)) {
+                visibleConversations.push(conv);
                 continue;
             }
-            if (conv.ProjectID && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))) {
+            if (
+                conv.ProjectID &&
+                IsInheritingFolderAccess(conv) &&
+                sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
+            ) {
+                visibleConversations.push(conv);
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID, contextUser);
                 const convWithUser = conv as MJConversationEntity & { User?: string | null };
                 folderSharedPermissions.push({
                     ResourceRecordID: conv.ID,
-                    SharedByUserID: conv.UserID ?? null,
-                    SharedByUser: convWithUser.User ?? null,
-                    PermissionLevel: 'View'
+                    SharedByUserID: conv.UserID ?? inherited?.SharedByUserID ?? null,
+                    SharedByUser: convWithUser.User ?? inherited?.SharedByUser ?? null,
+                    PermissionLevel: inherited?.Level ?? 'View'
                 });
+            } else {
+                filteredAny = true;
             }
+        }
+
+        if (filteredAny) {
+            this._conversations$.next(visibleConversations);
         }
 
         await this.rebuildSharedByMap(
             rv,
-            [...trulySharedPermissions, ...folderSharedPermissions],
+            [...effectiveExplicitPermissions, ...folderSharedPermissions],
             contextUser
         );
     }
@@ -1173,8 +1315,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
      * {@link LoadConversations} shows the user: owned by the user, explicitly shared with them,
-     * or inside a visible shared folder, not archived, and (unless `includeApplicationScoped`)
-     * Global or Both scope.
+     * or inside a visible Shared/Public folder (with folder inheritance enabled), not archived,
+     * and (unless `includeApplicationScoped`) Global or Both scope.
      *
      * Use it anywhere that reads conversations for display (search, pickers) so those reads
      * cannot show more than the conversation list does. It is not capped, unlike the list load.
@@ -1200,16 +1342,198 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * IDs of loaded shared folders (`OwnerUserID IS NULL` and not archived) in the environment.
+     * Approved `MJ: Resource Permissions` rows targeting `MJ: Projects` (`PROJECTS_RESOURCE_TYPE_ID`).
+     */
+    private getApprovedProjectPermissions(): MJResourcePermissionEntity[] {
+        const allPerms = ResourcePermissionEngine.Instance.Permissions ?? [];
+        return allPerms.filter(
+            (p) =>
+                p.Status === 'Approved' &&
+                UUIDsEqual(p.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID)
+        );
+    }
+
+    /**
+     * Approved `MJ: Projects` permission grants that apply to `user` (direct User grant or Role grant),
+     * reduced to the highest `PermissionLevel` per project ID.
+     */
+    private getUserSharedProjectPermissions(user: UserInfo | null | undefined): MJResourcePermissionEntity[] {
+        if (!user?.ID) return [];
+        const approved = this.getApprovedProjectPermissions();
+        const roleIdSet = new Set(
+            (user.UserRoles ?? [])
+                .map((ur) => ur.RoleID)
+                .filter((id): id is string => !!id)
+                .map((id) => NormalizeUUID(id))
+        );
+        const matching = approved.filter(
+            (p) =>
+                (p.Type === 'User' && !!p.UserID && UUIDsEqual(p.UserID, user.ID)) ||
+                (p.Type === 'Role' && !!p.RoleID && roleIdSet.has(NormalizeUUID(p.RoleID)))
+        );
+
+        const byProjectId = new Map<string, MJResourcePermissionEntity>();
+        for (const perm of matching) {
+            const key = NormalizeUUID(perm.ResourceRecordID);
+            const existing = byProjectId.get(key);
+            if (!existing) {
+                byProjectId.set(key, perm);
+            } else {
+                const winner = ComparePermissionLevels(existing.PermissionLevel ?? 'View', perm.PermissionLevel ?? 'View');
+                if (winner !== (existing.PermissionLevel ?? 'View')) {
+                    byProjectId.set(key, perm);
+                }
+            }
+        }
+        return [...byProjectId.values()];
+    }
+
+    /**
+     * Returns the three-tier visibility mode (`'Private' | 'Shared' | 'Public'`) for a folder:
+     * - `'Public'`: `OwnerUserID == null` (environment-wide)
+     * - `'Shared'`: `OwnerUserID != null` and the folder (or an ancestor) has approved `MJ: Resource Permissions` grants
+     * - `'Private'`: `OwnerUserID != null` with no active folder shares
+     */
+    public GetProjectVisibilityTier(projectOrId: MJProjectEntity | string | null | undefined): ProjectVisibilityTier {
+        const projectsById = new Map<string, MJProjectEntity>(
+            this._projects$.value.filter((p) => !!p.ID).map((p) => [NormalizeUUID(p.ID), p])
+        );
+        const project =
+            typeof projectOrId === 'string'
+                ? projectsById.get(NormalizeUUID(projectOrId))
+                : projectOrId;
+        if (!project) {
+            return 'Private';
+        }
+        if (!project.OwnerUserID) {
+            return 'Public';
+        }
+        const approvedProjectIds = new Set(
+            this.getApprovedProjectPermissions().map((p) => NormalizeUUID(p.ResourceRecordID))
+        );
+        let current: MJProjectEntity | undefined = project;
+        let depth = 0;
+        while (current && depth < 32) {
+            if (current.ID && approvedProjectIds.has(NormalizeUUID(current.ID))) {
+                return 'Shared';
+            }
+            if (!current.OwnerUserID) {
+                return 'Public';
+            }
+            current = current.ParentID
+                ? projectsById.get(NormalizeUUID(current.ParentID))
+                : undefined;
+            depth++;
+        }
+        return 'Private';
+    }
+
+    /**
+     * Resolves the effective permission level (`'View' | 'Edit' | 'Owner'`) a user inherits from a folder
+     * (walking up `ParentID` for nested folders):
+     * - Public folders (`OwnerUserID == null`) grant at least `'View'` to everyone in the environment.
+     * - Shared folders grant the user's highest direct/role `MJ: Resource Permissions` level (`View`/`Edit`/`Owner`).
+     * - Folder owners also receive at least `'View'` on other users' inherited conversations placed in their Shared folder.
+     */
+    public GetEffectiveProjectPermission(
+        projectId: string | null | undefined,
+        contextUser?: UserInfo | null
+    ): { Level: 'View' | 'Edit' | 'Owner'; SharedByUserID: string | null; SharedByUser: string | null } | null {
+        if (!projectId) return null;
+        const userId = contextUser?.ID ?? this._lastConversationsUserId ?? this._lastProjectsUserId;
+        const normUserId = userId ? NormalizeUUID(userId) : null;
+        const userProjectPerms = contextUser ? this.getUserSharedProjectPermissions(contextUser) : [];
+        const userPermByProjectId = new Map<string, MJResourcePermissionEntity>(
+            userProjectPerms.map((p) => [NormalizeUUID(p.ResourceRecordID), p])
+        );
+        if (normUserId) {
+            for (const p of this.getApprovedProjectPermissions()) {
+                if (p.Type === 'User' && p.UserID && NormalizeUUID(p.UserID) === normUserId) {
+                    const key = NormalizeUUID(p.ResourceRecordID);
+                    const existing = userPermByProjectId.get(key);
+                    if (
+                        !existing ||
+                        ComparePermissionLevels(existing.PermissionLevel ?? 'View', p.PermissionLevel ?? 'View') !==
+                            (existing.PermissionLevel ?? 'View')
+                    ) {
+                        userPermByProjectId.set(key, p);
+                    }
+                }
+            }
+        }
+        const projectsById = new Map<string, MJProjectEntity>(
+            this._projects$.value.filter((p) => !!p.ID).map((p) => [NormalizeUUID(p.ID), p])
+        );
+
+        let bestLevel: 'View' | 'Edit' | 'Owner' | null = null;
+        let sharedByUserId: string | null = null;
+        let sharedByUser: string | null = null;
+
+        let currentId: string | null | undefined = projectId;
+        let depth = 0;
+        while (currentId && depth < 32) {
+            const normCurrentId = NormalizeUUID(currentId);
+            const proj = projectsById.get(normCurrentId);
+            const directGrant = userPermByProjectId.get(normCurrentId);
+
+            if (directGrant) {
+                const grantLevel = directGrant.PermissionLevel ?? 'View';
+                const nextBest = ComparePermissionLevels(bestLevel, grantLevel);
+                if (nextBest !== bestLevel) {
+                    bestLevel = nextBest;
+                    sharedByUserId = directGrant.SharedByUserID ?? proj?.OwnerUserID ?? null;
+                    sharedByUser = directGrant.SharedByUser ?? proj?.OwnerUser ?? null;
+                }
+            }
+
+            if (proj) {
+                if (!proj.OwnerUserID) {
+                    bestLevel = ComparePermissionLevels(bestLevel, 'View');
+                } else if (userId && !UUIDsEqual(proj.OwnerUserID, userId)) {
+                    // Folder owned by another user that is in our visible project list (shared with us)
+                    bestLevel = ComparePermissionLevels(bestLevel, 'View');
+                    sharedByUserId = sharedByUserId ?? proj.OwnerUserID;
+                    sharedByUser = sharedByUser ?? proj.OwnerUser ?? null;
+                } else if (
+                    userId &&
+                    UUIDsEqual(proj.OwnerUserID, userId) &&
+                    this.GetProjectVisibilityTier(proj) !== 'Private'
+                ) {
+                    // Folder owner viewing collaborators' conversations inside their Shared folder
+                    bestLevel = ComparePermissionLevels(bestLevel, 'View');
+                }
+            }
+
+            currentId = proj?.ParentID ?? null;
+            depth++;
+        }
+
+        if (!bestLevel) {
+            return null;
+        }
+        return {
+            Level: bestLevel,
+            SharedByUserID: sharedByUserId,
+            SharedByUser: sharedByUser
+        };
+    }
+
+    /**
+     * IDs of loaded folders in `environmentId` that share their conversations with participants:
+     * - `'Public'` folders (`OwnerUserID IS NULL`)
+     * - `'Shared'` folders (have approved `MJ: Resource Permissions` grants on the folder or an ancestor,
+     *   or are owned by another user and visible to the current viewer).
      */
     private getSharedProjectIds(environmentId: string): string[] {
+        const viewerId = this._lastConversationsUserId ?? this._lastProjectsUserId;
         return this._projects$.value
-            .filter(
-                (p) =>
-                    !p.OwnerUserID &&
-                    !p.IsArchived &&
-                    (!p.EnvironmentID || UUIDsEqual(p.EnvironmentID, environmentId))
-            )
+            .filter((p) => {
+                if (p.IsArchived) return false;
+                if (p.EnvironmentID && !UUIDsEqual(p.EnvironmentID, environmentId)) return false;
+                if (!p.OwnerUserID) return true; // Public tier
+                if (viewerId && !UUIDsEqual(p.OwnerUserID, viewerId)) return true; // Shared with viewer by another owner
+                return this.GetProjectVisibilityTier(p) !== 'Private';
+            })
             .map((p) => p.ID)
             .filter((id): id is string => !!id);
     }
@@ -1243,7 +1567,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 : '';
         const sharedFolderClause =
             sharedProjectIds.length > 0
-                ? ` OR ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`
+                ? ` OR (ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
                 : '';
         // The main chat view shows Global and Both. App-scoped conversations live inside
         // their owning Application's embedded surface.
@@ -1315,14 +1639,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Loads the projects (conversation folders) visible to a user in an environment and
      * emits via Projects$.
      *
-     * Visible means SHARED (OwnerUserID IS NULL — every folder that existed before
-     * ownership was expressible) plus the user's OWN personal folders. A personal folder
-     * never reaches anyone else's sidebar. The set is small, so it is cached whole;
-     * reloading is skipped only when both the environment AND the user match, because the
-     * read now depends on both.
+     * Visible means:
+     * - PUBLIC (`OwnerUserID IS NULL`),
+     * - SHARED with the user or their roles via `MJ: Resource Permissions` (`PROJECTS_RESOURCE_TYPE_ID`), or
+     * - PRIVATE/OWNED by the user (`OwnerUserID = contextUser.ID`).
      *
      * @param environmentId - The environment to filter projects by
-     * @param contextUser - The current user context; also decides which personal folders load
+     * @param contextUser - The current user context; also decides which personal/shared folders load
      * @param forceRefresh - If true, reloads even if already cached for this environment/user
      */
     public async LoadProjects(
@@ -1337,9 +1660,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return;
         }
 
-        // Shared folders, plus this user's own. One definition, shared with every other
-        // list read of this entity — see BuildProjectVisibilityFilter.
-        const ownership = BuildProjectVisibilityFilter(userId);
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        const sharedProjectIds = this.getUserSharedProjectPermissions(contextUser).map(
+            (p) => p.ResourceRecordID
+        );
+
+        // Public folders, folders shared with this user/role, plus this user's own.
+        const ownership = BuildProjectVisibilityFilter(userId, sharedProjectIds);
 
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
@@ -1386,6 +1713,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         contextUser: UserInfo
     ): Promise<boolean> {
         return this.SaveConversation(conversationId, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Enables or disables folder permission inheritance for a conversation (`inheritFolderAccess`
+     * in `Conversation.AdditionalData`). When disabled (`false`), the conversation is restricted
+     * to its owner and explicit conversation-level `MJ: Resource Permissions` grantees even when
+     * placed inside a Shared or Public folder.
+     */
+    public async SetConversationFolderInheritance(
+        conversationId: string,
+        inheritFolderAccess: boolean,
+        contextUser?: UserInfo
+    ): Promise<boolean> {
+        const existing = this.GetConversation(conversationId);
+        const updatedAdditionalData = BuildUpdatedAdditionalDataForFolderInheritance(
+            existing?.AdditionalData,
+            inheritFolderAccess
+        );
+        const saved = await this.SaveConversation(
+            conversationId,
+            { AdditionalData: updatedAdditionalData },
+            contextUser
+        );
+        if (saved) {
+            this.reconcileFolderSharedConversations();
+        }
+        return saved;
     }
 
     /**
@@ -4149,10 +4503,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // folder in the environment — widening on absent input is the failure mode worth
         // avoiding, and it is the same rule the read path applies.
         const ownerUserId = data['OwnerUserID'] as string | null | undefined;
+        const viewerId = this._lastProjectsUserId ?? this._lastConversationsUserId;
+        const hasProjectGrant =
+            !!viewerId &&
+            this.getApprovedProjectPermissions().some(
+                (p) =>
+                    UUIDsEqual(p.ResourceRecordID, id) &&
+                    p.Type === 'User' &&
+                    !!p.UserID &&
+                    UUIDsEqual(p.UserID, viewerId)
+            );
         const isVisibleToViewer =
             ownerUserId == null || ownerUserId === ''
                 ? true
-                : !!this._lastProjectsUserId && UUIDsEqual(ownerUserId, this._lastProjectsUserId);
+                : (!!viewerId && UUIDsEqual(ownerUserId, viewerId)) || hasProjectGrant;
 
         const belongsInList = !isArchived && inLoadedEnvironment && isVisibleToViewer;
 
@@ -4175,11 +4539,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Keeps folder-shared conversations in `_conversations$` and `_sharedByByConversationId`
-     * aligned with the currently loaded shared folders:
+     * aligned with the currently loaded Shared/Public folders and each conversation's
+     * {@link IsInheritingFolderAccess} setting:
      * - Non-owned conversations without an explicit `MJ: Resource Permissions` grant that sit
-     *   inside a visible shared folder get a View-level `SharedByInfo` entry.
+     *   inside a visible Shared/Public folder (and have folder inheritance enabled) get a
+     *   `SharedByInfo` entry with the viewer's inherited folder permission level.
      * - Non-owned conversations without an explicit grant whose folder is no longer a visible
-     *   shared folder (moved out, folder deleted, or folder made private) are dropped from
+     *   Shared/Public folder or whose `inheritFolderAccess` was turned off are dropped from
      *   `_conversations$` and `_sharedByByConversationId`.
      */
     private reconcileFolderSharedConversations(): void {
@@ -4208,17 +4574,23 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
 
             const inSharedFolder =
-                !!conv.ProjectID && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID));
+                !!conv.ProjectID &&
+                IsInheritingFolderAccess(conv) &&
+                sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID));
             if (inSharedFolder) {
                 keptConversations.push(conv);
-                if (!this._sharedByByConversationId.has(normId)) {
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID);
+                const existingShare = this._sharedByByConversationId.get(normId);
+                if (!existingShare) {
                     const convWithUser = conv as MJConversationEntity & { User?: string | null };
                     this._sharedByByConversationId.set(normId, {
-                        UserID: conv.UserID ?? null,
-                        Name: convWithUser.User ?? null,
+                        UserID: conv.UserID ?? inherited?.SharedByUserID ?? null,
+                        Name: convWithUser.User ?? inherited?.SharedByUser ?? null,
                         Email: null,
-                        Level: 'View'
+                        Level: inherited?.Level ?? 'View'
                     });
+                } else if (inherited?.Level) {
+                    existingShare.Level = ComparePermissionLevels(existingShare.Level, inherited.Level) ?? 'View';
                 }
             } else {
                 listChanged = true;
