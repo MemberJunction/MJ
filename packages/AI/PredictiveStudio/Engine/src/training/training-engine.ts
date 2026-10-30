@@ -91,6 +91,7 @@ import {
   type TrainerCompleted,
   type TrainerResult,
   type HoldoutCarveSummary,
+  InnerScoreSelection,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
@@ -466,6 +467,7 @@ export class TrainingEngine {
     });
     const result = TrainingEngine.recordTrainerResult(run, await training.Trainer.RunTrainer(request), x.UsdPerSecond);
     TrainingEngine.checkAnswerBelongsToRun(run, snapshot, result);
+    TrainingEngine.checkSelection(result);
     const fileIds = await this.storeTrainerArtifacts(run, result, deps);
     const finalistFile = fileIds.get(result.finalist);
     if (finalistFile === undefined) throw new Error(`TrainingEngine: the trainer returned no artifact for its finalist '${result.finalist}'`);
@@ -550,6 +552,18 @@ export class TrainingEngine {
       if (a.featureSchemaHash !== snapshot.Entity.FeatureSchemaHash) {
         throw new Error(`TrainingEngine: artifact '${a.candidate}' was built for feature schema ${a.featureSchemaHash}, not the snapshot's ${snapshot.Entity.FeatureSchemaHash}`);
       }
+    }
+  }
+
+  /**
+   * Refuse a trainer report that breaks what the protocol guarantees about its search (`selection-invalid`): every
+   * candidate scored on every fold with a valid interval, and the holdout read for the finalist. Runs after the
+   * compute is recorded and before anything is stored, so the refused run keeps its compute and stores no artifact.
+   */
+  private static checkSelection(result: TrainerCompleted): void {
+    const selection = InnerScoreSelection.CheckSelection(result.innerScores, result.finalist, result.holdoutAccess);
+    if (selection.Ok === false) {
+      throw new TrainingRefusedError({ stage: 'trainer', reason: { kind: 'selection-invalid', reason: selection.Reason, detail: selection.Detail } });
     }
   }
 

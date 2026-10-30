@@ -66,4 +66,9 @@ describe('TrainingRefusedError.DescribeTrainingRefusal', () => {
     ];
     for (const c of cases) expect(new TrainingRefusedError({ stage: 'pipeline', reason: c.Reason }).message).toBe(c.Sentence);
   });
+
+  it("states a trainer report that breaks a selection rule with the rule and what broke it", () => {
+    const refusal = { stage: 'trainer', reason: { kind: 'selection-invalid', reason: 'candidate-pruned', detail: 'rf was scored on 5 folds, the others on 15' } } as const;
+    expect(new TrainingRefusedError(refusal).message).toBe('Refused (selection-invalid): candidate-pruned — rf was scored on 5 folds, the others on 15');
+  });
 });

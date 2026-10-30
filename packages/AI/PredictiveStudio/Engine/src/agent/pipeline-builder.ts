@@ -8,18 +8,67 @@
  * if the trust verdict clears the bar** — the same `TrustVerdicts.DeriveTrustVerdict` gate the business UI uses, so
  * a coin-flip / unmeasured / leakage-flagged model is never silently published into the catalog.
  *
+ * Every approved experiment is a candidate of ONE search on ONE pipeline. A pipeline with a Prediction Unit is bound
+ * to an Evaluation Protocol before it trains, and the trainer picks the finalist on inner-fold scores (the simplest
+ * candidate within one standard error of the best), reading the held-back rows once, for the finalist. A pipeline
+ * without a Prediction Unit trains the plan's highest-priority experiment only, and the result names the experiments
+ * it did not train.
+ *
  * Used by the agent's builder sub-agent AND directly callable from a headless script/test, so the
  * "build a new prediction" path is verifiable without the full LLM loop.
  */
 
-import { UUIDsEqual } from '@memberjunction/global';
-import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec, TrustVerdicts, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError, LogStatus } from '@memberjunction/core';
+import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import {
+  EvaluationProtocolRules,
+  InnerScoreSelection,
+  PredictionUnit,
+  TrainingRunResultsParser,
+  TrustVerdicts,
+  type CandidateSpec,
+  type FeatureStepWarning,
+  type HyperparameterValue,
+  type ModelingPlanSpec,
+  type TrustVerdict,
+} from '@memberjunction/predictive-studio-core';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { TrainingDelegation, WasTrainingLeakageFlagged } from '../operations/delegation';
-import { PredictiveStudioRefusals } from '../operations/refusals';
+import type { ProposedExperiment } from '../experiment/types';
+import type { TrainModelResult } from '../training/types';
+import { MetadataEntityFactory } from '../training/seams';
+import { EvaluationProtocolVersioning } from '../protocol/protocol-versioning';
+import { ProtocolDefaults } from '../protocol/protocol-defaults';
+import { RunViewDataAccess } from '../feature-assembly/data-access';
+import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+
+/** Baseline member names a candidate may not take (with the `heuristic:` prefix); the sidecar refuses them too. */
+export const RESERVED_CANDIDATE_NAMES: readonly string[] = ['dummy', 'oneFeature', 'glm', 'naive', 'seasonalNaive'];
+/** The prefix of the incumbent-heuristic baseline members' names, reserved like {@link RESERVED_CANDIDATE_NAMES}. */
+export const RESERVED_CANDIDATE_PREFIX = 'heuristic:';
+
+/** Common short names an LLM writes for an algorithm, read as the normalized name of the algorithm they mean. */
+const ALGORITHM_ALIASES: Readonly<Record<string, string>> = {
+  linearregression: 'ridgeregression',
+  linear: 'ridgeregression',
+  ols: 'ridgeregression',
+  ridge: 'ridgeregression',
+  logistic: 'logisticregression',
+  rf: 'randomforest',
+  lgb: 'lightgbm',
+  lgbm: 'lightgbm',
+  xgb: 'xgboost',
+  mlp: 'multilayerperceptron',
+  neuralnet: 'multilayerperceptron',
+  neuralnetwork: 'multilayerperceptron',
+};
+
+/** An `MJ: ML Algorithms` row an experiment's algorithm name resolved to. */
+export type ResolvedAlgorithm = Pick<MJMLAlgorithmEntity, 'ID' | 'DriverClass'>;
+/** The `MJ: ML Algorithms` columns an algorithm name is matched on. */
+export type AlgorithmRow = Pick<MJMLAlgorithmEntity, 'ID' | 'Name' | 'DriverClass'>;
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
 export interface BuildPredictionInput {
@@ -36,22 +85,30 @@ export interface BuildPredictionInput {
 }
 
 /**
- * Leaderboard entry matching MLExperimentResultsSpec. `Metric`/`score` is the candidate's measured headline metric
- * (the same one its trust verdict uses), or null when the candidate was not measured — never a stand-in number.
+ * Leaderboard entry matching MLExperimentResultsSpec (its keys are the artifact's JSON keys). For a search, a row is a
+ * candidate's inner-fold mean with its interval, labelled optimistic, and the trainer's finalist is the winner even
+ * when it is not rank 1. For a pipeline trained without a search, the one row is the model's trust-verdict headline
+ * metric, or null when it was not measured — never a stand-in number.
  */
 export interface MLLeaderboardEntryPayload {
-  IterationID: string;
-  Metric: number | null;
-  ModelID?: string;
-  rank?: number;
-  algorithm?: string;
-  featureSet?: string;
-  score?: number | null;
-  /** Which headline metric `score` is (e.g. `AUC`, `R2`); null when not measured. */
-  metricName?: string | null;
-  modelId?: string;
+  IterationID: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  Metric: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  ModelID?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  rank?: number;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  algorithm?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  featureSet?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  score?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** Which metric `score` is (an inner-fold score such as `log-loss`, or a headline metric such as `AUC`); null when not measured. */
+  metricName?: string | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The lower bound of the inner-fold mean's interval; null when the row is not an inner-fold score. */
+  innerLower?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** The upper bound of the inner-fold mean's interval; null when the row is not an inner-fold score. */
+  innerUpper?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  /** True for an inner-fold score: the search chose among these numbers, so they are optimistic. */
+  optimistic?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
+  modelId?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** True only for the selected candidate, and only when it was measured. */
-  isWinner?: boolean;
+  isWinner?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
 }
 
 /** The outcome of building a prediction from a plan. */
@@ -76,85 +133,30 @@ export interface BuildPredictionResult {
   model?: MJMLModelEntity;
   /** The created pipeline entity (present once pipeline is created). */
   pipeline?: MJMLTrainingPipelineEntity;
-  /** Leaderboard iterations produced during the tournament. */
+  /** The leaderboard of the build's one training run. */
   leaderboard?: MLLeaderboardEntryPayload[];
+  /**
+   * The labels of the approved experiments the build did not train: without a Prediction Unit on the pipeline there is
+   * no search, so only the highest-priority experiment trains. Empty when every experiment was a candidate.
+   */
+  untrainedExperiments?: string[];
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
   warnings?: FeatureStepWarning[];
 }
 
-/** One trained tournament candidate. */
-export interface TrainedCandidate {
-  Pipeline: MJMLTrainingPipelineEntity;
-  Model: MJMLModelEntity;
-  Trust: TrustVerdict;
-  LeakageFlagged: boolean;
-  AlgorithmName: string;
-  FeatureSetName: string;
-}
-
-/** How tournament candidates are scored, ranked and reported. Pure; no I/O. */
-export class TournamentRanking {
-  /**
-   * A candidate's leaderboard score: its trust verdict's headline metric, so the leaderboard and the headline can
-   * never disagree for the same model. Null when the model was not measured.
-   */
-  public static HeadlineScore(trust: TrustVerdict): number | null {
-    return trust.headlineMetric ? trust.headlineMetric.value : null;
-  }
-
-  /** Best-first: measured candidates by score (higher is better), unmeasured candidates last in plan order. */
-  public static Rank(trained: TrainedCandidate[]): TrainedCandidate[] {
-    return [...trained].sort((a, b) => {
-      const sa = TournamentRanking.HeadlineScore(a.Trust);
-      const sb = TournamentRanking.HeadlineScore(b.Trust);
-      if (sa === null && sb === null) return 0;
-      if (sa === null) return 1;
-      if (sb === null) return -1;
-      return sb - sa;
-    });
-  }
-
-  /** Leaderboard rows for ranked candidates; the first row is the winner only when it was measured. */
-  public static Leaderboard(ranked: TrainedCandidate[]): MLLeaderboardEntryPayload[] {
-    return ranked.map((t, idx) => {
-      const score = TournamentRanking.HeadlineScore(t.Trust);
-      return {
-        IterationID: t.Model.ID,
-        Metric: score,
-        ModelID: t.Model.ID,
-        rank: idx + 1,
-        algorithm: t.AlgorithmName,
-        featureSet: t.FeatureSetName,
-        score,
-        metricName: t.Trust.headlineMetric ? t.Trust.headlineMetric.key : null,
-        modelId: t.Model.ID,
-        isWinner: idx === 0 && score !== null,
-      };
-    });
-  }
-
-  /**
-   * The error a tournament throws when every candidate failed. When every candidate hit the same Predictive Studio
-   * refusal, the first one is rethrown so its type and code survive; otherwise one error lists each distinct message.
-   */
-  public static AllCandidatesFailed(errors: Error[]): Error {
-    const codes = errors.map((e) => PredictiveStudioRefusals.CodeOf(e));
-    const first = codes[0];
-    if (first !== null && first !== undefined && codes.every((c) => c === first)) {
-      return errors[0];
-    }
-    const distinct = [...new Set(errors.map((e) => e.message))];
-    return new Error(`All proposed experiment candidates failed to train: ${distinct.join(' | ')}`);
-  }
+/** One training of the build's pipeline: the engine's result and the leaderboard it produced. */
+interface BuildTraining {
+  readonly Train: TrainModelResult;
+  readonly Leaderboard: MLLeaderboardEntryPayload[];
+  readonly Untrained: string[];
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
 export class PredictiveStudioPipelineBuilder {
   /**
-   * Build a prediction from an approved plan: create the pipeline, train, and publish if the trust
-   * verdict clears the bar. When multiple experiments are proposed, runs a multi-algorithm tournament
-   * across up to 3 candidates, ranks them on each one's trust-verdict headline metric (unmeasured
-   * candidates last, never the winner), and selects/publishes the winning model.
+   * Build a prediction from an approved plan: create one pipeline, train it — one search over every approved
+   * experiment when the pipeline has a Prediction Unit, else the highest-priority experiment — and publish if the
+   * trust verdict clears the bar. Every experiment's name and algorithm are checked before any row is written.
    * Never throws — returns a typed result with `success`/`errorMessage`.
    */
   public async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
@@ -173,96 +175,26 @@ export class PredictiveStudioPipelineBuilder {
     };
 
     try {
-      const experiments = (spec.ProposedExperiments && spec.ProposedExperiments.length > 0)
-        ? [...spec.ProposedExperiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
-        : [];
-
-      if (experiments.length <= 1) {
-        const config = ModelingPlanToPipelineConfig(spec);
-        recordWarnings(config.warnings);
-        const pipeline = await this.createPipeline(config, provider, user);
-        const trainResult = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
-        const model = trainResult.model;
-        const trust = TrustVerdicts.DeriveTrustVerdict(model);
-        const leakageFlagged = WasTrainingLeakageFlagged(trainResult);
-        const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
-        const leaderboard = TournamentRanking.Leaderboard([{
-          Pipeline: pipeline,
-          Model: model,
-          Trust: trust,
-          LeakageFlagged: leakageFlagged,
-          AlgorithmName: experiments[0]?.AlgorithmName ?? config.algorithmName,
-          FeatureSetName: experiments[0]?.FeatureSet?.join(', ') || 'Full Feature Set',
-        }]);
-        return {
-          success: true,
-          pipelineId: pipeline.ID,
-          modelId: model.ID,
-          model,
-          pipeline,
-          trust,
-          published,
-          leakageFlagged,
-          heldReason,
-          errorMessage: null,
-          leaderboard,
-          warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
-        };
+      const config = ModelingPlanToPipelineConfig(spec);
+      recordWarnings(config.warnings);
+      const entity = this.preparePipelineConfig(config, provider);
+      const approved = PredictiveStudioPipelineBuilder.ApprovedExperiments(spec);
+      const algorithms = await this.resolveAlgorithms([config.algorithmName, ...approved.map((e) => e.AlgorithmName)], provider, user);
+      const candidates = PredictiveStudioPipelineBuilder.BuildCandidateSpecs(approved, algorithms);
+      if (approved.some((e) => (e.FeatureSet ?? []).length > 0)) {
+        LogStatus('PredictiveStudioPipelineBuilder: per-experiment feature sets are not candidates of one search; every candidate uses the pipeline feature schema.');
       }
-
-      // Multi-algorithm tournament over up to 3 candidate experiments
-      const candidatesToRun = experiments.slice(0, 3);
-      const trained: TrainedCandidate[] = [];
-      const candidateErrors: Error[] = [];
-
-      for (let i = 0; i < candidatesToRun.length; i++) {
-        const exp = candidatesToRun[i];
-        try {
-          const config = ModelingPlanToPipelineConfig(spec, i);
-          recordWarnings(config.warnings);
-          const pipeline = await this.createPipeline(config, provider, user);
-          const trainResult = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
-          const model = trainResult.model;
-          const trust = TrustVerdicts.DeriveTrustVerdict(model);
-          const leakageFlagged = WasTrainingLeakageFlagged(trainResult);
-          trained.push({
-            Pipeline: pipeline,
-            Model: model,
-            Trust: trust,
-            LeakageFlagged: leakageFlagged,
-            AlgorithmName: exp.AlgorithmName || config.algorithmName,
-            FeatureSetName: exp.FeatureSet?.join(', ') || 'Full Feature Set',
-          });
-        } catch (candidateErr) {
-          const error = candidateErr instanceof Error ? candidateErr : new Error(String(candidateErr));
-          candidateErrors.push(error);
-          LogError(`PredictiveStudioPipelineBuilder: candidate '${exp.AlgorithmName}' failed: ${error.message}`);
-        }
-      }
-
-      if (trained.length === 0) {
-        throw TournamentRanking.AllCandidatesFailed(candidateErrors);
-      }
-
-      // Measured candidates best-first, unmeasured last. When none was measured there is no winner: the result
-      // still reports the top-priority candidate (held by the trust gate, which never lets an unmeasured model act).
-      const ranked = TournamentRanking.Rank(trained);
-      const winner = ranked[0];
-      const { published, heldReason } = await this.maybePublish(winner.Model, winner.Trust, winner.LeakageFlagged, autoPublish);
-      const leaderboard = TournamentRanking.Leaderboard(ranked);
-
+      const pipeline = await this.savePipeline(config, entity, PredictiveStudioPipelineBuilder.algorithmOf(algorithms, config.algorithmName).ID, provider, user);
+      const training = pipeline.PredictionUnitID
+        ? await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user)
+        : await this.trainWithoutUnit(pipeline, approved, sidecarVersion, provider, user);
+      const model = training.Train.model;
+      const trust = TrustVerdicts.DeriveTrustVerdict(model);
+      const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
+      const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
       return {
-        success: true,
-        pipelineId: winner.Pipeline.ID,
-        modelId: winner.Model.ID,
-        model: winner.Model,
-        pipeline: winner.Pipeline,
-        trust: winner.Trust,
-        published,
-        leakageFlagged: winner.LeakageFlagged,
-        heldReason,
-        errorMessage: null,
-        leaderboard,
+        success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, leakageFlagged, heldReason,
+        errorMessage: null, leaderboard: training.Leaderboard, untrainedExperiments: training.Untrained,
         warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     } catch (err) {
@@ -279,11 +211,164 @@ export class PredictiveStudioPipelineBuilder {
     }
   }
 
-  /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */
-  private async createPipeline(config: PipelineConfig, provider: IMetadataProvider, user: UserInfo): Promise<MJMLTrainingPipelineEntity> {
-    // Validate the whole plan against real metadata BEFORE creating any rows or training — so an invalid
-    // plan (bad entity / target / feature / algorithm) fails fast with an actionable message and leaves
-    // no orphan pipeline/run rows behind, instead of erroring mid-train.
+  /** The plan's proposed experiments, highest priority (lowest `Priority`) first; ties keep plan order. */
+  public static ApprovedExperiments(spec: ModelingPlanSpec): ProposedExperiment[] {
+    return [...(spec.ProposedExperiments ?? [])]
+      .sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
+      .map((e) => ({ ...e, AlgorithmName: e.AlgorithmName.trim() }));
+  }
+
+  /**
+   * Every approved experiment becomes one candidate of the single search, in plan-priority order. A label a baseline
+   * member uses (or one with the heuristic prefix) and a label used twice are refused, as is an algorithm name that
+   * was not resolved. Hyperparameters keep their scalar values; nested objects are dropped.
+   *
+   * @throws Error naming the experiment
+   */
+  public static BuildCandidateSpecs(experiments: readonly ProposedExperiment[], algorithms: ReadonlyMap<string, ResolvedAlgorithm>): readonly CandidateSpec[] {
+    const seen = new Set<string>();
+    return experiments.map((e) => {
+      if (RESERVED_CANDIDATE_NAMES.includes(e.Label) || e.Label.startsWith(RESERVED_CANDIDATE_PREFIX)) {
+        throw new Error(`Experiment label '${e.Label}' is reserved for a baseline member; rename the experiment.`);
+      }
+      if (seen.has(e.Label)) throw new Error(`Experiment label '${e.Label}' is used by two experiments; every candidate of a search needs its own name.`);
+      seen.add(e.Label);
+      const algorithm = PredictiveStudioPipelineBuilder.algorithmOf(algorithms, e.AlgorithmName);
+      return { name: e.Label, algorithmId: algorithm.ID, driverKey: algorithm.DriverClass, hyperparameters: PredictiveStudioPipelineBuilder.scalarHyperparameters(e.Hyperparameters) };
+    });
+  }
+
+  /**
+   * The `MJ: ML Algorithms` row an algorithm name means. Tolerant of LLM naming variation: the display `Name` or the
+   * `DriverClass` matches case- and separator-insensitively, and common short names (`rf`, `xgb`, `linear`, …) are
+   * read as the algorithm they name. Two different rows that both match are refused rather than one being picked.
+   *
+   * @throws Error listing the available algorithms when nothing matches, or naming both rows when two match
+   */
+  public static MatchAlgorithm(algorithmName: string, rows: readonly AlgorithmRow[]): ResolvedAlgorithm {
+    const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalized = normalize(algorithmName);
+    const want = ALGORITHM_ALIASES[normalized] ?? normalized;
+    const matches = rows.filter((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
+    if (matches.length === 0) {
+      const available = rows.map((a) => a.Name).join(', ');
+      throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. Available: ${available || '(none)'}.`);
+    }
+    if (matches.length > 1) {
+      const named = matches.map((a) => `'${a.Name}' (${a.DriverClass}, ${NormalizeUUID(a.ID)})`).join(' and ');
+      throw new Error(`Algorithm '${algorithmName}' matches more than one MJ: ML Algorithms row: ${named}; name the algorithm by one of them.`);
+    }
+    return { ID: matches[0].ID, DriverClass: matches[0].DriverClass };
+  }
+
+  /** The resolved algorithm of a name, which {@link resolveAlgorithms} resolved before any row was written. */
+  private static algorithmOf(algorithms: ReadonlyMap<string, ResolvedAlgorithm>, name: string): ResolvedAlgorithm {
+    const algorithm = algorithms.get(name);
+    if (algorithm === undefined) throw new Error(`Algorithm '${name}' was not resolved.`);
+    return algorithm;
+  }
+
+  /** A plan experiment's hyperparameters as candidate values: scalars and null kept, nested objects and arrays dropped. */
+  private static scalarHyperparameters(raw: Record<string, unknown> | undefined): Record<string, HyperparameterValue> {
+    const hyperparameters: Record<string, HyperparameterValue> = {};
+    for (const [key, value] of Object.entries(raw ?? {})) {
+      if (PredictiveStudioPipelineBuilder.isHyperparameterValue(value)) hyperparameters[key] = value;
+    }
+    return hyperparameters;
+  }
+
+  /** A scalar or null: the values a candidate's hyperparameter can hold. */
+  private static isHyperparameterValue(value: unknown): value is HyperparameterValue {
+    return value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
+  }
+
+  /**
+   * The one leaderboard row of a pipeline trained without a search: the model's trust-verdict headline metric (the
+   * number the headline shows), the winner only when it was measured.
+   */
+  public static SingleModelLeaderboard(runId: string, model: MJMLModelEntity, trust: TrustVerdict, algorithm: string): MLLeaderboardEntryPayload[] {
+    const score = trust.headlineMetric ? trust.headlineMetric.value : null;
+    return [{
+      IterationID: runId, Metric: score, ModelID: model.ID, rank: 1, algorithm, featureSet: 'Pipeline feature set', score,
+      metricName: trust.headlineMetric ? trust.headlineMetric.key : null, innerLower: null, innerUpper: null, optimistic: false,
+      modelId: model.ID, isWinner: score !== null,
+    }];
+  }
+
+  /**
+   * Train a pipeline without a Prediction Unit: there is no protocol and no search, so it trains the plan's
+   * highest-priority experiment (the pipeline's own algorithm) and names the rest as untrained.
+   */
+  private async trainWithoutUnit(pipeline: MJMLTrainingPipelineEntity, approved: readonly ProposedExperiment[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
+    const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+    const first = approved[0];
+    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, TrustVerdicts.DeriveTrustVerdict(train.model), first ? first.Label : pipeline.Name);
+    return { Train: train, Leaderboard: leaderboard, Untrained: approved.slice(1).map((e) => e.Label) };
+  }
+
+  /**
+   * Train a pipeline with a Prediction Unit: bind its default Evaluation Protocol (before the run row), run ONE search
+   * over every candidate, and read the leaderboard from the stored inner-fold scores.
+   */
+  private async trainSearch(pipeline: MJMLTrainingPipelineEntity, candidates: readonly CandidateSpec[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
+    await this.ensureProtocol(pipeline, candidates.length, provider, user);
+    const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, candidates, sidecarVersion }, provider, user);
+    return { Train: train, Leaderboard: PredictiveStudioPipelineBuilder.searchLeaderboard(train), Untrained: [] };
+  }
+
+  /**
+   * A search's leaderboard from the run's stored trainer result: every candidate best-first by inner-fold mean with its
+   * interval, each optimistic, the trainer's finalist the winner. The model is the finalist's, so only its row links it.
+   *
+   * @throws Error when the completed run stores no trainer result
+   */
+  private static searchLeaderboard(train: TrainModelResult): MLLeaderboardEntryPayload[] {
+    const results = TrainingRunResultsParser.ParseTrainingRunResults(train.run.ValidationResults);
+    if (!results.Ok || results.Value.status !== 'completed' || results.Value.trainer === null) {
+      throw new Error(`Training run ${train.run.ID} completed without a stored trainer result; its search has no leaderboard.`);
+    }
+    const trainer = results.Value.trainer;
+    return InnerScoreSelection.LeaderboardFromInnerScores(trainer.innerScores, trainer.finalist).map((row) => ({
+      IterationID: train.run.ID, Metric: row.Mean, ModelID: row.IsFinalist ? train.model.ID : undefined, rank: row.Rank, algorithm: row.Candidate,
+      featureSet: 'Pipeline feature set', score: row.Mean, metricName: row.Metric, innerLower: row.Lower, innerUpper: row.Upper,
+      optimistic: row.Optimistic, modelId: row.IsFinalist ? train.model.ID : undefined, isWinner: row.IsFinalist,
+    }));
+  }
+
+  /**
+   * Resolve each distinct algorithm name once over one read of `MJ: ML Algorithms` (keys are the names as written in
+   * the plan), so a bad name fails before any row is written.
+   */
+  private async resolveAlgorithms(names: readonly string[], provider: IMetadataProvider, user: UserInfo): Promise<ReadonlyMap<string, ResolvedAlgorithm>> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const res = await rv.RunView<AlgorithmRow>({ EntityName: 'MJ: ML Algorithms', Fields: ['ID', 'Name', 'DriverClass'], ResultType: 'simple' }, user);
+    if (!res.Success) throw new Error(`Loading MJ: ML Algorithms failed: ${res.ErrorMessage}`);
+    return new Map([...new Set(names)].map((name) => [name, PredictiveStudioPipelineBuilder.MatchAlgorithm(name, res.Results)] as const));
+  }
+
+  /**
+   * Bind version 1 of a default Evaluation Protocol when the pipeline has none — always before the first candidate
+   * trains, so the protocol row precedes the run row. The holdout is the unit's default ({@link ProtocolDefaults}).
+   */
+  private async ensureProtocol(pipeline: MJMLTrainingPipelineEntity, candidates: number, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+    if (pipeline.EvaluationProtocolID) return;
+    const unitRow = await provider.GetEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', user);
+    if (!pipeline.PredictionUnitID || !(await unitRow.Load(pipeline.PredictionUnitID))) throw new Error(`Prediction Unit ${pipeline.PredictionUnitID || '(none)'} not found.`);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(unitRow);
+    if (parsed.Ok === false) throw new Error(`Prediction Unit cannot be read: ${parsed.Errors.join('; ')}`);
+    const holdout = await ProtocolDefaults.DefaultHoldoutFor(parsed.Value, { DataAccess: new RunViewDataAccess(user, provider), Metadata: new ProviderAssemblyMetadata(provider), Now: new Date() });
+    const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: parsed.Value, Holdout: holdout, Candidates: candidates, Seed: ProtocolDefaults.DEFAULT_SEED, Name: `${pipeline.Name} — protocol` });
+    const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, { kind: 'system', component: 'pipeline-builder' }, new MetadataEntityFactory(provider), user);
+    pipeline.EvaluationProtocolID = row.ID;
+    if (!(await pipeline.Save())) throw new Error(`Binding the Evaluation Protocol failed: ${pipeline.LatestResult?.CompleteMessage || 'unknown error'}`);
+  }
+
+  /**
+   * Validate the whole plan against real metadata BEFORE any row is written or anything trains — so an invalid plan
+   * (bad entity / target / feature) fails fast with an actionable message and leaves no orphan pipeline or run rows
+   * behind — and canonicalize its names. Returns the target entity.
+   */
+  private preparePipelineConfig(config: PipelineConfig, provider: IMetadataProvider): EntityInfo {
     const entity = ResolveEntity(config.targetEntityName, provider);
     if (!entity) {
       throw new Error(`Target entity '${config.targetEntityName}' was not found in metadata. The plan must reference a real entity.`);
@@ -300,18 +385,19 @@ export class PredictiveStudioPipelineBuilder {
 
     // Sanitize leakage guard deny fields against real entity schema
     this.sanitizeLeakageGuard(config, entity, provider);
-
     this.validatePlanFields(config, entity);
-    const targetEntityId = entity.ID;
-    const algorithmId = await this.resolveAlgorithmId(config.algorithmName, provider, user);
+    return entity;
+  }
 
+  /** Create + save the `MJ: ML Training Pipelines` row from the validated config. */
+  private async savePipeline(config: PipelineConfig, entity: EntityInfo, algorithmId: string, provider: IMetadataProvider, user: UserInfo): Promise<MJMLTrainingPipelineEntity> {
     const pipeline = await provider.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', user);
     pipeline.NewRecord();
     pipeline.Name = config.name;
     pipeline.Description = config.description;
     pipeline.Version = 1;
     pipeline.Status = 'Draft';
-    pipeline.TargetEntityID = targetEntityId;
+    pipeline.TargetEntityID = entity.ID;
     pipeline.TargetVariable = config.targetVariable;
     pipeline.ProblemType = config.problemType;
     pipeline.AlgorithmID = algorithmId;
@@ -417,47 +503,6 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
-   * Resolve an algorithm reference to its `MJ: ML Algorithms` id. Tolerant of LLM
-   * naming variation: matches the display `Name` OR the `DriverClass`, comparing
-   * case- and separator-insensitively — so `'LogisticRegression'`,
-   * `'Logistic Regression'`, and `'logistic_regression'` all resolve to the same row.
-   * Throws with the available algorithm list if nothing matches.
-   */
-  private async resolveAlgorithmId(algorithmName: string, provider: IMetadataProvider, user: UserInfo): Promise<string> {
-    const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView<{ ID: string; Name: string; DriverClass: string }>(
-      { EntityName: 'MJ: ML Algorithms', Fields: ['ID', 'Name', 'DriverClass'], ResultType: 'simple' },
-      user,
-    );
-    const algos = res.Success ? res.Results ?? [] : [];
-    const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    let want = normalize(algorithmName);
-    const ALIASES: Record<string, string> = {
-      linearregression: 'ridgeregression',
-      linear: 'ridgeregression',
-      ols: 'ridgeregression',
-      ridge: 'ridgeregression',
-      logistic: 'logisticregression',
-      rf: 'randomforest',
-      lgb: 'lightgbm',
-      lgbm: 'lightgbm',
-      xgb: 'xgboost',
-      mlp: 'multilayerperceptron',
-      neuralnet: 'multilayerperceptron',
-      neuralnetwork: 'multilayerperceptron',
-    };
-    if (ALIASES[want]) {
-      want = ALIASES[want];
-    }
-    const match = algos.find((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
-    if (!match) {
-      const available = algos.map((a) => a.Name).join(', ');
-      throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. Available: ${available || '(none)'}.`);
-    }
-    return match.ID;
-  }
-
-  /**
    * Publish the trained model into the business catalog ONLY if the trust verdict clears the bar and
    * training wasn't leakage-flagged. Otherwise leave it Draft and return the plain held-reason.
    */
@@ -516,4 +561,5 @@ export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): 
   }
   return undefined;
 }
+
 

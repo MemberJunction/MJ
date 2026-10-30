@@ -49,10 +49,13 @@ function check(condition: boolean, label: string): void {
   if (!condition) failures++;
 }
 
-/** Resolve (or create) the sidecar-driver-named ML Algorithm. */
+/**
+ * Resolve (or create) the ML Algorithm the sidecar driver names, matched on Name OR DriverClass: a second row with the
+ * same driver would make the builder's algorithm name ambiguous, which it refuses.
+ */
 async function ensureAlgorithm(md: IMetadataProvider, user: UserInfo): Promise<{ id: string; created: boolean }> {
   const existing = await new RunView().RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}' OR DriverClass='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
     user,
   );
   if (existing.Success && existing.Results.length > 0) return { id: existing.Results[0].ID, created: false };
@@ -81,6 +84,7 @@ function buildPlan(): ModelingPlanSpec {
     LeakageNotes: [{ Field: 'CancellationDate', Risk: 'reveals the outcome', Action: 'exclude' }],
     ProposedExperiments: [
       { Label: 'LR baseline', AlgorithmName: DRIVER_KEY, FeatureSet: ['AutoRenew', 'MembershipType'], Rationale: 'interpretable baseline', Priority: 1 },
+      { Label: 'XGB challenger', AlgorithmName: 'xgboost', FeatureSet: ['AutoRenew', 'MembershipType'], Rationale: 'non-linear challenger', Priority: 2 },
     ],
     ValidationStrategy: { Strategy: 'holdout', LockedHoldoutFraction: 0.2 },
     ProposedBudget: {},
@@ -146,6 +150,11 @@ async function main(): Promise<void> {
     check(!!result.pipelineId, 'a training pipeline was created');
     check(!!result.modelId, 'a model was trained');
     check(!!result.trust && ['Poor', 'Fair', 'Good', 'Excellent'].includes(result.trust.grade), 'a plain-language trust verdict was produced');
+    console.log(`  Leaderboard: ${JSON.stringify(result.leaderboard)}`);
+    console.log(`  Untrained experiments: ${JSON.stringify(result.untrainedExperiments)}`);
+    check((result.leaderboard ?? []).length === 1, 'one training run gives one leaderboard row (no search without a Prediction Unit)');
+    check(!JSON.stringify(result.leaderboard ?? []).includes('cvScore'), 'no leaderboard row carries a cvScore');
+    check(JSON.stringify(result.untrainedExperiments) === JSON.stringify(['XGB challenger']), 'the experiment that was not trained is named');
 
     // The core invariant: a model is published IFF the trust verdict clears the bar AND no leakage flag.
     const shouldPublish = !!result.trust?.canAct && !result.leakageFlagged;

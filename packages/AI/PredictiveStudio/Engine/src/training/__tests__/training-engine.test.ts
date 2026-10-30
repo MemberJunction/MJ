@@ -626,7 +626,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it("sends the pipeline's own algorithm as the single candidate and records the finalist's hyperparameters on the run", async () => {
     const { engine, deps, pipeline, runs, models } = TrainingHarness.ForUnit(years, unitColumns);
-    const trainer = new FakeTrainer((r) => ({ ...cannedFor(r), finalist: 'xgboost', artifacts: [TrainerResultFixtures.Artifact('xgboost', r.snapshot.featureSchemaHash)] }));
+    const trainer = new FakeTrainer((r) => TrainerResultFixtures.WithFinalist(cannedFor(r), 'xgboost', r.snapshot.featureSchemaHash));
     deps.trainer = trainer;
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(trainer.Requests.map((r) => r.candidates)).toEqual([[{ name: 'xgboost', algorithmId: 'algo-xgb', driverKey: 'xgboost', hyperparameters: { max_depth: 4 } }]]);
@@ -919,6 +919,28 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
       schema: 'ps-run-results/v2', status: 'refused',
       refusal: { stage: 'trainer', reason: { kind: 'trainer-failed', stage: 'inner-cv', message: "candidate 'xgb': only one class in a fold", computeSeconds: 3.25 } },
     });
+    expect(models).toHaveLength(0);
+  });
+
+  it('refuses a trainer report that pruned a candidate (selection-invalid), keeping its compute and storing no artifact or model', async () => {
+    const pruned = (r: TrainerRequest): TrainerCompleted => {
+      const canned = cannedFor(r);
+      return { ...canned, innerScores: [...canned.innerScores, { candidate: 'rf', inner: TrainerResultFixtures.Mwi('log-loss', 0.5, 0.48, 0.52, 3668), folds: 5, optimistic: true }] };
+    };
+    const { engine, deps, pipeline, runs, models, artifacts } = protocolHarness(pruned);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow('Refused (selection-invalid): candidate-pruned — rf was scored on 5 folds, the others on 15');
+    expect([runs[0].Status, runs[0].ComputeSeconds]).toEqual(['Failed', 12.5]);
+    expect(storedResults(runs[0].ValidationResults)).toEqual({
+      schema: 'ps-run-results/v2', status: 'refused',
+      refusal: { stage: 'trainer', reason: { kind: 'selection-invalid', reason: 'candidate-pruned', detail: 'rf was scored on 5 folds, the others on 15' } },
+    });
+    expect([models.length, artifacts.Saved.size]).toEqual([0, 0]);
+  });
+
+  it('refuses a trainer report whose holdout was read for another candidate than its finalist (selection-invalid)', async () => {
+    const elsewhere = (r: TrainerRequest): TrainerCompleted => ({ ...cannedFor(r), holdoutAccess: { accessedAt: '2026-10-12T00:00:00.000Z', count: 1, finalist: 'glm' } });
+    const { engine, deps, pipeline, models } = protocolHarness(elsewhere);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'trainer', reason: { kind: 'selection-invalid', reason: 'holdout-not-read-once-for-finalist' } } });
     expect(models).toHaveLength(0);
   });
 

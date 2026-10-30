@@ -16,7 +16,7 @@ import {
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { MetricDirections } from '@memberjunction/predictive-studio-core';
+import { JsonParse, MetricDirections } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training';
 import type { TrainingDeps } from '../training';
@@ -88,7 +88,7 @@ export interface IPipelineResolver {
  * trains it through the engine (producing an immutable Draft `MJ: ML Models` +
  * its `MJ: ML Training Runs` leaf linked to the iteration via
  * `experimentSessionIterationId`), and extracts the normalized holdout Score for
- * the plan's `SuccessMetric` to drive the leaderboard.
+ * the plan's `SuccessMetric` to drive the leaderboard (null when the holdout did not measure it).
  */
 export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
   /**
@@ -112,11 +112,10 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       },
       this.trainingDeps,
     );
-    const score = ExtractNormalizedScore(model.HoldoutMetrics, model.Metrics, input.plan.TargetDefinition.SuccessMetric, input.plan.TargetDefinition.ProblemType);
     return {
       model,
       run,
-      Score: score,
+      Score: ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric),
       // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
       // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
@@ -126,53 +125,34 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
 }
 
 /**
- * Extract the **normalized** leaderboard score from a model's holdout metrics
- * (preferred — the honest, search-never-saw-it number, §8.2), falling back to
- * the training metrics. The score is normalized so **higher is always better**:
- * error metrics (RMSE/MAE/loss) are negated, ranking metrics (AUC/F1/accuracy)
- * pass through. Returns `0` when the metric is absent (a failed/empty run).
+ * The **normalized** leaderboard score of a model: the plan's success metric read from its holdout metrics only, so
+ * that higher is always better (a lower-is-better metric is negated, a closer-to-one metric is minus its distance from
+ * one). Null when the holdout metrics do not hold the metric, or when the metric's direction is not known: a missing
+ * score is never a stand-in number, and an unmeasured model never takes a place on the leaderboard.
  *
- * Exported for unit testing the normalization in isolation.
- *
- * @param holdoutMetricsJson the model's `HoldoutMetrics` JSON (preferred)
- * @param trainMetricsJson the model's `Metrics` JSON (fallback)
+ * @param holdoutMetricsJson the model's `HoldoutMetrics` JSON
  * @param successMetric the plan's `SuccessMetric` (e.g. `AUC`, `RMSE`)
- * @param problemType classification vs. regression (informs the error-metric direction)
  */
-export function ExtractNormalizedScore(
-  holdoutMetricsJson: string | null,
-  trainMetricsJson: string | null,
-  successMetric: string,
-  problemType: 'classification' | 'regression',
-): number {
-  const metrics = parseMetrics(holdoutMetricsJson) ?? parseMetrics(trainMetricsJson) ?? {};
-  const key = successMetric.toLowerCase();
-  const raw = metrics[key];
-  if (raw == null || !Number.isFinite(raw)) {
-    return 0;
+export function ExtractNormalizedScore(holdoutMetricsJson: string | null, successMetric: string): number | null {
+  const key = successMetric.trim().toLowerCase();
+  const raw = parseMetrics(holdoutMetricsJson)?.get(key);
+  if (raw === undefined || !Number.isFinite(raw)) return null;
+  switch (MetricDirections.MetricDirectionOf(key)) {
+    case 'higher-is-better': return raw;
+    case 'lower-is-better': return -raw;
+    case 'closer-to-one': return -Math.abs(1 - raw);
+    case null: return null;
   }
-  // `problemType` is retained on the signature for callers/back-compat; the
-  // error-metric direction is metric-name driven (shared with maintenance via
-  // `MetricDirections.IsErrorMetric` in Core) so the two consumers can never drift apart.
-  void problemType;
-  return MetricDirections.IsErrorMetric(key) ? -raw : raw;
 }
 
-/** Parse a metrics JSON column into a lower-cased numeric record, or null. */
-function parseMetrics(json: string | null): Record<string, number> | null {
-  if (json == null || json.trim().length === 0) {
-    return null;
+/** A metrics JSON column as its numeric members by lower-cased key; null when the column is empty or not a JSON object. */
+function parseMetrics(json: string | null): ReadonlyMap<string, number> | null {
+  if (json === null || json.trim().length === 0) return null;
+  const parsed = JsonParse.ParseJsonText(json, 'HoldoutMetrics');
+  if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return null;
+  const out = new Map<string, number>();
+  for (const [k, v] of Object.entries(parsed.Value)) {
+    if (typeof v === 'number') out.set(k.toLowerCase(), v);
   }
-  try {
-    const parsed = JSON.parse(json) as Record<string, unknown>;
-    const out: Record<string, number> = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === 'number') {
-        out[k.toLowerCase()] = v;
-      }
-    }
-    return out;
-  } catch {
-    return null;
-  }
+  return out;
 }

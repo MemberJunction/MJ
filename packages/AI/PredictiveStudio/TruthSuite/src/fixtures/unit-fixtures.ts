@@ -10,12 +10,12 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
-  EvaluationProtocolRules, HoldoutCarve, PredictionUnit,
+  EvaluationProtocolRules, PredictionUnit,
   type ColumnEncodingKind, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
   type PredictionUnitSpec, type SliceSpec, type TaskType,
 } from '@memberjunction/predictive-studio-core';
 import {
-  EvaluationProtocolVersioning, PredictionUnitRowReader, RunViewDataAccess, RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata,
+  EvaluationProtocolVersioning, ProtocolDefaults, RunViewDataAccess, RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata,
   type IEntityFactory, type PredictionUnitDraft,
 } from '@memberjunction/predictive-studio';
 import type { ScenarioID, TruthHarness } from '../harness/types';
@@ -24,8 +24,9 @@ import { DatasetSeeds } from '../data/seeds';
 /** Which Evaluation Protocol a fixture pipeline is bound to. */
 export type ProtocolChoice =
   /**
-   * Date-carved on the decision date at the year cutoff over the unit's resolved decision dates (`HoldoutCarve.YearCutoff`
-   * at its default share); `NewEntityFraction` adds a new-entity report grouped by the unit's group key.
+   * The product's default holdout of a dated unit (`ProtocolDefaults.DefaultHoldoutFor`): date-carved on the decision
+   * date at the year cutoff over the unit's resolved decision dates; `NewEntityFraction` adds a new-entity report grouped
+   * by the unit's group key.
    */
   | { readonly Kind: 'year-cutoff'; readonly NewEntityFraction?: number }
   /** A seeded row-hash holdout, for units whose rows share one fixed decision date. */
@@ -199,20 +200,18 @@ export class UnitFixtures {
     return steps.Steps.flatMap((step) => (step.Kind === 'select' ? [...step.Columns] : 'FeatureName' in step ? [step.FeatureName] : []));
   }
 
-  /** The year cutoff over the unit's resolved decision dates, read the way training reads them. */
-  private static async yearCutoff(h: TruthHarness, unit: PredictionUnitSpec): Promise<string> {
-    const read = await new PredictionUnitRowReader().Read(unit, { DataAccess: new RunViewDataAccess(h.User, h.Provider), Metadata: new ProviderAssemblyMetadata(h.Provider), Read: { mode: 'complete' }, Now: new Date() });
-    if (read.Status !== 'read') throw new Error(`unit refused while choosing the holdout cutoff: ${JSON.stringify(read.Refusal)}`);
-    return HoldoutCarve.YearCutoff(read.Rows.map((r) => r.DecisionDate.toISOString().slice(0, 10)));
-  }
-
-  /** The holdout a protocol choice declares for a unit. */
+  /**
+   * The holdout a protocol choice declares for a unit. The year cutoff is the product's default holdout of a dated unit
+   * ({@link ProtocolDefaults.DefaultHoldoutFor}, which reads the unit's rows the way training reads them).
+   */
   private static async holdoutOf(h: TruthHarness, unit: PredictionUnitSpec, choice: Exclude<ProtocolChoice, { Kind: 'none' }>): Promise<HoldoutSplit> {
     if (choice.Kind === 'explicit') return choice.Holdout;
     if (choice.Kind === 'seeded-random') return { kind: 'seeded-random', fraction: choice.Fraction };
     if (choice.NewEntityFraction !== undefined && unit.groupKey === null) throw new Error(`unit "${unit.name}" has no group key, so it cannot hold out new groups`);
+    const holdout = await ProtocolDefaults.DefaultHoldoutFor(unit, { DataAccess: new RunViewDataAccess(h.User, h.Provider), Metadata: new ProviderAssemblyMetadata(h.Provider), Now: new Date() });
+    if (holdout.kind !== 'date-carved') throw new Error(`unit "${unit.name}" has no dated rows to take a year cutoff over; its default holdout is ${holdout.kind}`);
     const newEntityReport = choice.NewEntityFraction === undefined || unit.groupKey === null ? null : { groupKey: unit.groupKey, holdoutFraction: choice.NewEntityFraction };
-    return { kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: await UnitFixtures.yearCutoff(h, unit), holdoutEnd: null, newEntityReport };
+    return { ...holdout, newEntityReport };
   }
 
   /**
@@ -221,7 +220,7 @@ export class UnitFixtures {
    * not assemble, so the incumbent-heuristic comparator is kept only when every column it names is one of `features`.
    */
   private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string): Promise<EvaluationProtocolDraft> {
-    const base = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: await UnitFixtures.holdoutOf(h, unit, choice), Candidates: 1, Seed: 0, Name: name });
+    const base = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: await UnitFixtures.holdoutOf(h, unit, choice), Candidates: 1, Seed: ProtocolDefaults.DEFAULT_SEED, Name: name });
     const usable = unit.incumbent.kind === 'rule' && UnitFixtures.expressionColumns(unit.incumbent.scoreExpression).every((c) => features.includes(c));
     const baselines = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
     return {

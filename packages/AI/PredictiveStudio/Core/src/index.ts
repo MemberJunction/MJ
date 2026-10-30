@@ -41,3 +41,4 @@ export * from './training-run-results';
 export * from './snapshot-format';
 export * from './store-schemas';
 export * from './incumbent-heuristic';
+export * from './selection';

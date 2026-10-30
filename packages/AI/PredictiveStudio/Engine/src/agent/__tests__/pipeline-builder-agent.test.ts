@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, EntityInfo, UserInfo } from '@memberjunction/core';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { TrustVerdicts, ImportanceDisplay, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import {
   SummarizeBuildResult,
   BuildOutcomeMessage,
+  UntrainedExperimentsNote,
   GenerateMarkdownReport,
   HiddenImportanceNote,
   UNSHOWN_IMPORTANCE_KIND_NOTE,
@@ -14,7 +15,6 @@ import {
 } from '../pipeline-builder-agent';
 import {
   PredictiveStudioPipelineBuilder,
-  TournamentRanking,
   type BuildPredictionInput,
   type BuildPredictionResult,
   type MLLeaderboardEntryPayload,
@@ -218,16 +218,32 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     expect(md).not.toMatch(/winner was picked/);
     expect(md).toContain('## Model Performance');
   });
-  it('says the score is optimistic when a tournament picked a winner on the held-back rows', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [row(1, 0.8, true), row(2, 0.7, false)], false);
-    expect(md).toMatch(/winner was picked on those same rows/);
+  it('says a search picked its winner on optimistic inner-fold scores and read the held-back rows once, and prints each interval', () => {
+    const searchRow = (rank: number, mean: number, isWinner: boolean): MLLeaderboardEntryPayload => ({
+      IterationID: 'run-1', Metric: mean, rank, algorithm: `Algo ${rank}`, score: mean, metricName: 'log-loss', innerLower: mean - 0.02, innerUpper: mean + 0.02, optimistic: true, isWinner,
+    });
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], false);
+    expect(md).toContain('The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.');
+    expect(md).toContain('| Rank | Algorithm | Inner-CV log-loss [95% interval] (optimistic) | Status |');
+    expect(md).toContain('| 1 | Algo 1 | 0.400 [0.380, 0.420] | Evaluated |');
+    expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | 🏆 Winner (Selected) |');
     expect(md).toContain('## Winning Model Performance');
+  });
+  it('names the proposed experiments a build without a search did not train', () => {
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote, ['B', 'C']);
+    expect(md).toContain('- The score comes from the rows held back from training. The other 2 proposed experiments (B, C) were not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
+    expect(md).toContain('| Rank | Algorithm | Score (AUC) | Status |');
+    expect(UntrainedExperimentsNote(['B'])).toBe('The other proposed experiment (B) was not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
+    expect(UntrainedExperimentsNote([])).toBe('');
+    const outcome = SummarizeBuildResult({ ...published, untrainedExperiments: ['B', 'C'] });
+    expect(BuildOutcomeMessage(outcome)).toContain('The other 2 proposed experiments (B, C) were not trained');
+    expect(SummarizeBuildResult(published).untrainedExperiments).toBeUndefined();
   });
   it('says a tournament with no measured candidate has no winner', () => {
     const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Poor', 'x', false, [], [row(1, null, false), row(2, null, false)], false);
     expect(md).toContain('No candidate was measured, so no winner was picked.');
     expect(md).not.toContain('🏆');
-    expect(md).not.toMatch(/winner was picked on those same rows/);
+    expect(md).not.toMatch(/inner-fold score/);
   });
 });
 
@@ -268,14 +284,12 @@ function unmeasuredModel(id: string): MJMLModelEntity {
   } as unknown as MJMLModelEntity;
 }
 
-/** A builder stub that "trains" one unmeasured candidate and ranks it the way the real builder does. */
+/** A builder stub that "trains" one unmeasured model and reports it the way the real builder does without a search. */
 class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const model = unmeasuredModel('model-unmeasured');
     const trust = TrustVerdicts.DeriveTrustVerdict(model);
-    const leaderboard = TournamentRanking.Leaderboard(TournamentRanking.Rank([
-      { Pipeline: { ID: 'pipe-1' } as MJMLTrainingPipelineEntity, Model: model, Trust: trust, LeakageFlagged: false, AlgorithmName: 'XGBoost', FeatureSetName: 'Full Feature Set' },
-    ]));
+    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard('run-1', model, trust, 'XGBoost');
     return {
       success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, leakageFlagged: false,
       heldReason: trust.gateReason, errorMessage: null, leaderboard,
@@ -310,7 +324,7 @@ const plan: ModelingPlanSpec = {
   ProposedBudget: {},
 };
 
-describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — unmeasured model (C1)', () => {
+describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — unmeasured model', () => {
   it('reports the candidate as not measured, with no score and no winner', async () => {
     const step = await new TestableBuilderAgent().Run({ ...plan });
     const payload = step.newPayload as PredictiveStudioBuilderPayload;

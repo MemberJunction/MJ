@@ -20,6 +20,7 @@ import { TASK_KINDS } from './task-type';
 import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
 import type { StoredTrainerResult, TrainerFailureStage, TrainerRequestConfig } from './trainer-contract';
 import { TrainerResultSchemas } from './trainer-result-schemas';
+import { SELECTION_FAILURE_REASONS, type SelectionFailureReason } from './selection';
 
 export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
 
@@ -36,7 +37,9 @@ export type PipelineRefusal =
 /** A trainer run that did not complete: the stage it failed at, or a lineage the run cannot record. */
 export type TrainerRefusal =
   | { readonly kind: 'trainer-failed'; readonly stage: TrainerFailureStage; readonly message: string; readonly computeSeconds: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'lineage-incomplete'; readonly gaps: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'lineage-incomplete'; readonly gaps: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The trainer's report breaks a selection rule (a pruned candidate, a missing interval, the holdout read for another candidate). */
+  | { readonly kind: 'selection-invalid'; readonly reason: SelectionFailureReason; readonly detail: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
 export type TrainingRefusal =
   | { readonly stage: 'pipeline'; readonly reason: PipelineRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -131,6 +134,11 @@ const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('
 const trainerRefusalSchema: z.ZodType<TrainerRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('trainer-failed'), stage: TrainerResultSchemas.TrainerFailureStage, message: z.string(), computeSeconds: z.number().nonnegative() }),
   z.object({ kind: z.literal('lineage-incomplete'), gaps: z.array(z.string()) }),
+  z.object({
+    kind: z.literal('selection-invalid'),  // case-violation-ok-legacy-back-compat: stored envelope key
+    reason: z.enum(SELECTION_FAILURE_REASONS),  // case-violation-ok-legacy-back-compat: stored envelope key
+    detail: z.string(),  // case-violation-ok-legacy-back-compat: stored envelope key
+  }),
 ]);
 const carveRefusalSchema: z.ZodType<CarveRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unparseable-cutoff'), value: z.string() }),

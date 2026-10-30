@@ -43,6 +43,7 @@ export class TrainingRefusedError extends Error {
       case 'unsupported-step-kind': return `Refused (unsupported-step-kind): step ${reason.stepId} is a ${reason.stepKind} step, which has no as-of reading.`;
       case 'trainer-failed': return `Refused (trainer-failed): the trainer stopped at stage ${reason.stage} after ${reason.computeSeconds}s: ${reason.message}`;
       case 'lineage-incomplete': return `Refused (lineage-incomplete): the trainer's CodeVersion lacks ${reason.gaps.join(', ')}.`;
+      case 'selection-invalid': return `Refused (selection-invalid): ${reason.reason} — ${reason.detail}`;
       case 'unparseable-cutoff':
       case 'unparseable-carve-date':
       case 'missing-carve-date':

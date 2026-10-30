@@ -21,6 +21,19 @@ export class TrainerResultFixtures {
   }
 
   /**
+   * The same completed result with `finalist` as its one scored candidate, its finalist and the candidate its holdout
+   * was read for, with that candidate's artifact: a report the engine's selection check accepts for that name.
+   */
+  public static WithFinalist(result: TrainerCompleted, finalist: string, featureSchemaHash: string): TrainerCompleted {
+    return {
+      ...result, finalist,
+      innerScores: result.innerScores.map((s) => ({ ...s, candidate: finalist })),
+      holdoutAccess: { ...result.holdoutAccess, finalist },
+      artifacts: [TrainerResultFixtures.Artifact(finalist, featureSchemaHash)],
+    };
+  }
+
+  /**
    * A completed binary run: finalist `xgb`, members `oneFeature` and `glm`, sidecar gate keep-simple-baseline/glm. Its
    * artifacts carry `featureSchemaHash` (pass the request's `snapshot.featureSchemaHash` for an answer the engine accepts).
    */

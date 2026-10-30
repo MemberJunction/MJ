@@ -74,6 +74,16 @@ interface BudgetGateResult {
   reason?: SessionStopReason;
 }
 
+/** One trained (or failed) iteration, folded into the leaderboard and the budget. */
+interface IterationOutcome {
+  iterationId: string;
+  /** The normalized holdout score; null when the train failed or its holdout did not measure the success metric (never on the leaderboard). */
+  score: number | null;
+  computeCost: number;
+  /** The model the train produced; null when it failed. */
+  model: MJMLModelEntity | null;
+}
+
 /** Running budget accounting carried across waves. */
 interface BudgetState {
   runs: number;
@@ -281,20 +291,15 @@ export class ExperimentOrchestrator {
     // up-to-date budget state and can halt further dispatch the instant a bound
     // trips — no in-flight overrun (plan §8.4).
     let stopReason: SessionStopReason = 'completed';
-    const foldOutcome = (outcome: {
-      iterationId: string;
-      scored: boolean;
-      score: number;
-      computeCost: number;
-      model: MJMLModelEntity | null;
-    }): void => {
+    const foldOutcome = (outcome: IterationOutcome): void => {
       if (outcome.model) {
         modelsByIteration.set(outcome.iterationId, outcome.model);
-      }
-      if (outcome.scored) {
-        leaderboard.push({ IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID });
+        // A completed train counts against the budget whether or not its holdout measured the success metric.
         budgetState.runs += 1;
         budgetState.computeCost += outcome.computeCost;
+      }
+      if (outcome.score !== null) {
+        leaderboard.push({ IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID });
       }
       const gate = this.checkBudget(budget, budgetState, deps);
       if (gate.exceeded) {
@@ -345,7 +350,7 @@ export class ExperimentOrchestrator {
     plan: ModelingPlanSpec,
     session: MJExperimentSessionEntity,
     deps: ExperimentDeps,
-  ): Promise<{ iterationId: string; scored: boolean; score: number; computeCost: number; model: MJMLModelEntity | null }> {
+  ): Promise<IterationOutcome> {
     iteration.Status = 'Running';
     await this.saveOrThrow(iteration, 'mark iteration Running');
 
@@ -365,10 +370,10 @@ export class ExperimentOrchestrator {
       iteration.TokensUsed = result.TokensUsed ?? 0;
       iteration.Status = 'Completed';
       await this.saveOrThrow(iteration, 'finalize iteration');
-      return { iterationId: iteration.ID, scored: true, score: result.Score, computeCost, model: result.model };
+      return { iterationId: iteration.ID, score: result.Score, computeCost, model: result.model };
     } catch (err) {
       await this.failIteration(iteration, err);
-      return { iterationId: iteration.ID, scored: false, score: 0, computeCost: 0, model: null };
+      return { iterationId: iteration.ID, score: null, computeCost: 0, model: null };
     }
   }
 

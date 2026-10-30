@@ -116,8 +116,8 @@ export interface TrainExperimentResult {
   model: MJMLModelEntity;
   /** The `MJ: ML Training Runs` leaf recording the attempt (linked to the iteration). */
   run: MJMLTrainingRunEntity;
-  /** Normalized holdout metric for the plan's `SuccessMetric` — drives the leaderboard. */
-  Score: number;
+  /** Normalized holdout metric for the plan's `SuccessMetric` — drives the leaderboard; null when the holdout did not measure it. */
+  Score: number | null;
   /** Compute cost attributed to this attempt (defaults to 0 when unknown). */
   ComputeCost?: number;
   /** LLM tokens used by this attempt (defaults to 0 when unknown). */

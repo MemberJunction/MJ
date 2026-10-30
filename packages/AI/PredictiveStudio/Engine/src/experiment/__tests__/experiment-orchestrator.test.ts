@@ -163,7 +163,7 @@ class FakeRun extends FakeEntity {
 class FakeTrainer implements IExperimentTrainer {
   public readonly Calls: TrainExperimentInput[] = [];
   constructor(
-    private readonly scoreByLabel: Record<string, number>,
+    private readonly scoreByLabel: Record<string, number | null>,
     private readonly clock?: FakeClock,
     private readonly perTrainMs = 0,
     private readonly computeCostPerTrain = 1,
@@ -182,7 +182,8 @@ class FakeTrainer implements IExperimentTrainer {
     const run = new FakeRun();
     run.ExperimentSessionIterationID = input.iterationId; // link the leaf to the iteration
     run.ComputeCost = this.computeCostPerTrain;
-    const score = this.scoreByLabel[input.experiment.Label] ?? 0;
+    const label = input.experiment.Label;
+    const score = label in this.scoreByLabel ? this.scoreByLabel[label] : 0;
     return {
       model: model as unknown as MJMLModelEntity,
       run: run as unknown as MJMLTrainingRunEntity,
@@ -489,6 +490,22 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.stopReason).toBe('completed');
   });
 
+  it('completes an iteration whose holdout did not measure the success metric with a null Score, off the leaderboard but counted against the budget', async () => {
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({ A: null, B: 0.8, C: 0.7 });
+    const result = await new ExperimentOrchestrator().runSession(
+      plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)], { MaxRuns: 2 }),
+      deps(factory, trainer, new FakeClock()),
+      { concurrency: 1 },
+    );
+    const byLabel = new Map(factory.Iterations.map((it) => [it.Label, it]));
+    expect([byLabel.get('A')!.Status, byLabel.get('A')!.Score]).toEqual(['Completed', null]);
+    expect(result.leaderboard.map((e) => e.Metric)).toEqual([0.8]);
+    // A and B are the two runs MaxRuns allows: the unmeasured A counted, so C never ran.
+    expect(trainer.Calls.map((c) => c.experiment.Label)).toEqual(['A', 'B']);
+    expect(result.stopReason).toBe('budget-maxRuns');
+  });
+
   // H2 — once a budget bound trips mid-wave, NO further iteration is dispatched.
   it('stops dispatching the moment a MaxRuns bound trips within a wave (no overrun under concurrency)', async () => {
     const factory = new FakeFactory();
@@ -681,19 +698,26 @@ describe('runBounded', () => {
 });
 
 describe('ExtractNormalizedScore', () => {
-  it('prefers holdout metrics and passes ranking metrics through', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), JSON.stringify({ auc: 0.95 }), 'AUC', 'classification')).toBe(0.81);
+  it('reads the holdout metrics and passes a higher-is-better metric through', () => {
+    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), 'AUC')).toBe(0.81);
   });
 
-  it('falls back to training metrics when holdout is absent', () => {
-    expect(ExtractNormalizedScore(null, JSON.stringify({ f1: 0.7 }), 'F1', 'classification')).toBe(0.7);
+  it('never falls back to the training metrics: no holdout metric is no score', () => {
+    expect(ExtractNormalizedScore(null, 'F1')).toBeNull();
+    expect(ExtractNormalizedScore('', 'F1')).toBeNull();
   });
 
-  it('negates error metrics so higher Score is always better', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), null, 'RMSE', 'regression')).toBe(-2.5);
+  it('negates a lower-is-better metric and scores a closer-to-one metric by its distance from one, so higher is always better', () => {
+    expect(ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), 'RMSE')).toBe(-2.5);
+    expect(ExtractNormalizedScore(JSON.stringify({ 'calibration-slope': 0.8 }), 'calibration-slope')).toBeCloseTo(-0.2, 12);
   });
 
-  it('returns 0 when the metric is missing', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), null, 'F1', 'classification')).toBe(0);
+  it('returns null, never 0, when the metric is missing, not a number, or of no known direction', () => {
+    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), 'F1')).toBeNull();
+    expect(ExtractNormalizedScore(JSON.stringify({ f1: '0.7' }), 'F1')).toBeNull();
+    expect(ExtractNormalizedScore(JSON.stringify({ lift: 1.4 }), 'lift')).toBeNull();
+    expect(ExtractNormalizedScore('not json', 'AUC')).toBeNull();
+    expect(ExtractNormalizedScore('[0.8]', 'AUC')).toBeNull();
   });
 });
+

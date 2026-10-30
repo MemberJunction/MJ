@@ -3,6 +3,7 @@ import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
+import { LeaderboardRows, type LeaderboardEntryInput, type NormalizedLeaderboardRow } from './ml-leaderboard-rows';
 
 /**
  * A single feature-importance entry for the winning model.
@@ -15,41 +16,6 @@ interface MLFeatureImportance {
   importance?: number;
   weight?: number;
   value?: number;
-}
-
-/**
- * A single leaderboard iteration row.
- *
- * Accepts both the **canonical** Core `ModelingPlanSpec.Leaderboard` shape
- * (PascalCase: `Metric`/`ModelID`/`IterationID`, produced by the deterministic
- * `ExperimentOrchestrator`) and the older / LLM-authored lowercase shape. All
- * fields are optional so partial artifacts degrade gracefully.
- */
-interface MLLeaderboardEntry {
-  // ── Canonical (Core ModelingPlanSpec.Leaderboard entry) ──
-  /** The iteration this entry scores (`MJ: Experiment Session Iterations` id). */
-  IterationID?: string;
-  /** The normalized leaderboard metric value (the Experiment's TargetMetric); null when the candidate was not measured. */
-  Metric?: number | null;
-  /** The trained ML Model record ID for drill-through. */
-  ModelID?: string;
-
-  // ── Lowercase / LLM-authored fallbacks + display-only fields ──
-  /** Rank (1 = best). If absent, derived from array order. */
-  rank?: number;
-  /** Algorithm name, e.g. "XGBoost" */
-  algorithm?: string;
-  algorithmName?: string;
-  /** Feature set label, e.g. "engagement", "full", "interpretable" */
-  featureSet?: string;
-  /** Primary normalized leaderboard score (the Experiment's TargetMetric); null when not measured */
-  score?: number | null;
-  /** True only for the selected candidate, and only when it was measured. */
-  isWinner?: boolean;
-  /** The trained ML Model record ID for drill-through (lowercase fallback) */
-  modelId?: string;
-  /** Named metric label for the primary score column header */
-  metricName?: string;
 }
 
 /**
@@ -105,7 +71,7 @@ interface MLExperimentResultsSpec {
   /** The full results narrative in markdown (PascalCase). */
   Markdown?: string;
   /** Ranked leaderboard of experiment iterations (PascalCase Core shape). */
-  Leaderboard?: MLLeaderboardEntry[];
+  Leaderboard?: LeaderboardEntryInput[];
   /** Feature importance for the winning model (PascalCase). */
   FeatureImportance?: MLFeatureImportance[];
   /** The winning model pointer (PascalCase). */
@@ -129,7 +95,7 @@ interface MLExperimentResultsSpec {
   /** The normalized target metric name (column header / headline label) */
   targetMetric?: string;
   /** Ranked leaderboard of experiment iterations */
-  leaderboard?: MLLeaderboardEntry[];
+  leaderboard?: LeaderboardEntryInput[];
   /** Feature importance for the winning model */
   featureImportance?: MLFeatureImportance[];
   /** Convenience pointer to the winning model ID (also resolvable via report/leaderboard) */
@@ -138,18 +104,6 @@ interface MLExperimentResultsSpec {
   winningMetrics?: MLWinningMetric[];
   /** The reporting-phase block (markdown, summary, best model) */
   report?: MLExperimentReport;
-}
-
-/**
- * Normalized leaderboard row for the template (resolves alias fields + derived rank).
- */
-interface NormalizedLeaderboardRow {
-  rank: number;
-  algorithm: string;
-  featureSet: string;
-  score: number | null;
-  modelId: string | null;
-  isWinner: boolean;
 }
 
 /**
@@ -194,7 +148,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   public ErrorMessage = '';
 
   /** Normalized, ranked leaderboard rows for rendering. */
-  public LeaderboardRows: NormalizedLeaderboardRow[] = [];
+  public LeaderboardRows: readonly NormalizedLeaderboardRow[] = [];
 
   /** Normalized feature-importance bars for rendering. */
   public FeatureBars: NormalizedFeatureBar[] = [];
@@ -210,7 +164,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
         return;
       }
 
-      this.LeaderboardRows = this.buildLeaderboardRows(this.Spec.Leaderboard ?? this.Spec.leaderboard ?? []);
+      this.LeaderboardRows = LeaderboardRows.NormalizeLeaderboardRows(this.Spec.Leaderboard ?? this.Spec.leaderboard ?? []);
       this.FeatureBars = this.buildFeatureBars(this.Spec.FeatureImportance ?? this.Spec.featureImportance ?? []);
     } catch (error) {
       this.HasError = true;
@@ -265,7 +219,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return this.Spec?.TargetMetric ?? this.Spec?.targetMetric ?? this.firstMetricName() ?? 'Score';
   }
 
-  /** The winning row (rank 1) if any. */
+  /** The winning row (the one the artifact marks, which need not be rank 1), else the top row. */
   public get WinningRow(): NormalizedLeaderboardRow | null {
     return this.LeaderboardRows.find(r => r.isWinner) ?? this.LeaderboardRows[0] ?? null;  // no winner: the top row, whose score may be null
   }
@@ -366,34 +320,6 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
       ?? null;
   }
 
-  /** Build normalized, ranked leaderboard rows from raw entries. */
-  private buildLeaderboardRows(entries: MLLeaderboardEntry[]): NormalizedLeaderboardRow[] {
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return [];
-    }
-
-    const rows = entries.map((e, index) => ({
-      // Canonical `Leaderboard` is already best-first; derive rank from order.
-      rank: e.rank ?? index + 1,
-      algorithm: e.algorithm ?? e.algorithmName ?? 'Unknown',
-      featureSet: e.featureSet ?? '',
-      // Canonical: `Metric`; fallback: lowercase `score`.
-      score: this.firstDefined(e.Metric ?? e.score),
-      // Canonical: `ModelID`; fallback: lowercase `modelId`.
-      modelId: e.ModelID ?? e.modelId ?? null,
-      isWinner: e.isWinner === true
-    }));
-
-    // Sort by explicit rank ascending (rank 1 is best).
-    rows.sort((a, b) => a.rank - b.rank);
-    // Entries that do not say which one won: rank 1 wins, but only when it has a measured score.
-    const winnerStated = entries.some(e => e.isWinner !== undefined);
-    if (!winnerStated && rows.length > 0 && rows[0].score !== null) {
-      rows[0].isWinner = true;
-    }
-    return rows;
-  }
-
   /** Build normalized feature-importance bars (widths relative to the max). */
   private buildFeatureBars(entries: MLFeatureImportance[]): NormalizedFeatureBar[] {
     if (!Array.isArray(entries) || entries.length === 0) {
@@ -437,11 +363,6 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return value.toFixed(decimals);
   }
 
-  /** @deprecated Use {@link FormatScore}. */
-  public formatScore(value: number | null): string {
-    return this.FormatScore(value);
-  }
-
   /** Format an importance weight for the small bar label. */
   public FormatImportance(value: number): string {
     if (!Number.isFinite(value)) {
@@ -449,10 +370,5 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     }
     // Show .31 style for sub-1 weights, otherwise 2 decimals.
     return Math.abs(value) < 1 ? value.toFixed(2).replace(/^0/, '') : value.toFixed(2);
-  }
-
-  /** @deprecated Use {@link FormatImportance}. */
-  public formatImportance(value: number): string {
-    return this.FormatImportance(value);
   }
 }

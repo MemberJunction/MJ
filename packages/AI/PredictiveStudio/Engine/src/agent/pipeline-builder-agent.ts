@@ -36,6 +36,8 @@ export interface PredictiveStudioBuildOutcome {
   errorMessage: string | null;
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
   warnings?: FeatureStepWarning[];
+  /** The labels of the approved experiments the build did not train (no Prediction Unit, so no search). */
+  untrainedExperiments?: string[];
 }
 
 
@@ -92,7 +94,18 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
     warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
+    untrainedExperiments: result.untrainedExperiments && result.untrainedExperiments.length > 0 ? result.untrainedExperiments : undefined,
   };
+}
+
+/**
+ * The sentence naming the approved experiments a build did not train, or '' when every one was trained. Without a
+ * Prediction Unit on the pipeline there is no search, so only the highest-priority experiment trains.
+ */
+export function UntrainedExperimentsNote(untrained: readonly string[] | undefined): string {
+  if (!untrained || untrained.length === 0) return '';
+  const count = untrained.length === 1 ? 'The other proposed experiment' : `The other ${untrained.length} proposed experiments`;
+  return `${count} (${untrained.join(', ')}) ${untrained.length === 1 ? 'was' : 'were'} not trained: a search over several candidates needs a Prediction Unit on the pipeline.`;
 }
 
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
@@ -101,11 +114,13 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
     ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
     : '';
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
-  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${warningText}`;
+  const untrained = UntrainedExperimentsNote(o.untrainedExperiments);
+  const untrainedText = untrained ? ` ${untrained}` : '';
+  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${untrainedText}${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
-  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
+  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${untrainedText}${warningText}`;
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */
@@ -152,7 +167,7 @@ export function HiddenImportanceNote(lineageJSON: string | null | undefined): st
  * Generate a clean markdown results report for the ML Experiment Results artifact. A `null` score or
  * trust grade means the model was not measured; the report says so rather than standing in a number.
  * `hiddenImportanceNote` is the note printed when `importanceHidden` (see {@link HiddenImportanceNote});
- * it defaults to the split/impurity note.
+ * it defaults to the split/impurity note. `untrainedExperiments` are named in the measurement note.
  */
 export function GenerateMarkdownReport(
   name: string,
@@ -167,10 +182,11 @@ export function GenerateMarkdownReport(
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   importanceHidden: boolean,
   hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
+  untrainedExperiments: readonly string[] = [],
 ): string {
   // An unmeasured model's verdict grade is 'Poor' by construction; say "Not measured" rather than calling it a measured Poor result.
   const trustGradeLabel = trustGrade && score !== null ? trustGrade : 'Not measured';
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGradeLabel, oneLiner, published, features, leaderboard, importanceHidden, hiddenImportanceNote);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGradeLabel, oneLiner, published, features, leaderboard, importanceHidden, hiddenImportanceNote, untrainedExperiments);
 }
 
 /** The report body, with the trust grade already rendered as its display label. */
@@ -186,6 +202,7 @@ function renderMarkdownReport(
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   importanceHidden: boolean,
   hiddenImportanceNote: string,
+  untrainedExperiments: readonly string[],
 ): string {
   const topFeatures = features.length > 0
     ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
@@ -209,34 +226,59 @@ ${renderLeaderboardSection(leaderboard, targetMetric, hasWinner)}
 ${topFeatures}
 
 ## How this was measured
-- ${measurementNote(isTournament, hasWinner)}
+- ${measurementNote(IsSearchLeaderboard(leaderboard), untrainedExperiments)}
 - Registered in the Predictive Studio Models catalog; the Trust Grade line above says whether it was published.
 `;
 }
 
-/** The leaderboard table; an unmeasured row says so, and a tournament with no measured candidate says it has no winner. */
+/** Whether a leaderboard holds a search's inner-fold scores (optimistic by construction) rather than a holdout score. */
+export function IsSearchLeaderboard(leaderboard: readonly MLLeaderboardEntryPayload[] | undefined): boolean {
+  return (leaderboard ?? []).some((r) => r.optimistic === true);
+}
+
+/**
+ * The leaderboard table. A search prints each candidate's inner-fold mean with its interval under a header that says
+ * those scores are optimistic; any other leaderboard prints its score. An unmeasured row says so, and a leaderboard of
+ * several rows with no measured one says it has no winner.
+ */
 function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean): string {
   if (!leaderboard || leaderboard.length === 0) {
     return '';
   }
+  const search = IsSearchLeaderboard(leaderboard);
   const rows = leaderboard
     .map((r) => {
       const measured = r.score !== null && r.score !== undefined;
-      const scoreText = measured ? `${(r.score as number).toFixed(3)}${r.metricName ? ` (${r.metricName})` : ''}` : 'not measured';
+      const scoreText = measured ? leaderboardScoreText(r, r.score as number, search) : 'not measured';
       const status = r.isWinner ? '🏆 Winner (Selected)' : measured ? 'Evaluated' : 'Not measured';
       return `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${scoreText} | ${status} |`;
     })
     .join('\n');
   const noWinner = leaderboard.length > 1 && !hasWinner ? '\nNo candidate was measured, so no winner was picked.\n' : '';
-  return `\n## Tournament Leaderboard\n| Rank | Algorithm | Score (${targetMetric}) | Status |\n|---|---|---|---|\n${rows}\n${noWinner}`;
+  // A search ranks on its inner-fold metric (the protocol's primary score), which may differ from the plan's metric.
+  const header = search ? `Inner-CV ${leaderboard[0].metricName || targetMetric} [95% interval] (optimistic)` : `Score (${targetMetric})`;
+  return `\n## Tournament Leaderboard\n| Rank | Algorithm | ${header} | Status |\n|---|---|---|---|\n${rows}\n${noWinner}`;
 }
 
-/** How the score was measured; only a tournament picked a winner on the held-back rows. */
-function measurementNote(isTournament: boolean, hasWinner: boolean): string {
-  if (isTournament && hasWinner) {
-    return 'The score comes from the rows held back from training; the winner was picked on those same rows, so the score is optimistic.';
+/** A measured row's score cell: `mean [lower, upper]` for a search row with an interval, else the score and its metric. */
+function leaderboardScoreText(r: MLLeaderboardEntryPayload, score: number, search: boolean): string {
+  if (search && typeof r.innerLower === 'number' && typeof r.innerUpper === 'number') {
+    return `${score.toFixed(3)} [${r.innerLower.toFixed(3)}, ${r.innerUpper.toFixed(3)}]`;
   }
-  return 'The score comes from the rows held back from training.';
+  return `${score.toFixed(3)}${r.metricName ? ` (${r.metricName})` : ''}`;
+}
+
+/**
+ * How the result was measured. A search picked its winner on inner-fold scores over the training rows and read the
+ * held-back rows once, for the winner; a build without a search scored its one model on the held-back rows, and names
+ * the proposed experiments it did not train.
+ */
+function measurementNote(search: boolean, untrainedExperiments: readonly string[]): string {
+  if (search) {
+    return 'The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.';
+  }
+  const untrained = UntrainedExperimentsNote(untrainedExperiments);
+  return `The score comes from the rows held back from training.${untrained ? ` ${untrained}` : ''}`;
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -304,6 +346,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         leaderboard,
         importanceHidden,
         HiddenImportanceNote(result.model?.Lineage),
+        result.untrainedExperiments ?? [],
       );
 
       newPayloadObj = {

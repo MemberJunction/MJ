@@ -80,6 +80,7 @@
                     <th>Algorithm</th>
                     <th>Feature set</th>
                     <th class="num">{{ TargetMetricLabel }}</th>
+                    <th class="num">95% interval</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -104,10 +105,14 @@
                       <td class="muted">{{ row.featureSet || '—' }}</td>
                       <td class="num">
                         @if (row.isWinner) {
-                          <strong>{{ formatScore(row.score) }}</strong>
+                          <strong>{{ FormatScore(row.score) }}</strong>
                         } @else {
-                          {{ formatScore(row.score) }}
+                          {{ FormatScore(row.score) }}
                         }
+                      </td>
+                      <td class="num muted">
+                        @if (row.interval) { [{{ FormatScore(row.interval[0]) }}, {{ FormatScore(row.interval[1]) }}] } @else { — }
+                        @if (row.isWinner && row.optimistic) { <span class="lb-optimistic" title="The winner's inner-CV score is optimistic: it was the best of several tries.">optimistic</span> }
                       </td>
                     </tr>
                   }
@@ -127,7 +132,7 @@
                   <div class="fbar-track">
                     <span class="fbar-fill" [style.width.%]="bar.widthPct"></span>
                   </div>
-                  <div class="fbar-num">{{ formatImportance(bar.importance) }}</div>
+                  <div class="fbar-num">{{ FormatImportance(bar.importance) }}</div>
                 </div>
               }
             </div>

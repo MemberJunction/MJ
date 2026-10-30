@@ -83,6 +83,14 @@ describe('TrainingRunResultsParser', () => {
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'cutoff-in-the-future', cutoff: '2030-01-01' }));
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.kind/);
   });
+  it('reads a trainer selection refusal and refuses one with an unknown reason', () => {
+    const envelope = (reason: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'trainer', reason } });
+    const reason = { kind: 'selection-invalid', reason: 'candidate-pruned', detail: 'rf was scored on 5 folds, the others on 15' };
+    const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(reason));
+    expect(ok.Ok && ok.Value.status === 'refused' ? ok.Value.refusal : null).toEqual({ stage: 'trainer', reason });
+    const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...reason, reason: 'lowest-mean-not-chosen' }));
+    expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason/);
+  });
   it('reports a pre-v2 blob as not an envelope', () => {
     expect(TrainingRunResultsParser.ParseTrainingRunResults('{"accuracy":0.9}')).toEqual({ Ok: false, Errors: ['ValidationResults is not a ps-run-results/v2 envelope'] });
   });
