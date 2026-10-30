@@ -2369,10 +2369,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return undefined;
         }
         // If a prior chain save aborted after IsParentEntitySave (before provider.Save(leaf) ran)
-        // and the caller subsequently reverted or reloaded the parent, the field's current value
-        // no longer matches the value captured when IsParentEntitySave finalized it.
+        // and the caller subsequently reverted or reloaded this field on the parent, the field's
+        // current value no longer matches the value captured when IsParentEntitySave finalized it.
+        // Evict only the mismatched field entry so other dirty fields on the same parent remain intact.
         if (field.Value !== fSnap.value) {
-            this._isaParentPreSaveSnapshot.delete(entity);
+            snapshot.delete(field.Name);
+            if (snapshot.size === 0) {
+                this._isaParentPreSaveSnapshot.delete(entity);
+            }
             return undefined;
         }
         return fSnap;
