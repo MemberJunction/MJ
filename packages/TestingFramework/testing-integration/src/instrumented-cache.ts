@@ -7,6 +7,13 @@
  */
 import type { ILocalStorageProvider, LocalStorageWriteOptions } from '@memberjunction/core';
 
+/** One `SetItem` as the instrumented provider saw it: the key, its category, and the write options. */
+export interface RecordedWrite {
+    Key: string;
+    Category: string | undefined;
+    Options: LocalStorageWriteOptions | undefined;
+}
+
 /**
  * Wraps any ILocalStorageProvider with call counters so tests can prove cache
  * behavior from the outside: a cache WRITE shows up as SetItemCount++, a cache
@@ -46,6 +53,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
     public RemoveCount = 0;
     private perCategory = new Map<string, { Gets: number; Sets: number }>();
     private setsPerKey = new Map<string, number>();
+    private writes: RecordedWrite[] = [];
 
     /**
      * Present only when the inner provider has it: `LocalCacheManager` chooses its lookup path by
@@ -82,6 +90,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
     }
 
     public ResetCounts(): void {
+        this.writes.length = 0;
         this.GetItemCount = 0;
         this.GetItemsCount = 0;
         this.SetItemCount = 0;
@@ -135,7 +144,28 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         this.SetItemCount++;
         this.bump(category, 'Sets');
         this.setsPerKey.set(key, (this.setsPerKey.get(key) ?? 0) + 1);
+        this.recordWriteOptions(key, category, options);
         return this.inner.SetItem<T>(key, value, category, options);
+    }
+
+    /**
+     * The write options of every `SetItem` since the last {@link ResetCounts}, in call order. A
+     * test proves what a distributed provider WOULD have broadcast — e.g. that an in-place row
+     * maintenance wrote the slot with `pubSubAction: 'row_delta'` and a compact `pubSubData`
+     * payload instead of the full row array — by reading these, since the in-memory inner store
+     * has no pub/sub of its own.
+     */
+    public get Writes(): ReadonlyArray<RecordedWrite> {
+        return this.writes;
+    }
+
+    /** The recorded writes whose options asked for a `row_delta` broadcast, in call order. */
+    public RowDeltaWrites(): RecordedWrite[] {
+        return this.writes.filter(w => w.Options?.pubSubAction === 'row_delta');
+    }
+
+    private recordWriteOptions(key: string, category: string | undefined, options: LocalStorageWriteOptions | undefined): void {
+        this.writes.push({ Key: key, Category: category, Options: options ? { ...options } : undefined });
     }
 
     public async Remove(key: string, category?: string): Promise<void> {

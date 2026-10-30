@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryCompositionEngine, CompositionResult } from '../queryCompositionEngine';
+import { RenderPipeline } from '../renderPipeline';
 import { UserInfo, QueryDependencySpec } from '@memberjunction/core';
 import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
@@ -68,35 +69,35 @@ describe('QueryCompositionEngine', () => {
 
 
     // ================================================================
-    // renameSQLIdentifier — $-expansion in the replacement (issue #3171)
+    // Inner CTE renames (issue #3171): names are written by the dialect, never through a regex replacement
     // ================================================================
-    describe('renameSQLIdentifier', () => {
+    describe('inner CTE renames', () => {
         /**
-         * The search side is regex-escaped (`\\$&`) but the replacement side was
-         * passed as a STRING, so `$$`/`$&`/`` $` ``/`$'` in the NEW name were
-         * expanded instead of inserted. `SymbolTable.Register` returns the CTE name
-         * verbatim (or `name__N`) with no sanitisation, and both SQL Server bracketed
-         * identifiers and PG quoted identifiers may legally contain `$` — so this
-         * reaches executed SQL. Same defect the rest of #3171 fixed elsewhere.
+         * Two dependencies that both declare an inner CTE named `name`: the second is renamed. The new name
+         * goes in through the structural rename (RenameCTE), quoted by the dialect, so `$` sequences in it are
+         * inserted as written. The old regex rename expanded `$$`/`$&` in the replacement (#3171).
          */
-        const rename = (sql: string, oldName: string, newName: string): string =>
-            (engine as unknown as {
-                renameSQLIdentifier(s: string, o: string, n: string): string;
-            }).renameSQLIdentifier(sql, oldName, newName);
+        function composeTwo(name: string): string {
+            mockQueryEngineQueries([]);
+            const deps: QueryDependencySpec[] = [
+                { Name: 'One', CategoryPath: '/R/', SQL: `WITH [${name}] AS (SELECT 1 AS a) SELECT a FROM [${name}]` },
+                { Name: 'Two', CategoryPath: '/R/', SQL: `WITH [${name}] AS (SELECT 2 AS a) SELECT a, 'MyAcronym${name.replace(/'/g, "''")}' AS s FROM [${name}]` },
+            ];
+            return engine.ResolveComposition('SELECT * FROM {{query:"R/One"}} x JOIN {{query:"R/Two"}} y ON 1 = 1', 'sqlserver', mockUser, {}, deps).ResolvedSQL;
+        }
 
-        for (const newName of ['pool$$bridge__2', 'pool$&bridge__2', 'pool$`bridge__2', "pool$'bridge__2", 'pool$1bridge__2']) {
-            it(`substitutes a new name containing ${JSON.stringify(newName)} verbatim`, () => {
-                expect(rename('SELECT * FROM [poolbridge]', 'poolbridge', newName))
-                    .toBe(`SELECT * FROM ${newName}`);
+        for (const name of ['pool$$bridge', 'pool$&bridge', 'pool$`bridge', "pool$'bridge", 'pool$1bridge']) {
+            it(`renames a colliding inner CTE named ${JSON.stringify(name)} with the name inserted verbatim`, () => {
+                const sql = composeTwo(name);
+                expect(sql).toContain(`[${name}__2] AS (SELECT 2 AS a)`);
+                expect(sql).toContain(`FROM [${name}__2]`);
             });
         }
 
-        it('still renames all three identifier forms', () => {
-            expect(rename('[a], "a", a', 'a', 'b')).toBe('b, b, b');
-        });
-
-        it('still leaves a longer identifier that merely contains the name alone', () => {
-            expect(rename('SELECT MyAcronymBridge', 'AcronymBridge', 'x')).toBe('SELECT MyAcronymBridge');
+        it('renames only the declaration and the references bound to it, not strings or longer names', () => {
+            const sql = composeTwo('AcronymBridge');
+            expect(sql).toContain("'MyAcronymAcronymBridge' AS s");
+            expect(sql).toContain('[AcronymBridge] AS (SELECT 1 AS a)');
         });
     });
 
@@ -392,8 +393,10 @@ SELECT 1 AS Val`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
             expect(result.HasCompositions).toBe(true);
-            // The CTE body should have the static value substituted
-            expect(result.CTEs[0].ResolvedSQL).toContain("'Northeast'");
+            // K1 (COMPAT-MAP B10; TEST-INVENTORY C8): the dependency renders with the argument, and an unfiltered
+            // tag writes its value as is. Before, the static value was substituted as a quoted literal. A new or
+            // edited query with an unfiltered string tag is refused at save (S3).
+            expect(result.CTEs[0].ResolvedSQL).toContain('Region = Northeast');
         });
 
         it('should substitute numeric parameters as bare literals (no quotes)', () => {
@@ -448,7 +451,7 @@ SELECT 1 AS Val`;
             expect(tokens).toHaveLength(1);
         });
 
-        it('should preserve pass-through parameters as Nunjucks tokens', () => {
+        it('refuses a pass-through argument (compose-only takes static arguments only)', () => {
             const baseQuery = makeQueryInfo({
                 ID: 'base-1',
                 Name: 'By Region',
@@ -459,11 +462,12 @@ SELECT 1 AS Val`;
             mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/By Region(region=userRegion)"}} c';
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            // Pass-through: {{region}} in the referenced query is renamed to {{userRegion}}
-            // so the downstream Nunjucks processor resolves it from the outer query's params
-            expect(result.CTEs[0].ResolvedSQL).toContain('{{userRegion}}');
+            // Compose-only resolution renders no outer query, so there is no value to pass through: it takes
+            // static arguments only and refuses a pass-through with a clear error (IMPLEMENTATION-PLAN §5.3).
+            // Was: 'should preserve pass-through parameters as Nunjucks tokens' ({{region}} renamed to {{userRegion}}).
+            expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
+                .toThrow(/static arguments only, but "region" of "Sales\/By Region" reads a value of the outer query/);
         });
 
         it('should throw on non-existent query reference', () => {
@@ -505,7 +509,9 @@ SELECT 1 AS Val`;
                 .toThrow(/not Approved/);
         });
 
-        it('should throw on permission denied for referenced query', () => {
+        // A reference to a query the user may not run reads exactly like one to a query that does not exist
+        // (DISCUSSION Topic 3e item 1).
+        it('should refuse a referenced query the user may not run with the not-found message', () => {
             const restricted = makeQueryInfo({
                 ID: 'base-1',
                 Name: 'Restricted Query',
@@ -518,7 +524,7 @@ SELECT 1 AS Val`;
 
             const sql = 'SELECT * FROM {{query:"Sales/Restricted Query"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
-                .toThrow(/does not have permission/);
+                .toThrow(/^Referenced query not found: "Sales\/Restricted Query"\./);
         });
 
         it('should detect circular dependencies', () => {
@@ -638,7 +644,7 @@ SELECT 1 AS Val`;
             expect(result.ResolvedSQL).toBe(sql);
         });
 
-        it('should throw on ambiguous query reference (same name, different categories)', () => {
+        it('should refuse a bare name that two categories share (path required)', () => {
             const query1 = makeQueryInfo({
                 ID: 'q1',
                 Name: 'Users',
@@ -654,10 +660,12 @@ SELECT 1 AS Val`;
 
             mockQueryEngineQueries([query1, query2]);
 
-            // Reference by name only (no category path) — ambiguous
+            // Reference by name only (no category path). References resolve by full category path + name only
+            // (DISCUSSION §6, 2026-10-27; COMPAT-MAP B21), so a bare name matches neither query.
+            // Was: refused as ambiguous; now refused as not found.
             const sql = 'SELECT * FROM {{query:"Users"}} u';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
-                .toThrow(/Ambiguous query reference/);
+                .toThrow(/Referenced query not found: "Users"/);
         });
 
         it('should disambiguate by category path when name matches multiple queries', () => {
@@ -703,7 +711,7 @@ SELECT 1 AS Val`;
             expect(deps).toContain('leaf-id');
         });
 
-        it('should resolve query by name only when unambiguous', () => {
+        it('should refuse a bare name even when it is unique, and resolve the full path', () => {
             const unique = makeQueryInfo({
                 ID: 'uniq-1',
                 Name: 'Unique Query',
@@ -713,11 +721,12 @@ SELECT 1 AS Val`;
 
             mockQueryEngineQueries([unique]);
 
-            // No category path, just name — unambiguous because only one match
-            const sql = 'SELECT * FROM {{query:"Unique Query"}} uq';
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
-
-            expect(result.CTEs).toHaveLength(1);
+            // No category path, just the name. References resolve by full category path + name only, with no
+            // name-only fallback (DISCUSSION §6, 2026-10-27; COMPAT-MAP B21), so this fails by design.
+            // Was: 'should resolve query by name only when unambiguous'.
+            expect(() => engine.ResolveComposition('SELECT * FROM {{query:"Unique Query"}} uq', 'sqlserver', mockUser))
+                .toThrow(/Referenced query not found: "Unique Query"/);
+            const result = engine.ResolveComposition('SELECT * FROM {{query:"Some/Path/Unique Query"}} uq', 'sqlserver', mockUser);
             expect(result.CTEs[0].QueryID).toBe('uniq-1');
         });
 
@@ -1146,7 +1155,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 ID: 'leaf-tpl',
                 Name: 'Leaf With Template',
                 CategoryPath: '/Test/',
-                SQL: "SELECT * FROM Data {% if Filter %}WHERE x = '{{ Filter }}'{% endif %}",
+                SQL: "SELECT * FROM Data {% if Filter %}WHERE x = {{ Filter | sqlString }}{% endif %}",
                 UsesTemplate: true,
             });
 
@@ -1310,7 +1319,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 CategoryPath: '/Test/',
                 SQL: `SELECT m.ID, m.Name FROM Members m
 {% if Region %}
-WHERE m.Region = '{{ Region }}'
+WHERE m.Region = {{ Region | sqlString }}
 {% endif %}
 ORDER BY m.Name`,
                 UsesTemplate: true,
@@ -1321,10 +1330,11 @@ ORDER BY m.Name`,
             const sql = 'SELECT * FROM {{query:"Test/Nunjucks Ordered"}} no';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            // ORDER BY should be stripped even though Nunjucks tokens are present
+            // ORDER BY is stripped from the rendered dependency (render-then-compose: the dependency renders
+            // before it is composed, so no template tag is left; Region is not passed, so its block is left out)
             expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
-            // Nunjucks tokens should still be present (they get processed later)
-            expect(result.ResolvedSQL).toContain('{%');
+            expect(result.ResolvedSQL).not.toMatch(/\{%|\{\{/);
+            expect(result.ResolvedSQL).not.toContain('m.Region');
             expect(result.AnyDependencyUsesTemplates).toBe(true);
         });
 
@@ -1526,7 +1536,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
             expect(result.CTEs[0].QueryID).toBe('meta-1');
         });
 
-        it('should match inline deps by name only when no category segments in token', () => {
+        it('should refuse an inline dep named without its category path', () => {
             mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
@@ -1537,11 +1547,11 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
                 },
             ];
 
-            // Token has no category path — name-only lookup
-            const sql = 'SELECT * FROM {{query:"Simple Query"}} sq';
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
-
-            expect(result.CTEs).toHaveLength(1);
+            // Token has no category path. Inline dependencies resolve by full category path + name too
+            // (DISCUSSION §6, 2026-10-27; COMPAT-MAP B21), so this fails by design.
+            expect(() => engine.ResolveComposition('SELECT * FROM {{query:"Simple Query"}} sq', 'sqlserver', mockUser, {}, inlineDeps))
+                .toThrow(/Referenced query not found: "Simple Query"/);
+            const result = engine.ResolveComposition('SELECT * FROM {{query:"Whatever/Simple Query"}} sq', 'sqlserver', mockUser, {}, inlineDeps);
             expect(result.CTEs[0].QueryName).toBe('Simple Query');
         });
 
@@ -1732,7 +1742,8 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
 
             expect(result.CTEs).toHaveLength(1);
-            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
+            // K1 (COMPAT-MAP B10): the unfiltered tag writes the value as is (was substituted as 'West').
+            expect(result.CTEs[0].ResolvedSQL).toContain('Region = West');
             expect(result.CTEs[0].Parameters).toEqual({ region: 'West' });
         });
 
@@ -1797,14 +1808,14 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
 )
 SELECT * FROM MemberActivities WHERE 1=1
 {% if MinActivityCount %}AND TotalActivityCount >= {{ MinActivityCount | sqlNumber }}{% endif %}
-{% if MembershipType %}AND EXISTS (SELECT 1 FROM [AssociationDemo].[vwMemberships] ms INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID WHERE ms.MemberID = MemberActivities.MemberID AND ms.Status = 'Active' AND mt.Name = '{{ MembershipType }}'){% endif %}
+{% if MembershipType %}AND EXISTS (SELECT 1 FROM [AssociationDemo].[vwMemberships] ms INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID WHERE ms.MemberID = MemberActivities.MemberID AND ms.Status = 'Active' AND mt.Name = {{ MembershipType | sqlString }}){% endif %}
 ORDER BY TotalActivityCount DESC`;
 
         const CHAPTER_ENGAGEMENT_SUMMARY_SQL = `WITH ChapterMembers AS (
     SELECT c.ID AS ChapterID, c.Name AS ChapterName, c.ChapterType, c.Region, c.State, c.IsActive,
         COUNT(DISTINCT cm.MemberID) AS ActiveMemberCount, AVG(DATEDIFF(DAY, cm.JoinDate, GETDATE())) AS AvgMemberTenureDays
     FROM [AssociationDemo].[vwChapters] c LEFT JOIN [AssociationDemo].[vwChapterMemberships] cm ON c.ID = cm.ChapterID AND cm.Status = 'Active'
-    WHERE c.IsActive = 1 {% if ChapterType %}AND c.ChapterType = '{{ ChapterType }}'{% endif %}
+    WHERE c.IsActive = 1 {% if ChapterType %}AND c.ChapterType = {{ ChapterType | sqlString }}{% endif %}
     GROUP BY c.ID, c.Name, c.ChapterType, c.Region, c.State, c.IsActive
 ),
 ChapterEventActivity AS (
@@ -1845,7 +1856,7 @@ FROM [AssociationDemo].[vwMembers] m
 LEFT JOIN CurrentMembership cm ON m.ID = cm.MemberID AND cm.rn = 1
 LEFT JOIN MemberRevenue rev ON m.ID = rev.MemberID
 WHERE 1=1
-{% if MembershipType %}AND cm.MembershipType = '{{ MembershipType }}'{% endif %}`;
+{% if MembershipType %}AND cm.MembershipType = {{ MembershipType | sqlString }}{% endif %}`;
 
         const BOARD_OF_DIRECTORS_SQL = `WITH board_committee AS (
     SELECT Id FROM nams.vwNU__Committee__cs WHERE Name = 'MSTA Board of Directors' AND NU__Type__c = 'Board'
@@ -2079,17 +2090,17 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
             mockQueryEngineQueries([dep]);
 
             const mainSQL = `SELECT mac.MemberID, mac.TotalActivityCount FROM {{query:"Engagement Analytics/Member Activity Counts(MinActivityCount='5', MembershipType=MembershipType)"}} mac`;
-            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+            // A pass-through argument needs a render (compose-only resolution takes static arguments only).
+            const result = RenderPipeline.Run(mainSQL, { Platform: 'sqlserver', ContextUser: mockUser, UsesTemplate: true, Parameters: { MembershipType: 'Gold' } });
 
             expect(result.HasCompositions).toBe(true);
             expect(result.CTEs).toHaveLength(1);
-            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            expect(result.FinalSQL).not.toMatch(NESTED_WITH_REGEX);
             // MemberActivities CTE should be hoisted
-            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
-            // MinActivityCount='5' should be substituted — the literal '5' replaces the Nunjucks token
-            expect(result.CTEs[0].Parameters['MinActivityCount']).toBe('5');
-            // MembershipType is pass-through — should remain as a Nunjucks token for later processing
-            expect(result.ResolvedSQL).toMatch(/MembershipType/);
+            expect(result.FinalSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // Both arguments reached the dependency: the static one as written, the pass-through with the outer value
+            expect(result.CTEs[0].Parameters).toEqual({ MinActivityCount: '5', MembershipType: 'Gold' });
+            expect(result.FinalSQL).not.toMatch(/\{\{|\{%/);
         });
 
         it('should compose aggregation over CTE dependency', () => {
@@ -2326,7 +2337,14 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
     // ================================================================
     // Filter Chain Preservation in Parameter Substitution
     // ================================================================
+    // Render-then-compose evaluates each argument in the caller's scope and renders the dependency with its
+    // own tags, so the dependency's filter chain always applies to the value passed (nothing is renamed or
+    // rebuilt). Pass-through cases run through the render pipeline: compose-only resolution takes static
+    // arguments only.
     describe('Filter chain preservation in parameter substitution', () => {
+        const renderComposed = (sql: string, parameters: Record<string, string>): string =>
+            RenderPipeline.Run(sql, { Platform: 'sqlserver', ContextUser: mockUser, UsesTemplate: true, Parameters: parameters }).FinalSQL;
+
         it('should preserve sqlNumber filter on pass-through parameter', () => {
             const depQuery = makeQueryInfo({
                 ID: 'fc-num-1',
@@ -2338,12 +2356,9 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays=numDays)"}} rc';
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
-
-            // Pass-through: inner {{ lookbackDays | sqlNumber }} should become {{ numDays | sqlNumber }}
-            expect(result.CTEs[0].ResolvedSQL).toContain('numDays');
-            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
-            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+            // The outer numDays reaches the dependency's {{ lookbackDays | sqlNumber }}
+            expect(renderComposed(sql, { numDays: '14' })).toContain('DATEADD(DAY, -14, GETUTCDATE())');
+            expect(() => renderComposed(sql, { numDays: 'x' })).toThrow(/Invalid number: x/);
         });
 
         it('should preserve sqlString filter on pass-through parameter', () => {
@@ -2357,12 +2372,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/By Region(region=userRegion)"}} c';
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
-
-            // Pass-through: inner {{ region | sqlString }} should become {{ userRegion | sqlString }}
-            expect(result.CTEs[0].ResolvedSQL).toContain('userRegion');
-            expect(result.CTEs[0].ResolvedSQL).toContain('sqlString');
-            expect(result.CTEs[0].ResolvedSQL).not.toContain('region |');
+            expect(renderComposed(sql, { userRegion: "O'Hare" })).toContain("WHERE Region = 'O''Hare'");
         });
 
         it('should preserve default+filter chain on pass-through parameter', () => {
@@ -2376,13 +2386,9 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Limited Results(limit=maxRows)"}} lr';
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
-
-            // Pass-through: {{ limit | default(25) | sqlNumber }} should become {{ maxRows | default(25) | sqlNumber }}
-            expect(result.CTEs[0].ResolvedSQL).toContain('maxRows');
-            expect(result.CTEs[0].ResolvedSQL).toContain('default(25)');
-            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
-            expect(result.CTEs[0].ResolvedSQL).not.toContain('limit');
+            expect(renderComposed(sql, { maxRows: '5' })).toContain('SELECT TOP 5 * FROM Items');
+            // An outer value that is not given leaves the argument absent, so the default applies
+            expect(renderComposed(sql, {})).toContain('SELECT TOP 25 * FROM Items');
         });
 
         it('should replace entire expression (including filter) for static string value', () => {
@@ -2436,16 +2442,97 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
 
             // region is static, lookbackDays is pass-through
             const sql = `SELECT * FROM {{query:"Analytics/Regional Changes(region='West', lookbackDays=numDays)"}} rc`;
-            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+            const rendered = renderComposed(sql, { numDays: '7' });
+            expect(rendered).toContain("WHERE Region = 'West' AND CreatedAt >= DATEADD(DAY, -7, GETUTCDATE())");
+        });
+    });
 
-            // Static region: filter dropped, literal substituted
-            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
-            expect(result.CTEs[0].ResolvedSQL).not.toContain('region');
+    // ================================================================
+    // Same-name queries in two categories: resolution by full category path + name (TEST-INVENTORY CR3)
+    // ================================================================
+    describe('same-name queries in two categories (full category path + name)', () => {
+        /** Runs a composition and returns the resolved query id, or the error message when it is refused. */
+        function resolveOrError(sql: string, inlineDeps?: QueryDependencySpec[]): { QueryID?: string; Error?: string } {
+            try {
+                const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+                return { QueryID: result.CTEs[0]?.QueryID };
+            } catch (error: unknown) {
+                return { Error: error instanceof Error ? error.message : String(error) };
+            }
+        }
 
-            // Pass-through lookbackDays: renamed to numDays, filter preserved
-            expect(result.CTEs[0].ResolvedSQL).toContain('numDays');
-            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
-            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+        // Built per test: the shared config restores mocks after each test, which resets the vi.fn members.
+        const byActivity = (): MJQueryEntityExtended => makeQueryInfo({ ID: 'lb-org', Name: 'Leaderboard', CategoryPath: '/Organizations/', SQL: 'SELECT 1 AS OrgBoard' });
+        const byEngagement = (): MJQueryEntityExtended => makeQueryInfo({ ID: 'lb-eng', Name: 'Leaderboard', CategoryPath: '/Engagement/', SQL: 'SELECT 2 AS EngBoard' });
+        const nested = (): MJQueryEntityExtended => makeQueryInfo({ ID: 'roster-nested', Name: 'Active Member Roster', CategoryPath: '/Members/Roster/', SQL: 'SELECT 3 AS Roster' });
+
+        it('resolves each same-named metadata query by its own category path', () => {
+            mockQueryEngineQueries([byActivity(), byEngagement()]);
+            expect(resolveOrError('SELECT * FROM {{query:"Organizations/Leaderboard"}} l').QueryID).toBe('lb-org');
+            expect(resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l').QueryID).toBe('lb-eng');
+        });
+
+        it('resolves each same-named inline dependency by its own category path', () => {
+            mockQueryEngineQueries([]);
+            const inline: QueryDependencySpec[] = [
+                { Name: 'Leaderboard', CategoryPath: '/Organizations/', SQL: 'SELECT 1 AS OrgBoard' },
+                { Name: 'Leaderboard', CategoryPath: '/Engagement/', SQL: 'SELECT 2 AS EngBoard' },
+            ];
+            expect(resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l', inline).QueryID)
+                .toBe('__inline__/engagement/leaderboard');
+        });
+
+        // Composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3 (was pinned).
+        it('refuses a reference whose category path matches no query, even when the name alone is unique', () => {
+            mockQueryEngineQueries([byActivity()]);
+            const outcome = resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l');
+            expect(outcome.QueryID).toBeUndefined();
+            expect(outcome.Error).toMatch(/not found/i);
+        });
+
+        // A partial category path (a sub-category without its parent) is a whole-segment suffix of exactly one
+        // query's path, so it runs, with a warning (MJQ_COMPOSITION_PARTIAL_PATH; save refuses it). Was: 'refuses a
+        // partial category path' (CR3); the rule was reconciled so existing queries keep running, and a wrong path
+        // still never resolves (the tests around this one).
+        it('resolves a partial category path that is a segment suffix of exactly one query\'s path', () => {
+            mockQueryEngineQueries([nested()]);
+            expect(resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r').QueryID).toBe('roster-nested');
+        });
+
+        it('refuses a partial category path that is a suffix of more than one same-named query\'s path', () => {
+            const archived = makeQueryInfo({ ID: 'roster-archived', Name: 'Active Member Roster', CategoryPath: '/Archive/Roster/', SQL: 'SELECT 4 AS Roster' });
+            mockQueryEngineQueries([nested(), archived]);
+            const outcome = resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r');
+            expect(outcome.QueryID).toBeUndefined();
+            expect(outcome.Error).toMatch(/not found/i);
+            expect(resolveOrError('SELECT * FROM {{query:"Archive/Roster/Active Member Roster"}} r').QueryID).toBe('roster-archived');
+        });
+
+        it('refuses a path that is not a whole-segment suffix (a part of a segment, or a leading segment)', () => {
+            mockQueryEngineQueries([nested()]);
+            expect(resolveOrError('SELECT * FROM {{query:"ster/Active Member Roster"}} r').Error).toMatch(/not found/i);
+            expect(resolveOrError('SELECT * FROM {{query:"Members/Active Member Roster"}} r').Error).toMatch(/not found/i);
+        });
+
+        it('an exact path wins over a partial one, and an inline dependency resolves by a partial path too', () => {
+            const top = makeQueryInfo({ ID: 'roster-top', Name: 'Active Member Roster', CategoryPath: '/Roster/', SQL: 'SELECT 5 AS Roster' });
+            mockQueryEngineQueries([nested(), top]);
+            expect(resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r').QueryID).toBe('roster-top');
+            mockQueryEngineQueries([]);
+            const inline: QueryDependencySpec[] = [{ Name: 'Leaderboard', CategoryPath: '/Org/Engagement/', SQL: 'SELECT 2 AS EngBoard' }];
+            expect(resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l', inline).QueryID).toBe('__inline__/org/engagement/leaderboard');
+        });
+
+        // Composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3 (was pinned).
+        it('refuses an inline reference whose category path matches neither same-named dependency (no first-by-name pick)', () => {
+            mockQueryEngineQueries([]);
+            const inline: QueryDependencySpec[] = [
+                { Name: 'Leaderboard', CategoryPath: '/Organizations/', SQL: 'SELECT 1 AS OrgBoard' },
+                { Name: 'Leaderboard', CategoryPath: '/Engagement/', SQL: 'SELECT 2 AS EngBoard' },
+            ];
+            const outcome = resolveOrError('SELECT * FROM {{query:"Trends/Leaderboard"}} l', inline);
+            expect(outcome.QueryID).toBeUndefined();
+            expect(outcome.Error).toMatch(/not found/i);
         });
     });
 });

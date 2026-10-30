@@ -834,16 +834,24 @@ export class SyncEngine {
           const escaped = fieldValue.replace(/'/g, "''");
           filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(`'${escaped}'`)}`);
         } else {
-          filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+          // An unquoted value is spliced into the SQL verbatim, so it must be a pure
+          // numeric/boolean token — anything else (e.g. `1 OR 1=1`) would rewrite the lookup.
+          const trimmedLookupVal = fieldValue.trim();
+          if (!quotes && !/^-?\d+(\.\d+)?$/.test(trimmedLookupVal) && !/^(true|false)$/i.test(trimmedLookupVal)) {
+            throw new Error(`Lookup value '${fieldValue}' for non-string field '${fieldName}' on entity '${entityName}' must be a numeric or boolean literal`);
+          }
+          const formattedVal = quotes ? fieldValue.replace(/'/g, "''") : trimmedLookupVal;
+          filterParts.push(`${fieldName} = ${quotes}${formattedVal}${quotes}`);
         }
       }
     }
-    
+
     const extraFilter = filterParts.join(' AND ');
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: extraFilter,
       MaxRows: 1,
+      SkipTotalRowCount: true,
       // BypassCache: lookups during a push must always go to the DB.
       // The provider's RunView cache can return stale or filtered results
       // (especially across the LOWER()-based case-insensitive lookups
@@ -1524,17 +1532,41 @@ export class SyncEngine {
         throw new Error(`Missing primary key value for ${pk.Name} in entity ${entityName}`);
       }
       
+      // Reject non-primitive or non-finite values from untrusted JSON metadata (e.g. arrays/objects/NaN)
+      // before building either quoted or unquoted SQL primary-key predicates.
+      if (
+        (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') ||
+        (typeof value === 'number' && !Number.isFinite(value))
+      ) {
+        throw new Error(`Primary key value for '${pk.Name}' on entity '${entityName}' must be a string, finite number, or boolean primitive`);
+      }
+
       // Check if field needs quotes
       const field = entityInfo.Fields.find(f => f.Name === pk.Name);
       const quotes = field?.NeedsQuotes ? "'" : '';
-      const escapedValue = field?.NeedsQuotes && typeof value === 'string' ? value.replace(/'/g, "''") : value;
-      filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
+      if (!quotes) {
+        // An unquoted value is spliced into the SQL verbatim, so string forms must also be pure
+        // numeric/boolean tokens — anything else would splice SQL into the primary-key filter.
+        if (typeof value === 'string') {
+          const trimmedPk = value.trim();
+          if (!/^-?\d+(\.\d+)?$/.test(trimmedPk) && !/^(true|false)$/i.test(trimmedPk)) {
+            throw new Error(`Primary key value '${value}' for non-string field '${pk.Name}' on entity '${entityName}' must be a numeric or boolean literal`);
+          }
+          filters.push(`${pk.Name} = ${trimmedPk}`);
+        } else {
+          filters.push(`${pk.Name} = ${String(value)}`);
+        }
+      } else {
+        const escapedValue = String(value).replace(/'/g, "''");
+        filters.push(`${pk.Name} = '${escapedValue}'`);
+      }
     }
     
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: filters.join(' AND '),
-      MaxRows: 1
+      MaxRows: 1,
+      SkipTotalRowCount: true
     }, this.contextUser);
     
     // If no record found, return null without attempting to load

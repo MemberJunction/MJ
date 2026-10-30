@@ -30,12 +30,631 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "Unique identifier of the conversation to load complete details for.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B6BA2217-60F1-4FC7-B3C9-2AB57E45420E"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ID",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8EC4CF7F-826C-4B9C-923C-791C71C77E52"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F74FC958-DA34-443C-8CD9-FFD3CB0BB812"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ExternalID",
+            "Description": "External system identifier for this message, used for integration scenarios.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "776AD8D1-B4E5-408D-A3AC-FBDCB8718E08"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Role",
+            "Description": "The role of the message sender (user, assistant, system, function).",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BAFFEEA0-0BDE-4B69-BB09-5841427A6454"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Message",
+            "Description": "The actual content of the message in the conversation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3F891065-8539-4D42-9C0F-FD1F6203CC04"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Error",
+            "Description": "Error message if this conversation turn encountered a problem.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1790CD86-DD3F-431C-9C21-1F8E7B6EAF2F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "HiddenToUser",
+            "Description": "Flag indicating if this message should be hidden from end users (system messages, function calls, etc.).",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CBFAC63B-B71B-4AB8-80B7-C87D42509630"
+          }
+        },
+        {
+          "fields": {
+            "Name": "__mj_CreatedAt",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C5101072-9B32-447B-9F8C-F3A1180B24A2"
+          }
+        },
+        {
+          "fields": {
+            "Name": "__mj_UpdatedAt",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6D9B3AD0-3CFB-48EC-97EF-05625466BFF4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserRating",
+            "Description": "This column is used to capture user feedback as a rating scale. The scale ranges from 1 to 10, where 1 might represent thumbs down, and 10 might represent thumbs up or the highest rating in a star-based scale.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5BE6E198-C564-47CB-8A64-2A6C3ED60C35"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserFeedback",
+            "Description": "This column is used to store user text feedback about a given AI response, describing what they liked or disliked.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "27BD89B9-16F1-4D85-8B12-22CFEBCB25AA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ReflectionInsights",
+            "Description": "This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "2D426A3B-8EA2-42D4-90BE-99A5E01ED02A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SummaryOfEarlierConversation",
+            "Description": "This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1955C0AF-F0F9-4E36-8FA0-EC7343C30ADB"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A7AF97D6-DC77-430B-99C0-DCAF9EE4E3C2"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactID",
+            "Description": "Optional reference to a conversation artifact associated with this conversation detail",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B0E93295-D0B8-45AC-A2DD-A20E5BCA0FC8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactVersionID",
+            "Description": "Optional reference to a specific version of a conversation artifact associated with this conversation detail",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3380EB16-36D2-4F27-855A-001D0BD754FE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CompletionTime",
+            "Description": "Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A80E3C4C-4046-45AB-88D5-DDD1D0B6FA84"
+          }
+        },
+        {
+          "fields": {
+            "Name": "IsPinned",
+            "Description": "Indicates if this message is pinned within the conversation for easy reference",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "647C30F6-1342-4FB6-931C-7AD2F2AC7661"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentID",
+            "Description": "Optional reference to parent message for threaded conversations. NULL for top-level messages.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5E761DA5-AD29-4B6F-A287-CFE4C098A8B2"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Description": "Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AA8D0F90-C090-433A-8EB4-3E30DB3EF986"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Status",
+            "Description": "Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B8352A32-5610-4CA2-A72D-364368E47589"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SuggestedResponses",
+            "Description": "DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3AB93C27-960B-4C6D-8663-BCE86A5AB6AD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TestRunID",
+            "Description": "Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E23B2156-9975-48AF-A6D7-BAB48E3DAE35"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ResponseForm",
+            "Description": "JSON object containing agent response form definition with questions and validation rules. Supports 8 question types: text, textarea, email, number, currency, date, datetime, choices (buttongroup/radio/dropdown/checkbox). Used for collecting structured user input with proper validation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5682BF6C-CBD2-42DB-82BB-190217BFD511"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ActionableCommands",
+            "Description": "JSON array of actionable commands that user can trigger (shown as clickable buttons/links). Supports open:resource (navigate to records/dashboards/reports/forms) and open:url (external links). Typically used after completing work to provide easy navigation to created/modified resources.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "39BDBD1F-1496-4BCA-BEC1-5E0BE46C3093"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AutomaticCommands",
+            "Description": "JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "69ECA98D-BB4A-449E-91A6-1B6CBEBB3BD0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OriginalMessageChanged",
+            "Description": "Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DBE824E3-3B05-45DC-910D-4B9CDB76F06F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentSessionID",
+            "Description": "Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4239BF30-57B0-40AF-8844-553872CAB104"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TurnEndedAt",
+            "Description": "Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C5B187C1-703D-4EFB-BB1D-4CB56098B55F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UtteranceStartMs",
+            "Description": "Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B039A98F-429D-45C3-A0D9-D96A1D8B4185"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UtteranceEndMs",
+            "Description": "Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9AC86F2F-257B-4045-B469-C0D5715319BE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MediaType",
+            "Description": "Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1AAF9C27-6B64-4833-BE16-91502CB930B6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Sequence",
+            "Description": "Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "276A6C61-3810-4DFE-9E43-0B887A401227"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BranchID",
+            "Description": "The fork this message belongs to. NULL means Main (the trunk). Every writer sets it explicitly.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A745AE79-BCC8-4463-9FAB-A761C86E37B4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ReplacedAt",
+            "Description": "When a rerun of this message's turn replaced it (Regenerate or Save and resend while forking is off). A replaced row is kept for audit, is hidden from the user and is never sent to an agent. NULL means the row is live.",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E98341F1-C93A-4C3F-B1EF-897C3723DF8E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Conversation",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "854A09C3-1D61-4AF0-A49C-27B48D08A85B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "User",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DC6B1901-0594-4F2F-9929-9CC4B2631E91"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Artifact",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7FDE0AB7-F6C4-4F6C-B6C2-17B9244A4E96"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactVersion",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D060ECEE-45CD-4725-96DF-9FB1F11AD027"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Parent",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D30FD2A9-33C6-40C6-B630-E734B53E36B4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Agent",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "39F9BD0A-23C7-4723-AC06-9686B5A0B57F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TestRun",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "52E11670-3D1E-49CD-914A-926AE1825ADE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Branch",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "01A28131-140D-42AF-A71A-8A533C8FBD81"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RootParentID",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9CC986D1-5EE8-43CA-8C11-C89A45A261D5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentIDDepth",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "44F9C3B2-E3F2-4926-BD33-F2CD8D777BD6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentIDPath",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "16D38242-7098-4140-8E58-9E3F06655349"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentIDIsLeaf",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3722C4C8-2B14-4EFF-A749-FE04F8CF74D0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentIDChildCount",
+            "Description": null,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "32F8300E-EC51-40DE-862E-3F6F16D019C2"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserImageURL",
+            "Description": "URL for the user's avatar image",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "58515A1E-91DF-4407-9D8E-8A15411B7C66"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserImageIconClass",
+            "Description": "CSS icon class for the user's avatar",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D5CD4C49-DFFB-43DC-98EF-022FAB205B52"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentRunsJSON",
+            "Description": "JSON array containing AI agent execution runs associated with the conversation detail",
+            "IsSummary": false,
+            "ComputationDescription": "Subquery formatted FOR JSON PATH aggregating records from [__mj].[vwAIAgentRuns]",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "63614D8F-14EE-4265-9374-B942BD179D8F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactsJSON",
+            "Description": "JSON array containing artifact output versions associated with the conversation detail",
+            "IsSummary": false,
+            "ComputationDescription": "Subquery formatted FOR JSON PATH joining [vwConversationDetailArtifacts], [vwArtifactVersions], and [vwArtifacts]",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "50FDAA74-5617-4E5C-A29C-B98B8D01ADF3"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RatingsJSON",
+            "Description": "JSON array containing user ratings and feedback for the conversation detail",
+            "IsSummary": false,
+            "ComputationDescription": "Subquery formatted FOR JSON PATH joining [vwConversationDetailRatings] and [vwUsers]",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "92FE4B59-3F17-4286-905F-0797051B8A91"
+          }
+        },
+        {
+          "fields": {
+            "Name": "cd.*"
+          },
+          "primaryKey": {
+            "ID": "BF52B0E8-56F4-499C-8AB5-72C6F361E79B"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "8F84DFB4-C38E-4B8D-80E7-9CCF30039E77"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:48.781Z",
-      "checksum": "182648b87a3db3d920c0e9dcf69937cb6a97fbdb3912163954afc7931bccb747"
+      "lastModified": "2026-10-28T22:14:02.123Z",
+      "checksum": "e09961fcdb26b4c90de28516ed5f3bc0ac32b7ac236cdbd8c4ba2170a65e580d"
     }
   }
 ]

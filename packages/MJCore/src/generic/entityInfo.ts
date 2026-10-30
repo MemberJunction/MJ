@@ -5,7 +5,7 @@ import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
@@ -2444,6 +2444,15 @@ export class EntityFieldInfo extends BaseInfo {
         const t = this.Type.trim().toLowerCase();
         this._isUniqueIdentifierCache = t === 'uniqueidentifier' || t === 'uuid';
         return this._isUniqueIdentifierCache;
+    }
+
+    /**
+     * Returns the canonical string lookup key for a value of this field when matching records
+     * across heterogeneous sources (e.g., SQL Server upper-case vs. PostgreSQL lower-case UUIDs,
+     * while preserving exact case for non-UUID string keys).
+     */
+    public FormatCanonicalValue(value: unknown): string {
+        return CanonicalPrimaryKeyValue(String(value ?? ''), this.IsUniqueIdentifier);
     }
 
     /**
@@ -5056,18 +5065,16 @@ export class EntityInfo extends BaseInfo {
         }
 
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
-        if (userRLS && userRLS.length > 0) {
-            // userRLS has all of the objects that apply to this user. The user is NOT exempt from RLS, so we need to OR together all of the RLS object filters
-            let sRLSSQL: string = '';
-            userRLS.forEach((rls) => {
-                if (sRLSSQL.length > 0)
-                sRLSSQL += ' OR ';
-                sRLSSQL += `(${rls.MarkupFilterText(user)})`;
-            });
-            return sRLSSQL.length > 0 ? `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}` : '';
-        }
-        else
+        if (!userRLS || userRLS.length === 0) {
             return '';
+        }
+        // The user is NOT exempt, so every filter that applies is OR'd together. Each filter is
+        // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
+        // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
+        // than binding to the first one only. A single filter keeps its one pair of parentheses.
+        const terms = userRLS.map((rls) => `(${rls.MarkupFilterText(user)})`);
+        const sRLSSQL = terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}`;
     }
 
     /**

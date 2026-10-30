@@ -5,7 +5,7 @@
  */
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import type { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
@@ -312,8 +312,7 @@ export const NestedTransactionChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             if (isPostgres(ctx)) {
-                console.warn('NT9 skipped: transactionState$ is SQL Server-only');
-                return;
+                SkipCheck('transactionState$ is SQL Server-only; this run is on PostgreSQL.');
             }
             const p = providerOf(ctx) as GenericDatabaseProvider & {
                 transactionState$?: { subscribe: (fn: (v: boolean) => void) => { unsubscribe: () => void } };

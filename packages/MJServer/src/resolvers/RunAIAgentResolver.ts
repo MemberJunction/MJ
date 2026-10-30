@@ -17,7 +17,7 @@ import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -838,6 +838,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId, branchId, branches),
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 Fields: ['ID', 'Status', 'CancellationReason'],
                 ResultType: 'simple',
                 // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
@@ -866,11 +867,16 @@ export class RunAIAgentResolver extends ResolverBase {
         provider: IMetadataProvider
     ): Promise<void> {
         try {
+            const trimmedLastRunId = typeof lastRunId === 'string' ? lastRunId.trim() : '';
+            if (!IsValidUUID(trimmedLastRunId)) {
+                return;
+            }
             const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `OriginatingAgentRunID='${lastRunId}' AND Status='Requested'`,
+                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, contextUser);
 
@@ -1555,7 +1561,9 @@ export class RunAIAgentResolver extends ResolverBase {
         /** History floor: only rows written at or after it are loaded, and no summary is used. */
         historyFrom?: Date,
         /** The branch whose path to load; null reads the trunk. */
-        branchId?: string | null
+        branchId?: string | null,
+        /** Speaker attribution mode forwarded to `ConversationEngine.AssembleContextWindow`. */
+        speakerAttribution?: 'off' | 'auto' | 'always'
     ): Promise<ChatMessage[]> {
         // Context windowing (summary boundary + raw tail, or legacy last-N when no
         // summary exists) shares ONE fold implementation with all other callers —
@@ -1576,7 +1584,8 @@ export class RunAIAgentResolver extends ResolverBase {
         const window = ConversationEngine.AssembleContextWindow(rows, {
             maxTailMessages: maxMessages,
             excludeDetailIds,
-            historyFrom
+            historyFrom,
+            speakerAttribution
         });
 
         // Batch load input artifacts for the windowed messages. Since the backfill migration

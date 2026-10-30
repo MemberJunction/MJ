@@ -13,13 +13,69 @@
       "Reusable": true,
       "UsesTemplate": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/tag-aggregates.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "5074F9B6-BA08-4A82-8771-8C83627E2BB5"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.818Z",
+            "checksum": "d5d36f9b69d1a486ad75d741560cdec815c35bb774da166816d8e2ff50832c2f"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Fields": [
+        {
+          "fields": {
+            "Name": "TagID",
+            "Description": "The unique identifier for the tag being aggregated",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "469476B5-00D1-4FD5-B6E2-34192C0767DF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ItemCount",
+            "Description": "Total number of items associated with this tag",
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) aggregate counting all records per TagID",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "ADC300C9-24BA-4B66-9825-3AD118C29BA8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AvgWeight",
+            "Description": "The average relevance weight of the items for this tag, formatted to two decimal places",
+            "IsSummary": true,
+            "ComputationDescription": "Calculates the average of the Weight field after casting to FLOAT, handles NULLs with ISNULL(..., 0), and casts the final result to DECIMAL(4,2)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4B2E0964-1FE9-4924-B625-8C67E989C60E"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "A95E20FE-E0E9-4BDD-A61F-24447252C4E2"
     },
     "sync": {
-      "lastModified": "2026-04-13T01:48:44.684Z",
-      "checksum": "64e25508c8fadd4d31684eb3a6e4945c623241cfdad8dcab426a92fec944b888"
+      "lastModified": "2026-10-28T22:14:02.275Z",
+      "checksum": "7515f6be1e0dd578736146a4b4fa33c5bc2edb8d4074ba8ccb4ae04b69bc64e3"
     }
   }
 ]

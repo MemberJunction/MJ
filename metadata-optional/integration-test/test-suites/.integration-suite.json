@@ -1628,6 +1628,152 @@
           "primaryKey": {
             "ID": "4A05D640-2DD1-4DC8-A8FC-4F9C48F4550B"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT138 - Query Extraction Correctness",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "510C6C04-3845-461E-8DA7-DC343E4BB4FD"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.041Z",
+            "checksum": "eeb05f12c4a4b75a936ab16a1bfe61a038ea3652e441556da666c7e209ba7d72"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT139 - Query Refresh and Re-bind",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3495CE90-529A-437D-A143-54E58E8A218A"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "3b82b78d193c9d819df930d88922368bda569661cad17038d26459232fd13360"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT140 - MetadataSync Declared Query Children",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86466F49-FA5A-4B12-BE14-3277813C886C"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "12dcca7c13fcd56add7219e215c921567a3ebf01425c9a28a0ca158afa7264d7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT141 - Query API Lifecycle over GraphQL",
+            "Sequence": 78,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3FC29331-C6D5-4C8B-8083-7FBAE89C6889"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "7cdbe34f6333fee91549d9d8f4ca6badebe6f4c60273891e6487aeb30ca3a674"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT142 - Query Security",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D5A17CDE-C46C-405A-8156-265CB272B15E"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "6e4e923b1f24de7947df36d5bdbc0765c3af6b318f801db2210794885374a23a"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT143 - SQL Pipeline Scenario Matrix",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5D13057D-F57E-4E7D-A760-1D37B38FC47A"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "d5c31489bd359fb8f2b162106b521eaf3136e23b247da98b10e1d9ae73cdf63a"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT144 - SQL Pipeline Extraction Fixtures",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "13C81E72-03FB-475F-A271-F9DEBD11435F"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "e1d4b3bd05c7ab504e30d9b24871933560dd0185ed40cc6b0495dfd271429378"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99D3FE11-6191-46B9-8990-7B70ED3C9B67"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "0fd2f828efec5ce10bccd2ee3b79557d97a726eb0f245e7f5077d07ed3cf55fe"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT145 - SQL Pipeline Scenario Matrix over GraphQL",
+            "Sequence": 79,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "07B6EF3D-D0FD-4C75-8CB8-9D1BAA7EBE2E"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.042Z",
+            "checksum": "4350cf7f90727ee834ebb77f6f0ad7971f0b456d2ee186f56df1ab71bfb7c1b1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT147 - Agent Execution Primitives and Multi-Step Loops (deterministic)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE16C846-7B58-46CC-8B65-DC6AD0630062"
+          }
         }
       ]
     },
@@ -1862,7 +2008,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 19,
+            "Sequence": 20,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1919,6 +2065,17 @@
           },
           "primaryKey": {
             "ID": "B4E0BF50-AACE-4F59-9B07-F3CA6EE1EC7C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT148 - Agent Execution Primitives and Multi-Step Loops (live providers)",
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A75E0239-7423-476F-B9C1-24F44E373ED7"
           }
         }
       ]

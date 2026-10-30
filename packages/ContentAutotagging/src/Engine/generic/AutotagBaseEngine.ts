@@ -2601,6 +2601,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ExtraFilter: `ID = '${itemID}'`,
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return false;

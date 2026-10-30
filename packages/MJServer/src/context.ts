@@ -23,6 +23,7 @@ import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
 import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -896,8 +897,6 @@ export async function CreateReadOnlyProvider(dataSources: DataSourceInfo[]): Pro
  * from the primary provider to avoid pool exhaustion.
  */
 async function createPostgresProvider(): Promise<DatabaseProviderBase> {
-  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-
   const pgProvider = new PostgreSQLDataProvider();
   const pgConfig = new PostgreSQLProviderConfigData(
     BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
@@ -932,8 +931,6 @@ async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase
   }
 
   try {
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-
     const roProvider = new PostgreSQLDataProvider();
     const roConfig = new PostgreSQLProviderConfigData(
       BuildPostgreSQLConnectionConfig({ ...ResolvePostgreSQLEndpoint(), ...credentials }, configInfo.databaseSettings, 'read-only'),

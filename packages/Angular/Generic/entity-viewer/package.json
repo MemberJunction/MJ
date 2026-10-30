@@ -43,6 +43,7 @@
     "@memberjunction/communication-types": "6.2.0-edge.6",
     "@memberjunction/core": "6.2.0-edge.6",
     "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/excel-addin": "6.2.0-edge.6",
     "@memberjunction/export-engine": "6.2.0-edge.6",
     "@memberjunction/global": "6.2.0-edge.6",
     "@memberjunction/ng-base-types": "6.2.0-edge.6",
