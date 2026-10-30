@@ -19015,7 +19015,7 @@ reproduces refpipe's per-shift scores to 1e-10); `audit.beats_reference(y, candi
 list[ColumnImportance(source_column, drop, lower, upper)]`; `importance.noise_share(importances, noise_sources) ->
 float`; `run._reference_rule(...)`.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_audit_m7.py`:
 
@@ -19087,9 +19087,9 @@ def test_permutation_importance_groups_encoded_columns() -> None:
     assert IM.noise_share(imps, ["noise"]) == 0.0
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_audit_m7.py`. Expected: collection error,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_audit_m7.py`. Expected: collection error,
   `ImportError: cannot import name 'audit' from 'app'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/audit.py`:
 
@@ -19530,8 +19530,8 @@ with
         importance=imp, leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage, residualDiagnostics=None,
 ```
 
-- [ ] Step 4: Rerun. Expected: 3 passed; `tests/test_trainer_route.py` still 10 passed.
-- [ ] Step 5: Runtime check — Task M7.4 Step 5 (C4 and W3 through the live server).
+- [x] Step 4: Rerun. Expected: 3 passed; `tests/test_trainer_route.py` still 10 passed.
+- [x] Step 5: Runtime check — Task M7.4 Step 5 (C4 and W3 through the live server).
 
 #### Task M7.2: Legacy `/train` importance — held-out permutation per source column; LightGBM gain (F-SC-9, F-SC-9b, F-SC-10, F-SC-11)
 
@@ -19553,7 +19553,7 @@ carries to `EvaluationRecord.ImportanceKind`); `ImportanceKind` gains `'held_out
 (`Engine/src/feature-assembly/leakage-guard.ts`) now receives per-source shares. Both LightGBM factories set
 `importance_type="gain"`.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_legacy_importance.py`:
 
@@ -19619,10 +19619,10 @@ def test_lightgbm_uses_gain_importance() -> None:
     assert algorithms.build_estimator("lightgbm", "classification", {}).get_params()["importance_type"] == "gain"
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_legacy_importance.py`. Expected: 7 failed —
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_legacy_importance.py`. Expected: 7 failed —
   importance keys are one-hot columns (`plan=P0` …) not `{plan, x}`; MLP returns `{}` (`KeyError: 'a'`); random forest
   impurity ranks `noise_continuous` above `signal_binary`; `'split' == 'gain'` is false.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Edit `packages/AI/PredictiveStudio/Sidecar/src/python/app/main.py` (the stashed training mean is consumed by Task M7.3;
 PR 2 transforms the holdout after the importance call, so the transform moves up) — replace
@@ -19824,10 +19824,10 @@ with
 "verbose": -1, "min_child_samples": 5, "importance_type": "gain", **params}
 ```
 
-- [ ] Step 4: Rerun. Expected: 7 passed; `tests/test_train_predict.py` 17 passed (tree importances present, non-negative);
+- [x] Step 4: Rerun. Expected: 7 passed; `tests/test_train_predict.py` 17 passed (tree importances present, non-negative);
   `tests/test_importance_kind.py` (replaced) → 0 failed; Core `pnpm test -- importance-display evaluation-record` → 0
   failed; Core and Engine builds exit 0.
-- [ ] Step 5: Runtime check — live `/train` on the 25-level leaky categorical:
+- [x] Step 5: Runtime check — live `/train` on the 25-level leaky categorical:
   `../../.venv/bin/python -c "import json, numpy as np; from tests.test_legacy_importance import _req; rng=np.random.default_rng(1); plan=rng.integers(0,25,1500); x=rng.normal(size=1500); print(json.dumps(_req('lightgbm',['plan','x','label'],[[f'P{p}',float(v),int(p%2)] for p,v in zip(plan,x)],onehot=['plan'])))" > /tmp/ps-leak.json`
   then `curl -s -X POST http://127.0.0.1:4391/train -H 'content-type: application/json' --data @/tmp/ps-leak.json | ../../.venv/bin/python -c "import json,sys; print(json.load(sys.stdin)['feature_importance'])"`
   → `plan` ≥ 0.6 (the review measured 0.37 aggregated under split importance).
@@ -19843,7 +19843,7 @@ Produces `TrainedPredictor.contributions(X, top_k=5) -> list[list[(feature, valu
 multiclass); `/predict` returns these as `contributions` for v2 artifacts; legacy `_row_contributions` subtracts
 `mj_driver_baseline_` and returns None when a model has none.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_drivers_m7.py`:
 
@@ -19914,11 +19914,11 @@ def test_a_legacy_linear_model_without_a_training_mean_returns_no_driver() -> No
     assert rows[0] is not None and rows[3] is not None and rows[0][0]["value"] < 0 < rows[3][0]["value"]
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_drivers_m7.py`. Expected: 3 failed —
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_drivers_m7.py`. Expected: 3 failed —
   `AttributeError: 'TrainedPredictor' object has no attribute 'contributions'`, `/predict` returns
   `contributions: null` (`TypeError: 'NoneType' object is not subscriptable`), and the legacy model returns uncentred
   drivers instead of `None`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Edit `packages/AI/PredictiveStudio/Sidecar/src/python/app/trainer.py` — replace
 
@@ -20055,9 +20055,9 @@ with
     TrainRequest,
 ```
 
-- [ ] Step 4: Rerun. Expected: 3 passed; `tests/test_train_predict.py` 17 passed (linear models still return
+- [x] Step 4: Rerun. Expected: 3 passed; `tests/test_train_predict.py` 17 passed (linear models still return
   contributions, now centred; trees none).
-- [ ] Step 5: Runtime check — `PS_SIDECAR_URL` is not needed: `pnpm run test:python -- -p no:cacheprovider
+- [x] Step 5: Runtime check — `PS_SIDECAR_URL` is not needed: `pnpm run test:python -- -p no:cacheprovider
   tests/test_drivers_m7.py` runs `/predict` through the app; then one live call: train a logistic model with the legacy
   route (`tests/test_train_predict.py::_train_request("logistic_regression", "classification")` body) and `/predict`
   two rows at +0.9 and −0.7 → the top driver's sign differs between the rows.
@@ -20079,7 +20079,7 @@ check contract and `PsGate` (§2.7). Produces the pytest nodes of G2.9, G2.10 an
 `tests/gates/test_leakage_importance_gates.py::test_W3_S2_4_every_candidate_flagged` (4 parametrized cases) and
 `::test_W3_S2_4_above_oracle_is_a_leak` (1), in one `PsGatePytest.Run`; both must pass.
 
-- [ ] Step 1: Write the gate tests.
+- [x] Step 1: Write the gate tests.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/gates/test_leakage_importance_gates.py`:
 
@@ -20179,14 +20179,14 @@ def test_W8_S9_4_noise_carries_at_most_ten_percent(server: FileServer) -> None:
     assert any(f.kind == "high-cardinality-id" and f.sourceColumn == "MemberNumber" for f in r.leakageFlags)
 ```
 
-- [ ] Step 2: Before Task M7.1 they fail (no flags; `Status`/`ProxyOfTarget` reach the shipped artifact).
-- [ ] Step 3: `PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python -- -p no:cacheprovider tests/gates/test_leakage_importance_gates.py` → **7
+- [x] Step 2: Before Task M7.1 they fail (no flags; `Status`/`ProxyOfTarget` reach the shipped artifact).
+- [x] Step 3: `PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python -- -p no:cacheprovider tests/gates/test_leakage_importance_gates.py` → **7
   passed** (C4 flags `ProxyOfTarget` (same-period, AUC 0.9437), `NextPeriodFlag` (future period, 1.0, with a
   `time-shifted-label` flag) and `TicketCode` (distinct ratio 1.0), keeps the lag `PrevEscalated`; W3's `Status` is
   flagged in each of the 4 single-candidate runs and absent from what ships; with the ceiling at 1.0 and the oracle as
   reference, the drop-column rule names `Status`; W8's noise columns carry ≤ 10% of held-out importance and
   `MemberNumber` is flagged `high-cardinality-id`). Measured ≈ 30 s. No product implementation in this task.
-- [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
+- [x] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
   `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
@@ -20197,26 +20197,26 @@ def test_W8_S9_4_noise_carries_at_most_ten_percent(server: FileServer) -> None:
   | G2.10 | `.gate-W3-S2.4.json` | `ps-gate-w3-s2-4.checks.ts` · `PsGateW3S24Checks` | `'G2.10 W3 → S2.4: 4 of 4 candidates flagged; a candidate above the oracle is treated as a leak'` | pytest body, `expectedCases = 5`: `tests/gates/test_leakage_importance_gates.py::test_W3_S2_4_every_candidate_flagged` + `tests/gates/test_leakage_importance_gates.py::test_W3_S2_4_above_oracle_is_a_leak` |
   | G2.40 | `.gate-W8-S9.4.json` | `ps-gate-w8-s9-4.checks.ts` · `PsGateW8S94Checks` | `'G2.40 W8 → S9.4: noise columns carry at most 10% of held-out permutation importance'` | pytest body, `expectedCases = 1`: `tests/gates/test_leakage_importance_gates.py::test_W8_S9_4_noise_carries_at_most_ten_percent` |
 
-- [ ] Step 5: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
+- [x] Step 5: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
   `export * from './checks/ps-gate-c4-s2-4.checks';`
   `export * from './checks/ps-gate-w3-s2-4.checks';`
   `export * from './checks/ps-gate-w8-s9-4.checks';`
-- [ ] Step 6: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-c4-s2-4': 1`, `'ps-gate-w3-s2-4': 1`, `'ps-gate-w8-s9-4': 1` to
+- [x] Step 6: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-c4-s2-4': 1`, `'ps-gate-w3-s2-4': 1`, `'ps-gate-w8-s9-4': 1` to
   `EXPECTED_BUNDLE_COUNTS`; the bundle total `toHaveLength(183)` → `toHaveLength(186)` (+ any bundle `next` added); add
   `'ps-gate-c4-s2-4.G2.9'`, `'ps-gate-w3-s2-4.G2.10'`, `'ps-gate-w8-s9-4.G2.40'` to the gated-skip snapshot's `RequiresMutation` list.
-- [ ] Step 7: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
+- [x] Step 7: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
   Append to `metadata-optional/integration-test/test-suites/.ps-gates-training-suite.json` (16 members before): `C4 -> S2.4` (`Sequence` 17), `W3 -> S2.4` (`Sequence` 18), `W8 -> S9.4` (`Sequence` 19).
-- [ ] Step 8: **Runtime check** (§6 preamble, Gate flip 6):
+- [x] Step 8: **Runtime check** (§6 preamble, Gate flip 6):
   `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → 0 failed (pins and parity);
   `pnpm mj sync push --dir=metadata-optional/integration-test --ci` → exit 0; restart MJAPI; then, one gate at a time,
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "<name>"` → pass for `C4 -> S2.4`, `W3 -> S2.4`, `W8 -> S9.4`.
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → 19 of 19 passed.
   The PR 3 row count (§6 preamble) → `32`.
   Measured values to see and record in §11: G2.9 `collected=1 passed=1`, G2.10 `collected=5 passed=5` (4 parametrized single-candidate runs + the oracle node), G2.40 `collected=1 passed=1`; record the measured values the nodes print.
-- [ ] Step 9: **Mutation check G2.9:** the trainer's leakage audit skips the implausible-gain rule (`ProxyOfTarget` unflagged) → `C4 -> S2.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.9:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.10:** the leakage audit stops aggregating one-hot shares to the source column (flagged < 4 of 4) → `W3 -> S2.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.10:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.40:** importance is computed on training rows (noise share > 10%) → `W8 -> S9.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.40:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 12: Runtime check — `PS_SIDECAR_URL=http://127.0.0.1:4391 PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python --
+- [x] Step 9: **Mutation check G2.9:** the trainer's leakage audit skips the implausible-gain rule (`ProxyOfTarget` unflagged) → `C4 -> S2.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.9:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 10: **Mutation check G2.10:** the leakage audit stops aggregating one-hot shares to the source column (flagged < 4 of 4) → `W3 -> S2.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.10:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 11: **Mutation check G2.40:** importance is computed on training rows (noise share > 10%) → `W8 -> S9.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.40:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 12: Runtime check — `PS_SIDECAR_URL=http://127.0.0.1:4391 PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python --
   -p no:cacheprovider tests/gates/test_leakage_importance_gates.py` → 7 passed through the live server.
 
 **Mutation checks (M7)** (as M1; AI-run, ruling S1):
@@ -30713,6 +30713,12 @@ corrected, B-REGISTRY-TEST).
 - **D3-129** · M6 close: the mutation table's rows map to the tests that shipped — `_fit_baselines` dev ∪ holdout → `test_baselines_are_fitted_on_development_rows_only` and G2.8's node `test_C2_S4_5_…` (the route test's holdout count is the literal budget, unaffected); the `incumbent_diff` column check → `test_an_incumbent_needing_columns_the_snapshot_lacks_fails_the_holdout_stage` (`test_incumbent_diff_compares_on_the_same_rows` drops no column); `decide_calibration` always-apply → `test_a_logistic_finalist_on_logistic_data_ships_uncalibrated` and `W1_S6_3[lightgbm-43]`; the gate-branch swap reddens the three `test_gate_record_table` rows whose branch it swaps (the Q15-only and no-signal rows are untouched by construction) and G2.8's node. Exit counts are restated from measured numbers (Q20). *Rejected:* rewording shipped tests to fit the table.
 - **D3-130** · Test output is pristine: the Sidecar's `pytest.ini` is the one owner of warning policy (each filter names one third-party message with its reason; no test file adds its own), and Engine tests that drive an error or status path on purpose capture the console through `ConsoleCapture` and assert the exact lines, so a missing or extra line fails the test (M6 close items B, F, M). The live suite's measurement lines (`[PS integration] …`) are its report and stay.
 - **D3-131** · D-053 applied in M6: every edited file lost its `@deprecated` lowercase aliases with callers moved — `isErrorMetric`, `extractNormalizedScore`, `resolveComparisonMetric`, `readMetric`, `detectStaleness`, `rescoreScheduledBinding`, `triggerRetrainIfStale`, `compareChallenger`, `runMaintenancePass` (M6.2), `MLSidecar.start/stop/train/predict/health` (M6.6), four `artifact-store.ts` aliases (M6.7) and `InMemoryArtifactLoader.set` (M6 close); `ProblemType` (`sidecar-contract.ts`) is a deprecated type tied to the legacy `TrainRequest`, not a lowercase alias, and stays until M11.3. M6.2's automatic comparison metric picks only keys declared higher- or lower-is-better (never closer-to-one or unknown). The M12 changeset lists the removed aliases (release note).
+- **D3-132** · The leakage audit never raises and never judges a column on a shift it could not score: a label shift whose audit folds cannot be built (fewer than 20 shifted rows, fewer than 5 entities to group, or no fold with rows on both sides) scores NaN and never wins; a column is judged on the shifts that score, and a column with no scored shift is not flagged by the single-feature rule (M7 preflight Q2). Shifts are taken row by row within an entity, as refpipe does (owner flag y).
+- **D3-133** · Every feature column of a source column is audited (derived columns from `AsOfFeatureAssembler.ColumnsFor` included) and the source is flagged when any of them is, with evidence kept per column (Q5); identifier columns are flagged `high-cardinality-id` (Q18). The distinct-ratio rule applies to columns declared categorical or identifier, where refpipe applies it to every non-numeric column; the difference is documented in `audit.py`, and the C4 gate node holds the port to refpipe's audit (identical flags, max |evidence − `scoreByShift`| 4.70e-11 ≤ 1e-10) (Q16). An exact tie between shifts resolves in refpipe's string order — same period, next period, previous period — so a copy of a label that never changes within an entity is a same-period proxy, not a lag (M7.1 review C1). One owner calls the audit: `run._dev_audit`, used by the run and by the parity node (M7.4 review M1).
+- **D3-134** · The implausible-gain rule (planted reference score, binary only): drop-column trials score with `trainer.cross_validate` on the finished selection's folds, no refit per trial; after the explaining source columns are excluded and selection runs again, `beats_reference` runs once more, and a candidate that still beats the reference fails the run at `inner-cv` (Q4).
+- **D3-135** · One held-out permutation-importance implementation, `importance.permutation_importance` (one row permutation per source column, 5 repeats, paired-bootstrap interval through `intervals.paired_bootstrap`) (Q10). The trainer runs it inside the holdout stage before the clock's last check, on the holdout rows with the protocol's resamples, level and resampling units, and it describes the finalist even when the gate ships a simple baseline (Q3). The legacy `/train` path calls it through a source map read from the fitted preprocessing ops (`col=level`, `col__missing` → `col`), with no bootstrap draws, and reports shares of the positive loss increase as kind `held_out_permutation`; below 2 locked-holdout rows it reports `{}`/`none`. `importance_type="gain"` is not set on LightGBM: nothing reads `feature_importances_` once importance is held-out permutation on both paths, so it would be dead configuration; the permutation change closes F-SC-9b (biased split-count importance) (Q11).
+- **D3-136** · Per-row drivers are `coef × (z − z̄)` against the mean encoded training row. A v2 artifact carries the mean in its envelope (`driverBaseline` with the aligned `transformedColumns`; never pickled on the predictor); the legacy format stashes it on the estimator as `mj_driver_baseline_`, its only owner. A missing or misaligned mean gives no driver, never an uncentred one; one ranking rule (`trainer.top_signed_drivers`) serves both paths (Q8, M7 close self-audit).
+- **D3-137** · M7 mutation table mapped to the shipped tests (M7 close): `test_audit_m7.py` → `tests/test_leakage_audit.py`, `test_drivers_m7.py` → `tests/test_centred_drivers.py`; the row "audit each matrix column → `test_onehot_cannot_dilute_a_leak`" is substituted by "the audit scores only the first feature column of a source" → `test_a_source_is_flagged_when_any_of_its_feature_columns_is` (Q5/Q6); the LightGBM `importance_type="gain"` row is struck (D3-135); rows added for the tie-break order, the baselines' exclusion of flagged sources, the driver-baseline alignment guard, the recheck after reselect and the `ImportanceKind` TS↔Python parity. Gate mutations: G2.9 and G2.10 use substitutes on code the nodes run (G2.9: only a next-period best is flagged; the identifier check never fires. G2.10: `run` keeps flagged sources; `beats_reference` returns False), G2.40 the plan's own (importance on training rows) (Q6, Q7). Exit counts are restated from measurements (Q15). *Rejected:* rewording shipped tests to fit the table.
 
 ### 9.2 Risks
 
@@ -31304,6 +31310,67 @@ Product-direction questions keep a working automated default; the others are dec
   - (f) List F (parked notes): M6.1 — `paired_bootstrap` returns NaN bounds when every draw is NaN and records the effective draw count. M6.4 — the later forecast task widens `artifacts_v2.build`'s predictor type (carried to M7). M6.5 — legacy `main.py` `/train`/`/predict`, `preprocessing.py`, `metrics.py` stay outside strict mypy (M11.3 deletes them). M6.6 — `probabilities?`/`classOrder?` stay optional `| null` for hand-built doubles outside the allowlist; a retried request can train twice on a live remote sidecar (documented). M6.7 — the sidecar git SHA `"unrecorded"` is accepted by lineage (per plan); the early slice check scans every unit row. M6.8 — strict mypy on `tests/gates/*.py` pulls in `app/main.py` (not strict-clean), so the gate files stay out of the strict list; a 400-seed coverage gate takes ~10 min.
   - (g) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`; (e) Engine stderr lines from failure-path tests — resolved at this close (item F); (f) the sensitive-fields bracket (D3-85); (g) the 101 Sidecar pytest library warnings — resolved (M6.8 and item B: 0 warnings); (h) `.IT114-ai-vendor-effort.json` on `next` has no `primaryKey`; (i) `MJStorage/src/config.ts` has no `local` key and its README does not describe the driver; (j) the later migration-description edits; (k) converging `MJFilesArtifactStore` onto the snapshot file store (its four `@deprecated` aliases are gone, M6.7); (l) fresh installs need `STORAGE_LOCAL_ROOT`; (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver; (n) `SampleRowIds`/`RowId` spell `Id`; (o) `metadata/ml-algorithms/**` is outside the allowlist, so `poisson_glm`/`tweedie_glm` have no catalog row (baseline-only, D3-112, D3-119); (p) `MJStorage`'s `CreatePreAuthDownloadUrl` exposes no lifetime (the Engine table states 600 s for the cloud drivers, D3-121); (q) IT33's `MJ/Demos/User Activity Summary` catalog query (on `next`) scans `vwRecordChanges` once per active user and passes IT33's 30 s limit as `MJ: Record Changes` grows; the fix belongs to `next`; (r) new (M6.7 review m-5): `MJFilesArtifactStore.save` writes artifact bytes to `<PS_ARTIFACT_DIR|tmpdir>/mj-ps-artifacts/<FileID>.bin` and nothing deletes them (HarnessCleanup removes only the `MJ: Files` row, in another process than MJAPI); trainer runs write three artifacts each (457 files seen at M6.7); proposed fix: the artifact store writes and deletes through the storage provider (`PutObject`/`DeleteObject`) like the snapshot files, and cleanup deletes through the driver; (s) new: IT114's metadata file has no `primaryKey`, so every `mj sync push` duplicates its row (9 rows in `MJ_PS_PR3_claude`; outside the allowlist; IT114 kept out of PR 2 by the owner); (t) new (M6.8 review): calibration design — an isotonic map with `y_min=0` can ship 1e-6 probabilities for rows where the event happens (MLP W1 s42), and a map fitted on out-of-fold fold-model predictions can push an already calibrated refit out of range (RF W1 s42 1.0011 → 1.2227, holdout log loss slightly worse); both are hidden correctly by the 0.8–1.2 rule today; (u) new (M6.8): tree drivers receive centred numeric columns from the one shared encoder; LightGBM keeps a bin boundary at zero, so centring changes its trees versus refpipe (up to 2.2e-4 inner score on R3; xgboost `hist` is invariant); skipping centring for tree drivers would change every trained artifact — owner decision; (v) new (this close's self-audit): twelve exported free functions in the Engine (listed under the self-audit) predate PR 3; moving them onto owner classes renames published API — owner decision.
 
+### 2026-10-29 19:55 EDT — Claude Opus 5.5 (controller) + Opus subagents; close by Claude Opus 5.5 — M7
+
+- **Branch / HEAD:** `ps/pr-3-honest-training` @ the checkpoint commit that follows `251774aacb` (pushed: yes, after step 9).
+- **Database / ports:** `MJ_PS_PR3_claude` (state: the suites' fixtures torn down; PR 3 active gate rows 32; 10 `IT114 - AI Vendor Effort Levels` Test rows (owner flag s); 709 trainer artifact `.bin` files under `$TMPDIR/mj-ps-artifacts` (owner flag r)), MJAPI :4031 (PID 97498, started normally with `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:64537`, dispatcher running; log `/tmp/mjapi-4031.log`), truth sidecar http://127.0.0.1:64537 (Python PID 97325, launcher `pnpm run truth:sidecar`; the close's sidecar code).
+- **Done this session:** M7 start merge `60f36bf7d8` (257 `next` commits; only the two generated server manifests conflicted, taken from `next` and regenerated by the build → `41d839c1da`; migration `V202610281836__v6.2.x__RecordChange_RecycleBin_Covering_Index.sql` applied); M7.1 `7ced82cbd9` + `0f92637971` (the leakage audit `audit.py`, the implausible-gain rule in `run.py`, held-out permutation importance `importance.py` in the holdout stage; the tie-break in refpipe's order, recheck and baseline-exclusion tests); M7.2 `9717319ff4` + `f8eae25e98` (legacy `/train` importance is held-out permutation per source column, kind `held_out_permutation`; one TS `IMPORTANCE_KINDS` list held to `schemas.py`); M7.3 `c19de7640e` + `5567d2c742` (per-row drivers centred on the mean encoded training row on both paths; G0.4 re-pinned, owner flag x); M7.4 `3c89770313` + `9ce4a6d4e0` (gate module `test_leakage_importance_gates.py`, 7 nodes; gate rows `C4 -> S2.4`, `W3 -> S2.4`, `W8 -> S9.4` flipped; Training suite 16 → 19 members; `run._dev_audit`); this close: `25da45abdc` (one driver-ranking rule), `2f916774d7` (legacy importance estimator typed by a Protocol), `4cdab5bf04` (owner's nil UUID in a test), `3446ce2bdc` (drop-column trials take `y_dev`), `251774aacb` (`||` fallbacks in `ColumnByRowID`), the checkpoint (plan edits).
+- **Close items (`m7-close-items.md`):**
+  - (A) The mutation table mapped to the shipped tests and run (below; D3-137).
+  - (B) Counts below are measured. The plan's "190 passed in total" is stale (plain 476 + gate 42 = 518) and so is "no TypeScript product change in M7": M7.2 changed Core (`IMPORTANCE_KINDS`, `EvaluationLineage`, `ImportanceDisplay`; Core 206 → 210) and M7.3/M7.4 changed TruthSuite harness code and the integration-test-suite checks.
+  - (C) §9.1 D3-132…D3-137.
+  - (D) Owner flags a–z below (w, x, y, z new).
+  - (E) Observations below.
+  - (F) Standards self-audit below; five fixes, each its own commit.
+  - (G) Servers restarted because the self-audit changed modules the truth sidecar loads (below); the benchmark logs left unstaged.
+- **Standards self-audit (`git diff 41d839c1da..HEAD` — M7's 8 commits after the start merge `60f36bf7d8`: 37 files, +2,047/−146; 1,026 sidecar Python product lines, ~1,000 test lines, ~200 TypeScript) against `dev-best-practices.md` (= `$PLANS/reference/coding-standards.md`) and constraints §2; findings fixed first:**
+  - Scans: no `any`/`as any`, no `.Get(`/`.Set(`, no `.then(`, no `PrimaryKeys[0]`, no loose equality, no new `unknown` (the one `value: unknown` in `EvaluationLineage.isImportanceKind` is the existing type-guard signature); no `@deprecated` in an M7-edited file except `ProblemType` (`sidecar-contract.ts`, a type, D3-131); no dynamic `import()`; no plan vocabulary in product code or non-gate Sidecar tests (hits only in `tests/gates/`, `checks/ps-*` and the gate metadata, as allowed); Python: no `# type: ignore` added, no `hasattr` guard added, no unused import in a changed file (AST scan); `audit.py`/`importance.py` in the strict mypy list (42 files clean); long functions: `run_audit` (42 lines, 13 of them docstring; a fixed sequence of per-source steps) is the longest added; `evaluation.evaluate` grew by one line to 66 (M6's one-call-step sequence).
+  - Fixed: (S1) `TrainedPredictor.contributions` and legacy `_row_contributions` each carried the top-k signed-driver ranking → one `trainer.top_signed_drivers` with a named `_NEGLIGIBLE_DRIVER` threshold (`25da45abdc`); (S2) legacy `_importance_predictions`/`_extract_importance` took `estimator: Any` → the `_FittedEstimator` Protocol (`2f916774d7`); (S3) `test_centred_drivers.py` declared its own nil UUID → `app.baselines.NIL_UUID` (`4cdab5bf04`); (S4) `run._explaining_columns` rebuilt the development labels `_reference_rule` already holds → takes `y_dev` (`3446ce2bdc`); (S5) `HarnessDatasets.ColumnByRowID` fell back with `??` on missing cells → `||` (dev-best-practices §2) (`251774aacb`). After the fixes: plain Sidecar 476 passed, mypy 42 files clean, `check:standards` 0, `check:guards` 0, TruthSuite build 0.
+  - Not changed: `importance.noise_share` lives in a product module but only tests and the G2.40 node call it — the plan's M7.1 snippet puts it there (plan:19015), so moving it is a plan change, not a fix. The legacy `main.py` keeps `Any` on its pre-PR-3 signatures (`_row_contributions`, `_positive_scores`), outside strict mypy until M11.3.
+- **Mutation checks (M7 table, mapped to the shipped tests; 13 rows, 16 mutations; each a single-occurrence edit applied by script after copying the file to the scratchpad, the named tests run, the original bytes written back and the SHA-256 compared — all `identical`; no stash, checkout or restore):**
+  1. `audit._high_cardinality_flag` ratio `> 0.5` → never → `test_audit_flags_proxy_future_and_id_but_keeps_lag` and `test_categorical_identifier_and_legitimate_categorical` (2 failed / 16 passed); G2.40's node `test_W8_S9_4_noise_carries_at_most_ten_percent` (1 failed: `MemberNumber` unflagged).
+  2. `audit._audit_column` same/future-period rule `best >= 0` → `best >= -1` → `test_audit_flags_proxy_future_and_id_but_keeps_lag` (1 failed / 17 passed; the lag `PrevEscalated` is flagged).
+  3. **Substitute** (Q5/Q6) for "audit each matrix column → `test_onehot_cannot_dilute_a_leak`": the audit scores only the first feature column of a source (`specs[:1]`) → `test_a_source_is_flagged_when_any_of_its_feature_columns_is` (1 failed / 17 passed).
+  4. `run._audited_columns` keeps flagged sources (`list(snap.columns)`) → `test_trainer_excludes_audited_sources_before_selection`, `test_an_audit_that_excludes_every_source_fails_inner_cv_naming_them` (2 failed / 16 passed); gate nodes `test_C4_S2_4_planted_leaks_flagged_by_name_and_absent` and `test_W3_S2_4_every_candidate_flagged[logistic_regression|random_forest|xgboost|lightgbm]` (5 failed).
+  5. `audit.beats_reference` returns `False` → `test_beats_reference`, `test_reference_rule_drops_the_column_that_explains_an_implausible_gain`, `test_reference_rule_without_a_single_explaining_column_fails_inner_cv`, `test_reference_rule_fails_when_another_candidate_still_beats_the_reference` (4 failed / 14 passed); the W3 oracle node `test_W3_S2_4_above_oracle_is_a_leak` (1 failed).
+  6. M7.1 fix-round mutation: the recheck after reselect dropped (`still = None`) → `test_reference_rule_fails_when_another_candidate_still_beats_the_reference` (1 failed / 17 passed).
+  7. `importance.permutation_importance` permutes each encoded column independently → `test_drop_is_the_mean_loss_increase_over_repeats_with_one_row_permutation_per_source` (1 failed / 6 passed: `{'a': 1.44081…} == {'a': 1.43688…}`). The plan's named test `test_permutation_importance_groups_encoded_columns` stays green: it checks that the result is keyed by source, which the mutation keeps; the shipped test that pins one permutation per source is the one above.
+  8. Legacy `_extract_importance` reverted to `feature_importances_`/`|coef_|` per encoded column → `test_leaky_25_level_categorical_dominates_after_aggregation[random_forest|xgboost|lightgbm|logistic_regression]`, `test_mlp_reports_importance`, `test_random_forest_does_not_prefer_continuous_noise`, `test_missing_indicator_importance_belongs_to_its_source_column`, and the 11 `test_importance_kind.py` cases (18 failed).
+  9. **Struck** (Q11): LightGBM `importance_type="gain"` was never added — nothing reads `feature_importances_` once importance is held-out permutation on both paths; F-SC-9b (biased split-count importance) is closed by the permutation change (D3-135).
+  10. `TrainedPredictor.contributions` centring `coef * (z - z̄)` → `coef * z` → `test_drivers_change_sign_with_the_row_not_with_the_model`, `test_each_driver_averages_to_zero_over_the_training_rows`, `test_predict_returns_centred_drivers_for_a_v2_linear_model` (3 failed / 9 passed).
+  11. Legacy `_row_contributions` subtracts 0 when the training mean is absent → `test_a_legacy_linear_model_without_a_training_mean_returns_no_driver` (1 failed / 11 passed).
+  12. Added: the audit's tie-break order reversed (`{0: 2, 1: 1, -1: 0}`) → `test_a_label_copy_tied_on_every_shift_is_a_same_period_proxy` (1 failed / 17 passed).
+  13. Added: the baselines fitted on every snapshot column (`_fit_baselines(req, snap.columns, …)`) → `test_trainer_excludes_audited_sources_before_selection` (1 failed / 17 passed).
+  14. Added: the driver-baseline alignment guard dropped (`names != baseline.columns`) → `test_a_baseline_not_aligned_with_the_encoder_gives_no_driver` (1 failed / 11 passed).
+  15. Added: `'shap'` appended to the TS `IMPORTANCE_KINDS` only → Core `evaluation record › accepts exactly the importance kinds the sidecar declares in schemas.py` and `› reads ImportanceKind 'none' and drops an unknown kind` (2 failed / 8 passed).
+  Result: 16 of 16 mutations red; every file restored byte-identical; `git status` clean afterwards.
+- **Gate mutation checks (M7.4; evidence in `task-M7.4-report.md`; each applied, run through `pnpm mj test run` and the pytest node, restored by byte copy, sha256 identical; not re-run at this close):**
+  - **Mutation output G2.9:** `0 of 1 pytest case(s) passed` — substitute (i), only a next-period best is flagged (`best == 1`): `flagged ['NextPeriodFlag', 'TicketCode']` … `Extra items in the left set: 'ProxyOfTarget'`; substitute (ii), the identifier check never fires: `flagged ['NextPeriodFlag', 'ProxyOfTarget']` … `Extra items in the left set: 'TicketCode'`.
+  - **Mutation output G2.10:** substitute (i), `run` keeps flagged sources: `1 of 5 pytest case(s) passed` — `assert 'Status' not in {'AutoRenew', 'EventsAttended', 'IncomeK', 'Noise1', 'Noise2', 'Noise3', ...}` in each of the 4 candidate cases; substitute (ii), `beats_reference` returns False: `4 of 5 pytest case(s) passed` — oracle node `AssertionError: flags: []`.
+  - **Mutation output G2.40:** `0 of 1 pytest case(s) passed` — original (the plan's mutation), importance on training rows: `noise columns carry 0.3972 of the held-out permutation importance` / `assert 0.3972454453993684 <= 0.1`.
+  - **Mutation check G0.4:** (the keep-list row M7.3 re-pinned, owner flag x; its row file changed in M7, so the milestone-exit gate requires it) per-row drivers uncentred on the legacy `/train` path the W1 pipeline trains through (`_row_contributions`: `coef * (x − x̄)` → `coef * x`); the truth sidecar and MJAPI restarted on the mutated code, `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "W1 -> S9.4"` → fails; file restored byte-identical (sha256 `7abe218246fb…`), servers restarted, re-run → passes (testRunId `7150B83F-5F83-4D20-A379-9E3FB5C3E42B`: `717 of 717 … (329 of 329 auto-renewing rows "Lowers Risk", 388 of 388 others "Raises Risk")`).
+  - **Mutation output G0.4:** `488 of 488 Auto Renew top-driver rows show their own Auto Renew direction (488 of 488 auto-renewing rows "Lowers Risk", 0 of 0 others "Raises Risk"); 717 expected, with at least one row of each Auto Renew value` (testRunId `B2EF40C0-7962-447A-9D08-B3DE56F977E8`, Failed) — run at this close.
+- **Tests (at the checkpoint's tree, after the self-audit):**
+  - `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- -p no:cacheprovider --ignore=tests/gates` (plain, product venv) → 476 passed / 0 failed / 0 skipped, 0 warnings (432 at M6 + 44 in M7: the plan's "+13" counted three files; the shipped files are `test_leakage_audit.py` 18, `test_legacy_importance.py` 7, `test_centred_drivers.py` 12, `test_permutation_importance.py` 7, plus `test_importance_kind.py` changes). Gate nodes in the TruthSuite venv (`PREDICTIVE_STUDIO_PYTHON=$MJ/…/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/…/TruthSuite/python pnpm run test:python -- -p no:cacheprovider tests/gates`) → 42 passed / 0 failed, 5 deselected (`seeds400`), 644 s (35 at M6 + 7).
+  - `cd packages/AI/PredictiveStudio/Core && pnpm run build && pnpm test` → build 0; 210 passed / 0 failed / 0 skipped (18 files; 206 at M6 + 4).
+  - `cd packages/AI/PredictiveStudio/Sidecar && pnpm run build && pnpm test` → build 0; 29 passed / 0 failed / 0 skipped.
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm run build && pnpm test` → build 0; 707 passed / 0 failed / 0 skipped (69 files), 0 console blocks; `pnpm run test:integration` (truth sidecar) → 3 passed.
+  - `cd packages/AI/PredictiveStudio/TruthSuite && pnpm run build && pnpm test` → build 0; 93 passed / 0 failed / 0 skipped (17 files); `pnpm run test:python` → 20 passed; `--mypy` → "no issues found in 42 source files".
+  - `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → build 0; 790 passed / 0 failed (51 files; bundle total `toHaveLength(186)`); PR 3 gate rows (`Tags LIKE '%owner:PR3%' AND Status='Active'`) → 32.
+  - `npm run check:standards` → 0; `check:guards` → 0; `check:codegen-tail` → 0 (433 entities, 766 migrations).
+  - `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → Completed 19 / 19 passed (run `F865EFE5-8D77-455B-A95B-C064319F0962`); `"… — Prediction Units"` → Completed 12 / 12 passed (`F01B2D2C-34AC-485B-AA10-CF9BC819ABE9`); both against MJAPI 6995 (this close's build, dispatcher disabled) and the restarted truth sidecar.
+  - Keep-list: Containment → Completed 10 of 10 passed (`708B1773-E113-4501-9769-C125CE18C042`, `RUN_MUTATION_TESTS=1`; G0.4 under its re-pinned rule, owner flag x). Feature Pipelines → ENVIRONMENT-BLOCKED (D3-78): 0 of 5 (`0BF9BD83-A62F-42B7-9E4F-DA6E9465A4B7`), each "needs bizapps-common installed with its Feature Pipeline changes …", as at M5/M6. Deterministic (`pnpm run test:integration`, MJAPI 6995 with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, `RUN_MUTATION_TESTS=1`) → Completed 116 passed / 0 failed / 1 skipped of 117 (run `681C1F85-2C27-49F3-B083-17D330A6B399`, 23:26–23:43 UTC): IT52 skipped (RUN_SEARCH_TESTS not set); no new failure. Compared with the M6 close baseline 116/0/1 (IT52 skipped), not the plan's "M1-start counts".
+  - Milestone-exit gate: see the commit body.
+- **Runtime verification:** M7.4's live runs (`task-M7.4-report.md`): C4 1/1 (`0E60FB4C…`), W3 5/5 (`F3E53E7C…`), W8 1/1 (`007E2E68…`) through `pnpm mj test run`; the gate module 7/7 against a live sidecar (80.0 s); refpipe C4 parity: identical flags, max |Δ| 4.70e-11, cold `refpipe("C4")` 13 s. M7.3: G0.4 717 Auto Renew top-driver rows = 329 auto-renewing "Lowers Risk" + 388 others "Raises Risk". This close: the Training, Prediction Units and Containment suites above ran through MJAPI 6995 on this close's code (the truth sidecar restarted after the self-audit's Python changes); Containment's G0.4 passed on the centred drivers.
+- **State left behind:** MJAPI on :4031 (PID 97498, `.env.MJ_PS_PR3_claude` + `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:64537`, dispatcher running; log `/tmp/mjapi-4031.log`); truth sidecar http://127.0.0.1:64537 (Python PID 97325, `TruthSuite/.run/sidecar.url`, log `TruthSuite/.run/sidecar.log`); the three benchmark-log rewrites unstaged for the controller (item G); no `metadata/**` write-backs (no sync push at this close); untracked owner files only.
+- **Next step (exact):** M8 start: `git fetch origin && git merge origin/next` (then the §6 preamble's milestone-start steps; the controller rules on the M8 preflight scan before M8.1), then Task M8.1 Step 1.
+- **Gotchas / decisions:**
+  - (a) §9.1 D3-132…D3-137; the M7 start merge `60f36bf7d8` anchors `# ok 163 · moved 4 · changed 0 · missing 0` (§12); this close's anchor run: against `origin/next` (`ca3b460483`) `# ok 163 · moved 4 · changed 0 · missing 0`; at HEAD three more anchors read `changed` than at the M6 checkpoint, all M7 changes by design — `sc-main-importance-call`, `sc-main-extract-importance` (M7.2, held-out permutation importance on the legacy path), `sc-main-uncentred-driver` (M7.3, centred drivers); no anchor edited.
+  - (b) Restart the truth sidecar after any change to a module it loads, and MJAPI after it with the new URL. Restarts at this close: sidecar 88848 → 6723 (the self-audit's `trainer.py`/`main.py`/`run.py` edits), MJAPI 89054 → 6995 (dispatcher disabled, suites and Deterministic) → 47266 (normal); then, for the G0.4 mutation check, sidecar 6723 → 96033 (mutated) → 97325 and MJAPI 47266 → 96226 → 97498 (normal, dispatcher running).
+  - (c) Run the Deterministic tier against an MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, with `RUN_MUTATION_TESTS=1`; then restart MJAPI normally.
+  - (d) Observations (close item E, not flags): legacy `/train` runs with fewer than 2 locked-holdout rows now report `{}` importance, so the single-feature-dominance guard cannot fire for them — spec-conformant (`_extract_importance` returns `({}, "none")`); the gate test modules sit outside the TruthSuite mypy list — the new `test_leakage_importance_gates.py` is strict-clean on its own, and the 43 errors come from the legacy `main.py`/`metrics.py`/`preprocessing.py` that the gate conftest imports, which stay out of strict mypy until M11.3; the shared fixture module is `tests/tools/trainer_fixture.py`; the M7 task briefs' sidecar port 4391 is stale — the live sidecar URL comes from `TruthSuite/.run/sidecar.url`.
+  - (e) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`; (e) resolved at the M6 close; (f) the sensitive-fields bracket (D3-85); (g) resolved at the M6 close (0 Sidecar warnings); (h) `.IT114-ai-vendor-effort.json` on `next` has no `primaryKey`; (i) `MJStorage/src/config.ts` has no `local` key and its README does not describe the driver; (j) the later migration-description edits; (k) converging `MJFilesArtifactStore` onto the snapshot file store; (l) fresh installs need `STORAGE_LOCAL_ROOT`; (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver; (n) `SampleRowIds`/`RowId` spell `Id`; (o) `metadata/ml-algorithms/**` is outside the allowlist, so `poisson_glm`/`tweedie_glm` have no catalog row (D3-112, D3-119); (p) `MJStorage`'s `CreatePreAuthDownloadUrl` exposes no lifetime (D3-121); (q) IT33's `MJ/Demos/User Activity Summary` catalog query scans `vwRecordChanges` once per active user, so it can pass IT33's 30 s limit as `MJ: Record Changes` grows; the fix belongs to `next`; (r) artifact bytes are never deleted: `MJFilesArtifactStore.save` writes `<PS_ARTIFACT_DIR|tmpdir>/mj-ps-artifacts/<FileID>.bin` and cleanup removes only the `MJ: Files` row — 709 files now (509 at the M6 close); (s) IT114's metadata file has no `primaryKey`, so every `mj sync push` duplicates its row — 10 rows in `MJ_PS_PR3_claude` (M7.4's sync push added the tenth); (t) calibration design: isotonic maps with `y_min=0`, and maps fitted on out-of-fold predictions applied to a refit; (u) tree drivers receive centred numeric columns from the one shared encoder (LightGBM's zero bin); (v) twelve exported free functions in the Engine predate PR 3; moving them onto owner classes renames published API; (w) new: trainer-path models store `FeatureImportance='{}'` and `ImportanceKind: null` (`training-engine.ts:574,590`) — the plan's M6.7 snippet comment promised that the leakage audit fills held-out permutation importance (plan:18176), but no task carries it, and mapping drop + interval to the stored shares format is a design decision (M7 preflight Q12); (x) new: keep-list gate G0.4 re-pinned — from "488 of 488 Auto Renew top-driver rows lower risk" to "717 rows each show their own Auto Renew direction (329 on/lower, 388 off/raise), with both kinds present"; the cause is centring (an AutoRenew=0 row contributed exactly 0 before); the reviewer's assessment is that it still guards F-UI-3 (`task-M7.3-review.md`, "G0.4 assessment for the owner"); the measured split is stored in the DB only on failure, because the driver keeps only the check Name on pass and `testing-integration` is outside the allowlist; (y) new: the audit shifts rows within an entity, as refpipe does, not periods — they differ when an entity has several rows per period (D3-132); (z) new: the stale comment at `core-entity-forms/src/lib/custom/MLModels/ml-model-view-models.ts:296` is left as is — editing it triggers D-053 removal of 9 aliases, and one alias (`humanizeFeatureName`) has a caller in `core-entity-forms/src/__tests__/ml-model-view-models.test.ts`, outside the allowlist.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — written (trigger a not yet run) — Claude Opus 5.5
@@ -31553,3 +31620,7 @@ Product-direction questions keep a working automated default; the others are dec
 ### 2026-10-29 — M6 close (refresh trigger c at the M6 start merge `554852a6a4`) — Claude Opus 5.5
 
 - Anchors `# ok 163 · moved 4 · changed 0` at the M6 start merge `554852a6a4` (92 `next` commits, the v6.2.0-edge.6 release; the same four `__mj.ts` entity hints moved as at the M3–M5 starts; no pattern changed); from `next`: migration `V202610280035__v6.2.x__Metadata_Sync.sql` (applied on the private DB), 25 `metadata/` files, no integration bundles; no anchor edited. At the close `origin/next` (`61b24684db`) still reads `# ok 163 · moved 4 · changed 0`; the seven anchors M6 changes by design (`core-is-error-metric`, `core-test-error-keys`, `sc-artifacts-allowlist`, `sc-main-predict-return`, `sc-ts-http-post`, `eng-seams-import`, `p3-mj-sidecar-trainer`) read `changed` at HEAD, as intended (D3-124, D3-131).
+
+### 2026-10-29 — M7 close (refresh trigger c at the M7 start merge `60f36bf7d8`) — Claude Opus 5.5
+
+- Anchors `# ok 163 · moved 4 · changed 0 · missing 0` at the M7 start merge `60f36bf7d8` (257 `next` commits; the same four `__mj.ts` entity hints moved as at the M3–M6 starts; no pattern changed); from `next`: migration `V202610281836__v6.2.x__RecordChange_RecycleBin_Covering_Index.sql` (applied on the private DB), metadata (the reembed action, embeddinggemma models, the `IAIConfiguration` JSONType) and 4 IT check files; the two generated server manifests regenerated by the build (`41d839c1da`); no anchor edited. At the close `origin/next` (`ca3b460483`) still reads `# ok 163 · moved 4 · changed 0 · missing 0`; the three anchors M7 changes by design (`sc-main-importance-call`, `sc-main-extract-importance`, `sc-main-uncentred-driver`) read `changed` at HEAD, as intended (D3-135, D3-136).
