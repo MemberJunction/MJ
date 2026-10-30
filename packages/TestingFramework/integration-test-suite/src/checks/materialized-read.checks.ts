@@ -19,8 +19,8 @@
  * snapshot is FABRICATED directly (raw `CREATE TABLE` + a sentinel `INSERT` via `ctx.Pool`) with its metadata
  * (`MJ: Materialized Results` + the `MJ: Materialized Result Queries` join) seeded through `Metadata`. This is
  * fully deterministic and, via the deliberately-divergent sentinel row, the strongest possible "came from the
- * snapshot" signal. SQL-Server only: the fabrication uses `ctx.Pool` (an mssql pool), so the bundle skips
- * (skip-as-pass) when no pool is present (PostgreSQL / client transport).
+ * snapshot" signal. SQL-Server only: the fabrication uses `ctx.Pool` (an mssql pool), so the checks skip
+ * when no pool is present (PostgreSQL / client transport).
  *
  * FIXTURES: a self-contained Query Category + a template Query (`… WHERE Name = {{ marker }}`, so
  * MJQueryEntityServer auto-extracts the `marker` row-filter parameter) + its output QueryFields, a fabricated
@@ -40,7 +40,7 @@ import type {
     MJMaterializedResultQueryEntity,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { FixtureQuerySaveOptions } from './query-fixture-save-options';
@@ -70,7 +70,7 @@ function requireFixtures(): MaterializedReadFixtures {
 }
 
 /**
- * Fabricate the snapshot + seed its metadata. Skips (no fixtures set → checks skip-as-pass) when there is no
+ * Fabricate the snapshot + seed its metadata. Skips (no fixtures set → checks skip) when there is no
  * mssql pool (PostgreSQL / client transport), since the fabrication is raw T-SQL.
  */
 export async function CreateMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
@@ -213,7 +213,7 @@ export const MaterializedReadChecks: NamedCheck[] = [
         Id: 'materialized-read.MR1',
         Name: 'MR1: a Materialized read is served FROM THE SNAPSHOT — returns the sentinel row and RenderedSQL references materialized_<…> + the surrogate order key',
         Fn: async (ctx): Promise<void> => {
-            if (!fixtures) { console.warn('  ⚠ materialized-read.MR1 SKIPPED — no fixtures (no mssql pool on this run path).'); return; }
+            if (!fixtures) { SkipCheck('no fixtures: no mssql pool on this run path (snapshot fabrication is T-SQL only, SQL Server server transport)'); }
             const { Query, Sentinel, SentinelID } = requireFixtures();
             const rq = new RunQuery();
             const result = await rq.RunQuery({ QueryID: Query.ID, DataSource: 'Materialized', Parameters: { marker: Sentinel } }, ctx.User);
@@ -228,7 +228,7 @@ export const MaterializedReadChecks: NamedCheck[] = [
         Id: 'materialized-read.MR2',
         Name: 'MR2 (negative control): the SAME query read Live returns the sentinel NOWHERE and RenderedSQL does not reference the snapshot',
         Fn: async (ctx): Promise<void> => {
-            if (!fixtures) { console.warn('  ⚠ materialized-read.MR2 SKIPPED — no fixtures (no mssql pool on this run path).'); return; }
+            if (!fixtures) { SkipCheck('no fixtures: no mssql pool on this run path (snapshot fabrication is T-SQL only, SQL Server server transport)'); }
             const { Query, Sentinel, SentinelID } = requireFixtures();
             const rq = new RunQuery();
             const result = await rq.RunQuery({ QueryID: Query.ID, DataSource: 'Live', Parameters: { marker: Sentinel } }, ctx.User);
@@ -243,7 +243,7 @@ export const MaterializedReadChecks: NamedCheck[] = [
         Id: 'materialized-read.MR3',
         Name: 'MR3: deleting the MaterializedResult (join row present) cleans the join first — no raw FK error (reverse-direction FK cleanup)',
         Fn: async (ctx): Promise<void> => {
-            if (!fixtures) { console.warn('  ⚠ materialized-read.MR3 SKIPPED — no fixtures (no mssql pool on this run path).'); return; }
+            if (!fixtures) { SkipCheck('no fixtures: no mssql pool on this run path (snapshot fabrication is T-SQL only, SQL Server server transport)'); }
             const { MaterializedResult, Link } = requireFixtures();
             const rv = RunView.FromMetadataProvider(ctx.Provider as IMetadataProvider);
             const before = await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Materialized Result Queries', ExtraFilter: `ID='${Link.ID}'`, Fields: ['ID'], ResultType: 'simple' }, ctx.User);

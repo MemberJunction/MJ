@@ -64,7 +64,7 @@ import type {
 import { MJGlobal } from '@memberjunction/global';
 import type { MJUserEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -202,12 +202,11 @@ export const UserElevationChecks: NamedCheck[] = [
             const usersEntity = requireUsersEntity(ctx, 'UE2');
             const caller = findNonOwnerWithGrant(usersEntity, (p) => p.CanRead);
             if (!caller) {
-                console.warn(
-                    `  ⚠ user-elevation.UE2 SKIPPED — no ACTIVE non-Owner principal can READ '${USERS_ENTITY}' on ` +
+                SkipCheck(
+                    `no ACTIVE non-Owner principal can READ '${USERS_ENTITY}' on ` +
                     `this database (an all-Owner database, or one where no non-Owner role holds the grant), so the ` +
                     `caller's own row cannot even be loaded. Unexercised, not violated.`
                 );
-                return;
             }
 
             const row = await loadOwnRow(ctx, caller, 'UE2');
@@ -238,8 +237,7 @@ export const UserElevationChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const owner = findOwner();
             if (!owner) {
-                console.warn('  ⚠ user-elevation.UE3 SKIPPED — no ACTIVE Owner user in the cache.');
-                return;
+                SkipCheck('no ACTIVE Owner user in the user cache.');
             }
 
             const row = await loadOwnRow(ctx, owner, 'UE3');
@@ -289,12 +287,11 @@ export const UserElevationChecks: NamedCheck[] = [
             const usersEntity = requireUsersEntity(ctx, 'UE4');
             const caller = findNonOwnerWithGrant(usersEntity, (p) => p.CanUpdate);
             if (!caller) {
-                console.warn(
-                    `  ⚠ user-elevation.UE4 SKIPPED — no ACTIVE non-Owner principal holds CanUpdate on ` +
+                SkipCheck(
+                    `no ACTIVE non-Owner principal holds CanUpdate on ` +
                     `'${USERS_ENTITY}' on this database, so the end-to-end Save() path cannot be reached ` +
                     `(CheckPermissions would refuse before Validate() runs). UE2 still proves the guard's refusal.`
                 );
-                return;
             }
 
             // UE4 is the one check that issues a real write, and the danger is inverted from the
@@ -307,12 +304,11 @@ export const UserElevationChecks: NamedCheck[] = [
             // UE4 skips rather than running unprotected.
             const provider = asDataProvider(ctx.Provider);
             if (provider.SupportsEntityTransactions !== true || !provider.BeginEntityTransaction) {
-                console.warn(
-                    '  ⚠ user-elevation.UE4 SKIPPED — this provider cannot open a transaction, and UE4 refuses to ' +
+                SkipCheck(
+                    'this provider cannot open a transaction, and UE4 refuses to ' +
                     'attempt a real Type change without a guaranteed rollback (a regressed guard would leave a real ' +
                     'account promoted to Owner). Run this bundle on the server transport.'
                 );
-                return;
             }
 
             const row = await loadOwnRow(ctx, caller, 'UE4');
