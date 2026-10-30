@@ -459,7 +459,7 @@
 }
 
 @media (max-width: 1180px) {
-  .vs-resource-shell--slidein-open .vs-archetypes-workspace--split {
+  .vs-resource-shell:has(> vs-studio-slide-in.vs-studio-slide-in--open) .vs-archetypes-workspace--split {
     grid-template-columns: 1fr;
   }
 }

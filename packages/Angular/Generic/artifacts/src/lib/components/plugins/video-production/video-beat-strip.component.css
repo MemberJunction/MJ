@@ -77,7 +77,7 @@
   overflow: hidden;
   white-space: normal;
   hyphens: auto;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
   line-height: var(--mj-leading-tight);
   text-align: center;

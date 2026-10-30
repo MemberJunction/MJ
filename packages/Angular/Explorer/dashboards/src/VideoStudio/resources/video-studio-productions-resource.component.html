@@ -281,11 +281,11 @@
     [CurrentUser]="CurrentUser"
     [EnvironmentId]="EnvironmentId"
     [ApplicationId]="ApplicationId"
-    [AppContext]="CopilotAppContext"
+    [PageSource]="this"
+    [PageContext]="PageContext"
+    [PageTools]="PageTools"
+    [FallbackBrandKitId]="FallbackBrandKitId"
     [HeaderTitle]="'Video Studio'"
     (OpenChange)="OnSlideInOpenChange($event)"
-    (ConversationCreated)="OnSlideInConversationCreated($event)"
-    (PendingArtifactConsumed)="OnSlideInPendingArtifactConsumed()"
-    (BriefStateChange)="OnBriefStateChange($event)"
   ></vs-studio-slide-in>
 </div>

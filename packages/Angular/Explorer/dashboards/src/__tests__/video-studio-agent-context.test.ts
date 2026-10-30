@@ -7,7 +7,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
 import {
     VIDEO_STUDIO_NAME_LIST_CAP,
     CapVideoStudioNames,
@@ -519,10 +520,19 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
             Name: 'Org Default Kit',
         });
 
+        const getVsEngineSpy = vi
+            .spyOn(VideoStudioEngine, 'GetProviderInstance')
+            .mockReturnValue({
+                Archetypes: [sampleArchetype],
+            } as unknown as VideoStudioEngine);
+        const getBkEngineSpy = vi
+            .spyOn(BrandKitEngine, 'GetProviderInstance')
+            .mockReturnValue({
+                BrandKits: [sampleKit],
+            } as unknown as BrandKitEngine);
+
         const publishedContexts: Record<string, unknown>[] = [];
         const tools = service.BuildBriefClientTools({
-            GetFallbackArchetypes: () => [sampleArchetype],
-            GetFallbackBrandKits: () => [sampleKit],
             OnBriefMutated: () => {
                 publishedContexts.push(
                     service.BuildCombinedAppContext({ Surface: 'VideoStudioBrandKits', SuppressChatOverlay: true }),
@@ -593,6 +603,9 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
         const directArchRes = await directTools[0].Handler({ archetype: 'Executive Briefing' });
         expect(directArchRes.Success).toBe(true);
         expect(directArchRes.Data?.['SelectedArchetypeId']).toBe('arch-resolved-9');
+        expect(getVsEngineSpy).toHaveBeenCalled();
+        expect(getBkEngineSpy).toHaveBeenCalled();
+        vi.restoreAllMocks();
     });
 });
 

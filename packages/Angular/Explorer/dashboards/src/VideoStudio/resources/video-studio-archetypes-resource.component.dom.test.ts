@@ -188,14 +188,14 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
 
     // Shared slide-in sits beside mj-page-layout inside .vs-resource-shell; edge strip opens it
     expect(query(fixture, '.vs-resource-shell > vs-studio-slide-in')).not.toBeNull();
-    expect(instance.IsCopilotSlideInOpen).toBe(false);
+    expect(sharedSlideInState.IsOpen).toBe(false);
     const stripBtn = query(fixture, '[data-testid="productions-copilot-strip"]') as HTMLElement | null;
     expect(stripBtn).not.toBeNull();
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).toBeNull();
 
     stripBtn!.click();
     fixture.detectChanges();
-    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(sharedSlideInState.IsOpen).toBe(true);
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
     expect(queryAll(fixture, 'vs-copilot-panel')).toHaveLength(1);
 
@@ -320,8 +320,8 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
 
     const instance = fixture.componentInstance;
     // Open slide-in and ConversationId from previous page survive mounting Archetypes
-    expect(instance.IsCopilotSlideInOpen).toBe(true);
-    expect(instance.SlideInConversationId).toBe('conv-persisted-88');
+    expect(sharedSlideInState.IsOpen).toBe(true);
+    expect(sharedSlideInState.ConversationId).toBe('conv-persisted-88');
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
 
     instance.OpenCloneDialog(instance.AllArchetypes[0]);

@@ -2,12 +2,9 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  OnDestroy,
   OnInit,
-  ViewChild,
   inject,
 } from '@angular/core';
-import { Subscription } from 'rxjs';
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   MJEnvironmentEntityExtended,
@@ -19,10 +16,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { FormatVideoTime, FormatVideoTimeRange } from '@memberjunction/ng-artifacts';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
-import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
-import { VSProductionBriefStateSnapshot } from '../components/vs-production-brief.component';
-import { VSStudioSlideInComponent } from '../components/vs-studio-slide-in.component';
-import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import {
   ARCHETYPE_CATEGORIES,
   ArchetypeCardSnapshot,
@@ -37,6 +30,7 @@ import {
   GroupArchetypesByCategory,
   ParseArchetypeDefaultFormats,
   ResolveVideoStudioItem,
+  StudioBriefClientToolDefinition,
 } from '../video-studio-agent-context';
 
 export interface ArchetypeBeatBlock {
@@ -95,7 +89,7 @@ export interface ArchetypeCompanyOption {
 })
 export class VideoStudioArchetypesResourceComponent
   extends BaseResourceComponent
-  implements OnInit, OnDestroy
+  implements OnInit
 {
   public IsLoading = false;
   public LoadError: string | null = null;
@@ -147,37 +141,11 @@ export class VideoStudioArchetypesResourceComponent
   public IsCloning = false;
   public CloneError: string | null = null;
 
-  @ViewChild('studioSlideIn')
-  public StudioSlideIn?: VSStudioSlideInComponent;
-
-  public get CopilotPanel(): VSCopilotPanelComponent | undefined {
-    return this.StudioSlideIn?.CopilotPanel;
-  }
+  public PageContext: Record<string, unknown> = this.buildArchetypesContext();
+  public readonly PageTools: StudioBriefClientToolDefinition[] = this.buildArchetypesClientTools();
 
   private companiesLoadError: string | null = null;
-  private slideInSub: Subscription | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
-  public readonly SlideInState = inject(VSStudioSlideInStateService);
-
-  public CopilotAppContext: Record<string, unknown> = this.buildCopilotAppContext();
-
-  public get IsCopilotSlideInOpen(): boolean {
-    return this.SlideInState.IsOpen;
-  }
-  public set IsCopilotSlideInOpen(value: boolean) {
-    if (value) {
-      this.SlideInState.Reopen();
-    } else {
-      this.SlideInState.Close();
-    }
-  }
-
-  public get SlideInConversationId(): string | null {
-    return this.SlideInState.ConversationId;
-  }
-  public set SlideInConversationId(value: string | null) {
-    this.SlideInState.SetConversationId(value);
-  }
 
   public get CurrentUser(): UserInfo | null {
     return this.ProviderToUse?.CurrentUser ?? null;
@@ -196,56 +164,8 @@ export class VideoStudioArchetypesResourceComponent
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
-    this.slideInSub = this.SlideInState.State$.subscribe(() => {
-      this.CopilotAppContext = this.buildCopilotAppContext();
-      this.cdr.markForCheck();
-    });
-    this.registerAgentTools();
     await this.LoadArchetypes(false);
     this.NotifyLoadComplete();
-  }
-
-  override ngOnDestroy(): void {
-    this.slideInSub?.unsubscribe();
-    this.slideInSub = null;
-    super.ngOnDestroy();
-  }
-
-  public ReopenCopilotSlideIn(): void {
-    this.SlideInState.Reopen();
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public CloseCopilotSlideIn(): void {
-    this.SlideInState.Close();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnSlideInOpenChange(_isOpen: boolean): void {
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
-    this.SlideInState.ApplyBriefSnapshot(snapshot);
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnSlideInConversationCreated(event: { conversation: { ID: string } }): void {
-    this.SlideInState.SetConversationId(event.conversation.ID);
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnSlideInPendingArtifactConsumed(): void {
-    this.SlideInState.ClearPendingArtifact();
-    this.cdr.markForCheck();
   }
 
   public async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -292,12 +212,6 @@ export class VideoStudioArchetypesResourceComponent
       await engine.Config(forceRefresh, undefined, this.ProviderToUse);
       const archetypes = engine.Archetypes;
       this.AllArchetypes = archetypes.map((arch) => this.mapArchetypeToCard(arch));
-      if (this.SlideInState.BriefArchetypes.length === 0 && this.AllArchetypes.length > 0) {
-        this.SlideInState.BriefArchetypes = [...this.AllArchetypes];
-        if (!this.SlideInState.BriefSelectedArchetype) {
-          this.SlideInState.BriefSelectedArchetype = this.AllArchetypes[0];
-        }
-      }
       await this.loadAvailableCompanies();
       this.applyFiltersAndSync();
     } catch (err: unknown) {
@@ -583,24 +497,16 @@ export class VideoStudioArchetypesResourceComponent
     });
   }
 
-  private buildCopilotAppContext(): Record<string, unknown> {
-    return this.SlideInState.BuildCombinedAppContext(
-      this.buildArchetypesContext(),
-      null,
-    );
-  }
-
   private syncAgentContext(): void {
-    const context = this.buildArchetypesContext();
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.navigationService.SetAgentContext(this, context);
+    this.PageContext = this.buildArchetypesContext();
+    this.navigationService.SetAgentContext(this, this.PageContext);
   }
 
   // SAFETY BOUNDARY: Only read, filter, search, select/open-for-viewing, and refresh
   // tools are registered for the AI agent. Cloning a shipped archetype creates a new
   // database record and is gated exclusively behind the user-driven Clone dialog.
-  private registerAgentTools(): void {
-    this.navigationService.SetAgentClientTools(this, [
+  private buildArchetypesClientTools(): StudioBriefClientToolDefinition[] {
+    return [
       {
         Name: 'SearchArchetypes',
         Description: 'Filter Video Archetypes by a free-text search query matching name, category, format, or beat labels.',
@@ -739,15 +645,6 @@ export class VideoStudioArchetypesResourceComponent
           };
         },
       },
-      ...this.SlideInState.BuildBriefClientTools({
-        GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
-        GetFallbackArchetypes: () => this.AllArchetypes,
-        OnBriefMutated: () => {
-          this.CopilotAppContext = this.buildCopilotAppContext();
-          this.syncAgentContext();
-          this.cdr.markForCheck();
-        },
-      }),
-    ]);
+    ];
   }
 }

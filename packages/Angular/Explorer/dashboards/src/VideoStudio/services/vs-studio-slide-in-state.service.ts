@@ -1,10 +1,19 @@
 import { Injectable } from '@angular/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
+import {
+  BrandKitEngine,
+  MJBrandKitEntity,
+  MJVideoArchetypeEntity,
+  VideoStudioEngine,
+} from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { VideoCaptionMode } from '@memberjunction/video-studio-core';
 import { VSProductionBriefStateSnapshot } from '../components/vs-production-brief.component';
 import {
   ArchetypeCardSnapshot,
+  ArchetypeCategory,
   BrandKitCardSnapshot,
+  BuildArchetypeBeatStripItems,
   BuildStudioAppContext,
   BuildStudioBriefClientTools,
   StudioAppContextPayload,
@@ -18,8 +27,6 @@ export interface VSStudioSlideInStateSnapshot {
   ConversationId: string | null;
   PendingArtifactId: string | null;
   PendingArtifactVersionNumber: number | null;
-  BriefArchetypes: ArchetypeCardSnapshot[];
-  BriefBrandKits: BrandKitCardSnapshot[];
   BriefSelectedArchetype: ArchetypeCardSnapshot | null;
   BriefSelectedBrandKit: BrandKitCardSnapshot | null;
   BriefSelectedFormats: string[];
@@ -30,9 +37,8 @@ export interface VSStudioSlideInStateSnapshot {
 }
 
 export interface VSStudioBriefToolsOptions {
+  Provider?: IMetadataProvider | null;
   GetBriefComponent?: () => StudioBriefComponentHandle | null | undefined;
-  GetFallbackArchetypes?: () => readonly ArchetypeCardSnapshot[];
-  GetFallbackBrandKits?: () => readonly BrandKitCardSnapshot[];
   OnBriefMutated?: () => void;
 }
 
@@ -42,7 +48,7 @@ export interface VSStudioBriefToolsOptions {
  * Holds open/closed state, the active conversation ID, pending iteration artifact
  * metadata, and the in-memory production brief selections so the slide-in state
  * and active conversation survive moving between Productions, Brand Kits, and
- * Archetypes (UI state only: no data access, no `localStorage`).
+ * Archetypes (UI state only: no data arrays, no data access, no `localStorage`).
  */
 @Injectable({ providedIn: 'root' })
 export class VSStudioSlideInStateService {
@@ -51,8 +57,6 @@ export class VSStudioSlideInStateService {
   public PendingArtifactId: string | null = null;
   public PendingArtifactVersionNumber: number | null = null;
 
-  public BriefArchetypes: ArchetypeCardSnapshot[] = [];
-  public BriefBrandKits: BrandKitCardSnapshot[] = [];
   public BriefSelectedArchetype: ArchetypeCardSnapshot | null = null;
   public BriefSelectedBrandKit: BrandKitCardSnapshot | null = null;
   public BriefSelectedFormats: string[] = ['16:9'];
@@ -150,8 +154,6 @@ export class VSStudioSlideInStateService {
   }
 
   public ApplyBriefSnapshot(snapshot: VSProductionBriefStateSnapshot): void {
-    this.BriefArchetypes = [...snapshot.AllArchetypes];
-    this.BriefBrandKits = [...snapshot.AllBrandKits];
     this.BriefSelectedArchetype = snapshot.SelectedArchetype;
     this.BriefSelectedBrandKit = snapshot.SelectedBrandKit;
     this.BriefSelectedFormats = [...snapshot.SelectedFormats];
@@ -206,14 +208,8 @@ export class VSStudioSlideInStateService {
     }
     return BuildStudioBriefClientTools({
       GetBriefComponent: options.GetBriefComponent,
-      GetArchetypes: () =>
-        this.BriefArchetypes.length > 0
-          ? this.BriefArchetypes
-          : (options.GetFallbackArchetypes?.() ?? []),
-      GetBrandKits: () =>
-        this.BriefBrandKits.length > 0
-          ? this.BriefBrandKits
-          : (options.GetFallbackBrandKits?.() ?? []),
+      GetArchetypes: () => this.resolveEngineArchetypes(options.Provider),
+      GetBrandKits: () => this.resolveEngineBrandKits(options.Provider),
       OnArchetypeSelected: (
         archetype: ArchetypeCardSnapshot,
         formats: StudioVideoFormat[],
@@ -248,8 +244,6 @@ export class VSStudioSlideInStateService {
     this.ConversationId = null;
     this.PendingArtifactId = null;
     this.PendingArtifactVersionNumber = null;
-    this.BriefArchetypes = [];
-    this.BriefBrandKits = [];
     this.BriefSelectedArchetype = null;
     this.BriefSelectedBrandKit = null;
     this.BriefSelectedFormats = ['16:9'];
@@ -260,14 +254,80 @@ export class VSStudioSlideInStateService {
     this.emitState();
   }
 
+  private resolveEngineArchetypes(
+    provider?: IMetadataProvider | null,
+  ): ArchetypeCardSnapshot[] {
+    try {
+      const engine = VideoStudioEngine.GetProviderInstance<VideoStudioEngine>(
+        provider ?? Metadata.Provider,
+        VideoStudioEngine,
+      ) as VideoStudioEngine | undefined;
+      const archetypes = (engine?.Archetypes ?? []).filter(
+        (a: MJVideoArchetypeEntity) => a.Status === 'Active' || !a.Status,
+      );
+      return archetypes.map((arch: MJVideoArchetypeEntity) => {
+        const defaultDur = arch.DefaultDurationSeconds ?? 30;
+        const rawBeats = Array.isArray(arch.BeatTemplateObject) ? arch.BeatTemplateObject : [];
+        const beatItems = BuildArchetypeBeatStripItems(rawBeats, defaultDur);
+        const companyId = arch.CompanyID ?? null;
+        return {
+          ID: arch.ID,
+          Name: arch.Name,
+          Description: arch.Description ?? '',
+          Category: (arch.Category ?? 'Explainer') as ArchetypeCategory,
+          Status: arch.Status === 'Inactive' ? 'Inactive' : 'Active',
+          CompanyID: companyId,
+          CompanyName: arch.Company ?? null,
+          IsShipped: companyId === null,
+          DefaultDurationSeconds: defaultDur,
+          MinDurationSeconds: arch.MinDurationSeconds ?? 15,
+          MaxDurationSeconds: arch.MaxDurationSeconds ?? 120,
+          DefaultFormats: arch.DefaultFormats ?? '16:9',
+          BeatCount: beatItems.length,
+          BeatLabels: beatItems.map((b) => b.Label),
+          BeatItems: beatItems,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  private resolveEngineBrandKits(
+    provider?: IMetadataProvider | null,
+  ): BrandKitCardSnapshot[] {
+    try {
+      const engine = BrandKitEngine.GetProviderInstance<BrandKitEngine>(
+        provider ?? Metadata.Provider,
+        BrandKitEngine,
+      ) as BrandKitEngine | undefined;
+      const kits = (engine?.BrandKits ?? []).filter(
+        (k: MJBrandKitEntity) => k.Status === 'Active' || !k.Status,
+      );
+      return kits.map((kit: MJBrandKitEntity) => ({
+        ID: kit.ID,
+        Name: kit.Name,
+        Description: kit.Description ?? '',
+        CompanyID: kit.CompanyID ?? null,
+        CompanyName: kit.Company ?? null,
+        IsDefault: Boolean(kit.IsDefault),
+        Status: kit.Status === 'Inactive' ? 'Inactive' : 'Active',
+        Swatches: [],
+        PrimaryLogoFileID: null,
+        PrimaryLogoUrl: null,
+        AssetCount: 0,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   private snapshot(): VSStudioSlideInStateSnapshot {
     return {
       IsOpen: this.IsOpen,
       ConversationId: this.ConversationId,
       PendingArtifactId: this.PendingArtifactId,
       PendingArtifactVersionNumber: this.PendingArtifactVersionNumber,
-      BriefArchetypes: [...this.BriefArchetypes],
-      BriefBrandKits: [...this.BriefBrandKits],
       BriefSelectedArchetype: this.BriefSelectedArchetype,
       BriefSelectedBrandKit: this.BriefSelectedBrandKit,
       BriefSelectedFormats: [...this.BriefSelectedFormats],

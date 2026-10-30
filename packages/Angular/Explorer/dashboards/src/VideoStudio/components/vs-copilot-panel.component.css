@@ -66,7 +66,7 @@
 }
 
 @media (max-width: 1180px) {
-  .vs-copilot-panel__title i {
+  .vs-copilot-panel__slot-title .vs-copilot-panel__title-text {
     display: none;
   }
 
@@ -75,7 +75,6 @@
     height: 24px;
     min-width: 24px;
     min-height: 24px;
-    margin-left: -4px;
   }
 }
 

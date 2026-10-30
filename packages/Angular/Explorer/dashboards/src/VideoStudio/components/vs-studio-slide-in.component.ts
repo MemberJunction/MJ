@@ -5,9 +5,11 @@ import {
   EventEmitter,
   HostListener,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
   Output,
+  SimpleChanges,
   ViewChild,
   inject,
 } from '@angular/core';
@@ -17,7 +19,9 @@ import { UserInfo } from '@memberjunction/core';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
+import { StudioBriefClientToolDefinition } from '../video-studio-agent-context';
 import {
   VSCopilotConversationCreatedEvent,
   VSCopilotPanelComponent,
@@ -34,11 +38,12 @@ import {
  * and the `<aside class="vs-copilot-slidein">` wrapping `<vs-copilot-panel>` when open.
  * Backed by the root-provided {@link VSStudioSlideInStateService} so open/closed state
  * and the active conversation ID survive navigation across Productions, Brand Kits,
- * and Archetypes.
+ * and Archetypes. Also combines the hosting resource page's `[PageContext]` and `[PageTools]`
+ * with the Video Studio brief context and brief form-fill client tools.
  */
 @Component({
   standalone: true,
-  selector: 'vs-studio-slide-in, mj-vs-studio-slide-in',
+  selector: 'vs-studio-slide-in',
   imports: [CommonModule, VSCopilotPanelComponent],
   templateUrl: './vs-studio-slide-in.component.html',
   styleUrls: ['./vs-studio-slide-in.component.css'],
@@ -50,12 +55,16 @@ import {
 })
 export class VSStudioSlideInComponent
   extends BaseAngularComponent
-  implements OnInit, OnDestroy
+  implements OnInit, OnChanges, OnDestroy
 {
   @Input() CurrentUser: UserInfo | null = null;
   @Input() EnvironmentId: string = MJEnvironmentEntityExtended.DefaultEnvironmentID;
   @Input() ApplicationId = '';
+  @Input() PageSource: BaseResourceComponent | null = null;
+  @Input() PageContext: Record<string, unknown> | null = null;
   @Input() AppContext: Record<string, unknown> | null = null;
+  @Input() PageTools: StudioBriefClientToolDefinition[] = [];
+  @Input() FallbackBrandKitId: string | null = null;
   @Input() HeaderTitle = 'Video Studio';
 
   @Output() OpenChange = new EventEmitter<boolean>();
@@ -69,13 +78,27 @@ export class VSStudioSlideInComponent
   public CopilotPanel?: VSCopilotPanelComponent;
 
   public readonly SlideInState = inject(VSStudioSlideInStateService);
+  private readonly navigationService = inject(NavigationService, { optional: true });
   private readonly cdr = inject(ChangeDetectorRef);
   private stateSub: Subscription | null = null;
+  private lastBriefShowingState: boolean | null = null;
 
   ngOnInit(): void {
+    this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
+    this.registerCombinedClientTools();
     this.stateSub = this.SlideInState.State$.subscribe(() => {
+      if (this.lastBriefShowingState !== this.SlideInState.IsBriefShowing) {
+        this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
+        this.registerCombinedClientTools();
+      }
       this.cdr.markForCheck();
     });
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['PageTools'] && !changes['PageTools'].firstChange) {
+      this.registerCombinedClientTools();
+    }
   }
 
   ngOnDestroy(): void {
@@ -104,7 +127,10 @@ export class VSStudioSlideInComponent
   }
 
   public get EffectiveAppContext(): Record<string, unknown> {
-    return this.SlideInState.BuildCombinedAppContext(this.AppContext);
+    return this.SlideInState.BuildCombinedAppContext(
+      this.PageContext ?? this.AppContext,
+      this.FallbackBrandKitId,
+    );
   }
 
   public OpenNewProduction(): void {
@@ -158,5 +184,22 @@ export class VSStudioSlideInComponent
 
   public OnNavigationRequest(event: NavigationRequest): void {
     this.NavigationRequest.emit(event);
+  }
+
+  private registerCombinedClientTools(): void {
+    if (!this.navigationService || !this.PageSource) {
+      return;
+    }
+    const briefTools = this.SlideInState.BuildBriefClientTools({
+      Provider: this.ProviderToUse,
+      GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
+      OnBriefMutated: () => {
+        this.cdr.markForCheck();
+      },
+    });
+    this.navigationService.SetAgentClientTools(this.PageSource, [
+      ...this.PageTools,
+      ...briefTools,
+    ]);
   }
 }

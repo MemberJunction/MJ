@@ -41,6 +41,7 @@ import {
   ProductionCardStatus,
   ProductionFilterState,
   ResolveVideoStudioItem,
+  StudioBriefClientToolDefinition,
 } from '../video-studio-agent-context';
 
 /**
@@ -138,18 +139,14 @@ export class VideoStudioProductionsResourceComponent
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly artifactPermissionService = inject(ArtifactPermissionService);
   private slideInStateSub: Subscription | null = null;
-  private lastBriefShowingState: boolean | null = null;
+
+  public PageContext: Record<string, unknown> = this.buildProductionsContext();
+  public readonly PageTools: StudioBriefClientToolDefinition[] = this.buildProductionsClientTools();
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
-    this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
-    this.registerAgentClientTools();
     this.slideInStateSub = this.SlideInState.State$.subscribe(() => {
       this.CopilotAppContext = this.buildCopilotAppContext();
-      if (this.lastBriefShowingState !== this.SlideInState.IsBriefShowing) {
-        this.lastBriefShowingState = this.SlideInState.IsBriefShowing;
-        this.registerAgentClientTools();
-      }
       this.cdr.markForCheck();
     });
     await this.LoadProductions(false);
@@ -461,20 +458,6 @@ export class VideoStudioProductionsResourceComponent
     this.SlideInState.PendingArtifactVersionNumber = value;
   }
 
-  public get BriefArchetypes(): ArchetypeCardSnapshot[] {
-    return this.SlideInState.BriefArchetypes;
-  }
-  public set BriefArchetypes(value: ArchetypeCardSnapshot[]) {
-    this.SlideInState.BriefArchetypes = value;
-  }
-
-  public get BriefBrandKits(): BrandKitCardSnapshot[] {
-    return this.SlideInState.BriefBrandKits;
-  }
-  public set BriefBrandKits(value: BrandKitCardSnapshot[]) {
-    this.SlideInState.BriefBrandKits = value;
-  }
-
   public get BriefSelectedArchetype(): ArchetypeCardSnapshot | null {
     return this.SlideInState.BriefSelectedArchetype;
   }
@@ -619,12 +602,14 @@ export class VideoStudioProductionsResourceComponent
     this.cdr.markForCheck();
   }
 
+  public get FallbackBrandKitId(): string | null {
+    return this.BrandKitFilter || (this.SelectedProduction?.BrandKitID ?? null);
+  }
+
   private buildCopilotAppContext(): Record<string, unknown> {
-    const fallbackBrandKitId =
-      this.BrandKitFilter || (this.SelectedProduction?.BrandKitID ?? null);
     return this.SlideInState.BuildCombinedAppContext(
       this.buildProductionsContext(),
-      fallbackBrandKitId,
+      this.FallbackBrandKitId,
     );
   }
 
@@ -856,9 +841,9 @@ export class VideoStudioProductionsResourceComponent
   // user-confirm-only).
   // ============================================================================
 
-  private registerAgentClientTools(): void {
-    // SAFETY BOUNDARY: Read-only navigation/filter/select/refresh + reversible brief form-fill tools only.
-    this.navigationService.SetAgentClientTools(this, [
+  private buildProductionsClientTools(): StudioBriefClientToolDefinition[] {
+    // SAFETY BOUNDARY: Read-only navigation/filter/select/refresh tools only; brief tools are registered by vs-studio-slide-in.
+    return [
       {
         Name: 'SearchProductions',
         Description:
@@ -962,29 +947,7 @@ export class VideoStudioProductionsResourceComponent
           return { Success: true };
         },
       },
-      ...this.SlideInState.BuildBriefClientTools({
-        GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
-        GetFallbackBrandKits: () =>
-          Array.from(this.brandKitsById.values()).map((k) => ({
-            ID: k.ID,
-            Name: k.Name,
-            Description: k.Description ?? '',
-            CompanyID: k.CompanyID ?? null,
-            CompanyName: this.findCompanyName(k.CompanyID ?? null),
-            IsDefault: Boolean(k.IsDefault),
-            Status: k.Status === 'Inactive' ? 'Inactive' : 'Active',
-            Swatches: [],
-            PrimaryLogoFileID: null,
-            PrimaryLogoUrl: null,
-            AssetCount: 0,
-          })),
-        OnBriefMutated: () => {
-          this.CopilotAppContext = this.buildCopilotAppContext();
-          this.syncAgentContext();
-          this.cdr.markForCheck();
-        },
-      }),
-    ]);
+    ];
   }
 
   private async restoreSelectionFromQueryParams(): Promise<void> {
@@ -1275,10 +1238,9 @@ export class VideoStudioProductionsResourceComponent
   }
 
   private syncAgentContext(): void {
-    const context = this.buildProductionsContext();
+    this.PageContext = this.buildProductionsContext();
     this.CopilotAppContext = this.buildCopilotAppContext();
-    this.navigationService.SetAgentContext(this, context);
-    this.registerAgentClientTools();
+    this.navigationService.SetAgentContext(this, this.PageContext);
   }
 }
 

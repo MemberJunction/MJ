@@ -232,15 +232,16 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     );
 
     // Shared slide-in sits beside mj-page-layout inside .vs-resource-shell; edge strip opens it
-    expect(query(fixture, '.vs-resource-shell > vs-studio-slide-in')).not.toBeNull();
-    expect(instance.IsCopilotSlideInOpen).toBe(false);
+    const slideInEl = query(fixture, '.vs-resource-shell > vs-studio-slide-in');
+    expect(slideInEl).not.toBeNull();
+    expect(slideInEl!.classList.contains('vs-studio-slide-in--open')).toBe(false);
     const stripBtn = query(fixture, '[data-testid="productions-copilot-strip"]') as HTMLElement | null;
     expect(stripBtn).not.toBeNull();
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).toBeNull();
 
     stripBtn!.click();
     fixture.detectChanges();
-    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    expect(slideInEl!.classList.contains('vs-studio-slide-in--open')).toBe(true);
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
     expect(queryAll(fixture, 'vs-copilot-panel')).toHaveLength(1);
 

@@ -65,9 +65,13 @@
       >
         <ng-template mjChatSlot="headerActions" let-conversation>
           @if (!conversation) {
-            <span class="vs-copilot-panel__title" data-testid="vs-copilot-header-title">
+            <span
+              class="vs-copilot-panel__title vs-copilot-panel__slot-title"
+              data-testid="vs-copilot-header-title"
+              [title]="HeaderTitle"
+            >
               <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-              <span>{{ HeaderTitle }}</span>
+              <span class="vs-copilot-panel__title-text">{{ HeaderTitle }}</span>
             </span>
           }
           @if (IsSetupAllOk) {

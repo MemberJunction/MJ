@@ -2,12 +2,9 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  OnDestroy,
   OnInit,
-  ViewChild,
   inject,
 } from '@angular/core';
-import { Subscription } from 'rxjs';
 import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
 import {
   BrandKitEngine,
@@ -25,10 +22,6 @@ import { GetVideoStatusBadgeVariant } from '@memberjunction/ng-artifacts';
 import { DeleteBrandKitWithAssets } from '@memberjunction/ng-brand-kits';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
-import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
-import { VSProductionBriefStateSnapshot } from '../components/vs-production-brief.component';
-import { VSStudioSlideInComponent } from '../components/vs-studio-slide-in.component';
-import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import {
   BRAND_KIT_STATUS_FILTERS,
   BrandKitCardSnapshot,
@@ -38,6 +31,7 @@ import {
   BuildBrandKitsAgentContext,
   FilterBrandKitCards,
   ResolveVideoStudioItem,
+  StudioBriefClientToolDefinition,
 } from '../video-studio-agent-context';
 
 export type BrandKitCardItem = BrandKitCardSnapshot;
@@ -60,7 +54,7 @@ export type BrandKitCardItem = BrandKitCardSnapshot;
 })
 export class VideoStudioBrandKitsResourceComponent
   extends BaseResourceComponent
-  implements OnInit, OnDestroy
+  implements OnInit
 {
   public IsLoading = false;
   public LoadError: string | null = null;
@@ -81,38 +75,12 @@ export class VideoStudioBrandKitsResourceComponent
     companyId: null,
   };
 
-  @ViewChild('studioSlideIn')
-  public StudioSlideIn?: VSStudioSlideInComponent;
-
-  public get CopilotPanel(): VSCopilotPanelComponent | undefined {
-    return this.StudioSlideIn?.CopilotPanel;
-  }
+  public PageContext: Record<string, unknown> = this.buildBrandKitsContext();
+  public readonly PageTools: StudioBriefClientToolDefinition[] = this.buildBrandKitsClientTools();
 
   private kitsById = new Map<string, MJBrandKitEntity>();
-  private slideInSub: Subscription | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly confirmService = inject(MJConfirmService);
-  public readonly SlideInState = inject(VSStudioSlideInStateService);
-
-  public CopilotAppContext: Record<string, unknown> = this.buildCopilotAppContext();
-
-  public get IsCopilotSlideInOpen(): boolean {
-    return this.SlideInState.IsOpen;
-  }
-  public set IsCopilotSlideInOpen(value: boolean) {
-    if (value) {
-      this.SlideInState.Reopen();
-    } else {
-      this.SlideInState.Close();
-    }
-  }
-
-  public get SlideInConversationId(): string | null {
-    return this.SlideInState.ConversationId;
-  }
-  public set SlideInConversationId(value: string | null) {
-    this.SlideInState.SetConversationId(value);
-  }
 
   public get CurrentUser(): UserInfo | null {
     return this.ProviderToUse?.CurrentUser ?? null;
@@ -131,56 +99,8 @@ export class VideoStudioBrandKitsResourceComponent
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
-    this.slideInSub = this.SlideInState.State$.subscribe(() => {
-      this.CopilotAppContext = this.buildCopilotAppContext();
-      this.cdr.markForCheck();
-    });
-    this.registerAgentClientTools();
     await this.LoadBrandKits(false);
     this.NotifyLoadComplete();
-  }
-
-  override ngOnDestroy(): void {
-    this.slideInSub?.unsubscribe();
-    this.slideInSub = null;
-    super.ngOnDestroy();
-  }
-
-  public ReopenCopilotSlideIn(): void {
-    this.SlideInState.Reopen();
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public CloseCopilotSlideIn(): void {
-    this.SlideInState.Close();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnSlideInOpenChange(_isOpen: boolean): void {
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
-    this.SlideInState.ApplyBriefSnapshot(snapshot);
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnSlideInConversationCreated(event: { conversation: { ID: string } }): void {
-    this.SlideInState.SetConversationId(event.conversation.ID);
-    this.syncAgentContext();
-    this.cdr.markForCheck();
-  }
-
-  public OnSlideInPendingArtifactConsumed(): void {
-    this.SlideInState.ClearPendingArtifact();
-    this.cdr.markForCheck();
   }
 
   public async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -232,9 +152,6 @@ export class VideoStudioBrandKitsResourceComponent
         this.kitsById.set(kit.ID, kit);
       }
       this.AllBrandKits = kits.map((kit) => this.mapKitToCard(kit, engine));
-      if (this.SlideInState.BriefBrandKits.length === 0 && this.AllBrandKits.length > 0) {
-        this.SlideInState.BriefBrandKits = [...this.AllBrandKits];
-      }
       this.rebuildFilterFieldOptions();
       this.applyFiltersAndSync();
       await this.mintLogoUrls(this.AllBrandKits);
@@ -337,9 +254,9 @@ export class VideoStudioBrandKitsResourceComponent
   // share, or delete tools are exposed.
   // ============================================================================
 
-  private registerAgentClientTools(): void {
+  private buildBrandKitsClientTools(): StudioBriefClientToolDefinition[] {
     // SAFETY BOUNDARY: Read-only navigation, search, filter, open-record, and refresh tools only.
-    this.navigationService.SetAgentClientTools(this, [
+    return [
       {
         Name: 'SearchBrandKits',
         Description:
@@ -429,16 +346,7 @@ export class VideoStudioBrandKitsResourceComponent
           return { Success: true };
         },
       },
-      ...this.SlideInState.BuildBriefClientTools({
-        GetBriefComponent: () => this.CopilotPanel?.BriefComponent,
-        GetFallbackBrandKits: () => this.AllBrandKits,
-        OnBriefMutated: () => {
-          this.CopilotAppContext = this.buildCopilotAppContext();
-          this.syncAgentContext();
-          this.cdr.markForCheck();
-        },
-      }),
-    ]);
+    ];
   }
 
   private mapKitToCard(kit: MJBrandKitEntity, engine: BrandKitEngine): BrandKitCardSnapshot {
@@ -588,16 +496,8 @@ export class VideoStudioBrandKitsResourceComponent
     });
   }
 
-  private buildCopilotAppContext(): Record<string, unknown> {
-    return this.SlideInState.BuildCombinedAppContext(
-      this.buildBrandKitsContext(),
-      this.SelectedBrandKit?.ID ?? null,
-    );
-  }
-
   private syncAgentContext(): void {
-    const context = this.buildBrandKitsContext();
-    this.CopilotAppContext = this.buildCopilotAppContext();
-    this.navigationService.SetAgentContext(this, context);
+    this.PageContext = this.buildBrandKitsContext();
+    this.navigationService.SetAgentContext(this, this.PageContext);
   }
 }
