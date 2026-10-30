@@ -77,7 +77,8 @@ def _groups(req: TrainerRequest, snap: Snapshot, rows: IntArr, ordinals: IntArr)
     return None
 
 
-def _mwi(metric: MetricKey, value: float, ci: _Bounds, n: int, level: float) -> MetricWithInterval:
+def metric_with_interval(metric: MetricKey, value: float, ci: _Bounds, n: int, level: float) -> MetricWithInterval:
+    """A metric's value on `n` rows with its interval at `level` (shared by the tabular holdout and the forecast)."""
     return MetricWithInterval(metric=metric, value=float(value),
                               interval=Interval(level=level, lower=float(ci.lower), upper=float(ci.upper)), n=n)
 
@@ -220,7 +221,7 @@ def operating_point(req: TrainerRequest, snap: Snapshot, hold: IntArr, ordinals:
     iv = req.protocol.intervals
     ci = IV.bootstrap_ci(ya, s, prec_at_k, iv.resamples, req.protocol.seed, groups, iv.level)
     return OperatingPoint(capacityPerPeriod=float(cap), baseRate=float(np.mean(ya)),
-                          precisionAtCapacity=_mwi("precision", prec_at_k(ya, s), ci, k, iv.level))
+                          precisionAtCapacity=metric_with_interval("precision", prec_at_k(ya, s), ci, k, iv.level))
 
 
 def slice_results(req: TrainerRequest, snap: Snapshot, hold: IntArr, ordinals: IntArr, y: FArr, pred: FArr,
@@ -234,8 +235,8 @@ def slice_results(req: TrainerRequest, snap: Snapshot, hold: IntArr, ordinals: I
         sub_g = None if g is None else [g[int(i)] for i in np.flatnonzero(mask)]
         ci = IV.bootstrap_ci(y[mask], pred[mask], primary.aggregate, p.intervals.resamples, p.seed, sub_g,
                              p.intervals.level)
-        return _mwi(p.primaryScore.metric, primary.aggregate(y[mask], pred[mask]), ci, int(mask.sum()),
-                    p.intervals.level)
+        return metric_with_interval(p.primaryScore.metric, primary.aggregate(y[mask], pred[mask]), ci,
+                                    int(mask.sum()), p.intervals.level)
 
     for field in p.slices.subgroups:
         values = snap.slice_values.get(field)
@@ -323,7 +324,7 @@ def incumbent_diff(req: TrainerRequest, incumbent_artifact: Optional[bytes], enc
     return IncumbentDiff(incumbentModelId=inc.modelId, value=r.value, lower=r.lower, upper=r.upper)
 
 
-def _with_incumbent(X: pd.DataFrame, snap: Snapshot, rows: IntArr) -> pd.DataFrame:
+def with_incumbent(X: pd.DataFrame, snap: Snapshot, rows: IntArr) -> pd.DataFrame:
     """The frame plus the snapshot's incumbent-score column (for the incumbent-heuristic baseline), when present."""
     if snap.incumbent_score is None:
         return X
@@ -335,7 +336,7 @@ def _fit_baselines(req: TrainerRequest, columns: Sequence[encoding.ColumnSpec], 
     """Fits every declared baseline on development rows only."""
     inc_col = INCUMBENT_SCORE_COLUMN if snap.incumbent_score is not None else None
     try:
-        return BL.fit_all(req.protocol, columns, _with_incumbent(X_dev, snap, dev),
+        return BL.fit_all(req.protocol, columns, with_incumbent(X_dev, snap, dev),
                           EncodedLabel(y_dev, enc.family, enc.class_order, enc.tweedie_power), out.folds, req.threads,
                           inc_col)
     except ValueError as exc:
@@ -353,7 +354,8 @@ def _secondary_applies(metric: str, family: str) -> bool:
     return True
 
 
-def _is_defined(m: MetricWithInterval) -> bool:
+def is_defined(m: MetricWithInterval) -> bool:
+    """Whether the metric and both interval bounds are finite (an undefined secondary metric is left off the wire)."""
     return math.isfinite(m.value) and math.isfinite(m.interval.lower) and math.isfinite(m.interval.upper)
 
 
@@ -372,13 +374,14 @@ def _secondary_metrics(req: TrainerRequest, enc: EncodedLabel, y_hold: FArr, pre
     for m in p.secondaryMetrics:
         if _secondary_applies(m, enc.family):
             fn = scores.secondary_fn(m)
-            out.append(_mwi(m, fn(y_hold, pred), IV.bootstrap_ci(y_hold, pred, fn, R, seed, g, level), n, level))
+            out.append(metric_with_interval(m, fn(y_hold, pred), IV.bootstrap_ci(y_hold, pred, fn, R, seed, g, level),
+                                            n, level))
     other = _COMPANION_SCORE.get(p.primaryScore.metric)
     if other is not None:
         alt = scores.primary_score(other, None)
-        out.append(_mwi(other, alt.aggregate(y_hold, pred),
-                        IV.bootstrap_ci(y_hold, pred, alt.aggregate, R, seed, g, level), n, level))
-    return [m for m in out if _is_defined(m)]
+        out.append(metric_with_interval(other, alt.aggregate(y_hold, pred),
+                                        IV.bootstrap_ci(y_hold, pred, alt.aggregate, R, seed, g, level), n, level))
+    return [m for m in out if is_defined(m)]
 
 
 def _baseline_results(req: TrainerRequest, fitted: Sequence[BL.FittedBaseline], primary: scores.PrimaryScore,
@@ -387,9 +390,9 @@ def _baseline_results(req: TrainerRequest, fitted: Sequence[BL.FittedBaseline], 
     p = req.protocol
     R, seed, n, level = p.intervals.resamples, p.seed, len(y_hold), p.intervals.level
     return [BaselineResult(baseline=p.baselines[b.spec_index], role=b.role,
-                           holdout=_mwi(p.primaryScore.metric, primary.aggregate(y_hold, bpred[b.name]),
-                                        IV.bootstrap_ci(y_hold, bpred[b.name], primary.aggregate, R, seed, g, level),
-                                        n, level))
+                           holdout=metric_with_interval(
+                               p.primaryScore.metric, primary.aggregate(y_hold, bpred[b.name]),
+                               IV.bootstrap_ci(y_hold, bpred[b.name], primary.aggregate, R, seed, g, level), n, level))
             for b in fitted]
 
 
@@ -438,15 +441,28 @@ def _artifacts(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, finalist_
     shippable: List[Tuple[str, TrainedPredictor]] = [(finalist_name, finalist)]
     shippable += [(b.name, b.predictor) for b in fitted
                   if b.role == "simple" and isinstance(b.predictor, TrainedPredictor)]
-    out: List[ReturnedArtifact] = []
-    for name, predictor in shippable:
+    return [returned_artifact(req, snap, name, predictor, enc.class_order) for name, predictor in shippable]
+
+
+def returned_artifact(req: TrainerRequest, snap: Snapshot, name: str, predictor: artifacts_v2.ShippablePredictor,
+                      class_order: Optional[List[str]]) -> ReturnedArtifact:
+    """The v2 artifact of one shippable predictor, as the run returns it (the holdout stage and the forecast path).
+    A tabular predictor's envelope lists the columns it uses and, for a linear predictor, the mean encoded training row
+    its per-row drivers are measured from; a series forecaster reads no feature column.
+
+    Raises:
+        NotShippableError: From `artifacts_v2.build`, for a yardstick or a predictor type that never ships.
+    """
+    if isinstance(predictor, TrainedPredictor):
         b = predictor.driver_baseline
-        built = artifacts_v2.build(name, predictor, predictor.columns, req.task.kind, enc.class_order,
+        built = artifacts_v2.build(name, predictor, predictor.columns, req.task.kind, class_order,
                                    snap.feature_schema_hash, None if b is None else b.mean,
                                    None if b is None else b.columns)
-        out.append(ReturnedArtifact(candidate=built.candidate, bytesBase64=built.bytes_base64, sha256=built.sha256,
-                                    featureSchemaHash=built.feature_schema_hash, classOrder=built.class_order))
-    return out
+    else:
+        built = artifacts_v2.build(name, predictor, [], req.task.kind, class_order, snap.feature_schema_hash, None,
+                                   None)
+    return ReturnedArtifact(candidate=built.candidate, bytesBase64=built.bytes_base64, sha256=built.sha256,
+                            featureSchemaHash=built.feature_schema_hash, classOrder=built.class_order)
 
 
 class _HoldoutReader:
@@ -497,7 +513,7 @@ def _score_holdout(reader: _HoldoutReader, snap: Snapshot, enc: EncodedLabel, ho
                                             f"{enc.class_order} must occur in it")
     try:
         pred = np.asarray(finalist.predict(X_hold), dtype=np.float64)
-        bpred = {b.name: np.asarray(b.predictor.predict(_with_incumbent(X_hold, snap, hold)), dtype=np.float64)
+        bpred = {b.name: np.asarray(b.predictor.predict(with_incumbent(X_hold, snap, hold)), dtype=np.float64)
                  for b in fitted}
     except ValueError as exc:
         raise TrainerFailure("holdout", str(exc)) from exc
@@ -553,7 +569,8 @@ def held_out_importance(req: TrainerRequest, finalist: TrainedPredictor, X_hold:
     except ValueError as exc:
         raise TrainerFailure("holdout", f"permutation importance: {exc}") from exc
     return [SourceColumnImportance(sourceColumn=c.source_column,
-                                   permutationImportance=_mwi(p.primaryScore.metric, c.drop, c, len(y_hold), level))
+                                   permutationImportance=metric_with_interval(p.primaryScore.metric, c.drop, c,
+                                                                              len(y_hold), level))
             for c in found]
 
 
@@ -670,8 +687,8 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
     # (4): everything below uses `h.pred` / `h.bpred` only
     g = _groups(req, snap, hold, ordinals)
     n = len(hold)
-    prim = _mwi(p.primaryScore.metric, primary.aggregate(h.y, h.pred),
-                IV.bootstrap_ci(h.y, h.pred, primary.aggregate, p.intervals.resamples, p.seed, g, level), n, level)
+    prim_ci = IV.bootstrap_ci(h.y, h.pred, primary.aggregate, p.intervals.resamples, p.seed, g, level)
+    prim = metric_with_interval(p.primaryScore.metric, primary.aggregate(h.y, h.pred), prim_ci, n, level)
     gr = _run_gate(req, enc, fitted, finalist_spec, calibrator, primary, h.y, h.pred, h.bpred, g)
     d = gr.decision
     comparisons = {k: PairedComparison(value=v.value, ci=(v.lower, v.upper), beats=v.beats)

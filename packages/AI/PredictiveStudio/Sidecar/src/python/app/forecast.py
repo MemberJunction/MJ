@@ -54,7 +54,8 @@ from scipy import stats
 
 from . import artifacts_v2, baselines as BL, intervals as IV, scores, snapshot as SN, temporal as T
 from .array_types import FArr, IntArr
-from .evaluation import _is_defined, _mwi, _with_incumbent, gate_model, refuse_non_finite
+from .evaluation import (gate_model, is_defined, metric_with_interval, refuse_non_finite, returned_artifact,
+                         with_incumbent)
 from .failures import RequestRefused, RunClock, TrainerFailure
 from .gate import GateRun, run_gate
 from .trainer import INNER_INTERVAL_LEVEL, EncodedLabel, TrainedPredictor, fit_predictor
@@ -346,7 +347,7 @@ def _heuristics(req: TrainerRequest, snap: SN.Snapshot, fit: _Fitter) -> List[_H
     try:
         fitted = BL.fit_all(p.model_copy(update={"baselines": [b for _, b in kept]}), snap.columns, fit.X, fit.enc,
                             [], req.threads, column)
-        frame = _with_incumbent(fit.X, snap, fit.s.order)
+        frame = with_incumbent(fit.X, snap, fit.s.order)
         return [_Heuristic(kept[f.spec_index][0], f.name, np.asarray(f.predictor.predict(frame), dtype=np.float64))
                 for f in fitted if f.role == "simple"]
     except ValueError as exc:
@@ -415,7 +416,8 @@ def _metric(req: TrainerRequest, primary: scores.PrimaryScore, out: _Outer, memb
     iv = req.protocol.intervals
     ci = IV.bootstrap_ci(out.y, out.pred[member], primary.aggregate, iv.resamples, req.protocol.seed, out.groups,
                          iv.level)
-    return _mwi(primary.metric, primary.aggregate(out.y, out.pred[member]), ci, len(out.y), iv.level)
+    return metric_with_interval(primary.metric, primary.aggregate(out.y, out.pred[member]), ci, len(out.y),
+                                iv.level)
 
 
 def _baselines(req: TrainerRequest, primary: scores.PrimaryScore, out: _Outer) -> List[BaselineResult]:
@@ -433,9 +435,9 @@ def _secondary(req: TrainerRequest, out: _Outer) -> List[MetricWithInterval]:
     ys = np.concatenate([o.actual for o in out.scored])
     fc = np.concatenate([o.forecasts[MODEL] for o in out.scored])
     iv = req.protocol.intervals
-    m = _mwi("r2", scores.r2(ys, fc), IV.bootstrap_ci(ys, fc, scores.r2, iv.resamples, req.protocol.seed, out.groups,
-                                                      iv.level), len(ys), iv.level)
-    return [m] if _is_defined(m) else []
+    ci = IV.bootstrap_ci(ys, fc, scores.r2, iv.resamples, req.protocol.seed, out.groups, iv.level)
+    m = metric_with_interval("r2", scores.r2(ys, fc), ci, len(ys), iv.level)
+    return [m] if is_defined(m) else []
 
 
 def _diebold_mariano(primary: scores.PrimaryScore, out: _Outer, h: int) -> DieboldMariano:
@@ -482,21 +484,9 @@ def _artifacts(req: TrainerRequest, snap: SN.Snapshot, fit: _Fitter, spec: Candi
             ("naive", T.SeriesBaseline("naive", fit.s.season).fit(fit.y, t_all)),
             ("seasonalNaive", T.SeriesBaseline("seasonal-naive", fit.s.season).fit(fit.y, t_all)),
         ]
-        out: List[ReturnedArtifact] = []
-        for name, predictor in members:
-            if isinstance(predictor, TrainedPredictor):
-                b = predictor.driver_baseline
-                built = artifacts_v2.build(name, predictor, predictor.columns, req.task.kind, None,
-                                           snap.feature_schema_hash, None if b is None else b.mean,
-                                           None if b is None else b.columns)
-            else:
-                built = artifacts_v2.build(name, predictor, [], req.task.kind, None, snap.feature_schema_hash, None,
-                                           None)
-            out.append(ReturnedArtifact(candidate=built.candidate, bytesBase64=built.bytes_base64, sha256=built.sha256,
-                                        featureSchemaHash=built.feature_schema_hash, classOrder=None))
+        return [returned_artifact(req, snap, name, predictor, None) for name, predictor in members]
     except ValueError as exc:   # NotShippableError is a ValueError
         raise TrainerFailure("holdout", f"forecast artifacts: {exc}") from exc
-    return out
 
 
 # ------------------------------------------------------------------------------------------------ the run --------
