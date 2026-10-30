@@ -249,7 +249,6 @@ describe('DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable', () => {
     TrustServerCacheCompletely: boolean;
     AllowDirectSQLInsert: boolean;
     Saved?: boolean;
-    Load(id: string): Promise<boolean>;
     Save(): Promise<boolean>;
   }
 
@@ -262,21 +261,15 @@ describe('DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable', () => {
 
   let loaded: FakeEntityRow[];
   let refresh: ReturnType<typeof vi.fn>;
+  let entityQueries: string[];
 
-  function NewEntity(): FakeEntityRow {
+  function EntityRow(id: string): FakeEntityRow {
     const row: FakeEntityRow = {
-      ID: '',
-      Name: '',
-      SchemaName: '',
+      ID: id,
+      ...ENTITIES[id],
       TrackRecordChanges: true,
       TrustServerCacheCompletely: true,
       AllowDirectSQLInsert: false,
-      async Load(id: string) {
-        const found = ENTITIES[id];
-        if (!found) return false;
-        Object.assign(this, { ID: id, ...found });
-        return true;
-      },
       async Save() {
         this.Saved = true;
         return true;
@@ -286,10 +279,15 @@ describe('DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable', () => {
     return row;
   }
 
+  /** The entity rows an `ID IN ('a', 'b')` filter names that exist, in reverse order (the query sets none). */
+  function EntitiesMatching(filter: string): FakeEntityRow[] {
+    const ids = [...filter.matchAll(/'([^']+)'/g)].map(m => m[1]);
+    return ids.filter(id => ENTITIES[id]).reverse().map(id => EntityRow(id));
+  }
+
   function Provider(): IMetadataProvider {
     refresh = vi.fn(async () => true);
     const partial: Partial<IMetadataProvider> = {
-      GetEntityObject: vi.fn(async () => NewEntity()) as Partial<IMetadataProvider>['GetEntityObject'],
       Refresh: refresh as Partial<IMetadataProvider>['Refresh'],
     };
     return partial as IMetadataProvider;
@@ -297,8 +295,15 @@ describe('DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable', () => {
 
   beforeEach(() => {
     loaded = [];
+    entityQueries = [];
     const runView: Partial<RunView> = {
-      RunView: vi.fn(async () => ({ Success: true, Results: [{ Integration: 'SQL Server' }] })) as Partial<RunView>['RunView'],
+      RunView: vi.fn(async (params: { EntityName: string; ExtraFilter: string }) => {
+        if (params.EntityName === 'MJ: Entities') {
+          entityQueries.push(params.ExtraFilter);
+          return { Success: true, Results: EntitiesMatching(params.ExtraFilter) };
+        }
+        return { Success: true, Results: [{ Integration: 'SQL Server' }] };
+      }) as Partial<RunView>['RunView'],
     };
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(runView as RunView);
   });
@@ -306,9 +311,23 @@ describe('DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable', () => {
   it('marks the entities in the schema the apply created for the connection', async () => {
     await DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable('ci-1', ['ent-orders', 'ent-customers'], { ID: 'u-1' } as UserInfo, Provider());
 
-    expect(loaded.filter(e => e.Saved).map(e => e.ID)).toEqual(['ent-orders', 'ent-customers']);
+    expect(loaded.filter(e => e.Saved).map(e => e.ID).sort()).toEqual(['ent-customers', 'ent-orders']);
     expect(loaded.every(e => e.AllowDirectSQLInsert && !e.TrackRecordChanges && !e.TrustServerCacheCompletely)).toBe(true);
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads every selected entity in one query', async () => {
+    await DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable('ci-1', ['ent-orders', 'ent-customers'], { ID: 'u-1' } as UserInfo, Provider());
+
+    expect(entityQueries).toEqual([`ID IN ('ent-orders', 'ent-customers')`]);
+  });
+
+  it('names every selected ID that is not an entity and changes nothing', async () => {
+    await expect(
+      DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable('ci-1', ['ent-orders', 'ent-gone', 'ent-lost'], { ID: 'u-1' } as UserInfo, Provider()),
+    ).rejects.toThrow('Entity "ent-gone", "ent-lost" not found');
+    expect(loaded.some(e => e.Saved)).toBe(false);
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it.each([

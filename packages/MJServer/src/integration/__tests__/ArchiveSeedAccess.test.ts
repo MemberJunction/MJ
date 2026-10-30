@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInfo, EntityUserPermissionInfo, UserInfo } from '@memberjunction/core';
-import { CanManageArchiveSeedJob } from '../archiveSeed/ArchiveSeedAccess.js';
+import { AssertArchiveSeedRunsOnThisNode, CanManageArchiveSeedJob } from '../archiveSeed/ArchiveSeedAccess.js';
 
 const OWNER_ID = 'A1B2C3D4-0000-4000-8000-000000000001';
 const OTHER = { ID: 'b1b2c3d4-0000-4000-8000-000000000002' } as UserInfo;
@@ -27,5 +27,15 @@ describe('CanManageArchiveSeedJob', () => {
 
   it('refuses another user when the entity metadata is missing', () => {
     expect(CanManageArchiveSeedJob(OWNER_ID, OTHER, undefined)).toBe(false);
+  });
+});
+
+describe('AssertArchiveSeedRunsOnThisNode', () => {
+  it.each([['api'], [' API ']])('refuses a node whose role is %s', role => {
+    expect(() => AssertArchiveSeedRunsOnThisNode(role)).toThrow('Archive seeding requires a node that runs background workers');
+  });
+
+  it.each([['all'], ['worker'], [undefined], [null], ['']])('allows a node whose role is %s', role => {
+    expect(() => AssertArchiveSeedRunsOnThisNode(role)).not.toThrow();
   });
 });

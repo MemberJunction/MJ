@@ -154,6 +154,22 @@ describe('RuntimeSchemaManager archive-seed pending work', () => {
             expect(params.BypassCache).toBe(true);
         });
 
+        it('reads plain rows with only the columns it parses (the rows are never saved)', async () => {
+            await rsm.ReadPendingWorkForCompanyIntegration('ci-1', 'archive-seed', mockContextUser);
+            const params = mockRunViewFn.mock.calls[0][0];
+            expect(params.ResultType).toBe('simple');
+            expect(params.Fields).toEqual(['ID', 'PayloadJSON', 'Status', 'ErrorMessage', '__mj_CreatedAt']);
+        });
+
+        it('turns a string __mj_CreatedAt from a plain row into a Date', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'a', PayloadJSON: JSON.stringify(archivePayload()), Status: 'Pending', ErrorMessage: null, __mj_CreatedAt: '2026-10-28T01:02:03.000Z' }],
+            });
+            const seeds = await rsm.ReadPendingWorkForCompanyIntegration('ci-1', 'archive-seed', mockContextUser);
+            expect(seeds[0].CreatedAt).toEqual(new Date('2026-10-28T01:02:03.000Z'));
+        });
+
         it('keeps only the requested WorkType, treating an absent WorkType as apply-objects', async () => {
             const legacy = { ...archivePayload(), WorkType: undefined, ArchiveSeed: undefined };
             const promote = { ...archivePayload(), WorkType: 'promote-columns' as const, ArchiveSeed: undefined };

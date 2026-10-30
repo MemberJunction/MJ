@@ -7,7 +7,7 @@ import type {
   MJEntityEntity,
   MJExternalDataSourceEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { ReadArchiveSeedConfiguration } from '@memberjunction/core-entities-server';
 import { DeriveIntegrationSchemaName } from '../IntegrationSchemaName.js';
@@ -149,10 +149,7 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
 
   public async MarkEntitiesBulkLoadable(companyIntegrationID: string, entityIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<void> {
     const schema = await this.connectionSchema(companyIntegrationID, user, provider);
-    const entities: MJEntityEntity[] = [];
-    for (const entityID of entityIDs) {
-      entities.push(await this.loadEntity(entityID, user, provider));
-    }
+    const entities = await this.loadEntities(entityIDs, user, provider);
     this.assertInConnectionSchema(entities, schema, provider);
     for (const entity of entities) {
       await this.markBulkLoadable(entity);
@@ -175,12 +172,37 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     return DeriveIntegrationSchemaName(rows[0].Integration);
   }
 
-  private async loadEntity(entityID: string, user: UserInfo, provider: IMetadataProvider): Promise<MJEntityEntity> {
-    const entity = await provider.GetEntityObject<MJEntityEntity>('MJ: Entities', user);
-    if (!(await entity.Load(entityID))) {
-      throw new Error(`Entity "${entityID}" not found`);
+  /**
+   * The entities, in the order asked for, read in one query (they are saved afterwards, so as entity
+   * objects). Throws naming every ID that is not an entity.
+   */
+  private async loadEntities(entityIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<MJEntityEntity[]> {
+    if (entityIDs.length === 0) {
+      return [];
     }
-    return entity;
+    const inList = entityIDs.map(id => `'${EscapeSQLString(id)}'`).join(', ');
+    const result = await RunView.FromMetadataProvider(provider).RunView<MJEntityEntity>(
+      { EntityName: 'MJ: Entities', ExtraFilter: `ID IN (${inList})`, ResultType: 'entity_object', BypassCache: true },
+      user,
+    );
+    if (!result.Success) {
+      throw new Error(`Failed to read MJ: Entities: ${result.ErrorMessage}`);
+    }
+    const byID = IndexByUUID(result.Results ?? []);
+    const entities: MJEntityEntity[] = [];
+    const missing: string[] = [];
+    for (const id of entityIDs) {
+      const entity = byID.Get(id);
+      if (entity) {
+        entities.push(entity);
+      } else {
+        missing.push(`"${id}"`);
+      }
+    }
+    if (missing.length > 0) {
+      throw new Error(`Entity ${missing.join(', ')} not found`);
+    }
+    return entities;
   }
 
   /**

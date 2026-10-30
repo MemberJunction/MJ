@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { SetHostConnectionResolver, ResolveHostConnection, IsHostModeDatabaseAllowed, type HostSqlConnectionInfo } from "../hostConnection";
 
 describe("IsHostModeDatabaseAllowed", () => {
@@ -28,6 +28,17 @@ describe("host connection resolver", () => {
         SetHostConnectionResolver(() => {
             throw new Error("boom");
         });
+        expect(ResolveHostConnection()).toBeUndefined();
+    });
+
+    it("is shared process-wide, so a second copy of the module sees the registration", async () => {
+        const info: HostSqlConnectionInfo = { Server: "db", User: "u", Password: "p" };
+        SetHostConnectionResolver(() => info);
+        vi.resetModules();
+        const secondCopy = await import("../hostConnection");
+        expect(secondCopy.ResolveHostConnection).not.toBe(ResolveHostConnection);
+        expect(secondCopy.ResolveHostConnection()).toEqual(info);
+        secondCopy.SetHostConnectionResolver(undefined);
         expect(ResolveHostConnection()).toBeUndefined();
     });
 });

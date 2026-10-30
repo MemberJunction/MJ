@@ -11,6 +11,7 @@
  * the host's own server). Any user who can edit an External Data Source can set `authMode: "host"`, so a
  * driver refuses it for every database outside that purpose — see {@link IsHostModeDatabaseAllowed}.
  */
+import { BaseSingleton } from '@memberjunction/global';
 
 /** The host process's own SQL Server connection, as handed to drivers running in `host` auth mode. */
 export interface HostSqlConnectionInfo {
@@ -31,11 +32,34 @@ export interface HostSqlConnectionInfo {
 /** Returns the host's SQL Server connection info, or undefined when the host has none to offer. */
 export type HostConnectionResolver = () => HostSqlConnectionInfo | undefined;
 
-let hostConnectionResolver: HostConnectionResolver | undefined;
+/**
+ * Holds the registered {@link HostConnectionResolver}. A {@link BaseSingleton}, so the registration
+ * lives in the process-wide global object store: if this package is loaded twice (a bundler split or a
+ * duplicate install), MJAPI's registration is still the one every driver sees.
+ */
+class HostConnectionRegistry extends BaseSingleton<HostConnectionRegistry> {
+    private resolver: HostConnectionResolver | undefined;
+
+    protected constructor() {
+        super();
+    }
+
+    public static get Instance(): HostConnectionRegistry {
+        return super.getInstance<HostConnectionRegistry>();
+    }
+
+    public get Resolver(): HostConnectionResolver | undefined {
+        return this.resolver;
+    }
+
+    public set Resolver(resolver: HostConnectionResolver | undefined) {
+        this.resolver = resolver;
+    }
+}
 
 /** Registers (or, with undefined, clears) the resolver drivers use for `host` auth mode. */
 export function SetHostConnectionResolver(resolver: HostConnectionResolver | undefined): void {
-    hostConnectionResolver = resolver;
+    HostConnectionRegistry.Instance.Resolver = resolver;
 }
 
 /**
@@ -43,11 +67,12 @@ export function SetHostConnectionResolver(resolver: HostConnectionResolver | und
  * or when the resolver throws, so callers treat both as "host mode unavailable".
  */
 export function ResolveHostConnection(): HostSqlConnectionInfo | undefined {
-    if (!hostConnectionResolver) {
+    const resolver = HostConnectionRegistry.Instance.Resolver;
+    if (!resolver) {
         return undefined;
     }
     try {
-        return hostConnectionResolver();
+        return resolver();
     } catch {
         return undefined;
     }

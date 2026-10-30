@@ -2,20 +2,18 @@ import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, InputType, Int,
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
-import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { ArchiveSeedDiscoveredTable, ArchiveSeedSummary } from '@memberjunction/schema-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
-import { ResolveServerRole, ShouldRunBackgroundWorkers } from '../serverRoleConfigUnits.js';
 import { GetReadWriteProvider } from '../util.js';
-import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { AssertCanRunAction } from '../auth/actionRunGuard.js';
 import { BOOTSTRAP_ACTION_NAME } from '../integration/BootstrapLaunch.js';
+import { FindRegisteredAction, GetActionLaunchPrincipal } from '../integration/BackupActionSupport.js';
 import type { ArchiveSeedStartInput } from '../integration/archiveSeed/ArchiveSeedState.js';
 import type { ArchiveSeedJobState } from '../integration/archiveSeed/ArchiveSeedJob.js';
 import { ArchiveSeedJobInstance } from '../integration/archiveSeed/ArchiveSeedJobInstance.js';
-import { CanManageArchiveSeedJob } from '../integration/archiveSeed/ArchiveSeedAccess.js';
+import { AssertArchiveSeedRunsOnThisNode, CanManageArchiveSeedJob } from '../integration/archiveSeed/ArchiveSeedAccess.js';
 
 @InputType()
 export class IntegrationArchiveSeedStartInput implements ArchiveSeedStartInput {
@@ -116,6 +114,8 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
   ): Promise<IntegrationArchiveSeedStateOutput> {
     try {
       const caller = await this.authorize(ctx, 'IntegrationArchiveSeedSelectTables');
+      // The apply runs detached here and ends in a restart that only a worker node resumes from.
+      this.assertRunsBackgroundWorkers();
       await this.loadManageableJob(jobID, caller);
       await ArchiveSeedJobInstance.SelectTables(jobID, tableNames, caller.User, caller.Provider);
       // The apply now runs in the background and ends in an API restart, so nothing is read back
@@ -172,21 +172,21 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
   }
 
   /**
-   * Refuses a node that does not run background workers (`MJ_SERVER_ROLE=api`): the job's phases run
-   * detached in this process and resume on this node's boot, so starting one here would strand it.
-   * The role is resolved exactly as `serve()` resolves it.
+   * Refuses a node that does not run background workers (`MJ_SERVER_ROLE=api`) for the operations that
+   * start detached work: `Start` (restore and discovery) and `SelectTables` (the apply, which restarts
+   * the API and resumes on a worker's boot). `Finish` and `Cancel` are not refused: they finish the job
+   * inside the request and leave nothing to resume, and an api node must still be able to end a job.
+   * See {@link AssertArchiveSeedRunsOnThisNode}.
    */
   private assertRunsBackgroundWorkers(): void {
-    if (!ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE))) {
-      throw new Error('Archive seeding requires a node that runs background workers');
-    }
+    AssertArchiveSeedRunsOnThisNode(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE);
   }
 
   /** The guards of IntegrationStartBootstrap, in its order; throws the refusal. */
   private async authorize(ctx: AppContext, operation: string): Promise<ArchiveSeedCaller> {
-    const user = this.getPrincipal(ctx, operation);
+    const user = GetActionLaunchPrincipal(ctx, operation);
     await ActionEngineServer.Instance.Config(false, user);
-    const action = this.findBootstrapAction();
+    const action = FindRegisteredAction(ActionEngineServer.Instance, BOOTSTRAP_ACTION_NAME);
     await this.CheckAPIKeyScopeAuthorization('action:execute', action.ID, ctx.userPayload);
     await AssertCanRunAction(action, user, ctx.providers);
     const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true });
@@ -194,26 +194,6 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
       throw new Error('No data provider is available for this request');
     }
     return { User: user, Provider: provider };
-  }
-
-  /** The authenticated caller; a scope-limited session may not run an action. */
-  private getPrincipal(ctx: AppContext, operation: string): UserInfo {
-    const user = ctx.userPayload?.userRecord;
-    if (!user) {
-      throw new Error('User is not authenticated');
-    }
-    if (IsScopeLimitedPrincipal(user)) {
-      throw new Error(`${operation} is not permitted for scope-limited sessions`);
-    }
-    return user;
-  }
-
-  private findBootstrapAction(): MJActionEntityExtended {
-    const action = ActionEngineServer.Instance.Actions.find(a => a.Name.trim().toLowerCase() === BOOTSTRAP_ACTION_NAME.toLowerCase());
-    if (!action) {
-      throw new Error(`Action '${BOOTSTRAP_ACTION_NAME}' is not registered. Push the integration action metadata first.`);
-    }
-    return action;
   }
 
   /**

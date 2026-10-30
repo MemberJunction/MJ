@@ -105,11 +105,29 @@ describe('IntegrationArchiveSeedResolver', () => {
         expect(guard).toBeLessThan(body.indexOf('ArchiveSeedJobInstance.Start('));
     });
 
-    it('the background-worker guard resolves the role as serve() does and names the requirement', () => {
+    it('IntegrationArchiveSeedSelectTables refuses a node without background workers before starting the apply', () => {
+        const body = memberBody('async IntegrationArchiveSeedSelectTables(');
+        const guard = body.indexOf('this.assertRunsBackgroundWorkers()');
+        expect(guard).toBeGreaterThan(body.indexOf('this.authorize('));
+        expect(guard).toBeLessThan(body.indexOf('ArchiveSeedJobInstance.SelectTables('));
+    });
+
+    it.each(['IntegrationArchiveSeedFinish', 'IntegrationArchiveSeedCancel', 'IntegrationArchiveSeedState'])(
+        '%s runs on any node (it finishes inside the request and leaves nothing to resume)',
+        name => {
+            expect(memberBody(`async ${name}(`)).not.toContain('this.assertRunsBackgroundWorkers()');
+        },
+    );
+
+    it('the background-worker guard resolves the role from the same setting serve() reads', () => {
         const guard = memberBody('private assertRunsBackgroundWorkers(');
-        expect(guard).toContain('ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE))');
-        expect(guard).toContain("'Archive seeding requires a node that runs background workers'");
+        expect(guard).toContain('AssertArchiveSeedRunsOnThisNode(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE)');
         expect(indexSource).toContain('ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE))');
+    });
+
+    it('finds the bootstrap action through the engine name index, not a scan', () => {
+        expect(memberBody('private async authorize(')).toContain('FindRegisteredAction(ActionEngineServer.Instance, BOOTSTRAP_ACTION_NAME)');
+        expect(source).not.toContain('Actions.find(');
     });
 
     it('uses the shared job instance, never its own', () => {

@@ -4,11 +4,12 @@
  */
 import { LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
-import type { ActionParam, ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
 import type { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { ConnectorFactory, IntegrationSchemaSync, type BaseIntegrationConnector, type IntrospectSchemaOptions, type PersistSchemaResult, type SourceSchemaInfo } from '@memberjunction/integration-engine';
 import { RuntimeSchemaManager, type ArchiveSeedDiscoveredTable, type ArchiveSeedWork, type RSUPendingWork } from '@memberjunction/schema-engine';
 import { SelectArchiveSchemas } from './ArchiveSeedState.js';
+import { FindRegisteredAction } from '../BackupActionSupport.js';
 import { IntegrationDiscoveryResolver, type ApplyAllBatchInput } from '../../resolvers/IntegrationDiscoveryResolver.js';
 import type {
   ArchiveSeedActions,
@@ -126,7 +127,7 @@ export class DefaultArchiveSeedApply implements ArchiveSeedApply {
 export class DefaultArchiveSeedActions implements ArchiveSeedActions {
   public async Run(actionName: string, params: ActionParam[], user: UserInfo, provider?: IMetadataProvider): Promise<ActionResult> {
     await ActionEngineServer.Instance.Config(false, user);
-    const action = this.findAction(actionName);
+    const action = FindRegisteredAction(ActionEngineServer.Instance, actionName);
     return ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
@@ -135,15 +136,6 @@ export class DefaultArchiveSeedActions implements ArchiveSeedActions {
       Filters: [],
       Provider: provider,
     });
-  }
-
-  private findAction(actionName: string): MJActionEntityExtended {
-    const wanted = actionName.trim().toLowerCase();
-    const action = ActionEngineServer.Instance.Actions.find(a => a.Name.trim().toLowerCase() === wanted);
-    if (!action) {
-      throw new Error(`Action '${actionName}' is not registered. Push the integration action metadata first.`);
-    }
-    return action;
   }
 }
 

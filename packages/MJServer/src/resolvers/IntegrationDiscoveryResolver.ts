@@ -5911,19 +5911,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * The cascade behind {@link IntegrationDeleteConnection}, for server-side callers (the archive seed
      * replaces a failed seed's connection with it): deletes the connection's runs, scheduled jobs, entity
      * maps with their field maps, watermarks and record maps, employee links, the connection itself and
-     * its unshared credential, in one transaction group as `sysUser`. Throws on an unexpected error;
+     * its unshared credential, in one transaction group as `actingUser` (the GraphQL
+     * mutation passes the system user; the archive seed passes the job's owner). Throws on an unexpected error;
      * returns `Success: false` when the connection is missing or the transaction fails.
      */
     public async DeleteConnectionCore(
         companyIntegrationID: string,
         deleteData: boolean,
         md: IMetadataProvider,
-        sysUser: UserInfo
+        actingUser: UserInfo
     ): Promise<DeleteConnectionOutput> {
             const rv = new RunView();
 
             // Step 1: Load CompanyIntegration
-            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', sysUser);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', actingUser);
             const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!ciLoaded) return { Success: false, Message: 'CompanyIntegration not found' };
 
@@ -5938,7 +5939,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Company Integration Runs',
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             if (ciRunsResult.Success) {
                 for (const ciRun of ciRunsResult.Results) {
                     if (ciRun.ScheduledJobRunID) {
@@ -5953,7 +5954,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Scheduled Jobs',
                 ExtraFilter: `Configuration LIKE '%${sqlUuid(companyIntegrationID, 'companyIntegrationID')}%'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             if (jobsResult.Success) {
                 for (const job of jobsResult.Results) {
                     try {
@@ -5963,7 +5964,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                                 EntityName: 'MJ: Scheduled Job Runs',
                                 ExtraFilter: `ScheduledJobID='${job.ID}'`,
                                 ResultType: 'entity_object'
-                            }, sysUser);
+                            }, actingUser);
                             if (jobRunsResult.Success) {
                                 for (const jr of jobRunsResult.Results) {
                                     jr.TransactionGroup = tg;
@@ -5986,7 +5987,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         EntityName: 'MJ: Company Integration Run Details',
                         ExtraFilter: `CompanyIntegrationRunID='${run.ID}'`,
                         ResultType: 'entity_object'
-                    }, sysUser);
+                    }, actingUser);
                     if (detailsResult.Success) {
                         for (const detail of detailsResult.Results) {
                             detail.TransactionGroup = tg;
@@ -6003,7 +6004,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Company Integration Entity Maps',
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
 
             for (const em of entityMaps) {
@@ -6011,7 +6012,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Field Maps',
                     ExtraFilter: `EntityMapID='${em.ID}'`,
                     ResultType: 'entity_object'
-                }, sysUser);
+                }, actingUser);
                 if (fmResult.Success) {
                     for (const fm of fmResult.Results) {
                         fm.TransactionGroup = tg;
@@ -6023,7 +6024,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Sync Watermarks',
                     ExtraFilter: `EntityMapID='${em.ID}'`,
                     ResultType: 'entity_object'
-                }, sysUser);
+                }, actingUser);
                 if (wmResult.Success) {
                     for (const wm of wmResult.Results) {
                         wm.TransactionGroup = tg;
@@ -6035,7 +6036,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Record Maps',
                     ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                     ResultType: 'entity_object'
-                }, sysUser);
+                }, actingUser);
                 if (rmResult.Success) {
                     for (const rm of rmResult.Results) {
                         rm.TransactionGroup = tg;
@@ -6055,7 +6056,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Employee Company Integrations',
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             if (empResult.Success) {
                 for (const emp of empResult.Results) {
                     emp.TransactionGroup = tg;
@@ -6070,7 +6071,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // before Delete() since we still need it for Step 8.
             const linkedCredentialID = ci.CredentialID;
             ci.TransactionGroup = tg;
-            await ci.Delete();
+            if (!(await ci.Delete())) {
+                // Refused (e.g. an archive seed still running): nothing queued so far may be submitted.
+                return { Success: false, Message: ci.LatestResult?.CompleteMessage ?? 'The connection could not be deleted' };
+            }
 
             // Step 8: Delete the linked Credential (encrypted-credential row) in the SAME
             // transaction group so it commits/rolls back atomically with the cascade — now safe
@@ -6078,7 +6082,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // silently when there is no CredentialID, and refuses to delete a credential still
             // referenced by ANOTHER CompanyIntegration (shared credential).
             const credentialDeleted = await this.cascadeDeleteCredential(
-                linkedCredentialID, companyIntegrationID, tg, rv, md, sysUser
+                linkedCredentialID, companyIntegrationID, tg, rv, md, actingUser
             );
 
             // Submit the transaction

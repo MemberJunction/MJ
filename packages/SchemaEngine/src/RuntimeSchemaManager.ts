@@ -427,6 +427,11 @@ export interface RSUPipelineBatchResult {
   TotalCount: number;
 }
 
+/** The pending-work columns {@link RuntimeSchemaManager.ReadPendingWorkForCompanyIntegration} reads, as a plain row. */
+type PendingWorkSummaryRow = Pick<MJRSUPendingWorkEntity, 'ID' | 'PayloadJSON' | 'Status' | 'ErrorMessage'> & {
+  __mj_CreatedAt: Date | string | null;
+};
+
 /** Per-item result from the migration execution phase. */
 interface MigrationItemResult {
   Input: RSUPipelineInput;
@@ -1047,13 +1052,15 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   ): Promise<
     Array<{ ID: string; Work: RSUPendingWork; Status: MJRSUPendingWorkEntity['Status']; ErrorMessage: string | null; CreatedAt: Date }>
   > {
+    // Read-only: the rows are parsed, never saved, so plain rows with only the columns read.
     const rv = new RunView(provider as DatabaseProviderBase | undefined);
-    const result = await rv.RunView<MJRSUPendingWorkEntity>(
+    const result = await rv.RunView<PendingWorkSummaryRow>(
       {
         EntityName: 'MJ: RSU Pending Works',
         ExtraFilter: `CompanyIntegrationID = '${EscapeSQLString(companyIntegrationID)}'`,
         OrderBy: '__mj_CreatedAt DESC',
-        ResultType: 'entity_object',
+        Fields: ['ID', 'PayloadJSON', 'Status', 'ErrorMessage', '__mj_CreatedAt'],
+        ResultType: 'simple',
         BypassCache: true,
       },
       contextUser,
@@ -1067,7 +1074,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     for (const row of result.Results) {
       const work = this.tryParsePayload(row.PayloadJSON);
       if (!work || (work.WorkType ?? 'apply-objects') !== wanted) continue;
-      items.push({ ID: row.ID, Work: work, Status: row.Status, ErrorMessage: row.ErrorMessage, CreatedAt: row.__mj_CreatedAt ?? new Date() });
+      items.push({ ID: row.ID, Work: work, Status: row.Status, ErrorMessage: row.ErrorMessage, CreatedAt: row.__mj_CreatedAt ? new Date(row.__mj_CreatedAt) : new Date() });
     }
     return items;
   }

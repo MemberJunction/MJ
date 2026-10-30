@@ -334,12 +334,6 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   }
 
   /**
-   * Coerce a watermark string into the value Mongo will `$gte`-match: an ISO-8601 date-time → `Date`
-   * (a zoneless one interpreted as UTC, never server-local), a finite numeric → number, else the string
-   * verbatim. `Number.isFinite` (not `!isNaN`) so `'Infinity'`/`'NaN'` stay strings rather than becoming
-   * numeric bounds.
-   */
-  /**
    * Render a structured keyset resume point (`ExternalViewParams.seekAfter`) as a Mongo filter: every
    * document strictly after the consumed one in (watermark ASC, keys ASC) order. BSON sorts `null` (and a
    * missing field) before every value, so a NULL watermark run sits at the head of the ordering.
@@ -382,6 +376,12 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     return { $or: alternatives };
   }
 
+  /**
+   * Coerce a watermark string into the value Mongo will `$gte`-match: an ISO-8601 date-time → `Date`
+   * (a zoneless one interpreted as UTC, never server-local), a finite numeric → number, else the string
+   * verbatim. `Number.isFinite` (not `!isNaN`) so `'Infinity'`/`'NaN'` stay strings rather than becoming
+   * numeric bounds.
+   */
   private coerceIncrementalValue(value: string): unknown {
     const d = parseIso8601AsUtc(value);
     if (d) return d;

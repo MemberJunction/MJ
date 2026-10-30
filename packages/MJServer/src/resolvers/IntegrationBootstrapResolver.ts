@@ -1,12 +1,11 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int } from 'type-graphql';
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
-import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { ActionResult } from '@memberjunction/actions-base';
 import { IntegrationProgressEmitter, IntegrationProgressReader } from '@memberjunction/integration-progress-artifacts';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
-import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { AssertCanRunAction } from '../auth/actionRunGuard.js';
 import {
   BOOTSTRAP_ACTION_NAME,
@@ -14,6 +13,7 @@ import {
   ValidateBootstrapLaunchInput,
   type BootstrapLaunchInput,
 } from '../integration/BootstrapLaunch.js';
+import { FindRegisteredAction, GetActionLaunchPrincipal } from '../integration/BackupActionSupport.js';
 
 @InputType()
 export class IntegrationBootstrapInput implements BootstrapLaunchInput {
@@ -55,14 +55,14 @@ export class IntegrationBootstrapResolver extends ResolverBase {
     @Ctx() ctx: AppContext
   ): Promise<IntegrationBootstrapStartOutput> {
     try {
-      const user = this.getPrincipal(ctx);
+      const user = GetActionLaunchPrincipal(ctx, 'IntegrationStartBootstrap');
       const validationError = ValidateBootstrapLaunchInput(input);
       if (validationError) {
         return { Success: false, Message: validationError, InProgress: false };
       }
 
       await ActionEngineServer.Instance.Config(false, user);
-      const action = this.findBootstrapAction();
+      const action = FindRegisteredAction(ActionEngineServer.Instance, BOOTSTRAP_ACTION_NAME);
       await this.CheckAPIKeyScopeAuthorization('action:execute', action.ID, ctx.userPayload);
       await AssertCanRunAction(action, user, ctx.providers);
 
@@ -95,26 +95,6 @@ export class IntegrationBootstrapResolver extends ResolverBase {
       LogError(`IntegrationStartBootstrap error: ${e}`);
       return { Success: false, Message: this.errorMessage(e), InProgress: false };
     }
-  }
-
-  /** The authenticated caller; a scope-limited session may not launch an action, as with RunAction. */
-  private getPrincipal(ctx: AppContext): UserInfo {
-    const user = ctx.userPayload?.userRecord;
-    if (!user) {
-      throw new Error('User is not authenticated');
-    }
-    if (IsScopeLimitedPrincipal(user)) {
-      throw new Error('IntegrationStartBootstrap is not permitted for scope-limited sessions');
-    }
-    return user;
-  }
-
-  private findBootstrapAction(): MJActionEntityExtended {
-    const action = ActionEngineServer.Instance.Actions.find(a => a.Name.trim().toLowerCase() === BOOTSTRAP_ACTION_NAME.toLowerCase());
-    if (!action) {
-      throw new Error(`Action '${BOOTSTRAP_ACTION_NAME}' is not registered. Push the integration action metadata first.`);
-    }
-    return action;
   }
 
   /**

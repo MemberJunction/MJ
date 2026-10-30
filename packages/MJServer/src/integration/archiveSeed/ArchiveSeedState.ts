@@ -1,6 +1,7 @@
-import { ActionParam } from '@memberjunction/actions-base';
+import type { ActionParam } from '@memberjunction/actions-base';
 import type { IntegrationRunManifest } from '@memberjunction/integration-progress-artifacts';
 import type { ArchiveSeedState, ArchiveSeedWork } from '@memberjunction/schema-engine';
+import { ToInputActionParams, ValidateBackupSource } from '../BackupActionSupport.js';
 
 /** Max time the server waits for a schema-apply (build) step before failing the job. */
 export const ARCHIVE_SEED_APPLY_TIMEOUT_MS = 30 * 60_000;
@@ -32,12 +33,9 @@ export function ValidateArchiveSeedStartInput(input: ArchiveSeedStartInput): str
   if (!input.ConnectionName?.trim()) {
     return "'ConnectionName' is required.";
   }
-  if (!input.BackupUrls?.trim()) {
-    return "'BackupUrls' is required.";
-  }
-  const hasUrl = input.BackupUrls.split(',').some(u => /^https?:\/\//i.test(u.trim()));
-  if (hasUrl && !input.SasToken?.trim() && !input.StorageCredentialID?.trim()) {
-    return "An Azure Blob backup needs either 'SasToken' or 'StorageCredentialID'.";
+  const sourceError = ValidateBackupSource(input);
+  if (sourceError) {
+    return sourceError;
   }
   const staging = input.StagingDatabaseName?.trim();
   if (staging && !staging.toLowerCase().startsWith(STAGING_PREFIX.toLowerCase())) {
@@ -134,22 +132,9 @@ export function CanonicalizeTableSelection(work: ArchiveSeedWork, tableNames: st
     .filter((n): n is string => n !== undefined);
 }
 
-/** Every present value becomes a string Input ActionParam; undefined/null/'' are dropped. */
-function toActionParams(values: Record<string, string | number | boolean | undefined | null>): ActionParam[] {
-  return Object.entries(values)
-    .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined && entry[1] !== null && entry[1] !== '')
-    .map(([name, value]) => {
-      const param = new ActionParam();
-      param.Name = name;
-      param.Type = 'Input';
-      param.Value = typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value);
-      return param;
-    });
-}
-
 /** Params for 'Restore SQL Server Backup To Staging'. */
 export function BuildRestoreActionParams(work: ArchiveSeedWork, companyIntegrationID: string, runID: string, sasToken?: string): ActionParam[] {
-  return toActionParams({
+  return ToInputActionParams({
     CompanyIntegrationID: companyIntegrationID,
     BackupUrls: work.BackupUrls,
     StagingDatabaseName: work.StagingDatabaseName,
@@ -163,7 +148,7 @@ export function BuildRestoreActionParams(work: ArchiveSeedWork, companyIntegrati
 
 /** Params for 'Load SQL Server Integration From Staging' (never truncates, never drops staging). */
 export function BuildLoadActionParams(work: ArchiveSeedWork, companyIntegrationID: string, runID: string): ActionParam[] {
-  return toActionParams({
+  return ToInputActionParams({
     CompanyIntegrationID: companyIntegrationID,
     StagingDatabaseName: work.StagingDatabaseName,
     BackupStartDate: work.BackupStartDate,
@@ -187,7 +172,7 @@ export function BuildDropActionParams(
   runID?: string,
   options: { KeepDatabase?: boolean } = {},
 ): ActionParam[] {
-  return toActionParams({
+  return ToInputActionParams({
     StagingDatabaseName: work.StagingDatabaseName,
     ContainerUrl: work.ContainerUrl,
     CreatedAfter: work.RestoreStartedAt,
