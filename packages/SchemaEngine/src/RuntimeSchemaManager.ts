@@ -637,8 +637,31 @@ function buildSchemaPatterns(schema: string): RegExp[] {
  * Validate that migration SQL does not target protected schemas.
  * The __mj schema is ALWAYS protected regardless of configuration.
  */
+/**
+ * True when `sql` holds anything other than whitespace and comments: `-- …` lines, block comments and
+ * bare `GO` separators are not statements. The header a caller writes above the statements it never
+ * produced is exactly that, and it is not a migration.
+ */
+export function HasExecutableSQL(sql: string | null | undefined): boolean {
+  if (!sql) return false;
+  const stripped = sql
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*--.*$/gm, '')
+    .replace(/^\s*GO\s*;?\s*$/gim, '');
+  return stripped.trim().length > 0;
+}
+
 export function ValidateMigrationSQL(sql: string, additionalProtectedSchemas: string[] = []): SQLValidationResult {
   const errors: string[] = [];
+  // A migration with no executable statement is not a migration. Comments-only SQL passed every
+  // check below — nothing in it touches a protected schema — and the pipeline then ran end to end
+  // on nothing: file written, PR opened and merged, CodeGen, restart, commit, every step green.
+  // Seen 2026-10-29 as three "RSU: Integration: PropFuel — " migrations whose table list was empty.
+  // Named here so the batch fails at ValidateSQL, where callers already expect to hear the SQL is
+  // unusable, and so Preview reports it before anything runs.
+  if (!HasExecutableSQL(sql)) {
+    errors.push('Migration SQL contains no executable statements (empty or comments only). Nothing to apply.');
+  }
   const allProtected = new Set(['__mj', ...additionalProtectedSchemas.map((s) => s.toLowerCase())]);
 
   for (const schema of allProtected) {

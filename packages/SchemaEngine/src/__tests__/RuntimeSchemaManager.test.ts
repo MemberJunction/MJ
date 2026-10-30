@@ -1,9 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RuntimeSchemaManager, ValidateMigrationSQL, RSUError } from '../RuntimeSchemaManager.js';
+import { RuntimeSchemaManager, ValidateMigrationSQL, HasExecutableSQL, RSUError } from '../RuntimeSchemaManager.js';
 
 // ─── ValidateMigrationSQL Tests ──────────────────────────────────────
 
+describe('HasExecutableSQL', () => {
+    it('is false for empty, whitespace, comments-only and GO-only SQL', () => {
+        expect(HasExecutableSQL('')).toBe(false);
+        expect(HasExecutableSQL(undefined)).toBe(false);
+        expect(HasExecutableSQL('   \n\t')).toBe(false);
+        expect(HasExecutableSQL('-- RSU Migration: Integration: PropFuel — \n-- Generated: 2026-10-29T11:03:09.541Z\n-- Affected tables: \n')).toBe(false);
+        expect(HasExecutableSQL('/* header */\n-- note\nGO\n')).toBe(false);
+    });
+
+    it('is true as soon as there is a statement', () => {
+        expect(HasExecutableSQL('-- header\nCREATE TABLE [propfuel].[clicks] (click_id INT NOT NULL);')).toBe(true);
+        expect(HasExecutableSQL('CREATE SCHEMA propfuel;')).toBe(true);
+    });
+});
+
 describe('ValidateMigrationSQL', () => {
+    it('should reject a header-only migration with no statements', () => {
+        const sql = '-- RSU Migration: Integration: PropFuel — \n-- Generated: 2026-10-29T11:03:09.541Z\n-- Affected tables: \n';
+        const result = ValidateMigrationSQL(sql);
+        expect(result.Valid).toBe(false);
+        expect(result.Errors[0]).toContain('no executable statements');
+    });
+
     it('should accept DDL on non-protected schemas', () => {
         const sql = 'CREATE TABLE [hubspot].[Contact] (ID INT NOT NULL);';
         const result = ValidateMigrationSQL(sql);
@@ -105,9 +127,10 @@ describe('ValidateMigrationSQL', () => {
         expect(result.Errors[0]).toContain('__mj');
     });
 
-    it('should accept empty SQL', () => {
+    it('should reject empty SQL — there is nothing to apply', () => {
         const result = ValidateMigrationSQL('');
-        expect(result.Valid).toBe(true);
+        expect(result.Valid).toBe(false);
+        expect(result.Errors[0]).toContain('no executable statements');
     });
 });
 
