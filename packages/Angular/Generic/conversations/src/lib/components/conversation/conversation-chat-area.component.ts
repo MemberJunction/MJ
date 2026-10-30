@@ -103,7 +103,10 @@ import {
   type MessageForkChip
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID, IsValidUUID } from '@memberjunction/global';
+import { GetThreadReplyRoots, type ThreadReplyRevealRequest } from '../../utils/thread-replies';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID } from '@memberjunction/global';
+
+const EMPTY_THREAD_REPLY_ROOTS = new UUIDMap<string>();
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
@@ -2932,6 +2935,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     View: ConversationOpenView;
     Branches: ConversationBranchRow[];
     CanFork: boolean;
+    CollapseThreads: boolean;
     Turn: LatestTurn | null;
   } | null = null;
   /** The draft whose fork a first send is creating, with that creation; a send in the same draft awaits it. */
@@ -2991,9 +2995,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** The loaded rows split for the window view, and the rows shown from that split. */
   private displayCache: {
     Messages: MJConversationDetailEntity[];
-    Length: number;
     View: ConversationOpenView;
     CollapseThreads: boolean;
+    ThreadReplyRoots: UUIDMap<string>;
+    MainFlow: MJConversationDetailEntity[];
     Split: ForkRows<MJConversationDetailEntity>;
     Rows: MJConversationDetailEntity[];
   } | null = null;
@@ -3422,7 +3427,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             this.resetComponentState(conversationId);
             await this.decideAndApplyArtifactPanel(artifactBaseline, conversationId);
             this.messages = [...this.messages];
-            this.followTranscript('new');
+            this.followTranscript('new', newlyLoaded);
             this.cdr.detectChanges();
           } else {
             await this.ReconcileNow('completion-for-unloaded-message');
@@ -4482,12 +4487,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.replaceDisplayedRow(message);
       this.windowStore.ApplyLocalDetail(message);
     }
+    const rootId = this.collapsedThreadRootId(message);
+    if (rootId !== null) {
+      const root = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
+      if (root) {
+        this.messageListComponent?.RefreshRenderedMessage(root);
+      }
+      return;
+    }
     if (!this.messageListComponent?.RefreshRenderedMessage(message)) {
       // The first delta can beat the bubble's own render; the full path handles that one update.
       this.ngZone.run(() => void this.OnMessageSent(message));
       return;
     }
-    this.followTranscript('stream');
+    this.followTranscript('stream', message);
   }
 
   /** Drops a landing still queued or retrying, so it cannot resolve after a newer one. */
@@ -5552,23 +5565,39 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const view = this.WindowView;
     const branches = UUIDsEqual(this.branchRowsConversationId, this.ConversationId) ? (this.branches ?? NO_BRANCHES) : NO_BRANCHES;
     const canFork = this.CanFork;
+    const collapseThreads = Boolean(this.CollapseThreadReplies);
     const cache = this.inPlaceTurnCache;
-    if (cache && cache.Messages === messages && cache.View === view && cache.Branches === branches && cache.CanFork === canFork) {
+    if (
+      cache &&
+      cache.Messages === messages &&
+      cache.View === view &&
+      cache.Branches === branches &&
+      cache.CanFork === canFork &&
+      cache.CollapseThreads === collapseThreads
+    ) {
       return cache.Turn;
     }
     const turn = canFork ? null : this.unblockedLatestTurn(messages, view, branches);
-    this.inPlaceTurnCache = { Messages: messages, View: view, Branches: branches, CanFork: canFork, Turn: turn };
+    this.inPlaceTurnCache = {
+      Messages: messages,
+      View: view,
+      Branches: branches,
+      CanFork: canFork,
+      CollapseThreads: collapseThreads,
+      Turn: turn,
+    };
     return turn;
   }
 
   /** The latest turn of the rows, or null when there is none or a fork depends on its answer rows. */
   private unblockedLatestTurn(messages: MJConversationDetailEntity[], view: ConversationOpenView, branches: ReadonlyArray<ConversationBranchRow>): LatestTurn | null {
-    const turn = FindLatestTurn(messages, view);
-    const user = turn ? messages.find(m => UUIDsEqual(m.ID, turn.UserDetailID)) : undefined;
+    const mainFlow = this.CollapseThreadReplies ? this.displayState().MainFlow : messages;
+    const turn = FindLatestTurn(mainFlow, view);
+    const user = turn ? mainFlow.find(m => UUIDsEqual(m.ID, turn.UserDetailID)) : undefined;
     if (!turn || !user) {
       return null;
     }
-    return ForkDependsOnRows(user.BranchID ?? null, TurnRowsAfter(messages, user), branches) ? null : turn;
+    return ForkDependsOnRows(user.BranchID ?? null, this.turnRowsAfter(messages, user), branches) ? null : turn;
   }
 
   /** "Save and resend": the message item saved the new text of the latest user message; reruns its turn in place. */
@@ -5594,7 +5623,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!input) {
       return;
     }
-    const answerRows = TurnRowsAfter(this.messages ?? [], userMessage);
+    const answerRows = this.turnRowsAfter(this.messages ?? [], userMessage);
     if (answerRows.some(r => r.Status === 'In-Progress')) {
       MJNotificationService.Instance.CreateSimpleNotification('Wait for the current reply to finish', 'error', 3000);
       return;
@@ -5634,6 +5663,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } finally {
       this.inPlaceRerunInFlight = false;
     }
+  }
+
+  /**
+   * The rows of `userMessage`'s turn that an in-place rerun replaces: when thread replies are
+   * collapsed, the main-flow rows after `userMessage` plus any thread replies rooted on those rows.
+   */
+  private turnRowsAfter(messages: MJConversationDetailEntity[], userMessage: MJConversationDetailEntity): MJConversationDetailEntity[] {
+    if (!this.CollapseThreadReplies) {
+      return TurnRowsAfter(messages, userMessage);
+    }
+    const roots = GetThreadReplyRoots(messages);
+    const mainFlow = messages.filter(m => !roots.Has(m.ID));
+    const mainAfter = TurnRowsAfter(mainFlow, userMessage);
+    const afterRoots = new UUIDSet(mainAfter.map(m => m.ID));
+    return TurnRowsAfter(messages, userMessage).filter(m => {
+      const rootId = roots.Get(m.ID);
+      return afterRoots.Has(m.ID) || (rootId !== undefined && afterRoots.Has(rootId));
+    });
   }
 
   /**
@@ -5731,7 +5778,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** The nearest earlier User row in the loaded window; null when the window holds none. */
   private findUserMessageBefore(aiMessage: MJConversationDetailEntity): MJConversationDetailEntity | null {
-    const sorted = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
+    const sorted = [...this.displayState().MainFlow].sort((a, b) => a.Sequence - b.Sequence);
     const index = sorted.findIndex(m => UUIDsEqual(m.ID, aiMessage.ID));
     for (let i = index - 1; i >= 0; i--) {
       if (sorted[i].Role === 'User') {
@@ -5854,12 +5901,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /**
    * When true, thread replies in the loaded window are omitted from top-level `DisplayMessages` so
-   * they can be rendered inside a collapsed thread under their root message. Only replies in a
-   * thread collapse: a person's message with a loaded `ParentID`, or an agent message whose
-   * `ParentID` is itself a thread reply. An agent's answer to a top-level message (`ParentID` set
-   * to that top-level message) stays in the main flow.
+   * they can be rendered inside a collapsed thread under their root message (see
+   * {@link GetThreadReplyRoots}).
    */
   @Input() CollapseThreadReplies: boolean = false;
+
+  /**
+   * Emits when a jump targets a collapsed thread reply, after scrolling to its top-level root
+   * message, so the host can open the thread and reveal the reply.
+   */
+  @Output() ThreadReplyRevealRequested = new EventEmitter<ThreadReplyRevealRequest>();
 
   /**
    * The rows the message list shows for the window view; the same array until the rows or the view
@@ -5871,70 +5922,53 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** The loaded rows split for the window view, and the rows shown; rebuilt only when one of their inputs changes. */
-  private displayState(): { Split: ForkRows<MJConversationDetailEntity>; Rows: MJConversationDetailEntity[] } {
+  private displayState(): {
+    ThreadReplyRoots: UUIDMap<string>;
+    MainFlow: MJConversationDetailEntity[];
+    Split: ForkRows<MJConversationDetailEntity>;
+    Rows: MJConversationDetailEntity[];
+  } {
     const messages = this.messages ?? [];
     const view = this.WindowView;
-    const collapseThreads = this.CollapseThreadReplies;
+    const collapseThreads = Boolean(this.CollapseThreadReplies);
     const cache = this.displayCache;
-    if (
-      cache &&
-      cache.Messages === messages &&
-      cache.Length === messages.length &&
-      cache.View === view &&
-      cache.CollapseThreads === collapseThreads
-    ) {
+    if (cache && cache.Messages === messages && cache.View === view && cache.CollapseThreads === collapseThreads) {
       return cache;
     }
-    const split = SplitForkRows(messages, view);
-    const rawRows = view.Kind === 'Main' ? messages : [...split.Inherited, ...split.Own];
-    let rows = rawRows;
-    if (collapseThreads && rawRows.length > 0) {
-      const byId = new Map<string, MJConversationDetailEntity>();
-      for (const m of rawRows) {
-        const id = m?.ID?.trim().toLowerCase();
-        if (id) {
-          byId.set(id, m);
-        }
-      }
-      const memo = new Map<string, boolean>();
-      const visiting = new Set<string>();
-      const isAgentRow = (m: MJConversationDetailEntity): boolean =>
-        m?.Role === 'AI' || Boolean(m?.AgentID && String(m.AgentID).trim().length > 0);
-      const isThreadReply = (m: MJConversationDetailEntity): boolean => {
-        const id = m?.ID?.trim().toLowerCase() ?? '';
-        if (id && memo.has(id)) {
-          return memo.get(id)!;
-        }
-        const pid = m?.ParentID?.trim().toLowerCase();
-        if (!pid || pid === 'null' || !byId.has(pid) || (id && visiting.has(id))) {
-          if (id) memo.set(id, false);
-          return false;
-        }
-        if (!isAgentRow(m)) {
-          if (id) memo.set(id, true);
-          return true;
-        }
-        if (id) visiting.add(id);
-        const parent = byId.get(pid)!;
-        const result = isThreadReply(parent);
-        if (id) {
-          visiting.delete(id);
-          memo.set(id, result);
-        }
-        return result;
-      };
-      rows = rawRows.filter((m) => !isThreadReply(m));
-    }
+    const threadReplyRoots = collapseThreads ? GetThreadReplyRoots(messages) : EMPTY_THREAD_REPLY_ROOTS;
+    const mainFlow = collapseThreads ? messages.filter((m) => !threadReplyRoots.Has(m.ID)) : messages;
+    const split = SplitForkRows(mainFlow, view);
+    const rows = view.Kind === 'Main' ? mainFlow : [...split.Inherited, ...split.Own];
     const next = {
       Messages: messages,
-      Length: messages.length,
       View: view,
       CollapseThreads: collapseThreads,
+      ThreadReplyRoots: threadReplyRoots,
+      MainFlow: mainFlow,
       Split: split,
       Rows: rows,
     };
     this.displayCache = next;
     return next;
+  }
+
+  /**
+   * Top-level root ID for `message` when {@link CollapseThreadReplies} is on and `message` is a
+   * thread reply; null when thread collapsing is off or `message` belongs in the main flow.
+   */
+  private collapsedThreadRootId(message: MJConversationDetailEntity): string | null {
+    if (!this.CollapseThreadReplies) {
+      return null;
+    }
+    const fromLoaded = this.displayState().ThreadReplyRoots.Get(message.ID);
+    if (fromLoaded) {
+      return fromLoaded;
+    }
+    const loaded = this.messages ?? [];
+    if (loaded.some((m) => UUIDsEqual(m.ID, message.ID))) {
+      return null;
+    }
+    return GetThreadReplyRoots([...loaded, message]).Get(message.ID) ?? null;
   }
 
   /**
@@ -5946,6 +5980,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!cache || cache.Messages !== this.messages) {
       return;
     }
+    this.replaceRowIn(cache.MainFlow, message);
     this.replaceRowIn(cache.Rows, message);
     this.replaceRowIn(cache.Split.Inherited, message);
     this.replaceRowIn(cache.Split.Own, message);
@@ -6025,7 +6060,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * that run, so the placeholder says so.
    */
   private stoppedLastReplyAgent(): string | null | undefined {
-    const rows = this.DisplayMessages;
+    const rows = this.DisplayMessages
+      .filter(r => r.ReplacedAt == null)
+      .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
     const last = rows[rows.length - 1];
     if (!last) {
       return undefined;
@@ -6143,7 +6180,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (anchor) {
       return anchor;
     }
-    const inherited = view === this.WindowView ? this.displayState().Split.Inherited : SplitForkRows(messages, view).Inherited;
+    const state = this.displayState();
+    const inherited = view === this.WindowView ? state.Split.Inherited : SplitForkRows(state.MainFlow, view).Inherited;
     return inherited.length > 0 ? inherited[inherited.length - 1] : null;
   }
 
@@ -7189,8 +7227,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // region the list unmounts into spacers — so this button silently did nothing for any pin
     // that wasn't already on screen. The list resolves through the timeline key, which a
     // spacer shares with the item it stands in for.
-    if (this.messageListComponent?.ScrollToMessage(messageId)) {
-      this.beaconMessage(messageId);
+    if (this.scrollToMessageOrThreadRoot(messageId)) {
       return;
     }
 
@@ -7208,9 +7245,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // The paging loop deliberately skipped the per-page peripheral rebuild — pay it once,
     // here, before asking the list for element positions.
     await this.refreshAfterPaging(this.ConversationId!);
-    if (this.messageListComponent?.ScrollToMessage(messageId)) {
-      this.beaconMessage(messageId);
-    } else {
+    if (!this.scrollToMessageOrThreadRoot(messageId)) {
       MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
     }
   }
@@ -7254,12 +7289,47 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.scrollToBottom = false;
       this.bottomFollowSuppressedUntil = Date.now() + 1500;
     }
-    if (!row || !this.messageListComponent?.ScrollToMessage(row.ID)) {
+    if (!row || !this.scrollToMessageOrThreadRoot(row.ID, 'search-hit-highlight', 2000)) {
       MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
       return false;
     }
-    this.beaconMessage(row.ID, 'search-hit-highlight', 2000);
     return true;
+  }
+
+  /**
+   * Scrolls to `messageId`, or when {@link CollapseThreadReplies} hides `messageId` under a thread
+   * root, scrolls to that root and emits {@link ThreadReplyRevealRequested} so the host can open
+   * the thread.
+   */
+  private scrollToMessageOrThreadRoot(
+    messageId: string,
+    cssClass: string = 'pin-beacon',
+    durationMs: number = 1500,
+  ): boolean {
+    const rootId = this.CollapseThreadReplies
+      ? this.displayState().ThreadReplyRoots.Get(messageId)
+      : undefined;
+    if (rootId) {
+      if (this.messageListComponent?.ScrollToMessage(rootId)) {
+        this.beaconMessage(rootId, cssClass, durationMs);
+      }
+      this.emitThreadReplyReveal(messageId, rootId);
+      return true;
+    }
+    if (this.messageListComponent?.ScrollToMessage(messageId)) {
+      this.beaconMessage(messageId, cssClass, durationMs);
+      return true;
+    }
+    return false;
+  }
+
+  private emitThreadReplyReveal(replyId: string, rootId: string): void {
+    const loadedReply = (this.messages ?? []).find(m => UUIDsEqual(m.ID, replyId));
+    const loadedRoot = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
+    (this.ThreadReplyRevealRequested ??= new EventEmitter<ThreadReplyRevealRequest>()).emit({
+      ReplyID: loadedReply?.ID ?? replyId,
+      RootID: loadedRoot?.ID ?? rootId,
+    });
   }
 
   /**
@@ -7281,7 +7351,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Pages older history until the pinned message `messageId` falls inside the loaded window. */
   private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
-    const target = this.PinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
+    const target = this.PinnedMessages?.find(p => UUIDsEqual(p.ID, messageId));
     if (!target) {
       return false;   // not a loaded pin — nothing tells us how far back to page
     }
@@ -7418,10 +7488,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Find this message and all messages after it sorted by Sequence
     const sortedMessages = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
-    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
-    if (targetIndex === -1) return;
-
-    const toHide = sortedMessages.slice(targetIndex);
+    const toHide = this.rowsToDeleteFrom(sortedMessages, message.ID);
+    if (toHide.length === 0) return;
     const count = toHide.length;
 
     const confirmed = await this.confirmDialog.confirm({
@@ -7458,14 +7526,43 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
 
-    const hideIds = new Set(toHide.map(m => m.ID));
+    const hideIds = new UUIDSet(toHide.map(m => m.ID));
     // Drop them from the window too, or the next RefreshLatest merge reinstates them.
-    for (const id of hideIds) {
-      this.windowStore.RemoveDetail(id);
+    for (const m of toHide) {
+      this.windowStore.RemoveDetail(m.ID);
     }
-    this.messages = this.messages.filter(m => !hideIds.has(m.ID));
+    this.messages = this.messages.filter(m => !hideIds.Has(m.ID));
     this.resetComponentState(this.ConversationId!);
     this.cdr.detectChanges();
+  }
+
+  /**
+   * The rows removed by "delete this and everything after": when thread replies are collapsed,
+   * the target, every main-flow row after it, and any thread replies whose root is among those rows.
+   */
+  private rowsToDeleteFrom(
+    sortedMessages: MJConversationDetailEntity[],
+    targetId: string,
+  ): MJConversationDetailEntity[] {
+    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, targetId));
+    if (targetIndex === -1) {
+      return [];
+    }
+    if (!this.CollapseThreadReplies) {
+      return sortedMessages.slice(targetIndex);
+    }
+    const roots = GetThreadReplyRoots(sortedMessages);
+    const removedRoots = new UUIDSet();
+    for (let i = targetIndex; i < sortedMessages.length; i++) {
+      const id = sortedMessages[i].ID;
+      if (!roots.Has(id) || i === targetIndex) {
+        removedRoots.Add(id);
+      }
+    }
+    return sortedMessages.filter(m => {
+      const rootId = roots.Get(m.ID);
+      return removedRoots.Has(m.ID) || (rootId !== undefined && removedRoots.Has(rootId));
+    });
   }
 
   /** @deprecated Use {@link OnDeleteMessage}. */
@@ -9220,6 +9317,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * in flight.
    */
   private followTranscript(change: 'load' | 'new' | 'update' | 'stream', message?: MJConversationDetailEntity): void {
+    if (message && this.collapsedThreadRootId(message) !== null) {
+      return;
+    }
     if (change === 'load') {
       this.scrollToBottom = true;
       return;
@@ -9810,15 +9910,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private scrollToMessage(messageId: string): void {
     // Wait for DOM to update, then scroll
     setTimeout(() => {
-      if (this.messageListComponent?.ScrollToMessage(messageId)) {
+      if (this.scrollToMessageOrThreadRoot(messageId)) {
         return;
       }
-      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      const rootId = this.CollapseThreadReplies
+        ? this.displayState().ThreadReplyRoots.Get(messageId)
+        : undefined;
+      const targetId = rootId ?? messageId;
+      const messageElement = document.querySelector(`[data-message-id="${targetId}"]`);
       if (messageElement) {
         messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        console.log('📍 Scrolled to message:', messageId);
+        console.log('📍 Scrolled to message:', targetId);
       } else {
-        console.warn('⚠️ Message element not found for ID:', messageId);
+        console.warn('⚠️ Message element not found for ID:', targetId);
       }
     }, 300); // Give time for artifact panel to open and DOM to render
   }
