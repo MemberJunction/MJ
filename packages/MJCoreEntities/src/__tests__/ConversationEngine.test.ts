@@ -3213,6 +3213,87 @@ describe('ConversationEngine', () => {
             expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('View');
         });
 
+        describe('folders shared through a User or a Role grant', () => {
+            /** user-1, holding role-1, as LoadProjects/LoadConversations see them. */
+            const viewerWithRole = () => {
+                const viewer = new UserInfo();
+                viewer.ID = 'user-1';
+                (viewer as unknown as { UserRoles: unknown[] }).UserRoles = [{ RoleID: 'role-1' }];
+                return viewer;
+            };
+            const grant = (projectId: string, overrides: Record<string, unknown>) => ({
+                ResourceTypeID: PROJECTS_RESOURCE_TYPE_ID,
+                ResourceRecordID: projectId,
+                Status: 'Approved',
+                UserID: null,
+                RoleID: null,
+                PermissionLevel: 'View',
+                SharedByUserID: null,
+                SharedByUser: null,
+                ...overrides,
+            });
+            const engineHandlers = () =>
+                engine as unknown as {
+                    handleProjectEntityEvent(e: Record<string, unknown>, action: string, d: Record<string, unknown> | null): boolean;
+                    handleConversationEntityEvent(e: Record<string, unknown>, action: string, d: Record<string, unknown> | null): boolean;
+                };
+
+            it('keeps both folders, and their conversations, when another user saves them', async () => {
+                (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                    grant('proj-user', { Type: 'User', UserID: 'user-1' }),
+                    grant('proj-role', { Type: 'Role', RoleID: 'role-1' }),
+                ];
+                const viewer = viewerWithRole();
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [
+                        createSharedOrPersonalProject({ ID: 'proj-user', OwnerUserID: 'user-2' }),
+                        createSharedOrPersonalProject({ ID: 'proj-role', OwnerUserID: 'user-3' }),
+                    ],
+                });
+                await engine.LoadProjects('env-1', viewer);
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [
+                        createMockConversation({ ID: 'c-user', UserID: 'user-2', ProjectID: 'proj-user' }),
+                        createMockConversation({ ID: 'c-role', UserID: 'user-3', ProjectID: 'proj-role' }),
+                    ],
+                });
+                runViewResultQueue.push({ Success: true, Results: [] });
+                await engine.LoadConversations('env-1', viewer);
+                expect(engine.Conversations).toHaveLength(2);
+
+                // The owners rename their folders; each event re-checks whether this viewer still sees the folder.
+                for (const [id, owner] of [['proj-user', 'user-2'], ['proj-role', 'user-3']]) {
+                    const row = { ID: id, Name: 'Renamed', EnvironmentID: 'env-1', OwnerUserID: owner, IsArchived: false };
+                    engineHandlers().handleProjectEntityEvent({ baseEntity: null, payload: { recordData: JSON.stringify(row) } }, 'save', row);
+                }
+
+                expect(engine.Projects.map((p) => p.ID).sort()).toEqual(['proj-role', 'proj-user']);
+                expect(engine.Conversations.map((c) => c.ID).sort()).toEqual(['c-role', 'c-user']);
+            });
+
+            it('gives a conversation that arrives by event the Role grant\'s level, not View', async () => {
+                (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                    grant('proj-role', { Type: 'Role', RoleID: 'role-1', PermissionLevel: 'Edit' }),
+                ];
+                const viewer = viewerWithRole();
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [createSharedOrPersonalProject({ ID: 'proj-role', OwnerUserID: 'user-3' })],
+                });
+                await engine.LoadProjects('env-1', viewer);
+                runViewResultQueue.push({ Success: true, Results: [] });
+                await engine.LoadConversations('env-1', viewer);
+
+                const row = { ID: 'c-new', UserID: 'user-3', ProjectID: 'proj-role', EnvironmentID: 'env-1', IsArchived: false };
+                const conversation = createMockConversation(row);
+                engineHandlers().handleConversationEntityEvent({ baseEntity: conversation }, 'save', row);
+
+                expect(engine.GetSharedByInfo('c-new')?.Level).toBe('Edit');
+            });
+        });
+
         it('classifies folders into Private, Shared (ACL), and Public tiers from each folder\'s own grants, as the server does', async () => {
             const privateProject = createSharedOrPersonalProject({ ID: 'proj-priv', OwnerUserID: 'user-1' });
             const sharedProject = createSharedOrPersonalProject({ ID: 'proj-acl', OwnerUserID: 'user-2' });

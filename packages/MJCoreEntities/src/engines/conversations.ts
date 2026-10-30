@@ -1067,6 +1067,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     private _lastProjectsUserId: string | null = null;
 
     /**
+     * The user the last folder or conversation load ran for. Kept whole, not just the ID, so event handlers can
+     * match that user's Role grants as well as their User grants (see {@link getUserSharedProjectPermissions}).
+     */
+    private _lastViewer: UserInfo | null = null;
+
+    /**
      * Monotonic ticket for conversation loads, to keep the newest ANSWER rather than the
      * newest REQUEST.
      *
@@ -1188,6 +1194,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         this._lastEnvironmentId = environmentId;
         this._lastConversationsUserId = contextUser?.ID ?? null;
+        this._lastViewer = contextUser ?? null;
 
         // Claim a ticket for this load. Anything published below is gated on still holding
         // the newest one — see _conversationsLoadGeneration.
@@ -1746,6 +1753,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (result.Success) {
             this._lastProjectsEnvironmentId = environmentId;
             this._lastProjectsUserId = userId;
+            this._lastViewer = contextUser ?? null;
             this._projects$.next(result.Results || []);
         } else {
             console.error('[ConversationEngine] Failed to load projects:', result.ErrorMessage);
@@ -4196,6 +4204,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._lastConversationsUserId = null;
         this._lastProjectsEnvironmentId = null;
         this._lastProjectsUserId = null;
+        this._lastViewer = null;
     }
 
     // ========================================================================
@@ -4650,15 +4659,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // avoiding, and it is the same rule the read path applies.
         const ownerUserId = data['OwnerUserID'] as string | null | undefined;
         const viewerId = this._lastProjectsUserId ?? this._lastConversationsUserId;
-        const hasProjectGrant =
-            !!viewerId &&
-            this.getApprovedProjectPermissions().some(
-                (p) =>
-                    UUIDsEqual(p.ResourceRecordID, id) &&
-                    p.Type === 'User' &&
-                    !!p.UserID &&
-                    UUIDsEqual(p.UserID, viewerId)
-            );
+        const hasProjectGrant = this.getUserSharedProjectPermissions(this._lastViewer).some((p) =>
+            UUIDsEqual(p.ResourceRecordID, id)
+        );
         const isVisibleToViewer =
             ownerUserId == null || ownerUserId === ''
                 ? true
@@ -4725,7 +4728,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID));
             if (inSharedFolder) {
                 keptConversations.push(conv);
-                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID);
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID, this._lastViewer);
                 const existingShare = this._sharedByByConversationId.get(normId);
                 if (!existingShare) {
                     const convWithUser = conv as MJConversationEntity & { User?: string | null };
