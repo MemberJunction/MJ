@@ -212,6 +212,14 @@ describe('HuggingFaceRealtime', () => {
             expect(pact['sampleRate']).toBe(HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE);
         });
 
+        it('carries the host cap as MaxSessionSeconds, and leaves it unset when the host sets none (no provider cap is known)', async () => {
+            const driver = new TestHuggingFaceRealtime('secret-key');
+            process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+            expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+            const unset = await driver.CreateClientSession(makeParams());
+            expect(unset.MaxSessionSeconds).toBeUndefined();
+        });
+
         it('takes the proxy origin from Config.proxyBaseUrl before MJAPI_PUBLIC_URL', async () => {
             const driver = new TestHuggingFaceRealtime('secret-key');
             process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
@@ -626,5 +634,16 @@ describe('QA hardening regressions (plan A-items, HF-specific)', () => {
         driver.Emit({ type: 'conversation.item.input_audio_transcription.delta' }); // undefined delta
         driver.Emit({ type: 'response.output_audio_transcript.done', transcript: '  ' });
         expect(seen).toHaveLength(0);
+    });
+});
+
+describe('HuggingFaceRealtime DriverFacts', () => {
+    it('declares its own DriverFacts, with the provider ceiling unknown', () => {
+        expect(Object.prototype.hasOwnProperty.call(HuggingFaceRealtime, 'DriverFacts')).toBe(true);
+        expect(HuggingFaceRealtime.DriverFacts.ProviderMaxSessionSeconds).toBeUndefined();
+    });
+
+    it('declares no SupportedTurnSettings: its profile maps no normalized turn field', () => {
+        expect(HuggingFaceRealtime.DriverFacts.SupportedTurnSettings).toBeUndefined();
     });
 });

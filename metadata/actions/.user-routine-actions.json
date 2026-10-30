@@ -1,0 +1,92 @@
+[
+  {
+    "fields": {
+      "Name": "Run User Routine Now",
+      "Description": "Runs one MJ: User Routines row immediately, on the user's request, without changing its schedule. Unlike setting NextRunAt to now, which makes the dispatcher claim the routine and spends a one-shot, this hands the routine to the dispatcher's manual-run path: the claim and the wake gate are skipped, a one-shot keeps its scheduled time and a recurring routine keeps its cadence. The caller must own the routine unless they are an Owner-type user. The run completes in the background; its result lands on the run row, the routine's conversation and its notification.",
+      "DriverClass": "Run User Routine Now",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-bolt"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ: User Routines row to run now",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5F00E3E5-CFB9-44EE-AF1E-A040BE763D85"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The run was started; it completes in the background"
+          },
+          "primaryKey": {
+            "ID": "CF94B69E-51BF-4249-A193-A1C75E682C80"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_USER_CONTEXT",
+            "IsSuccess": false,
+            "Description": "No context user on the request"
+          },
+          "primaryKey": {
+            "ID": "959EFAC2-7612-47E9-B5F9-E8EDDC642D26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "RoutineID was not supplied"
+          },
+          "primaryKey": {
+            "ID": "9645FE3E-729D-4271-B533-723FBD8C783B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ROUTINE_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No routine with that ID is visible to the caller"
+          },
+          "primaryKey": {
+            "ID": "F44AF4E5-7CB0-438F-9B0B-1C86FCD7706F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_OWNER",
+            "IsSuccess": false,
+            "Description": "The caller does not own the routine and is not an Owner-type user"
+          },
+          "primaryKey": {
+            "ID": "7B549941-F879-41B9-A87F-65684F34FCDF"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FAA47BCA-D805-473E-B556-4FFE9D4BE644"
+    }
+  }
+]

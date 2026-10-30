@@ -135,6 +135,7 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
 
             this.setOutputParam(params, 'RoutineID', routine.ID);
             this.setOutputParam(params, 'NextRunAt', routine.NextRunAt ? routine.NextRunAt.toISOString() : null);
+            this.setOutputParam(params, 'ScheduledWakeTime', routine.NextRunAt ? routine.NextRunAt.toISOString() : null);
             this.setOutputParam(params, 'ScheduleMode', routine.ScheduleMode);
             this.setOutputParam(params, 'WorkstreamKey', workstreamKey);
 
@@ -264,14 +265,16 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         scheduleMode: MJUserRoutineEntity['ScheduleMode'],
         cronExpression: string | null
     ): Date | null {
-        const wakeAtISO = this.getStringParam(params, 'WakeAtISO');
+        // NextWakeAt and DelayMinutes are the names the action's metadata declares; WakeAtISO and
+        // WakeInMinutes are the names the Chief of Staff prompt uses. Both pairs are accepted.
+        const wakeAtISO = this.getStringParam(params, 'WakeAtISO') ?? this.getStringParam(params, 'NextWakeAt');
         if (wakeAtISO) {
             const parsed = new Date(wakeAtISO);
             if (!Number.isNaN(parsed.getTime())) {
                 return parsed;
             }
         }
-        const wakeInMinutes = this.getNumericParam(params, 'WakeInMinutes');
+        const wakeInMinutes = this.getNumericParam(params, 'WakeInMinutes') ?? this.getNumericParam(params, 'DelayMinutes');
         if (wakeInMinutes != null && wakeInMinutes > 0) {
             return new Date(Date.now() + Math.round(wakeInMinutes * 60_000));
         }
