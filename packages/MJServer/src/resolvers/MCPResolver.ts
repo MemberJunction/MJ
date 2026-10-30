@@ -23,6 +23,19 @@ import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { configInfo } from '../config.js';
 
+const UUID_SHAPE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/**
+ * Validates that a caller-supplied record id is a UUID before it is interpolated into a SQL
+ * filter, and returns it unchanged. A validated UUID cannot carry SQL.
+ */
+function sqlUuid(value: string, argName: string): string {
+    if (typeof value !== 'string' || !UUID_SHAPE.test(value)) {
+        throw new Error(`${argName} must be a UUID`);
+    }
+    return value;
+}
+
 /**
  * Input type for syncing MCP tools
  */
@@ -1289,7 +1302,7 @@ export class MCPResolver extends ResolverBase {
             // First get connection to get server ID
             const connResult = await rv.RunView<{ MCPServerID: string }>({
                 EntityName: 'MJ: MCP Server Connections',
-                ExtraFilter: `ID='${connectionId}'`,
+                ExtraFilter: `ID='${sqlUuid(connectionId, 'connectionId')}'`,
                 Fields: ['MCPServerID'],
                 ResultType: 'simple'
             }, contextUser);
@@ -1310,7 +1323,7 @@ export class MCPResolver extends ResolverBase {
                 OAuthRequirePKCE: boolean | null;
             }>({
                 EntityName: 'MJ: MCP Servers',
-                ExtraFilter: `ID='${serverId}'`,
+                ExtraFilter: `ID='${sqlUuid(serverId, 'serverId')}'`,
                 Fields: [
                     'OAuthIssuerURL',
                     'OAuthScopes',

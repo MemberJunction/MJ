@@ -169,7 +169,8 @@ export class RuntimeUtilities {
           // Use the AI client from GraphQLDataProvider to generate embeddings
           const result = await graphQLProvider.AI.EmbedText({
             textToEmbed: params.textToEmbed,
-            modelSize: params.modelSize
+            modelSize: params.modelSize,
+            inputType: params.inputType
           });
           
           if (result.error) {

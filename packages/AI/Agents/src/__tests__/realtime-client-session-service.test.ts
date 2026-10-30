@@ -123,8 +123,10 @@ class TestableService extends RealtimeClientSessionService {
         return this.ResolveModelResult;
     }
     protected override getCoAgentSystemPromptText(): string { return 'CO-AGENT PROMPT BODY'; }
+    /** The co-agent system prompt id the stub resolves; null = the co-agent has no active prompt. */
+    public SystemPromptID: string | null = 'prompt-1';
     protected override resolveCoAgentSystemPrompt(): CoAgentSystemPromptResolution {
-        return { Text: 'CO-AGENT PROMPT BODY', PromptID: 'prompt-1' };
+        return { Text: 'CO-AGENT PROMPT BODY', PromptID: this.SystemPromptID };
     }
     protected override async createCoAgentObservabilityRun(
         coAgent: MJAIAgentEntityExtended,
@@ -267,6 +269,65 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         expect(result.CoAgentRunID).toBeUndefined();
         expect(result.PromptRunID).toBeUndefined();
         expect(result.CoAgentRunStepID).toBeUndefined();
+    });
+
+    describe('logs once at prepare time when the session will have no co-agent prompt run', () => {
+        let errorSpy: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => { errorSpy = vi.spyOn(coreModule, 'LogError').mockImplementation(() => {}); });
+        afterEach(() => { errorSpy.mockRestore(); });
+
+        /** The LogError lines that name the missing co-agent prompt run. */
+        function missingRunLines(): string[] {
+            return errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('no co-agent prompt run'));
+        }
+
+        it('names the co-agent and its missing active prompt when the co-agent has none', async () => {
+            const svc = new TestableService();
+            svc.SystemPromptID = null;
+            svc.ObservabilityResult = { CoAgentRunID: 'co-run-1' };
+
+            const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            expect(result.Success).toBe(true);
+            expect(result.PromptRunID).toBeUndefined();
+            const lines = missingRunLines();
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain("co-agent 'Realtime Co-Agent' (co-1)");
+            expect(lines[0]).toContain("no Active 'MJ: AI Agent Prompts' row");
+            expect(lines[0]).toContain('session session-1');
+        });
+
+        it('says the co-agent run could not be saved when observability creation failed', async () => {
+            const svc = new TestableService();
+            svc.ObservabilityResult = null;
+
+            await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            const lines = missingRunLines();
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain('co-agent run');
+            expect(lines[0]).toContain('could not be saved');
+        });
+
+        it('says the prompt run could not be saved when the co-agent has a prompt but no prompt run came back', async () => {
+            const svc = new TestableService();
+            svc.ObservabilityResult = { CoAgentRunID: 'co-run-1' };
+
+            await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            const lines = missingRunLines();
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain('prompt run');
+            expect(lines[0]).toContain('prompt-1');
+        });
+
+        it('logs nothing when the prompt run exists', async () => {
+            const svc = new TestableService();
+
+            await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+            expect(missingRunLines()).toHaveLength(0);
+        });
     });
 
     it('includes caller-supplied extra tools alongside invoke-target', async () => {

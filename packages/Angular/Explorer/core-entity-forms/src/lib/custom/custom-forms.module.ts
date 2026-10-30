@@ -59,6 +59,9 @@ import { ConstellationComponent } from "./ai-agent-run/flow/constellation.compon
 import { FlowchartComponent } from "./ai-agent-run/flow/flowchart.component";
 import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
+import { QueryFieldsGridComponent } from "./Queries/query-fields-grid.component";
+import { QueryParametersGridComponent } from "./Queries/query-parameters-grid.component";
+import { QueryDiagnosticsComponent, QueryRefreshDialogComponent } from "@memberjunction/ng-query-viewer";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
 import { TaskGraphEditorModule } from "@memberjunction/ng-task-graph-editor";
@@ -232,6 +235,10 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         ClonePlanTreeComponent,
         MJTabStripModule,
         CodeEditorModule,
+        QueryFieldsGridComponent,
+        QueryParametersGridComponent,
+        QueryDiagnosticsComponent,
+        QueryRefreshDialogComponent,
         DeepDiffModule,
         AITestHarnessModule,
         ActionGalleryModule,
