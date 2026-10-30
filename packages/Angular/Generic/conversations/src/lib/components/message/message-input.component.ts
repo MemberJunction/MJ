@@ -3395,8 +3395,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.showDelegateReply(first.reply, userMessage);
         return;
       }
-      // A post-ACK disconnect means the first run may still be executing — do not start a second run.
-      if (agentFailureDisposition(first.result).status === 'In-Progress') {
+      // Only a genuine failure earns a retry. A post-ACK disconnect means the first run may still
+      // be executing on this detail, and an Awaiting-Input run is parked on the user — re-invoking
+      // in either case starts a second run against a live one, and for the awaiting run it throws
+      // away the question the agent is waiting to have answered.
+      if (agentFailureDisposition(first.result).status !== 'Error') {
         await this.applyAgentFailureToDetail(first.reply, userMessage, agentName, first.result);
         return;
       }
@@ -3973,6 +3976,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * follows the row until the server writes a terminal status. A placeholder the server never
    * acknowledged shows the failure on screen only.
    *
+   * A run in AwaitingFeedback/Paused is not a failure at all — the agent asked this user a
+   * question, or is parked on a workflow. It only reaches here because the envelope says
+   * `success: false`, and because such a run usually carries no ErrorMessage it used to render as
+   * "❌ failed — Unknown error": a verdict the server never returned. That branch surfaces the
+   * agent's question and completes the bubble instead.
+   *
    * Always completes the user message — the user turn finished regardless of what the agent is doing.
    */
   private async applyAgentFailureToDetail(
@@ -3983,6 +3992,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     failedVerb = 'failed',
   ): Promise<void> {
     const disposition = agentFailureDisposition(result);
+    if (disposition.status === 'Awaiting-Input') {
+      // Complete, not Error: the turn is over (the timer must stop) and the agent's question is
+      // the reply. `result` is passed through so any ResponseForm the agent attached to its
+      // question still renders. The user's answer resumes the run, which re-enters
+      // AgentStateService's active set as Running.
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        disposition.message || `**${agentName}** needs more information to continue — please reply with details.`,
+        'Complete',
+        result ?? undefined,
+      );
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      return;
+    }
     if (disposition.status === 'In-Progress' && agentResponseMessage.IsSaved) {
       await agentResponseMessage.Load(agentResponseMessage.ID);
       if (agentResponseMessage.Status === 'In-Progress') {
