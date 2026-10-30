@@ -20,6 +20,7 @@ import {
 } from '@memberjunction/core';
 import { MJQueryEntityExtended, MJQueryPermissionEntity, QueryEngine } from '@memberjunction/core-entities';
 import { SystemUserID } from '../systemUser';
+import { DescribeStatementFailure, DescribeStatementSuccess, type DescribeStatementResult } from '../describeStatement';
 
 /**
  * Saved queries and ad-hoc SQL enforce entity and field-level security on the SQL that runs.
@@ -60,9 +61,23 @@ class QueryFlsProvider extends GenericDatabaseProviderTestBase {
     }
 
     public readonly Executed: string[] = [];
+    /** The rows every statement returns. */
+    public Rows: Record<string, unknown>[] = [{ ID: 'p-1' }];
     override async ExecuteSQL<T>(sql: string): Promise<Array<T>> {
         this.Executed.push(sql);
-        return [{ ID: 'p-1' }] as unknown as Array<T>;
+        return this.Rows as unknown as Array<T>;
+    }
+
+    /** What DescribeStatement reports: output name → source view column (null: no source); null: the describe fails. */
+    public Description: Array<[string, string | null]> | null = null;
+    public readonly Described: string[] = [];
+    public override async DescribeStatement(sql: string): Promise<DescribeStatementResult> {
+        this.Described.push(sql);
+        if (!this.Description) return DescribeStatementFailure('Invalid object name');
+        return DescribeStatementSuccess(this.Description.map(([Name, column], i) => ({
+            Name, Ordinal: i + 1, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', IsNullable: true, IsComputed: column === null,
+            Source: column === null ? null : { Schema: '__mj', Object: column.split('.')[0], Column: column.split('.')[1] },
+        })));
     }
 
     public Run(params: RunQueryParams, user: UserInfo): Promise<RunQueryResult> {
@@ -173,10 +188,15 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
     });
     afterEach(() => vi.restoreAllMocks());
 
-    async function runAs(sql: string, who: UserInfo, extra: Partial<QuerySpec> = {}, parameters?: Record<string, string>): Promise<RunQueryResult> {
+    async function runAs(
+        sql: string, who: UserInfo, extra: Partial<QuerySpec> = {}, parameters?: Record<string, string>, paging: Partial<RunQueryParams> = {},
+    ): Promise<RunQueryResult> {
         provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: sql, ...extra })]);
-        return provider.Run({ QueryID: 'q-1', ...(parameters ? { Parameters: parameters } : {}) }, who);
+        return provider.Run({ QueryID: 'q-1', ...(parameters ? { Parameters: parameters } : {}), ...paging }, who);
     }
+
+    /** The refusal for the query `runAs` seeds: worded as if it did not exist (DISCUSSION Topic 3e item 1). */
+    const UNAVAILABLE = "Query 'q-1' does not exist or you do not have permission to run it.";
 
     const deniedShapes: Array<[string, string]> = [
         ['the select list', 'SELECT ID, Salary FROM vwPeople'],
@@ -186,15 +206,15 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
         ['an aggregate', 'SELECT DepartmentID, SUM(Salary) AS Total FROM vwPeople GROUP BY DepartmentID'],
         ['HAVING', 'SELECT DepartmentID FROM vwPeople GROUP BY DepartmentID HAVING MAX(Salary) > 1'],
         ['a CTE that renames it', 'WITH x AS (SELECT ID, Salary AS S FROM vwPeople) SELECT ID, S FROM x'],
-        ['SELECT *', 'SELECT * FROM vwPeople'],
-        ['alias.*', 'SELECT p.* FROM vwPeople p'],
+        ['a WHERE beside a star', 'SELECT * FROM vwPeople WHERE Salary > 100000'],
+        ['the outer query of a star CTE', 'WITH x AS (SELECT * FROM vwPeople) SELECT ID FROM x WHERE x.Salary > 1'],
     ];
 
     for (const [where, sql] of deniedShapes) {
-        it(`refuses a restricted user whose query reads a denied column in ${where}, without running it`, async () => {
+        it(`refuses a restricted user whose query names a denied column in ${where}, without running it`, async () => {
             const result = await runAs(sql, staff);
             expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toMatch(/does not have permission to run query/);
+            expect(result.ErrorMessage).toBe(UNAVAILABLE);
             expect(result.ErrorMessage).not.toMatch(/Salary/i);
             expect(provider.Executed).toEqual([]);
         });
@@ -219,8 +239,187 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
     it('checks the entities the SQL reads even when the query declares none', async () => {
         const result = await runAs('SELECT ID, Amount FROM vwPayroll', staff);
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/Denied entities: Payroll/);
         expect(provider.Executed).toEqual([]);
+    });
+
+    // The refusal does not list "Denied entities" (DISCUSSION §6, 2026-10-27; Topic 3e item 5). TEST-INVENTORY F2.
+    // Inverted from the assertion `toMatch(/Denied entities: Payroll/)` that used to sit in the test above.
+    it('refuses a query reading an entity the user cannot read without naming that entity', async () => {
+        const result = await runAs('SELECT ID, Amount FROM vwPayroll', staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).not.toMatch(/Denied entities/);
+        expect(result.ErrorMessage).not.toMatch(/Payroll/);
+    });
+
+    // F1: a refusal and a not-found are byte-identical for each request form, because the message echoes only
+    // the identifier the caller supplied — never the resolved query's name, which a request by ID did not
+    // name and may not be allowed to see (DISCUSSION Topic 3e item 1; non-disclosure posture). TEST-INVENTORY F1.
+    const BY_NAME = "Query 'Payroll Report' does not exist or you do not have permission to run it.";
+    const BY_PATH = "Query 'HR/Reports/Payroll Report' does not exist or you do not have permission to run it.";
+    const BY_ID = "Query 'q-1' does not exist or you do not have permission to run it.";
+
+    function seedPayrollReport(sql: string): void {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', Name: 'Payroll Report', SQL: sql })]);
+    }
+
+    it('refuses a denied query asked for by name with the not-found message for that name', async () => {
+        seedPayrollReport('SELECT ID, Amount FROM vwPayroll');
+        const result = await provider.Run({ QueryName: 'Payroll Report' }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(BY_NAME);
+    });
+
+    it('refuses a query that does not exist, asked for by name, with the same message as a denied one', async () => {
+        provider.SeedQueries([]);
+        const result = await provider.Run({ QueryName: 'Payroll Report' }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(BY_NAME);
+    });
+
+    it('refuses a denied query asked for by ID with the not-found message for that ID, never naming the query', async () => {
+        seedPayrollReport('SELECT ID, Salary FROM vwPeople');
+        const result = await provider.Run({ QueryID: 'q-1' }, staff);
+        expect(result.ErrorMessage).toBe(BY_ID);
+        expect(result.ErrorMessage).not.toMatch(/Payroll Report/);
+        provider.SeedQueries([]);
+        expect((await provider.Run({ QueryID: 'q-1' }, staff)).ErrorMessage).toBe(BY_ID);
+    });
+
+    it('echoes the category path and name a request supplied, for a denied query and a missing one alike', async () => {
+        seedPayrollReport('SELECT ID, Salary FROM vwPeople');
+        expect((await provider.Run({ QueryName: 'Payroll Report', CategoryPath: '/HR/Reports/' }, staff)).ErrorMessage).toBe(BY_PATH);
+        provider.SeedQueries([]);
+        expect((await provider.Run({ QueryName: 'Payroll Report', CategoryPath: '/HR/Reports/' }, staff)).ErrorMessage).toBe(BY_PATH);
+    });
+
+    it('refuses a cache-checked batch item with the identifier that item supplied', async () => {
+        seedPayrollReport('SELECT ID, Salary FROM vwPeople');
+        const denied: RunQueryWithCacheCheckParams = { params: { QueryID: 'q-1' }, cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00.000Z', rowCount: 1 } };
+        const missing: RunQueryWithCacheCheckParams = { params: { QueryID: 'q-missing' } };
+        const response = await provider.RunQueriesWithCacheCheck([denied, missing], staff);
+        expect(response.results.map(r => r.errorMessage)).toEqual([BY_ID, "Query 'q-missing' does not exist or you do not have permission to run it."]);
+    });
+
+    // ── A denied field reaching the output only through a plain `*` / `alias.*` (DISCUSSION Topic 3e item 2) ──
+
+    const PERSON_ROW = { ID: 'p-1', Name: 'Ada', Salary: 250000, DepartmentID: 'd-1' };
+    const PERSON_COLUMNS: Array<[string, string | null]> = [['ID', 'vwPeople.ID'], ['Name', 'vwPeople.Name'], ['Salary', 'vwPeople.Salary'], ['DepartmentID', 'vwPeople.DepartmentID']];
+
+    const starShapes: Array<[string, string]> = [
+        ['SELECT *', 'SELECT * FROM vwPeople'],
+        ['alias.*', 'SELECT p.* FROM vwPeople p'],
+        ['a star beside named columns', 'SELECT p.*, j.ID AS ProjectID FROM vwPeople p JOIN vwProjects j ON j.OwnerID = p.ID'],
+        ['a star through a CTE', 'WITH x AS (SELECT * FROM vwPeople) SELECT * FROM x'],
+        ['a star through a derived table', 'SELECT d.* FROM (SELECT * FROM vwPeople) d WHERE d.Name IS NOT NULL'],
+    ];
+
+    for (const [shape, sql] of starShapes) {
+        it(`runs ${shape} for a restricted user and drops the denied column, silently`, async () => {
+            provider.Rows = [{ ...PERSON_ROW }];
+            provider.Description = PERSON_COLUMNS;
+            const result = await runAs(sql, staff);
+            expect(result.Success).toBe(true);
+            expect(result.Results).toEqual([{ ID: 'p-1', Name: 'Ada', DepartmentID: 'd-1' }]);
+            expect(JSON.stringify(result)).not.toMatch(/Salary|250000/);
+            expect(provider.Executed.length).toBe(1);
+        });
+    }
+
+    it('returns every column of a star to an unrestricted user, without describing the statement', async () => {
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = PERSON_COLUMNS;
+        const result = await runAs('SELECT * FROM vwPeople', hr);
+        expect(result.Results).toEqual([PERSON_ROW]);
+        expect(provider.Described).toEqual([]);
+    });
+
+    it('describes a rendered statement once and reuses the description', async () => {
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = PERSON_COLUMNS;
+        const sql = 'SELECT * FROM vwPeople WHERE 1 = 1';
+        await runAs(sql, staff);
+        await runAs(sql, staff);
+        expect(provider.Described).toEqual([sql]);
+    });
+
+    it('drops a column the description did not list, and describes the statement again next time', async () => {
+        provider.Rows = [{ ...PERSON_ROW, Bonus: 5 }];
+        provider.Description = PERSON_COLUMNS;
+        const sql = 'SELECT * FROM vwPeople WHERE 2 = 2';
+        const first = await runAs(sql, staff);
+        expect(first.Results).toEqual([{ ID: 'p-1', Name: 'Ada', DepartmentID: 'd-1' }]);
+        await runAs(sql, staff);
+        expect(provider.Described).toEqual([sql, sql]);
+    });
+
+    it('drops a column with no traced source whose name is a denied field', async () => {
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = [['ID', 'vwPeople.ID'], ['Name', 'vwPeople.Name'], ['Salary', null], ['DepartmentID', 'vwPeople.DepartmentID']];
+        const result = await runAs('SELECT * FROM vwPeople WHERE 3 = 3', staff);
+        expect(result.Results).toEqual([{ ID: 'p-1', Name: 'Ada', DepartmentID: 'd-1' }]);
+    });
+
+    it('refuses a star it cannot describe, with the not-found message', async () => {
+        provider.Description = null;
+        const result = await runAs('SELECT * FROM vwPeople WHERE 4 = 4', staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(UNAVAILABLE);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('refuses a paged star run whose first output column is withheld: the page could be ordered by it', async () => {
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = [['Salary', 'vwPeople.Salary'], ['ID', 'vwPeople.ID']];
+        const result = await runAs('SELECT * FROM vwPeople WHERE 5 = 5', staff, {}, undefined, { StartRow: 0, MaxRows: 10 });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(UNAVAILABLE);
+        provider.Description = PERSON_COLUMNS;
+        const allowed = await runAs('SELECT * FROM vwPeople WHERE 6 = 6', staff, {}, undefined, { StartRow: 0, MaxRows: 10 });
+        expect(allowed.Success).toBe(true);
+        expect(allowed.Results).toEqual([{ ID: 'p-1', Name: 'Ada', DepartmentID: 'd-1' }]);
+    });
+
+    // ── `*` inside a whole-row construct (DISCUSSION Topic 3e item 3): refused like a named denied field ──
+
+    const wholeRowShapes: Array<[string, string]> = [
+        ['DISTINCT *', 'SELECT DISTINCT * FROM vwPeople'],
+        ['a set operation', 'SELECT * FROM vwPeople UNION SELECT * FROM vwPeople'],
+        ['FOR JSON', 'SELECT * FROM vwPeople FOR JSON PATH'],
+        ['NATURAL JOIN', 'SELECT * FROM vwPeople NATURAL JOIN vwProjects'],
+        ['an ordinal ORDER BY with paging', 'SELECT * FROM vwPeople ORDER BY 3 DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY'],
+        ['GROUP BY', 'SELECT * FROM vwPeople GROUP BY ID, Name, Salary, DepartmentID'],
+        ['a star in a value subquery', 'SELECT ID FROM vwProjects WHERE OwnerID IN (SELECT * FROM vwPeople)'],
+        ['a checksum of the row', 'SELECT CHECKSUM(*) AS C FROM vwPeople'],
+        ['a star CTE read as a row', 'WITH x AS (SELECT * FROM vwPeople) SELECT DISTINCT * FROM x'],
+    ];
+
+    for (const [shape, sql] of wholeRowShapes) {
+        it(`refuses ${shape} over a restricted entity, without running it`, async () => {
+            provider.Description = PERSON_COLUMNS;
+            const result = await runAs(sql, staff);
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toBe(UNAVAILABLE);
+            expect(provider.Executed).toEqual([]);
+        });
+    }
+
+    // ── Definer's rights (DISCUSSION Topic 3e): a role-listed query skips field-level security entirely ──
+
+    it('returns every column of a role-listed star query to a role holder, without describing it', async () => {
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = PERSON_COLUMNS;
+        const result = await runAs('SELECT * FROM vwPeople', staff, { PermissionRoles: [STAFF_ROLE] });
+        expect(result.Success).toBe(true);
+        expect(result.Results).toEqual([PERSON_ROW]);
+        expect(provider.Described).toEqual([]);
+    });
+
+    it('gives a run that drops denied columns its own cache segment, keyed by the user\'s denials', () => {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT * FROM vwPeople' })]);
+        expect(provider.CacheAuthorization({ QueryID: 'q-1' }, staff)).toMatchObject({ authorized: true, fieldSecurityKey: expect.stringContaining(':salary') });
+        expect(provider.CacheAuthorization({ QueryID: 'q-1' }, hr).fieldSecurityKey).toBeUndefined();
+        provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT ID, Name FROM vwPeople' })]);
+        expect(provider.CacheAuthorization({ QueryID: 'q-1' }, staff).fieldSecurityKey).toBeUndefined();
     });
 
     // The refusal returned to the CALLER names no field or clause, on purpose. That makes a
@@ -333,6 +532,199 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
         const response = await provider.RunQueriesWithCacheCheck([item], staff);
         expect(response.results[0].status).toBe('error');
         expect(response.results[0].errorMessage).not.toMatch(/Salary/i);
+    });
+});
+
+describe('a saved query that writes a value tag inside a SQL string literal is refused at run time', () => {
+    const QUOTED = "SELECT ID, Name FROM vwProjects WHERE OwnerID = '{{ Owner }}'";
+    let provider: QueryFlsProvider;
+
+    beforeEach(() => {
+        provider = new QueryFlsProvider();
+        provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function seed(sql: string, permissionRoles?: string[]): void {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', Name: 'Projects By Owner', SQL: sql, UsesTemplate: true, PermissionRoles: permissionRoles })]);
+    }
+
+    it('refuses the run before anything executes, naming the query, the parameter, the position and the fix', async () => {
+        seed(QUOTED);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Owner: "x' OR 1=1 --" } }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/^Query "Projects By Owner" cannot run: .*\{\{ Owner \}\} \(parameter "Owner"\) at line 1, column 50: '\{\{ Owner \}\}'\./);
+        expect(result.ErrorMessage).toContain('a value that contains a quote can change the statement');
+        expect(result.ErrorMessage).toContain("Fix: replace '{{ Owner }}' with {{ Owner | sqlString }} and drop the surrounding quotes");
+        expect(result.ErrorMessage).toContain('mj query refresh --all --dry-run');
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('gives a caller who may not run the query the not-found message, never the detail', async () => {
+        seed(QUOTED, [HR_ROLE]);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Owner: 'a' } }, staff);
+        expect(result.ErrorMessage).toBe("Query 'q-1' does not exist or you do not have permission to run it.");
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Owner: 'a' } } }], staff);
+        expect(batch.results.map(r => r.errorMessage)).toEqual(["Query 'q-1' does not exist or you do not have permission to run it."]);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('refuses an authorized caller in a cache-checked batch with the same detail, running nothing', async () => {
+        seed(QUOTED);
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Owner: 'a' } } }], staff);
+        expect(batch.results[0].status).toBe('error');
+        expect(batch.results[0].errorMessage).toMatch(/^Query "Projects By Owner" cannot run: /);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('runs the same query written with the filter and no quotes', async () => {
+        seed('SELECT ID, Name FROM vwProjects WHERE OwnerID = {{ Owner | sqlString }}');
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Owner: "O'Brien" } }, staff);
+        expect(result.Success).toBe(true);
+        expect(provider.Executed).toEqual(["SELECT ID, Name FROM vwProjects WHERE OwnerID = 'O''Brien'"]);
+    });
+});
+
+describe('a saved query that writes a value tag inside a quoted identifier is refused at run time', () => {
+    const BRACKETED = 'SELECT ID, [{{ Col }}] FROM vwProjects';
+    let provider: QueryFlsProvider;
+
+    beforeEach(() => {
+        provider = new QueryFlsProvider();
+        provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function seed(sql: string, permissionRoles?: string[]): void {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', Name: 'Project Column', SQL: sql, UsesTemplate: true, PermissionRoles: permissionRoles })]);
+    }
+
+    it('refuses the run before anything executes, naming the query, the parameter, the position and the sqlIdentifier fix', async () => {
+        seed(BRACKETED);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name] FROM vwPayroll --' } }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/^Query "Project Column" cannot run: .*\{\{ Col \}\} \(parameter "Col"\) at line 1, column 13: \[\{\{ Col \}\}\]\./);
+        expect(result.ErrorMessage).toContain('a value that contains the closing ] can end the identifier and change the statement');
+        expect(result.ErrorMessage).toContain('Fix: replace [{{ Col }}] with {{ Col | sqlIdentifier }} and drop the surrounding brackets');
+        expect(result.ErrorMessage).toContain('mj query refresh --all --dry-run');
+        expect(result.ErrorMessage).toContain('MJQ_TAG_IN_QUOTED_IDENTIFIER');
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('gives a caller who may not run the query the not-found message, never the detail', async () => {
+        seed(BRACKETED, [HR_ROLE]);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name' } }, staff);
+        expect(result.ErrorMessage).toBe("Query 'q-1' does not exist or you do not have permission to run it.");
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Col: 'Name' } } }], staff);
+        expect(batch.results.map(r => r.errorMessage)).toEqual(["Query 'q-1' does not exist or you do not have permission to run it."]);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('refuses an authorized caller in a cache-checked batch with the same detail, running nothing', async () => {
+        seed(BRACKETED);
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Col: 'Name' } } }], staff);
+        expect(batch.results[0].status).toBe('error');
+        expect(batch.results[0].errorMessage).toMatch(/^Query "Project Column" cannot run: .*sqlIdentifier/);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('runs the same query written with sqlIdentifier and no brackets', async () => {
+        seed('SELECT ID, {{ Col | sqlIdentifier }} FROM vwProjects');
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name' } }, staff);
+        expect(result.Success).toBe(true);
+        expect(provider.Executed).toEqual(['SELECT ID, [Name] FROM vwProjects']);
+    });
+
+    it('lists a string-literal tag and an identifier tag in one refusal', async () => {
+        seed("SELECT ID, [{{ Col }}] FROM vwProjects WHERE OwnerID = '{{ Owner }}'");
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Col: 'Name', Owner: 'a' } }, staff);
+        expect(result.ErrorMessage).toMatch(/^Query "Project Column" cannot run: .*\[\{\{ Col \}\}\]; \{\{ Owner \}\} \(parameter "Owner"\) at line 1, column 57: '\{\{ Owner \}\}'\./);
+        expect(result.ErrorMessage).toContain("Fix: replace '{{ Owner }}' with {{ Owner | sqlString }}");
+        expect(result.ErrorMessage).toContain('Fix: replace [{{ Col }}] with {{ Col | sqlIdentifier }}');
+        expect(provider.Executed).toEqual([]);
+    });
+});
+
+/**
+ * A server-side result cache that keeps whatever a run returned, already narrowed for its caller,
+ * under the slot key the provider hands its cache hooks. Keeping narrowed rows is the careless
+ * case: it is safe only because the slot key separates field-security profiles.
+ */
+class SlotCachingProvider extends QueryFlsProvider {
+    public readonly Slots = new Map<string, RunQueryResult>();
+    public readonly KeysSeen: string[] = [];
+    private lastKey = '';
+    protected override async checkQueryCache(_q: MJQueryEntityExtended, _p: RunQueryParams, _a: Record<string, string>, slotKey: string): Promise<RunQueryResult | null> {
+        return this.lookUp(slotKey);
+    }
+    protected override async checkPagedQueryCache(_q: MJQueryEntityExtended, _p: RunQueryParams, _a: Record<string, string>, slotKey: string): Promise<RunQueryResult | null> {
+        return this.lookUp(slotKey);
+    }
+    private lookUp(slotKey: string): RunQueryResult | null {
+        this.KeysSeen.push(slotKey);
+        this.lastKey = slotKey;
+        return this.Slots.get(slotKey) ?? null;
+    }
+    public override async Run(params: RunQueryParams, user: UserInfo): Promise<RunQueryResult> {
+        const result = await super.Run(params, user);
+        if (result.Success && !result.CacheHit) this.Slots.set(this.lastKey, { ...result, CacheHit: true });
+        return result;
+    }
+}
+
+describe('a server-side result cache keeps one slot per rendered statement and field-security profile', () => {
+    const PERSON_ROW = { ID: 'p-1', Name: 'Ada', Salary: 250000, DepartmentID: 'd-1' };
+    const NARROWED = { ID: 'p-1', Name: 'Ada', DepartmentID: 'd-1' };
+    const otherStaff = user('A0000000-0000-0000-0000-0000000000A3', [STAFF_ROLE]);
+    let provider: SlotCachingProvider;
+
+    beforeEach(() => {
+        provider = new SlotCachingProvider();
+        provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = [['ID', 'vwPeople.ID'], ['Name', 'vwPeople.Name'], ['Salary', 'vwPeople.Salary'], ['DepartmentID', 'vwPeople.DepartmentID']];
+        provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT * FROM vwPeople' })]);
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    for (const [label, paging] of [['a full run', {}], ['a paged run', { StartRow: 0, MaxRows: 10 }]] as const) {
+        it(`never serves ${label} narrowed for a restricted caller to an unrestricted one, or the reverse`, async () => {
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, staff)).Results).toEqual([NARROWED]);
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, hr)).Results).toEqual([PERSON_ROW]);
+            provider.Slots.clear();
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, hr)).Results).toEqual([PERSON_ROW]);
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, staff)).Results).toEqual([NARROWED]);
+            expect(provider.Executed.length).toBe(paging.MaxRows ? 8 : 4);
+        });
+
+        it(`shares ${label}'s slot between callers with the same field-security profile`, async () => {
+            await provider.Run({ QueryID: 'q-1', ...paging }, staff);
+            const second = await provider.Run({ QueryID: 'q-1', ...paging }, otherStaff);
+            expect(second.CacheHit).toBe(true);
+            expect(second.Results).toEqual([NARROWED]);
+            expect(provider.KeysSeen[0]).toBe(provider.KeysSeen[1]);
+        });
+    }
+
+    it('keys a slot by the rendered statement, so different parameter values never share one', async () => {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: "SELECT ID, Name FROM vwPeople WHERE Name = {{ name | sqlString }}", UsesTemplate: true })]);
+        await provider.Run({ QueryID: 'q-1', Parameters: { name: 'Ada' } }, hr);
+        await provider.Run({ QueryID: 'q-1', Parameters: { name: 'Bob' } }, hr);
+        expect(new Set(provider.KeysSeen).size).toBe(2);
+        expect(provider.Executed.length).toBe(2);
+    });
+
+    it('keys each page apart from the full result and from other pages', async () => {
+        await provider.Run({ QueryID: 'q-1' }, hr);
+        await provider.Run({ QueryID: 'q-1', StartRow: 0, MaxRows: 10 }, hr);
+        await provider.Run({ QueryID: 'q-1', StartRow: 10, MaxRows: 10 }, hr);
+        expect(new Set(provider.KeysSeen).size).toBe(3);
     });
 });
 

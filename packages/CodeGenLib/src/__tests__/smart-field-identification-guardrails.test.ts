@@ -1,6 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('../Misc/status_logging', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('../Misc/status_logging')>();
+   return { ...actual, logStatus: vi.fn(), LogWarning: vi.fn(), UpdateSpinner: vi.fn() };
+});
+
 import { ManageMetadataBase } from '../Database/manage-metadata';
-import type { SmartFieldIdentificationResult } from '../Misc/advanced_generation';
+import { AdvancedGeneration, type SmartFieldIdentificationResult } from '../Misc/advanced_generation';
+import { logStatus, LogWarning } from '../Misc/status_logging';
+import { configInfo } from '../Config/config';
+import type { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
+import type { EntityInfo, UserInfo } from '@memberjunction/core';
 
 /**
  * Tests for the Smart Field Identification guardrails added after a v5.39
@@ -21,9 +31,9 @@ class TestableManageMetadata extends ManageMetadataBase {
    public inheritedISAField(field: Record<string, unknown>): boolean {
       return this.isInheritedISAField(field);
    }
-   public runNameFieldUpdates(fields: Array<Record<string, unknown>>, result: SmartFieldIdentificationResult): string[] {
+   public runNameFieldUpdates(fields: Array<Record<string, unknown>>, result: SmartFieldIdentificationResult, entityName?: string): string[] {
       const sql: string[] = [];
-      this.applyNameFieldUpdates(sql, fields, result);
+      this.applyNameFieldUpdates(sql, fields, result, entityName ? { Name: entityName } : undefined);
       return sql;
    }
    public runDefaultInViewUpdates(fields: Array<Record<string, unknown>>, result: SmartFieldIdentificationResult): string[] {
@@ -50,6 +60,8 @@ describe('SmartFieldIdentification guardrails', () => {
    let mm: TestableManageMetadata;
    beforeEach(() => {
       mm = new TestableManageMetadata();
+      vi.mocked(logStatus).mockClear();
+      vi.mocked(LogWarning).mockClear();
    });
 
    describe('isFieldEligibleForNameField', () => {
@@ -329,6 +341,123 @@ describe('SmartFieldIdentification guardrails', () => {
          expect(joined).toContain('IsNameField = 1');
          expect(joined).toContain("'f-rec'");
          expect(joined).toContain('IsNameField = 0');
+      });
+   });
+
+   // ── MJ issue #3608: say when the AI picks the name field, or nothing does ──
+   describe('name-field logging', () => {
+      const statusLines = (): string[] => vi.mocked(logStatus).mock.calls.map((c) => String(c[0]));
+
+      it('logs the entity, the field and that it was an AI pick when step 3 sets the name field', () => {
+         const fields = [
+            { ID: 'f-subj', Name: 'SubjectEntityName', Type: 'nvarchar', Length: 255, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['SubjectEntityName'] }), 'Assessment Sessions');
+         const lines = statusLines();
+         expect(lines).toHaveLength(1);
+         expect(lines[0]).toContain('Assessment Sessions.SubjectEntityName');
+         expect(lines[0]).toContain('AI pick');
+      });
+
+      it('logs nothing when an already-flagged field stays the winner', () => {
+         const fields = [
+            { ID: 'f-a', Name: 'Title', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-b', Name: 'Code', Type: 'nvarchar', Length: 40, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['Code'] }), 'Things');
+         expect(statusLines()).toHaveLength(0);
+      });
+
+      it('does not claim an AI pick when the candidate is pinned (AutoUpdateIsNameField = 0)', () => {
+         const fields = [
+            { ID: 'f-t', Name: 'Title', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: false },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['Title'] }), 'Things');
+         expect(sql).toHaveLength(0);
+         expect(statusLines().some((l) => l.includes('AI pick'))).toBe(false);
+      });
+
+      it('logs when no field wins, naming the entity', () => {
+         const fields = [
+            { ID: 'f-id', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }), 'Assessment Sessions');
+         const lines = statusLines();
+         expect(lines).toHaveLength(1);
+         expect(lines[0]).toContain('no eligible name field for Assessment Sessions');
+      });
+   });
+
+   // ── MJ issue #3608: an open AI circuit must not skip entities silently ──
+   describe('processEntitiesBatched circuit warning', () => {
+      class FakeAG extends AdvancedGeneration {
+         public Open = false;
+         public override get AICircuitOpen(): boolean {
+            return this.Open;
+         }
+      }
+
+      class BatchHarness extends ManageMetadataBase {
+         public Processed: string[] = [];
+         /** Opens the circuit after this entity is processed (simulates repeated credential failures). */
+         public OpenCircuitAfter: string | null = null;
+         public Ag = new FakeAG();
+         protected override async processEntityAdvancedGeneration(_pool: CodeGenConnection, entity: EntityInfo): Promise<void> {
+            if (this.Ag.AICircuitOpen) {
+               return;
+            }
+            this.Processed.push(entity.Name);
+            if (entity.Name === this.OpenCircuitAfter) {
+               this.Ag.Open = true;
+            }
+         }
+         public async Run(count: number): Promise<boolean> {
+            const entities = Array.from({ length: count }, (_, i) => ({ ID: `e${i}`, Name: `E${i}` }));
+            return this.processEntitiesBatched({} as CodeGenConnection, entities, [], this.Ag, {} as UserInfo);
+         }
+      }
+
+      let savedBatchSize: number | undefined;
+      beforeEach(() => {
+         savedBatchSize = configInfo.advancedGeneration?.batchSize;
+         if (configInfo.advancedGeneration) {
+            configInfo.advancedGeneration.batchSize = 2;
+         }
+      });
+      afterEach(() => {
+         if (configInfo.advancedGeneration && savedBatchSize !== undefined) {
+            configInfo.advancedGeneration.batchSize = savedBatchSize;
+         }
+      });
+
+      const warnings = (): string[] => vi.mocked(LogWarning).mock.calls.map((c) => String(c[0]));
+
+      it('warns nothing when the circuit stays closed', async () => {
+         const h = new BatchHarness();
+         await h.Run(5);
+         expect(h.Processed).toHaveLength(5);
+         expect(warnings()).toHaveLength(0);
+      });
+
+      it('warns once with the count of entities the open circuit skipped', async () => {
+         const h = new BatchHarness();
+         h.OpenCircuitAfter = 'E1'; // circuit opens during the first batch (E0, E1)
+         await h.Run(5);
+         expect(h.Processed).toEqual(['E0', 'E1']);
+         const w = warnings();
+         expect(w).toHaveLength(1);
+         expect(w[0]).toContain('smart-field identification');
+         expect(w[0]).toContain('3 of 5');
+      });
+
+      it('counts every entity when the circuit was already open before the phase', async () => {
+         const h = new BatchHarness();
+         h.Ag.Open = true;
+         await h.Run(5);
+         expect(h.Processed).toHaveLength(0);
+         const w = warnings();
+         expect(w).toHaveLength(1);
+         expect(w[0]).toContain('5 of 5');
       });
    });
 

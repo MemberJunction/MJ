@@ -72,14 +72,25 @@ const PENDING_LINTER_REFACTOR = new Set<string>([
   'schema-validation/data-grid-validation/datagrid-mixed-source-invalid-broken',
   'type-rules/cross-component-computed-field-typo-broken',
   'type-rules/cross-component-entity-to-grid-broken',
+  // Its only violation used to be a false one: the linter confused the second .map()
+  // callback's `o` (the reshaped object) with the first one's (the raw row).
+  'type-rules/cross-component-multiple-transforms-broken',
   'type-rules/cross-component-filter-field-access-broken',
   'type-rules/pipeline-entity-to-filter-to-grid-broken',
   'type-rules/pipeline-query-to-transform-to-chart-broken',
 ]);
 
 
+// "Valid" fixtures that the linter now shows are not valid. Each is a real defect in the
+// component, kept skipped with its reason until the component itself is fixed.
+const VALID_FIXTURES_WITH_KNOWN_DEFECTS = new Map<string, string>([
+  ['ai-prompts-cluster', 'reads TemplateText, which MJ: AI Prompts does not have'],
+]);
+
 function shouldSkip(fixture: LoadedFixture): string | false {
   if (!fixture.spec.code) return 'no code';
+  const knownDefect = VALID_FIXTURES_WITH_KNOWN_DEFECTS.get(fixture.metadata.name);
+  if (fixture.metadata.category === 'valid' && knownDefect) return `known defect: ${knownDefect}`;
   if (fixtureRequiresDatabase(fixture) && !DB_AVAILABLE) return 'requires database';
   if (PENDING_LINTER_REFACTOR.has(fixture.metadata.name)) return 'pending linter refactor (optional-chain detection)';
   return false;
