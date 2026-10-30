@@ -24,8 +24,19 @@ SERIES: List[Tuple[str, str, JsonObject]] = [("ar1_const", "ar1_const", {}),
 T1P_MASE = 0.4401059204
 T1P_MASE_CI = (0.3645724719, 0.5401424002)
 T1P_DM = -4.884688476
-# The reference pipeline writes these with 10 significant digits.
+# Its gate comparisons (baseline loss minus model loss, origin-block bootstrap at the 0.95 lower-bound level) and the
+# final origin's Ljung-Box p-value on 24 lags.
+T1P_COMPARISONS: Dict[str, Tuple[float, float, float]] = {
+    "modelVsDummy": (5.48883724, 4.539196624, 6.437445142),
+    "naiveVsDummy": (4.73113388, 3.824182146, 5.675830905),
+    "modelVs:naive": (0.7577033605, 0.4988533414, 0.975043519),
+    "seasonalNaiveVsDummy": (5.018343788, 4.114872797, 5.916094214),
+    "modelVs:seasonalNaive": (0.4704934523, 0.2617983955, 0.6603556942),
+}
+T1P_LJUNG_BOX_P = 0.9001658262
+# The reference pipeline writes these with 10 significant digits: 1e-9 absolute below 1, 1e-8 for values up to 10.
 REFERENCE_DIGITS = 1e-9
+REFERENCE_DIGITS_UNITS = 1e-8
 # The reference pipeline's T4 interval for its selected model's MASE (its AR(1) is statsmodels' ARIMA, the sidecar's
 # is conditional least squares, so the point values differ in the third decimal: 0.6242 vs 0.6229).
 T4_REFERENCE_CI = (0.4854, 0.7821)
@@ -37,7 +48,8 @@ def _rolling(sid: str) -> Dict[str, int]:
 
 
 def _series_request(server: FileServer, sid: str, extra: Optional[List[Tuple[str, str, JsonObject]]] = None,
-                    lag_cols: int = 0, holdout_shift: int = 0) -> Tuple[JsonObject, pd.DataFrame]:
+                    lag_cols: int = 0, holdout_shift: int = 0,
+                    ljung_box_alpha: float = 0.05) -> Tuple[JsonObject, pd.DataFrame]:
     """The forecast request for one planted series; `holdout_shift` moves the manifest's locked-holdout rows off the
     protocol's design (a manifest the trainer must refuse). Lag columns start at the horizon, so no column reads a
     target inside the forecast window."""
@@ -55,10 +67,11 @@ def _series_request(server: FileServer, sid: str, extra: Optional[List[Tuple[str
                            "minTrainPeriods": 13, "window": "expanding"}
     proto = protocol("forecast", holdout=holdout,
                      innerValidation={"kind": "blocked-time", "folds": 3, "gapPeriods": ro["H"], "groupKey": None},
-                     residualDiagnostics={"acfLags": 24, "ljungBoxAlpha": 0.05}, secondaryMetrics=["r2"])
+                     residualDiagnostics={"acfLags": 24, "ljungBoxAlpha": ljung_box_alpha}, secondaryMetrics=["r2"])
     task: JsonObject = {"kind": "forecast", "valueKind": "continuous"}
     cands: List[JsonValue] = candidates("continuous", SERIES + (extra or []))
-    return request(server, m, n, task, proto, cands, tag=f"{sid}-{lag_cols}-{holdout_shift}"), df
+    tag = f"{sid}-{lag_cols}-{holdout_shift}-{ljung_box_alpha}"
+    return request(server, m, n, task, proto, cands, tag=tag), df
 
 
 def _series(server: FileServer, sid: str, extra: Optional[List[Tuple[str, str, JsonObject]]] = None,
@@ -94,9 +107,21 @@ def test_T1p_S_T_2_rolling_origin_mase(server: FileServer) -> None:
     assert abs(p.interval.lower - T1P_MASE_CI[0]) <= REFERENCE_DIGITS
     assert abs(p.interval.upper - T1P_MASE_CI[1]) <= REFERENCE_DIGITS
     assert r.comparisons["modelVs:seasonalNaive"].ci[0] > 0
+    for name, (value, lower, upper) in T1P_COMPARISONS.items():
+        got = r.comparisons[name]
+        assert max(abs(got.value - value), abs(got.ci[0] - lower), abs(got.ci[1] - upper)) <= REFERENCE_DIGITS_UNITS, name
     assert abs(r.forecast.dieboldMarianoVsSeasonalNaive.statistic - T1P_DM) <= REFERENCE_DIGITS
     assert r.residualDiagnostics is not None and not r.residualDiagnostics.autocorrelationFlagged
+    assert abs(r.residualDiagnostics.ljungBox.pValue - T1P_LJUNG_BOX_P) <= REFERENCE_DIGITS
     assert {a.candidate for a in r.artifacts} == {"trend_season_ar1", "naive", "seasonalNaive"}
+
+
+@pytest.mark.covers("T1p -> S-T.2")
+def test_T1p_S_T_2_the_veto_uses_the_protocols_ljung_box_alpha(server: FileServer) -> None:
+    """At alpha 1e-30 the trend + season OLS model (pre-test Ljung-Box p about 5e-22) is no longer vetoed, and its
+    lowest inner MASE makes it the finalist."""
+    req, _ = _series_request(server, "T1p", ljung_box_alpha=1e-30)
+    assert completed(req).finalist == "trend_season_ols"
 
 
 @pytest.mark.gate("T1p -> S-T.3")

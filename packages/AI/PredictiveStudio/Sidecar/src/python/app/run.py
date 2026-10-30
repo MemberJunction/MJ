@@ -98,7 +98,7 @@ def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
     code = code_version.code_version(req.threads, p.seed)
     clock.check("snapshot load")
     if req.task.kind == "forecast":
-        return run_forecast(req, snap, enc, clock)
+        return run_forecast(req, snap, enc, code, clock)
     columns, flags = _audited_columns(req, snap, enc, dev, periods)
     clock.check("leakage audit")
     out = TR.select_finalist(p, snap, columns, enc, dev, req.candidates, req.threads, clock, periods)

@@ -123,10 +123,14 @@ class NotShippableError(ValueError):
 
 
 def _refuse_yardstick(candidate: str, predictor: ShippablePredictor) -> None:
-    """The dummy and the incumbent heuristic never ship: refused by gate member name, and anything outside the
-    allow-set of shippable types by type."""
+    """The dummy and the incumbent heuristic never ship: refused by gate member name, the forecast's dummy (a
+    training-window-mean series baseline) whatever it is named, and anything outside the allow-set of shippable types
+    by type."""
     if candidate == DUMMY_MEMBER or candidate.startswith(HEURISTIC_PREFIX):
         raise NotShippableError(f"'{candidate}' is a publishing-gate yardstick; yardsticks never ship as artifacts")
+    if isinstance(predictor, SeriesBaseline) and predictor.kind == "mean":
+        raise NotShippableError(f"'{candidate}' is a training-window mean, the forecast gate's dummy: a publishing-gate "
+                                f"yardstick; yardsticks never ship as artifacts")
     if not isinstance(predictor, SHIPPABLE_TYPES):
         raise NotShippableError(f"'{candidate}' is a {type(predictor).__name__}; only trainer predictors and forecast "
                                 f"series models and baselines ship as artifacts")
@@ -139,8 +143,8 @@ def build(candidate: str, predictor: ShippablePredictor, columns: Sequence[Colum
     predictor and arguments always produce the same bytes and hash.
 
     Raises:
-        NotShippableError: When `candidate` names the dummy or an incumbent heuristic, or `predictor` is not one of
-            `SHIPPABLE_TYPES`.
+        NotShippableError: When `candidate` names the dummy or an incumbent heuristic, `predictor` is a
+            training-window-mean series baseline, or `predictor` is not one of `SHIPPABLE_TYPES`.
     """
     _refuse_yardstick(candidate, predictor)
     buf = io.BytesIO()

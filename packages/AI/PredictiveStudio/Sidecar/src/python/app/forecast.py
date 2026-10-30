@@ -15,12 +15,17 @@ pre-test window fail Ljung-Box (p below the protocol's `ljungBoxAlpha`, else 0.0
 unless every candidate fails; the rest are ranked by their pooled inner loss, and the earliest candidate (request
 order) within one Newey-West standard error (horizon - 1 lags) of the best is the finalist. Series drivers
 (`temporal.SERIES_ALGOS`) fit the target alone; any other driver is a tabular predictor fitted on the snapshot's
-columns (lag columns the engine built at or beyond the horizon). The protocol's `innerValidation` is not read here:
-the inner origins are the forecast's inner validation.
+columns. The engine refuses a lag column shorter than the horizon; it does not add the gap, so with `gapPeriods` g a
+lag-h column at the j-th test period of an origin reads a period after that origin's training window when j > h - g.
+The protocol's `innerValidation` is not read here: the inner origins are the forecast's inner validation, and
+`innerScores[].folds` reports how many ran.
 
 Every outer origin scores the finalist, the training-window mean (the gate's dummy), the naive and the seasonal-naive
-forecasts (the simple set), each fitted on that origin's window (`temporal.backtest`). With a `mase` primary score
-the errors are scaled by the origin's own in-sample seasonal-naive MAE; with `rmse` they are not scaled. The gate and
+forecasts, each fitted on that origin's window (`temporal.backtest`), and every declared incumbent heuristic, read
+from the snapshot's incumbent-score column at the origin's test periods (as the tabular path reads it; a declared
+heuristic without that column fails at `baselines`). Naive, seasonal naive and the heuristics are the gate's simple
+set. With a `mase` primary score every member's errors are scaled by the origin's own in-sample seasonal-naive MAE;
+with `rmse` they are not scaled. The gate and
 every interval resample whole origins (block bootstrap by origin), which is why a forecast protocol must declare
 `block-bootstrap`; the Diebold-Mariano test of the model against seasonal naive is reported beside the gate's
 comparisons whatever `pairedTest` declares. Residual ACF and Ljung-Box of the finalist at the final origin are
@@ -34,9 +39,8 @@ What a forecast run does not report, and why:
     columns per origin window is not built, so `importance` is empty.
   - the incumbent diff: scoring a published forecast model on these origins needs a forecast loader and per-origin
     scoring of the incumbent, which are not built, so `incumbentDiff` is null.
-  - slices, calibration and the operating point: they are defined on independent rows, not on a series.
-  - declared baselines other than the training-window mean, naive and seasonal naive (an incumbent heuristic reads a
-    column a series does not carry): they are not fitted.
+  - slices: a protocol declaring them is refused (out-of-time and subgroup slices of a series backtest are not
+    built). Calibration and the operating point are defined on classification rows only.
 """
 
 from __future__ import annotations
@@ -48,17 +52,18 @@ from typing import Dict, Final, List, Optional, Sequence, Tuple
 import numpy as np
 from scipy import stats
 
-from . import artifacts_v2, code_version, intervals as IV, scores, snapshot as SN, temporal as T
+from . import artifacts_v2, baselines as BL, intervals as IV, scores, snapshot as SN, temporal as T
 from .array_types import FArr, IntArr
-from .evaluation import _is_defined, _mwi, gate_model, refuse_non_finite
+from .evaluation import _is_defined, _mwi, _with_incumbent, gate_model, refuse_non_finite
 from .failures import RequestRefused, RunClock, TrainerFailure
 from .gate import GateRun, run_gate
 from .trainer import INNER_INTERVAL_LEVEL, EncodedLabel, TrainedPredictor, fit_predictor
+from .snapshot_format import INCUMBENT_SCORE_COLUMN
 from .trainer_schemas import (
-    BaselineResult, CandidateInnerScore, CandidateSpec, DieboldMariano, EvaluationProtocol, ForecastEvaluation,
-    HoldoutAccess, HoldoutScores, LjungBox, MetricWithInterval, PairedComparison, ResidualDiagnostics,
-    ReturnedArtifact, RollingOriginHoldout, RollingOriginResult, RunCost, SeasonalNaiveBaseline, TrainerCompleted,
-    TrainerRequest,
+    BaselineResult, CandidateInnerScore, CandidateSpec, CodeVersion, DieboldMariano, EvaluationProtocol,
+    ForecastEvaluation, HoldoutAccess, HoldoutScores, Interval, LjungBox, MetricWithInterval, PairedComparison,
+    ResidualDiagnostics, ReturnedArtifact, RollingOriginHoldout, RollingOriginResult, RunCost, SeasonalNaiveBaseline,
+    TrainerCompleted, TrainerRequest,
 )
 
 # The Ljung-Box veto's significance level when the protocol declares no residual diagnostics.
@@ -72,8 +77,11 @@ MAX_INNER_ORIGINS: Final = 3
 MODEL: Final = "model"
 MEAN_MEMBER: Final = "mean"
 SIMPLE_MEMBERS: Final = ("naive", "seasonalNaive")
-# A declared baseline kind -> the backtest member that stands for it.
+# A declared baseline kind -> the backtest member that stands for it (a heuristic is named by `baselines.fit_all`).
 BASELINE_MEMBER: Final[Dict[str, str]] = {"dummy": MEAN_MEMBER, "naive": "naive", "seasonal-naive": "seasonalNaive"}
+# The declared baseline kinds `baselines.fit_all` reads for a forecast: the dummy (the gate's yardstick, required as on
+# the tabular path) and the incumbent heuristics.
+FIT_ALL_KINDS: Final = ("dummy", "incumbent-heuristic")
 
 
 def refuse_invalid_forecast(p: EvaluationProtocol) -> None:
@@ -81,8 +89,8 @@ def refuse_invalid_forecast(p: EvaluationProtocol) -> None:
 
     Raises:
         RequestRefused: For an interval method other than `block-bootstrap` (the backtest resamples whole origins),
-            declared prediction intervals (forecast prediction-interval coverage is not available), or no
-            seasonal-naive baseline (it sets the MASE scale's season and is a member of the gate).
+            declared prediction intervals (forecast prediction-interval coverage is not available), no seasonal-naive
+            baseline (it sets the MASE scale's season and is a member of the gate), or declared slices.
     """
     if p.intervals.method != "block-bootstrap":
         raise RequestRefused(f"a forecast's intervals resample whole rolling origins ('block-bootstrap'); the protocol "
@@ -93,6 +101,10 @@ def refuse_invalid_forecast(p: EvaluationProtocol) -> None:
     if _season(p) is None:
         raise RequestRefused("a forecast needs a declared seasonal-naive baseline: its season sets the MASE scale and "
                              "it is a member of the publishing gate")
+    declared = (["out-of-time"] if p.slices.outOfTime else []) + ([f"subgroups {p.slices.subgroups}"]
+                                                                 if p.slices.subgroups else [])
+    if declared:
+        raise RequestRefused(f"forecast slices are not available; the protocol declares {' and '.join(declared)}")
 
 
 def _season(p: EvaluationProtocol) -> Optional[int]:
@@ -235,23 +247,24 @@ def _backtest(fit: _Fitter, origins: Sequence[T.Origin], spec: CandidateSpec) ->
     return T.backtest(fit.y, origins, fit.s.season, fit.forecaster(spec))
 
 
-def _rows(metric: scores.PrimaryMetric, scored: Sequence[T.OriginScores], member: str) -> Tuple[FArr, FArr]:
-    """(y, prediction) whose primary-score loss is the member's loss: scaled absolute errors against 0 for MASE (the
-    reference pipeline's device), else the actual values and the forecasts."""
+def _rows(metric: scores.PrimaryMetric, scored: Sequence[T.OriginScores],
+          forecasts: Sequence[FArr]) -> Tuple[FArr, FArr]:
+    """(y, prediction) whose primary-score loss is the loss of `forecasts` (one array per origin): absolute errors
+    scaled by each origin's scale against 0 for MASE (the reference pipeline's device; the same arithmetic as
+    `OriginScores.scaled_errors`), else the actual values and the forecasts."""
     if metric == "mase":
-        e = np.concatenate([o.scaled_errors[member] for o in scored])
+        e = np.concatenate([np.abs(o.actual - f) / o.scale for o, f in zip(scored, forecasts)])
         return np.zeros(len(e), dtype=np.float64), np.asarray(e, dtype=np.float64)
     return (np.asarray(np.concatenate([o.actual for o in scored]), dtype=np.float64),
-            np.asarray(np.concatenate([o.forecasts[member] for o in scored]), dtype=np.float64))
+            np.asarray(np.concatenate(list(forecasts)), dtype=np.float64))
+
+
+def _member_rows(metric: scores.PrimaryMetric, scored: Sequence[T.OriginScores], member: str) -> Tuple[FArr, FArr]:
+    """`_rows` of one backtest member."""
+    return _rows(metric, scored, [o.forecasts[member] for o in scored])
 
 
 # ------------------------------------------------------------------------------------------------ selection ------
-
-@dataclass(frozen=True)
-class _Bounds:
-    lower: float
-    upper: float
-
 
 @dataclass(frozen=True)
 class _Selection:
@@ -272,7 +285,9 @@ def _inner_score(name: str, metric: scores.PrimaryMetric, losses: FArr, n_inner:
     if metric == "rmse":
         mean, lo, hi = float(np.sqrt(mean)), float(np.sqrt(max(lo, 0.0))), float(np.sqrt(hi))
     return CandidateInnerScore(candidate=name, folds=n_inner, optimistic=True,
-                               inner=_mwi(metric, mean, _Bounds(lo, hi), len(losses), INNER_INTERVAL_LEVEL))
+                               inner=MetricWithInterval(metric=metric, value=mean, n=len(losses),
+                                                        interval=Interval(level=INNER_INTERVAL_LEVEL, lower=lo,
+                                                                          upper=hi)))
 
 
 def _select(req: TrainerRequest, fit: _Fitter, design: _Design, primary: scores.PrimaryScore, h: int,
@@ -286,7 +301,7 @@ def _select(req: TrainerRequest, fit: _Fitter, design: _Design, primary: scores.
     lb_p: Dict[str, float] = {}
     for c in req.candidates:
         try:
-            y_rows, pred = _rows(primary.metric, _backtest(fit, design.inner, c), MODEL)
+            y_rows, pred = _member_rows(primary.metric, _backtest(fit, design.inner, c), MODEL)
             resid = fit.residuals(fit.fit(c, 0, design.pre_test_last), 0, design.pre_test_last)
             lb_p[c.name] = T.ljung_box(resid, max(1, min(VETO_MAX_LAGS, len(resid) // VETO_RESIDUALS_PER_LAG)))[1]
         except ValueError as exc:
@@ -303,21 +318,60 @@ def _select(req: TrainerRequest, fit: _Fitter, design: _Design, primary: scores.
     return _Selection(next(c for c in req.candidates if c.name == chosen), inner)
 
 
+# ------------------------------------------------------------------------------------------------ the heuristics -
+
+@dataclass(frozen=True)
+class _Heuristic:
+    """A declared incumbent heuristic: its index in `protocol.baselines`, its gate member name and its forecast at
+    every period of the series (the snapshot's incumbent-score column, in period order)."""
+
+    declared_index: int
+    name: str
+    forecast: FArr
+
+
+def _heuristics(req: TrainerRequest, snap: SN.Snapshot, fit: _Fitter) -> List[_Heuristic]:
+    """Every declared incumbent heuristic, read through `baselines.fit_all` as the tabular path reads it (one owner of
+    the member name, the column predictor and the refusal of a heuristic without the incumbent-score column).
+    `fit_all` is handed the declared dummy and heuristics only (it also requires the dummy, as the tabular gate does);
+    its dummy is not used, since the forecast's dummy is the training-window mean of each origin.
+
+    Raises:
+        TrainerFailure: Stage `baselines`, as on the tabular path, when a heuristic is declared but the snapshot has no
+            incumbent-score column, or no dummy is declared.
+    """
+    p = req.protocol
+    kept = [(i, b) for i, b in enumerate(p.baselines) if b.kind in FIT_ALL_KINDS]
+    column = INCUMBENT_SCORE_COLUMN if snap.incumbent_score is not None else None
+    try:
+        fitted = BL.fit_all(p.model_copy(update={"baselines": [b for _, b in kept]}), snap.columns, fit.X, fit.enc,
+                            [], req.threads, column)
+        frame = _with_incumbent(fit.X, snap, fit.s.order)
+        return [_Heuristic(kept[f.spec_index][0], f.name, np.asarray(f.predictor.predict(frame), dtype=np.float64))
+                for f in fitted if f.role == "simple"]
+    except ValueError as exc:
+        raise TrainerFailure("baselines", str(exc)) from exc
+
+
 # ------------------------------------------------------------------------------------------------ the outer origins
 
 @dataclass(frozen=True)
 class _Outer:
-    """The outer origins' scores, the gate's rows and per-member predictions, and the origin-block groups."""
+    """The outer origins' scores, the gate's rows and per-member predictions, the gate's simple set (naive, seasonal
+    naive, then the heuristics), each declared baseline's member, and the origin-block groups."""
 
     scored: List[T.OriginScores]
     y: FArr
     pred: Dict[str, FArr]
+    simple: List[str]
+    member_of_baseline: Dict[int, str]
     groups: List[str]
     accessed_at: str
 
 
-def _score_outer(fit: _Fitter, design: _Design, spec: CandidateSpec, metric: scores.PrimaryMetric) -> _Outer:
-    """Scores the outer origins once for the finalist and the three baselines.
+def _score_outer(req: TrainerRequest, fit: _Fitter, design: _Design, spec: CandidateSpec,
+                 metric: scores.PrimaryMetric, heuristics: Sequence[_Heuristic]) -> _Outer:
+    """Scores the outer origins once for the finalist, the three baselines and the declared heuristics.
 
     Raises:
         TrainerFailure: Stage `holdout`, naming the origin, when a fit, a forecast or a MASE scale fails.
@@ -327,10 +381,15 @@ def _score_outer(fit: _Fitter, design: _Design, spec: CandidateSpec, metric: sco
         scored = _backtest(fit, design.outer, spec)
     except ValueError as exc:
         raise TrainerFailure("holdout", str(exc)) from exc
-    y = _rows(metric, scored, MODEL)[0]
-    pred = {member: _rows(metric, scored, member)[1] for member in (MODEL, MEAN_MEMBER) + SIMPLE_MEMBERS}
+    y = _member_rows(metric, scored, MODEL)[0]
+    pred = {member: _member_rows(metric, scored, member)[1] for member in (MODEL, MEAN_MEMBER) + SIMPLE_MEMBERS}
+    for hz in heuristics:
+        pred[hz.name] = _rows(metric, scored, [hz.forecast[list(o.origin.test)] for o in scored])[1]
+    members = {i: BASELINE_MEMBER[b.kind] for i, b in enumerate(req.protocol.baselines) if b.kind in BASELINE_MEMBER}
+    members.update({hz.declared_index: hz.name for hz in heuristics})
     groups = [str(o.k) for o in scored for _ in o.origin.test]
-    return _Outer(scored, y, pred, groups, accessed_at)
+    return _Outer(scored, y, pred, list(SIMPLE_MEMBERS) + [hz.name for hz in heuristics], members, groups,
+                  accessed_at)
 
 
 def _origin_results(scored: Sequence[T.OriginScores], s: _Series) -> List[RollingOriginResult]:
@@ -342,11 +401,12 @@ def _origin_results(scored: Sequence[T.OriginScores], s: _Series) -> List[Rollin
 
 
 def _gate(req: TrainerRequest, primary: scores.PrimaryScore, finalist: str, out: _Outer) -> GateRun:
-    """The publishing gate on the origins' rows: dummy = training-window mean, simple set = naive and seasonal naive,
-    each comparison a block bootstrap by origin at the protocol's margin and lower-bound level."""
+    """The publishing gate on the origins' rows: dummy = training-window mean, simple set = naive, seasonal naive and
+    the declared heuristics, each comparison a block bootstrap by origin at the protocol's margin and lower-bound
+    level."""
     p = req.protocol
     return run_gate(out.y, primary.aggregate, finalist, out.pred[MODEL], out.pred[MEAN_MEMBER],
-                    [(m, out.pred[m]) for m in SIMPLE_MEMBERS], None, p.promotion.margin, p.intervals.resamples,
+                    [(m, out.pred[m]) for m in out.simple], None, p.promotion.margin, p.intervals.resamples,
                     p.seed, out.groups, p.promotion.lowerBoundLevel)
 
 
@@ -359,10 +419,10 @@ def _metric(req: TrainerRequest, primary: scores.PrimaryScore, out: _Outer, memb
 
 
 def _baselines(req: TrainerRequest, primary: scores.PrimaryScore, out: _Outer) -> List[BaselineResult]:
-    """Each declared baseline the backtest forecasts, scored on the origins' rows."""
+    """Each declared baseline, in declared order, scored on the origins' rows."""
     return [BaselineResult(baseline=b, role="dummy" if b.kind == "dummy" else "simple",
-                           holdout=_metric(req, primary, out, BASELINE_MEMBER[b.kind]))
-            for b in req.protocol.baselines if b.kind in BASELINE_MEMBER]
+                           holdout=_metric(req, primary, out, out.member_of_baseline[i]))
+            for i, b in enumerate(req.protocol.baselines) if i in out.member_of_baseline]
 
 
 def _secondary(req: TrainerRequest, out: _Outer) -> List[MetricWithInterval]:
@@ -441,14 +501,17 @@ def _artifacts(req: TrainerRequest, snap: SN.Snapshot, fit: _Fitter, spec: Candi
 
 # ------------------------------------------------------------------------------------------------ the run --------
 
-def run_forecast(req: TrainerRequest, snap: SN.Snapshot, enc: EncodedLabel, clock: RunClock) -> TrainerCompleted:
-    """One forecast run: check the series and the design, select on inner origins, score the outer origins once,
-    then the gate, statistics, diagnostics and artifacts, all before the run clock's last check.
+def run_forecast(req: TrainerRequest, snap: SN.Snapshot, enc: EncodedLabel, code: CodeVersion,
+                 clock: RunClock) -> TrainerCompleted:
+    """One forecast run: check the series and the design, read the declared heuristics, select on inner origins,
+    score the outer origins once, then the gate, statistics, diagnostics and artifacts, all before the run clock's
+    last check. `code` is the run's CodeVersion, computed by the caller before the run's work.
 
     Raises:
         TrainerFailure: `load-snapshot` (not one contiguous series, or a design the manifest or the season cannot
-            carry), `inner-cv` (selection), `holdout` (an outer origin, a statistic, the diagnostics, an artifact, or a
-            non-finite number), `timeout`/`budget-exceeded` from the run clock.
+            carry), `baselines` (a declared heuristic without its column, or no declared dummy), `inner-cv`
+            (selection), `holdout` (an outer origin, a statistic, the diagnostics, an artifact, or a non-finite
+            number), `timeout`/`budget-exceeded` from the run clock.
     """
     p = req.protocol
     ho = p.holdout
@@ -457,9 +520,10 @@ def run_forecast(req: TrainerRequest, snap: SN.Snapshot, enc: EncodedLabel, cloc
     s = _one_series(req, snap)
     design = _checked_design(snap, ho, s)
     fit = _Fitter(req, snap, enc, s)
+    heuristics = _heuristics(req, snap, fit)
     primary = scores.primary_score(p.primaryScore.metric, enc.tweedie_power)
     sel = _select(req, fit, design, primary, ho.horizonPeriods, clock)
-    out = _score_outer(fit, design, sel.finalist, primary.metric)
+    out = _score_outer(req, fit, design, sel.finalist, primary.metric, heuristics)
     clock.check("rolling origins")
     gr = _gate(req, primary, sel.finalist.name, out)
     baselines = _baselines(req, primary, out)
@@ -471,7 +535,7 @@ def run_forecast(req: TrainerRequest, snap: SN.Snapshot, enc: EncodedLabel, cloc
     clock.check("forecast statistics")
     cost = clock.compute_seconds()
     return refuse_non_finite(TrainerCompleted(
-        status="completed", trainingRunId=req.trainingRunId, codeVersion=code_version.code_version(req.threads, p.seed),
+        status="completed", trainingRunId=req.trainingRunId, codeVersion=code,
         computeSeconds=cost, innerScores=sel.inner_scores, finalist=sel.finalist.name,
         holdoutAccess=HoldoutAccess(accessedAt=out.accessed_at, count=p.holdoutAccessBudget,
                                     finalist=sel.finalist.name),

@@ -150,11 +150,17 @@ SERIES_NEXT = np.arange(60, 66, dtype=np.int64)
 
 
 def _series_forecasters() -> List[Tuple[str, artifacts_v2.ShippablePredictor]]:
-    """Every series model and series baseline a forecast run can ship, fitted on one monthly series."""
+    """Every series model and series baseline a forecast run can ship (the naive members; the training-window mean is
+    the forecast's dummy and never ships), fitted on one monthly series."""
     out: List[Tuple[str, artifacts_v2.ShippablePredictor]] = [
         (algo, T.SeriesModel(algo, 12, 0).fit(SERIES_Y, SERIES_T)) for algo in T.SERIES_ALGOS]
-    out += [(kind, T.SeriesBaseline(kind, 12).fit(SERIES_Y, SERIES_T)) for _, kind in T.BASELINE_MEMBERS]
+    out += [(name, T.SeriesBaseline(kind, 12).fit(SERIES_Y, SERIES_T)) for name, kind in T.BASELINE_MEMBERS
+            if kind != "mean"]
     return out
+
+
+def _series_mean() -> T.SeriesBaseline:
+    return T.SeriesBaseline("mean", 12).fit(SERIES_Y, SERIES_T)
 
 
 def _series_forecast(p: artifacts_v2.ShippablePredictor) -> FArr:
@@ -171,6 +177,13 @@ def test_every_series_forecaster_round_trips(name: str) -> None:
     assert np.array_equal(_series_forecast(loaded), _series_forecast(fitted))
 
 
+def test_the_forecast_dummy_never_ships() -> None:
+    """The training-window mean is the forecast gate's dummy: refused by type whatever it is named."""
+    for name in ("mean", "trainingWindowMean"):
+        with pytest.raises(artifacts_v2.NotShippableError, match="yardstick"):
+            artifacts_v2.build(name, _series_mean(), [], "forecast", None, ZERO_HASH, None, None)
+
+
 def test_a_series_forecaster_is_refused_where_rows_are_scored() -> None:
     """`load_v2_envelope` (the /predict and incumbent loader) refuses a series forecaster, naming the limitation."""
     name, fitted = _series_forecasters()[0]
@@ -183,7 +196,8 @@ def test_allow_list_holds_exactly_the_globals_every_shipped_predictor_pickles() 
     used: Set[Tuple[str, str]] = set()
     shipped: List[Tuple[str, artifacts_v2.ShippablePredictor]] = [
         (f"{family}/{driver}", _fitted(family, driver)) for family, driver in PAIRS]
-    for label, predictor in shipped + _series_forecasters():
+    # The training-window mean never ships, but it pickles the same globals as the shipped series baselines.
+    for label, predictor in shipped + _series_forecasters() + [("mean", _series_mean())]:
         found = _pickled_globals(predictor)
         refused = sorted(g for g in found if not artifacts._is_allowed_global(*g))
         assert refused == [], f"{label} pickles globals the allow-list refuses: {refused}"

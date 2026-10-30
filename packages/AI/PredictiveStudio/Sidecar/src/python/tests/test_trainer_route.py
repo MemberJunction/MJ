@@ -461,18 +461,21 @@ def _monthly_series(n: int = 96, seed: int = 5) -> pd.DataFrame:
 
 def _forecast_request(server: FileServer, df: pd.DataFrame, tag: str, origins: int = 5, horizon: int = 6,
                       gap: int = 0, min_train: int = 24, window: str = "expanding",
-                      holdout_rows: int | None = None, **proto_over: JsonValue) -> JsonObject:
-    """A forecast request over `df` whose last `origins * horizon` rows (by position) are the locked holdout."""
+                      holdout_rows: int | None = None, feats: dict[str, JsonObject] | None = None,
+                      drivers: list[DriverSpec] | None = None, incumbent_col: str | None = None,
+                      **proto_over: JsonValue) -> JsonObject:
+    """A forecast request over `df` whose last `origins * horizon` rows (by position) are the locked holdout; series
+    candidates unless `drivers` is given."""
     n_hold = origins * horizon if holdout_rows is None else holdout_rows
     hold = [str(i) for i in df["ID"].iloc[len(df) - n_hold:]]
-    m, n = snapshot_files(df, {}, hold, period_col="Period", decision=MONTHLY)
+    m, n = snapshot_files(df, feats or {}, hold, period_col="Period", decision=MONTHLY, incumbent_col=incumbent_col)
     holdout: JsonObject = {"kind": "rolling-origin", "origins": origins, "horizonPeriods": horizon, "gapPeriods": gap,
                            "minTrainPeriods": min_train, "window": window}
     over: dict[str, JsonValue] = {"holdout": holdout, "secondaryMetrics": ["r2"],
                                   "residualDiagnostics": {"acfLags": 12, "ljungBoxAlpha": 0.05}}
     over.update(proto_over)
-    return request(server, m, n, FORECAST_TASK, protocol("forecast", **over), candidates("continuous", SERIES_DRIVERS),
-                   tag=tag)
+    return request(server, m, n, FORECAST_TASK, protocol("forecast", **over),
+                   candidates("continuous", drivers or SERIES_DRIVERS), tag=tag)
 
 
 def test_a_forecast_runs_a_rolling_origin_backtest(server: FileServer) -> None:
@@ -536,12 +539,15 @@ def _with_proto(req: JsonObject, key: str, value: JsonValue) -> JsonObject:
      "'bootstrap'"),
     ("predictionIntervals", {"method": "split-conformal", "nominalCoverage": [0.8]}, "prediction-interval coverage"),
     ("baselines", [{"kind": "dummy", "name": "training-window-mean"}, {"kind": "naive"}], "seasonal-naive"),
+    ("slices", {"outOfTime": True, "subgroups": []}, "out-of-time"),
+    ("slices", {"outOfTime": False, "subgroups": ["Region"]}, "['Region']"),
 ])
 def test_a_forecast_protocol_the_backtest_cannot_honour_is_400(server: FileServer, key: str, value: JsonValue,
                                                                 named: str) -> None:
-    """An interval method other than the block bootstrap by origin, declared prediction intervals, or no
-    seasonal-naive baseline (the MASE scale and the gate need it) answer 400 before anything is fitted."""
-    req = _with_proto(_forecast_request(server, _monthly_series(), f"fc-400-{key}"), key, value)
+    """An interval method other than the block bootstrap by origin, declared prediction intervals, no seasonal-naive
+    baseline (the MASE scale and the gate need it), or declared slices answer 400 before anything is fitted."""
+    tag = f"fc-400-{key}-{named.encode().hex()[:16]}"
+    req = _with_proto(_forecast_request(server, _monthly_series(), tag), key, value)
     resp = client.post("/trainer", json=req)
     assert resp.status_code == 400 and named in resp.json()["detail"], resp.text
 
@@ -630,3 +636,124 @@ def test_predict_refuses_a_series_forecast_artifact(server: FileServer) -> None:
     art = next(a for a in r.artifacts if a.candidate == r.finalist)
     resp = client.post("/predict", json={"artifact_b64": art.bytesBase64, "rows": [{"x1": 1.0}]})
     assert resp.status_code == 400 and "forecast" in resp.json()["detail"], resp.text
+
+
+HEURISTIC: JsonObject = {"kind": "incumbent-heuristic", "name": "planner"}
+
+
+def _with_heuristic_baseline(req: JsonObject) -> JsonObject:
+    baselines = list(_list(_obj(req["protocol"])["baselines"]))
+    return _with_proto(req, "baselines", baselines + [HEURISTIC])
+
+
+def test_a_forecast_heuristic_that_beats_the_model_is_kept_instead(server: FileServer) -> None:
+    """A declared incumbent heuristic is a gate member on the same origin rows: a near-perfect one is kept, and the
+    model is not shipped over it."""
+    df = _monthly_series()
+    planner = df["Target"].to_numpy(dtype=np.float64) + np.random.default_rng(8).normal(scale=0.05, size=len(df))
+    req = _with_heuristic_baseline(_forecast_request(server, df.assign(Planner=planner), "fc-heur",
+                                                     incumbent_col="Planner"))
+    r = _completed(req)
+    assert r.gate.outcome == "keep-simple-baseline" and r.gate.shipped == "heuristic:planner"
+    assert r.comparisons["modelVs:heuristic:planner"].ci[1] < 0
+    heuristic = next(b for b in r.baselines if b.baseline.kind == "incumbent-heuristic")
+    assert heuristic.role == "simple" and heuristic.holdout.metric == "mase" and heuristic.holdout.value < 0.1
+    assert "heuristic:planner" not in {a.candidate for a in r.artifacts}
+
+
+def test_a_forecast_heuristic_without_its_column_fails_at_baselines(server: FileServer) -> None:
+    """As on the tabular path: a declared heuristic needs the snapshot's incumbent-score column."""
+    r = _failed(_with_heuristic_baseline(_forecast_request(server, _monthly_series(), "fc-heur-missing")))
+    assert r.stage == "baselines" and "no incumbent-score column" in r.message, r.message
+
+
+def _expected_fits(n: int, origins: int, h: int, gap: int, min_train: int, candidates_n: int,
+                   diagnostics: bool) -> list[tuple[int, int]]:
+    """Every fit window a forecast run makes, in order: per candidate its inner origins (ending one horizon apart at
+    the first test period, trained from period 0 up to the gap before each) and the Ljung-Box veto's pre-test window;
+    then the finalist on every outer origin's window, the final origin's window for the diagnostics, and the whole
+    series for the artifact."""
+    first_test = n - origins * h
+    n_inner = max(1, min(3, (first_test - min_train) // h))
+    inner = [(0, first_test - 1 - (n_inner - j) * h - gap) for j in range(n_inner)]
+    selection = (inner + [(0, first_test - 1 - gap)]) * candidates_n
+    outer = [(0, first_test + (k - 1) * h - 1 - gap) for k in range(1, origins + 1)]
+    return selection + outer + (outer[-1:] if diagnostics else []) + [(0, n - 1)]
+
+
+def _lagged(df: pd.DataFrame, lags: list[int]) -> tuple[pd.DataFrame, dict[str, JsonObject]]:
+    out = df.copy()
+    for k in lags:
+        out[f"lag{k}"] = out["Target"].shift(k)
+    return out, {f"lag{k}": NUMERIC for k in lags}
+
+
+def test_tabular_forecast_fits_read_only_their_windows(server: FileServer, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every tabular fit (inner origins, the veto, each outer origin, the diagnostics, the artifact) trains on exactly
+    its window: nothing at or after the periods it forecasts, nothing inside the outer test windows during selection."""
+    windows: list[tuple[int, int]] = []
+    real = FC.fit_predictor
+
+    def recorder(spec: CandidateSpec, columns: list[ColumnSpec], X: pd.DataFrame, enc: TR.EncodedLabel,
+                 idx: np.ndarray, proto: EvaluationProtocol, threads: int) -> TR.TrainedPredictor:
+        assert np.array_equal(idx, np.arange(int(idx[0]), int(idx[-1]) + 1))
+        windows.append((int(idx[0]), int(idx[-1])))
+        return real(spec, columns, X, enc, idx, proto, threads)
+
+    monkeypatch.setattr(FC, "fit_predictor", recorder)
+    df, feats = _lagged(_monthly_series(), [6, 12])
+    drivers: list[DriverSpec] = [("ridge", "ridge", {}), ("lgbm", "lightgbm", {"n_estimators": 50})]
+    r = _completed(_forecast_request(server, df, "fc-tab-windows", gap=1, feats=feats, drivers=drivers))
+    assert r.finalist in ("ridge", "lgbm")
+    assert windows == _expected_fits(96, 5, 6, 1, 24, len(drivers), True)
+
+
+def test_series_forecast_fits_read_only_their_windows(server: FileServer, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same windows for series models: selection reads only the periods before the first test period."""
+    windows: list[tuple[int, int]] = []
+    real = T.SeriesModel.fit
+
+    def recorder(self: T.SeriesModel, y: np.ndarray, t: np.ndarray) -> T.SeriesModel:
+        assert np.array_equal(t, np.arange(int(t[0]), int(t[-1]) + 1))
+        windows.append((int(t[0]), int(t[-1])))
+        return real(self, y, t)
+
+    monkeypatch.setattr(T.SeriesModel, "fit", recorder)
+    _completed(_forecast_request(server, _monthly_series(), "fc-series-windows", gap=1))
+    assert windows == _expected_fits(96, 5, 6, 1, 24, len(SERIES_DRIVERS), True)
+
+
+def _fixed_inner(losses: dict[str, np.ndarray], h: int) -> Callable[..., list[T.OriginScores]]:
+    """A stand-in for the inner backtest that gives each candidate fixed MASE losses (the outer one runs for real)."""
+    real = FC._backtest
+
+    def backtest(fit: FC._Fitter, origins: list[T.Origin], spec: CandidateSpec) -> list[T.OriginScores]:
+        if origins[0].first_train != 0 or origins[-1].test[-1] >= 66:
+            return real(fit, origins, spec)
+        out = []
+        for j, o in enumerate(origins):
+            e = losses[spec.name][j * h:(j + 1) * h]
+            zero = np.zeros(h)
+            fc = {m: e if m == "model" else zero for m in ("model", "mean", "naive", "seasonalNaive")}
+            raw = {m: zero - v for m, v in fc.items()}
+            out.append(T.OriginScores(o, 1.0, zero, fc, raw, {m: np.abs(v) for m, v in raw.items()}))
+        return out
+    return backtest
+
+
+def test_selection_takes_the_simplest_candidate_within_one_standard_error(server: FileServer,
+                                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    """The earliest candidate (request order) whose pooled inner loss is within one Newey-West standard error of the
+    best one is the finalist, not the best one itself."""
+    v = np.random.default_rng(4).uniform(-2.0, 2.0, 18)
+    losses = {"ar1_const": 3.0 + v - v.mean(), "trend_season_ols": np.full(18, 5.0),
+              "trend_season_ar1": np.full(18, 2.9)}
+    d = losses["ar1_const"] - losses["trend_season_ar1"]
+    assert 0 < d.mean() <= T.hac_se(d, 5)   # ar1_const is within one standard error; trend_season_ar1 is best
+    monkeypatch.setattr(FC, "_backtest", _fixed_inner(losses, 6))
+    # Nothing vetoed: the selection compares the inner losses only.
+    r = _completed(_forecast_request(server, _monthly_series(), "fc-one-se",
+                                     residualDiagnostics={"acfLags": 12, "ljungBoxAlpha": 1e-300}))
+    assert r.finalist == "ar1_const"
+    best = min(r.innerScores, key=lambda s: s.inner.value)
+    assert best.candidate == "trend_season_ar1"
