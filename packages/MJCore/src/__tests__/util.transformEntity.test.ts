@@ -402,10 +402,14 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
             return out;
         }
 
+        /** Every param object handed to RunViews, in call order — lets tests assert cache directives. */
+        public RunViewsParams: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean }> = [];
+
         public async RunViews(
-            params: Array<{ EntityName?: string; ExtraFilter?: string | object }>
+            params: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean }>
         ): Promise<Array<{ Success: boolean; Results: Record<string, unknown>[]; RowCount: number; TotalRowCount: number; ExecutionTime: number; ErrorMessage: string; UserViewRunID: string }>> {
             this.RunViewsBatchCalls++;
+            this.RunViewsParams.push(...params);
             return params.map(p => {
                 const info = p.EntityName ? this.EntityByName(p.EntityName) : undefined;
                 if (!info) {
@@ -534,6 +538,30 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         });
         expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
         expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+    });
+
+    it('batched IS-A child discovery and hydration reads bypass the RunView cache (internal reads never create per-IN-list slots)', async () => {
+        // The pre-batch path hydrated each child through InnerLoad, which never touched the
+        // RunView cache. The batched RunViews would otherwise be ordinary server reads: every
+        // distinct IN-list of parent keys becomes its own filtered cache slot, invalidated
+        // (never maintained) on each child save — unbounded slot churn with no reuse.
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(productsInfo, id)!;
+        });
+
+        await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(batchedProvider.RunViewsParams.length).toBeGreaterThan(0);
+        for (const p of batchedProvider.RunViewsParams) {
+            expect(p.BypassCache, `child read for ${p.EntityName} must set BypassCache`).toBe(true);
+        }
     });
 
     it('CheckForChildRecords resolves IS-A child existence in 1 FindISAChildEntity probe instead of C RunViews', async () => {

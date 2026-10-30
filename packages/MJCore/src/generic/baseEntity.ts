@@ -6819,6 +6819,10 @@ export abstract class BaseEntity<T = unknown> {
                         ExtraFilter: BaseEntity.buildChildPkInFilter(childPk, chunkPks),
                         Fields: [childPk.Name],
                         ResultType: 'simple',
+                        // Internal probe: the pre-batch path (InnerLoad) never touched the RunView
+                        // cache. Every distinct IN-list would otherwise become its own filtered
+                        // cache slot that is invalidated (never maintained) on each child save.
+                        BypassCache: true,
                     };
                 });
                 const probeResults = await rv.RunViews<Record<string, string | number>>(probeParams, contextUser);
@@ -6920,6 +6924,9 @@ export abstract class BaseEntity<T = unknown> {
                         EntityName: childInfo.Name,
                         ExtraFilter: BaseEntity.buildChildPkInFilter(pkField, pks),
                         ResultType: 'simple',
+                        // Internal hydration read: see batchDiscoverDisjointChildren — keep these
+                        // per-batch IN-list reads out of the shared RunView cache.
+                        BypassCache: true,
                     },
                 });
             }

@@ -66,6 +66,12 @@ class TestEngine extends BaseEngine<TestEngine> {
         this.loadSingleConfigCalls++;
     }
 
+    public LoadMultipleEntityConfigsForTest(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+        return (this as unknown as {
+            LoadMultipleEntityConfigs: (c: BaseEnginePropertyConfig[], u: UserInfo) => Promise<void>;
+        }).LoadMultipleEntityConfigs(configs, contextUser);
+    }
+
     public OnExternalCacheChangeForTest(config: BaseEnginePropertyConfig, event: CacheChangedEvent): Promise<void> {
         return (this as unknown as {
             OnExternalCacheChange: (c: BaseEnginePropertyConfig, e: CacheChangedEvent) => Promise<void>;
@@ -417,6 +423,57 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         const after = engine._items as MockEntity[];
         expect(after.map(r => `${r.data.ID}:${r.data.Note}`)).toEqual(['r1:v2', 'r2:v2']);
         expect(engine.loadSingleConfigCalls).toBe(0);
+    });
+
+    it('defers a row_delta that arrives during a batched full load (LoadMultipleEntityConfigs) instead of applying it under the snapshot', async () => {
+        // The batched load used by LoadConfigs/RefreshAllItems awaits one RunViews for every
+        // property. A delta applied in place during that await is silently overwritten when the
+        // (pre-delta) snapshot lands. The in-flight marker must cover this path too, so the
+        // delta defers to a coalesced reload that runs after the snapshot.
+        const engine = new TestEngine();
+        const provider = makeDeltaProvider();
+        let resolveBatch: (() => void) | null = null;
+        const batchGate = new Promise<void>(resolve => { resolveBatch = resolve; });
+        const runViewsProvider = provider as object as IMetadataProvider & {
+            RunViews: (params: unknown[]) => Promise<Array<Record<string, unknown>>>;
+        };
+        runViewsProvider.RunViews = async (params: unknown[]) => {
+            await batchGate;
+            return params.map(() => ({
+                Success: true,
+                Results: [{ ID: 'r1', Note: 'v1' }], // the pre-delta snapshot
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            }));
+        };
+        engine.SetProviderForTest(runViewsProvider);
+        const config = makeConfig();
+        engine.SetConfigsForTest([config]);
+        await engine.OnExternalCacheChangeForTest(config, makeEvent([{ ID: 'r1', Note: 'v1' }]));
+
+        const batch = engine.LoadMultipleEntityConfigsForTest([config], {} as UserInfo);
+        // Delta arrives while the batch RunViews is in flight
+        await engine.OnExternalCacheChangeForTest(
+            config,
+            makeDeltaEvent({
+                kind: 'row_delta',
+                upsertedRows: [{ ID: 'r2', Note: 'v1' }],
+                deletedPrimaryKeys: [],
+                rowCount: 2,
+                maxUpdatedAt: '2026-10-29T00:00:04.000Z',
+            })
+        );
+        // Deferred: a full reload was requested rather than an in-place apply that the snapshot would clobber
+        expect(engine.loadSingleConfigCalls).toBe(1);
+
+        resolveBatch!();
+        await batch;
+        // The snapshot landed (1 row); the reload (stubbed here) is what brings r2 in. Without the
+        // fix the delta had been applied (2 rows, 0 reloads) and the snapshot then dropped r2 silently.
+        expect(engine._items).toHaveLength(1);
     });
 
     it('falls back to full reload when rowCount drifts from expected length', async () => {

@@ -2471,14 +2471,33 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
-            const p = this.RunViewProviderToUse;
-            const rv = new RunView(p);
-            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
-            const results = await rv.RunViews(viewConfigs, contextUser);
+            // Same protocol as LoadSingleEntityConfig, per property: claim a refresh generation and
+            // mark a full refresh in flight BEFORE the awaited RunViews. Without it a `row_delta`
+            // that arrives mid-flight is applied to the held array and then overwritten by this
+            // (pre-delta) snapshot when the batch lands; with it the delta path defers to a
+            // coalesced reload instead, and a newer per-property refresh supersedes our slot.
+            const generations = configs.map(c => this.beginConfigRefresh(c.PropertyName));
+            for (const c of configs) {
+                this.incrementInFlightFullRefresh(c.PropertyName);
+            }
+            let results: RunViewResult[];
+            try {
+                const p = this.RunViewProviderToUse;
+                const rv = new RunView(p);
+                const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
+                results = await rv.RunViews(viewConfigs, contextUser);
+            } finally {
+                for (const c of configs) {
+                    this.decrementInFlightFullRefresh(c.PropertyName);
+                }
+            }
 
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
+                if (!this.isLatestConfigRefresh(configs[i].PropertyName, generations[i])) {
+                    continue; // a newer refresh of this property owns the assignment
+                }
                 this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
