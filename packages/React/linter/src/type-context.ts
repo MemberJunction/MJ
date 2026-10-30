@@ -61,6 +61,37 @@ export function CarriesRowType(type: TypeInfo | undefined): boolean {
   return isRow(type) || (type.type === 'array' && isRow(type.arrayElementType));
 }
 
+/** Array methods the type rules check: calling one on a value known not to be an array is reported. */
+const ARRAY_METHODS = new Set([
+  'push', 'pop', 'shift', 'unshift', 'splice', 'slice',
+  'map', 'filter', 'reduce', 'reduceRight', 'forEach',
+  'find', 'findIndex', 'some', 'every', 'flat', 'flatMap',
+  'sort', 'reverse', 'concat', 'join', 'fill', 'copyWithin',
+  'includes', 'indexOf', 'lastIndexOf', 'at',
+]);
+
+/** Other inferred types that have an array method of the same name and meaning. */
+const ARRAY_METHOD_OTHER_OWNERS: Readonly<Record<string, readonly string[]>> = {
+  forEach: ['Map', 'Set', 'NodeList'],
+  slice: ['string'],
+  concat: ['string'],
+  includes: ['string'],
+  indexOf: ['string'],
+  lastIndexOf: ['string'],
+  at: ['string'],
+};
+
+/**
+ * Whether calling `methodName` on a value of `type` is an array method used on something
+ * that is not an array. False when the type is unknown or an array, and false when the type
+ * has that method too: `Map#forEach`, `Set#forEach` and `String#slice` are all correct.
+ */
+export function IsArrayMethodMisuse(methodName: string, type: TypeInfo): boolean {
+  if (!ARRAY_METHODS.has(methodName)) return false;
+  if (type.type === 'unknown' || type.type === 'array') return false;
+  return !(ARRAY_METHOD_OTHER_OWNERS[methodName]?.includes(type.type) ?? false);
+}
+
 /**
  * Whether two types that may hold rows hold rows of the same entity or query. Two arrays are
  * otherwise "compatible", so without this check `tab === 'a' ? agentRuns : promptRuns` would
