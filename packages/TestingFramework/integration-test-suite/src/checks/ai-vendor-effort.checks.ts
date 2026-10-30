@@ -20,7 +20,7 @@
  *
  * CREDENTIALS: a model is called only when the runner itself would find a credential for it —
  * an MJ credential binding, the vendor's default credential, or `AI_VENDOR_API_KEY__<DRIVER>` in the
- * environment. Anything else is logged as skipped; a check with nothing callable skips loudly.
+ * environment. Anything else is logged as skipped; a check with nothing callable records a SKIP.
  * `EFFORT_IT_MODELS` (comma-separated model names) narrows either check to the listed models.
  *
  * Requests made by SDKs that do not use the global `fetch` (Bedrock, Azure, Groq, Cerebras,
@@ -34,7 +34,7 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { AIPromptRunResult, MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIModelVendorEntity } from '@memberjunction/core-entities';
-import { Assert, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const PROBE_PROMPT_NAME = 'IT: Effort Probe';
@@ -307,8 +307,7 @@ function requireProbePrompt(): MJAIPromptEntityExtended {
 
 async function runTargets(check: string, targets: EffortTarget[], run: (t: EffortTarget) => Promise<string[]>): Promise<void> {
     if (targets.length === 0) {
-        console.warn(`  ⚠ ${check} SKIPPED — no effort-capable model in scope has a credential in this environment.`);
-        return;
+        SkipCheck('no effort-capable model in scope has a credential in this environment (MJ credential binding, vendor default credential, or AI_VENDOR_API_KEY__<DRIVER>)');
     }
     const failures: string[] = [];
     for (const target of targets) {

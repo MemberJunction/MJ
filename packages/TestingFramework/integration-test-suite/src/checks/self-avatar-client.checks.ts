@@ -32,13 +32,13 @@
  * MUTATION TIER. Every check writes (or would write if its guard regressed), so every check carries
  * `RequiresMutation: true`, and Setup provisions nothing when the tier is off. The only rows written
  * are the two seeded users' avatar columns (restored from the Setup snapshot in Teardown) and the
- * minted API keys (deleted in Teardown). Checks skip LOUDLY when the seed is absent.
+ * minted API keys (deleted in Teardown). Checks skip (SkipCheck) when the seed is absent or the mutation tier is off.
  */
 import { RunView } from '@memberjunction/core';
 import type { EntityUserPermissionInfo } from '@memberjunction/core';
 import type { MJUserEntity } from '@memberjunction/core-entities';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Assert, AssertEqual, IntegrationCheckRegistry, IsTierEnabled } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, IsTierEnabled, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, MintFullAccessUserKey, MintedUserKeyIds } from './fls-client.checks';
 
@@ -88,12 +88,11 @@ const fixture: { Current: SelfAvatarFixture | undefined } = { Current: undefined
 
 // ─────────────────────────────────────────────────────────────────── helpers
 
-/** The fixture, or undefined after logging a loud skip. */
-function usableFixture(checkId: string): SelfAvatarFixture | undefined {
+/** The fixture; skips the running check (SkipCheck) when Setup could not provision it. */
+function usableFixture(): SelfAvatarFixture {
     const fx = fixture.Current;
     if (!fx?.Usable || !fx.Locked || !fx.Editor) {
-        console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_COMMAND}\` and start MJAPI.`);
-        return undefined;
+        SkipCheck(`${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_COMMAND}\` and start MJAPI.`);
     }
     return fx;
 }
@@ -231,8 +230,7 @@ export const SelfAvatarClientChecks: NamedCheck[] = [
         Name: 'AV1: a user WITHOUT Update on MJ: Users sets their own image through UpdateMyAvatar',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('AV1');
-            if (!fx) return;
+            const fx = usableFixture();
             const leg = fx.Locked!;
             Assert(!usersPermissions(ctx, leg).CanUpdate,
                 `AV1 precondition: ${leg.Email} must NOT hold Update on ${USERS_ENTITY}, or this check proves nothing`);
@@ -244,8 +242,7 @@ export const SelfAvatarClientChecks: NamedCheck[] = [
         Name: 'AV2: an icon with a null image replaces the image',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('AV2');
-            if (!fx) return;
+            const fx = usableFixture();
             const leg = fx.Locked!;
             await setAndVerify(ctx, leg, PNG_DATA_URI, null, 'AV2 (arrange)');
             await setAndVerify(ctx, leg, null, ICON, 'AV2');
@@ -256,8 +253,7 @@ export const SelfAvatarClientChecks: NamedCheck[] = [
         Name: 'AV3: the plain entity save is refused for that user — the mutation is the only door',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('AV3');
-            if (!fx) return;
+            const fx = usableFixture();
             const leg = fx.Locked!;
             const before = await readRow(ctx, leg.UserID);
 
@@ -293,8 +289,7 @@ export const SelfAvatarClientChecks: NamedCheck[] = [
         Name: 'AV4: no other column and no other row can be changed through the mutation',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('AV4');
-            if (!fx) return;
+            const fx = usableFixture();
             const leg = fx.Locked!;
 
             for (const extra of ['Email: "attacker@example.com"', `UserID: "${fx.Editor!.UserID}"`, 'Name: "Owner"']) {
@@ -316,8 +311,7 @@ export const SelfAvatarClientChecks: NamedCheck[] = [
         Name: 'AV5: bad input is refused with a message and writes nothing',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('AV5');
-            if (!fx) return;
+            const fx = usableFixture();
             const leg = fx.Locked!;
             const oversize = `data:image/png;base64,${Buffer.alloc(200 * 1024 + 1, 7).toString('base64')}`;
             const svg = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>').toString('base64')}`;
@@ -346,8 +340,7 @@ export const SelfAvatarClientChecks: NamedCheck[] = [
         Name: 'AV6: a user WITH Update on MJ: Users can set and clear their avatar through the mutation too',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('AV6');
-            if (!fx) return;
+            const fx = usableFixture();
             const leg = fx.Editor!;
             Assert(usersPermissions(ctx, leg).CanUpdate,
                 `AV6 precondition: ${leg.Email} must hold Update on ${USERS_ENTITY} for this leg to mean anything`);

@@ -5,6 +5,7 @@ import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testin
 // file sees the complete registry (the explicit imports below cover only the hand-pinned
 // table's bundles — the barrel covers all of them).
 import '../index';
+import { SKIP_ALLOWLIST } from '../skip-allowlist';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { CacheImmutabilityChecks } from '../checks/cache-immutability.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
@@ -953,5 +954,17 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     it('the live-model-gated (RequiresLiveModel) set is exactly the pinned snapshot', () => {
         const actual = collectGated('RequiresLiveModel');
         expect(actual, `Live-model-gated set drifted (a check newly self-skips or un-gated). Paste over EXPECTED_LIVE_MODEL_GATED if deliberate:\n${pasteReady(actual)}`).toEqual(EXPECTED_LIVE_MODEL_GATED);
+    });
+});
+
+describe('skip allowlist', () => {
+    it('every allowlist entry names a registered check and gives a reason', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const entries = reg.GetAllowedSkips();
+        expect(entries.length).toBe(SKIP_ALLOWLIST.length);
+        const bundles = new Set(reg.GetBundleNames());
+        const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
+        expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
+        expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
     });
 });
