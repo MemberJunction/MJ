@@ -275,4 +275,64 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.status).toBe('Passed');
         expect(order).toEqual(['setup', 'check', 'teardown']);
     });
+
+    it('a gated RequiresMutation skip is marked allowed with the mutation gate', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitmut' }] }));
+        const details = result.oracleResults.find(o => o.oracleType === 'unitmut.M')?.details as Record<string, unknown>;
+        expect(details.SkipAllowed).toBe(true);
+        expect(details.SkipGate).toBe('mutation');
+    });
+
+    it('a run-time SkipCheck is unexpected unless the check is on the allowlist', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitallow.S', Name: 'allowS', Fn: async () => SkipCheck('no key for the vendor') });
+        reg.AllowSkip({ CheckId: 'unitallow.S', Gate: 'credentials', Reason: 'needs a vendor key' });
+        const driver = new IntegrationTestDriver();
+
+        const notListed = await driver.Execute(makeContext({ checks: [{ type: 'unitskip' }] }));
+        const notListedDetails = notListed.oracleResults.find(o => o.oracleType === 'unitskip.S')?.details as Record<string, unknown>;
+        expect(notListedDetails.SkipAllowed).toBe(false);
+
+        const listed = await driver.Execute(makeContext({ checks: [{ type: 'unitallow' }] }));
+        const listedDetails = listed.oracleResults.find(o => o.oracleType === 'unitallow.S')?.details as Record<string, unknown>;
+        expect(listedDetails.SkipAllowed).toBe(true);
+        expect(listedDetails.SkipGate).toBe('credentials');
+        expect(listedDetails.SkipAllowReason).toBe('needs a vendor key');
+    });
+
+    it('a whole-test tier gate is an allowed skip; an explicit requiresEnv gate is not', async () => {
+        const driver = new IntegrationTestDriver();
+        const tier = await driver.Execute(makeContext({ tier: 'mutation', checks: [{ type: 'unitpass' }] }));
+        expect((tier.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(true);
+
+        delete process.env.UNIT_GATE;
+        const parked = await driver.Execute(makeContext({ checks: [{ type: 'unitpass' }], requiresEnv: 'UNIT_GATE' }));
+        expect((parked.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
+
+    it('checks a timed-out run never started are recorded as failed, not left out', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudget.A', Name: 'budgetA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudget.B', Name: 'budgetB', Fn: async () => { /* pass */ } });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitbudget' }] }, 40));
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitbudget.A', 'unitbudget.B']);
+        const notRun = result.oracleResults.find(o => o.oracleType === 'unitbudget.B');
+        // Either the per-check budget failed it or it never started; it can never be absent or passed.
+        expect(notRun?.passed).toBe(false);
+    });
+
+    it('a requiresEnv-parked Test is allowed when every selected bundle has a bundle-level entry', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitparked.A', Name: 'parkedA', Fn: async () => { /* pass */ } });
+        reg.AllowSkip({ CheckId: 'unitparked', Gate: 'pending-ruling', Reason: 'parked until a provider is provisioned' });
+        delete process.env.UNIT_PARK_GATE;
+        const driver = new IntegrationTestDriver();
+        const parked = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }], requiresEnv: 'UNIT_PARK_GATE' }));
+        const details = parked.oracleResults[0].details as Record<string, unknown>;
+        expect(details.SkipAllowed).toBe(true);
+        expect(details.SkipGate).toBe('pending-ruling');
+
+        const mixed = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }, { type: 'unitpass' }], requiresEnv: 'UNIT_PARK_GATE' }));
+        expect((mixed.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
 });

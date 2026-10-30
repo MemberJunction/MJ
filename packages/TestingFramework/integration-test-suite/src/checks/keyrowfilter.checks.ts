@@ -58,7 +58,7 @@ import type { IMetadataProvider, RunViewParams, RowLevelSecurityFilterInfo, Enti
 import type { MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { SEEDED_SCOPED_A_EMAIL, SEEDED_RLS_ENTITY, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
@@ -105,11 +105,6 @@ function findSelfScopedFilter(provider: IMetadataProvider): RowLevelSecurityFilt
     return (provider.RowLevelSecurityFilters ?? []).find(f => /^\s*UserID\s*=\s*'\{\{UserID\}\}'\s*$/i.test(f.FilterText ?? ''));
 }
 
-/** Loud, uniform skip-as-pass note (mirrors the RLS8/9/10 style). */
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ rls-isolation.${checkId} SKIPPED — ${reason}`);
-}
-
 /**
  * KF1 — key-filter isolation (deterministic, no DB read).
  * Two clones of the SEEDED scoped user — identical roles, identical everything — differ ONLY
@@ -121,8 +116,7 @@ function skipNote(checkId: string, reason: string): void {
 export async function CheckKf1KeyFilterIsolation(ctx: IntegrationCheckContext): Promise<void> {
     const seeded = ctx.RlsFixture?.SeededScopedA;
     if (!seeded) {
-        skipNote('KF1', `seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
-        return;
+        SkipCheck(`seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
     }
     const entity = ctx.Provider.EntityByName(SEEDED_RLS_ENTITY);
     Assert(entity != null, `seeded RLS entity '${SEEDED_RLS_ENTITY}' not found in provider metadata`);
@@ -144,8 +138,7 @@ export async function CheckKf1KeyFilterIsolation(ctx: IntegrationCheckContext): 
         return term.trim() !== '' && !roleClause.includes(term);
     });
     if (!keyFilter) {
-        skipNote('KF1', 'no RLS filter in metadata with markup text distinct from the role clause; key-vs-role composition not demonstrable here.');
-        return;
+        SkipCheck('no RLS filter in metadata with markup text distinct from the role clause; key-vs-role composition not demonstrable here.');
     }
     withKey.APIKeyRowFilters = [keyBinding(entity!, 'Read', keyFilter)];
 
@@ -180,8 +173,7 @@ export async function CheckKf1_KeyFilterIsolation(ctx: IntegrationCheckContext):
 export async function CheckKf2ExemptionIndependence(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
-        skipNote('KF2', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; key binding not constructible.");
-        return;
+        SkipCheck("no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; key binding not constructible.");
     }
     // Find an entity where the context user is role-EXEMPT (empty role clause). Admin/context
     // users are exempt nearly everywhere; probe a few known-cacheable candidates.
@@ -195,8 +187,7 @@ export async function CheckKf2ExemptionIndependence(ctx: IntegrationCheckContext
         }
     }
     if (!entity) {
-        skipNote('KF2', `context user ${ctx.User.Email} is not role-exempt on any candidate entity (${candidates.join(', ')}); exemption independence not demonstrable here.`);
-        return;
+        SkipCheck(`context user ${ctx.User.Email} is not role-exempt on any candidate entity (${candidates.join(', ')}); exemption independence not demonstrable here.`);
     }
 
     const bound = cloneUser(ctx.User);
@@ -232,18 +223,15 @@ export async function CheckKf2_ExemptionIndependence(ctx: IntegrationCheckContex
 export async function CheckKf3CacheSlotSeparation(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
-        skipNote('KF3', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; key binding not constructible.");
-        return;
+        SkipCheck("no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; key binding not constructible.");
     }
     const entity = ctx.Provider.EntityByName(SMALL_ENTITY);
     Assert(entity != null, `${SMALL_ENTITY} must exist in provider metadata`);
     if (!entity!.Fields.some(f => f.Name === 'UserID')) {
-        skipNote('KF3', `'${SMALL_ENTITY}' has no UserID column here; the self-scoped filter is not valid SQL against it.`);
-        return;
+        SkipCheck(`'${SMALL_ENTITY}' has no UserID column here; the self-scoped filter is not valid SQL against it.`);
     }
     if (!entity!.AllowCaching || entity!.TrustServerCacheCompletely === false) {
-        skipNote('KF3', `'${SMALL_ENTITY}' is not server-cacheable here (AllowCaching=${entity!.AllowCaching}, Trust=${entity!.TrustServerCacheCompletely}); slot separation not observable.`);
-        return;
+        SkipCheck(`'${SMALL_ENTITY}' is not server-cacheable here (AllowCaching=${entity!.AllowCaching}, Trust=${entity!.TrustServerCacheCompletely}); slot separation not observable.`);
     }
 
     const bound = cloneUser(ctx.User);
@@ -301,8 +289,7 @@ export async function CheckKf3_CacheSlotSeparation(ctx: IntegrationCheckContext)
 export async function CheckKf4FingerprintWhereAgreement(ctx: IntegrationCheckContext): Promise<void> {
     const filters = (ctx.Provider.RowLevelSecurityFilters ?? []).filter(f => !!f.FilterText && f.FilterText.trim() !== '');
     if (filters.length === 0) {
-        skipNote('KF4', 'no RLS filters in metadata; a key-filtered clause is not constructible.');
-        return;
+        SkipCheck('no RLS filters in metadata; a key-filtered clause is not constructible.');
     }
     const entity = ctx.Provider.EntityByName(SMALL_ENTITY);
     Assert(entity != null, `${SMALL_ENTITY} must exist in provider metadata`);
@@ -365,19 +352,16 @@ export async function CheckKf4_FingerprintWhereAgreement(ctx: IntegrationCheckCo
 export async function CheckKf5PostImageUpdateRejection(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
-        skipNote('KF5', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; an Update key binding is not constructible.");
-        return;
+        SkipCheck("no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; an Update key binding is not constructible.");
     }
     const entity = ctx.Provider.EntityByName(SMALL_ENTITY);
     Assert(entity != null, `${SMALL_ENTITY} must exist in provider metadata`);
     if (!entity!.Fields.some(f => f.Name === 'UserID')) {
-        skipNote('KF5', `'${SMALL_ENTITY}' has no UserID column here; the self-scoped filter is not valid SQL against it.`);
-        return;
+        SkipCheck(`'${SMALL_ENTITY}' has no UserID column here; the self-scoped filter is not valid SQL against it.`);
     }
     const otherUser = (UserCache.Instance.Users ?? []).find(u => !UUIDsEqual(u.ID, ctx.User.ID));
     if (!otherUser) {
-        skipNote('KF5', 'only one user in the user cache; "move the row outside the filter" needs a second owner to move it to.');
-        return;
+        SkipCheck('only one user in the user cache; "move the row outside the filter" needs a second owner to move it to.');
     }
 
     const bound = cloneUser(ctx.User);
@@ -449,19 +433,16 @@ export async function CheckKf5_PostImageUpdateRejection(ctx: IntegrationCheckCon
 export async function CheckKf6LoadByPkEnforcement(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
-        skipNote('KF6', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; a Read key binding is not constructible.");
-        return;
+        SkipCheck("no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; a Read key binding is not constructible.");
     }
     const entity = ctx.Provider.EntityByName(SMALL_ENTITY);
     Assert(entity != null, `${SMALL_ENTITY} must exist in provider metadata`);
     if (!entity!.Fields.some(f => f.Name === 'UserID')) {
-        skipNote('KF6', `'${SMALL_ENTITY}' has no UserID column here; the self-scoped filter is not valid SQL against it.`);
-        return;
+        SkipCheck(`'${SMALL_ENTITY}' has no UserID column here; the self-scoped filter is not valid SQL against it.`);
     }
     const otherUser = (UserCache.Instance.Users ?? []).find(u => !UUIDsEqual(u.ID, ctx.User.ID));
     if (!otherUser) {
-        skipNote('KF6', 'only one user in the user cache; a row OUTSIDE the self-scoped filter needs a different owner.');
-        return;
+        SkipCheck('only one user in the user cache; a row OUTSIDE the self-scoped filter needs a different owner.');
     }
 
     // Fixture row owned by the OTHER user — outside the bound principal's self-scoped filter.
