@@ -148,13 +148,6 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return num;
     },
     
-    sqlDate: (value: any) => {
-        if (!value) return 'NULL';
-        const date = value instanceof Date ? value : new Date(value);
-        if (isNaN(date.getTime())) throw new Error(`Invalid date: ${value}`);
-        return `'${date.toISOString()}'`;
-    },
-    
     sqlNoKeywordsExpression: (value: any) => {
         if (!value) {
             throw new Error('SQL expression cannot be empty');
@@ -223,8 +216,8 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
     }));
 
 /**
- * The filters whose output depends on the database, rendered for one dialect: string and IN-list
- * literals, booleans, identifiers and the three LIKE filters. Every difference comes from the
+ * The filters whose output depends on the database, rendered for one dialect: string, date and
+ * IN-list literals, booleans, identifiers and the three LIKE filters. Every difference comes from the
  * dialect's writer, so a new dialect needs no change here.
  */
 function dialectFilterImplementations(dialect: Pick<QueryDialect, 'Writer'>): Record<string, (value: unknown) => unknown> {
@@ -239,6 +232,7 @@ function dialectFilterImplementations(dialect: Pick<QueryDialect, 'Writer'>): Re
             return `(${items.join(', ')})`;
         },
         sqlBoolean: (value: unknown) => writer.BooleanLiteral(Boolean(value)),
+        sqlDate: (value: unknown) => dateLiteral(value, dialect),
         sqlIdentifier: (value: unknown) => {
             if (!value) throw new Error('Identifier cannot be empty');
             const identifier = String(value);
@@ -292,6 +286,20 @@ function likeLiteral(value: unknown, wildcardSide: 'leading' | 'trailing' | 'bot
  * dialect in which a backslash escapes (MySQL, Snowflake, Databricks) gets its backslashes
  * escaped too and the literal ends where the database reads it ending. NUL characters are dropped.
  */
+/**
+ * A date or date-time value as a quoted ISO 8601 UTC literal (`'2024-01-15T00:00:00.000Z'`), or
+ * `NULL` for an empty value. The ISO text is ASCII with no quote or backslash, so every dialect's
+ * writer quotes it to the same characters.
+ *
+ * @throws Error when the value is not a valid date
+ */
+function dateLiteral(value: unknown, dialect: Pick<QueryDialect, 'Writer'>): string {
+    if (!value) return 'NULL';
+    const date = value instanceof Date ? value : new Date(typeof value === 'number' ? value : String(value));
+    if (isNaN(date.getTime())) throw new Error(`Invalid date: ${String(value)}`);
+    return dialect.Writer.QuoteStringLiteral(date.toISOString());
+}
+
 function textLiteral(value: unknown, dialect: Pick<QueryDialect, 'Writer'>): string {
     const text = String(value).replace(/\0/g, '');
     return `${dialect.Writer.StringLiteralPrefix(text)}${dialect.Writer.QuoteStringLiteral(text)}`;
