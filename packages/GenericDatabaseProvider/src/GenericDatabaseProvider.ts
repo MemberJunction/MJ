@@ -2752,13 +2752,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
                 }
+                // The filter builder saves WhereClauses in SQL Server syntax (`[Field] LIKE ...`), so the
+                // rendered clause gets the same platform rewrite as ExtraFilter. Without it PostgreSQL
+                // rejects every filtered saved view run here: `syntax error at or near "["`.
+                const viewWhereSQL = this.TransformExternalSQLClause(renderedWhere, entityInfo);
                 // CustomWhereClause views too: an unbalanced clause would take row-level security
                 // out of force for everyone who runs the view. Only their admin-written text may
-                // carry comments.
-                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
+                // carry comments. Checked after the rewrite, since that is the text that runs.
+                this.AssertClauseBalanced(viewWhereSQL, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
                     AllowComments: isCustomWhereClause,
                 });
-                whereSQL = `(${renderedWhere})`;
+                whereSQL = `(${viewWhereSQL})`;
                 bHasWhere = true;
             }
 

@@ -249,13 +249,13 @@ describe('RunViewCore — a saved view\'s stored clauses pass the clause screen 
 describe('RunViewCore — saved views on PostgreSQL', () => {
     const pg = () => new PostgreSQLClauseScreenTestProvider();
 
-    it('runs a saved view whose FilterState clause uses bracket identifiers', async () => {
+    it('runs a saved view whose FilterState clause uses bracket identifiers, rewritten for PostgreSQL', async () => {
         const where = `([Name] = 'Acme') AND ([Name] LIKE '%acme%') AND ID IN (SELECT ID FROM [__mj].[vwAccounts])`;
 
         const { result, sql } = await run(savedView({ WhereClause: where, OrderByClause: 'Name DESC' }), pg());
 
         expect(result.Success).toBe(true);
-        expect(sql[0]).toContain(`WHERE (${where})`);
+        expect(sql[0]).toContain(`WHERE (("Name" = 'Acme') AND ("Name" LIKE '%acme%') AND ID IN (SELECT ID FROM "__mj"."vwAccounts"))`);
     });
 
     it('still refuses a bracketed base-table read and a stacked E-string in a stored WhereClause', async () => {
