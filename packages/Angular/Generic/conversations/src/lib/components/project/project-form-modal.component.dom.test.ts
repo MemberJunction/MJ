@@ -172,7 +172,7 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
 
   it('does not show the warning when Only me is selected', () => {
     const hint = renderWithVisibility(true);
-    expect(hint).toContain('Only you can see this folder.');
+    expect(hint).toContain('This folder appears only in your list.');
     expect(hint).not.toContain(SHARING_IS_ONE_WAY);
   });
 
@@ -240,7 +240,7 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
 
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('#projectVisibilityHint')?.textContent).toContain(
-      'People and roles you add below can see this folder'
+      'People and roles you add below see this folder'
     );
     expect(el.querySelector('.folder-acl-panel')).not.toBeNull();
 

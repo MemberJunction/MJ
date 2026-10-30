@@ -15,7 +15,7 @@ const migration = readFileSync(
 
 /** The RLS filter as SQL Server stores it: the N'...' literal with doubled quotes undone. */
 function rlsFilterText(): string {
-    const match = migration.match(/SET FilterText = N'((?:[^']|'')*)'/);
+    const match = migration.match(/@NewFilterText NVARCHAR\(MAX\) = N'((?:[^']|'')*)'/);
     if (!match) throw new Error('FilterText assignment not found');
     return match[1].replace(/''/g, "'");
 }
@@ -43,10 +43,21 @@ describe('V202610291610 conversation-folder migration', () => {
     it('opts existing conversations in Public or other-owned folders out of folder inheritance', () => {
         const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
         expect(pass3).toContain("JSON_MODIFY(c.AdditionalData, '$.inheritFolderAccess', CAST(0 AS BIT))");
-        expect(pass3).toContain(`ELSE N'{"inheritFolderAccess":false}'`);
         expect(pass3).toMatch(/WHERE p\.OwnerUserID IS NULL\s+OR c\.UserID IS NULL\s+OR p\.OwnerUserID <> c\.UserID/);
         // Pass 3 must run after both owner backfills, or a folder Pass 1/2 assigns would be judged on NULL.
         expect(migration.indexOf('-- Pass 3')).toBeGreaterThan(migration.indexOf('-- Pass 2'));
+    });
+
+    it('keeps AdditionalData that is not a JSON object instead of overwriting it', () => {
+        const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
+        expect(pass3).toContain(`N'{"inheritFolderAccess":false,"previousAdditionalData":"' + STRING_ESCAPE(c.AdditionalData, 'json') + N'"}'`);
+        expect(pass3).toMatch(/WHEN c\.AdditionalData IS NULL OR LTRIM\(RTRIM\(c\.AdditionalData\)\) = N''\s+THEN N'\{"inheritFolderAccess":false\}'/);
+    });
+
+    it('replaces the read filter only while it still holds the text V202609260053 installed', () => {
+        const update = migration.slice(migration.indexOf('UPDATE ${flyway:defaultSchema}.RowLevelSecurityFilter'));
+        expect(update).toContain("AND FilterText IN (N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'')', @NewFilterText);");
+        expect(update).toMatch(/IF @@ROWCOUNT = 0\s+PRINT /);
     });
 
     it('carries no metadata insert for the Projects resource type', () => {

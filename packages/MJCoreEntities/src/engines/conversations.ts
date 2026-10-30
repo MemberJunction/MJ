@@ -43,15 +43,57 @@ export const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
 export type ProjectVisibilityTier = 'Private' | 'Shared' | 'Public';
 
 /**
+ * The spellings of `"inheritFolderAccess": false` the SQL filter recognises: the compact one every MJ writer
+ * produces (`JSON.stringify`, `JSON_MODIFY`, and the server's save, which rewrites `AdditionalData` compactly)
+ * and the one-space one. {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} and {@link IsInheritingFolderAccessInSQL}
+ * are both built from this list, so they cannot drift apart.
+ */
+export const INHERIT_FOLDER_ACCESS_FALSE_SPELLINGS: readonly string[] = ['"inheritFolderAccess":false', '"inheritFolderAccess": false'];
+
+/**
  * SQL predicate matching conversations that inherit access from their folder (the default).
  * Turning off folder inheritance writes `"inheritFolderAccess":false` into `Conversation.AdditionalData`.
  *
  * `LIKE`, not `JSON_VALUE`: this filter runs on PostgreSQL too, which translates no SQL Server JSON
- * functions in a runtime filter. It matches the compact spelling every MJ writer produces (`JSON.stringify`,
- * `JSON_MODIFY`) and the one-space spelling, the same two {@link IsInheritingFolderAccess} accepts.
+ * functions in a runtime filter. A `LIKE` also matches the key nested inside another object; that only ever
+ * hides a conversation the parser would list (it never lists one the parser would hide), so it is left as is.
  */
 export const INHERIT_FOLDER_ACCESS_SQL_CLAUSE =
-    `(AdditionalData IS NULL OR (AdditionalData NOT LIKE '%"inheritFolderAccess":false%' AND AdditionalData NOT LIKE '%"inheritFolderAccess": false%'))`;
+    `(AdditionalData IS NULL OR (${INHERIT_FOLDER_ACCESS_FALSE_SPELLINGS.map((s) => `AdditionalData NOT LIKE '%${s}%'`).join(' AND ')}))`;
+
+/**
+ * What {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} decides for this `AdditionalData`: true when the SQL filter
+ * treats the conversation as inheriting its folder's access. Case-insensitive, like SQL Server's default
+ * collation. The server compares this as well as {@link IsInheritingFolderAccess}, so a rewrite that one of
+ * them reads differently is caught.
+ */
+export function IsInheritingFolderAccessInSQL(additionalData: string | null | undefined): boolean {
+    if (!additionalData) {
+        return true;
+    }
+    const lower = additionalData.toLowerCase();
+    return !INHERIT_FOLDER_ACCESS_FALSE_SPELLINGS.some((s) => lower.includes(s.toLowerCase()));
+}
+
+/**
+ * `AdditionalData` rewritten as compact JSON when it holds a JSON object, so the stored text always uses the
+ * spelling {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} matches. Anything else (null, an array, text that is not
+ * JSON) comes back unchanged.
+ */
+export function CanonicalizeConversationAdditionalData(additionalData: string | null | undefined): string | null | undefined {
+    if (!additionalData) {
+        return additionalData;
+    }
+    try {
+        const parsed: unknown = JSON.parse(additionalData);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return JSON.stringify(parsed);
+        }
+    } catch {
+        // Not JSON: leave it as written.
+    }
+    return additionalData;
+}
 
 /** Spots `"inheritFolderAccess": false` in AdditionalData that is not valid JSON. */
 const INHERIT_FALSE_PATTERN = /"inheritFolderAccess"\s*:\s*false/;

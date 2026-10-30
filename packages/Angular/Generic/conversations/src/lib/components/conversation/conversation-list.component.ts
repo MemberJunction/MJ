@@ -11,6 +11,7 @@ import {
 } from '@memberjunction/core-entities';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
+import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ProjectFormModalComponent } from '../project/project-form-modal.component';
@@ -2070,16 +2071,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       return;
     }
     // A Shared or Public folder shows the conversations in it to everyone it is shared with.
-    if (projectId && this.engine.GetProjectVisibilityTier(projectId) !== 'Private') {
-      const folder = this.engine.Projects.find(p => UUIDsEqual(p.ID, projectId));
-      const what = toMove.length === 1 ? 'this conversation' : `these ${toMove.length} conversations`;
-      const confirmed = await this.dialogService.confirm({
-        title: 'Move into a shared folder?',
-        message: `People with access to "${folder?.Name ?? 'this folder'}" will see ${what}.`,
-        okText: 'Move'
-      });
-      if (!confirmed) return;
-    }
+    if (!(await ConfirmMoveIntoFolder(this.dialogService, this.engine, projectId, toMove.length))) return;
 
     try {
       const result = await this.engine.MoveMultipleConversationsToProject(toMove, projectId, this.CurrentUser);

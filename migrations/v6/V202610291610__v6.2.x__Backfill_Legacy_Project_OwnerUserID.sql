@@ -191,12 +191,17 @@ GO
 --         in a Public folder, or in a folder someone else owns, keeps its old
 --         visibility by opting out of folder inheritance. Conversations created after
 --         the upgrade inherit by default. Re-running sets the same value again.
+--         AdditionalData that is not a JSON object is kept, not overwritten: it moves
+--         under "previousAdditionalData" as a JSON string. Empty or NULL becomes a new
+--         object.
 UPDATE c
 SET
     c.AdditionalData = CASE
         WHEN ISJSON(c.AdditionalData) = 1 AND LEFT(LTRIM(c.AdditionalData), 1) = N'{'
             THEN JSON_MODIFY(c.AdditionalData, '$.inheritFolderAccess', CAST(0 AS BIT))
-        ELSE N'{"inheritFolderAccess":false}'
+        WHEN c.AdditionalData IS NULL OR LTRIM(RTRIM(c.AdditionalData)) = N''
+            THEN N'{"inheritFolderAccess":false}'
+        ELSE N'{"inheritFolderAccess":false,"previousAdditionalData":"' + STRING_ESCAPE(c.AdditionalData, 'json') + N'"}'
     END,
     c.__mj_UpdatedAt = GETUTCDATE()
 FROM ${flyway:defaultSchema}.Conversation c
@@ -218,11 +223,19 @@ GO
 -- itself open every folder.
 -- ============================================================================
 DECLARE @OwnFoldersRLSID UNIQUEIDENTIFIER = '7596823D-CA3B-4CE5-A66E-FC929E0FEB02';
+DECLARE @NewFilterText NVARCHAR(MAX) = N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'' OR CAST([ID] AS NVARCHAR(36)) IN (SELECT [rp].[ResourceRecordID] FROM ${flyway:defaultSchema}.[ResourcePermission] AS [rp] WHERE [rp].[ResourceTypeID] = ''88D0DF27-AF8F-43AC-9EC4-2AC314F49355'' AND [rp].[Status] = N''Approved'' AND (([rp].[Type] = N''User'' AND [rp].[UserID] = ''{{UserID}}'') OR ([rp].[Type] = N''Role'' AND [rp].[RoleID] IN (SELECT [ur].[RoleID] FROM ${flyway:defaultSchema}.[UserRole] AS [ur] WHERE [ur].[UserID] = ''{{UserID}}'')))))';
 
+-- Replace the filter only while it still holds V202609260053's text (or this
+-- migration's own, on a re-run). A host that edited the filter keeps its version
+-- and is told to merge the shared-folder clause in by hand.
 UPDATE ${flyway:defaultSchema}.RowLevelSecurityFilter
-   SET FilterText = N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'' OR CAST([ID] AS NVARCHAR(36)) IN (SELECT [rp].[ResourceRecordID] FROM ${flyway:defaultSchema}.[ResourcePermission] AS [rp] WHERE [rp].[ResourceTypeID] = ''88D0DF27-AF8F-43AC-9EC4-2AC314F49355'' AND [rp].[Status] = N''Approved'' AND (([rp].[Type] = N''User'' AND [rp].[UserID] = ''{{UserID}}'') OR ([rp].[Type] = N''Role'' AND [rp].[RoleID] IN (SELECT [ur].[RoleID] FROM ${flyway:defaultSchema}.[UserRole] AS [ur] WHERE [ur].[UserID] = ''{{UserID}}'')))))',
+   SET FilterText = @NewFilterText,
        Description = N'Narrows MJ: Projects to folders the current user may see: public folders (OwnerUserID IS NULL), their own folders (OwnerUserID = {{UserID}}), and folders shared with them or their roles via MJ: Resource Permissions.',
        __mj_UpdatedAt = GETUTCDATE()
- WHERE ID = @OwnFoldersRLSID;
+ WHERE ID = @OwnFoldersRLSID
+   AND FilterText IN (N'(OwnerUserID IS NULL OR OwnerUserID = ''{{UserID}}'')', @NewFilterText);
+
+IF @@ROWCOUNT = 0
+    PRINT 'RowLevelSecurityFilter 7596823D-CA3B-4CE5-A66E-FC929E0FEB02 was edited after V202609260053, so it was left as is. Add the shared-folder clause from this migration to it by hand to let users read folders shared with them.';
 GO
 

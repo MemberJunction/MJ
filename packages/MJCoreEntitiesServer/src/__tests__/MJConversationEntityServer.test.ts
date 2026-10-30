@@ -18,7 +18,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', async () => {
     // The real helper, so the guard reads AdditionalData exactly as the client does.
-    const { IsInheritingFolderAccess } = await vi.importActual<typeof import('@memberjunction/core-entities')>('@memberjunction/core-entities');
+    const { IsInheritingFolderAccess, IsInheritingFolderAccessInSQL, CanonicalizeConversationAdditionalData } =
+        await vi.importActual<typeof import('@memberjunction/core-entities')>('@memberjunction/core-entities');
     /** Minimal stand-in for the generated MJConversationEntity. */
     class StubConversationEntity {
         public IsSaved = true;
@@ -30,8 +31,16 @@ vi.mock('@memberjunction/core-entities', async () => {
         public GetFieldByName(name: string): unknown {
             return this.Fields.get(name) ?? null;
         }
+        public async Save(): Promise<boolean> {
+            return true;
+        }
     }
-    return { MJConversationEntity: StubConversationEntity, IsInheritingFolderAccess };
+    return {
+        MJConversationEntity: StubConversationEntity,
+        IsInheritingFolderAccess,
+        IsInheritingFolderAccessInSQL,
+        CanonicalizeConversationAdditionalData,
+    };
 });
 
 import { MJConversationEntityServer } from '../custom/MJConversationEntityServer.server';
@@ -148,5 +157,52 @@ describe("MJConversationEntityServer — only the owner moves, re-owns or re-sha
         const move = { ProjectID: { Dirty: true, OldValue: 'p1', Value: 'p2' } };
         expect(owned(null, move).Validate().Success).toBe(true);
         expect(owned(colleague, move, false).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJConversationEntityServer — AdditionalData is stored in the spelling the SQL filter matches', () => {
+    /** A saved conversation whose AdditionalData is being written as `value`. */
+    function writing(value: string): MJConversationEntityServer {
+        const entity = new MJConversationEntityServer();
+        (entity as unknown as Stub).Fields.set('AdditionalData', { Dirty: true, OldValue: null, Value: value });
+        return entity;
+    }
+    const stored = (entity: MJConversationEntityServer) => (entity as unknown as Stub).Fields.get('AdditionalData')?.Value;
+
+    it.each([
+        ['a space before the colon', '{"inheritFolderAccess" :false}'],
+        ['two spaces', '{"inheritFolderAccess":  false}'],
+        ['a tab', '{"inheritFolderAccess":\tfalse}'],
+        ['a newline', '{\n  "inheritFolderAccess": false\n}'],
+    ])('rewrites %s compactly on save', async (_label, value) => {
+        const entity = writing(value);
+        await entity.Save();
+        expect(stored(entity)).toBe('{"inheritFolderAccess":false}');
+    });
+
+    it('keeps other keys, and leaves text that is not a JSON object alone', async () => {
+        const object = writing('{ "pinnedBy": "x", "inheritFolderAccess" : false }');
+        await object.Save();
+        expect(stored(object)).toBe('{"pinnedBy":"x","inheritFolderAccess":false}');
+        const notJson = writing('not json');
+        await notJson.Save();
+        expect(stored(notJson)).toBe('not json');
+    });
+
+    it('refuses a non-owner rewriting AdditionalData so the SQL filter reads it differently', () => {
+        const entity = new MJConversationEntityServer();
+        const stub = entity as unknown as Stub;
+        stub.ContextCurrentUser = { ID: 'colleague-2' };
+        stub.Fields.set('UserID', { Dirty: false, OldValue: 'owner-1', Value: 'owner-1' });
+        // Not valid JSON, so the save cannot canonicalize it. The parser's fallback still reads false;
+        // the SQL LIKE no longer matches, which would list the conversation to folder members.
+        stub.Fields.set('AdditionalData', {
+            Dirty: true,
+            OldValue: '{"inheritFolderAccess":false}',
+            Value: '{"inheritFolderAccess" :false, broken',
+        });
+        const result = entity.Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('AdditionalData');
     });
 });

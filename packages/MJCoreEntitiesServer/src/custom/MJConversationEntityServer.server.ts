@@ -1,6 +1,11 @@
-import { BaseEntity, ValidationErrorInfo, ValidationErrorType, ValidationResult, WellKnownUserSource } from '@memberjunction/core';
+import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult, WellKnownUserSource } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { IsInheritingFolderAccess, MJConversationEntity } from '@memberjunction/core-entities';
+import {
+    CanonicalizeConversationAdditionalData,
+    IsInheritingFolderAccess,
+    IsInheritingFolderAccessInSQL,
+    MJConversationEntity,
+} from '@memberjunction/core-entities';
 import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
 
 /**
@@ -11,9 +16,24 @@ import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './
  * Keeps who a conversation belongs to and who it is shared with in its owner's hands: see
  * {@link checkOwnerOnlyChange}. Uses the synchronous `Validate()` so the rules run on every save, like
  * `MJAIAgentSessionEntityServer`.
+ *
+ * Saves `AdditionalData` as compact JSON when it holds an object, so the stored text always uses the spelling
+ * the conversation list's SQL filter matches (`INHERIT_FOLDER_ACCESS_SQL_CLAUSE`): the filter and the parser
+ * cannot then disagree about whether a conversation inherits its folder's access.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntityServer extends MJConversationEntity {
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const additionalData = this.GetFieldByName('AdditionalData');
+        if (additionalData?.Dirty) {
+            const canonical = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
+            if (canonical !== additionalData.Value) {
+                additionalData.Value = canonical;
+            }
+        }
+        return super.Save(options);
+    }
+
     public override Validate(): ValidationResult {
         const result = super.Validate();
         for (const violation of [CheckAnonymousOwnershipKeyChange(this, 'ExternalID'), checkOwnerOnlyChange(this)]) {
@@ -46,10 +66,14 @@ function checkOwnerOnlyChange(entity: MJConversationEntity): ValidationErrorInfo
         return null;
     }
     const additionalData = entity.GetFieldByName('AdditionalData');
+    const before = additionalData?.OldValue as string | null;
+    const after = additionalData?.Value as string | null;
+    // Both readings: the parser's, and the SQL filter's. A rewrite one of them reads differently (an odd
+    // spelling the LIKE misses) would otherwise re-share the conversation past a parser-only check.
     const inheritanceChanged =
         !!additionalData?.Dirty &&
-        IsInheritingFolderAccess({ AdditionalData: additionalData.OldValue as string | null }) !==
-            IsInheritingFolderAccess({ AdditionalData: additionalData.Value as string | null });
+        (IsInheritingFolderAccess({ AdditionalData: before }) !== IsInheritingFolderAccess({ AdditionalData: after }) ||
+            IsInheritingFolderAccessInSQL(before) !== IsInheritingFolderAccessInSQL(after));
     const changed = ['ProjectID', 'UserID'].find((name) => entity.GetFieldByName(name)?.Dirty)
         ?? (inheritanceChanged ? 'AdditionalData' : undefined)
         ?? (IsSetByTransactionVariable(entity, ['ProjectID', 'UserID', 'AdditionalData', 'ID']) ? 'ProjectID' : undefined);
