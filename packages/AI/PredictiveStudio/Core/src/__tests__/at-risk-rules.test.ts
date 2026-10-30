@@ -262,6 +262,16 @@ describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () =
     expect(mean(list.map((r) => r.RecordID))).toBeLessThan(mean(Object.keys(truth)));
   });
 
+  it('lists the same records whatever the read order when the limit falls inside a run of equal risks', () => {
+    const row = (id: string, riskPct: number): AtRiskRow => ({ RecordID: id, Label: null, Score: 1 - riskPct / 100, RiskPct: riskPct, Class: null, Band: 'high', Status: 'At risk', BadgeColor: 'red', Icon: 'fa-triangle-exclamation', Drivers: null });
+    const tied = ['0C1D-B', '0c1d-a', '9F2E-D', '0C1D-C', '5A5A-E'].map((id) => row(id, 61));
+    const rows = [row('ffff-top', 90), ...tied, row('aaaa-low', 45)];
+    const expected = ['ffff-top', '0c1d-a', '0C1D-B', '0C1D-C'];
+    // Every rotation and the reverse of the input give the same members, in the same order.
+    const orders = [...rows.map((_, k) => [...rows.slice(k), ...rows.slice(0, k)]), [...rows].reverse()];
+    for (const order of orders) expect(AtRiskRules.SelectAtRiskListMembers(order, 4).map((r) => r.RecordID)).toEqual(expected);
+  });
+
   it('never pads the list with low-risk rows', () => {
     const rows: AtRiskRow[] = [10, 20, 39].map((riskPct, i) => ({ RecordID: `r${i}`, Label: null, Score: 1 - riskPct / 100, RiskPct: riskPct, Class: null, Band: 'low', Status: 'Low risk', BadgeColor: 'green', Icon: 'fa-circle-check', Drivers: null }));
     expect(AtRiskRules.SelectAtRiskListMembers(rows, 200)).toEqual([]);

@@ -10,6 +10,7 @@
  * Pure, dependency-free, browser-safe → unit-tested with no Angular.
  */
 
+import { IsValidUUID, NormalizeUUID, OrdinalCompare } from '@memberjunction/global';
 import { type OutcomeConfig, type OutcomeConfigSource, ResolveOutcomeConfig } from './outcome-config';
 import { ProblemTypes } from './sidecar-contract';
 
@@ -101,9 +102,6 @@ interface ScoredPrediction {
   Drivers: unknown;
 }
 
-/** A UUID string; `LabelFromRecord` skips these (same pattern as `IsValidUUID` in `@memberjunction/global`, which Core does not depend on). */
-const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Rows below this displayed risk never go on an "At-Risk" list. */
 export const AT_RISK_LIST_MIN_RISK_PCT = 40;
 
@@ -124,12 +122,21 @@ export class AtRiskRules {
     return { InvertedRisk: outcomeConfig.Polarity === 'positive' && !ProblemTypes.IsRegression(model?.ProblemType), OutcomeConfig: outcomeConfig };
   }
 
-  /** The members of an "At-Risk" list: highest displayed risk first, at least {@link AT_RISK_LIST_MIN_RISK_PCT}, at most `limit`. */
+  /**
+   * The members of an "At-Risk" list: highest displayed risk first, at least {@link AT_RISK_LIST_MIN_RISK_PCT}, at most
+   * `limit`. Rows of equal risk are ordered by record ID (case-insensitive, as UUIDs compare, then exactly), so when the
+   * limit falls inside a run of equal risks the same records are listed whatever order the rows were read in.
+   */
   public static SelectAtRiskListMembers(rows: ReadonlyArray<AtRiskRow>, limit: number): AtRiskRow[] {
     return [...rows]
-      .sort((a, b) => b.RiskPct - a.RiskPct)
+      .sort((a, b) => b.RiskPct - a.RiskPct || AtRiskRules.compareRecordIDs(a.RecordID, b.RecordID))
       .filter((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT)
       .slice(0, limit);
+  }
+
+  /** A total order on record IDs: case-insensitive first (SQL Server and PostgreSQL case UUIDs differently), then exact. */
+  private static compareRecordIDs(a: string, b: string): number {
+    return OrdinalCompare(NormalizeUUID(a), NormalizeUUID(b)) || OrdinalCompare(a, b);
   }
 
   /** Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s. */
@@ -169,7 +176,7 @@ export class AtRiskRules {
     if (email) return email;
     for (const v of Object.values(row)) {
       const s = str(v);
-      if (s && s.length <= 120 && !UUID_FORMAT.test(s)) return s;
+      if (s && s.length <= 120 && !IsValidUUID(s)) return s;
     }
     return null;
   }
