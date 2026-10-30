@@ -112,7 +112,13 @@ MJServer uses a layered configuration system with the following priority (highes
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
 | `MJ_SESSION_JANITOR_ENABLED` | Run the AI Agent Session janitor's periodic tick — see [Idle databases](#idle-databases-serverless-sql-auto-pause) | `true` |
 | `MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS` | How often the session janitor ticks (ms, greater than 0) | `60000` |
-| `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS` | How often the agent-run watchdog sweeps for orphaned runs while runs are in flight (ms); `0` = startup sweep only | `300000` |
+| `MJ_BRIDGE_RECONCILER_ENABLED` | Repeat the realtime bridge orphan reconcile (the startup pass always runs) | `true` |
+| `MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS` | How often it repeats (ms, greater than 0) | `600000` |
+| `MJ_HANDOFF_OFFER_EXPIRY_ENABLED` | Run the 15-second expiry sweep over human-handoff offers | `true` |
+| `MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS` | How often it runs (ms, greater than 0) | `15000` |
+| `MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED` | Repeat the orphaned conversation detail reconcile (the startup pass always runs) | `true` |
+| `MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS` | How often it repeats (ms, greater than 0) | `300000` |
+| `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS` | How often the agent-run watchdog sweeps for orphaned runs, once this process has run an agent (ms); `0` = startup sweep only | `300000` |
 | `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` | `MJ: AI Models` name every process embeds locally with — see [Changing the local embedding model](#changing-the-local-embedding-model) | highest-PowerRank active local model |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
@@ -174,16 +180,28 @@ module.exports = {
     maxConcurrentJobs: 5,
   },
 
-  // AI Agent Session janitor — see "Idle databases" below
+  // Background sweeps — see "Idle databases" below and the Serverless Database Auto-Pause guide
   agentSessions: {
     janitor: {
       enabled: true,              // env: MJ_SESSION_JANITOR_ENABLED
       sweepIntervalMs: 60000,     // env: MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS
       closeThresholdMinutes: 15,  // a session idle longer than this is closed
     },
+    bridgeReconciler: {
+      enabled: true,              // env: MJ_BRIDGE_RECONCILER_ENABLED
+      sweepIntervalMs: 600000,    // env: MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS
+    },
+    handoffOfferExpiry: {
+      enabled: true,              // env: MJ_HANDOFF_OFFER_EXPIRY_ENABLED
+      sweepIntervalMs: 15000,     // env: MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS
+    },
+  },
+  conversationDetailReconciler: {
+    enabled: true,                // env: MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED
+    sweepIntervalMs: 300000,      // env: MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS
   },
 
-  // Agent-run watchdog — its timers run only while an agent run is in flight
+  // Agent-run watchdog — heartbeat only while a run is in flight; the sweep runs once any agent has run
   agentRunWatchdog: {
     sweepIntervalMs: 300000,      // env: MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS; 0 = startup sweep only
     heartbeatIntervalMs: 30000,   // liveness stamp for this process's in-flight runs
@@ -801,39 +819,9 @@ The service starts automatically during server initialization and shuts down gra
 
 ## Idle databases (serverless SQL auto-pause)
 
-A serverless database (Azure SQL serverless, for example) pauses only after a stretch with no queries and no open sessions; Azure's shortest auto-pause delay is one hour. MJAPI runs several background loops that query the database on a timer even when nobody is using it. To let an idle MJAPI's database pause, turn off each one you do not need:
+MJAPI runs several background loops that query the database on a timer, and keeps `connectionPool.min` connections open, even when nobody is using it. That stops a serverless database (Azure SQL serverless, Aurora Serverless, Neon) from pausing. Every loop has a switch; turned off together, an idle MJAPI sends no periodic queries.
 
-| Background loop | What it does | Default | How to turn it off |
-|---|---|---|---|
-| Metadata and user-cache refresh | Checks whether metadata changed | every 3 min | `databaseSettings.metadataCacheRefreshInterval: 0` or `METADATA_CACHE_REFRESH_INTERVAL=0` |
-| Scheduled jobs | Polls for due jobs | on | `scheduledJobs.enabled: false` |
-| Task graph dispatcher | Claims pending durable-workflow tasks | on (SQL Server) | `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` |
-| AI Agent Session janitor | Closes stale sessions, enforces voice-session time caps, rebuilds lost realtime recordings | every 60s | `agentSessions.janitor.enabled: false` or `MJ_SESSION_JANITOR_ENABLED=false` |
-| Agent-run watchdog | Heartbeat for in-flight agent runs, sweep for runs orphaned by a crash | only while an agent run is in flight | Nothing to do: it stops by itself when the last run finishes. `agentRunWatchdog.sweepIntervalMs: 0` also drops the periodic sweep during runs |
-| Orphaned conversation details | Closes chat messages left "in progress" by a run that already ended | every 5 min | No dedicated switch; off on an `api`-role replica (below) |
-| Realtime bridge orphans | Closes bridges an earlier boot of this instance left open | every 10 min | No dedicated switch; off on an `api`-role replica (below) |
-| Integration sync worker, work queue host | Poll their queues | off | Leave them off |
-| Pooled connections | Hold sessions open | `databaseSettings.connectionPool.min: 5` | `connectionPool.min: 0` |
-
-`MJ_SERVER_ROLE=api` (or `serverRole: 'api'`) turns off every background loop above except the metadata refresh and the watchdog, for a replica that only serves requests; another replica with role `worker` or `all` must then run them.
-
-What turning each sweep off costs:
-
-- **Session janitor off.** The one-time startup recovery and the graceful-shutdown drain still run, so sessions this instance left open are closed when it restarts. Stale sessions from instances that never come back, the voice-session time cap and realtime recording recovery are not handled by this instance. Leave it on for any deployment that uses realtime/voice agent sessions.
-- **Watchdog sweep at `0`.** The startup sweep still force-fails runs orphaned by a crash, but only when an MJAPI restarts. While runs are in flight, the heartbeat still runs, and it also drops finished runs from the watchdog's tracked set.
-
-The watchdog sweeps only while this instance has a run in flight. In a multi-instance deployment, an instance whose runs crash is cleaned up by its own startup sweep, or by any other instance's sweep while that instance has a run going. For a sweep on a fixed schedule regardless of traffic, create a `MJ: Scheduled Job` of the `AgentRunSweepScheduledJobDriver` type (it needs scheduled jobs enabled).
-
-```javascript
-// mj.config.cjs: an MJAPI that lets its serverless database pause when idle
-databaseSettings: {
-  metadataCacheRefreshInterval: 0,
-  connectionPool: { min: 0 },
-},
-scheduledJobs: { enabled: false },
-agentSessions: { janitor: { enabled: false } },
-// plus MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 in the environment
-```
+**→ [Serverless Database Auto-Pause Guide](../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md)** has the copy-paste settings, every loop with its default, its switch and what turning it off costs, the orphaned-agent-run trade-off, and how to check from the database side that MJAPI is quiet.
 
 ## AI Integration
 

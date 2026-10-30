@@ -22,12 +22,13 @@ export interface AgentRunSweepJobConfiguration extends ScheduledJobConfiguration
 /**
  * Audit/observability layer over {@link AgentRunWatchdog.SweepOrphanedRuns}.
  *
- * The watchdog already runs an in-process sweep while its process has agent runs in flight (see
+ * The watchdog already runs an in-process sweep once its process has run an agent (see
  * `AgentRunWatchdog` — that timer is the reliability floor and runs regardless of whether scheduled
  * jobs are enabled), and the host sweeps once at startup. This driver lets an operator ALSO drive
- * the *same idempotent sweep* through MJ's scheduler, on a fixed schedule whether or not any run is
- * in flight, so each run is recorded as a `MJ: Scheduled Job Run` with the orphan count and can
- * raise notifications. It is
+ * the *same idempotent sweep* through MJ's scheduler — or replace the in-process timer with it when
+ * `agentRunWatchdog.sweepIntervalMs` is 0 so a serverless database can pause between runs — so
+ * each run is recorded as a `MJ: Scheduled Job Run` with the orphan count and can raise
+ * notifications. It is
  * deliberately opt-in: shipping the job *type* doesn't activate anything until someone creates a
  * `MJ: Scheduled Job` of this type with a cron expression. Running both is harmless — the sweep is
  * a `Status='Running' AND <stale>` UPDATE, atomic and idempotent.

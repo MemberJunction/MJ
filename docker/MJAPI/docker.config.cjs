@@ -195,6 +195,24 @@ const mjServerConfig = {
   viewingSystem: {
     enableSmartFilters: true,
   },
+
+  // ---------------------------------------------------------------------------
+  // Serverless database (Azure SQL serverless, Aurora Serverless, Neon)
+  // ---------------------------------------------------------------------------
+  // By default MJAPI queries the database on several timers and holds 5 pooled
+  // connections, so a serverless database never auto-pauses. Uncomment what you
+  // need; guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md explains each setting
+  // and what turning it off costs. Env equivalents shown in comments.
+  // In databaseSettings above: METADATA_CACHE_REFRESH_INTERVAL=0, and add connectionPool: { min: 0 }.
+  // scheduledJobs: { enabled: false },
+  // agentSessions: {
+  //   janitor: { enabled: false },          // MJ_SESSION_JANITOR_ENABLED=false
+  //   bridgeReconciler: { enabled: false }, // MJ_BRIDGE_RECONCILER_ENABLED=false
+  //   handoffOfferExpiry: { enabled: false }, // MJ_HANDOFF_OFFER_EXPIRY_ENABLED=false
+  // },
+  // conversationDetailReconciler: { enabled: false }, // MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED=false
+  // agentRunWatchdog: { sweepIntervalMs: 0 },         // MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS=0
+  // (also set MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 in the environment)
   askSkip: {
     chatURL: process.env.ASK_SKIP_CHAT_URL,
     learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,

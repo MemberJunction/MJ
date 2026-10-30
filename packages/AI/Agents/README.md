@@ -307,9 +307,9 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 Process-wide guard that keeps an `AIAgentRun` from being left `Running` forever when its process dies or its final save fails. `BaseAgent` calls `Track()` once the run row exists and `Untrack()` as soon as the run leaves `Running` (Completed, Failed, Cancelled, AwaitingFeedback or Paused) — first thing in `Execute()`'s teardown, before any subclass `finalizeRun` hook.
 
 - **Heartbeat** — every `heartbeatIntervalMs` (30s) it stamps `LastHeartbeatAt` on this process's in-flight runs.
-- **Sweep** — every `sweepIntervalMs` (5 min) it force-fails `Running` runs whose heartbeat went stale (`staleThresholdMinutes`, 5) and drops finished runs from its tracked set. The host also runs `SweepOrphanedRuns` once at startup.
+- **Sweep** — every `sweepIntervalMs` (5 min) it force-fails `Running` runs whose heartbeat went stale (`staleThresholdMinutes`, 5) and drops finished runs from its tracked set. Once the process has tracked a run, the sweep keeps running even with nothing tracked, so it also closes runs that other, crashed instances left `Running`. The host also runs `SweepOrphanedRuns` once at startup.
 - **Stop relay** — every 3s it checks whether one of its runs was marked `Cancelled` (the Stop button) and aborts that run.
-- **Idle** — every timer runs only while at least one run is tracked. The last run leaving stops them all, and the next `Track()` starts them again, so an idle process issues no periodic database statements.
+- **Idle** — the heartbeat and the stop relay run only while at least one run is tracked: the last run leaving stops them, and the next `Track()` starts them again. With `sweepIntervalMs: 0` the sweep never starts either, so an idle process issues no periodic database statements; see the [Serverless Database Auto-Pause Guide](../../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md) for the trade-off.
 
 Tune it with `AgentRunWatchdog.Instance.Configure({ ... })`; MJServer passes its `agentRunWatchdog` settings through at startup. `sweepIntervalMs: 0` turns the periodic sweep off (the startup sweep still runs, and the tracked-set prune moves to the heartbeat). Other values must be greater than 0; an invalid value throws.
 

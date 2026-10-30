@@ -69,7 +69,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
 import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
+import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
   HANDOFF_OFFER_FANOUT_CHANNEL,
   HANDOFF_OFFER_TOPIC,
@@ -85,6 +85,7 @@ import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResol
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
+import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -342,8 +343,6 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
-/** How often to re-check for conversation details left behind by finished runs. */
-const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -1605,6 +1604,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
   AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
+  ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
 
   // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
   //
@@ -1711,17 +1712,9 @@ const setupComplete$ = new ReplaySubject(1);
       // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
       // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
       // beside a message that still claims to be generating, and it spins forever for anyone who
-      // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
-      // mirroring the watchdog's own two-phase shape.
-      const reconcileOrphans = () =>
-        ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
-          .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
-      void reconcileOrphans();
-      const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
-      ShutdownRegistry.Instance.Register({
-        ShutdownName: 'OrphanDetailReconciler',
-        Shutdown: () => { clearInterval(orphanDetailTimer); },
-      });
+      // opens it. Runs at boot (closes restart orphans) and, unless `conversationDetailReconciler.enabled`
+      // is false, on a timer (closes mid-life orphans), mirroring the watchdog's own two-phase shape.
+      StartOrphanedConversationDetailReconciler(sweepProvider, sweepUser, configInfo.conversationDetailReconciler);
     }
 
     // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
@@ -1734,7 +1727,7 @@ const setupComplete$ = new ReplaySubject(1);
         .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
       // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
       // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
-      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser, configInfo.agentSessions.bridgeReconciler); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
     }
   }
 
