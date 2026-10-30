@@ -74,7 +74,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "VALIDATION_FAILED",
             "IsSuccess": false,
-            "Description": "The spec failed validation. The Message is a JSON object with diagnostics ([{ code, severity, path, message, fix }]). Apply the suggested fixes and call again."
+            "Description": "The spec failed validation. The Message is a JSON object { error, diagnostics: [{ Code, Severity, Path, Message, Fix }] }. Apply the suggested fixes and call again."
           },
           "primaryKey": {
             "ID": "64F8CBD0-9A0D-4815-B302-B7FAB17898D6"

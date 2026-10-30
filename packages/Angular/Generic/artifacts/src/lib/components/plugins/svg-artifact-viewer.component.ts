@@ -1,5 +1,4 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MarkdownService } from '@memberjunction/ng-markdown';
@@ -9,11 +8,10 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 /**
  * Viewer component for SVG artifacts.
  *
- * Uses DOMPurify's SVG profile (via `MarkdownService.SanitizeHtml`) instead of Angular's HTML
- * sanitizer so `<svg>`, `<style>`, `<desc>`, and `data-*` attributes survive intact.
- * When the SVG carries the MJ Diagram SVG Data Contract (`data-mj-diagram="1"`), mounts the
- * interactive diagram viewer (`MountInteractiveDiagram`) with click-to-inspect node details
- * and upstream/downstream path tracing.
+ * Every preview goes through `MountInteractiveDiagram`: the SVG is sanitized with DOMPurify's SVG
+ * profile (via `MarkdownService.SanitizeHtml`) and shown in a shadow root, so its own `<style>` stays
+ * inside the preview. When it carries the MJ Diagram SVG Data Contract (`data-mj-diagram="1"`), it gets
+ * the interactive viewer with click-to-inspect node details and upstream/downstream path tracing.
  */
 @Component({
   standalone: false,
@@ -35,13 +33,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       </div>
       <div class="svg-content-container">
         @if (ViewMode === 'preview') {
-          @if (IsInteractiveDiagram) {
-            <div #interactiveHost class="svg-interactive-host"></div>
-          } @else {
-            <div class="svg-preview">
-              <div class="svg-wrapper" [innerHTML]="SafeSvgContent"></div>
-            </div>
-          }
+          <div #previewHost class="svg-preview"></div>
         } @else {
           <mj-code-editor
             [(ngModel)]="SvgContent"
@@ -99,42 +91,21 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
       overflow: auto;
     }
 
-    .svg-interactive-host {
+    .svg-preview {
       padding: 12px;
       min-height: 100%;
       box-sizing: border-box;
-    }
-
-    .svg-preview {
-      padding: 20px;
       background: var(--mj-bg-surface);
-      height: 100%;
-      overflow: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .svg-wrapper {
-      max-width: 100%;
-      max-height: 100%;
-    }
-
-    .svg-wrapper ::ng-deep svg {
-      max-width: 100%;
-      max-height: 100%;
-      height: auto;
     }
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SvgArtifactViewerPlugin')
 export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
   public SvgContent = '';
-  public IsInteractiveDiagram = false;
 
-  /** Mounts the viewer when the preview host appears and tears it down when it goes (source view, destroy). */
-  @ViewChild('interactiveHost')
-  private set interactiveHost(ref: ElementRef<HTMLElement> | undefined) {
+  /** Mounts the SVG when the preview host appears and tears the viewer down when it goes (source view, destroy). */
+  @ViewChild('previewHost')
+  private set previewHost(ref: ElementRef<HTMLElement> | undefined) {
     this.destroyInteractiveViewer();
     if (ref) {
       this.viewerInstance = MountInteractiveDiagram(ref.nativeElement, this.SvgContent, (raw) => this.markdownService.SanitizeHtml(raw));
@@ -150,16 +121,6 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   /** @deprecated Use {@link SvgContent}. */
   public set svgContent(value) {
     this.SvgContent = value;
-  }
-  public SafeSvgContent: SafeHtml = '';
-
-  /** @deprecated Use {@link SafeSvgContent}. */
-  public get safeSvgContent(): SafeHtml {
-    return this.SafeSvgContent;
-  }
-  /** @deprecated Use {@link SafeSvgContent}. */
-  public set safeSvgContent(value: SafeHtml) {
-    this.SafeSvgContent = value;
   }
   public ViewMode: 'preview' | 'source' = 'preview';
 
@@ -179,28 +140,16 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     return true;
   }
 
-  constructor(
-    private sanitizer: DomSanitizer,
-    private markdownService: MarkdownService
-  ) {
+  constructor(private markdownService: MarkdownService) {
     super();
   }
 
   ngOnInit(): void {
-    this.refreshSvgContent();
+    this.SvgContent = this.getContent();
   }
 
   ngOnDestroy(): void {
     this.destroyInteractiveViewer();
-  }
-
-  private refreshSvgContent(): void {
-    this.SvgContent = this.getContent();
-    this.IsInteractiveDiagram =
-      this.SvgContent.includes('data-mj-diagram="1"') ||
-      this.SvgContent.includes("data-mj-diagram='1'");
-    const sanitized = this.markdownService.SanitizeHtml(this.SvgContent);
-    this.SafeSvgContent = this.sanitizer.bypassSecurityTrustHtml(sanitized);
   }
 
   private destroyInteractiveViewer(): void {

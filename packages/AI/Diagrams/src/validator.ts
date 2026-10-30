@@ -29,6 +29,8 @@ const MAX_EDGES = 80;
 const MAX_LANES = MAX_NODES;
 /** Summary cards render side by side under the diagram. */
 const MAX_CARDS = 8;
+/** A phase spans at least one message, so there are never more phases than messages. */
+const MAX_PHASES = MAX_EDGES;
 
 const VALID_NODE_KINDS = new Set<MJDiagramNodeKind>([
     'start', 'end', 'task', 'decision', 'state', 'waiting',
@@ -367,7 +369,8 @@ function validateSingleEdge(
     edgeIds: Set<string>,
     edges: MJDiagramEdge[],
     rawMessageYs: number[],
-    diagnostics: MJDiagramDiagnostic[]
+    diagnostics: MJDiagramDiagnostic[],
+    allowSelf: boolean
 ): void {
     const path = `${edgeKey}[${idx}]`;
     if (!isRecord(e)) {
@@ -381,14 +384,14 @@ function validateSingleEdge(
     if (!to) pushError(diagnostics, 'MISSING_EDGE_TO', `${path}.to`, `${path} is missing "to".`, `Set "to" to a valid node id.${suggestId('', [...nodeIds])}`);
     else if (nodeIds.size > 0 && !nodeIds.has(to)) pushError(diagnostics, 'UNKNOWN_EDGE_TO', `${path}.to`, `${path}.to references unknown node "${to}".`, `Change "to" to a defined node id.${suggestId(to, [...nodeIds])}`);
 
-    if (from && from === to) pushError(diagnostics, 'SELF_LOOP_EDGE', path, `${path} goes from "${from}" to itself.`, 'Remove the edge, or describe the repeat in the node\'s "detail" instead.');
+    if (from && from === to && !allowSelf) pushError(diagnostics, 'SELF_LOOP_EDGE', path, `${path} goes from "${from}" to itself.`, 'Remove the edge, or describe the repeat in the node\'s "detail" instead.');
 
     let id = asString(e.id) || `e${idx + 1}`;
     if (edgeIds.has(id)) id = `${id}-${idx + 1}`;
     edgeIds.add(id);
     if (typeof e.y === 'number') rawMessageYs[idx] = e.y;
 
-    if (from && to && from !== to && nodeIds.has(from) && nodeIds.has(to)) {
+    if (from && to && (allowSelf || from !== to) && nodeIds.has(from) && nodeIds.has(to)) {
         edges.push({
             id,
             from,
@@ -420,17 +423,23 @@ function validateDiagramEdges(
         return edgeKey;
     }
     const edgeIds = new Set<string>();
-    rawEdges.forEach((e, idx) => validateSingleEdge(e, idx, edgeKey, nodeIds, edgeIds, edges, rawMessageYs, diagnostics));
+    // A sequence message to oneself is a normal pattern; in the graph kinds a self-loop is an authoring mistake.
+    rawEdges.forEach((e, idx) => validateSingleEdge(e, idx, edgeKey, nodeIds, edgeIds, edges, rawMessageYs, diagnostics, kind === 'sequence'));
     return edgeKey;
 }
 
 function validateSequencePhases(
     raw: Record<string, unknown>,
     edges: MJDiagramEdge[],
-    rawMessageYs: number[]
+    rawMessageYs: number[],
+    diagnostics: MJDiagramDiagnostic[]
 ): MJDiagramPhase[] | undefined {
     const rawPhases = Array.isArray(raw.phases) ? raw.phases : Array.isArray(raw.segments) ? raw.segments : null;
     if (!rawPhases || rawPhases.length === 0 || edges.length === 0) return undefined;
+    if (rawPhases.length > MAX_PHASES) {
+        pushError(diagnostics, 'TOO_MANY_PHASES', 'phases', `Diagram has ${rawPhases.length} phases; maximum allowed is ${MAX_PHASES}.`, `Merge phases so there are at most ${MAX_PHASES}.`);
+        return undefined;
+    }
     const phases: MJDiagramPhase[] = [];
     rawPhases.forEach((p, idx) => {
         if (!isRecord(p)) return;
@@ -618,7 +627,7 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
     const rawMessageYs: number[] = [];
     const edgeKey = validateDiagramEdges(raw, kind, nodeIds, edges, rawMessageYs, diagnostics);
 
-    const phases = validateSequencePhases(raw, edges, rawMessageYs);
+    const phases = validateSequencePhases(raw, edges, rawMessageYs, diagnostics);
     const mainPath = resolveMainPath(raw, kind, lanes, nodes, nodeIds, edges, edgeKey, diagnostics, warnings);
 
     let cards: MJDiagramCard[] | undefined;

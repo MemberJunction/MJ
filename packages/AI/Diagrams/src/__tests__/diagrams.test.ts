@@ -24,6 +24,11 @@ function purifiedDom(body = '<div id="host"></div>'): { doc: Document; sanitize:
     return { doc: dom.window.document, sanitize: (m) => purify.sanitize(m) };
 }
 
+/** The shadow root MountInteractiveDiagram renders into. */
+function shadow(host: HTMLElement): ShadowRoot {
+    return host.firstElementChild!.shadowRoot!;
+}
+
 function validSpec(file: string): MJDiagramSpec {
     const v = ValidateDiagramSpec(loadFixture(file));
     if (!v.Valid) throw new Error(`${file} failed validation`);
@@ -97,7 +102,8 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
         expect(submitNode?.classList.contains('dim')).toBe(false);
         expect(logNode?.classList.contains('dim')).toBe(true);
 
-        const panel = host.querySelector('.mjd-panel')!;
+        expect(shadow(host).getElementById('mj-diagram-viewer-styles')).not.toBeNull();
+        const panel = shadow(host).querySelector('.mjd-panel')!;
         expect(panel.textContent).toContain('Enough CE credits?');
         expect(panel.textContent).toContain('Submit renewal');
         expect(panel.textContent).toContain('Issue new certificate');
@@ -167,11 +173,11 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
             '<g data-node-id="n1" onclick="alert(5)"><text class="lbl">n1</text></g></svg>';
         const viewer = MountInteractiveDiagram(host, hostile, sanitize);
         expect(viewer).not.toBeNull();
-        const html = host.innerHTML.toLowerCase();
+        const html = shadow(host).innerHTML.toLowerCase();
         expect(html).not.toContain('javascript:');
         expect(html).not.toContain('data:image');
-        expect(host.querySelectorAll('animate, set').length).toBe(0);
-        expect(host.querySelector('[onclick]')).toBeNull();
+        expect(shadow(host).querySelectorAll('animate, set').length).toBe(0);
+        expect(shadow(host).querySelector('[onclick]')).toBeNull();
     });
 
     it('shows sanitized markup statically when it is not an MJ diagram', () => {
@@ -179,8 +185,17 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
         const host = doc.getElementById('host')!;
         const viewer = MountInteractiveDiagram(host, '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>', sanitize);
         expect(viewer).toBeNull();
-        expect(host.querySelector('svg circle')).not.toBeNull();
-        expect(host.querySelector('.mjd-shell')).toBeNull();
+        expect(shadow(host).querySelector('svg circle')).not.toBeNull();
+        expect(shadow(host).querySelector('.mjd-shell')).toBeNull();
+    });
+
+    it("keeps an SVG's own <style> inside its preview, so it cannot restyle the page", () => {
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        MountInteractiveDiagram(host, '<svg xmlns="http://www.w3.org/2000/svg"><style>body{display:none}</style><circle r="4"/></svg>', sanitize);
+        expect([...doc.querySelectorAll('style')].map((el) => el.textContent).join('')).not.toContain('display:none');
+        expect(shadow(host).querySelector('svg style')?.textContent).toContain('display:none');
+        expect(host.style.contain).toBe('paint');
     });
 
     it('takes every color from an --mj-* design token, with a light fallback only', () => {
@@ -215,12 +230,26 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
         if (!loop.Valid) expect(loop.Diagnostics.some((d) => d.Code === 'SELF_LOOP_EDGE')).toBe(true);
     });
 
+    it('caps phases and lets a sequence participant message itself', () => {
+        const participants = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }];
+        const messages = [{ from: 'a', to: 'b' }, { from: 'b', to: 'b', label: 'check' }];
+        const phases = Array.from({ length: 81 }, (_, i) => ({ id: `ph${i}`, label: `P${i}`, fromMessage: 0, toMessage: 1 }));
+        const many = ValidateDiagramSpec({ kind: 'sequence', title: 'S', participants, messages, phases });
+        expect(many.Valid).toBe(false);
+        if (!many.Valid) expect(many.Diagnostics.some((d) => d.Code === 'TOO_MANY_PHASES')).toBe(true);
+
+        const self = ValidateDiagramSpec({ kind: 'sequence', title: 'S', participants, messages });
+        if (!self.Valid) throw new Error('a sequence self-message should validate');
+        expect(self.Spec.edges).toHaveLength(2);
+        expect(RenderDiagramSvg(self.Spec)).toMatch(/d="M[\d.]+ [\d.]+H[\d.]+V[\d.]+H[\d.]+"/);
+    });
+
     it('offers connection rows as buttons, so the details panel works from the keyboard', () => {
         const { doc, sanitize } = purifiedDom();
         const host = doc.getElementById('host')!;
         const viewer = MountInteractiveDiagram(host, RenderDiagramSvg(validSpec('renewal.workflow.json')), sanitize)!;
         viewer.Select('review');
-        const rows = host.querySelectorAll<HTMLButtonElement>('.mjd-panel button.mjd-conn');
+        const rows = shadow(host).querySelectorAll<HTMLButtonElement>('.mjd-panel button.mjd-conn');
         expect(rows.length).toBeGreaterThan(0);
         const target = rows[0].dataset.jump!;
         rows[0].click();
@@ -238,7 +267,7 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
         viewer.Destroy();
         states.length = 0;
 
-        expect(host.querySelector('.mjd-shell')).toBeNull();
+        expect(shadow(host).querySelector('.mjd-shell')).toBeNull();
         expect(viewer.Svg.querySelectorAll('path.mjd-hit').length).toBe(0);
         expect(viewer.Svg.querySelectorAll('.sel, .lit, .dim').length).toBe(0);
         (viewer.Svg.querySelector('[data-node-id="review"]') as unknown as HTMLElement).dispatchEvent(new doc.defaultView!.Event('click', { bubbles: true }));

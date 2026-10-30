@@ -52,6 +52,8 @@ interface IndexedDiagram {
 }
 
 const SHELL_STYLE_ID = 'mj-diagram-viewer-styles';
+/** Fits a static SVG to its host inside MountInteractiveDiagram's shadow root. */
+const FRAME_CSS = ':host>svg{display:block;max-width:100%;height:auto;margin:0 auto}';
 
 const SHELL_CSS = `
 .mjd-shell {
@@ -94,7 +96,7 @@ const SHELL_CSS = `
   background: var(--s-surface);
   border: 1px solid var(--s-border);
   border-radius: 10px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--mj-shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16));
   padding: 14px 16px;
   overflow-y: auto;
   z-index: 5;
@@ -188,12 +190,16 @@ svg.mjd .edge path.mjd-hit {
 }
 `;
 
-function ensureStylesInjected(doc: Document): void {
-    if (!doc.getElementById(SHELL_STYLE_ID)) {
+/** Adds the shell CSS once per document, or once per shadow root, since document styles do not reach inside one. */
+function ensureStylesInjected(svg: SVGSVGElement): void {
+    const doc = svg.ownerDocument;
+    const root = svg.getRootNode();
+    const target = root.nodeType === root.DOCUMENT_FRAGMENT_NODE ? (root as ShadowRoot) : doc;
+    if (!target.getElementById(SHELL_STYLE_ID)) {
         const styleEl = doc.createElement('style');
         styleEl.id = SHELL_STYLE_ID;
         styleEl.textContent = SHELL_CSS;
-        doc.head.appendChild(styleEl);
+        (target === doc ? doc.head : target).appendChild(styleEl);
     }
 }
 
@@ -449,7 +455,7 @@ class DiagramViewer implements DiagramViewerInstance {
     constructor(public readonly Svg: SVGSVGElement) {
         // The document's own realm: jsdom and iframes reject a signal from another window.
         this.events = new (Svg.ownerDocument.defaultView ?? globalThis).AbortController();
-        ensureStylesInjected(Svg.ownerDocument);
+        ensureStylesInjected(Svg);
         const dom = buildShellDom(Svg);
         this.shell = dom.shell;
         this.stage = dom.stage;
@@ -622,13 +628,22 @@ function parseFirstSvg(doc: Document, markup: string): SVGSVGElement | null {
  * `MarkdownService.SanitizeHtml` in Angular hosts), then mounted interactively when it carries the MJ Diagram
  * contract (`data-mj-diagram="1"`), or shown as a static SVG otherwise. Returns the viewer, or null when the
  * markup is not an MJ diagram.
+ *
+ * Sanitizing keeps `<style>`, so the SVG is placed in a shadow root, where its CSS cannot select anything on the
+ * page, and `host` gets paint containment, so `position: fixed` or `:host` rules cannot draw outside it.
  */
 export function MountInteractiveDiagram(
     host: HTMLElement,
     svgMarkup: string,
     sanitize: (rawSvg: string) => string
 ): DiagramViewerInstance | null {
-    const svg = parseFirstSvg(host.ownerDocument, sanitize(svgMarkup));
-    host.replaceChildren(...(svg ? [svg] : []));
+    const doc = host.ownerDocument;
+    const svg = parseFirstSvg(doc, sanitize(svgMarkup));
+    const frame = doc.createElement('div');
+    const fit = doc.createElement('style');
+    fit.textContent = FRAME_CSS;
+    frame.attachShadow({ mode: 'open' }).append(fit, ...(svg ? [svg] : []));
+    host.style.contain = 'paint';
+    host.replaceChildren(frame);
     return svg?.matches('svg[data-mj-diagram="1"], svg.mjd') ? MountDiagramViewer(svg) : null;
 }

@@ -404,15 +404,17 @@ function layoutSequence(spec: MJDiagramSpec): LayoutOutput {
         const dir = tx >= sx ? 1 : -1;
         const x1 = sx + dir * 6;
         const x2 = tx - dir * 6;
-        sequenceDots.push({ x: sx, y, role: e.role }, { x: tx, y, role: e.role });
+        // A message to oneself loops out to the right of the lifeline and back.
+        const self = e.from === e.to;
+        sequenceDots.push({ x: sx, y, role: e.role }, { x: tx, y: self ? y + 16 : y, role: e.role });
         const stepBadge = `${i + 1}. `;
         return {
             ...e,
             id: e.id ?? `m${i + 1}`,
-            d: `M${x1} ${y}H${x2}`,
-            lx: Math.round((x1 + x2) / 2),
+            d: self ? `M${sx + 6} ${y}H${sx + 42}V${y + 16}H${sx + 6}` : `M${x1} ${y}H${x2}`,
+            lx: self ? sx + 10 : Math.round((x1 + x2) / 2),
             ly: y - 8,
-            anchor: 'middle',
+            anchor: self ? 'start' : 'middle',
             isMain: e.role !== 'conditional',
             order: i,
             label: e.label ? `${stepBadge}${e.label}` : `${stepBadge}${e.from} → ${e.to}`,
