@@ -4,10 +4,17 @@ import { describe, it, expect } from 'vitest';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
 
-function fakeMessage(id: string, parentId: string | null = null): MJConversationDetailEntity {
+function fakeMessage(
+  id: string,
+  parentId: string | null = null,
+  role: 'User' | 'AI' = 'User',
+  agentId: string | null = null,
+): MJConversationDetailEntity {
   return {
     ID: id,
     ParentID: parentId,
+    Role: role,
+    AgentID: agentId,
   } as unknown as MJConversationDetailEntity;
 }
 
@@ -22,25 +29,44 @@ function createChatArea(messages: MJConversationDetailEntity[]): ConversationCha
 }
 
 describe('chat area: CollapseThreadReplies', () => {
-  it('keeps thread replies in top-level DisplayMessages when CollapseThreadReplies is off, and removes replies whose parent is loaded when on', () => {
-    const root1 = fakeMessage('msg-root-1', null);
-    const reply1 = fakeMessage('msg-reply-1', 'msg-root-1');
-    const orphanReply = fakeMessage('msg-orphan-reply', 'msg-missing-parent');
+  it('collapses person thread replies and agent replies inside a thread while keeping agent answers to top-level messages in DisplayMessages', () => {
+    const root1 = fakeMessage('msg-root-1', null, 'User');
+    // Case 1: Agent's answer to a top-level message (AgentTurnHandler stamps ParentID = root1.ID)
+    const agentAnswerToRoot = fakeMessage('msg-agent-top-answer', 'msg-root-1', 'AI', 'agent-1');
+    // Case 2: Person's reply in a thread (ParentID = root1.ID)
+    const personThreadReply = fakeMessage('msg-person-reply-1', 'msg-root-1', 'User');
+    // Case 3: Agent's reply whose ParentID is itself a thread reply
+    const agentThreadReply = fakeMessage('msg-agent-thread-reply', 'msg-person-reply-1', 'AI', 'agent-1');
+    // Unloaded parent stays visible
+    const orphanReply = fakeMessage('msg-orphan-reply', 'msg-missing-parent', 'User');
 
-    const component = createChatArea([root1, reply1, orphanReply]);
+    const component = createChatArea([
+      root1,
+      agentAnswerToRoot,
+      personThreadReply,
+      agentThreadReply,
+      orphanReply,
+    ]);
 
     // Default (CollapseThreadReplies = false): every row stays in top-level DisplayMessages
     expect(component.DisplayMessages.map((m) => m.ID)).toEqual([
       'msg-root-1',
-      'msg-reply-1',
+      'msg-agent-top-answer',
+      'msg-person-reply-1',
+      'msg-agent-thread-reply',
       'msg-orphan-reply',
     ]);
 
-    // Opt-in (CollapseThreadReplies = true): reply whose parent is loaded leaves the top-level list
+    // Opt-in (CollapseThreadReplies = true):
+    // - root1 and agentAnswerToRoot stay in the main flow
+    // - personThreadReply and agentThreadReply collapse into the thread
+    // - orphanReply stays visible because its parent is not loaded
     component.CollapseThreadReplies = true;
     expect(component.DisplayMessages.map((m) => m.ID)).toEqual([
       'msg-root-1',
+      'msg-agent-top-answer',
       'msg-orphan-reply',
     ]);
   });
 });
+

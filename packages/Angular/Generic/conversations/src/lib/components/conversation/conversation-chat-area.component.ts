@@ -5853,9 +5853,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * When true, messages whose `ParentID` matches another message in the loaded window are omitted
-   * from top-level `DisplayMessages` so they can be rendered inside a collapsed thread under their
-   * root message.
+   * When true, thread replies in the loaded window are omitted from top-level `DisplayMessages` so
+   * they can be rendered inside a collapsed thread under their root message. Only replies in a
+   * thread collapse: a person's message with a loaded `ParentID`, or an agent message whose
+   * `ParentID` is itself a thread reply. An agent's answer to a top-level message (`ParentID` set
+   * to that top-level message) stays in the main flow.
    */
   @Input() CollapseThreadReplies: boolean = false;
 
@@ -5887,17 +5889,41 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rawRows = view.Kind === 'Main' ? messages : [...split.Inherited, ...split.Own];
     let rows = rawRows;
     if (collapseThreads && rawRows.length > 0) {
-      const idSet = new Set<string>();
+      const byId = new Map<string, MJConversationDetailEntity>();
       for (const m of rawRows) {
         const id = m?.ID?.trim().toLowerCase();
         if (id) {
-          idSet.add(id);
+          byId.set(id, m);
         }
       }
-      rows = rawRows.filter((m) => {
+      const memo = new Map<string, boolean>();
+      const visiting = new Set<string>();
+      const isAgentRow = (m: MJConversationDetailEntity): boolean =>
+        m?.Role === 'AI' || Boolean(m?.AgentID && String(m.AgentID).trim().length > 0);
+      const isThreadReply = (m: MJConversationDetailEntity): boolean => {
+        const id = m?.ID?.trim().toLowerCase() ?? '';
+        if (id && memo.has(id)) {
+          return memo.get(id)!;
+        }
         const pid = m?.ParentID?.trim().toLowerCase();
-        return !pid || pid === 'null' || !idSet.has(pid);
-      });
+        if (!pid || pid === 'null' || !byId.has(pid) || (id && visiting.has(id))) {
+          if (id) memo.set(id, false);
+          return false;
+        }
+        if (!isAgentRow(m)) {
+          if (id) memo.set(id, true);
+          return true;
+        }
+        if (id) visiting.add(id);
+        const parent = byId.get(pid)!;
+        const result = isThreadReply(parent);
+        if (id) {
+          visiting.delete(id);
+          memo.set(id, result);
+        }
+        return result;
+      };
+      rows = rawRows.filter((m) => !isThreadReply(m));
     }
     const next = {
       Messages: messages,
