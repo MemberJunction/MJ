@@ -62,6 +62,7 @@ describe('shipped channel descriptors', () => {
     const returning = Object.entries(flags).filter(([, level]) => level !== null);
     expect(Object.fromEntries(returning)).toEqual({
       browser_GetPageText: 'state',
+      browser_Inspect: 'state',
       browser_DescribePage: 'pixels',
       browser_LocateElement: 'pixels',
       browser_AchieveGoal: 'state',
