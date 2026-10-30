@@ -137,7 +137,7 @@ export function ParseWorkbookManifest(cells: readonly string[]): ParseWorkbookMa
  */
 export function MakeUniqueSheetName(name: string, used: Set<string>): string {
     let base = (name ?? '').replace(INVALID_SHEET_NAME_CHARS, ' ').replace(/\s+/g, ' ').trim();
-    base = base.replace(/^'+|'+$/g, '').trim();
+    base = stripOuterSingleQuotes(base).trim();
     if (!base || base.toLowerCase() === 'history' || base.toLowerCase() === EXCEL_SOURCES_SHEET_NAME.toLowerCase()) {
         base = 'Data';
     }
@@ -148,6 +148,18 @@ export function MakeUniqueSheetName(name: string, used: Set<string>): string {
     }
     used.add(candidate.toLowerCase());
     return candidate;
+}
+
+function stripOuterSingleQuotes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 39) {
+        start++;
+    }
+    while (end > start && value.charCodeAt(end - 1) === 39) {
+        end--;
+    }
+    return value.slice(start, end);
 }
 
 /** The Excel table name for a source, unique within the workbook. */

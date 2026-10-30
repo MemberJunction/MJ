@@ -147,13 +147,25 @@ export class ExcelAddinResolveSourceServerOperation extends ExcelAddinResolveSou
 export function MakeWorkbookFileName(sources: Pick<ExcelWorkbookSource, 'Name'>[]): string {
     const first = sources[0]?.Name ?? '';
     // Drop characters Windows, macOS or a browser download refuse, and control characters.
-    const cleaned = Array.from(first)
+    const collapsed = Array.from(first)
         .filter(ch => ch.charCodeAt(0) >= 32 && !'\\/:*?"<>|'.includes(ch))
         .join('')
-        .replace(/\s+/g, ' ')
-        .replace(/^[\s.]+|[\s.]+$/g, '')
+        .replace(/\s+/g, ' ');
+    const cleaned = trimDotsAndWhitespace(collapsed)
         .slice(0, MAX_FILE_NAME_LENGTH)
         .trim();
     const base = cleaned || 'MemberJunction';
     return sources.length > 1 ? `${base} and ${sources.length - 1} more.xlsx` : `${base}.xlsx`;
+}
+
+function trimDotsAndWhitespace(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && (value[start] === '.' || value[start].trim() === '')) {
+        start++;
+    }
+    while (end > start && (value[end - 1] === '.' || value[end - 1].trim() === '')) {
+        end--;
+    }
+    return value.slice(start, end);
 }

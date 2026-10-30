@@ -70,7 +70,7 @@ export function BuildCandidateConfigUrls(inputUrl: string): string[] {
     }
     parsed.hash = '';
     parsed.search = '';
-    const base = parsed.toString().replace(/\/+$/, '');
+    const base = trimTrailingSlashes(parsed.toString());
     const candidates: string[] = [];
     const pushUnique = (u: string): void => {
         if (!candidates.includes(u)) {
@@ -107,12 +107,20 @@ export function ValidatePaneConfig(raw: Partial<PaneConfig>): PaneConfig {
 
 /** Normalized form of an add-in base URL (trimmed, no trailing slashes, lowercase). */
 export function NormalizeAddinUrl(url: string): string {
-    return url.trim().replace(/\/+$/, '').toLowerCase();
+    return trimTrailingSlashes(url.trim()).toLowerCase();
 }
 
 /** True when two add-in base URLs name the same place (ignoring a trailing slash and case). */
 export function SameAddinUrl(a: string, b: string): boolean {
     return NormalizeAddinUrl(a) === NormalizeAddinUrl(b);
+}
+
+function trimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return value.slice(0, end);
 }
 
 /** Reads the user's chosen custom MJ server add-in URL, or null when using the default host. */

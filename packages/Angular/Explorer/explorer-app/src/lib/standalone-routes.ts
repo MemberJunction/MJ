@@ -22,7 +22,11 @@ export function IsStandaloneRoute(url: string, basePath = ''): boolean {
 }
 
 function stripBasePath(path: string, basePath: string): string {
-    const base = basePath.replace(/\/+$/, '');
+    let end = basePath.length;
+    while (end > 0 && basePath.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    const base = basePath.slice(0, end);
     if (!base || !path.startsWith(`${base}/`)) {
         return path;
     }

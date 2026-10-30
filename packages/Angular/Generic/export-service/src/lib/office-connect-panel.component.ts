@@ -199,11 +199,10 @@ export class OfficeConnectPanelComponent extends BaseAngularComponent implements
             return null;
         }
         const search = new URLSearchParams(window.location.search);
-        const out: OfficeConnectQueryParams = {};
-        search.forEach((value, key) => {
-            out[key] = value;
-        });
-        return out;
+        return {
+            pk: search.get('pk'),
+            state: search.get('state'),
+        };
     }
 
     private waitForSession(): void {

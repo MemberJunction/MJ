@@ -127,12 +127,12 @@ export function EncodeBase64Url(bytes: Uint8Array): string {
     for (const b of bytes) {
         binary += String.fromCharCode(b);
     }
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return trimTrailingEquals(btoa(binary).replace(/\+/g, '-').replace(/\//g, '_'));
 }
 
 /** Decodes base64url, with or without padding. */
 export function DecodeBase64Url(text: string): Uint8Array {
-    const base64 = text.replace(/=+$/, '').replace(/-/g, '+').replace(/_/g, '/');
+    const base64 = trimTrailingEquals(text).replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
     const binary = atob(padded);
     const bytes = new Uint8Array(binary.length);
@@ -140,6 +140,14 @@ export function DecodeBase64Url(text: string): Uint8Array {
         bytes[i] = binary.charCodeAt(i);
     }
     return bytes;
+}
+
+function trimTrailingEquals(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 61) {
+        end--;
+    }
+    return value.slice(0, end);
 }
 
 function validatePayload(payload: Partial<ExcelConnectionPayload>, expectedState: string): ExcelConnectionPayload {
