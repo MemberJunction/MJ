@@ -19,10 +19,12 @@
       <mj-view-toggle [Options]="AuthModeOptions" [ActiveKey]="Value.AuthMode" (KeyChange)="OnAuthModeKey($event)"></mj-view-toggle>
 
       @if (Value.AuthMode === 'sas') {
+        <label class="form-label required" for="backup-sas-token">SAS Token</label>
         <input
+          id="backup-sas-token"
           type="password"
           class="mj-input"
-          aria-labelledby="backup-auth-label"
+          autocomplete="off"
           placeholder="sp=rl&st=2026-10-26T00:00:00Z&se=2026-10-27T00:00:00Z&sig=..."
           [ngModel]="Value.SasToken"
           (ngModelChange)="Patch({ SasToken: $event })"
@@ -91,7 +93,7 @@
               <input type="checkbox" class="mj-checkbox" [checked]="SelectedAzureBlobs.has(blob.Name)" (change)="ToggleAzureBlob(blob.Name)" />
               <i class="fa-solid fa-file-zipper" aria-hidden="true"></i>
               <span class="file-name" [title]="blob.Name">{{ blob.Name }}</span>
-              <span class="badge">{{ blob.SizeFormatted }}</span>
+              <span class="status-chip">{{ blob.SizeFormatted }}</span>
               <button
                 type="button"
                 mjButton

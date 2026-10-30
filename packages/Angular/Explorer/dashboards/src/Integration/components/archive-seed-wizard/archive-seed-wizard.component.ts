@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, Output, inject } from '@angular/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import type {
   IntegrationArchiveSeedState,
   IntegrationArchiveSeedSummary,
@@ -45,6 +46,7 @@ const RESTING_STATES = new Set(['AwaitingSelection', 'AwaitingCleanupDecision', 
 export class ArchiveSeedWizardComponent extends BaseAngularComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private integrationService = inject(IntegrationDataService);
+  private confirmService = inject(MJConfirmService);
 
   private isOpen = false;
   @Input()
@@ -217,7 +219,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
         StorageCredentialID: isAzure && this.Source.AuthMode === 'credential' ? this.Source.StorageCredentialID : undefined,
         StagingDatabaseName: this.StagingDatabaseName.trim(),
         BatchSize: this.BatchSize,
-      });
+      }, this.ProviderToUse);
       if (generation !== this.generation) return; // closed or destroyed while starting
       if (!started.Success || !started.JobID) {
         this.ExecutionError = started.Message || 'The archive seed could not be started.';
@@ -250,7 +252,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.SelectionError = null;
     this.cdr.detectChanges();
     try {
-      const result = await this.integrationService.SelectArchiveSeedTables(jobID, names);
+      const result = await this.integrationService.SelectArchiveSeedTables(jobID, names, this.ProviderToUse);
       if (generation !== this.generation) return;
       if (!result.Success) {
         this.SelectionError = result.Message || 'The table selection was not accepted.';
@@ -261,6 +263,10 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
       this.ExecutionError = null;
       this.CurrentStep = 4;
       this.schedulePoll(jobID);
+    } catch (err) {
+      // The selection may not have reached the server; stay on step 3 so the user can retry.
+      if (generation !== this.generation) return;
+      this.SelectionError = err instanceof Error ? err.message : String(err);
     } finally {
       this.IsSubmitting = false;
       this.cdr.detectChanges();
@@ -275,7 +281,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.ExecutionError = null;
     this.cdr.detectChanges();
     try {
-      const result = await this.integrationService.FinishArchiveSeed(this.JobID, drop);
+      const result = await this.integrationService.FinishArchiveSeed(this.JobID, drop, this.ProviderToUse);
       if (generation !== this.generation) return;
       if (!result.Success) {
         this.ExecutionError = result.Message || 'The archive seed could not be finished.';
@@ -309,11 +315,12 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   public async CancelSeed(): Promise<void> {
     if (!this.JobID || this.IsSubmitting) return;
     const generation = this.generation;
+    if (!(await this.confirmCancel()) || generation !== this.generation) return;
     this.IsSubmitting = true;
     this.ExecutionError = null;
     this.cdr.detectChanges();
     try {
-      const result = await this.integrationService.CancelArchiveSeed(this.JobID);
+      const result = await this.integrationService.CancelArchiveSeed(this.JobID, this.ProviderToUse);
       if (generation !== this.generation) return;
       if (!result.Success) {
         this.ExecutionError = result.Message || 'The archive seed could not be cancelled.';
@@ -326,6 +333,18 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
       this.IsSubmitting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** Asks before abandoning the seed, which drops the restored staging database. */
+  private confirmCancel(): Promise<boolean> {
+    return this.confirmService.Confirm({
+      type: 'danger',
+      title: 'Cancel this seed?',
+      message: `Abandon the archive seed and drop the restored staging database [${this.StagingDatabaseName}]?`,
+      detail: 'The restored archive is permanently removed. This cannot be undone.',
+      confirmText: 'Cancel Seed',
+      cancelText: 'Keep Seed',
+    });
   }
 
   /** Closes the wizard. The job keeps running on the server and can be resumed by its ID. */
@@ -373,7 +392,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   /** The job's state, or a message saying why it could not be read (a thrown call counts as unreachable). */
   private async readState(jobID: string): Promise<{ State?: IntegrationArchiveSeedState; Message: string }> {
     try {
-      const result = await this.integrationService.GetArchiveSeedState(jobID);
+      const result = await this.integrationService.GetArchiveSeedState(jobID, this.ProviderToUse);
       return result.Success && result.State
         ? { State: result.State, Message: '' }
         : { Message: result.Message || 'The archive seed job could not be read.' };
@@ -412,7 +431,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
       this.lastSeq = 0;
     }
     try {
-      const tail = await this.integrationService.TailBootstrapRun(runID, this.lastSeq);
+      const tail = await this.integrationService.TailBootstrapRun(runID, this.lastSeq, this.ProviderToUse);
       if (generation !== this.generation || !tail.Success || this.RunID !== runID) return;
       this.ProgressLog = [...this.ProgressLog, ...ProgressLinesFromEvents(tail.Events)];
       this.eventTables = ReadSeedTablesFromEvents(tail.Events) ?? this.eventTables;

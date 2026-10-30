@@ -8,13 +8,12 @@ import {
   inject
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import {
   IntegrationDataService,
   EntityMapRow,
-  InspectBackupResult,
-  AzureBlobItem,
-  ListAzureBackupBlobsResult
+  InspectBackupResult
 } from '../../services/integration-data.service';
 import {
   BootstrapProgressLine,
@@ -23,8 +22,6 @@ import {
   SummarizeBootstrapRun,
 } from '../../services/backup-source.helpers';
 import { BackupSourceValue, DefaultBackupSourceValue, IsBackupSourceValid } from '../backup-source-picker/backup-source-picker.component';
-
-export type { AzureBlobItem, InspectBackupResult, ListAzureBackupBlobsResult, BootstrapResultSummary, BootstrapProgressLine };
 
 /** How often the wizard asks the server for new run events while a bootstrap is running. */
 const RUN_POLL_INTERVAL_MS = 2500;
@@ -41,6 +38,7 @@ export type ExecutionStatusType = 'idle' | 'running' | 'succeeded' | 'failed';
 export class BootstrapWizardComponent extends BaseAngularComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private integrationService = inject(IntegrationDataService);
+  private confirmService = inject(MJConfirmService);
 
   /** Bind before IsOpen: opening names the staging database after this connection. */
   @Input() CompanyIntegration: MJCompanyIntegrationEntity | null = null;
@@ -136,6 +134,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
    */
   public async StartBootstrap(): Promise<void> {
     if (!this.CompanyIntegration) return;
+    if (this.TruncateTargetBeforeLoad && !(await this.confirmTruncate())) return;
 
     this.CurrentStep = 3;
     this.ExecutionStatus = 'running';
@@ -160,7 +159,8 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
           DropStagingDbOnComplete: this.DropStagingDbOnComplete,
           TruncateTargetBeforeLoad: this.TruncateTargetBeforeLoad,
           BatchSize: this.BatchSize,
-        }
+        },
+        this.ProviderToUse
       );
 
       if (!started.Success || !started.RunID) {
@@ -177,12 +177,41 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
     }
   }
 
-  /** One polling round: append new events to the log, then finish the run or schedule the next round. */
+  /** Asks before a launch that permanently empties the mapped target tables. */
+  private confirmTruncate(): Promise<boolean> {
+    return this.confirmService.Confirm({
+      type: 'danger',
+      title: 'Truncate target tables?',
+      message: `Truncate the ${this.EntityMaps.length} mapped MemberJunction table(s) before loading?`,
+      detail: 'All existing rows in those tables are permanently removed. This cannot be undone.',
+      confirmText: 'Truncate and Launch',
+    });
+  }
+
+  /**
+   * One polling round: append new events to the log, then finish the run or schedule the next round.
+   * Rounds after the first run from a timer, so a failed request is caught here: the wizard stops
+   * following and shows the error (the run itself carries on on the server).
+   */
   private async pollRun(runID: string): Promise<void> {
+    try {
+      await this.pollRunOnce(runID);
+    } catch (err) {
+      if (this.RunID !== runID) {
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      this.failRun(`Lost contact with bootstrap run ${runID}; it may still be running on the server. ${message}`);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** The round itself; throws when a service call fails. */
+  private async pollRunOnce(runID: string): Promise<void> {
     if (this.RunID !== runID) {
       return; // the wizard was closed or reset while the request was in flight
     }
-    const tail = await this.integrationService.TailBootstrapRun(runID, this.lastSeq);
+    const tail = await this.integrationService.TailBootstrapRun(runID, this.lastSeq, this.ProviderToUse);
     if (this.RunID !== runID) {
       return;
     }
@@ -207,7 +236,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
 
   /** The run is terminal: read its outcome and move to the completion step or show the failure. */
   private async finishRun(runID: string): Promise<void> {
-    const detail = await this.integrationService.GetBootstrapRun(runID);
+    const detail = await this.integrationService.GetBootstrapRun(runID, this.ProviderToUse);
     if (this.RunID !== runID) {
       return;
     }
@@ -217,7 +246,10 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
       : { Success: false, Message: detail.Message || 'The bootstrap run could not be read.', RunID: runID };
     if (detail.Run && summary.Success) {
       // The outputs ride on the Summary event; re-read the tail so the summary sees that event's data.
-      const full = await this.integrationService.TailBootstrapRun(runID, 0);
+      const full = await this.integrationService.TailBootstrapRun(runID, 0, this.ProviderToUse);
+      if (this.RunID !== runID) {
+        return;
+      }
       const withOutputs = SummarizeBootstrapRun(detail.Run, full.Events, detail.Errors);
       this.ExecutionStatus = 'succeeded';
       this.ResultSummary = withOutputs;
@@ -289,7 +321,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
 
     this.IsLoadingPreview = true;
     try {
-      this.EntityMaps = await this.integrationService.LoadEntityMaps(this.CompanyIntegration.ID);
+      this.EntityMaps = await this.integrationService.LoadEntityMaps(this.CompanyIntegration.ID, this.RunViewToUse);
     } catch {
       this.EntityMaps = [];
     } finally {

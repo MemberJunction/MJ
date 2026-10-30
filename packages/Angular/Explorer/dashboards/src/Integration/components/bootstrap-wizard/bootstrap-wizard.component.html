@@ -88,16 +88,16 @@
             @if (IsLoadingPreview) {
               <mj-loading Text="Loading entity maps…" Size="small"></mj-loading>
             } @else if (EntityMaps.length === 0) {
-              <div class="list-empty">
-                No active entity maps found for this integration. Ensure entity maps are configured.
-              </div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-circle-info"
+                Title="No active entity maps found for this integration."
+                Message="Ensure entity maps are configured." />
             }
             @for (map of EntityMaps; track map.ID) {
               <div class="list-row">
-                <span class="badge">Source</span>
+                <span class="status-chip">Source</span>
                 <code class="map-name">{{ map.ExternalObjectName }}</code>
                 <i class="fa-solid fa-arrow-right map-arrow" aria-hidden="true"></i>
-                <span class="badge success">Target Entity</span>
+                <span class="status-chip" data-color="success">Target Entity</span>
                 <strong class="map-name">{{ map.Entity }}</strong>
               </div>
             }

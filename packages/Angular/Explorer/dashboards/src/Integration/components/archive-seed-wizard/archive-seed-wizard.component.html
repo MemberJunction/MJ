@@ -103,20 +103,20 @@
 
           <div class="list-card-body">
             @if (Tables.length === 0) {
-              <div class="list-empty">The archive reported no tables.</div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-circle-info" Title="The archive reported no tables." />
             }
             @for (table of Tables; track table.Name) {
               <label class="list-row table-check" [class.selected]="Selected.has(table.Name)">
                 <input type="checkbox" class="mj-checkbox" [checked]="Selected.has(table.Name)" (change)="ToggleTable(table.Name)" />
                 <code class="table-name" [title]="table.Name">{{ table.Name }}</code>
-                <span class="badge">{{ table.ColumnCount }} columns</span>
+                <span class="status-chip">{{ table.ColumnCount }} columns</span>
                 @if (table.HasPrimaryKey) {
-                  <span class="badge success">Primary key</span>
+                  <span class="status-chip" data-color="success">Primary key</span>
                 } @else {
-                  <span class="badge warning" title="Without a primary key, rows cannot be matched on later syncs">No primary key</span>
+                  <span class="status-chip" data-color="warning" title="Without a primary key, rows cannot be matched on later syncs">No primary key</span>
                 }
                 @if (table.WatermarkField) {
-                  <span class="badge" title="Incremental syncs use this field as their watermark">
+                  <span class="status-chip" title="Incremental syncs use this field as their watermark">
                     <i class="fa-solid fa-water"></i> {{ table.WatermarkField }}
                   </span>
                 }

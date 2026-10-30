@@ -329,6 +329,15 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // ToggleEntityMapEnabled / AutoMap / CreateTables / FindAndAddNewTables),
   // update-schedule, or change-credentials. Creating / editing / deleting
   // connections and testing credentials remain user-driven from the UI.
+  // Also never exposed: the SQL Server backup flows, whose operations are
+  // destructive and run only from an explicit user action in the UI (truncate
+  // and Cancel Seed also ask for confirmation through MJConfirmService) —
+  // bootstrap from backup (OpenBootstrapWizard; with "Truncate target tables" it
+  // empties the mapped MJ tables), archive seed start / resume (ChooseConnectMode
+  // 'archive', ResumeSeed), Cancel Seed (CancelArchiveSeed drops the restored
+  // staging database), finishing a seed with Remove (FinishArchiveSeed drop=true
+  // drops it), and deleting the unfinished connection the inline wizard saved
+  // before an archive seed (deleteUnfinishedIntegration). No agent tool reaches them.
   // OpenIntegrationRecord opens the record in a tab for VIEWING — it does not edit.
   // ---------------------------------------------------------------------------
 
@@ -811,7 +820,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   private async readSeedState(jobID: string): Promise<{ State: string; Error?: string } | undefined> {
     try {
-      const result = await this.dataService.GetArchiveSeedState(jobID);
+      const result = await this.dataService.GetArchiveSeedState(jobID, this.ProviderToUse);
       const state = result.Success ? result.State : undefined;
       return state?.State ? { State: state.State, Error: state.Error ?? undefined } : undefined;
     } catch (err) {

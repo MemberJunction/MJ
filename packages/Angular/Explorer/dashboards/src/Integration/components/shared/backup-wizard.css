@@ -168,31 +168,8 @@
   background: var(--mj-bg-surface-active);
 }
 
-.list-empty {
-  padding: var(--mj-space-5);
-  text-align: center;
-  font-size: var(--mj-text-sm);
-  color: var(--mj-text-muted);
-}
-
-.badge {
+.list-row .status-chip {
   flex-shrink: 0;
-  padding: 2px var(--mj-space-2);
-  border-radius: var(--mj-radius-sm);
-  background: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-secondary);
-  font-size: var(--mj-text-xs);
-  font-weight: var(--mj-font-semibold);
-}
-
-.badge.success {
-  background: var(--mj-status-success-bg);
-  color: var(--mj-status-success-text);
-}
-
-.badge.warning {
-  background: var(--mj-status-warning-bg);
-  color: var(--mj-status-warning-text);
 }
 
 /* --- Running job: live log --- */

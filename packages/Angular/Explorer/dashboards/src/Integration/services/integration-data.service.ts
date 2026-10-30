@@ -4,7 +4,7 @@ import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
 import type { MJExternalDataSourceEntity, MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
 import { DateCellDayKey } from '../../shared/date-cell';
-import { FormatBytes, ReadExternalDataSourceID } from './backup-source.helpers';
+import { FormatBytes, IsActionOutputEntryList, IsPlainRecord, ReadExternalDataSourceID } from './backup-source.helpers';
 import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
@@ -948,23 +948,34 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 
-  /** Run a named MJ action through the GraphQL action client; undefined when the action is not registered. */
-  private async runNamedAction(actionName: string, params: ActionParam[]): Promise<ActionResult | undefined> {
-    const actionID = await this.lookupActionID(actionName);
+  /**
+   * Run a named MJ action through the GraphQL action client on `provider` (the service's provider when
+   * omitted); undefined when the action is not registered.
+   */
+  private async runNamedAction(actionName: string, params: ActionParam[], provider?: IMetadataProvider | null): Promise<ActionResult | undefined> {
+    const actionID = await this.lookupActionID(actionName, provider);
     if (!actionID) {
       return undefined;
     }
-    const actionClient = new GraphQLActionClient(this.requireGraphQLProvider());
+    const actionClient = new GraphQLActionClient(this.requireGraphQLProvider(provider));
     return actionClient.RunAction(actionID, params);
   }
 
-  /** The provider as the GraphQL provider the action client needs; the browser always runs on one. */
-  private requireGraphQLProvider(): GraphQLDataProvider {
-    const provider = this.Provider;
-    if (!(provider instanceof GraphQLDataProvider)) {
+  /**
+   * `provider` (the service's provider when omitted) as the GraphQL provider the action and
+   * integration clients need; the browser always runs on one.
+   */
+  private requireGraphQLProvider(provider?: IMetadataProvider | null): GraphQLDataProvider {
+    const resolved = provider ?? this.Provider;
+    if (!(resolved instanceof GraphQLDataProvider)) {
       throw new Error('Integration actions need a GraphQLDataProvider; the current provider is not one.');
     }
-    return provider;
+    return resolved;
+  }
+
+  /** An integration client on `provider` (the service's provider when omitted). */
+  private integrationClientFor(provider?: IMetadataProvider | null): GraphQLIntegrationClient {
+    return provider ? new GraphQLIntegrationClient(this.requireGraphQLProvider(provider)) : this.getIntegrationClient();
   }
 
   /** Input params from a name → value map; undefined values are omitted, booleans become 'true'/'false'. */
@@ -980,16 +991,15 @@ export class IntegrationDataService {
    */
   private readOutputValue(result: ActionResult, name: string): unknown {
     const lower = name.toLowerCase();
+    // Declared as a result-code entity, but the GraphQL action client puts the parsed ResultData here.
     const resultData: unknown = result.Result;
-    if (Array.isArray(resultData)) {
-      const param = resultData.find((item: { Name?: string }) => item?.Name?.toLowerCase() === lower);
-      return param && 'Value' in param ? param.Value : undefined;
+    if (IsActionOutputEntryList(resultData)) {
+      return resultData.find(item => item.Name.toLowerCase() === lower)?.Value;
     }
-    if (resultData && typeof resultData === 'object') {
-      const record = resultData as Record<string, unknown>;
-      const key = Object.keys(record).find(k => k.toLowerCase() === lower);
-      if (key !== undefined && record[key] != null) {
-        return record[key];
+    if (IsPlainRecord(resultData)) {
+      const key = Object.keys(resultData).find(k => k.toLowerCase() === lower);
+      if (key !== undefined && resultData[key] != null) {
+        return resultData[key];
       }
     }
     const param = result.Params?.find(p => p.Name?.toLowerCase() === lower);
@@ -1025,15 +1035,16 @@ export class IntegrationDataService {
       DropStagingDbOnComplete?: boolean;
       TruncateTargetBeforeLoad?: boolean;
       BatchSize?: number;
-    }
+    },
+    provider?: IMetadataProvider | null
   ): Promise<{ Success: boolean; Message: string; RunID?: string }> {
-    const result = await this.getIntegrationClient().StartBootstrap({ CompanyIntegrationID: companyIntegrationID, ...options });
+    const result = await this.integrationClientFor(provider).StartBootstrap({ CompanyIntegrationID: companyIntegrationID, ...options });
     return { Success: result.Success, Message: result.Message ?? '', RunID: result.RunID };
   }
 
   /** The run's events after `sinceSeq`; `IsInFlight === false` means the run is terminal and polling can stop. */
-  async TailBootstrapRun(runID: string, sinceSeq: number): Promise<{ Success: boolean; Message: string; Events: IntegrationRunEvent[]; LatestSeq: number; IsInFlight: boolean }> {
-    const result = await this.getIntegrationClient().TailRunEvents(runID, sinceSeq);
+  async TailBootstrapRun(runID: string, sinceSeq: number, provider?: IMetadataProvider | null): Promise<{ Success: boolean; Message: string; Events: IntegrationRunEvent[]; LatestSeq: number; IsInFlight: boolean }> {
+    const result = await this.integrationClientFor(provider).TailRunEvents(runID, sinceSeq);
     return {
       Success: result.Success,
       Message: result.Message ?? '',
@@ -1044,34 +1055,34 @@ export class IntegrationDataService {
   }
 
   /** The run's summary and errors once it is terminal (or at any point, for its latest state). */
-  async GetBootstrapRun(runID: string): Promise<{ Success: boolean; Message: string; Run?: IntegrationRunSummary; Errors: string[] }> {
-    const result = await this.getIntegrationClient().GetRun(runID);
+  async GetBootstrapRun(runID: string, provider?: IMetadataProvider | null): Promise<{ Success: boolean; Message: string; Run?: IntegrationRunSummary; Errors: string[] }> {
+    const result = await this.integrationClientFor(provider).GetRun(runID);
     return { Success: result.Success, Message: result.Message ?? '', Run: result.Run, Errors: result.Errors ?? [] };
   }
 
   /** Launches a detached archive seed job (restore, discover, then wait for a table selection). */
-  async StartArchiveSeed(input: IntegrationArchiveSeedStartInput): Promise<Awaited<ReturnType<GraphQLIntegrationClient['StartArchiveSeed']>>> {
-    return this.getIntegrationClient().StartArchiveSeed(input);
+  async StartArchiveSeed(input: IntegrationArchiveSeedStartInput, provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['StartArchiveSeed']>>> {
+    return this.integrationClientFor(provider).StartArchiveSeed(input);
   }
 
   /** Records the tables to seed and resumes the job. */
-  async SelectArchiveSeedTables(jobID: string, tableNames: string[]): Promise<Awaited<ReturnType<GraphQLIntegrationClient['SelectArchiveSeedTables']>>> {
-    return this.getIntegrationClient().SelectArchiveSeedTables(jobID, tableNames);
+  async SelectArchiveSeedTables(jobID: string, tableNames: string[], provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['SelectArchiveSeedTables']>>> {
+    return this.integrationClientFor(provider).SelectArchiveSeedTables(jobID, tableNames);
   }
 
   /** Completes the job, optionally dropping the staging database. */
-  async FinishArchiveSeed(jobID: string, dropStaging: boolean): Promise<Awaited<ReturnType<GraphQLIntegrationClient['FinishArchiveSeed']>>> {
-    return this.getIntegrationClient().FinishArchiveSeed(jobID, dropStaging);
+  async FinishArchiveSeed(jobID: string, dropStaging: boolean, provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['FinishArchiveSeed']>>> {
+    return this.integrationClientFor(provider).FinishArchiveSeed(jobID, dropStaging);
   }
 
   /** Abandons a job waiting for a selection or a cleanup decision; the server drops its staging database. */
-  async CancelArchiveSeed(jobID: string): Promise<Awaited<ReturnType<GraphQLIntegrationClient['CancelArchiveSeed']>>> {
-    return this.getIntegrationClient().CancelArchiveSeed(jobID);
+  async CancelArchiveSeed(jobID: string, provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['CancelArchiveSeed']>>> {
+    return this.integrationClientFor(provider).CancelArchiveSeed(jobID);
   }
 
   /** The archive seed job's current state. */
-  async GetArchiveSeedState(jobID: string): Promise<{ Success: boolean; Message?: string; State?: IntegrationArchiveSeedState }> {
-    return this.getIntegrationClient().GetArchiveSeedState(jobID);
+  async GetArchiveSeedState(jobID: string, provider?: IMetadataProvider | null): Promise<{ Success: boolean; Message?: string; State?: IntegrationArchiveSeedState }> {
+    return this.integrationClientFor(provider).GetArchiveSeedState(jobID);
   }
 
   /**
@@ -1084,14 +1095,15 @@ export class IntegrationDataService {
       BackupUrls: string;
       SasToken?: string;
       StorageCredentialID?: string;
-    }
+    },
+    provider?: IMetadataProvider | null
   ): Promise<InspectBackupResult> {
     const result = await this.runNamedAction('Inspect SQL Server Backup', this.buildActionParams({
       CompanyIntegrationID: companyIntegrationID ?? undefined,
       BackupUrls: options.BackupUrls,
       SasToken: options.SasToken,
       StorageCredentialID: options.StorageCredentialID,
-    }));
+    }), provider);
     if (!result) {
       return {
         Success: false,
@@ -1120,7 +1132,8 @@ export class IntegrationDataService {
       SasToken?: string;
       StorageCredentialID?: string;
       Prefix?: string;
-    }
+    },
+    provider?: IMetadataProvider | null
   ): Promise<ListAzureBackupBlobsResult> {
     const result = await this.runNamedAction('List Azure Backup Blobs', this.buildActionParams({
       CompanyIntegrationID: companyIntegrationID ?? undefined,
@@ -1128,7 +1141,7 @@ export class IntegrationDataService {
       SasToken: options.SasToken,
       StorageCredentialID: options.StorageCredentialID,
       Prefix: options.Prefix,
-    }));
+    }), provider);
     if (!result) {
       return {
         Success: false,
@@ -1158,8 +1171,7 @@ export class IntegrationDataService {
       items = raw;
     }
 
-    return items.map((entry: unknown) => {
-      const item = (entry ?? {}) as Record<string, unknown>;
+    return items.filter(IsPlainRecord).map(item => {
       const name = String(item['Name'] ?? '');
       const sizeBytes = Number(item['SizeBytes'] ?? 0);
       const lastModifiedRaw = item['LastModified'];
@@ -1298,8 +1310,8 @@ export class IntegrationDataService {
     return counts;
   }
 
-  private async lookupActionID(actionName: string): Promise<string | null> {
-    const rv = RunView.FromMetadataProvider(this.Provider);
+  private async lookupActionID(actionName: string, provider?: IMetadataProvider | null): Promise<string | null> {
+    const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
     const result = await rv.RunView<{ ID: string }>({
       EntityName: 'MJ: Actions',
       ExtraFilter: `Name='${actionName}'`,

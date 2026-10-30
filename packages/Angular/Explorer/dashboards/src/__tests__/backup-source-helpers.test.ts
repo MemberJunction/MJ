@@ -5,7 +5,12 @@ import {
   DeriveContainerUrl,
   FirstBackupUrl,
   FormatBytes,
+  IsActionOutputEntry,
+  IsActionOutputEntryList,
+  IsArchiveSeedTable,
+  IsPlainRecord,
   IsSeededAwaitingSource,
+  ReadArchiveSeedTables,
   ProgressLinesFromEvents,
   ReadSeedTablesFromEvents,
   ReadSeededJobID,
@@ -184,6 +189,59 @@ describe('archive seed helpers', () => {
     it('is undefined without a Tables event or on bad JSON', () => {
       expect(ReadSeedTablesFromEvents([])).toBeUndefined();
       expect(ReadSeedTablesFromEvents([{ Seq: 1, Ts: 't', EventType: 'stage.complete', Stage: 'Tables', DataJSON: 'nope' }])).toBeUndefined();
+    });
+  });
+
+  describe('ReadSeedTablesFromEvents rejects malformed tables', () => {
+    function tablesEvent(tables: unknown) {
+      return [{ Seq: 1, Ts: 't', EventType: 'stage.complete', Stage: 'Tables', DataJSON: JSON.stringify({ tables }) }];
+    }
+    it('is undefined when tables is not an array or any row is malformed', () => {
+      expect(ReadSeedTablesFromEvents(tablesEvent('dbo.A'))).toBeUndefined();
+      expect(ReadSeedTablesFromEvents(tablesEvent({ Name: 'dbo.A' }))).toBeUndefined();
+      expect(ReadSeedTablesFromEvents(tablesEvent([{ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: true }, null]))).toBeUndefined();
+      expect(ReadSeedTablesFromEvents(tablesEvent([{ Name: 'dbo.A', ColumnCount: '2', HasPrimaryKey: true }]))).toBeUndefined();
+      expect(ReadSeedTablesFromEvents(tablesEvent([{ name: 'dbo.A', columnCount: 2, hasPrimaryKey: true }]))).toBeUndefined();
+    });
+    it('is undefined when the event payload is not an object', () => {
+      const events = [{ Seq: 1, Ts: 't', EventType: 'stage.complete', Stage: 'Tables', DataJSON: '[1,2]' }];
+      expect(ReadSeedTablesFromEvents(events)).toBeUndefined();
+    });
+  });
+
+  describe('type guards for parsed action and event payloads', () => {
+    it('IsPlainRecord accepts objects only', () => {
+      expect(IsPlainRecord({ a: 1 })).toBe(true);
+      expect(IsPlainRecord(null)).toBe(false);
+      expect(IsPlainRecord([])).toBe(false);
+      expect(IsPlainRecord('x')).toBe(false);
+      expect(IsPlainRecord(undefined)).toBe(false);
+    });
+    it('IsArchiveSeedTable checks every field', () => {
+      expect(IsArchiveSeedTable({ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: false })).toBe(true);
+      expect(IsArchiveSeedTable({ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: false, WatermarkField: 'ModifiedAt' })).toBe(true);
+      expect(IsArchiveSeedTable({ Name: '', ColumnCount: 2, HasPrimaryKey: false })).toBe(false);
+      expect(IsArchiveSeedTable({ Name: 'dbo.A', ColumnCount: Number.NaN, HasPrimaryKey: false })).toBe(false);
+      expect(IsArchiveSeedTable({ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: 'yes' })).toBe(false);
+      expect(IsArchiveSeedTable({ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: true, WatermarkField: 7 })).toBe(false);
+      expect(IsArchiveSeedTable('dbo.A')).toBe(false);
+    });
+    it('ReadArchiveSeedTables returns the array only when every row is valid', () => {
+      const good = [{ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: true }];
+      expect(ReadArchiveSeedTables(good)).toEqual(good);
+      expect(ReadArchiveSeedTables([])).toEqual([]);
+      expect(ReadArchiveSeedTables([...good, { Name: 'dbo.B' }])).toBeUndefined();
+      expect(ReadArchiveSeedTables(undefined)).toBeUndefined();
+    });
+    it('IsActionOutputEntry / IsActionOutputEntryList need a string Name on every item', () => {
+      expect(IsActionOutputEntry({ Name: 'Blobs', Value: '[]' })).toBe(true);
+      expect(IsActionOutputEntry({ Name: 'Blobs' })).toBe(true);
+      expect(IsActionOutputEntry({ Name: 3, Value: 'x' })).toBe(false);
+      expect(IsActionOutputEntry(null)).toBe(false);
+      expect(IsActionOutputEntryList([{ Name: 'A', Value: 1 }, { Name: 'B', Value: 2 }])).toBe(true);
+      expect(IsActionOutputEntryList([])).toBe(true);
+      expect(IsActionOutputEntryList([{ Name: 'A', Value: 1 }, 'B'])).toBe(false);
+      expect(IsActionOutputEntryList({ Name: 'A' })).toBe(false);
     });
   });
 

@@ -1,5 +1,6 @@
 import '@angular/compiler';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BootstrapWizardComponent } from '../Integration/components/bootstrap-wizard/bootstrap-wizard.component';
 import {
@@ -222,6 +223,146 @@ describe('Bootstrap Wizard Review Fixes', () => {
     it('Task 9: defaults TruncateTargetBeforeLoad to false', () => {
       const wizard = createWizard();
       expect(wizard.TruncateTargetBeforeLoad).toBe(false);
+    });
+  });
+
+  describe('BootstrapWizardComponent follows the run and survives failed polls', () => {
+    const PROVIDER = { Name: 'wizard-provider' } as unknown as IMetadataProvider;
+    type ServiceStub = {
+      StartBootstrapFromBackup: ReturnType<typeof vi.fn>;
+      TailBootstrapRun: ReturnType<typeof vi.fn>;
+      GetBootstrapRun: ReturnType<typeof vi.fn>;
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function createRunningWizard(): { wizard: BootstrapWizardComponent; service: ServiceStub; confirm: ReturnType<typeof vi.fn> } {
+      const wizard = Object.create(BootstrapWizardComponent.prototype) as BootstrapWizardComponent;
+      const service: ServiceStub = {
+        StartBootstrapFromBackup: vi.fn().mockResolvedValue({ Success: true, Message: 'started', RunID: 'run-1' }),
+        TailBootstrapRun: vi.fn(),
+        GetBootstrapRun: vi.fn(),
+      };
+      const confirm = vi.fn().mockResolvedValue(true);
+      const internals = wizard as unknown as Record<string, unknown>;
+      internals['cdr'] = { detectChanges: vi.fn() };
+      internals['integrationService'] = service as unknown as IntegrationDataService;
+      internals['confirmService'] = { Confirm: confirm };
+      internals['timerInterval'] = null;
+      internals['pollTimer'] = null;
+      internals['lastSeq'] = 0;
+      wizard.Provider = PROVIDER;
+      wizard.CompanyIntegration = { ID: 'ci-1' } as unknown as MJCompanyIntegrationEntity;
+      wizard.Source = { ...DefaultBackupSourceValue(), BackupUrls: 'https://acct/backups/a.bak', SasToken: 'sig=x' };
+      wizard.StagingDatabaseName = 'MJ_Staging_Test';
+      wizard.DropStagingDbOnComplete = true;
+      wizard.TruncateTargetBeforeLoad = false;
+      wizard.BatchSize = 500000;
+      wizard.EntityMaps = [];
+      wizard.ProgressLog = [];
+      wizard.ExecutionStatus = 'idle';
+      wizard.ExecutionError = null;
+      wizard.RunID = null;
+      wizard.Completed = { emit: vi.fn() } as unknown as typeof wizard.Completed;
+      return { wizard, service, confirm };
+    }
+
+    function timersOf(wizard: BootstrapWizardComponent): { timer: unknown; poll: unknown } {
+      const internals = wizard as unknown as Record<string, unknown>;
+      return { timer: internals['timerInterval'], poll: internals['pollTimer'] };
+    }
+
+    it('passes the wizard provider to every service call', async () => {
+      vi.useFakeTimers();
+      const { wizard, service } = createRunningWizard();
+      service.TailBootstrapRun.mockResolvedValue({ Success: true, Message: '', Events: [], LatestSeq: 0, IsInFlight: false });
+      service.GetBootstrapRun.mockResolvedValue({ Success: true, Message: '', Errors: [], Run: { RunID: 'run-1', IsInFlight: false, Success: false, ExitReason: 'failed' } });
+
+      await wizard.StartBootstrap();
+
+      expect(service.StartBootstrapFromBackup).toHaveBeenCalledWith('ci-1', expect.objectContaining({ BackupUrls: 'https://acct/backups/a.bak' }), PROVIDER);
+      expect(service.TailBootstrapRun).toHaveBeenCalledWith('run-1', 0, PROVIDER);
+      expect(service.GetBootstrapRun).toHaveBeenCalledWith('run-1', PROVIDER);
+    });
+
+    it('a poll that throws on a timer round stops the timers and shows the error', async () => {
+      vi.useFakeTimers();
+      const { wizard, service } = createRunningWizard();
+      service.TailBootstrapRun
+        .mockResolvedValueOnce({ Success: true, Message: '', Events: [], LatestSeq: 1, IsInFlight: true })
+        .mockRejectedValueOnce(new Error('Failed to fetch'));
+
+      await wizard.StartBootstrap();
+      expect(wizard.ExecutionStatus).toBe('running');
+      expect(timersOf(wizard).poll).not.toBeNull();
+
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect(wizard.ExecutionStatus).toBe('failed');
+      expect(wizard.ExecutionError).toContain('Failed to fetch');
+      expect(wizard.ExecutionError).toContain('run-1');
+      expect(timersOf(wizard)).toEqual({ timer: null, poll: null });
+      const ticks = wizard.ElapsedSeconds;
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(wizard.ElapsedSeconds).toBe(ticks);
+    });
+
+    it('a failed read of the finished run shows the error instead of staying on running', async () => {
+      vi.useFakeTimers();
+      const { wizard, service } = createRunningWizard();
+      service.TailBootstrapRun.mockResolvedValue({ Success: true, Message: '', Events: [], LatestSeq: 0, IsInFlight: false });
+      service.GetBootstrapRun.mockRejectedValue(new Error('API restarting'));
+
+      await expect(wizard.StartBootstrap()).resolves.toBeUndefined();
+
+      expect(wizard.ExecutionStatus).toBe('failed');
+      expect(wizard.ExecutionError).toContain('API restarting');
+      expect(timersOf(wizard)).toEqual({ timer: null, poll: null });
+      expect(wizard.Completed.emit).not.toHaveBeenCalled();
+    });
+
+    it('a poll failure after the wizard closed is ignored', async () => {
+      vi.useFakeTimers();
+      const { wizard, service } = createRunningWizard();
+      service.TailBootstrapRun
+        .mockResolvedValueOnce({ Success: true, Message: '', Events: [], LatestSeq: 1, IsInFlight: true })
+        .mockImplementationOnce(async () => {
+          wizard.Close();
+          throw new Error('Failed to fetch');
+        });
+      wizard.Closed = { emit: vi.fn() } as unknown as typeof wizard.Closed;
+
+      await wizard.StartBootstrap();
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect(wizard.ExecutionError).toBeNull();
+      expect(wizard.RunID).toBeNull();
+    });
+
+    it('launching with truncate asks first and does nothing when declined', async () => {
+      const { wizard, service, confirm } = createRunningWizard();
+      wizard.TruncateTargetBeforeLoad = true;
+      confirm.mockResolvedValue(false);
+
+      await wizard.StartBootstrap();
+
+      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ type: 'danger' }));
+      expect(service.StartBootstrapFromBackup).not.toHaveBeenCalled();
+      expect(wizard.ExecutionStatus).toBe('idle');
+    });
+
+    it('launching without truncate does not ask', async () => {
+      vi.useFakeTimers();
+      const { wizard, service, confirm } = createRunningWizard();
+      service.TailBootstrapRun.mockResolvedValue({ Success: true, Message: '', Events: [], LatestSeq: 0, IsInFlight: false });
+      service.GetBootstrapRun.mockResolvedValue({ Success: true, Message: '', Errors: [], Run: { RunID: 'run-1', IsInFlight: false, Success: false, ExitReason: 'failed' } });
+
+      await wizard.StartBootstrap();
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(service.StartBootstrapFromBackup).toHaveBeenCalled();
     });
   });
 

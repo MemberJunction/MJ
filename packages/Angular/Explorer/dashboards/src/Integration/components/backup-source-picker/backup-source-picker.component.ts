@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inje
 import { RunView, LogError } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ViewToggleOption } from '@memberjunction/ng-ui-components';
-import { MJCredentialEntity } from '@memberjunction/core-entities';
+import type { MJCredentialEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, InspectBackupResult, AzureBlobItem } from '../../services/integration-data.service';
 import {
   AppendDirectoryPreset,
@@ -11,6 +11,12 @@ import {
   FirstBackupUrl,
   FormatBytes,
 } from '../../services/backup-source.helpers';
+
+/** A stored credential as the picker's dropdown lists it: just its ID and name. */
+export interface StorageCredentialOption {
+  ID: MJCredentialEntity['ID'];
+  Name: MJCredentialEntity['Name'];
+}
 
 /** Where a SQL Server backup comes from and how the server authenticates to read it. */
 export interface BackupSourceValue {
@@ -80,7 +86,7 @@ export class BackupSourcePickerComponent extends BaseAngularComponent implements
   /** A local backup's header was read successfully. */
   @Output() Verified = new EventEmitter<InspectBackupResult>();
 
-  AvailableCredentials: MJCredentialEntity[] = [];
+  AvailableCredentials: StorageCredentialOption[] = [];
   IsLoadingCredentials = false;
   CredentialsError: string | null = null;
 
@@ -170,7 +176,7 @@ export class BackupSourcePickerComponent extends BaseAngularComponent implements
         ContainerUrl: container,
         SasToken: isSas ? this._value.SasToken.trim() : undefined,
         StorageCredentialID: isSas ? undefined : this._value.StorageCredentialID,
-      });
+      }, this.ProviderToUse);
       if (result.Success) {
         this.AzureBlobs = result.Blobs;
         this.AzureBrowseError = result.Blobs.length === 0 ? 'No blobs found in this container.' : null;
@@ -266,7 +272,7 @@ export class BackupSourcePickerComponent extends BaseAngularComponent implements
     this.RefreshLocalFiles();
     this.cdr.detectChanges();
     try {
-      const result = await this.integrationService.InspectSQLServerBackup(this.CompanyIntegrationID, { BackupUrls: backupUrls });
+      const result = await this.integrationService.InspectSQLServerBackup(this.CompanyIntegrationID, { BackupUrls: backupUrls }, this.ProviderToUse);
       if (result.Success) {
         this.VerifiedBackupHeader = result;
         this.Verified.emit(result);
@@ -290,11 +296,14 @@ export class BackupSourcePickerComponent extends BaseAngularComponent implements
     this.CredentialsError = null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJCredentialEntity>({
+      // Display-only: ID and name feed the dropdown. Not narrowed by credential type, because the
+      // server accepts any credential whose values carry a SasToken, Secret or Key.
+      const result = await rv.RunView<StorageCredentialOption>({
         EntityName: 'MJ: Credentials',
         ExtraFilter: 'IsActive = 1',
         OrderBy: 'Name ASC',
-        ResultType: 'entity_object',
+        Fields: ['ID', 'Name'],
+        ResultType: 'simple',
       });
       if (result.Success) {
         this.AvailableCredentials = result.Results ?? [];

@@ -199,7 +199,7 @@ describe('ConnectionsComponent — seeded status on cards', () => {
     comp.Connections = [makeSummary(SEEDED_CONFIG, 'Disabled'), { ...makeSummary(null, 'Active'), Integration: { ID: 'ci-2', Configuration: null } as unknown as MJCompanyIntegrationEntity }];
     await comp.LoadSeedStates();
     expect(getState).toHaveBeenCalledTimes(1);
-    expect(getState).toHaveBeenCalledWith('job-42');
+    expect(getState).toHaveBeenCalledWith('job-42', comp.ProviderToUse);
     expect(comp.SeedStates.Get('ci-1')).toBe('Failed');
     expect(comp.SeedErrors.Get('ci-1')).toBe('boom');
   });

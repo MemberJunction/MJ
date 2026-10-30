@@ -1,6 +1,7 @@
 import '@angular/compiler';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { IntegrationArchiveSeedState } from '@memberjunction/graphql-dataprovider';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { ArchiveSeedWizardComponent } from '../Integration/components/archive-seed-wizard/archive-seed-wizard.component';
 import { DefaultBackupSourceValue } from '../Integration/components/backup-source-picker/backup-source-picker.component';
 import type { IntegrationDataService } from '../Integration/services/integration-data.service';
@@ -9,9 +10,13 @@ type ServiceStub = {
   StartArchiveSeed: ReturnType<typeof vi.fn>;
   SelectArchiveSeedTables: ReturnType<typeof vi.fn>;
   FinishArchiveSeed: ReturnType<typeof vi.fn>;
+  CancelArchiveSeed: ReturnType<typeof vi.fn>;
   GetArchiveSeedState: ReturnType<typeof vi.fn>;
   TailBootstrapRun: ReturnType<typeof vi.fn>;
 };
+
+/** The provider the wizard is bound to; every service call must carry it. */
+const PROVIDER = { Name: 'wizard-provider' } as unknown as IMetadataProvider;
 
 const TABLES = [
   { Name: 'dbo.Customers', ColumnCount: 12, HasPrimaryKey: true, WatermarkField: 'ModifiedAt' },
@@ -27,18 +32,22 @@ function seedState(state: string, extra: Partial<IntegrationArchiveSeedState> = 
   return { Success: true, State: { JobID: 'job-1', CompanyIntegrationID: 'ci-1', State: state, CurrentRunID: 'run-a', ...extra } };
 }
 
-function createWizard(): { wizard: ArchiveSeedWizardComponent; service: ServiceStub } {
+function createWizard(): { wizard: ArchiveSeedWizardComponent; service: ServiceStub; confirm: ReturnType<typeof vi.fn> } {
   const wizard = Object.create(ArchiveSeedWizardComponent.prototype) as ArchiveSeedWizardComponent;
   const service: ServiceStub = {
     StartArchiveSeed: vi.fn(),
     SelectArchiveSeedTables: vi.fn(),
     FinishArchiveSeed: vi.fn(),
+    CancelArchiveSeed: vi.fn(),
     GetArchiveSeedState: vi.fn(),
     TailBootstrapRun: vi.fn().mockResolvedValue(emptyTail()),
   };
   const internals = wizard as unknown as Record<string, unknown>;
   internals['cdr'] = { detectChanges: vi.fn() };
   internals['integrationService'] = service as unknown as IntegrationDataService;
+  const confirm = vi.fn().mockResolvedValue(true);
+  internals['confirmService'] = { Confirm: confirm };
+  wizard.Provider = PROVIDER;
   internals['lastSeq'] = 0;
   internals['pollTimer'] = null;
   internals['reconnectStartedAt'] = null;
@@ -67,7 +76,7 @@ function createWizard(): { wizard: ArchiveSeedWizardComponent; service: ServiceS
   wizard.IsSubmitting = false;
   wizard.Closed = { emit: vi.fn() } as unknown as typeof wizard.Closed;
   wizard.Completed = { emit: vi.fn() } as unknown as typeof wizard.Completed;
-  return { wizard, service };
+  return { wizard, service, confirm };
 }
 
 /** A promise the test resolves by hand, to hold a service call in flight. */
@@ -106,7 +115,7 @@ describe('ArchiveSeedWizardComponent', () => {
       StorageCredentialID: undefined,
       StagingDatabaseName: 'MJ_ArchiveSeed_1',
       BatchSize: 500000,
-    });
+    }, PROVIDER);
     expect(wizard.CurrentStep).toBe(2);
     expect(wizard.JobID).toBe('job-1');
     expect(wizard.RunID).toBe('run-a');
@@ -128,7 +137,7 @@ describe('ArchiveSeedWizardComponent', () => {
 
     await pollOnce(wizard);
 
-    expect(service.TailBootstrapRun).toHaveBeenCalledWith('run-b', 0);
+    expect(service.TailBootstrapRun).toHaveBeenCalledWith('run-b', 0, PROVIDER);
     expect(wizard.RunID).toBe('run-b');
     expect((wizard as unknown as Record<string, unknown>)['lastSeq']).toBe(3);
     expect(wizard.ProgressLog.map(l => l.Message)).toEqual(['Creating entity maps']);
@@ -173,10 +182,58 @@ describe('ArchiveSeedWizardComponent', () => {
     service.SelectArchiveSeedTables.mockResolvedValue({ Success: true, Message: 'ok' });
     await wizard.CreateAndLoad();
 
-    expect(service.SelectArchiveSeedTables).toHaveBeenCalledWith('job-1', ['dbo.Customers', 'dbo.Orders']);
+    expect(service.SelectArchiveSeedTables).toHaveBeenCalledWith('job-1', ['dbo.Customers', 'dbo.Orders'], PROVIDER);
     expect(wizard.SelectionError).toBeNull();
     expect(wizard.CurrentStep).toBe(4);
     expect(wizard.CurrentState).toBe('Building');
+  });
+
+  it('CreateAndLoad shows a thrown selection error on step 3 and can be retried', async () => {
+    vi.useFakeTimers();
+    const { wizard, service } = createWizard();
+    wizard.JobID = 'job-1';
+    wizard.CurrentStep = 3;
+    wizard.Tables = TABLES;
+    wizard.AllSelected = true;
+    service.SelectArchiveSeedTables.mockRejectedValueOnce(new Error('Failed to fetch'));
+
+    await expect(wizard.CreateAndLoad()).resolves.toBeUndefined();
+
+    expect(wizard.SelectionError).toBe('Failed to fetch');
+    expect(wizard.CurrentStep).toBe(3);
+    expect(wizard.IsSubmitting).toBe(false);
+    expect(pollTimerOf(wizard)).toBeNull();
+
+    service.SelectArchiveSeedTables.mockResolvedValue({ Success: true, Message: 'ok' });
+    await wizard.CreateAndLoad();
+    expect(wizard.SelectionError).toBeNull();
+    expect(wizard.CurrentStep).toBe(4);
+  });
+
+  it('CancelSeed asks first and does nothing when the user keeps the seed', async () => {
+    const { wizard, service, confirm } = createWizard();
+    wizard.JobID = 'job-1';
+    wizard.CurrentStep = 3;
+    confirm.mockResolvedValue(false);
+
+    await wizard.CancelSeed();
+
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ type: 'danger' }));
+    expect(service.CancelArchiveSeed).not.toHaveBeenCalled();
+    expect(wizard.JobID).toBe('job-1');
+    expect(wizard.Closed.emit).not.toHaveBeenCalled();
+  });
+
+  it('CancelSeed, once confirmed, cancels the job on the wizard provider and closes', async () => {
+    const { wizard, service } = createWizard();
+    wizard.JobID = 'job-1';
+    wizard.CurrentStep = 3;
+    service.CancelArchiveSeed.mockResolvedValue({ Success: true, Message: 'cancelled' });
+
+    await wizard.CancelSeed();
+
+    expect(service.CancelArchiveSeed).toHaveBeenCalledWith('job-1', PROVIDER);
+    expect(wizard.Closed.emit).toHaveBeenCalledWith(true);
   });
 
   it('network errors while Building are tolerated until the reconnect window elapses', async () => {
@@ -229,8 +286,8 @@ describe('ArchiveSeedWizardComponent', () => {
     wizard.ResumeJobID = 'job-1';
     await vi.waitFor(() => expect(wizard.CurrentStep).toBe(5));
 
-    expect(service.GetArchiveSeedState).toHaveBeenCalledWith('job-1');
-    expect(service.TailBootstrapRun).toHaveBeenCalledWith('run-a', 0);
+    expect(service.GetArchiveSeedState).toHaveBeenCalledWith('job-1', PROVIDER);
+    expect(service.TailBootstrapRun).toHaveBeenCalledWith('run-a', 0, PROVIDER);
     expect(wizard.JobID).toBe('job-1');
     expect(wizard.StagingDatabaseName).toBe('MJ_ArchiveSeed_9');
     expect(wizard.Summary?.TotalRowsTransferred).toBe(1200);
@@ -245,7 +302,7 @@ describe('ArchiveSeedWizardComponent', () => {
 
     await wizard.RemoveArchive(true);
 
-    expect(service.FinishArchiveSeed).toHaveBeenCalledWith('job-1', true);
+    expect(service.FinishArchiveSeed).toHaveBeenCalledWith('job-1', true, PROVIDER);
     expect(wizard.CurrentStep).toBe(6);
     expect(wizard.Summary).toMatchObject({ Success: true, TablesProcessed: 2, TotalRowsTransferred: 1200, StagingDatabaseDropped: true });
     expect(wizard.Completed.emit).toHaveBeenCalledWith(wizard.Summary);

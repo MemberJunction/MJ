@@ -96,10 +96,50 @@ export function SummarizeBootstrapRun(run: BootstrapRunState, events: readonly B
 function parseOutputs(json: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(json);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    return IsPlainRecord(parsed) ? parsed : {};
   } catch {
     return {};
   }
+}
+
+/** True for a JSON object (not null, not an array), so its keys can be read by name. */
+export function IsPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** One `{ Name, Value }` entry of an action's output list; the value is raw JSON the caller interprets. */
+export interface ActionOutputEntry {
+  Name: string;
+  Value?: unknown;
+}
+
+/** True for an `{ Name, Value }` action output entry with a string name. */
+export function IsActionOutputEntry(value: unknown): value is ActionOutputEntry {
+  return IsPlainRecord(value) && typeof value['Name'] === 'string';
+}
+
+/** True for an array whose every item is an action output entry. */
+export function IsActionOutputEntryList(value: unknown): value is ActionOutputEntry[] {
+  return Array.isArray(value) && value.every(IsActionOutputEntry);
+}
+
+/** True for an archive table as the seed job reports it: a name, a column count and a primary-key flag. */
+export function IsArchiveSeedTable(value: unknown): value is IntegrationArchiveSeedTable {
+  if (!IsPlainRecord(value)) {
+    return false;
+  }
+  const watermark = value['WatermarkField'];
+  return typeof value['Name'] === 'string'
+    && value['Name'].length > 0
+    && typeof value['ColumnCount'] === 'number'
+    && Number.isFinite(value['ColumnCount'])
+    && typeof value['HasPrimaryKey'] === 'boolean'
+    && (watermark === undefined || watermark === null || typeof watermark === 'string');
+}
+
+/** The archive tables in a parsed payload, or undefined unless it is an array of well-formed tables. */
+export function ReadArchiveSeedTables(value: unknown): IntegrationArchiveSeedTable[] | undefined {
+  return Array.isArray(value) && value.every(IsArchiveSeedTable) ? value : undefined;
 }
 
 function asString(value: unknown): string | undefined {
@@ -159,10 +199,10 @@ export function ReadExternalDataSourceID(configuration: string | null | undefine
   }
   try {
     const parsed: unknown = JSON.parse(configuration);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!IsPlainRecord(parsed)) {
       return undefined;
     }
-    const id = (parsed as Record<string, unknown>)['externalDataSourceID'];
+    const id = parsed['externalDataSourceID'];
     return typeof id === 'string' && id.trim().length > 0 ? id.trim() : undefined;
   } catch {
     return undefined;
@@ -237,8 +277,7 @@ export function ReadSeedTablesFromEvents(events: readonly BootstrapRunEvent[]): 
   if (!event?.DataJSON) {
     return undefined;
   }
-  const tables = parseOutputs(event.DataJSON)['tables'];
-  return Array.isArray(tables) ? (tables as IntegrationArchiveSeedTable[]) : undefined;
+  return ReadArchiveSeedTables(parseOutputs(event.DataJSON)['tables']);
 }
 
 function readSeededFromBackup(configuration: string | null | undefined): Record<string, unknown> | undefined {
@@ -246,7 +285,7 @@ function readSeededFromBackup(configuration: string | null | undefined): Record<
     return undefined;
   }
   const seeded = parseOutputs(configuration)['seededFromBackup'];
-  return seeded && typeof seeded === 'object' ? (seeded as Record<string, unknown>) : undefined;
+  return IsPlainRecord(seeded) ? seeded : undefined;
 }
 
 /**
