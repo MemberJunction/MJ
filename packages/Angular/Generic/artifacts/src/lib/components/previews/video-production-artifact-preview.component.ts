@@ -54,16 +54,16 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
       .vp-preview {
         position: relative;
         width: 100%;
-        border-radius: var(--mj-radius-sm, 6px);
+        border-radius: var(--mj-radius-sm);
         overflow: hidden;
         background: var(--mj-bg-surface-sunken);
       }
       .vp-preview__generated-chip {
         position: absolute;
-        top: 6px;
-        right: 6px;
+        top: var(--mj-space-1-5);
+        right: var(--mj-space-1-5);
         z-index: 2;
-        padding: 2px 6px;
+        padding: var(--mj-space-0-5) var(--mj-space-1-5);
         border-radius: var(--mj-radius-sm);
         font-size: var(--mj-text-xs);
         font-weight: var(--mj-font-medium);
@@ -81,15 +81,15 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: var(--mj-space-2);
         height: 110px;
-        padding: 12px;
+        padding: var(--mj-space-3);
         color: var(--mj-text-secondary);
         font-size: var(--mj-text-sm);
         font-weight: var(--mj-font-medium);
       }
       .vp-preview__status-icon {
-        font-size: 20px;
+        font-size: var(--mj-text-xl);
         color: var(--mj-text-muted);
       }
     `,

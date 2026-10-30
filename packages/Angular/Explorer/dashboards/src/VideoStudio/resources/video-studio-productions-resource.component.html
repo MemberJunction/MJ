@@ -52,21 +52,19 @@
         />
         <div class="vs-date-filter-group">
           <mj-filter-field Label="Updated from">
-            <input
-              type="date"
-              class="vs-date-input"
+            <mj-datepicker
+              AriaLabel="Updated from"
               data-testid="productions-date-from"
-              [value]="DateFrom"
-              (input)="OnDateFromChange($any($event.target).value)"
+              [ngModel]="DateFrom || null"
+              (ngModelChange)="OnDateFromChange($event)"
             />
           </mj-filter-field>
           <mj-filter-field Label="Updated to">
-            <input
-              type="date"
-              class="vs-date-input"
+            <mj-datepicker
+              AriaLabel="Updated to"
               data-testid="productions-date-to"
-              [value]="DateTo"
-              (input)="OnDateToChange($any($event.target).value)"
+              [ngModel]="DateTo || null"
+              (ngModelChange)="OnDateToChange($event)"
             />
           </mj-filter-field>
         </div>
@@ -79,7 +77,7 @@
       <div class="vs-productions-main">
         @if (IsLoading && AllProductions.length === 0) {
           <div class="vs-loading-state" data-testid="productions-loading">
-            <mj-loading text="Loading video productions..." size="medium" />
+            <mj-loading Text="Loading video productions..." Size="medium" />
           </div>
         } @else if (LoadError) {
           <mj-empty-state
@@ -136,6 +134,7 @@
                   [attr.aria-pressed]="SelectedProduction?.ID === item.ID"
                   (click)="SelectProduction(item)"
                   (keydown.enter)="SelectProduction(item)"
+                  (keydown.space)="$event.preventDefault(); SelectProduction(item)"
                 >
                   <div class="vs-production-poster">
                     @if (item.PosterUrl) {

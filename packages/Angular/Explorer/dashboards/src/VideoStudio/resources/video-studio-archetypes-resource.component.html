@@ -45,7 +45,7 @@
   <mj-page-body>
     @if (IsLoading && AllArchetypes.length === 0) {
       <div class="vs-loading-state" data-testid="archetypes-loading">
-        <mj-loading text="Loading video archetypes..." size="medium" />
+        <mj-loading Text="Loading video archetypes..." Size="medium" />
       </div>
     } @else if (LoadError) {
       <mj-empty-state
@@ -113,6 +113,7 @@
                     [attr.aria-pressed]="SelectedArchetype?.ID === arch.ID"
                     (click)="SelectArchetype(arch)"
                     (keydown.enter)="SelectArchetype(arch)"
+                    (keydown.space)="$event.preventDefault(); SelectArchetype(arch)"
                   >
                     <div class="vs-archetype-card-header">
                       <h3 class="vs-archetype-title" [title]="arch.Name">
@@ -208,7 +209,7 @@
                   mjButton
                   Variant="icon"
                   Size="sm"
-                  aria-label="Close archetype preview"
+                  [AriaLabel]="'Close archetype preview'"
                   data-testid="archetype-slideout-close"
                   (click)="CloseSlideOut()"
                 >

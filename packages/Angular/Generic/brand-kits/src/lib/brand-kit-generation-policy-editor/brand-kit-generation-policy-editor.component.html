@@ -1,8 +1,8 @@
-<section class="mj-bkgp-root" aria-label="Brand Kit Generation Policy Editor">
+<section class="mj-bkgp-root" aria-label="Brand kit generation policy editor">
   @if (!BrandKit) {
     <div class="mj-bkgp-empty" role="status">
       <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-      <span>Select or create a Brand Kit to configure its AI generation policy.</span>
+      <span>Select or create a brand kit to configure its AI generation policy.</span>
     </div>
   } @else {
     @if (SaveError) {
@@ -21,8 +21,8 @@
           [disabled]="Readonly"
           data-testid="bkgp-allow-images" />
         <div class="mj-bkgp-toggle-text">
-          <span class="mj-bkgp-toggle-title">Allow Generated Images</span>
-          <span class="mj-bkgp-toggle-desc">Permit AI image generation (plates, illustrations, backgrounds) using this Brand Kit.</span>
+          <span class="mj-bkgp-toggle-title">Allow generated images</span>
+          <span class="mj-bkgp-toggle-desc">Permit AI image generation (plates, illustrations, backgrounds) using this brand kit.</span>
         </div>
       </label>
 
@@ -34,8 +34,8 @@
           [disabled]="Readonly"
           data-testid="bkgp-allow-video" />
         <div class="mj-bkgp-toggle-text">
-          <span class="mj-bkgp-toggle-title">Allow Generated Video</span>
-          <span class="mj-bkgp-toggle-desc">Permit AI video clip generation (ambient motion, B-roll plates) using this Brand Kit.</span>
+          <span class="mj-bkgp-toggle-title">Allow generated video</span>
+          <span class="mj-bkgp-toggle-desc">Permit AI video clip generation (ambient motion, B-roll plates) using this brand kit.</span>
         </div>
       </label>
 
@@ -47,7 +47,7 @@
           [disabled]="Readonly"
           data-testid="bkgp-allow-synthetic-people" />
         <div class="mj-bkgp-toggle-text">
-          <span class="mj-bkgp-toggle-title">Allow Synthetic People</span>
+          <span class="mj-bkgp-toggle-title">Allow synthetic people</span>
           <span class="mj-bkgp-toggle-desc">Permit AI-generated human figures in conceptual or atmospheric scenes.</span>
         </div>
       </label>
@@ -65,7 +65,7 @@
 
     <div class="mj-bkgp-fields">
       <div class="mj-bkgp-field">
-        <label class="mj-bkgp-label" for="bkgp-style-prompt">Style Prompt Fragment</label>
+        <label class="mj-bkgp-label" for="bkgp-style-prompt">Style prompt fragment</label>
         <textarea
           id="bkgp-style-prompt"
           class="mj-bkgp-textarea"
@@ -78,7 +78,7 @@
       </div>
 
       <div class="mj-bkgp-field">
-        <span class="mj-bkgp-label">Avoid Subjects</span>
+        <span class="mj-bkgp-label">Avoid subjects</span>
         <div class="mj-bkgp-chips" data-testid="bkgp-avoid-subjects-chips">
           @for (subject of AvoidSubjects; track subject) {
             <span class="mj-bkgp-chip" data-testid="bkgp-avoid-chip">
@@ -101,6 +101,7 @@
             <input
               type="text"
               class="mj-bkgp-input"
+              aria-label="New prohibited subject"
               [(ngModel)]="NewSubjectInput"
               (keydown)="OnSubjectKeydown($event)"
               placeholder="Add a prohibited subject (e.g., competitor logos) and press Enter"
@@ -120,7 +121,7 @@
       </div>
 
       <div class="mj-bkgp-field mj-bkgp-field--narrow">
-        <label class="mj-bkgp-label" for="bkgp-max-cost">Max Generation Cost Per Run (USD)</label>
+        <label class="mj-bkgp-label" for="bkgp-max-cost">Max generation cost per run (USD)</label>
         <input
           id="bkgp-max-cost"
           type="number"
@@ -146,7 +147,7 @@
           (click)="SavePolicy()"
           data-testid="bkgp-save-btn">
           <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
-          <span>{{ Saving ? 'Saving…' : 'Save Generation Policy' }}</span>
+          <span>{{ Saving ? 'Saving…' : 'Save generation policy' }}</span>
         </button>
       </div>
     }

@@ -7,10 +7,12 @@
     @if (ShowCloseButton) {
       <button
         type="button"
-        class="vs-copilot-panel__close-btn"
+        mjButton
+        Variant="icon"
+        Size="sm"
+        [AriaLabel]="'Close Video Studio'"
         data-testid="vs-copilot-close-button"
         title="Close Video Studio"
-        aria-label="Close Video Studio"
         (click)="OnCloseClick()"
       >
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>

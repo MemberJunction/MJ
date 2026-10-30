@@ -350,14 +350,30 @@ export class VideoStudioProductionsResourceComponent
     this.applyFiltersAndSync();
   }
 
-  public OnDateFromChange(value: string): void {
-    this.DateFrom = value;
+  public OnDateFromChange(value: Date | string | null): void {
+    this.DateFrom = this.formatDateFilterInput(value);
     this.applyFiltersAndSync();
   }
 
-  public OnDateToChange(value: string): void {
-    this.DateTo = value;
+  public OnDateToChange(value: Date | string | null): void {
+    this.DateTo = this.formatDateFilterInput(value);
     this.applyFiltersAndSync();
+  }
+
+  private formatDateFilterInput(value: Date | string | null | undefined): string {
+    if (!value) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      const year = value.getFullYear();
+      const month = String(value.getMonth() + 1).padStart(2, '0');
+      const day = String(value.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return '';
   }
 
   public ClearAllFilters(): void {

@@ -10,6 +10,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
   MJAlertComponent,
   MJButtonDirective,
+  MJDatepickerComponent,
   MJDialogActionsComponent,
   MJDialogComponent,
   MJDropdownComponent,
@@ -59,6 +60,7 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     VSSetupHealthCardComponent,
     MJAlertComponent,
     MJButtonDirective,
+    MJDatepickerComponent,
     MJDialogComponent,
     MJDialogActionsComponent,
     MJDropdownComponent,

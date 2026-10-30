@@ -26,18 +26,21 @@
                 class="vp-storyboard-beat-row"
                 [class.vp-storyboard-beat-row--active]="ActiveBeatKey === row.Beat.Key"
                 [attr.data-beat-key]="row.Beat.Key"
+                tabindex="0"
                 (click)="OnBeatPicked(row.Beat.Key)"
+                (keydown.enter)="OnBeatPicked(row.Beat.Key)"
+                (keydown.space)="$event.preventDefault(); OnBeatPicked(row.Beat.Key)"
               >
-                <td class="vp-cell-mono">{{ row.TimeRange }}</td>
-                <td class="vp-cell-strong">
+                <td class="vp-cell-mono vp-beat-cell--time">{{ row.TimeRange }}</td>
+                <td class="vp-cell-strong vp-beat-cell--label">
                   {{ row.Beat.Label }}
                   @if (row.UsesGeneratedAsset) {
                     <span class="vp-generated-chip">AI-generated</span>
                   }
                 </td>
-                <td>{{ row.Beat.Purpose }}</td>
-                <td>{{ row.OnScreenTextJoined }}</td>
-                <td>{{ row.NarrationText }}</td>
+                <td class="vp-beat-cell--purpose" data-label="Purpose">{{ row.Beat.Purpose }}</td>
+                <td class="vp-beat-cell--text" data-label="On-screen text">{{ row.OnScreenTextJoined }}</td>
+                <td class="vp-beat-cell--narration" data-label="Narration">{{ row.NarrationText }}</td>
               </tr>
             }
           </tbody>
@@ -71,7 +74,7 @@
               <div class="vp-contact-sheet-placeholder">Contact sheet unavailable.</div>
             } @else {
               <div class="vp-contact-sheet-placeholder">
-                <mj-loading size="small"></mj-loading>
+                <mj-loading Size="small"></mj-loading>
               </div>
             }
           </div>

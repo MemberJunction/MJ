@@ -22,8 +22,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2-5) var(--mj-space-3-5);
   border-bottom: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface-card);
   flex-shrink: 0;
@@ -32,32 +32,14 @@
 .vs-copilot-panel__title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--mj-space-2);
   font-size: var(--mj-text-sm);
-  font-weight: 600;
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
 }
 
 .vs-copilot-panel__title i {
   color: var(--mj-brand-primary);
-}
-
-.vs-copilot-panel__close-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--mj-radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-}
-
-.vs-copilot-panel__close-btn:hover {
-  background: var(--mj-bg-surface-hover);
-  color: var(--mj-text-primary);
 }
 
 .vs-copilot-panel__body {
@@ -81,7 +63,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  padding: 24px;
+  padding: var(--mj-space-6);
 }
 
 .vs-copilot-panel__missing {
@@ -89,10 +71,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--mj-space-2-5);
   flex: 1;
-  padding: 24px;
-  margin: 16px;
+  padding: var(--mj-space-6);
+  margin: var(--mj-space-4);
   border-radius: var(--mj-radius-md);
   border: 1px solid var(--mj-status-warning-border);
   background: var(--mj-status-warning-bg);
@@ -101,7 +83,7 @@
 }
 
 .vs-copilot-panel__missing i {
-  font-size: 20px;
+  font-size: var(--mj-text-xl);
   color: var(--mj-status-warning);
 }
 

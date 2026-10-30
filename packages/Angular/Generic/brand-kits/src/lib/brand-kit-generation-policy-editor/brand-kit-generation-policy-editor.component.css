@@ -6,16 +6,16 @@
 .mj-bkgp-root {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--mj-space-4);
 }
 
 .mj-bkgp-banner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: var(--mj-radius-md, 0.5rem);
-  font-size: 0.875rem;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-sm);
 }
 
 .mj-bkgp-banner--error {
@@ -32,104 +32,123 @@
 
 .mj-bkgp-toggles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--mj-space-3);
 }
 
 .mj-bkgp-toggle-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.625rem;
-  padding: 0.75rem;
+  gap: var(--mj-space-2-5);
+  padding: var(--mj-space-3);
   background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md, 0.5rem);
+  border-radius: var(--mj-radius-md);
   cursor: pointer;
+}
+
+.mj-bkgp-toggle-card input:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
 }
 
 .mj-bkgp-toggle-text {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--mj-space-1);
 }
 
 .mj-bkgp-toggle-title {
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
 }
 
 .mj-bkgp-toggle-desc {
-  font-size: 0.75rem;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-secondary);
 }
 
 .mj-bkgp-fields {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: var(--mj-space-3-5);
 }
 
 .mj-bkgp-field {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--mj-space-1-5);
 }
 
 .mj-bkgp-field--narrow {
-  max-width: 16rem;
+  max-width: 256px;
 }
 
 .mj-bkgp-label {
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-secondary);
 }
 
 .mj-bkgp-input,
 .mj-bkgp-textarea {
   width: 100%;
-  padding: 0.5rem 0.625rem;
-  font-size: 0.875rem;
+  padding: var(--mj-space-2) var(--mj-space-2-5);
+  font-size: var(--mj-text-sm);
   color: var(--mj-text-primary);
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-sm, 0.25rem);
+  border-radius: var(--mj-radius-sm);
   font-family: inherit;
+  transition: var(--mj-transition-fast);
+}
+
+.mj-bkgp-input:focus-visible,
+.mj-bkgp-textarea:focus-visible {
+  outline: none;
+  border-color: var(--mj-border-focus);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .mj-bkgp-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: var(--mj-space-1-5);
 }
 
 .mj-bkgp-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.8125rem;
+  gap: var(--mj-space-1-5);
+  padding: var(--mj-space-1) var(--mj-space-2-5);
+  font-size: var(--mj-text-xs);
   background: var(--mj-bg-surface-sunken, var(--mj-bg-surface-card));
   color: var(--mj-text-primary);
   border: 1px solid var(--mj-border-default);
-  border-radius: 999px;
+  border-radius: var(--mj-radius-full);
 }
 
 .mj-bkgp-chip-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: var(--mj-space-0);
   background: transparent;
   border: none;
+  border-radius: var(--mj-radius-sm);
   color: var(--mj-text-secondary);
   cursor: pointer;
 }
 
+.mj-bkgp-chip-remove:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
 .mj-bkgp-chip-input-row {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--mj-space-2);
 }
 
 .mj-bkgp-actions {
@@ -140,10 +159,17 @@
 .mj-bkgp-empty {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-4);
   color: var(--mj-text-secondary);
   background: var(--mj-bg-surface-card);
   border: 1px dashed var(--mj-border-default);
-  border-radius: var(--mj-radius-md, 0.5rem);
+  border-radius: var(--mj-radius-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-bkgp-input,
+  .mj-bkgp-textarea {
+    transition: none;
+  }
 }

@@ -25,6 +25,7 @@ import {
   ConversationsModule,
 } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
   VSProductionBriefComponent,
   VSProductionBriefStartEvent,
@@ -52,7 +53,13 @@ export interface VSCopilotConversationCreatedEvent {
 @Component({
   standalone: true,
   selector: 'vs-copilot-panel, mj-vs-copilot-panel',
-  imports: [CommonModule, ConversationsModule, SharedGenericModule, VSProductionBriefComponent],
+  imports: [
+    CommonModule,
+    ConversationsModule,
+    SharedGenericModule,
+    MJButtonDirective,
+    VSProductionBriefComponent,
+  ],
   templateUrl: './vs-copilot-panel.component.html',
   styleUrls: ['./vs-copilot-panel.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

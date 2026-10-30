@@ -3,5 +3,5 @@
 }
 
 .mj-bkap-container {
-  padding: 0.5rem 0;
+  padding: var(--mj-space-2) var(--mj-space-0);
 }

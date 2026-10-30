@@ -48,6 +48,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
   },
 }));
 
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { VSCopilotPanelComponent } from './vs-copilot-panel.component';
 
 @Directive({
@@ -127,6 +128,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
         ConversationChatAreaStubComponent,
         LoadingStubComponent,
         ChatSlotStubDirective,
+        MJButtonDirective,
       ],
       providers: [provideZonelessChangeDetection()],
     })
@@ -137,6 +139,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
             ConversationChatAreaStubComponent,
             LoadingStubComponent,
             ChatSlotStubDirective,
+            MJButtonDirective,
           ],
         },
       })

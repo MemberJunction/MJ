@@ -16,6 +16,7 @@ import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/g
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FileStorageModule, FileUploadEvent } from '@memberjunction/ng-file-storage';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 
 export type BrandKitAssetType = MJBrandKitAssetEntity['AssetType'];
@@ -33,14 +34,14 @@ export const ALL_BRAND_KIT_ASSET_TYPES: ReadonlyArray<{
   Icon: string;
 }> = [
   { Type: 'Logo', Label: 'Logos', Icon: 'fa-solid fa-gem' },
-  { Type: 'LogoMark', Label: 'Logo Marks', Icon: 'fa-solid fa-stamp' },
+  { Type: 'LogoMark', Label: 'Logo marks', Icon: 'fa-solid fa-stamp' },
   { Type: 'Image', Label: 'Images', Icon: 'fa-solid fa-image' },
   { Type: 'Screenshot', Label: 'Screenshots', Icon: 'fa-solid fa-desktop' },
   { Type: 'Video', Label: 'Videos', Icon: 'fa-solid fa-video' },
-  { Type: 'Music', Label: 'Music Tracks', Icon: 'fa-solid fa-music' },
-  { Type: 'SoundEffect', Label: 'Sound Effects', Icon: 'fa-solid fa-volume-high' },
+  { Type: 'Music', Label: 'Music tracks', Icon: 'fa-solid fa-music' },
+  { Type: 'SoundEffect', Label: 'Sound effects', Icon: 'fa-solid fa-volume-high' },
   { Type: 'Font', Label: 'Fonts', Icon: 'fa-solid fa-font' },
-  { Type: 'Other', Label: 'Other Assets', Icon: 'fa-solid fa-file' },
+  { Type: 'Other', Label: 'Other assets', Icon: 'fa-solid fa-file' },
 ];
 
 export const VISUAL_GENERATION_REFERENCE_ASSET_TYPES: ReadonlySet<BrandKitAssetType> = new Set<BrandKitAssetType>([
@@ -75,7 +76,7 @@ export const AUDIO_ASSET_TYPES: ReadonlySet<BrandKitAssetType> = new Set<BrandKi
 @Component({
   standalone: true,
   selector: 'mj-brand-kit-assets-editor',
-  imports: [CommonModule, FormsModule, FileStorageModule, MJStorageMediaPlayerComponent, MJButtonDirective],
+  imports: [CommonModule, FormsModule, FileStorageModule, MJStorageMediaPlayerComponent, MJButtonDirective, SharedGenericModule],
   templateUrl: './brand-kit-assets-editor.component.html',
   styleUrls: ['./brand-kit-assets-editor.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

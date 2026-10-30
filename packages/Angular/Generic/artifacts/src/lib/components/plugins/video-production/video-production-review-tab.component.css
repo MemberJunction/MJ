@@ -1,15 +1,15 @@
 .vp-review-tab {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 16px;
+  gap: var(--mj-space-5);
+  padding: var(--mj-space-4);
   color: var(--mj-text-primary);
 }
 
 .vp-review-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--mj-space-3);
 }
 
 .vp-section-title {
@@ -34,7 +34,7 @@
 
 .vp-table th,
 .vp-table td {
-  padding: 10px 12px;
+  padding: var(--mj-space-2-5) var(--mj-space-3);
   text-align: left;
   border-bottom: 1px solid var(--mj-border-subtle);
   vertical-align: top;
@@ -65,7 +65,7 @@
 .vp-severity-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: var(--mj-space-0-5) var(--mj-space-2);
   border-radius: var(--mj-radius-full);
   font-size: var(--mj-text-xs);
   font-weight: var(--mj-font-medium);
@@ -108,17 +108,17 @@
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
   background: var(--mj-bg-surface-card);
-  padding: 12px;
+  padding: var(--mj-space-3);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--mj-space-2-5);
 }
 
 .vp-round-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--mj-space-2);
   flex-wrap: wrap;
 }
 
@@ -141,12 +141,12 @@
 .vp-scores-summary {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--mj-space-3);
   font-size: var(--mj-text-sm);
 }
 
 .vp-human-notes {
-  padding: 12px;
+  padding: var(--mj-space-3);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
   background: var(--mj-bg-surface-card);
@@ -160,11 +160,17 @@
   color: var(--mj-text-secondary);
   font-size: var(--mj-text-xs);
   font-weight: var(--mj-font-medium);
+  border-radius: var(--mj-radius-sm);
+}
+
+.vp-prompt-details summary:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
 }
 
 .vp-prompt-text {
-  margin-top: 6px;
-  padding: 8px;
+  margin-top: var(--mj-space-1-5);
+  padding: var(--mj-space-2);
   border: 1px solid var(--mj-border-subtle);
   border-radius: var(--mj-radius-sm);
   background: var(--mj-bg-surface-sunken);

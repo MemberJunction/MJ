@@ -1,8 +1,8 @@
-<section class="mj-bka-root" aria-label="Brand Kit Assets Editor">
+<section class="mj-bka-root" aria-label="Brand kit assets editor">
   @if (!BrandKit || !BrandKit.ID) {
     <div class="mj-bka-empty" role="status">
       <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-      <span>Save the Brand Kit first to attach and manage Brand Kit Assets.</span>
+      <span>Save the brand kit first to attach and manage brand kit assets.</span>
     </div>
   } @else {
     @if (LoadError) {
@@ -24,12 +24,12 @@
         <div class="mj-bka-upload-header">
           <h4 class="mj-bka-upload-title">
             <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-            Add Brand Kit Asset
+            Add brand kit asset
           </h4>
         </div>
         <div class="mj-bka-upload-fields">
           <label class="mj-bka-field">
-            <span class="mj-bka-field-label">Asset Type</span>
+            <span class="mj-bka-field-label">Asset type</span>
             <select
               class="mj-bka-select"
               [(ngModel)]="NewAssetType"
@@ -41,7 +41,7 @@
           </label>
 
           <label class="mj-bka-field">
-            <span class="mj-bka-field-label">Display Name (optional)</span>
+            <span class="mj-bka-field-label">Display name (optional)</span>
             <input
               type="text"
               class="mj-bka-input"
@@ -51,7 +51,7 @@
           </label>
 
           <label class="mj-bka-field">
-            <span class="mj-bka-field-label">Usage Guidance</span>
+            <span class="mj-bka-field-label">Usage guidance</span>
             <input
               type="text"
               class="mj-bka-input"
@@ -90,13 +90,12 @@
 
     @if (Loading) {
       <div class="mj-bka-loading" role="status">
-        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-        <span>Loading Brand Kit assets…</span>
+        <mj-loading Text="Loading brand kit assets…" Size="small"></mj-loading>
       </div>
     } @else if (Groups.length === 0) {
       <div class="mj-bka-empty" data-testid="bka-no-assets">
         <i class="fa-solid fa-box-open" aria-hidden="true"></i>
-        <span>No assets attached to this Brand Kit yet.</span>
+        <span>No assets attached to this brand kit yet.</span>
       </div>
     } @else {
       <div class="mj-bka-groups">
@@ -164,7 +163,7 @@
                         class="mj-bka-input mj-bka-input--title"
                         [(ngModel)]="asset.Name"
                         [disabled]="Readonly"
-                        aria-label="Asset Name"
+                        aria-label="Asset name"
                         data-testid="bka-asset-name" />
                       <span class="mj-bka-type-badge">{{ asset.AssetType }}</span>
                     </div>
@@ -192,7 +191,7 @@
                       </label>
 
                       <label class="mj-bka-field">
-                        <span class="mj-bka-field-label">License Notes</span>
+                        <span class="mj-bka-field-label">License notes</span>
                         <input
                           type="text"
                           class="mj-bka-input"
@@ -247,7 +246,7 @@
                           (click)="SaveAsset(asset)"
                           data-testid="bka-asset-save-btn">
                           <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
-                          <span>{{ IsSavingAsset(asset) ? 'Saving…' : 'Save Asset' }}</span>
+                          <span>{{ IsSavingAsset(asset) ? 'Saving…' : 'Save asset' }}</span>
                         </button>
                       </div>
                     }

@@ -55,7 +55,7 @@
   <mj-page-body>
     @if (IsLoading && AllBrandKits.length === 0) {
       <div class="vs-loading-state" data-testid="brand-kits-loading">
-        <mj-loading text="Loading brand kits..." size="medium" />
+        <mj-loading Text="Loading brand kits..." Size="medium" />
       </div>
     } @else if (LoadError) {
       <mj-empty-state
@@ -109,6 +109,7 @@
             role="button"
             (click)="OpenBrandKit(kit)"
             (keydown.enter)="$event.target === $event.currentTarget && OpenBrandKit(kit)"
+            (keydown.space)="$event.target === $event.currentTarget && $event.preventDefault(); $event.target === $event.currentTarget && OpenBrandKit(kit)"
           >
             <div class="vs-palette-strip" data-testid="brand-kit-palette-strip">
               @if (kit.Swatches.length > 0) {
@@ -186,6 +187,7 @@
                   [disabled]="DeletingKitId === kit.ID"
                   (click)="DeleteBrandKit(kit, $event)"
                   (keydown.enter)="$event.stopPropagation()"
+                  (keydown.space)="$event.stopPropagation()"
                 >
                   <i class="fa-regular fa-trash-can" aria-hidden="true"></i>
                 </button>
