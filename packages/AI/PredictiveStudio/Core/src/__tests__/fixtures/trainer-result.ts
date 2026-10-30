@@ -62,14 +62,17 @@ export class TrainerResultFixtures {
   /**
    * The C1 result with a finalist whose name is a simple member's key (`glm`). The sidecar refuses member names for
    * candidates, so a live run never produces this; it pins how a stored result with such a finalist maps to the gate's
-   * delivered member. The model's comparison against the GLM is 0 [0, 0] (same predictions).
+   * delivered member. The finalist's predictions are the GLM's: its holdout score is the GLM's, its comparisons are the
+   * GLM's, and the comparison against the GLM is 0 [0, 0].
    */
   public static C1MemberNamedFinalistResult(): TrainerCompleted {
     const base = TrainerResultFixtures.C1KeepSimpleResult();
     return {
       ...base,
+      innerScores: base.innerScores.map((c) => (c.candidate === 'xgb' ? { ...c, candidate: 'glm' } : c)),
       finalist: 'glm',
       holdoutAccess: { ...base.holdoutAccess, finalist: 'glm' },
+      holdout: { ...base.holdout, primary: TrainerResultFixtures.Mwi('log-loss', 0.3652, 0.328, 0.408) },
       comparisons: {
         ...base.comparisons,
         modelVsDummy: TrainerResultFixtures.Cmp(0.0239, 0.011, 0.036),

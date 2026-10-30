@@ -112,7 +112,11 @@ export interface GuardedGateDecision {
 
 // ------------------------------------------------------------------- from a trainer result to stored intervals --
 
-/** The fields the gate reads; satisfied by the live `TrainerCompleted` and by the stored `StoredTrainerResult`. */
+/**
+ * The trainer-result fields the gate and the run's stored gate record read. The gate itself reads `finalist`, `baselines`
+ * and `comparisons`; the rest (`holdout`, `gate`, `slices`, `incumbentDiff`, `operatingPoint`) are carried for storing
+ * the run's gate record. Satisfied by the live `TrainerCompleted` and by the stored `StoredTrainerResult`.
+ */
 export type CompletedTrainerResult = Pick<TrainerCompleted, 'finalist' | 'baselines' | 'comparisons' | 'holdout' | 'gate' | 'slices' | 'incumbentDiff' | 'operatingPoint'>;
 
 /** The stored intervals read from a trainer result, or the comparison key the result lacks. */
@@ -122,6 +126,10 @@ export type IntervalsFromResult =
 
 // -------------------------------------------------------------------------------------------- the reason --
 
+/**
+ * Why the stored decision came out as it did: one code per decision-table branch (with the keep-simple branch split
+ * into a simple baseline or the unit's existing heuristic rule), and one per guard refusal.
+ */
 export type GateReasonCode =
   | 'model-beats-best-simple'
   | 'only-model-beats-dummy'
@@ -217,7 +225,8 @@ export class GateRules {
    * guard inputs, not `DecideGate`.
    *
    * The AUC guard reads the interval at the level the trainer reported it (0.95); it does not consult the protocol's
-   * `promotion.lowerBoundLevel`.
+   * `promotion.lowerBoundLevel`. The rule is "contains 0.5": an interval wholly below 0.5 does not trigger it (such a
+   * model would also have had to beat the dummy's loss by the margin to reach this point).
    */
   public static ApplyGateGuards(gate: GateDecision, guards: GateGuardInputs): GuardedGateDecision {
     if (gate.outcome === 'no-signal') return { Transcribed: gate, Decision: gate, GuardRefusal: null };
@@ -258,7 +267,7 @@ export class GateRules {
       case 'seasonal-naive':
         return 'seasonalNaive';
       case 'incumbent-heuristic':
-        return `heuristic:${spec.name}`;
+        return `${GateRules.heuristicPrefix}${spec.name}`;
     }
   }
 
@@ -354,25 +363,24 @@ export class GateRules {
 
   /** The lowest score, first in name order on a tie (the sidecar picks the best simple member the same way). */
   private static bestSimpleMember(scores: Readonly<Record<string, number>>): string | null {
-    let best: { readonly name: string; readonly score: number } | null = null;
-    for (const [name, score] of Object.entries(scores).sort(GateRules.byKey)) {
-      if (best === null || score < best.score) best = { name, score };
-    }
-    return best === null ? null : best.name;
+    const best = GateRules.minByKeyOrder(scores);
+    return best === null ? null : best.key;
   }
 
   /** The class with the fewest holdout rows, first in label order on a tie. */
   private static rarestClass(counts: Readonly<Record<string, number>> | null): { readonly label: string; readonly rows: number } | null {
-    if (counts === null) return null;
-    let rarest: { readonly label: string; readonly rows: number } | null = null;
-    for (const [label, rows] of Object.entries(counts).sort(GateRules.byKey)) {
-      if (rarest === null || rows < rarest.rows) rarest = { label, rows };
-    }
-    return rarest;
+    const rarest = counts === null ? null : GateRules.minByKeyOrder(counts);
+    return rarest === null ? null : { label: rarest.key, rows: rarest.value };
   }
 
-  private static byKey(a: readonly [string, number], b: readonly [string, number]): number {
-    return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+  /** The entry with the smallest value, the first key in code-unit order on a tie; null for an empty record. */
+  private static minByKeyOrder(values: Readonly<Record<string, number>>): { readonly key: string; readonly value: number } | null {
+    let min: { readonly key: string; readonly value: number } | null = null;
+    for (const key of Object.keys(values).sort()) {
+      const value = values[key];
+      if (value !== undefined && (min === null || value < min.value)) min = { key, value };
+    }
+    return min;
   }
 
   private static formatOrUnreported(iv: StoredInterval | null | undefined): string {
