@@ -6,7 +6,6 @@ import { TrustVerdicts, ImportanceDisplay, type ModelingPlanSpec } from '@member
 import {
   SummarizeBuildResult,
   BuildOutcomeMessage,
-  UntrainedExperimentsNote,
   GenerateMarkdownReport,
   HiddenImportanceNote,
   UNSHOWN_IMPORTANCE_KIND_NOTE,
@@ -233,8 +232,9 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote, ['B', 'C']);
     expect(md).toContain('- The score comes from the rows held back from training. The other 2 proposed experiments (B, C) were not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
     expect(md).toContain('| Rank | Algorithm | Score (AUC) | Status |');
-    expect(UntrainedExperimentsNote(['B'])).toBe('The other proposed experiment (B) was not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
-    expect(UntrainedExperimentsNote([])).toBe('');
+    expect(BuildOutcomeMessage(SummarizeBuildResult({ ...published, untrainedExperiments: ['B'] }))).toContain('The other proposed experiment (B) was not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
+    const none = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote, []);
+    expect(none).toContain('- The score comes from the rows held back from training.\n');
     const outcome = SummarizeBuildResult({ ...published, untrainedExperiments: ['B', 'C'] });
     expect(BuildOutcomeMessage(outcome)).toContain('The other 2 proposed experiments (B, C) were not trained');
     expect(SummarizeBuildResult(published).untrainedExperiments).toBeUndefined();

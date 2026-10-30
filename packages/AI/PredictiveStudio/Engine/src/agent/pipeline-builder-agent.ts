@@ -102,7 +102,7 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
  * The sentence naming the approved experiments a build did not train, or '' when every one was trained. Without a
  * Prediction Unit on the pipeline there is no search, so only the highest-priority experiment trains.
  */
-export function UntrainedExperimentsNote(untrained: readonly string[] | undefined): string {
+function untrainedExperimentsNote(untrained: readonly string[] | undefined): string {
   if (!untrained || untrained.length === 0) return '';
   const count = untrained.length === 1 ? 'The other proposed experiment' : `The other ${untrained.length} proposed experiments`;
   return `${count} (${untrained.join(', ')}) ${untrained.length === 1 ? 'was' : 'were'} not trained: a search over several candidates needs a Prediction Unit on the pipeline.`;
@@ -114,7 +114,7 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
     ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
     : '';
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
-  const untrained = UntrainedExperimentsNote(o.untrainedExperiments);
+  const untrained = untrainedExperimentsNote(o.untrainedExperiments);
   const untrainedText = untrained ? ` ${untrained}` : '';
   if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${untrainedText}${warningText}`;
   const heldMessage = o.heldReason
@@ -226,14 +226,14 @@ ${renderLeaderboardSection(leaderboard, targetMetric, hasWinner)}
 ${topFeatures}
 
 ## How this was measured
-- ${measurementNote(IsSearchLeaderboard(leaderboard), untrainedExperiments)}
+- ${measurementNote(isSearchLeaderboard(leaderboard), untrainedExperiments)}
 - Registered in the Predictive Studio Models catalog; the Trust Grade line above says whether it was published.
 `;
 }
 
 /** Whether a leaderboard holds a search's inner-fold scores (optimistic by construction) rather than a holdout score. */
-export function IsSearchLeaderboard(leaderboard: readonly MLLeaderboardEntryPayload[] | undefined): boolean {
-  return (leaderboard ?? []).some((r) => r.optimistic === true);
+function isSearchLeaderboard(leaderboard: readonly MLLeaderboardEntryPayload[] | undefined): boolean {
+  return (leaderboard || []).some((r) => r.optimistic === true);
 }
 
 /**
@@ -245,7 +245,7 @@ function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | und
   if (!leaderboard || leaderboard.length === 0) {
     return '';
   }
-  const search = IsSearchLeaderboard(leaderboard);
+  const search = isSearchLeaderboard(leaderboard);
   const rows = leaderboard
     .map((r) => {
       const measured = typeof r.score === 'number';
@@ -277,7 +277,7 @@ function measurementNote(search: boolean, untrainedExperiments: readonly string[
   if (search) {
     return 'The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.';
   }
-  const untrained = UntrainedExperimentsNote(untrainedExperiments);
+  const untrained = untrainedExperimentsNote(untrainedExperiments);
   return `The score comes from the rows held back from training.${untrained ? ` ${untrained}` : ''}`;
 }
 
