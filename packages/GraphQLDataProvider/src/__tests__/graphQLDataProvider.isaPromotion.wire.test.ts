@@ -21,7 +21,7 @@ vi.mock('graphql-request', async () => {
     return { gql: wire.FakeGql, GraphQLClient: wire.FakeGraphQLClient };
 });
 
-import { BaseEntity, EntityInfo, EntitySaveOptions, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntitySaveOptions, IMetadataProvider, Metadata, UserInfo, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
 import { GraphQLWire } from './support/graphQLWire';
 import {
     BuildTestConfig,
@@ -379,6 +379,106 @@ describe('GraphQLDataProvider Save — IS-A promotion carries the shared primary
             { Key: 'ID', Value: EXISTING_ANIMAL_ID },
             { Key: 'Name', Value: 'Biscuit' },
         ]);
+    });
+
+    it('clears stale _isaParentPreSaveSnapshot when leaf Save() aborts in validation and caller reverts parent', async () => {
+        const animal = existingAnimal();
+        const dog = new TestIsaEntity(dogInfo, provider);
+        dog.WireParent(animal);
+        dog.LoadFromData({
+            ID: EXISTING_ANIMAL_ID,
+            Name: 'Biscuit',
+            MicrochipNumber: '985112000000001',
+            IsHouseTrained: false,
+            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+
+        // 1. Mutate parent field; leaf Validate() fails after IsParentEntitySave runs
+        animal.Set('Name', 'Aborted Name');
+        const origValidate = dog.Validate.bind(dog);
+        let failOnce = true;
+        dog.Validate = () => {
+            if (failOnce) {
+                failOnce = false;
+                const r = origValidate();
+                r.Success = false;
+                r.Errors.push(new ValidationErrorInfo('IsHouseTrained', 'forced failure', false, ValidationErrorType.Failure));
+                return r;
+            }
+            return origValidate();
+        };
+
+        const firstSave = await dog.Save();
+        expect(firstSave).toBe(false);
+
+        // 2. Caller reverts the entity so animal.Dirty === false, then edits only a child field
+        dog.Revert();
+        expect(animal.Dirty).toBe(false);
+        expect(animal.Get('Name')).toBe('Biscuit');
+
+        dog.Set('IsHouseTrained', true);
+        GraphQLWire.EnqueueResponse({
+            UpdateShelterDog: {
+                ID: EXISTING_ANIMAL_ID,
+                IsHouseTrained: true,
+                _mj__CreatedAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+                _mj__UpdatedAt: new Date('2026-01-02T00:00:00Z').toISOString(),
+            },
+        });
+
+        const secondSave = await dog.Save();
+        expect(secondSave).toBe(true);
+
+        const input = lastInputRecord();
+        expect(input['ID']).toBe(EXISTING_ANIMAL_ID);
+        expect(input['IsHouseTrained']).toBe(true);
+        expect(input).not.toHaveProperty('Name');
+    });
+
+    it('preserves dirty IS-A parent fields when saved inside a GraphQLTransactionGroup', async () => {
+        const animal = existingAnimal();
+        const dog = new TestIsaEntity(dogInfo, provider);
+        dog.WireParent(animal);
+        dog.LoadFromData({
+            ID: EXISTING_ANIMAL_ID,
+            Name: 'Biscuit',
+            MicrochipNumber: '985112000000001',
+            IsHouseTrained: false,
+            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+
+        const tg = await provider.CreateTransactionGroup();
+        dog.TransactionGroup = tg;
+        animal.Set('Name', 'Biscuit TG');
+
+        const queued = await animal.Save();
+        expect(queued).toBe(true);
+
+        GraphQLWire.EnqueueResponse({
+            ExecuteTransactionGroup: {
+                Success: true,
+                ErrorMessages: [],
+                ResultsJSON: [
+                    JSON.stringify({
+                        ID: EXISTING_ANIMAL_ID,
+                        Name: 'Biscuit TG',
+                        IsHouseTrained: false,
+                    }),
+                ],
+            },
+        });
+
+        const submitted = await tg.Submit();
+        expect(submitted).toBe(true);
+
+        const groupVars = (GraphQLWire.LastRequest.variables as { group: { Items: Array<{ EntityObjectJSON: string }> } }).group;
+        const itemJson = JSON.parse(groupVars.Items[0].EntityObjectJSON) as Record<string, unknown>;
+        expect(itemJson).toEqual({
+            ID: EXISTING_ANIMAL_ID,
+            Name: 'Biscuit TG',
+        });
     });
 });
 
