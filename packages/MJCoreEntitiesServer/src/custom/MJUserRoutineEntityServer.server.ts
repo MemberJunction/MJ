@@ -94,7 +94,14 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         // client's untouched null, so a null-dirty NextRunAt must not suppress the
         // initial computation (it previously left new UI-created routines unscheduled
         // until the dispatcher's seeding sweep).
-        const explicitlySet = this.GetFieldByName('NextRunAt')?.Dirty === true && this.NextRunAt != null;
+        //
+        // On an unsaved record a non-null NextRunAt is always the caller's explicit time. Field Dirty
+        // cannot tell us so there: after NewRecord() a field's first write also becomes its OldValue,
+        // so a one-shot built with a default cron that is then cleared reads as "schedule changed,
+        // NextRunAt not dirty" and would be recomputed to null (no cron, no StartAt), after which the
+        // dispatcher's post-run roll-up disables it.
+        const explicitlySet = this.NextRunAt != null
+            && (!this.IsSaved || this.GetFieldByName('NextRunAt')?.Dirty === true);
         if (explicitlySet) {
             return;
         }

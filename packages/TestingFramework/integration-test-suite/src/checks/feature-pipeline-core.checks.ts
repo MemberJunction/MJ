@@ -127,7 +127,7 @@ class FeaturePipelineCoreBundle {
             ExtraFilter: `RecordProcessID = '${EscapeSQLString(F.Require(ctx).RecordProcessID)}'`,
         }, ctx.User);
         Assert(res.Success, `counting ${entityName}: ${res.ErrorMessage}`);
-        return res.TotalRowCount;
+        return res.TotalRowCount ?? 0;
     }
 
     /** The pipeline's cache rows (entity objects: FP4 saves one). */

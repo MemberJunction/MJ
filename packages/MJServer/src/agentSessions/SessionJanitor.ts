@@ -20,6 +20,7 @@ import {
 import { GetCurrentHostInstance, GetHostInstanceID, HostInstanceIdentity } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
 import type { SessionJanitorSettings } from '../backgroundSweepConfigUnits.js';
+import { ExpiryCloseReason, ExpiryReason } from './sessionDeadline.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -197,6 +198,24 @@ interface RecoveryVisit {
 }
 
 /**
+ * The close reason for a row the staleness sweep's SQL already judged stale (`LastActiveAt < cutoff`).
+ * {@link ExpiryCloseReason} returns null for such a row only when `LastActiveAt` will not parse (or the
+ * threshold is non-finite); skipping it would leave it `Active` forever, so it closes as `'Idle'` and the
+ * fallback is logged with the session ID.
+ */
+function staleRowCloseReason(session: MJAIAgentSessionEntity, nowMs: number, thresholdMs: number): ExpiryReason {
+    const reason = ExpiryCloseReason(session, nowMs, thresholdMs);
+    if (reason !== null) {
+        return reason;
+    }
+    LogError(
+        `[SessionJanitor] Staleness sweep: session ${session.ID} has LastActiveAt ${String(session.LastActiveAt)}; ` +
+            'LastActiveAt unparseable; closing as Idle',
+    );
+    return 'Idle';
+}
+
+/**
  * `BaseSingleton` background reconciler that keeps the durable `AIAgentSession` state from drifting
  * away from volatile process reality. A crash/redeploy vaporizes a host's in-memory sockets but
  * leaves its session rows reading `Active`/`Idle` forever; the janitor force-closes those orphans.
@@ -213,9 +232,12 @@ interface RecoveryVisit {
  *    `closeThresholdMinutes`, regardless of host. Catches sessions whose owner died without a clean
  *    reboot (OOM, scaled-down pod).
  * 3. **Max-duration sweep ({@link RunMaxDurationSweep})** — run on every periodic tick after the
- *    staleness sweep. Closes any session past its stored hard deadline (the public voice cost cap).
+ *    staleness sweep. Closes any session past its stored hard deadline (the public voice cost cap), and
+ *    any deadline-carrying session whose idle moment has passed; it stamps that row `'Idle'` when the idle
+ *    moment came before the deadline.
  *
- * The close sweeps stamp `CloseReason = 'Janitor'`. A shutdown-time path — {@link RunShutdownDrain},
+ * Startup recovery stamps `CloseReason = 'Janitor'`; the staleness and max-duration sweeps stamp `'Idle'` or
+ * `'TimeLimit'`, whichever expiry moment passed first ({@link ExpiryCloseReason}). A shutdown-time path — {@link RunShutdownDrain},
  * invoked from {@link Shutdown} during the graceful ShutdownRegistry drain — closes this exact host
  * instance's own live sessions with `CloseReason = 'Shutdown'`.
  *
@@ -369,7 +391,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      * {@link IShutdownable}: stop the timer, then drain this host's own live sessions so a
      * graceful stop never strands `Active`/`Idle` rows for the next boot's janitor to mop up, then wait
      * (at most {@link RECOVERY_SHUTDOWN_WAIT_MS}) for an in-flight recording recovery pass.
-     * Drained sessions are stamped `CloseReason = 'Shutdown'` (vs. `'Janitor'` for crash orphans),
+     * Drained sessions are stamped `CloseReason = 'Shutdown'` (vs. `'Janitor'` for crash orphans from an earlier boot),
      * so the dashboards can tell a clean redeploy from a reconciled crash. Never throws; the drain
      * is skipped when {@link Start} was never called (no captured provider/user).
      */
@@ -394,7 +416,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     public async RunShutdownDrain(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
         const current = GetHostInstanceID().replace(/'/g, "''");
         const filter = `Status IN ('Active','Idle') AND HostInstanceID = '${current}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Shutdown');
+        const closed = await this.sweepAndClose(filter, provider, systemUser, () => 'Shutdown');
         if (closed > 0) {
             LogStatus(`[SessionJanitor] Shutdown drain closed ${closed} live session(s) owned by this host instance`);
         }
@@ -423,8 +445,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             `AND HostInstanceID LIKE '${prefix}%' ` +
             `AND HostInstanceID <> '${current}'`;
         // The LIKE narrows the read; the exact check decides, since LIKE reads a `_` in a host name as any character.
-        const isPriorBoot = (session: MJAIAgentSessionEntity): boolean => hostInstance.IsPriorBoot(session.HostInstanceID);
-        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor', isPriorBoot);
+        const reasonFor = (session: MJAIAgentSessionEntity): SessionCloseReason | null =>
+            hostInstance.IsPriorBoot(session.HostInstanceID) ? 'Janitor' : null;
+        const closed = await this.sweepAndClose(filter, provider, systemUser, reasonFor);
         if (closed > 0) {
             LogStatus(
                 `[SessionJanitor] Startup recovery closed ${closed} orphaned session(s) from an earlier boot of this instance ` +
@@ -436,12 +459,18 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
 
     /**
      * Force-close any `Active`/`Idle` session whose `LastActiveAt` is older than the configured
-     * close threshold, regardless of host. Idempotent and concurrency-safe. Returns the count closed.
+     * close threshold, regardless of host. Stamped `'Idle'`, or `'TimeLimit'` when the row's authored deadline
+     * passed before its idle moment ({@link ExpiryCloseReason}). A row the SQL judged stale is never skipped:
+     * when its `LastActiveAt` will not parse it closes as `'Idle'` with a `LogError` ({@link staleRowCloseReason}).
+     * Idempotent and concurrency-safe. Returns the count closed.
      */
     public async RunStalenessSweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
-        const cutoffIso = new Date(Date.now() - this._config.closeThresholdMinutes * 60_000).toISOString();
+        // One clock read feeds both the SQL cutoff and the per-row decision, so they cannot disagree.
+        const nowMs = Date.now();
+        const thresholdMs = this._config.closeThresholdMinutes * 60_000;
+        const cutoffIso = new Date(nowMs - thresholdMs).toISOString();
         const filter = `Status IN ('Active','Idle') AND LastActiveAt < '${cutoffIso}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor');
+        const closed = await this.sweepAndClose(filter, provider, systemUser, s => staleRowCloseReason(s, nowMs, thresholdMs));
         if (closed > 0) {
             LogStatus(`[SessionJanitor] Staleness sweep closed ${closed} stale session(s) (>${this._config.closeThresholdMinutes}m idle)`);
         }
@@ -456,20 +485,18 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      *
      * Only sessions that CARRY a deadline are loaded (a cheap `Config_ LIKE` pre-filter), then the exact
      * ISO deadline is parsed and compared in JS (`Config_` is JSON, not a queryable column). Stamped
-     * `CloseReason = 'Janitor'`, idempotent + concurrency-safe like the other sweeps. Returns the count closed.
+     * `'TimeLimit'`, or `'Idle'` when the row's idle moment passed before its deadline ({@link ExpiryCloseReason});
+     * idempotent + concurrency-safe like the other sweeps. Returns the count closed.
      */
     public async RunMaxDurationSweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
         const nowMs = Date.now();
         // Only consider sessions that carry a deadline marker — keeps this sweep cheap (it never touches
         // the far-more-common uncapped sessions) while the JS check below enforces the exact deadline.
         const filter = `Status IN ('Active','Idle') AND Config LIKE '%maxSessionDeadlineIso%'`;
-        const isExpired = (session: MJAIAgentSessionEntity): boolean => {
-            const deadlineMs = this.parseSessionDeadlineMs(session.Config_);
-            return deadlineMs != null && deadlineMs <= nowMs;
-        };
-        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor', isExpired);
+        const thresholdMs = this._config.closeThresholdMinutes * 60_000;
+        const closed = await this.sweepAndClose(filter, provider, systemUser, s => ExpiryCloseReason(s, nowMs, thresholdMs));
         if (closed > 0) {
-            LogStatus(`[SessionJanitor] Max-duration sweep closed ${closed} session(s) past their hard duration cap`);
+            LogStatus(`[SessionJanitor] Max-duration sweep closed ${closed} capped session(s) past their deadline or idle threshold`);
         }
         return closed;
     }
@@ -736,23 +763,6 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                 `[SessionJanitor] Recording shard purge (sessions closed before ${lookbackCutoff.toISOString()}) failed: ` +
                 `${err instanceof Error ? err.message : String(err)}`,
             );
-        }
-    }
-
-    /** Parses the absolute deadline (ms) from a session's `Config_` JSON, or null when absent/malformed. */
-    private parseSessionDeadlineMs(configJson: string | null | undefined): number | null {
-        if (!configJson) {
-            return null;
-        }
-        try {
-            const parsed = JSON.parse(configJson) as { maxSessionDeadlineIso?: string };
-            if (typeof parsed.maxSessionDeadlineIso !== 'string') {
-                return null;
-            }
-            const ms = Date.parse(parsed.maxSessionDeadlineIso);
-            return Number.isNaN(ms) ? null : ms;
-        } catch {
-            return null;
         }
     }
 
@@ -1027,7 +1037,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
 
     /**
      * Page through every session matching `filter` with keyset (`AfterKey`) pagination and close each
-     * via {@link SessionManager.CloseSession}, stamping `closeReason` on every row it transitions.
+     * via {@link SessionManager.CloseSession}, stamping the reason `reasonFor` returns for that row.
+     * A `null` reason skips the row (the SQL filter only narrows; `reasonFor` decides), and skipped rows
+     * are dropped before the channel batch load so it covers only rows that will close.
      * Returns the number successfully closed. A `Closed`-by-now row (raced by another instance) is a
      * harmless no-op that keeps its original reason.
      */
@@ -1035,30 +1047,34 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         filter: string,
         provider: IMetadataProvider,
         systemUser: UserInfo,
-        closeReason: SessionCloseReason,
-        shouldClose?: (session: MJAIAgentSessionEntity) => boolean,
+        reasonFor: (session: MJAIAgentSessionEntity) => SessionCloseReason | null,
     ): Promise<number> {
         let closedCount = 0;
         await this.forEachSessionPage(filter, provider, systemUser, async fetched => {
-            // Optional in-JS narrowing (e.g. exact deadline check the SQL pre-filter can't express).
-            const page = shouldClose ? fetched.filter(shouldClose) : fetched;
-            if (page.length === 0) {
+            const toClose: Array<{ session: MJAIAgentSessionEntity; reason: SessionCloseReason }> = [];
+            for (const session of fetched) {
+                const reason = reasonFor(session);
+                if (reason !== null) {
+                    toClose.push({ session, reason });
+                }
+            }
+            if (toClose.length === 0) {
                 return;
             }
             // Batch-load every channel for this whole page of sessions in ONE query, then hand each
             // session its own slice to CloseSession — avoids the N+1 channel read (one RunView per
             // closing session) that tripped the sequential / multiple-same-entity telemetry.
             const channelsBySession = await this.sessionManager.LoadActiveChannelsBySession(
-                page.map(s => s.ID),
+                toClose.map(c => c.session.ID),
                 systemUser,
                 provider,
             );
-            for (const session of page) {
+            for (const { session, reason } of toClose) {
                 const closed = await this.sessionManager.CloseSession(
                     session.ID,
                     systemUser,
                     provider,
-                    closeReason,
+                    reason,
                     channelsBySession.get(session.ID.toLowerCase()) ?? [],
                 );
                 if (closed) {

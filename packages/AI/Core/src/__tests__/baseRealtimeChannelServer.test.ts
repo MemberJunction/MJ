@@ -62,7 +62,7 @@ describe('BaseRealtimeChannelServer', () => {
         plugin.Initialize(CTX);
 
         await expect(plugin.OnSessionStarted()).resolves.toBeUndefined();
-        const reasons: Array<RealtimeChannelCloseReason | null> = ['Explicit', 'Janitor', 'Shutdown', 'Error', null];
+        const reasons: Array<RealtimeChannelCloseReason | null> = ['Explicit', 'Janitor', 'Shutdown', 'Error', 'TimeLimit', 'Idle', null];
         for (const reason of reasons) {
             await expect(plugin.OnSessionClosed(reason)).resolves.toBeUndefined();
         }

@@ -95,7 +95,7 @@ async function countQueries(user: UserInfo, categoryID: string, name: string): P
     const result = await new RunView().RunView({
         EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${categoryID}' AND Name='${name.replace(/'/g, "''")}'`, ResultType: 'count_only', BypassCache: true,
     }, user);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 /** Over GraphQL. */

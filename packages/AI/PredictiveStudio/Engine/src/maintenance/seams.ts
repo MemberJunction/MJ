@@ -49,6 +49,7 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
         ExtraFilter: `ID='${bindingId}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );
@@ -95,6 +96,7 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
         ExtraFilter: `ID='${modelId}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );

@@ -11,6 +11,7 @@
  */
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
+import { BuildActionOutputObject } from '@memberjunction/ai-core-plus';
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
@@ -97,29 +98,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * produced.
      */
     private buildOutput(actionParams: ActionParam[], resultMessage?: string | null): Record<string, unknown> {
-        const output: Record<string, unknown> = {};
-        if (typeof resultMessage === 'string') {
-            const trimmed = resultMessage.trim();
-            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                try {
-                    const parsed: unknown = JSON.parse(trimmed);
-                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                        Object.assign(output, parsed as Record<string, unknown>);
-                    }
-                } catch {
-                    // Non-JSON prose message; ignore.
-                }
-            }
-        }
-        for (const p of actionParams ?? []) {
-            if (p.Type === 'Output' || p.Type === 'Both') output[p.Name] = p.Value;
-        }
-        if (typeof output.handle === 'string' && output.Handle === undefined) {
-            output.Handle = output.handle;
-        } else if (typeof output.Handle === 'string' && output.handle === undefined) {
-            output.handle = output.Handle;
-        }
-        return output;
+        return BuildActionOutputObject(actionParams, resultMessage);
     }
 
     /**

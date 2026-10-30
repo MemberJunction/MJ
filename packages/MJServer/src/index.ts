@@ -614,10 +614,19 @@ const setupComplete$ = new ReplaySubject(1);
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // so boot does not pay a second full metadata load. The refresh interval stays non-zero on
+        // PostgreSQL on purpose: PostgreSQLDataProvider.AllowRefresh is `CheckRefreshIntervalSeconds > 0`,
+        // so an interval of 0 would make every later codegenPgProvider.Refresh() — the one RSU CodeGen
+        // issues after DDL — return without reloading, leaving this provider frozen at the boot catalog.
+        // (SQL Server's AllowRefresh is independent of the interval, so its codegen provider can use 0.)
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
           codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
+          undefined,
+          undefined,
+          false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
         await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
@@ -765,8 +774,18 @@ const setupComplete$ = new ReplaySubject(1);
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenProvider.Refresh() after DDL still reloads from the DB
+        // (SQLServerDataProvider.AllowRefresh does not depend on the interval; PostgreSQL's does — see above).
+        const codegenConfig = new SQLServerProviderConfigData(
+          codegenPool,
+          mj_core_schema,
+          0,
+          undefined,
+          undefined,
+          false,
+        );
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -1323,7 +1342,7 @@ const setupComplete$ = new ReplaySubject(1);
     },
     // High compression level (good balance between CPU and compression ratio)
     level: 6
-  }));
+  }) as object as express.RequestHandler);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
@@ -2211,6 +2230,7 @@ async function processRSUPendingWork(): Promise<void> {
               EntityName: 'MJ: Scheduled Job Types',
               ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               ResultType: 'simple',
               Fields: ['ID']
             }, systemUser);
@@ -2304,6 +2324,7 @@ async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: Us
       ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
       Fields: ['ID'],
     }, systemUser);

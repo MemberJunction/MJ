@@ -273,7 +273,7 @@ export class RecordCloneOperationsHandler {
     /** Whether the record has the yes/no field `field` set, as `contextUser` can read it. */
     private async isFlagged(entity: EntityInfo, key: RecordCloneKey, field: string, contextUser: UserInfo): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
-            { EntityName: entity.Name, Fields: [field], ExtraFilter: toCompositeKey(entity, key).ToWhereClause(), ResultType: 'simple', MaxRows: 1 },
+            { EntityName: entity.Name, Fields: [field], ExtraFilter: toCompositeKey(entity, key).ToWhereClause(), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         const value = res?.Success ? res.Results?.[0]?.[field] : undefined;

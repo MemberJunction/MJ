@@ -342,6 +342,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             ExtraFilter: `${FeatureValueCacheService.CacheScopeFilter(params)} AND KeyHash = '${EscapeSQLString(params.keyHash)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             BypassCache: true,
         }, params.contextUser);
         if (!res.Success) {
@@ -525,6 +526,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             Fields: [...(shape.Fields || []), 'ValueKeyHash'],
             ExtraFilter: `${recordFilter} AND FeatureName = '${EscapeSQLString(name)}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
         })), p.ContextUser);
         results.forEach((res, i) => {
             if (!res.Success) {
@@ -573,6 +575,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             ...FeatureValueCacheService.LatestValueViewShape(),
             ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)}${FeatureValueCacheService.SourceFilter(p.Source)}${exclude}`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, p.ContextUser);
         if (!res.Success) {
             throw new Error(`FeatureValueCacheService: reading the latest '${p.FeatureName}' value of record '${p.RecordID}' failed: ${res.ErrorMessage}`);

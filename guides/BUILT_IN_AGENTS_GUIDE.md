@@ -56,7 +56,7 @@ flowchart TB
 | Agent Name | Type | Category | Primary Role & Capabilities |
 | :--- | :--- | :--- | :--- |
 | **Sage** | Loop | Assistant | Ambient concierge present in every MJ conversation. Answers quick questions, navigates the UI, and delegates specialized work via `nextStep.type = 'Tasks'`. |
-| **Chief of Staff** | Loop | Assistant | Personal, self-scheduling agent (`One CoS per user`) that tracks quarterly priorities/OKRs, monitors workstreams & issues, writes executive briefings, manages approvals, and coordinates across chat, email, and voice/telephony. |
+| **Chief of Staff** | Loop | Assistant | Personal, self-scheduling agent (`One CoS per user`) that keeps the user's priorities, runs their approvals and wake schedule, writes executive briefings, manages approvals, and coordinates across chat, email, and voice/telephony. |
 | **Workflow Planner** | Loop (Sub-Agent of Sage) | Assistant | Designs multi-agent dependency DAGs (`TaskGraph`) using `Find Candidate Agents` and confirms execution plans with the user. |
 | **Form Builder** | Loop (`FormBuilderAgent`) | Assistant | Two-stage deterministic orchestrator (`Form Builder - Designer` + `Form Builder - Builder`) that designs, lints, and persists interactive entity forms. |
 | **Research Agent** | Loop | Research | Multi-source research orchestrator coordinating `Database Research Agent`, `Web Research Agent`, `File Research Agent`, `KB Research Agent`, and `Research Report Writer`. |
@@ -86,30 +86,24 @@ flowchart LR
     subgraph CoSModel["Chief of Staff (Personal Coordinator)"]
         C1["Always-On: Self-schedules via MJ: User Routines + 3-Tier Wake Gate"]
         C2["Per-User Identity & Policy: Custom name, narrowed RLS/FLS, approval rules"]
-        C3["Stateful Workstreams: Owns OKR check-ins, issue escalations & peer follow-ups"]
+        C3["Stateful Workstreams: Owns briefings, reminders, approvals & peer follow-ups"]
     end
 ```
 
 1. **Sage is the Reactive Concierge**: Sage is lightweight, fast, and stateless across sessions. When a user asks *"Open the Accounts dashboard"* or *"Run a quick web search on Acme Corp"*, Sage handles or delegates it immediately and steps back.
-2. **Chief of Staff is the Proactive Personal Coordinator**: Each user has their own Chief of Staff relationship governed by a dedicated `MJ: AI Agent User Policies` row. The Chief of Staff wakes up autonomously on its own schedule or entity-change watermarks, checks the user's Objectives & Key Results (`Tasks` & `TaskCheckIns`) and escalations (`Issues`), drafts briefings, and (when permitted) reaches out to colleagues or their Chief of Staff agents.
+2. **Chief of Staff is the Proactive Personal Coordinator**: Each user has their own Chief of Staff relationship governed by a dedicated `MJ: AI Agent User Policies` row. The Chief of Staff wakes up autonomously on its own schedule or entity-change watermarks, checks what is waiting on the user (approvals, reminders, and any business data an installed skill provides), drafts briefings, and (when permitted) reaches out to colleagues or their Chief of Staff agents.
 
 ---
 
-## 4. Chief of Staff Agent & Its BizApps Dependency Graph
+## 4. Chief of Staff Agent: Core and Extensions
 
-While the **Chief of Staff** agent metadata (`metadata/agents/.chief-of-staff-agent.json`), **User Policy Engine** (`@memberjunction/ai-agents` + `@memberjunction/ai-core-plus`), **8 Chief of Staff Core Actions** (`@memberjunction/core-actions`), **Calendar / Free-Busy / Preflight Communication Verbs** (`@memberjunction/communication-types`, `@memberjunction/communication-ms-graph`, `@memberjunction/communication-gmail`), and **3-Tier Wake Gate** (`@memberjunction/scheduling-engine`) live in **MJ Core** so every MemberJunction installation has the foundational primitives, the Chief of Staff's **full organizational work-tracking experience** depends on three peer BizApps packages:
+The **Chief of Staff** works on a plain MJ installation with no Open App. Everything it needs lives in **MJ Core**: the agent metadata (`metadata/agents/.chief-of-staff-agent.json`), the **User Policy Engine** (`@memberjunction/ai-agents` + `@memberjunction/ai-core-plus`), the **Chief of Staff Core Actions** (`@memberjunction/core-actions`), the **Calendar / Free-Busy / Preflight Communication Verbs** (`@memberjunction/communication-types`, `@memberjunction/communication-ms-graph`, `@memberjunction/communication-gmail`), the **3-Tier Wake Gate** (`@memberjunction/scheduling-engine`) and the **Chief of Staff application** with its Overview, Approvals & Wakes and Governance pages (`@memberjunction/ng-dashboards`). Core knows nothing about any Open App's entities. Business data such as priorities, objectives and to-dos arrives through extensions.
 
 ```mermaid
 flowchart TD
-    MJ["@memberjunction/* (MJ Core)<br/>• Users (Security Principal)<br/>• AIAgentUserPolicy (Narrowed Governance + CalendarChannelMode)<br/>• CommunicationProvider (EnterpriseScopeMode + AllowedEmailDomains)<br/>• UserRoutines + 3-Tier WakeGateEvaluator<br/>• AIBridgeAgentIdentity (Utility Mailboxes & Voice DIDs)<br/>• Chief of Staff Agent & 8 CoS Core Actions"]
-    Common["@mj-biz-apps/common (bizapps-common)<br/>• People (LinkedUserID -> MJ: Users)<br/>• Organizations & Relationships<br/>• ContactMethods (Phone / Email / Messaging)"]
-    Tasks["@mj-biz-apps/tasks (bizapps-tasks)<br/>• Tasks (Priority Objectives & Key Results)<br/>• HealthStatus, Target/Current Metrics, RollupWeight<br/>• TaskCheckIn (Periodic Progress & AI Rollups)<br/>• TaskAssignment & Approval Requests"]
-    Issues["@mj-biz-apps/issues (bizapps-issues)<br/>• Issues (Cross-Team Blockers & Escalations)<br/>• IssueComments, IssueLinks & SLA Tracking"]
-
-    MJ --> Common
-    Common --> Tasks
-    Common --> Issues
-    Tasks --> Issues
+    MJ["MJ Core Chief of Staff<br/>• Users (Security Principal)<br/>• AIAgentUserPolicy (Governance, Priorities in InstructionsOverride)<br/>• UserRoutines + 3-Tier WakeGateEvaluator (Briefings, Reminders)<br/>• AIAgentRequests (Approvals Queue)<br/>• CommunicationProvider + AIBridgeAgentIdentity<br/>• Chief of Staff application (Overview, Approvals & Wakes, Governance nav items)"]
+    Ext["Extending Open App (for example BizApps Tasks: priorities, objectives and to-dos)<br/>• MJ: AI Skills row granted to the Chief of Staff<br/>• NavItem.* application settings adding its own pages to the Chief of Staff application"]
+    Ext --> MJ
 ```
 
 ### Chief of Staff Built-In Core Actions (`@memberjunction/core-actions`)
@@ -125,6 +119,8 @@ flowchart TD
 | **`Send Inter-Agent Request`** | Sends a structured coordination message or creates an approval request between two users' Chief of Staff agents without crossing user permission ceilings. |
 | **`Prepare Outbound Call Brief`** | Validates `PhoneChannelMode`, builds a mandatory AI disclosure greeting, and structures the call objective, fallback plan, and prohibited commitments before any outbound voice call. |
 
+**Where a wake's output lands.** `UserRoutineDispatcherDriver` runs each `AgentWake` routine in a conversation of its own, named after the routine (`Chief of Staff — Wake (<workstreamKey>)`), owned by the routine's user and filed under the **Routines** application so it stays out of the default chat list. The run's reply is written there, and the user gets an in-app notification linking to the routine run. The wake does not post into the conversation the user scheduled it from. Four clicks lead to it: the "Routine completed" notification opens the conversation in the Chat app; the Routines app's run history has a "Conversation" button that does the same; and each routine card on the Chief of Staff app's Overview and Approvals & Wakes pages has "Read Briefing" (a slide-in reader on the page) and "Open in Chat". The chat sidebar itself never lists it. The Chief of Staff prompt tells the user this when it schedules a wake, and it does not create new `Recurring` routines on its own: a `OneShot` check-in ends when it has reported.
+
 **Event-driven wakes alongside the schedule.** The cron/adaptive routines above are not the only way a Chief of Staff wakes. `AgentWakeTriggerService` in `@memberjunction/ai-agents` reacts to specific events by writing a `OneShot` `RoutineType = 'AgentWake'` row to `MJ: User Routines` with `NextRunAt = now`, which the 1-minute `UserRoutineDispatcherDriver` sweep picks up — so an event wake lands within about a minute, not at the next scheduled slot. It is still a routine, not a direct agent call, and an existing routine for the same `workstreamKey` keeps whatever 3-Tier Wake Gate it already has. Today the events are:
 
 - An action-created `MJ: AI Agent Requests` row (`Manage My Calendar Event`, `Manage My Email Inbox and Drafts`, `Prepare Outbound Call Brief` approvals) moving from `Requested` to `Approved` / `Rejected` / `Responded` wakes the request owner's agent with the outcome in `resumeState`.
@@ -133,18 +129,20 @@ flowchart TD
 
 Triggers, user scoping, `resumeState` shapes, result codes and a code sample: [Event-Driven Agent Wakes](../packages/AI/Agents/README.md#event-driven-agent-wakes-agentwaketriggerservice) in the `@memberjunction/ai-agents` README.
 
-### Why These Three Dependencies Exist
+### What Core Provides
 
-1. **`bizapps-common` (`MJ_BizApps_Common: People`) — Bridging Security Principal to Org Identity**:
-   - In MJ Core, `MJ: Users` is the authentication and authorization principal (`contextUser`).
-   - In business applications, real-world people (employees, executives, committee members, external partners) are modeled in `MJ_BizApps_Common: People` with rich organizational relationships and contact methods.
-   - `People.LinkedUserID` links an org `Person` record to their `MJ: Users` login, allowing the Chief of Staff to map its invoking user (`contextUser.ID`) to their organizational `Person` record, direct reports, and contact channels.
-2. **`bizapps-tasks` (`MJ_BizApps_Tasks: Tasks` & `Task Check Ins`) — Unified Workstream & OKR Spine**:
-   - Rather than inventing a separate OKR database, `bizapps-tasks` extends `Task` with additive Priority/OKR fields (`HealthStatus`, `ConfidenceScore`, `BaselineValue`, `TargetValue`, `CurrentValue`, `UnitOfMeasure`, `MetricDirection`, `RollupWeight`, `PlanningPeriod`, `CheckInCadence`, `LastCheckInAt`, `NextCheckInDueAt`) and the `TaskCheckIn` entity.
-   - This lets quarterly **Priority Objectives**, measurable **Key Results**, **Deliverables**, and **Approval Requests** share the same hierarchy, assignment model, and automatic progress rollups.
-3. **`bizapps-issues` (`MJ_BizApps_Issues: Issues`) — Impediment & Escalation Tracking**:
-   - Workstreams rarely slip in a vacuum—they slip because of open defects, customer escalations, or cross-departmental blockers tracked in `bizapps-issues`.
-   - Because `bizapps-issues` sits at the leaf of the dependency graph (`MJ` → `bizapps-common` → `bizapps-tasks` → `bizapps-issues`), the comprehensive end-to-end guide for the Chief of Staff Agent lives in the `bizapps-issues` repository.
+- **Priorities.** The priorities the user names during onboarding are saved in the policy's `InstructionsOverride` through `Configure Agent User Policy`. Core has no business-task entity: `MJ: Tasks` is the workflow engine and never holds to-dos.
+- **Reminders are one-shot wakes.** A personal request ("remind me to call Mom on Wednesday") becomes a `OneShot` `AgentWake` routine at that time whose whole reply is the reminder. It shows on the Approvals & Wakes page.
+- **Email approval comes before transport.** `Manage My Email Inbox and Drafts` has a `Send` operation for a new outbound email (plus `Reply`/`Forward`; the older names `SendEmail`/`ReplyToMessage`/`ForwardMessage` are accepted). Under `SendAsAgent`/`SendAsUser` with `RequireApprovalForExternalComms`, a sending operation queues the `MJ: AI Agent Requests` approval **before** any mail provider is consulted and returns `APPROVAL_REQUIRED`, so the card appears in the Chief of Staff app even when no provider can reach the mailbox yet. On the approval-resolution wake the agent calls the action again with `ConfirmedApprovalRequestID`; only then is the provider resolved and the mailbox gate checked, and a failure there (`NO_EMAIL_PROVIDER`, a gate code) is reported to the user as undeliverable. `DraftOnly` never raises an approval: the draft is the user's to send.
+- **Wake Now runs out of schedule.** The "Wake Now" button calls the `Run User Routine Now` action, which hands the routine to the dispatcher's manual-run path: no claim, no wake gate, so a one-shot (a reminder) keeps its scheduled time and a recurring routine keeps its cadence. Setting `NextRunAt` to now instead would make the dispatcher claim the routine and spend a one-shot. The caller must own the routine; bookkeeping runs as the scheduler's system user, the target as the owner. A one-shot that has fired shows as **Fired** on the Approvals & Wakes page (the dispatcher disables it, which is "done", not "broken") and sits behind a "Show fired" toggle.
+- **Role grants.** A regular user (the `UI` role only) needs Create + Update on `MJ: AI Agent User Policies` and `MJ: AI Agent Requests`, or onboarding cannot save their policy and no approval request can be raised for them. The grants ship as metadata (`metadata/entity-permissions/.chief-of-staff-permissions.json`, pushed with `mj sync push`); server-side entity subclasses keep both rows private to their user (`MJAIAgentUserPolicyEntityServer`, `MJAIAgentRequestEntityServer`): a non-Owner user can only save their own policy and only create or resolve requests that are for them. Cross-user paths such as Send Inter-Agent Request still need an Owner or system context. If the save does fail, the prompt tells the agent to say so and never to claim the preferences were kept in memory.
 
-> [!IMPORTANT]
-> **Full Chief of Staff Documentation**: See **`docs/Chief-Of-Staff-Agent.md` in the `bizapps-issues` repository** for the complete Chief of Staff architecture, onboarding flow, Enterprise Mailbox Security Gates, Calendar/Availability/HubSpot/Calendly integration, 3-Tier Wake Gate reference, `AIAgentUserPolicy` JSON schemas, and cross-app operational playbooks.
+### Extending the Chief of Staff
+
+An Open App extends the core agent in two places, without core knowing about it:
+
+1. **The agent, through a skill.** The app ships an `MJ: AI Skills` row whose `Instructions` explain its entities (for example People, objectives, assignments and to-dos), plus any actions it needs, and grants it to the Chief of Staff through `MJ: AI Agent Skills`. The Chief of Staff has `AcceptsSkills = 'All'` and `SkillActivationMode = 'Auto'`, so it activates a skill whose `ActivationMode = 'Auto'` when a request needs it. The core prompt tells the agent to use an active skill for business data and to say plainly when none is installed.
+2. **The Chief of Staff application, through nav items.** The app's metadata adds `MJ: Application Settings` rows scoped to the Chief of Staff application, each named `NavItem.<unique key>` (for example `NavItem.bizapps-tasks.chief-of-staff`) with one nav item as JSON in `Value`: `Label`, `Icon`, `ResourceType: "Custom"`, the `DriverClass` of a `BaseResourceComponent` its client package registers, and an optional `Sequence` (the core pages are 10, 20 and 30; an item without one goes last). `BaseApplication.GetNavItems()` merges these settings into every application's nav bar, so the mechanism is not specific to the Chief of Staff. Each page is a normal resource component: it loads its own data, publishes its own agent context and reloads itself. The app's teardown deletes its setting rows, which removes the pages. An extension cannot add cards to the core Overview page.
+
+The BizApps Tasks app (`bizapps-tasks`) ships the priorities-and-tasks extension: a `Chief of Staff Tasks & Priorities` skill (People link, objectives and milestones, owner and holder rules, to-dos) and a `NavItem.bizapps-tasks.chief-of-staff` setting that adds its "Priorities & To-dos" page. It needs BizApps Common for People, and the user needs a People record (`LinkedUserID`, or the same email) before the page or the skill can see their tasks. See [MemberJunction/bizapps-tasks#151](https://github.com/MemberJunction/bizapps-tasks/pull/151).
+
