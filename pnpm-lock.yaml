@@ -63,7 +63,7 @@ importers:
     devDependencies:
       '@analogjs/vite-plugin-angular':
         specifier: ^2.6.1
-        version: 2.6.1(@angular-devkit/build-angular@21.2.23(c9585001f8eadf034085e60e36fd3d7a))(@angular/build@21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16))(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+        version: 2.6.1(@angular-devkit/build-angular@21.2.23(c9585001f8eadf034085e60e36fd3d7a))(@angular/build@21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16))(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       '@angular/build':
         specifier: 21.2.23
         version: 21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16)
@@ -177,7 +177,7 @@ importers:
         version: 5.9.3
       vite-tsconfig-paths:
         specifier: ^5.1.4
-        version: 5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
@@ -5407,6 +5407,9 @@ importers:
       '@memberjunction/entity-communications-client':
         specifier: 6.2.0-edge.6
         version: link:../../../Communication/entity-comm-client
+      '@memberjunction/excel-addin':
+        specifier: 6.2.0-edge.6
+        version: link:../../../OfficeAddins/Excel
       '@memberjunction/export-engine':
         specifier: 6.2.0-edge.6
         version: link:../../../MJExportEngine
@@ -7633,6 +7636,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.6
         version: link:../../../MJCoreEntities
+      '@memberjunction/excel-addin':
+        specifier: 6.2.0-edge.6
+        version: link:../../../OfficeAddins/Excel
       '@memberjunction/export-engine':
         specifier: 6.2.0-edge.6
         version: link:../../../MJExportEngine
@@ -7721,9 +7727,24 @@ importers:
       '@angular/forms':
         specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.6
+        version: link:../../../MJCore
+      '@memberjunction/excel-addin':
+        specifier: 6.2.0-edge.6
+        version: link:../../../OfficeAddins/Excel
       '@memberjunction/export-engine':
         specifier: 6.2.0-edge.6
         version: link:../../../MJExportEngine
+      '@memberjunction/ng-base-types':
+        specifier: 6.2.0-edge.6
+        version: link:../base-types
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.2.0-edge.6
+        version: link:../shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0-edge.6
+        version: link:../ui-components
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
@@ -8690,6 +8711,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.6
         version: link:../../../MJCoreEntities
+      '@memberjunction/excel-addin':
+        specifier: 6.2.0-edge.6
+        version: link:../../../OfficeAddins/Excel
       '@memberjunction/export-engine':
         specifier: 6.2.0-edge.6
         version: link:../../../MJExportEngine
@@ -12258,6 +12282,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.2.0-edge.6
         version: link:../MJCore
+      '@memberjunction/excel-addin-server':
+        specifier: 6.2.0-edge.6
+        version: link:../OfficeAddins/ExcelServer
       '@memberjunction/global':
         specifier: 6.2.0-edge.6
         version: link:../MJGlobal
@@ -14236,6 +14263,77 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/OfficeAddins/Excel:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.6
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.6
+        version: link:../../MJGlobal
+    devDependencies:
+      '@types/office-js':
+        specifier: ^1.0.463
+        version: 1.0.615
+      esbuild:
+        specifier: ^0.26.0
+        version: 0.26.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/OfficeAddins/ExcelServer:
+    dependencies:
+      '@memberjunction/api-keys':
+        specifier: 6.2.0-edge.6
+        version: link:../../APIKeys/Engine
+      '@memberjunction/api-keys-base':
+        specifier: 6.2.0-edge.6
+        version: link:../../APIKeys/Base
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.6
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.6
+        version: link:../../MJCoreEntities
+      '@memberjunction/excel-addin':
+        specifier: 6.2.0-edge.6
+        version: link:../Excel
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.6
+        version: link:../../MJGlobal
+      '@memberjunction/server-extensions-core':
+        specifier: 6.2.0-edge.6
+        version: link:../../ServerExtensionsCore
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/OpenApp/Engine:
     dependencies:
       '@memberjunction/core':
@@ -15551,6 +15649,9 @@ importers:
       '@memberjunction/esignature-pandadoc':
         specifier: 6.2.0-edge.6
         version: link:../eSignature/Providers/PandaDoc
+      '@memberjunction/excel-addin-server':
+        specifier: 6.2.0-edge.6
+        version: link:../OfficeAddins/ExcelServer
       '@memberjunction/external-data-source-databricks':
         specifier: 6.2.0-edge.6
         version: link:../ExternalDataSources/Providers/Databricks
@@ -23310,6 +23411,9 @@ packages:
 
   '@types/nunjucks@3.2.6':
     resolution: {integrity: sha512-pHiGtf83na1nCzliuAdq8GowYiXvH5l931xZ0YEHaLMNFgynpEqx+IPStlu7UaDkehfvl01e4x/9Tpwhy7Ue3w==}
+
+  '@types/office-js@1.0.615':
+    resolution: {integrity: sha512-pSEiguAVkoQxSY+by3hYHo8s1Y/idmlvmpgJ1GLa5JOJrBUbtoNf5rpS3oUkaMvGrprezZ9oq9Rx3HQjLhLmbg==}
 
   '@types/pad-left@2.1.1':
     resolution: {integrity: sha512-Xd22WCRBydkGSApl5Bw0PhAOHKSVjNL3E3AwzKaps96IMraPqy5BvZIsBVK6JLwdybUzjHnuWVwpDd0JjTfHXA==}
@@ -32225,7 +32329,7 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
 
-  '@analogjs/vite-plugin-angular@2.6.1(@angular-devkit/build-angular@21.2.23(c9585001f8eadf034085e60e36fd3d7a))(@angular/build@21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16))(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
+  '@analogjs/vite-plugin-angular@2.6.1(@angular-devkit/build-angular@21.2.23(c9585001f8eadf034085e60e36fd3d7a))(@angular/build@21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16))(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       magic-string: 0.30.21
       obug: 2.1.1
@@ -32235,7 +32339,7 @@ snapshots:
     optionalDependencies:
       '@angular-devkit/build-angular': 21.2.23(8b5ff6c8d6b2881cf5a377178f9c369e)
       '@angular/build': 21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16)
-      vite: 7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   '@angular-devkit/architect@0.2102.23(chokidar@5.0.0)':
     dependencies:
@@ -40621,6 +40725,8 @@ snapshots:
       undici-types: 7.16.0
 
   '@types/nunjucks@3.2.6': {}
+
+  '@types/office-js@1.0.615': {}
 
   '@types/pad-left@2.1.1': {}
 
@@ -50406,6 +50512,17 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
+    dependencies:
+      debug: 4.4.3(supports-color@5.5.0)
+      globrex: 0.1.2
+      tsconfck: 3.1.6(typescript@5.9.3)
+    optionalDependencies:
+      vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
 
   vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
