@@ -11,6 +11,14 @@
  * - SPC2: extraction properties of every saved query, read over GraphQL: parameters, dependencies,
  *   Query Entities, and fields equal to those the server extracted for the plain-SQL oracle.
  *
+ * Two scopes, from `SQLPIPE_MATRIX_SCOPE` (see `sqlpipe-dimensions.ts`): `full` (the default, and
+ * the nightly, merge and manual-dispatch runs) is every pair above; `pr` (pull requests) keeps all
+ * pairs over the transport dimensions (run path, value case, MaxRows, StartRow), every shape,
+ * templating and composition variant with every client run path, and every templating and
+ * composition variant with its value cases, and drops the content-only pairs (shape × templating
+ * and the like) that the server bundles IT143 / IT146 run in full on every pull request. SPC2
+ * checks what SPC1 saved, so it shrinks with it. Setup logs the scope and its counts.
+ *
  * Everything lives in a per-run `zzz-it145` category, deleted over GraphQL in Teardown.
  */
 import { RunView } from '@memberjunction/core';
@@ -20,10 +28,11 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { ClientBackend } from './sqlpipe-backend';
 import { CheckExtractionProperties, CreateDependencies, MatrixFixture, RunPoints } from './sqlpipe-matrix-runner';
-import { DIMENSIONS, LogMatrixFailures, SampledPoints } from './sqlpipe-matrix.checks';
-import { GeneratePairwise } from './sqlpipe-pairwise';
-import type { Assignment, Dimension } from './sqlpipe-pairwise';
-import { PointOf, ValidPoint } from './sqlpipe-scenarios';
+import { ClientAssignments, MatrixScopeOf } from './sqlpipe-dimensions';
+import type { MatrixScope } from './sqlpipe-dimensions';
+import { LogMatrixFailures, SampledPoints } from './sqlpipe-matrix.checks';
+import { BuildQuery, PointOf } from './sqlpipe-scenarios';
+import type { ScenarioPoint } from './sqlpipe-scenarios';
 import { CreateFixtureCategory, ErrorMessageOf, RunStamp } from './query-extraction-fixture';
 import { FailOnMismatches } from './runquery-rendering-matrix';
 
@@ -58,6 +67,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         backend.OracleCategoryID = category.ID;
         fixture = new MatrixFixture(ctx, backend, category, PREFIX, ['core']);
         await CreateDependencies(fixture);
+        logScope(fixture);
     },
     Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
         try {
@@ -72,25 +82,43 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     },
 });
 
-const CLIENT_PATHS = ['saved', 'byName', 'cached'];
+/** The scope this run uses, from `SQLPIPE_MATRIX_SCOPE` (unset: `full`). */
+function scopeOf(): MatrixScope {
+    return MatrixScopeOf(process.env.SQLPIPE_MATRIX_SCOPE);
+}
 
-function clientDimensions(): Dimension[] {
-    return DIMENSIONS.map(d => d.Name === 'Schema' ? { Name: d.Name, Values: ['core'] } : d.Name === 'Path' ? { Name: d.Name, Values: CLIENT_PATHS } : d);
+/** The SPC1 points of a scope on the fixture's platform, before any `SQLPIPE_SAMPLE` thinning. */
+function scopePoints(f: MatrixFixture, scope: MatrixScope): ScenarioPoint[] {
+    return ClientAssignments(f.Platform, scope).Assignments.map(a => PointOf(a));
+}
+
+function distinctQueries(f: MatrixFixture, points: readonly ScenarioPoint[]): number {
+    return new Set(points.map(p => BuildQuery(f.Env, p).Key)).size;
+}
+
+/** Logs which scope runs and its counts (SPC2 checks the saved, unrefused ones of the distinct queries), with the full counts beside. */
+function logScope(f: MatrixFixture): void {
+    const scope = scopeOf();
+    const pr = scopePoints(f, 'pr');
+    const full = scopePoints(f, 'full');
+    const counts = (points: readonly ScenarioPoint[]) => `${points.length} point(s), ${distinctQueries(f, points)} distinct quer(ies)`;
+    console.log(`      → ${BUNDLE} scope '${scope}' (SQLPIPE_MATRIX_SCOPE=${process.env.SQLPIPE_MATRIX_SCOPE ?? 'unset'}) on ${f.Platform}: pr = ${counts(pr)}; full = ${counts(full)}`);
 }
 
 async function checkSpc1Pairwise(): Promise<void> {
     const f = requireFixture();
-    const generated = GeneratePairwise(clientDimensions(), (a: Assignment) => ValidPoint(f.Platform, a));
-    const points = SampledPoints(generated.Assignments.map(a => PointOf(a)));
+    const scope = scopeOf();
+    const points = SampledPoints(scopePoints(f, scope));
     const result = await RunPoints(f, points);
     LogMatrixFailures('SPC1', result.Failures);
-    console.log(`      → SPC1 all pairs over GraphQL: ${points.length} point(s), ${result.Queries} distinct quer(ies), ${result.Runs} run(s)`);
+    console.log(`      → SPC1 all pairs over GraphQL (scope '${scope}'): ${points.length} point(s), ${result.Queries} distinct quer(ies), ${result.Runs} run(s)`);
     FailOnMismatches('SPC1 all pairs over GraphQL', result.Failures, result.Runs + result.Queries);
 }
 
 async function checkSpc2ExtractionProperties(): Promise<void> {
     const result = await CheckExtractionProperties(requireFixture());
     LogMatrixFailures('SPC2', result.Failures);
+    console.log(`      → SPC2 extraction properties over GraphQL (scope '${scopeOf()}'): ${result.Checked} saved quer(ies) checked`);
     FailOnMismatches('SPC2 extraction properties over GraphQL', result.Failures, result.Checked);
 }
 

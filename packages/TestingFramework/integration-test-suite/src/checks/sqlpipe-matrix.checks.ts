@@ -28,15 +28,15 @@ import type { DatabasePlatform } from '@memberjunction/core';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { COMPOSITIONS } from './sqlpipe-composition';
+import { DIMENSIONS } from './sqlpipe-dimensions';
 import { CrossProduct, GeneratePairwise } from './sqlpipe-pairwise';
 import type { Assignment, Dimension } from './sqlpipe-pairwise';
 import { CheckExtractionProperties, CreateDependencies, MatrixFixture, RunPoints } from './sqlpipe-matrix-runner';
 import { ServerBackend } from './sqlpipe-backend';
-import { MAX_ROWS, PointOf, START_ROWS, ValidPoint } from './sqlpipe-scenarios';
+import { PointOf, ValidPoint } from './sqlpipe-scenarios';
 import type { ScenarioPoint } from './sqlpipe-scenarios';
 import { CreateMockSchemaStatements, DropMockSchemaStatements } from './sqlpipe-schema';
 import { SHAPES } from './sqlpipe-shapes';
-import { TEMPLATING, VALUE_CASES } from './sqlpipe-templating';
 import { CreateFixtureCategory, DeleteFixtureCategory, PlatformOf, RunFixtureSQL, RunFixtureSQLQuietly, RunStamp } from './query-extraction-fixture';
 import { FailOnMismatches } from './runquery-rendering-matrix';
 
@@ -73,19 +73,6 @@ registerLifecycle(PAIRWISE_BUNDLE, 'zzz-it143');
 registerLifecycle(CROSS_BUNDLE, 'zzz-it146');
 
 // ─── Dimensions ────────────────────────────────────────────────────────────
-
-const keys = <T extends { Key: string }>(items: readonly T[]): string[] => items.map(i => i.Key);
-
-export const DIMENSIONS: readonly Dimension[] = [
-    { Name: 'Schema', Values: ['mock', 'core'] },
-    { Name: 'Shape', Values: keys(SHAPES) },
-    { Name: 'Templating', Values: keys(TEMPLATING) },
-    { Name: 'Composition', Values: keys(COMPOSITIONS) },
-    { Name: 'Values', Values: [...VALUE_CASES] },
-    { Name: 'MaxRows', Values: Object.keys(MAX_ROWS) },
-    { Name: 'StartRow', Values: Object.keys(START_ROWS) },
-    { Name: 'Path', Values: ['saved', 'byName', 'adhoc', 'cached', 'spec'] },
-];
 
 function dims(names: readonly string[], overrides: Readonly<Record<string, readonly string[]>> = {}): Dimension[] {
     return names.map(n => {
@@ -133,7 +120,7 @@ const REFUSED_COMPOSITIONS = new Set(COMPOSITIONS.filter(c => c.Refusal).map(c =
 
 async function checkSpm2CompositionTemplatingPaging(): Promise<void> {
     const f = requireFixture(CROSS_BUNDLE);
-    const space = dims(['Composition', 'Templating', 'MaxRows', 'StartRow'], { Composition: keys(COMPOSITIONS).filter(k => !REFUSED_COMPOSITIONS.has(k)) });
+    const space = dims(['Composition', 'Templating', 'MaxRows', 'StartRow'], { Composition: COMPOSITIONS.map(c => c.Key).filter(k => !REFUSED_COMPOSITIONS.has(k)) });
     const fixed = { Schema: 'mock', Shape: 'cte', Values: 'provided', Path: 'saved' };
     const points = CrossProduct(space, a => ValidPoint(f.Platform, { ...a, ...fixed })).map(a => PointOf({ ...a, ...fixed }));
     await runAndReport(CROSS_BUNDLE, 'SPM2 composition × templating × MaxRows × StartRow', points);

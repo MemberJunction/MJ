@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { CoveredPairs, CrossProduct, GeneratePairwise } from '../checks/sqlpipe-pairwise';
-import type { Assignment, Dimension } from '../checks/sqlpipe-pairwise';
+import type { Assignment, Dimension, DimensionValue } from '../checks/sqlpipe-pairwise';
 
 const DIMS: Dimension[] = [
     { Name: 'Shape', Values: ['plain', 'cte', 'json', 'top', 'union'] },
@@ -50,6 +50,17 @@ describe('GeneratePairwise', () => {
 
     it('is deterministic', () => {
         expect(GeneratePairwise(DIMS, valid)).toEqual(GeneratePairwise(DIMS, valid));
+    });
+
+    it('with a pair filter, covers only the pairs it requires, in fewer combinations', () => {
+        const required = (a: DimensionValue, b: DimensionValue): boolean => a.Dimension === 'Path' || b.Dimension === 'Path';
+        const narrowed = GeneratePairwise(DIMS, valid, required);
+        const covered = CoveredPairs(DIMS, narrowed.Assignments);
+        const wanted = [...feasiblePairs()].filter(p => p.includes('Path='));
+        expect(wanted.filter(p => !covered.has(p))).toEqual([]);
+        expect(narrowed.Assignments.every(valid)).toBe(true);
+        expect(narrowed.Assignments.length).toBeLessThan(GeneratePairwise(DIMS, valid).Assignments.length);
+        expect(narrowed.InfeasiblePairs.every(p => p.includes('Path='))).toBe(true);
     });
 });
 

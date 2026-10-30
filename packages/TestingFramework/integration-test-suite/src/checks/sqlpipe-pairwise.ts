@@ -9,6 +9,10 @@
  * valid assignment can hold is reported as infeasible instead of being forced.
  *
  * Generation is deterministic: the same dimensions and predicate always yield the same list.
+ *
+ * An optional {@link PairFilter} narrows which value pairs must be covered: with it, only the pairs
+ * it accepts are required, so a smaller list can cover the pairs that matter for one purpose.
+ * Without it, every value pair of two dimensions is required.
  */
 
 /** One dimension: its name and its values, in a fixed order. */
@@ -22,6 +26,17 @@ export type Assignment = Readonly<Record<string, string>>;
 
 /** Whether a (possibly partial) assignment can be part of a valid combination. */
 export type ValidityPredicate = (partial: Assignment) => boolean;
+
+/** One value of one dimension, as a pair filter sees it. */
+export interface DimensionValue {
+    readonly Dimension: string;
+    readonly Value: string;
+}
+
+/** Whether a value pair of two different dimensions must be covered. */
+export type PairFilter = (a: DimensionValue, b: DimensionValue) => boolean;
+
+const EVERY_PAIR: PairFilter = () => true;
 
 /** The generated assignments, and the value pairs no valid assignment can hold. */
 export interface PairwiseResult {
@@ -40,13 +55,14 @@ function pairKey(dims: readonly Dimension[], a: number, av: string, b: number, b
     return a < b ? `${dims[a].Name}=${av}|${dims[b].Name}=${bv}` : `${dims[b].Name}=${bv}|${dims[a].Name}=${av}`;
 }
 
-function allPairs(dims: readonly Dimension[], valid: ValidityPredicate): { Pairs: Map<string, Pair>; Infeasible: string[] } {
+function allPairs(dims: readonly Dimension[], valid: ValidityPredicate, required: PairFilter): { Pairs: Map<string, Pair>; Infeasible: string[] } {
     const pairs = new Map<string, Pair>();
     const infeasible: string[] = [];
     for (let a = 0; a < dims.length; a++) {
         for (let b = a + 1; b < dims.length; b++) {
             for (const av of dims[a].Values) {
                 for (const bv of dims[b].Values) {
+                    if (!required({ Dimension: dims[a].Name, Value: av }, { Dimension: dims[b].Name, Value: bv })) continue;
                     const key = pairKey(dims, a, av, b, bv);
                     if (valid({ [dims[a].Name]: av, [dims[b].Name]: bv })) pairs.set(key, { A: a, AValue: av, B: b, BValue: bv });
                     else infeasible.push(key);
@@ -97,10 +113,11 @@ function markCovered(dims: readonly Dimension[], assignment: Assignment, uncover
 /**
  * All-pairs generation: every feasible value pair of two dimensions appears in at least one
  * returned assignment. A pair that passes the predicate on its own but has no valid completion is
- * listed in `InfeasiblePairs` with the pairs the predicate rejects outright.
+ * listed in `InfeasiblePairs` with the pairs the predicate rejects outright. With `required`, only
+ * the value pairs it accepts are required (and reported).
  */
-export function GeneratePairwise(dims: readonly Dimension[], valid: ValidityPredicate): PairwiseResult {
-    const { Pairs: uncovered, Infeasible: infeasible } = allPairs(dims, valid);
+export function GeneratePairwise(dims: readonly Dimension[], valid: ValidityPredicate, required: PairFilter = EVERY_PAIR): PairwiseResult {
+    const { Pairs: uncovered, Infeasible: infeasible } = allPairs(dims, valid, required);
     const assignments: Assignment[] = [];
     for (const [key, seed] of [...uncovered.entries()]) {
         if (!uncovered.has(key)) continue;
