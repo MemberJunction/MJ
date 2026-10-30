@@ -1424,15 +1424,9 @@ export class TaskGraphService {
         const activeByName = new Map(activeRows.map((r) => [r.Name, r]));
 
         const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
-        const canFilterViaHelper =
-            engineLoaded ||
-            (typeof AIAgentPermissionHelper?.FilterRunnableAgents === 'function' &&
-                'mock' in AIAgentPermissionHelper.FilterRunnableAgents);
         const runnableRows =
             activeRows.length > 0
-                ? canFilterViaHelper
-                    ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
-                    : activeRows
+                ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
                 : [];
         const runnableByName = new Map<string, string>();
         for (const r of runnableRows) {
@@ -1485,7 +1479,7 @@ export class TaskGraphService {
                 if (matches.length === 1) {
                     const candidate = matches[0];
                     activeByName.set(rawName, candidate);
-                    const allowedByHelper = canFilterViaHelper
+                    const allowedByHelper = engineLoaded
                         ? (await AIAgentPermissionHelper.FilterRunnableAgents([candidate], context.ContextUser)).length > 0
                         : true;
                     const allowedByEngine =

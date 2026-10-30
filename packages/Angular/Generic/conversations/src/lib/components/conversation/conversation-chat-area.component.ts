@@ -3809,7 +3809,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowForksPopover = false;
     this.IsRenamingTitle = false;
     this.HandoffsByDetailId = new Map();
-    this.handoffStepsByRunId.clear();
+    this.handoffStepsByRunId?.clear();
     if (this.forkSummaryRefreshTimer) {
       clearTimeout(this.forkSummaryRefreshTimer);
       this.forkSummaryRefreshTimer = null;
