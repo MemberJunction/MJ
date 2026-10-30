@@ -2031,9 +2031,6 @@ async function processRSUPendingWork(): Promise<void> {
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);
 
-      const objectsToMap = item.SourceObjectNames.length;
-      progress?.BeginEntityMaps(objectsToMap);
-
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
         const entity = md.Entities.find(
