@@ -583,3 +583,72 @@ describe('ConversationListComponent (DOM) — who can move and pin', () => {
     expect(message).toContain('View access only');
   });
 });
+
+describe('ConversationListComponent (DOM) — folder sharing and conversation folder access inheritance', () => {
+  beforeEach(() => {
+    vi.spyOn(ConversationListComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+  });
+
+  it('opens the share dialog for a folder when Share is clicked on a folder row', () => {
+    const { f } = render();
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    const shareBtn = findItem(f, 'Share');
+    expect(shareBtn).toBeTruthy();
+    shareBtn.click();
+    f.detectChanges();
+    expect(f.componentInstance.IsShareDialogOpen).toBe(true);
+    expect(f.componentInstance.ShareResourceLabel).toBe('folder');
+    expect(f.componentInstance.ShareContexts.map(c => c.ResourceID)).toEqual(['proj1']);
+  });
+
+  it('disables Share on a folder owned by someone else without Owner permission', () => {
+    const { f } = render((c) => {
+      const engine = (c as unknown as { engine: { Projects: MJProjectEntity[] } }).engine;
+      engine.Projects = [
+        { ID: 'proj1', Name: 'Work', ParentID: null, Icon: null, Color: null, OwnerUserID: 'someone-else' } as unknown as MJProjectEntity
+      ];
+      (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
+    }, {
+      GetEffectiveProjectPermission: () => ({ Level: 'View', SharedByUserID: 'someone-else', SharedByUser: 'Someone' })
+    });
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    expect(findItem(f, 'Share').disabled).toBe(true);
+  });
+
+  it('offers Restrict folder access for a conversation inside a folder and calls SetConversationFolderInheritance(false)', async () => {
+    const setInheritSpy = vi.fn().mockResolvedValue(true);
+    const { f } = render(undefined, {
+      SetConversationFolderInheritance: setInheritSpy
+    });
+    rightClickOn(f, rowFor(f, 'Work One'));
+    const restrictBtn = findItem(f, 'Restrict folder access');
+    expect(restrictBtn).toBeTruthy();
+    restrictBtn.click();
+    await Promise.resolve();
+    expect(setInheritSpy).toHaveBeenCalledWith('A1', false, currentUser);
+  });
+
+  it('offers Inherit folder access and renders a lock badge when inheritFolderAccess is false', async () => {
+    const setInheritSpy = vi.fn().mockResolvedValue(true);
+    const { f } = render((c) => {
+      const engine = (c as unknown as { engine: { Conversations: MJConversationEntity[] } }).engine;
+      engine.Conversations = [
+        conv('A1', 'Work One', { ProjectID: 'proj1', AdditionalData: JSON.stringify({ inheritFolderAccess: false }) }),
+        conv('U1', 'Loose One')
+      ];
+      (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
+    }, {
+      SetConversationFolderInheritance: setInheritSpy
+    });
+    f.detectChanges();
+    expect(query(f, '.restricted-indicator')).not.toBeNull();
+
+    rightClickOn(f, rowFor(f, 'Work One'));
+    const inheritBtn = findItem(f, 'Inherit folder access');
+    expect(inheritBtn).toBeTruthy();
+    inheritBtn.click();
+    await Promise.resolve();
+    expect(setInheritSpy).toHaveBeenCalledWith('A1', true, currentUser);
+  });
+});
+

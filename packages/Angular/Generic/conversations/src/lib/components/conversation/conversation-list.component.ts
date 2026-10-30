@@ -1,6 +1,14 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJProjectEntity, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import {
+  MJConversationEntity,
+  MJProjectEntity,
+  ConversationEngine,
+  UserInfoEngine,
+  ResourcePermissionEngine,
+  PROJECTS_RESOURCE_TYPE_ID,
+  IsInheritingFolderAccess
+} from '@memberjunction/core-entities';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
@@ -396,6 +404,10 @@ interface ListContextMenu {
               <i class="fas fa-share-nodes shared-indicator"
                  [title]="SharedWithMeTooltip(conversation)"></i>
             }
+            @if (conversation.ProjectID && !IsConversationInheritingFolderAccess(conversation)) {
+              <i class="fas fa-lock shared-indicator restricted-indicator"
+                 title="Restricted — does not inherit folder access"></i>
+            }
           </div>
           <div class="conversation-preview">{{ conversation.Description }}</div>
         </div>
@@ -412,7 +424,7 @@ interface ListContextMenu {
       [Contexts]="ShareContexts"
       [Adapter]="ShareAdapter"
       [Notice]="ShareNotice"
-      ResourceLabel="conversation"
+      [ResourceLabel]="ShareResourceLabel"
       (Result)="OnShareDialogResult($event)">
     </mj-resource-share-dialog>
 
@@ -490,6 +502,15 @@ interface ListContextMenu {
                 <i class="fas fa-user-plus"></i>
                 <span>{{ ContextMenu.targets.length > 1 ? 'Share ' + ContextMenu.targets.length + ' conversations' : 'Share' }}</span>
               </button>
+              @if (ContextMenu.targets.length === 1 && ContextMenu.conversation?.ProjectID) {
+                <button class="menu-item"
+                        (click)="ContextToggleFolderInheritance()"
+                        [disabled]="!CanShareAny(ContextMenu.targets)"
+                        [attr.title]="CanShareAny(ContextMenu.targets) ? null : ShareRefusedReason">
+                  <i class="fas" [ngClass]="IsConversationInheritingFolderAccess(ContextMenu.conversation) ? 'fa-lock' : 'fa-folder-open'"></i>
+                  <span>{{ IsConversationInheritingFolderAccess(ContextMenu.conversation) ? 'Restrict folder access' : 'Inherit folder access' }}</span>
+                </button>
+              }
               @if (ContextMenu.targets.length === 1) {
                 <button class="menu-item" (click)="ContextRename()">
                   <i class="fas fa-edit"></i>
@@ -507,6 +528,13 @@ interface ListContextMenu {
             <button class="menu-item" (click)="ContextCreateSubfolder($event)">
               <i class="fas fa-folder-plus"></i>
               <span>New Subfolder</span>
+            </button>
+            <button class="menu-item"
+                    (click)="ContextShareFolder($event)"
+                    [disabled]="!CanShareFolder(ContextMenu.folder)"
+                    [attr.title]="CanShareFolder(ContextMenu.folder) ? null : FolderShareRefusedReason">
+              <i class="fas fa-user-plus"></i>
+              <span>Share</span>
             </button>
             <button class="menu-item" (click)="ContextEditFolder($event)">
               <i class="fas fa-pen"></i>
@@ -1368,11 +1396,15 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** True while the open conversation menu is showing its folder picker. */
   public IsMoveSubmenuOpen: boolean = false;
 
-  /** Resources the share dialog is currently offering, one per conversation. */
+  /** Resources the share dialog is currently offering, one per conversation or folder. */
   public ShareContexts: ResourceShareContext[] = [];
   public ShareNotice: string | null = null;
   public IsShareDialogOpen: boolean = false;
-  public ShareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
+  private conversationShareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
+  private folderShareAdapter = new MJResourcePermissionShareAdapter(PROJECTS_RESOURCE_TYPE_ID);
+  public ShareAdapter = this.conversationShareAdapter;
+  public ShareResourceLabel: string = 'conversation';
+  private isSharingFolder: boolean = false;
   public ConversationIdsWithTasks = new Set<string>();
   public IsSelectionMode: boolean = false;
   public SelectedConversationIds = new Set<string>();
@@ -1382,6 +1414,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   /** Why Share is unavailable, shown on its disabled button. */
   public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
+
+  /** Why Folder Share is unavailable, shown on its disabled button. */
+  public readonly FolderShareRefusedReason = 'Only the folder owner, or someone with Owner access, can share a folder';
 
   /** Why Move and Pin are unavailable, shown on their disabled buttons. */
   public readonly ChangeRefusedReason = 'You need Edit access to move or pin a conversation shared with you';
@@ -2240,6 +2275,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
 
     const skipped = conversations.length - shareable.length;
+    this.isSharingFolder = false;
+    this.ShareAdapter = this.conversationShareAdapter;
+    this.ShareResourceLabel = 'conversation';
     this.ShareContexts = shareable.map(c => ({
       ResourceID: c.ID,
       ResourceName: c.Name ?? 'Conversation',
@@ -2263,6 +2301,66 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return this.engine.CanShareConversation(conversation, this.CurrentUser.ID);
   }
 
+  /** True when the current user owns the folder or holds Owner permission on it. */
+  public CanShareFolder(folder: MJProjectEntity | null | undefined): boolean {
+    if (!folder || !this.CurrentUser) return false;
+    if (!folder.OwnerUserID) return true;
+    if (UUIDsEqual(folder.OwnerUserID, this.CurrentUser.ID)) return true;
+    return this.engine.GetEffectiveProjectPermission?.(folder.ID, this.CurrentUser)?.Level === 'Owner';
+  }
+
+  /** Opens the resource share dialog for the right-clicked folder. */
+  public ContextShareFolder(event?: Event): void {
+    if (event) event.stopPropagation();
+    const folder = this.ContextMenu?.folder;
+    this.CloseContextMenu();
+    if (!folder) return;
+    if (!this.CanShareFolder(folder)) {
+      void this.dialogService.alert('Cannot Share', `${this.FolderShareRefusedReason}.`);
+      return;
+    }
+
+    this.isSharingFolder = true;
+    this.ShareAdapter = this.folderShareAdapter;
+    this.ShareResourceLabel = 'folder';
+    this.ShareContexts = [{
+      ResourceID: folder.ID,
+      ResourceName: folder.Name ?? 'Folder',
+      OwnerUserID: folder.OwnerUserID ?? this.CurrentUser?.ID ?? null,
+      OwnerDisplayName: folder.OwnerUser ?? 'You',
+      CurrentUserID: this.CurrentUser?.ID ?? null
+    }];
+    this.ShareNotice = null;
+    this.IsShareDialogOpen = true;
+  }
+
+  /** True when the conversation inherits permissions from its parent folder. */
+  public IsConversationInheritingFolderAccess(conversation: MJConversationEntity | null | undefined): boolean {
+    if (!conversation) return true;
+    return IsInheritingFolderAccess(conversation);
+  }
+
+  /** Narrows or restores folder permission inheritance for the right-clicked conversation. */
+  public async ContextToggleFolderInheritance(): Promise<void> {
+    const conversation = this.ContextMenu?.conversation;
+    this.CloseContextMenu();
+    if (!conversation || !conversation.ProjectID) return;
+    if (!this.canShare(conversation)) {
+      await this.dialogService.alert('Cannot Change Access', `${this.ShareRefusedReason}.`);
+      return;
+    }
+
+    const nextInherit = !IsInheritingFolderAccess(conversation);
+    try {
+      await this.engine.SetConversationFolderInheritance?.(conversation.ID, nextInherit, this.CurrentUser);
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error updating folder access inheritance:', error);
+      await this.dialogService.alert('Error', 'Failed to update folder access inheritance. Please try again.');
+    }
+  }
+
   /** True when at least one of the conversations can be moved or pinned by the current user. */
   public CanChangeAny(ids: string[]): boolean {
     return ids.some(id => {
@@ -2277,10 +2375,28 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return this.engine.CanEditConversation(conversation, this.CurrentUser.ID);
   }
 
-  public OnShareDialogResult(_result: ResourceShareDialogResult): void {
+  public OnShareDialogResult(result: ResourceShareDialogResult): void {
+    const sharedFolder = this.isSharingFolder;
+    this.isSharingFolder = false;
     this.IsShareDialogOpen = false;
     this.ShareContexts = [];
     this.ShareNotice = null;
+    this.ShareAdapter = this.conversationShareAdapter;
+    this.ShareResourceLabel = 'conversation';
+    if (sharedFolder && result?.Action === 'save') {
+      void this.refreshAfterFolderShareSave();
+    }
+    this.cdr.detectChanges();
+  }
+
+  private async refreshAfterFolderShareSave(): Promise<void> {
+    try {
+      await ResourcePermissionEngine.Instance.Config(true, this.CurrentUser);
+      await this.engine.LoadConversations?.(this.EnvironmentId, this.CurrentUser, true);
+    } catch {
+      // Best-effort refresh in test or offline environments
+    }
+    this.rebuildGroups();
     this.cdr.detectChanges();
   }
 

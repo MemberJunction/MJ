@@ -166,6 +166,48 @@ WHERE p.OwnerUserID IS NULL
 GO
 
 -- ============================================================================
+-- Ensure the 'Projects' (Conversation Folders) ResourceType exists so folder-
+-- level ResourcePermission grants satisfy FK_ResourcePermission_ResourceType
+-- immediately after running Flyway migrations (before mj sync push).
+-- ============================================================================
+DECLARE @ProjectsResourceTypeID UNIQUEIDENTIFIER = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+DECLARE @ProjectsEntityID UNIQUEIDENTIFIER = 'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A';
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM ${flyway:defaultSchema}.ResourceType
+    WHERE ID = @ProjectsResourceTypeID
+       OR Name = N'Projects'
+)
+BEGIN
+    INSERT INTO ${flyway:defaultSchema}.ResourceType (
+        ID,
+        Name,
+        DisplayName,
+        Description,
+        Icon,
+        EntityID,
+        __mj_CreatedAt,
+        __mj_UpdatedAt,
+        CategoryEntityID,
+        DriverClass
+    )
+    VALUES (
+        @ProjectsResourceTypeID,
+        N'Projects',
+        N'Conversation Folders',
+        N'Conversation folders that organize conversations and support folder-level sharing',
+        N'fa-solid fa-folder',
+        @ProjectsEntityID,
+        GETUTCDATE(),
+        GETUTCDATE(),
+        NULL,
+        NULL
+    );
+END
+GO
+
+-- ============================================================================
 -- Update UI role's Read RLS filter on MJ: Projects so folders shared with
 -- specific Users or Roles via MJ: Resource Permissions (ResourceType 'Projects',
 -- ID '88D0DF27-AF8F-43AC-9EC4-2AC314F49355') are readable alongside public
