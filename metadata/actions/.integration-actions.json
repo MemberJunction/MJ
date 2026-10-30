@@ -317,7 +317,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Comma-separated or JSON array of Azure Blob URLs or local disk paths to the backup stripe files (.bak)",
+            "Description": "Azure Blob URLs or local disk paths of the backup stripe files (.bak), as a JSON array of strings (e.g. [\"https://acct.blob.core.windows.net/c/a.bak\",\"https://acct.blob.core.windows.net/c/b.bak\"]) or a comma-separated list. A value starting with '[' must be a valid JSON array of strings (INVALID_PARAMETER otherwise).",
             "IsRequired": true
           },
           "primaryKey": {
@@ -404,7 +404,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional JSON array of specific Company Integration Entity Map IDs to bootstrap. If omitted, all active maps are processed",
+            "Description": "Optional Company Integration Entity Map IDs to restrict the load to, as a JSON array of strings (e.g. [\"<id1>\",\"<id2>\"]) or a comma-separated list. If omitted, all sync-enabled Pull or Bidirectional entity maps are processed. A malformed JSON array or an entry that is not a UUID is refused with INVALID_PARAMETER before any SQL runs.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -452,6 +452,20 @@
           },
           "primaryKey": {
             "ID": "68BA61D5-FDE1-4C55-B1EA-128C0710C297"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProgressRunID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the integration progress run to report the bootstrap stages to, when launched detached (the IntegrationStartBootstrap mutation passes it); the run is terminated with the outcome",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "54E88214-D601-4EE3-BC33-003E6156264B"
           }
         },
         {
@@ -541,11 +555,22 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "MISSING_PARAMETER",
-            "Description": "Required parameters (CompanyIntegrationID or BackupUrls) were missing or invalid",
+            "Description": "A required parameter (CompanyIntegrationID or BackupUrls) was missing",
             "IsSuccess": false
           },
           "primaryKey": {
             "ID": "8E5C5020-0533-4DDE-99F5-85A5DE8CFA26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "A parameter was invalid: BackupUrls containing no usable URL or path, a backup source or staging directory outside the allowed locations, a malformed JSON array, or an EntityMapIDs entry that is not a UUID",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "85BE7809-D60B-4FC5-9F66-99A5C9D90C78"
           }
         },
         {
@@ -611,7 +636,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Comma-separated or JSON array of Azure Blob URLs or local disk paths to the backup stripe files (.bak)",
+            "Description": "Azure Blob URLs or local disk paths of the backup stripe files (.bak), as a JSON array of strings (e.g. [\"https://acct.blob.core.windows.net/c/a.bak\",\"https://acct.blob.core.windows.net/c/b.bak\"]) or a comma-separated list. A value starting with '[' must be a valid JSON array of strings (INVALID_PARAMETER otherwise).",
             "IsRequired": true
           },
           "primaryKey": {
@@ -773,11 +798,22 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_PARAMETER",
-            "Description": "A parameter was invalid, such as BackupUrls containing no valid URL or path",
+            "Description": "A parameter was invalid: BackupUrls containing no usable URL or path, a malformed JSON array, or a backup source or staging directory outside the allowed locations",
             "IsSuccess": false
           },
           "primaryKey": {
             "ID": "63075DDF-673B-474B-B88C-78F22AB3FFEE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STAGING_NOT_ACCESSIBLE",
+            "Description": "The backup was restored, but the SQL login MJAPI runs with cannot open the staging database; the staging database is dropped and the message names the permissions to grant",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "9BE80F47-440C-4F0F-A71A-2B217A96FFDE"
           }
         },
         {
@@ -901,7 +937,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional comma-separated or JSON array of Company Integration Entity Map IDs to restrict the load to. If omitted, all active maps are loaded",
+            "Description": "Optional Company Integration Entity Map IDs to restrict the load to, as a JSON array of strings (e.g. [\"<id1>\",\"<id2>\"]) or a comma-separated list. If omitted, all sync-enabled Pull or Bidirectional entity maps are processed. A malformed JSON array or an entry that is not a UUID is refused with INVALID_PARAMETER before any SQL runs.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1063,7 +1099,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_PARAMETER",
-            "Description": "BackupStartDate was not a valid date",
+            "Description": "A parameter was invalid: BackupStartDate or CreatedAfter not a valid date, ContainerUrl not an Azure Blob Storage container URL, or EntityMapIDs malformed or holding an entry that is not a UUID",
             "IsSuccess": false
           },
           "primaryKey": {
@@ -1285,7 +1321,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_PARAMETER",
-            "Description": "Parameter CreatedAfter was not a valid date",
+            "Description": "A parameter was invalid: CreatedAfter not a valid date, or ContainerUrl not an Azure Blob Storage container URL",
             "IsSuccess": false
           },
           "primaryKey": {
@@ -1528,7 +1564,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Single backup URL/path or comma-separated list of URLs/paths for multi-stripe backup sets",
+            "Description": "Azure Blob URLs or local disk paths of the backup stripe files (.bak), as a JSON array of strings (e.g. [\"https://acct.blob.core.windows.net/c/a.bak\",\"https://acct.blob.core.windows.net/c/b.bak\"]) or a comma-separated list. A value starting with '[' must be a valid JSON array of strings (INVALID_PARAMETER otherwise).",
             "IsRequired": true
           },
           "primaryKey": {
@@ -1651,7 +1687,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "MISSING_PARAMETER",
-            "Description": "Required parameter CompanyIntegrationID or BackupUrls was not provided",
+            "Description": "Required parameter BackupUrls was not provided",
             "IsSuccess": false
           },
           "primaryKey": {
@@ -1662,7 +1698,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_PARAMETER",
-            "Description": "BackupUrls parameter contains no valid URLs or file paths",
+            "Description": "BackupUrls was invalid: no usable URL or path, a malformed JSON array, or a backup source outside the allowed locations",
             "IsSuccess": false
           },
           "primaryKey": {

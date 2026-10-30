@@ -9,3 +9,5 @@ export * from './DropSQLServerStagingDatabaseAction.js';
 export * from './StagingDropGuard.js';
 export * from './StagingAccessGuard.js';
 export * from './BackupSourceGuard.js';
+export * from './ListParam.js';
+export * from './SecretRedaction.js';

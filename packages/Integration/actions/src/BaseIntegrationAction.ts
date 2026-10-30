@@ -2,7 +2,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import { DatabaseProviderBase, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID } from '@memberjunction/global';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import {
@@ -13,6 +13,14 @@ import {
     QuoteSqlIdentifier,
     StagingDirectoryProblem
 } from './BackupSourceGuard.js';
+import { ParseListParam } from './ListParam.js';
+import { SasTokenSecrets, SecretSafeSqlError } from './SecretRedaction.js';
+
+/** An input the action refuses to run with: its result code and message. */
+export interface ActionInputRefusal {
+    ResultCode: string;
+    Message: string;
+}
 
 /**
  * Runs statements that may take hours (a multi-terabyte RESTORE, a set-based load of a staged table)
@@ -180,6 +188,45 @@ export abstract class BaseIntegrationAction extends BaseAction {
     }
 
     /**
+     * The `BackupUrls` sources (a JSON array or a comma-separated list), or the refusal of a missing,
+     * empty, malformed or unacceptable list. Runs before any SQL. `checkStagingDirectories` also checks
+     * the staging-file directory parameters, for the actions that restore (and so declare them).
+     */
+    protected ReadBackupUrls(params: RunActionParams, checkStagingDirectories: boolean): string[] | ActionInputRefusal {
+        const raw = this.GetStringParam(params, 'BackupUrls');
+        if (!raw) {
+            return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'BackupUrls' is required." };
+        }
+        let backupUrls: string[];
+        try {
+            backupUrls = ParseListParam(raw, 'BackupUrls');
+        } catch (error) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: error instanceof Error ? error.message : String(error) };
+        }
+        if (backupUrls.length === 0) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path." };
+        }
+        const problem = checkStagingDirectories ? this.BackupInputProblem(params, backupUrls) : BackupSourcesProblem(backupUrls);
+        return problem ? { ResultCode: 'INVALID_PARAMETER', Message: problem } : backupUrls;
+    }
+
+    /**
+     * Why the optional `EntityMapIDs` cannot be used, or undefined when it can (or is absent): it must
+     * be a JSON array or comma-separated list of entity map IDs. Checked with the other inputs, so a bad
+     * value fails before the restore rather than in the load hours later.
+     */
+    protected EntityMapIDsProblem(params: RunActionParams): string | undefined {
+        let ids: string[];
+        try {
+            ids = this.GetStringListParam(params, 'EntityMapIDs') ?? [];
+        } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+        }
+        const invalid = ids.find(id => !IsValidUUID(id));
+        return invalid === undefined ? undefined : `Parameter 'EntityMapIDs' contains '${invalid}', which is not an entity map ID (a UUID).`;
+    }
+
+    /**
      * Extracts the Azure Blob container root URL from a full blob URL, and checks that it is a valid
      * storage container URL (it becomes a SQL Server credential name).
      * e.g. 'https://myaccount.blob.core.windows.net/mycontainer/backup.bak' -> 'https://myaccount.blob.core.windows.net/mycontainer'
@@ -220,7 +267,7 @@ export abstract class BaseIntegrationAction extends BaseAction {
         if (!(await this.CallerCanReadCredential(params, credId))) {
             throw new Error(notFound);
         }
-        await CredentialEngine.Instance.Config(false, params.ContextUser);
+        await CredentialEngine.Instance.Config(false, params.ContextUser, this.GetMetadataProvider(params));
         const credential = CredentialEngine.Instance.getCredentialById(credId);
         if (!credential) {
             throw new Error(notFound);
@@ -338,8 +385,10 @@ export abstract class BaseIntegrationAction extends BaseAction {
      * Ensures the SQL Server credential for the Azure Storage container URL exists and carries THIS
      * run's SAS token. An existing credential is altered rather than kept, so a credential left behind by
      * an earlier run (or created by hand) never makes a corrected token silently ineffective. The
-     * statement embeds the secret, so it is excluded from SQL logging. The container URL is validated
-     * and the credential name quoted QUOTENAME-style, so the name can never end the identifier.
+     * statement embeds the secret, so it is excluded from SQL logging, and a failure is rethrown with
+     * only the database's own reason, the token redacted (see {@link SecretSafeSqlError}): the provider's
+     * error carries the statement text. The container URL is validated and the credential name quoted
+     * QUOTENAME-style, so the name can never end the identifier.
      */
     protected async EnsureStorageCredential(
         executor: DatabaseProviderBase,
@@ -360,7 +409,11 @@ ELSE
     CREATE CREDENTIAL ${credentialName}
     WITH IDENTITY = 'SHARED ACCESS SIGNATURE',
     SECRET = N'${cleanSas}';`;
-        await executor.ExecuteSQL(query, undefined, { isMutation: true, ignoreLogging: true, description: 'Ensure Azure Storage Credential' }, contextUser);
+        try {
+            await executor.ExecuteSQL(query, undefined, { isMutation: true, ignoreLogging: true, description: 'Ensure Azure Storage Credential' }, contextUser);
+        } catch (error) {
+            throw SecretSafeSqlError(`Could not register the SQL Server storage credential for '${containerUrl}'`, error, SasTokenSecrets(sasToken));
+        }
     }
 
     /**
@@ -408,10 +461,15 @@ END`;
         return defaultValue;
     }
 
+    /**
+     * A list parameter given as a JSON array of strings or a comma-separated list (see
+     * {@link ParseListParam}); undefined when absent or empty. Throws `InvalidBackupParameterError` for a
+     * malformed JSON array.
+     */
     protected GetStringListParam(params: RunActionParams, name: string): string[] | undefined {
         const raw = this.GetStringParam(params, name);
         if (!raw) return undefined;
-        const list = raw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const list = ParseListParam(raw, name);
         return list.length > 0 ? list : undefined;
     }
 

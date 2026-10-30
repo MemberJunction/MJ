@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, type UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import {
     ListAzureBackupBlobsAction,
@@ -286,6 +286,24 @@ describe('ListAzureBackupBlobsAction', () => {
             expect(result.Message).toContain('403');
             // The upstream body is never reflected to the caller.
             expect(result.Message).not.toContain('AuthenticationFailed');
+
+            vi.unstubAllGlobals();
+        });
+
+        it('redacts the SAS token from a request failure that echoes the request URL', async () => {
+            const fetchMock = vi.fn().mockImplementation((url: string) => Promise.reject(new TypeError(`fetch failed for ${url}`)));
+            vi.stubGlobal('fetch', fetchMock);
+            vi.mocked(LogError).mockClear();
+
+            const result = await action['InternalRunAction'](makeParams({
+                ContainerUrl: 'https://myaccount.blob.core.windows.net/sql-backups',
+                SasToken: 'sv=2024&sp=rl&sig=TopSecretSignatureValue',
+            }));
+
+            expect(result.ResultCode).toBe('LIST_BLOBS_FAILED');
+            expect(result.Message).toContain('fetch failed');
+            expect(result.Message).not.toContain('TopSecretSignatureValue');
+            expect(JSON.stringify(vi.mocked(LogError).mock.calls)).not.toContain('TopSecretSignatureValue');
 
             vi.unstubAllGlobals();
         });

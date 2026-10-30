@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, type UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
-import type { SqlBackupFileListEntry, SqlColumnInfo } from '../BootstrapSQLServerIntegrationFromBackupAction.js';
+import type { SqlColumnInfo } from '../BootstrapSQLServerIntegrationFromBackupAction.js';
+import type { SqlBackupFileListEntry } from '../BaseIntegrationAction.js';
+import { CREDENTIAL_PERMISSION_DENIED, IsCredentialDdl, ProviderShapedSqlError } from './sqlErrorFixtures.js';
 import { RestoreSQLServerBackupToStagingAction } from '../RestoreSQLServerBackupToStagingAction.js';
 import { LoadSQLServerIntegrationFromStagingAction } from '../LoadSQLServerIntegrationFromStagingAction.js';
 import { DropSQLServerStagingDatabaseAction } from '../DropSQLServerStagingDatabaseAction.js';
@@ -138,6 +140,8 @@ interface MockSqlOptions {
     createdAtUtc?: Date | null;
     /** The server's UTC clock the restore start is read from (default 2026-10-28T11:59:00Z, just before `createdAtUtc`). */
     serverUtcNow?: Date;
+    /** The storage credential DDL fails as the provider reports it: the message carries the statement. */
+    failOnCredential?: boolean;
 }
 
 /** SQL text of every call, in order. */
@@ -148,6 +152,9 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): DatabaseProviderBa
         const text = sql.trim();
         sqlCalls.push(text);
 
+        if (options.failOnCredential && IsCredentialDdl(sql)) {
+            return Promise.reject(ProviderShapedSqlError(CREDENTIAL_PERMISSION_DENIED, sql));
+        }
         if (text.startsWith('RESTORE DATABASE') && options.failOnRestore) {
             return Promise.reject(new Error('RESTORE DATABASE is terminating abnormally'));
         }
@@ -340,6 +347,38 @@ describe('RestoreSQLServerBackupToStagingAction', () => {
         expect(progressCalls.find(c => c.Method === 'StageError')?.Args[2]).toEqual({ code: 'MISSING_PARAMETER' });
         expect(progressMethods()).not.toContain('Fail');
     });
+
+    it('Restore action never reports the SAS token when registering the storage credential fails', async () => {
+        restore.CustomDatabaseProvider = createMockSqlExecutor({ failOnCredential: true });
+        vi.mocked(LogError).mockClear();
+        const r = await restore.Run(makeParams({
+            CompanyIntegrationID: 'ci-001',
+            BackupUrls: 'https://storage.blob.core.windows.net/backups/x.bak',
+            StagingDatabaseName: 'MJ_Staging_X',
+            SasToken: 'sv=2024&sig=TopSecretSignatureValue',
+            ProgressRunID: 'run-A',
+        }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('RESTORE_FAILED');
+        expect(r.Message).toContain('do not have permission');
+        for (const leaked of ['TopSecretSignatureValue', 'SECRET =']) {
+            expect(r.Message).not.toContain(leaked);
+            expect(JSON.stringify(vi.mocked(LogError).mock.calls)).not.toContain(leaked);
+            expect(JSON.stringify(progressCalls)).not.toContain(leaked);
+        }
+    });
+
+    it('Restore action accepts BackupUrls as a JSON array and refuses a malformed one before any SQL', async () => {
+        const ok = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '["/var/opt/mssql/backup/x.bak"]', StagingDatabaseName: 'MJ_Staging_X' }));
+        expect(ok.Success).toBe(true);
+
+        sqlCalls = [];
+        const bad = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '["/var/opt/mssql/backup/x.bak"', StagingDatabaseName: 'MJ_Staging_X' }));
+        expect(bad.ResultCode).toBe('INVALID_PARAMETER');
+        expect(bad.Message).toContain('BackupUrls');
+        expect(sqlCalls).toHaveLength(0);
+    });
 });
 
 describe('LoadSQLServerIntegrationFromStagingAction', () => {
@@ -367,6 +406,15 @@ describe('LoadSQLServerIntegrationFromStagingAction', () => {
         expect(out.StagingDatabaseName).toBe('MJ_Staging_X');
         expect(typeof out.DurationSeconds).toBe('number');
         expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it('Load action refuses a malformed EntityMapIDs with INVALID_PARAMETER before any SQL', async () => {
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z', EntityMapIDs: '["map-1",' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('INVALID_PARAMETER');
+        expect(r.Message).toContain('EntityMapIDs');
+        expect(sqlCalls).toHaveLength(0);
     });
 
     it('Load action refuses to read the database the server runs on, before loading anything', async () => {

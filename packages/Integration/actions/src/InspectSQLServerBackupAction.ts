@@ -17,7 +17,7 @@ interface InspectionCredential {
  *
  * Parameters (Input):
  *   - CompanyIntegrationID (optional): ID of the Company Integration being inspected; not used by the inspection
- *   - BackupUrls (required): Single backup URL/path or comma-separated list of URLs/paths for striped sets;
+ *   - BackupUrls (required): Single backup URL/path, or several for a striped set (a JSON array of strings or a comma-separated list);
  *     validated before any SQL (`INVALID_PARAMETER`), as {@link BaseIntegrationAction.BackupInputProblem} describes
  *   - SasToken (optional): Shared Access Signature token for container access
  *   - StorageCredentialID (optional): MJ Credentials record ID storing the SAS token (the caller must be able to read it)
@@ -35,7 +35,8 @@ export class InspectSQLServerBackupAction extends BaseIntegrationAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const credential: InspectionCredential = { ContainerUrl: '' };
         try {
-            const backupUrls = this.readBackupUrls(params);
+            // An inspection restores nothing, so the staging-directory parameters (which it does not declare) are not read.
+            const backupUrls = this.ReadBackupUrls(params, false);
             if (!Array.isArray(backupUrls)) {
                 return { Success: false, ResultCode: backupUrls.ResultCode, Message: backupUrls.Message, Params: params.Params };
             }
@@ -52,20 +53,6 @@ export class InspectSQLServerBackupAction extends BaseIntegrationAction {
         } finally {
             await this.dropCredential(params, credential);
         }
-    }
-
-    /** The backup sources, or the refusal of a missing or invalid list. Runs before any SQL. */
-    private readBackupUrls(params: RunActionParams): string[] | { ResultCode: string; Message: string } {
-        const backupUrlsRaw = this.GetStringParam(params, 'BackupUrls');
-        if (!backupUrlsRaw) {
-            return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'BackupUrls' is required." };
-        }
-        const backupUrls = backupUrlsRaw.split(',').map(u => u.trim()).filter(u => u.length > 0);
-        if (backupUrls.length === 0) {
-            return { ResultCode: 'INVALID_PARAMETER', Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path." };
-        }
-        const problem = this.BackupInputProblem(params, backupUrls);
-        return problem ? { ResultCode: 'INVALID_PARAMETER', Message: problem } : backupUrls;
     }
 
     /** Registers the storage credential for the container of the first URL source. */

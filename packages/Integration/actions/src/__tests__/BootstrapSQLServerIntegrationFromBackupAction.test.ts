@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, type UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import {
     BootstrapSQLServerIntegrationFromBackupAction,
-    SqlBackupFileListEntry,
     SqlColumnInfo
 } from '../BootstrapSQLServerIntegrationFromBackupAction.js';
+import type { SqlBackupFileListEntry } from '../BaseIntegrationAction.js';
+import { CREDENTIAL_PERMISSION_DENIED, IsCredentialDdl, ProviderShapedSqlError } from './sqlErrorFixtures.js';
 
 // --- Mocks ---
 
@@ -30,6 +31,7 @@ vi.mock('@memberjunction/integration-engine', () => {
 
 let mockGetCompanyIntegrationObjectFn: ReturnType<typeof vi.fn>;
 let mockGetIntegrationObjectFn: ReturnType<typeof vi.fn>;
+let mockIntegrationConfigFn: ReturnType<typeof vi.fn>;
 
 /** Every call made on the progress emitter, in order, so tests can assert the stream a detached run sees. */
 let progressCalls: Array<{ Method: string; Args: unknown[] }> = [];
@@ -54,7 +56,7 @@ vi.mock('@memberjunction/integration-engine-base', () => {
     return {
         IntegrationEngineBase: {
             Instance: {
-                Config: () => Promise.resolve(),
+                Config: (...args: unknown[]) => mockIntegrationConfigFn(...args),
                 GetCompanyIntegrationObject: (...args: unknown[]) => mockGetCompanyIntegrationObjectFn(...args),
                 GetIntegrationObject: (...args: unknown[]) => mockGetIntegrationObjectFn(...args),
                 GetCompanyIntegrationByID: () => ({ IntegrationID: 'int-001' }),
@@ -294,6 +296,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         );
 
         mockGetIntegrationObjectFn = vi.fn().mockReturnValue(undefined);
+        mockIntegrationConfigFn = vi.fn().mockResolvedValue(undefined);
 
         mockEntityByNameFn = vi.fn().mockImplementation((name: string) => {
             if (name === 'MJ: Company Integration Record Maps') {
@@ -972,6 +975,56 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(dropSql).toContain("state_desc = 'ONLINE'");
             expect(dropSql?.indexOf("state_desc = 'ONLINE'")).toBeLessThan(dropSql!.indexOf('SET SINGLE_USER'));
         });
+
+        describe('SAS token secrecy when the credential DDL fails', () => {
+            const sasToken = 'sv=2024-01-01&sp=rl&sig=TopSecretSignatureValue%2Bxyz%3D';
+
+            beforeEach(() => {
+                progressCalls = [];
+                vi.mocked(LogError).mockClear();
+                const base = mockSql.mockExecuteSql.getMockImplementation()!;
+                // As SQLServerDataProvider reports a failed statement: the message carries the query text.
+                mockSql.mockExecuteSql.mockImplementation((sql: string, ...rest: unknown[]) =>
+                    IsCredentialDdl(sql) ? Promise.reject(ProviderShapedSqlError(CREDENTIAL_PERMISSION_DENIED, sql)) : base(sql, ...rest));
+            });
+
+            it('never puts the token in the result message, the log or the progress run', async () => {
+                const params = makeParams({
+                    CompanyIntegrationID: 'ci-001',
+                    BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                    SasToken: sasToken,
+                    ProgressRunID: 'bootstrap-run-secret',
+                });
+
+                const result = await action['InternalRunAction'](params);
+
+                expect(result.Success).toBe(false);
+                expect(result.ResultCode).toBe('BOOTSTRAP_FAILED');
+                // SQL Server's own reason survives, so the operator can act on it.
+                expect(result.Message).toContain('do not have permission');
+                for (const leaked of ['TopSecretSignatureValue', 'SECRET =', 'Query:']) {
+                    expect(result.Message).not.toContain(leaked);
+                    expect(JSON.stringify(vi.mocked(LogError).mock.calls)).not.toContain(leaked);
+                    expect(JSON.stringify(progressCalls)).not.toContain(leaked);
+                }
+            });
+
+            it('redacts the token even when the database echoes it in its own error text', async () => {
+                mockSql.mockExecuteSql.mockImplementation((sql: string) =>
+                    IsCredentialDdl(sql) ? Promise.reject(new Error(`Incorrect syntax near '${sasToken}'.`)) : Promise.resolve([]));
+                const params = makeParams({
+                    CompanyIntegrationID: 'ci-001',
+                    BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                    SasToken: sasToken,
+                });
+
+                const result = await action['InternalRunAction'](params);
+
+                expect(result.Success).toBe(false);
+                expect(result.Message).not.toContain('TopSecretSignatureValue');
+                expect(result.Message).toContain('[REDACTED]');
+            });
+        });
     });
 
     describe('Watermark Seeding (Zero-Gap Invariant)', () => {
@@ -1266,6 +1319,86 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
 
             expect(result.ResultCode).toBe('INVALID_PARAMETER');
             expect(mockSql.executedSql).toHaveLength(0);
+        });
+    });
+    describe('List parameters (BackupUrls, EntityMapIDs)', () => {
+        const mapA = 'AAAAAAAA-1111-4111-8111-AAAAAAAAAAAA';
+        const mapB = 'BBBBBBBB-2222-4222-8222-BBBBBBBBBBBB';
+
+        it('accepts EntityMapIDs as a JSON array and filters the maps by those IDs', async () => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'C:\\backups\\db.bak',
+                EntityMapIDs: JSON.stringify([mapA, mapB]),
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const filter = (mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
+            expect(filter).toContain(`ID IN ('${mapA}','${mapB}')`);
+        });
+
+        it.each([
+            ['a malformed JSON array', '["not closed"'],
+            ['a JSON array holding a non-string', '[42]'],
+            ['an entry that is not an ID', `${mapA}, not-an-id`],
+        ])('refuses EntityMapIDs given as %s with INVALID_PARAMETER before any SQL', async (_label, value) => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'C:\\backups\\db.bak',
+                EntityMapIDs: value,
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAMETER');
+            expect(result.Message).toContain('EntityMapIDs');
+            expect(mockSql.executedSql).toHaveLength(0);
+        });
+
+        it('accepts BackupUrls as a JSON array of stripes', async () => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: JSON.stringify(['C:\\backups\\s1.bak', 'C:\\backups\\s2.bak']),
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const headerSql = mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'));
+            expect(headerSql).toContain("DISK = N'C:\\backups\\s1.bak'");
+            expect(headerSql).toContain("DISK = N'C:\\backups\\s2.bak'");
+        });
+    });
+
+    describe('Watermark column identifier', () => {
+        it('refuses a watermark column name that would end the bracketed identifier', () => {
+            const targetColMap = new Map([['__mj_integration_lastseenmodifiedvalue', '__mj_integration_LastSeenModifiedValue']]);
+
+            expect(() => action['BuildColumnMappings']([], targetColMap, [], 'ModifiedAt]; DROP TABLE x; --')).toThrow();
+            expect(action['BuildColumnMappings']([], targetColMap, [], 'ModifiedAt')).toEqual([
+                { Target: '__mj_integration_LastSeenModifiedValue', Expr: 'CAST(s.[ModifiedAt] AS NVARCHAR(255))' },
+            ]);
+        });
+    });
+
+    describe('Engine configuration on the action provider (multi-provider)', () => {
+        it('configures the integration and credential engines on the action provider', async () => {
+            mockGetCredentialByIdFn.mockReturnValue({ ID: 'cred-123', Name: 'Azure Blob Backup Credential' });
+            mockGetCredentialFn.mockResolvedValue({ values: { SasToken: 'sp=r&sig=engineToken456' }, status: 'valid' });
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                StorageCredentialID: 'cred-123',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            expect(mockCredentialConfigFn).toHaveBeenCalledWith(false, params.ContextUser, mockSql.executor);
+            expect(mockIntegrationConfigFn).toHaveBeenCalledWith(false, params.ContextUser, mockSql.executor);
         });
     });
 });

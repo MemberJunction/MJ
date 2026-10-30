@@ -50,7 +50,7 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
 | `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being bootstrapped |
-| `BackupUrls` | Input | string | Yes | Single Azure Blob URL / disk path or comma-separated list of URLs/paths for striped backups |
+| `BackupUrls` | Input | string | Yes | One Azure Blob URL / disk path, or several for a striped backup (a JSON array of strings or a comma-separated list) |
 | `SasToken` | Input | string | No | Shared Access Signature token for Azure Blob container access (redacted from logs) |
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
 | `StagingDatabaseName` | Both | string | No | Temporary staging database name (default: auto-generated); returned with the name actually used |
@@ -59,7 +59,7 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 | `BatchSize` | Input | number | No | Chunk batch size for large table transfers (default: 500,000; 0 for unchunked) |
 | `TargetDataFileDirectory` | Input | string | No | Custom directory for staging database .mdf file |
 | `TargetLogFileDirectory` | Input | string | No | Custom directory for staging database .ldf file |
-| `EntityMapIDs` | Input | string | No | Comma-separated list of specific EntityMapIDs to restrict bootstrap |
+| `EntityMapIDs` | Input | string | No | Entity map IDs to restrict the bootstrap to (a JSON array of strings or a comma-separated list); a malformed list or non-UUID entry is `INVALID_PARAMETER` before any SQL |
 | `ProgressRunID` | Input | string | No | Integration progress run to report stages to. Set by the `IntegrationStartBootstrap` GraphQL mutation, which launches this action detached and returns the run ID; clients tail the run with `IntegrationTailRunEvents` instead of awaiting the action |
 | `BackupStartDate` | Output | string | — | Point-in-time timestamp (ISO UTC) when backup began (seeds watermarks) |
 | `TablesProcessed` | Output | number | — | Count of entity tables transferred |
@@ -70,7 +70,7 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 **Result Codes**:
 - `SUCCESS` — Backup restored, ETL completed, record maps seeded, and watermarks set
 - `MISSING_PARAMETER` — Required parameters missing
-- `INVALID_PARAMETER` — Invalid backup URL or parameter values
+- `INVALID_PARAMETER` — Invalid backup URL, disk path, staging directory, malformed JSON array, or `EntityMapIDs` entry
 - `BOOTSTRAP_FAILED` — Error during restore, validation, ETL transfer, or cleanup
 
 ---
@@ -107,7 +107,7 @@ Inspects SQL Server backup files (.bak) from Azure Blob Storage or local disk by
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
 | `CompanyIntegrationID` | Input | string | No | ID of the Company Integration being inspected |
-| `BackupUrls` | Input | string | Yes | Single backup URL/path or comma-separated list of URLs/paths for striped sets |
+| `BackupUrls` | Input | string | Yes | One backup URL/path, or several for a striped set (a JSON array of strings or a comma-separated list) |
 | `SasToken` | Input | string | No | Shared Access Signature token for Azure Blob container access (redacted from logs) |
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
 | `BackupStartDate` | Output | string | — | ISO UTC timestamp when backup was initiated |
@@ -118,7 +118,7 @@ Inspects SQL Server backup files (.bak) from Azure Blob Storage or local disk by
 **Result Codes**:
 - `SUCCESS` — Header and file list inspected successfully
 - `MISSING_PARAMETER` — Required parameters missing
-- `INVALID_PARAMETER` — BackupUrls contains no valid URLs or paths
+- `INVALID_PARAMETER` — BackupUrls contains no valid URLs or paths, is a malformed JSON array, or names a disallowed location
 - `INSPECTION_FAILED` — SQL Server error during inspection
 
 ---
@@ -136,7 +136,7 @@ Restores the backup into a named staging database and stops. The staging databas
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
 | `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being seeded |
-| `BackupUrls` | Input | string | Yes | One backup URL or path, or a comma-separated list for a striped backup |
+| `BackupUrls` | Input | string | Yes | One backup URL or path, or several for a striped backup (a JSON array of strings or a comma-separated list) |
 | `StagingDatabaseName` | Both | string | Yes | Database to restore into; echoed back as the restored staging database |
 | `SasToken` | Input | string | No | SAS token for Azure Blob container access (redacted from logs) |
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
@@ -162,7 +162,7 @@ Loads every active entity map's table from the staging database into the target 
 | `BackupStartDate` | Both | string | Yes | ISO UTC backup start, as the restore phase reported it; the date the watermarks were seeded to |
 | `BatchSize` | Input | number | No | Chunk size for large tables (default 500,000; 0 for unchunked) |
 | `TruncateTargetBeforeLoad` | Input | string | No | `'true'` empties each target first (default `'false'`); each target entity must have `AllowDirectSQLDelete` |
-| `EntityMapIDs` | Input | string | No | Entity map IDs to restrict the load to |
+| `EntityMapIDs` | Input | string | No | Entity map IDs to restrict the load to (a JSON array of strings or a comma-separated list); a malformed list or non-UUID entry is `INVALID_PARAMETER` before any SQL |
 | `DropStagingDbOnComplete` | Input | string | No | `'true'` drops the staging database afterwards (default `'false'`); refused as for the drop action below, checked before anything loads |
 | `AllowAnyName` | Input | string | No | `'true'` lets `DropStagingDbOnComplete` drop a name outside `MJ_Staging_` (default `'false'`); requires `CreatedAfter` |
 | `CreatedAfter` | Input | string | No | ISO UTC time; `DropStagingDbOnComplete` refuses a database created before it |
@@ -173,7 +173,7 @@ Loads every active entity map's table from the staging database into the target 
 | `DurationSeconds` | Output | number | — | Execution time of the phase |
 | `StagingDatabaseDropped` | Output | boolean | — | Whether the staging database was dropped |
 
-**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate is not a valid date), `STAGING_NOT_FOUND`, `STAGING_NOT_ALLOWED` (the source is a system database or the server's own database, or lacks the `MJ_Staging_` prefix without `AllowAnyName` and a `CreatedAfter` its creation date satisfies), `DROP_REFUSED` (the requested drop-on-complete is not allowed), `LOAD_FAILED`
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate or CreatedAfter is not a valid date, ContainerUrl is not an Azure Blob container URL, or EntityMapIDs is malformed), `STAGING_NOT_FOUND`, `STAGING_NOT_ALLOWED` (the source is a system database or the server's own database, or lacks the `MJ_Staging_` prefix without `AllowAnyName` and a `CreatedAfter` its creation date satisfies), `DROP_REFUSED` (the requested drop-on-complete is not allowed), `LOAD_FAILED`
 
 ### 7. Drop SQL Server Staging Database
 

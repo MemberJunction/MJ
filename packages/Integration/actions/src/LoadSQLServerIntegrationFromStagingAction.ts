@@ -39,7 +39,8 @@ type InputRefusal = { ResultCode: string; Message: string };
  *   - BatchSize (optional): chunk size for large tables (default 500,000; 0 for unchunked)
  *   - TruncateTargetBeforeLoad (optional): 'true' to empty each target first (default 'false'); each target
  *     entity must sanction direct SQL delete (`AllowDirectSQLDelete`)
- *   - EntityMapIDs (optional): comma-separated entity map IDs to restrict the load to
+ *   - EntityMapIDs (optional): entity map IDs to restrict the load to, as a JSON array of strings or a
+ *     comma-separated list; a malformed list or a non-UUID entry is refused (`INVALID_PARAMETER`) before any SQL
  *   - DropStagingDbOnComplete (optional): 'true' to drop the staging database afterwards (default 'false'). The
  *     drop refuses a system database, the server's own database, a database created before CreatedAfter and —
  *     unless AllowAnyName is 'true' with CreatedAfter — a name that does not start with `MJ_Staging_`
@@ -103,6 +104,10 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
         const dates = this.readDates(params, backupStartDateRaw);
         if ('ResultCode' in dates) {
             return dates;
+        }
+        const entityMapProblem = this.EntityMapIDsProblem(params);
+        if (entityMapProblem) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: entityMapProblem };
         }
         const containerUrl = this.GetStringParam(params, 'ContainerUrl') ?? '';
         const refusal = this.inputRefusal(params, stagingDatabaseName, containerUrl, dates.CreatedAfter);

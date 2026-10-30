@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, type UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import {
     InspectSQLServerBackupAction,
 } from '../InspectSQLServerBackupAction.js';
 import type { SqlBackupFileListEntry } from '../BaseIntegrationAction.js';
+import { CREDENTIAL_PERMISSION_DENIED, IsCredentialDdl, ProviderShapedSqlError } from './sqlErrorFixtures.js';
 
 let mockCredentialConfigFn: ReturnType<typeof vi.fn>;
 let mockGetCredentialByIdFn: ReturnType<typeof vi.fn>;
@@ -50,7 +51,7 @@ function makeParams(inputs: Record<string, string | number | boolean>): RunActio
     return params;
 }
 
-function createMockSqlExecutor(options: { failOnHeader?: boolean } = {}): {
+function createMockSqlExecutor(options: { failOnHeader?: boolean; failOnCredential?: boolean } = {}): {
     executor: DatabaseProviderBase;
     executedSql: string[];
     mockExecuteSql: ReturnType<typeof vi.fn>;
@@ -58,6 +59,10 @@ function createMockSqlExecutor(options: { failOnHeader?: boolean } = {}): {
     const executedSql: string[] = [];
     const mockExecuteSql = vi.fn().mockImplementation((sql: string) => {
         executedSql.push(sql);
+
+        if (options.failOnCredential && IsCredentialDdl(sql)) {
+            return Promise.reject(ProviderShapedSqlError(CREDENTIAL_PERMISSION_DENIED, sql));
+        }
 
         if (options.failOnHeader && sql.includes('RESTORE HEADERONLY')) {
             return Promise.reject(new Error('Cannot open backup device'));
@@ -235,6 +240,39 @@ describe('InspectSQLServerBackupAction', () => {
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('INVALID_PARAMETER');
             expect(mockSql.executedSql).toHaveLength(0);
+        });
+    });
+    describe('SAS token secrecy', () => {
+        it('never reports the token when registering the storage credential fails', async () => {
+            mockSql = createMockSqlExecutor({ failOnCredential: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+            vi.mocked(LogError).mockClear();
+
+            const result = await action['InternalRunAction'](makeParams({
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'sv=2024&sig=TopSecretSignatureValue',
+            }));
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INSPECTION_FAILED');
+            expect(result.Message).toContain('do not have permission');
+            expect(result.Message).not.toContain('TopSecretSignatureValue');
+            expect(JSON.stringify(vi.mocked(LogError).mock.calls)).not.toContain('TopSecretSignatureValue');
+        });
+    });
+
+    describe('Declared parameters only', () => {
+        it('does not read the staging directory parameters it does not declare', async () => {
+            const result = await action['InternalRunAction'](makeParams({ BackupUrls: 'C:\\backups\\db.bak', TargetDataFileDirectory: '\\\\host\\share' }));
+
+            expect(result.Success).toBe(true);
+        });
+
+        it('accepts BackupUrls as a JSON array', async () => {
+            const result = await action['InternalRunAction'](makeParams({ BackupUrls: JSON.stringify(['C:\\backups\\s1.bak', 'C:\\backups\\s2.bak']) }));
+
+            expect(result.Success).toBe(true);
+            expect(mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'))).toContain("DISK = N'C:\\backups\\s2.bak'");
         });
     });
 });

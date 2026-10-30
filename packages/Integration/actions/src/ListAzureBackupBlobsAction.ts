@@ -4,6 +4,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseIntegrationAction, TrimTrailingChars } from './BaseIntegrationAction.js';
 import { StorageContainerUrlProblem } from './BackupSourceGuard.js';
+import { RedactSecrets, SasTokenSecrets } from './SecretRedaction.js';
 
 export interface AzureBlobItem {
     Name: string;
@@ -138,14 +139,17 @@ class BlobListingHttpError extends Error {
 export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        // The token rides in the request URL, so any failure text is redacted before it is reported.
+        let sasToken = '';
         try {
             const containerUrl = this.readContainerUrl(params);
             if (typeof containerUrl !== 'string') {
                 return { Success: false, ResultCode: containerUrl.ResultCode, Message: containerUrl.Message, Params: params.Params };
             }
+            sasToken = await this.resolveOptionalSas(params);
             const request: BlobListingRequest = {
                 ContainerUrl: containerUrl,
-                Sas: await this.resolveOptionalSas(params),
+                Sas: sasToken,
                 Prefix: this.GetStringParam(params, 'Prefix'),
             };
             LogStatus(`[ListAzureBackupBlobsAction] Querying container '${containerUrl}' with prefix '${request.Prefix ?? ''}'...`);
@@ -154,7 +158,7 @@ export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
             this.AddOutputParam(params, 'BlobCount', blobs.length);
             return { Success: true, ResultCode: 'SUCCESS', Message: `Found ${blobs.length} blob(s) in container '${containerUrl}'.`, Params: params.Params };
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = RedactSecrets(error instanceof Error ? error.message : String(error), SasTokenSecrets(sasToken));
             LogError(`[ListAzureBackupBlobsAction] Listing failed: ${message}`);
             return { Success: false, ResultCode: 'LIST_BLOBS_FAILED', Message: message, Params: params.Params };
         }
@@ -207,7 +211,7 @@ export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
             headers: { 'x-ms-version': '2021-08-06' },
         });
         if (!response.ok) {
-            const errorText = await response.text();
+            const errorText = RedactSecrets(await response.text(), SasTokenSecrets(request.Sas));
             LogError(`[ListAzureBackupBlobsAction] Azure REST API error (${response.status} ${response.statusText}): ${errorText.slice(0, MAX_LOGGED_ERROR_BODY)}`);
             throw new BlobListingHttpError(response.status, response.statusText);
         }

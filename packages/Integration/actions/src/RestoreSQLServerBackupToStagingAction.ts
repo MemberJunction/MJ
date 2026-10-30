@@ -9,6 +9,7 @@ import {
     type BootstrapRunContext
 } from './BootstrapSQLServerIntegrationFromBackupAction.js';
 import { StagingNotAccessibleError } from './StagingAccessGuard.js';
+import { InvalidBackupParameterError } from './BackupSourceGuard.js';
 
 /** The validated inputs of a restore, or the reason the action cannot run. */
 type RestoreInput =
@@ -22,7 +23,8 @@ type RestoreInput =
  *
  * Parameters (Input):
  *   - CompanyIntegrationID (required): the Company Integration being seeded
- *   - BackupUrls (required): one backup URL or path, or a comma-separated list for a striped backup
+ *   - BackupUrls (required): one backup URL or path, or several for a striped backup (a JSON array of
+ *     strings or a comma-separated list)
  *   - StagingDatabaseName (required): the database to restore into; it must not already exist
  *   - SasToken / StorageCredentialID (optional): storage access for URL sources
  *   - TargetDataFileDirectory / TargetLogFileDirectory (optional): where the staging files go
@@ -73,24 +75,19 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
 
     private readRestoreInput(params: RunActionParams): RestoreInput {
         const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
-        const backupUrlsRaw = this.GetStringParam(params, 'BackupUrls');
         const stagingDatabaseName = this.GetStringParam(params, 'StagingDatabaseName');
         if (!companyIntegrationID) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'CompanyIntegrationID' is required." };
         }
-        if (!backupUrlsRaw) {
+        if (!this.GetStringParam(params, 'BackupUrls')) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'BackupUrls' is required." };
         }
         if (!stagingDatabaseName) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'StagingDatabaseName' is required." };
         }
-        const backupUrls = backupUrlsRaw.split(',').map(u => u.trim()).filter(u => u.length > 0);
-        if (backupUrls.length === 0) {
-            return { ResultCode: 'INVALID_PARAMETER', Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path." };
-        }
-        const problem = this.BackupInputProblem(params, backupUrls);
-        if (problem) {
-            return { ResultCode: 'INVALID_PARAMETER', Message: problem };
+        const backupUrls = this.ReadBackupUrls(params, true);
+        if (!Array.isArray(backupUrls)) {
+            return backupUrls;
         }
         ValidateIdentifier(stagingDatabaseName, 'database');
         return { CompanyIntegrationID: companyIntegrationID, StagingDatabaseName: stagingDatabaseName, BackupUrls: backupUrls };
@@ -118,7 +115,7 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
         error: unknown
     ): Promise<ActionResultSimple> {
         const message = error instanceof Error ? error.message : String(error);
-        const resultCode = error instanceof StagingNotAccessibleError ? error.ResultCode : 'RESTORE_FAILED';
+        const resultCode = error instanceof StagingNotAccessibleError || error instanceof InvalidBackupParameterError ? error.ResultCode : 'RESTORE_FAILED';
         LogError(`[RestoreSQLServerBackupToStagingAction] Failure: ${message}`);
         await this.ReportFailure(progress, message, resultCode);
         if (ctx) {

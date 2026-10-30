@@ -1,5 +1,5 @@
 import { RegisterClass, EscapeSQLString } from '@memberjunction/global';
-import { LogError, LogStatus, RunView, DatabaseProviderBase, LocalCacheManager, type EntityInfo, type UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, RunView, DatabaseProviderBase, LocalCacheManager, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { WatermarkService } from '@memberjunction/integration-engine';
@@ -9,10 +9,11 @@ import { ValidateIdentifier } from '@memberjunction/schema-engine';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import {
     BaseIntegrationAction,
-    SqlBackupFileListEntry,
-    SqlBackupHeaderInfo,
     TrimTrailingChars,
-    type LongRunningSqlRunner
+    type ActionInputRefusal,
+    type LongRunningSqlRunner,
+    type SqlBackupFileListEntry,
+    type SqlBackupHeaderInfo
 } from './BaseIntegrationAction.js';
 import {
     AssertDropAllowedByFacts,
@@ -101,9 +102,6 @@ export class BootstrapProgress {
         await this.emitter?.Flush();
     }
 }
-
-// Re-export shared types for backward compatibility
-export type { SqlBackupHeaderInfo, SqlBackupFileListEntry } from './BaseIntegrationAction.js';
 
 /**
  * Column schema information from INFORMATION_SCHEMA.COLUMNS.
@@ -200,12 +198,6 @@ interface BootstrapInput {
     LoadOptions: Omit<BootstrapLoadOptions, 'BackupStartDate'>;
 }
 
-/** A refused input: its result code and message. */
-interface BootstrapInputRefusal {
-    ResultCode: string;
-    Message: string;
-}
-
 /**
  * State shared by the bootstrap's restore and load phases. The restore phase fills in the backup's
  * identity, the long-running runner and what it created (staging database, storage credential) as it
@@ -244,7 +236,8 @@ const RESTORE_START_CLOCK_MARGIN_MS = 2000;
  *
  * Parameters (Input):
  *   - CompanyIntegrationID (required): ID of the CompanyIntegration being bootstrapped
- *   - BackupUrls (required): Single Azure Blob URL or comma-separated list of URLs (for striped backups)
+ *   - BackupUrls (required): One Azure Blob URL or local disk path, or several (for striped backups) as a
+ *     JSON array of strings or a comma-separated list
  *   - StorageCredentialID (optional): ID of the MJ: Credentials record storing the SAS token (the caller must be able to read it)
  *   - SasToken (optional): Direct Shared Access Signature token for the Azure Blob container
  *   - StagingDatabaseName (optional): Name for the temporary staging database (default: auto-generated)
@@ -254,7 +247,8 @@ const RESTORE_START_CLOCK_MARGIN_MS = 2000;
  *     each target entity must sanction direct SQL delete (`AllowDirectSQLDelete`)
  *   - TargetDataFileDirectory (optional): Custom file path for staging database .mdf file
  *   - TargetLogFileDirectory (optional): Custom file path for staging database .ldf file
- *   - EntityMapIDs (optional): Comma-separated list of specific EntityMapIDs to restrict the bootstrap
+ *   - EntityMapIDs (optional): Entity map IDs to restrict the bootstrap to, as a JSON array of strings or a
+ *     comma-separated list; a malformed list or a non-UUID entry is refused (`INVALID_PARAMETER`) before any SQL
  *   - ProgressRunID (optional): The integration progress run to report stages to, when launched detached
  *     by the `IntegrationStartBootstrap` mutation; the client tails that run instead of awaiting the action
  *
@@ -303,22 +297,18 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     }
 
     /** The validated inputs, or the refusal of a missing or invalid one. Runs before any SQL. */
-    private readBootstrapInput(params: RunActionParams): BootstrapInput | BootstrapInputRefusal {
+    private readBootstrapInput(params: RunActionParams): BootstrapInput | ActionInputRefusal {
         const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
         if (!companyIntegrationID) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'CompanyIntegrationID' is required." };
         }
-        const backupUrlsRaw = this.GetStringParam(params, 'BackupUrls');
-        if (!backupUrlsRaw) {
-            return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'BackupUrls' is required." };
+        const backupUrls = this.ReadBackupUrls(params, true);
+        if (!Array.isArray(backupUrls)) {
+            return backupUrls;
         }
-        const backupUrls = backupUrlsRaw.split(',').map(u => u.trim()).filter(u => u.length > 0);
-        if (backupUrls.length === 0) {
-            return { ResultCode: 'INVALID_PARAMETER', Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path." };
-        }
-        const problem = this.BackupInputProblem(params, backupUrls);
-        if (problem) {
-            return { ResultCode: 'INVALID_PARAMETER', Message: problem };
+        const entityMapProblem = this.EntityMapIDsProblem(params);
+        if (entityMapProblem) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: entityMapProblem };
         }
         const stagingDbName = this.GetStringParam(params, 'StagingDatabaseName') ??
             `MJ_Staging_${companyIntegrationID.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12)}_${Date.now()}`;
@@ -931,16 +921,17 @@ SELECT DB_NAME() AS CurrentDatabase,
     /**
      * The source object's incremental watermark column, read from `MJ: Integration Objects` — the same
      * place the external-data-source connector reads it when it syncs deltas — when the staged table
-     * carries that column.
+     * carries that column. The integration engine is configured on the action's provider.
      */
     protected async ResolveWatermarkColumn(
+        provider: IMetadataProvider,
         companyIntegrationID: string,
         externalObjectName: string,
         sourceColSet: Set<string>,
         contextUser?: UserInfo
     ): Promise<string | undefined> {
         const engine = IntegrationEngineBase.Instance;
-        await engine.Config(false, contextUser);
+        await engine.Config(false, contextUser, provider);
         // Per-connection catalog first; the backup-archive flow populates the shared catalog instead.
         const object = engine.GetCompanyIntegrationObject(companyIntegrationID, externalObjectName)
             ?? this.getSharedCatalogObject(engine, companyIntegrationID, externalObjectName);
@@ -965,7 +956,7 @@ SELECT DB_NAME() AS CurrentDatabase,
         const source = await this.readStagedSourceFacts(request);
         const truncateTarget = await this.decideTruncate(request);
 
-        const watermarkSourceCol = await this.ResolveWatermarkColumn(request.CompanyIntegrationID, request.EntityMap.ExternalObjectName, source.SourceColSet, request.ContextUser);
+        const watermarkSourceCol = await this.ResolveWatermarkColumn(request.Executor, request.CompanyIntegrationID, request.EntityMap.ExternalObjectName, source.SourceColSet, request.ContextUser);
         const totalRows = await this.QueryTableRowCount(request.Executor, request.StagingDbName, source.SourceSchema, source.SourceTable, request.ContextUser);
         const batchSql = this.BuildTableLoadBatch({
             StagingDbName: request.StagingDbName,
@@ -1107,6 +1098,7 @@ SELECT DB_NAME() AS CurrentDatabase,
         }
         const lastSeen = targetColMap.get('__mj_integration_lastseenmodifiedvalue');
         if (lastSeen && watermarkSourceCol) {
+            ValidateIdentifier(watermarkSourceCol, 'column');
             mappings.push({ Target: lastSeen, Expr: `CAST(s.[${watermarkSourceCol}] AS NVARCHAR(255))` });
         }
         return mappings;
