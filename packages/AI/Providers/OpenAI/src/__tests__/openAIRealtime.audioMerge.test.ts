@@ -101,7 +101,6 @@ describe('MergeAudioOverride', () => {
     const meetingBuilt = { input: { transcription: { model: 'm' },
       turn_detection: { type: 'server_vad', create_response: false, interrupt_response: true } } } as const;
     const bypasses: Array<[string, unknown]> = [
-      ['turn_detection null', { input: { turn_detection: null } }],
       ['input null', { input: null }],
       ['input string', { input: 'x' }],
       ['turn_detection string', { input: { turn_detection: 'off' } }],
@@ -118,6 +117,11 @@ describe('MergeAudioOverride', () => {
       expect(out?.input).toEqual({ transcription: { model: 'm' } });
       expect(out?.input).not.toHaveProperty('turn_detection');
       expect(out?.output).toEqual({ speed: 1.1 });
+    });
+    it('keeps an explicit turn_detection null: VAD off cannot auto-respond, so the floor already holds', () => {
+      const out = MergeAudioOverride(meetingBuilt, { input: { turn_detection: null } }, true);
+      expect(out?.input?.turn_detection).toBeNull();
+      expect(out?.input?.transcription).toEqual({ model: 'm' });
     });
     it('leaves a bag null as sent when nothing was built', () => {
       const out = MergeAudioOverride(undefined, { input: { turn_detection: null } }, true);
@@ -344,6 +348,17 @@ describe('Reconfigure', () => {
     session.Reconfigure?.({ DisableAutoResponse: false });
     const input = (lastSession(driver).audio as AudioShape).input;
     expect(input).toHaveProperty('turn_detection', null);
+  });
+
+  it('keeps VAD off in a meeting when the bag sent turn_detection:null, at start and on Reconfigure', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({
+      Model: 'gpt-realtime', SystemPrompt: 'hi',
+      Config: { disableAutoResponse: true, audio: { input: { turn_detection: null } } },
+    });
+    expect((driver.SentSession().audio as AudioShape).input).toHaveProperty('turn_detection', null);
+    session.Reconfigure?.({ DisableAutoResponse: true });
+    expect((lastSession(driver).audio as AudioShape).input).toHaveProperty('turn_detection', null);
   });
 
   it('re-sends a bag type swap (semantic_vad) without server_vad-only fields', async () => {

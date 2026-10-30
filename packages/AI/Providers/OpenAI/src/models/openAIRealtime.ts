@@ -580,13 +580,18 @@ function readTurnDetection(audio: Record<string, unknown>): Record<string, unkno
 
 /**
  * Applies the meeting-mode floor to a merged audio block, in place on `merged` (a fresh object the
- * caller owns). The surviving `turn_detection` object gets `create_response: false`. When the bag
- * nulled or broke `input` or `turn_detection`, the built `turn_detection` is restored (with the
- * floor) on the built input, since a missing block makes OpenAI fall back to auto-responding VAD.
- * When the profile built no `turn_detection` (e.g. HuggingFace), nothing is invented.
+ * caller owns). The surviving `turn_detection` object gets `create_response: false`. An explicit
+ * `turn_detection: null` is kept: with VAD off nothing commits a turn, so the model cannot auto-respond
+ * and the floor already holds. When the bag nulled or broke `input`, or sent a `turn_detection` that is
+ * neither an object nor null, the built `turn_detection` is restored (with the floor) on the built
+ * input, since a missing block makes OpenAI fall back to auto-responding VAD. When the profile built
+ * no `turn_detection` (e.g. HuggingFace), nothing is invented.
  */
 function applyMeetingFloor(merged: Record<string, unknown>, base: Record<string, unknown>): void {
     const mergedInput = isPlainObject(merged.input) ? merged.input : undefined;
+    if (mergedInput && mergedInput.turn_detection === null) {
+        return;
+    }
     const mergedDetection = mergedInput && isPlainObject(mergedInput.turn_detection) ? mergedInput.turn_detection : undefined;
     if (mergedInput && mergedDetection) {
         merged.input = { ...mergedInput, turn_detection: { ...mergedDetection, create_response: false } };
@@ -614,8 +619,9 @@ function applyMeetingFloor(merged: Record<string, unknown>, base: Record<string,
  * - A `turn_detection.type` that differs from the built one replaces the whole `turn_detection`
  *   object, because fields of one detector kind (e.g. `silence_duration_ms`) are invalid on another.
  * - In meeting mode, after the merge: a surviving `turn_detection` object gets `create_response:
- *   false`. If the bag nulled or broke `input` or `turn_detection` and the built block had a
- *   `turn_detection`, that block is restored with the floor (on the built input when `input` was
+ *   false`. An explicit `turn_detection: null` is kept (VAD off cannot auto-respond). If the bag nulled
+ *   or broke `input`, or sent a `turn_detection` that is neither an object nor null, and the built block
+ *   had a `turn_detection`, that block is restored with the floor (on the built input when `input` was
  *   clobbered). If the profile built none, nothing is invented and the bag's value stands.
  *
  * Neither argument is mutated.
@@ -1330,8 +1336,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      *
      * The frame always carries `audio.input.turn_detection`, because flipping `create_response` is the
      * whole point. The explicit live `DisableAutoResponse` wins over any bag `create_response`: the
-     * caller asked for this mode now. The one exception is a bag `turn_detection: null` outside meeting
-     * mode, which is re-sent as `null` so VAD stays off, as it was at start.
+     * caller asked for this mode now. The one exception is a bag `turn_detection: null`, re-sent as `null`
+     * in either mode so VAD stays off, as it was at start: without VAD nothing auto-responds.
      */
     public Reconfigure(params: RealtimeReconfigureParams): void {
         if (!this.profile.supportsLiveReconfigure) {
@@ -1378,8 +1384,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         if (isPlainObject(mergedDetection)) {
             input.turn_detection = { ...mergedDetection, create_response: !disable };
         }
-        else if (mergedDetection === null && !disable) {
-            input.turn_detection = null; // the bag turned VAD off at start; keep it off
+        else if (mergedDetection === null) {
+            input.turn_detection = null; // the bag turned VAD off at start; keep it off (without VAD nothing auto-responds)
         }
         else {
             input.turn_detection = turnDetection;
