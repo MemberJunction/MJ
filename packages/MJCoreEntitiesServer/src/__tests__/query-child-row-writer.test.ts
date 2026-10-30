@@ -334,3 +334,71 @@ describe('WriteExtractedChildRows — dry run and the change list', () => {
         expect(summary.Changes).toEqual([{ Collection: 'Fields', Action: 'Added', Name: 'New', ChangedColumns: [], SourceEntityFieldID: null }]);
     });
 });
+
+describe('WriteExtractedChildRows — one unit of work', () => {
+    /**
+     * A provider with entity transactions: a write inside a scope is kept only when the outermost
+     * scope commits, and a rollback discards everything written since its scope began. A save of a
+     * row named `Bad` fails.
+     */
+    function transactionalContext(log: string[]): ChildRowWriteContext {
+        const provider = makeProvider();
+        let depth = 0;
+        const save = provider.Save.bind(provider);
+        // Changed in place: the entities it creates save through this same object.
+        const transactional = Object.assign(provider, {
+            SupportsEntityTransactions: true,
+            async Save(entity: BaseEntity): Promise<Record<string, unknown>> {
+                if (entity.Get('Name') === 'Bad') throw new Error('the database refused the row');
+                return save(entity);
+            },
+            async BeginEntityTransaction() {
+                const start = ops.length;
+                log.push(depth++ > 0 ? 'join' : 'begin');
+                return {
+                    IsNested: depth > 1,
+                    async Commit() { depth--; log.push('commit'); },
+                    async Rollback() { depth--; ops.splice(start); log.push('rollback'); },
+                };
+            },
+        });
+        return { QueryID: QUERY_ID, Provider: transactional as unknown as ChildRowWriteContext['Provider'], User: USER as unknown as UserInfo };
+    }
+
+    it('rolls every write back when one fails, and throws', async () => {
+        const log: string[] = [];
+        stored.set('MJ: Query Fields', [{ ID: 'F9', QueryID: QUERY_ID, Name: 'Gone', Sequence: 9, SQLBaseType: 'int', SQLFullType: 'int', DetectionMethod: 'Database' }]);
+        const write = WriteExtractedChildRows(transactionalContext(log), result({ Fields: [field('First', 1), field('Bad', 2), field('Third', 3)], Parameters: [parameter('Region')] }));
+
+        await expect(write).rejects.toThrow(/child-row writes failed; none of them were kept/);
+        expect(ops).toEqual([]);
+        expect(log).toEqual(['begin', 'rollback']);
+    });
+
+    it('commits the writes together when every one succeeds', async () => {
+        const log: string[] = [];
+        await WriteExtractedChildRows(transactionalContext(log), result({ Fields: [field('First', 1), field('Second', 2)] }));
+
+        expect(ops.sort()).toEqual(['create MJ: Query Fields:First', 'create MJ: Query Fields:Second']);
+        expect(log).toEqual(['begin', 'commit']);
+    });
+
+    it('joins a transaction the caller has open rather than writing outside it', async () => {
+        const log: string[] = [];
+        const ctx = transactionalContext(log);
+        const outer = await ctx.Provider.BeginEntityTransaction!();
+        await WriteExtractedChildRows(ctx, result({ Fields: [field('First', 1)] }));
+        await outer.Commit();
+
+        expect(log).toEqual(['begin', 'join', 'commit', 'commit']);
+    });
+
+    it('opens no transaction for a dry run, or when nothing changes', async () => {
+        const log: string[] = [];
+        await WriteExtractedChildRows({ ...transactionalContext(log), DryRun: true }, result({ Fields: [field('First', 1)] }));
+        await WriteExtractedChildRows(transactionalContext(log), result({ Fields: [] }));
+
+        expect(log).toEqual([]);
+        expect(ops).toEqual([]);
+    });
+});

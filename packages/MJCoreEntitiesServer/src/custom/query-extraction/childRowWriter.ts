@@ -1,5 +1,5 @@
-import { RunMaybeSerial } from "@memberjunction/core";
-import type { BaseEntity, IMetadataProvider, IRunViewProvider, UserInfo } from "@memberjunction/core";
+import { RunInEntityTransaction, RunMaybeSerial } from "@memberjunction/core";
+import type { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, UserInfo } from "@memberjunction/core";
 import type {
     MJQueryDependencyEntity,
     MJQueryEntityEntity,
@@ -18,8 +18,11 @@ import type {
 /** Where the child rows are written, and as whom. */
 export interface ChildRowWriteContext {
     readonly QueryID: string;
-    /** The caller's provider, so the writes join the caller's transaction. */
-    readonly Provider: IMetadataProvider & IRunViewProvider;
+    /**
+     * The caller's provider. The writes run in an entity transaction on it, joining the caller's
+     * transaction when one is open; a provider without entity transactions writes without one.
+     */
+    readonly Provider: IMetadataProvider & IRunViewProvider & Partial<Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'>>;
     /** The user the rows are read and written as: the system user for save-triggered extraction. */
     readonly User: UserInfo;
     /** Work out and report the changes without writing anything. */
@@ -86,6 +89,11 @@ type Write = () => Promise<boolean>;
  * they are. Existing rows are read from the database on the caller's provider, never a cache, so
  * rows written earlier in the same transaction are seen.
  *
+ * The writes are one unit of work: they run in an entity transaction on the caller's provider,
+ * which joins the caller's transaction when one is open (a nested scope), so a failed write rolls
+ * every write of this call back and throws. A provider without entity transactions (a client)
+ * writes without one.
+ *
  * With `DryRun` the same changes are worked out and reported, and nothing is written.
  */
 export async function WriteExtractedChildRows(context: ChildRowWriteContext, result: QueryExtractionResult): Promise<ChildRowWriteSummary> {
@@ -96,10 +104,16 @@ export async function WriteExtractedChildRows(context: ChildRowWriteContext, res
     writes.push(...await parameterWrites(context, stored.Parameters, result.Parameters, summary));
     if (result.Entities) writes.push(...await entityWrites(context, stored.Entities, result.Entities, summary));
     if (result.Dependencies) writes.push(...await dependencyWrites(context, stored.Dependencies, result.Dependencies, summary));
-    if (context.DryRun) return summary;
-    const outcomes = await RunMaybeSerial(context.Provider, writes);
-    if (outcomes.some(ok => !ok)) throw new Error(`Query ${context.QueryID}: ${outcomes.filter(ok => !ok).length} of ${writes.length} child-row writes failed.`);
+    if (context.DryRun || writes.length === 0) return summary;
+    await RunInEntityTransaction(context.Provider, () => runWrites(context, writes));
     return summary;
+}
+
+/** Runs the writes; throws when any of them failed, so the enclosing transaction rolls them all back. */
+async function runWrites(context: ChildRowWriteContext, writes: readonly Write[]): Promise<void> {
+    const outcomes = await RunMaybeSerial(context.Provider, [...writes]);
+    const failed = outcomes.filter(ok => !ok).length;
+    if (failed > 0) throw new Error(`Query ${context.QueryID}: ${failed} of ${writes.length} child-row writes failed; none of them were kept.`);
 }
 
 async function loadStoredChildRows(context: ChildRowWriteContext): Promise<StoredChildRows> {
