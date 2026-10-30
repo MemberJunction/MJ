@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { FieldMappingEngine } from '../FieldMappingEngine.js';
+import { SafeExpressionEvaluator } from '@memberjunction/global';
 import type { ExternalRecord } from '../types.js';
 import type { ICompanyIntegrationFieldMap } from '../entity-types.js';
 import type { TransformStep } from '../transforms.js';
@@ -759,10 +760,13 @@ describe('transforms', () => {
 
         it('should compile a malformed expression only once, re-throwing from cache per record', () => {
             const localEngine = new FieldMappingEngine();
+            // The screen parses before anything is compiled, so a syntax error is caught there and
+            // `Function` is never reached; the screen itself must run once, then serve from cache.
             const compileSpy = vi.spyOn(global, 'Function');
+            const screenSpy = vi.spyOn(SafeExpressionEvaluator, 'ScreenExpression');
             try {
                 const pipeline: TransformStep[] = [
-                    // Syntax error -> new Function throws at compile time.
+                    // Syntax error -> rejected by the screen at compile time.
                     { Type: 'custom', Config: { Expression: 'value +' }, OnError: 'Null' },
                 ];
                 const records = Array.from({ length: 10 }, (_, i) => record({ Val: i }));
@@ -775,9 +779,11 @@ describe('transforms', () => {
                 // OnError: 'Null' is honored for every record (behavior preserved)...
                 expect(result.every(r => r.MappedFields['Out'] === null)).toBe(true);
                 // ...yet the failing expression was only compiled once, then served from cache.
-                expect(compileSpy).toHaveBeenCalledTimes(1);
+                expect(screenSpy).toHaveBeenCalledTimes(1);
+                expect(compileSpy).not.toHaveBeenCalled();
             } finally {
                 compileSpy.mockRestore();
+                screenSpy.mockRestore();
             }
         });
     });

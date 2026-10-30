@@ -40,6 +40,16 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     DatasetName?: string;
     /**
+     * Optional list of constituent entity names for a `Type: 'dataset'` config (for example,
+     * the entities returned by `Template_Metadata` or `ResourceTypes`).
+     *
+     * When supplied, `BaseEngine.CheckPermissionsOrSkipAll` pre-checks `CanRead` on each
+     * constituent entity before firing the dataset request, and `LoadSingleDatasetConfig`
+     * can classify a failed dataset load as a permanent permission denial rather than a
+     * transient error.
+     */
+    Entities?: string[];
+    /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
      */
     Filter?: string;
@@ -350,11 +360,16 @@ export class PermissionConstrainedError extends Error {
     }
 }
 
-/** A reload of one engine property started by a peer's cache change. */
+/**
+ * The reload of one engine property that a change made elsewhere asked for: a peer's cache change,
+ * or a remote-invalidate event that carried no row to apply.
+ */
 interface ExternalChangeReload {
     /** Another event arrived while this reload was running, so it must run once more. */
     Again: boolean;
-    /** Settles when the last requested reload has finished. */
+    /** True when the next reload must read past the cache, because an event that asked for it did. */
+    BypassCache: boolean;
+    /** Settles when the last requested reload has finished; rejects only when that one threw. */
     Done: Promise<void>;
 }
 
@@ -430,9 +445,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
-     * Reloads started by {@link OnExternalCacheChange}, keyed by config PropertyName. While one is
-     * running, further events for that property set `Again` instead of starting another, so a
-     * burst of peer events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
+     * Reloads started by {@link OnExternalCacheChange} and by the no-row fallback of
+     * {@link HandleRemoteInvalidateEvent}, keyed by config PropertyName. While one is running,
+     * further events for that property set `Again` instead of starting another, so a burst of
+     * events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
      */
     private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
 
@@ -448,6 +464,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * for distinct rows apply in arrival order without dropping earlier mutations.
      */
     private _rowDeltaQueues: Map<string, Promise<void>> = new Map();
+
+    /**
+     * The least time, in milliseconds, between the end of one reload from
+     * {@link reloadAfterExternalChange} and the start of the next for the same property. A change
+     * that arrives after this long since the last reload reloads at once; one that arrives sooner
+     * (including while a reload is running) waits out the rest of it, and every change that arrives
+     * meanwhile shares that one reload.
+     *
+     * Without it, a steady stream of changes (a server writing rows of one entity a few times a
+     * second) keeps a property reloading back to back. Each full reload costs time proportional to
+     * the table, so the process spends most of its time reloading and the cost of the stream grows
+     * with the square of its length. With it, a property reloads at most once per this delay plus
+     * one reload's duration, and its data is never more than that far behind the last change.
+     * 0 restores back-to-back reloads.
+     */
+    public static ExternalChangeFollowUpDelayMs: number = 1000;
+
+    /** When the last reload from {@link reloadAfterExternalChange} ended, per config PropertyName (epoch ms). */
+    private _externalChangeReloadEndedAt: Map<string, number> = new Map();
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -1111,9 +1146,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true; // No entity name, nothing to do
             }
 
-            const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
-                return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
-            });
+            const matchingConfigs = this.AutoRefreshConfigsForEntity(entityName);
 
             if (matchingConfigs.length === 0) {
                 return true;
@@ -1141,23 +1174,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from server (missing data or apply failure). Bypass the cache
-            // for the same reason as the local-event path: this fetch runs BECAUSE a
-            // (cross-server) write signaled the cache stale, so reading back through it would
-            // re-sync the pre-write snapshot.
-            let refreshCount = 0;
+            // Fallback: re-fetch from the server (no row, or it could not be applied).
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
-                if (!this.configLoadedSuccessfully(config.PropertyName)) {
-                    // Same one-shot hazard as the debounced path: the invalidation event is
-                    // consumed, so a transient failure here needs a bounded retry too.
-                    this.scheduleEventRefreshRetry(config, 1);
-                }
-                refreshCount++;
-            }
-
-            if (refreshCount > 0) {
-                await this.AdditionalLoading(this._contextUser);
+                await this.reloadAfterRemoteInvalidate(config);
             }
 
             return true;
@@ -1166,6 +1185,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             LogError(e);
             return false;
         }
+    }
+
+    /**
+     * Reloads one config because a remote-invalidate event said it changed but carried no row to
+     * apply. A burst of such events shares reloads (see {@link reloadAfterExternalChange}), so a
+     * server that saves many rows of one entity costs this engine at most two reloads per burst
+     * instead of one per row, and the reload that runs last began after the last event arrived.
+     *
+     * The reload reads past the cache: it runs because a write elsewhere made the cached copy
+     * stale, and reading back through the cache would restore the pre-write snapshot. A transient
+     * failure gets the bounded retry, since the event that asked for this reload is consumed.
+     */
+    private async reloadAfterRemoteInvalidate(config: BaseEnginePropertyConfig): Promise<void> {
+        let succeeded: boolean;
+        try {
+            await this.reloadAfterExternalChange(config, /*bypassCache*/ true);
+            succeeded = this.configLoadedSuccessfully(config.PropertyName);
+        } catch (e: unknown) {
+            LogError(e);
+            succeeded = false;
+        }
+        if (!succeeded) {
+            this.scheduleEventRefreshRetry(config, 1);
+        }
+    }
+
+    /**
+     * The entity configs that refresh automatically when a record of `entityName` changes.
+     * Matching ignores case and surrounding whitespace.
+     */
+    protected AutoRefreshConfigsForEntity(entityName: string): BaseEnginePropertyConfig[] {
+        const name = entityName.trim().toLowerCase();
+        return this._metadataConfigs.filter((config: BaseEnginePropertyConfig) =>
+            config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === name
+        );
     }
 
     /**
@@ -1976,18 +2030,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
-        // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
-        const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
         this.WarnAboutFieldSecuredEntities(entityConfigs);
 
-        // All-or-nothing permission check: if the user lacks read access on ANY
-        // entity config, skip ALL entity configs for this engine. Returns the
-        // original array unchanged when permissions pass, or an empty array when
-        // any entity is denied (marking the engine as permission-constrained).
-        const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
+        // All-or-nothing permission check across all configs (both entity configs and
+        // dataset configs that declare their constituent Entities). If the user lacks
+        // read access on ANY configured entity, skip ALL configs for this engine.
+        const configsToLoad = this.CheckPermissionsOrSkipAll(this._metadataConfigs, contextUser);
+        const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
+        const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
                            this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
@@ -2046,17 +2099,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const missingEntities = this.findMissingEntities(configs);
         if (missingEntities.length > 0) {
             LogStatusEx({
-                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                message: `${this.constructor.name}: Skipping ${configs.length} config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
                 verboseOnly: true,
                 category: 'Cache',
             });
 
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                 });
@@ -2073,18 +2124,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const deniedEntities = this.findUnreadableEntities(configs, user);
 
         if (deniedEntities.length > 0) {
-            LogWarning(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
+            LogWarning(`${this.constructor.name}: Skipping ${configs.length} config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
 
-            // Mark all entity configs as successfully loaded with empty data.
+            // Mark all configs as successfully loaded with empty data.
             // This is not a failure — it's expected behavior for limited-permission users.
             // Marking as successful allows the engine to set _loaded = true and avoid
             // endless retry loops from EnsureLoaded().
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                     permissionDenied: true,
@@ -2094,10 +2143,45 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._isPermissionConstrained = true;
             this._deniedEntityNames = deniedEntities;
 
-            return []; // Return empty — don't attempt any RunView calls
+            return []; // Return empty — don't attempt any RunView or dataset calls
         }
 
         return configs;
+    }
+
+    /**
+     * Initializes the target property on `this` when a config is skipped before loading.
+     * Entity configs receive `[]`; `single_property` dataset configs receive `{}` only when
+     * the subclass has not already initialized the property to a default container.
+     */
+    private initializeSkippedConfigProperty(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject === false) {
+            return;
+        }
+        if (config.Type === 'dataset') {
+            if (
+                config.DatasetResultHandling === 'single_property' &&
+                (this as Record<string, unknown>)[config.PropertyName] == null
+            ) {
+                (this as Record<string, unknown>)[config.PropertyName] = {};
+            }
+        } else {
+            (this as Record<string, unknown>)[config.PropertyName] = [];
+        }
+    }
+
+    /**
+     * Returns the entity name(s) governed by `config`: `Entities` (or `EntityName`) for
+     * dataset configs, and `EntityName` for entity configs.
+     */
+    private configEntityNames(config: BaseEnginePropertyConfig): string[] {
+        if (config.Type === 'dataset') {
+            if (config.Entities && config.Entities.length > 0) {
+                return config.Entities;
+            }
+            return config.EntityName ? [config.EntityName] : [];
+        }
+        return config.EntityName ? [config.EntityName] : [];
     }
 
     /**
@@ -2112,9 +2196,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
         const missing: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            if (!md.EntityByName(config.EntityName)) {
-                missing.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                if (!md.EntityByName(entityName) && !missing.includes(entityName)) {
+                    missing.push(entityName);
+                }
             }
         }
         return missing;
@@ -2125,12 +2210,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const md = this.ProviderToUse;
         const denied: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            const entityInfo = md.EntityByName(config.EntityName);
-            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
-            const perms = entityInfo.GetUserPermisions(user);
-            if (!perms || !perms.CanRead) {
-                denied.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                const entityInfo = md.EntityByName(entityName);
+                if (!entityInfo) continue; // Entity not in metadata — let RunView/dataset handle it
+                const perms = entityInfo.GetUserPermisions(user);
+                if ((!perms || !perms.CanRead) && !denied.includes(entityName)) {
+                    denied.push(entityName);
+                }
             }
         }
         return denied;
@@ -2343,6 +2429,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Returns true when a failed dataset load was caused by the current user lacking Read
+     * permission on one of the dataset's constituent entities — either per local metadata
+     * (`config.Entities` / `config.EntityName`) or per the server's dataset status message
+     * (`does not have read permissions on ...`).
+     */
+    protected IsDatasetReadDenied(
+        config: BaseEnginePropertyConfig,
+        result: DatasetResultType,
+        contextUser: UserInfo | undefined
+    ): boolean {
+        for (const entityName of this.configEntityNames(config)) {
+            if (!this.ContextUserCanReadConfigEntity(entityName, contextUser)) {
+                return true;
+            }
+        }
+        return typeof result.Status === 'string' && /does not have read permissions? on/i.test(result.Status);
+    }
+
+    /**
+     * Records a dataset config as successfully loaded in an empty state after a permanent
+     * permission denial, so `BaseEngine.Load` marks the engine loaded and does not loop on
+     * `EnsureLoaded()` / `Config()`.
+     */
+    protected MarkDatasetConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        this.initializeSkippedConfigProperty(config);
+        this._dataMap.set(config.PropertyName, {
+            datasetName: config.DatasetName,
+            data: [],
+            loadedSuccessfully: true,
+            readDenied: true,
+        });
+        this.NotifyDataChange(config, []);
+    }
+
+    /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
@@ -2453,7 +2574,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         let result: DatasetResultType;
         if (bypassCache) {
             result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
-            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            if (result?.Success) {
+                await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            }
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser);
         }
@@ -2469,6 +2592,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
         if (!result.Success) {
+            if (this.IsDatasetReadDenied(config, result, contextUser)) {
+                this.MarkDatasetConfigEmptyLoaded(config);
+                LogWarning(
+                    `BaseEngine: Dataset ${config.DatasetName} not readable by current role — loaded empty (restricted-role degradation).`,
+                    'Cache'
+                );
+                return;
+            }
             const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
             LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
             this._dataMap.set(config.PropertyName, {
@@ -2993,38 +3124,80 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Reloads a config after a peer's cache change, coalescing overlapping requests: an event that
-     * arrives while a reload for the same property is running asks for one more reload after it
-     * instead of starting its own. Every caller's promise settles only after a reload that began
+     * Reloads a config after a change made elsewhere, coalescing overlapping requests: an event
+     * that arrives while a reload for the same property is running asks for one more reload after
+     * it instead of starting its own. Every caller's promise settles only after a reload that began
      * after its event, so no change is missed, but N events in a burst cost at most two reloads.
+     * Successive reloads of one property are at least {@link ExternalChangeFollowUpDelayMs} apart.
+     * Requests for different properties never share a reload.
+     *
+     * @param bypassCache - Read past the cache. When any request folded into a reload asks for
+     *   it, that reload bypasses the cache.
      */
-    private reloadAfterExternalChange(config: BaseEnginePropertyConfig): Promise<void> {
+    private reloadAfterExternalChange(config: BaseEnginePropertyConfig, bypassCache: boolean = false): Promise<void> {
         const running = this._externalChangeReloads.get(config.PropertyName);
         if (running) {
             running.Again = true;
+            running.BypassCache = running.BypassCache || bypassCache;
             return running.Done;
         }
-        const reload: ExternalChangeReload = { Again: false, Done: Promise.resolve() };
+        const reload: ExternalChangeReload = { Again: false, BypassCache: bypassCache, Done: Promise.resolve() };
         this._externalChangeReloads.set(config.PropertyName, reload);
         reload.Done = this.runExternalChangeReloads(config, reload);
         return reload.Done;
     }
 
-    /** Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one. */
+    /**
+     * Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one.
+     * A reload that throws does not end the loop while another is pending, so an event that
+     * arrived during a failed reload is still served; the error surfaces only when the last
+     * reload is the one that threw.
+     */
     private async runExternalChangeReloads(config: BaseEnginePropertyConfig, reload: ExternalChangeReload): Promise<void> {
         try {
+            let lastError: Error | null = null;
             do {
+                const wait = this.reloadSpacingRemainingMs(config.PropertyName);
+                if (wait > 0) {
+                    // Requests that arrive during the wait join the reload that follows it.
+                    await new Promise<void>(resolve => setTimeout(resolve, wait));
+                }
+                const bypassCache = reload.BypassCache;
                 reload.Again = false;
-                // The reload replaces the property, so the derived state has to be rebuilt too —
-                // and the reload must NOT emit on its own, or a subscriber wakes between the new
-                // rows and the rebuild and reads derived state still pointing at the instances
-                // this reload discarded.
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
-                await this.RebuildDerivedState(this._contextUser);
-                this.emitPropertyChange(config.PropertyName);
+                reload.BypassCache = false;
+                lastError = await this.runOneExternalChangeReload(config, bypassCache);
+                this._externalChangeReloadEndedAt.set(config.PropertyName, Date.now());
+                if (lastError && reload.Again) {
+                    LogError(lastError);
+                }
             } while (reload.Again);
+            if (lastError) {
+                throw lastError;
+            }
         } finally {
             this._externalChangeReloads.delete(config.PropertyName);
+        }
+    }
+
+    /** How long the next reload of the property must still wait for {@link ExternalChangeFollowUpDelayMs}; 0 when it may start now. */
+    private reloadSpacingRemainingMs(propertyName: string): number {
+        const endedAt = this._externalChangeReloadEndedAt.get(propertyName);
+        return endedAt === undefined ? 0 : Math.max(0, endedAt + BaseEngine.ExternalChangeFollowUpDelayMs - Date.now());
+    }
+
+    /** One reload for {@link runExternalChangeReloads}. Returns the error it threw, or null. */
+    private async runOneExternalChangeReload(config: BaseEnginePropertyConfig, bypassCache: boolean): Promise<Error | null> {
+        try {
+            // The reload replaces the property, so the derived state has to be rebuilt too —
+            // and the reload must NOT emit on its own, or a subscriber wakes between the new
+            // rows and the rebuild and reads derived state still pointing at the instances
+            // this reload discarded.
+            await this.LoadSingleConfig(config, this._contextUser, bypassCache, /*suppressEmit*/ true);
+            await this.RebuildDerivedState(this._contextUser);
+            this.emitPropertyChange(config.PropertyName);
+            return null;
+        } catch (e: unknown) {
+            return e instanceof Error ? e : new Error(String(e));
         }
     }
 

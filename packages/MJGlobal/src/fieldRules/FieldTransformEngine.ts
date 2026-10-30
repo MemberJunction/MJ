@@ -1,4 +1,5 @@
 import { MJLruCache } from '../MJLruCache';
+import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
 import { GetFieldTransform } from './transformRegistry';
 import type {
     TransformStep,
@@ -17,6 +18,9 @@ import type {
 
 /** Signature of a compiled custom/formula expression: `(value, fields) => result`. */
 export type CompiledExpression = (value: unknown, fields: Record<string, unknown>) => unknown;
+
+/** The only names a custom/formula expression may reference besides the approved globals. */
+const FORMULA_IDENTIFIERS: readonly string[] = ['value', 'fields'];
 
 /**
  * Framework-agnostic engine that runs a field-value transform pipeline over a single `(value, fields)`
@@ -63,6 +67,10 @@ export class FieldTransformEngine {
      * Evaluates a value-producing expression against the record. Reuses the compiled-expression cache.
      * The expression sees the current field value as `value` and all record fields as `fields`
      * (e.g. `fields.FirstName + ' ' + fields.LastName`).
+     *
+     * The expression must pass {@link SafeExpressionEvaluator.ScreenExpression} with `value` and
+     * `fields` as its only names; a rejected expression throws `Expression rejected: ...` and is
+     * never compiled.
      */
     public Evaluate(expression: string, value: unknown, fields: Record<string, unknown>): unknown {
         return this.getCompiled(expression)(value, fields);
@@ -204,6 +212,12 @@ export class FieldTransformEngine {
     }
 
     private compile(expression: string): CompiledExpression | Error {
+        // Formulas are authored by end users (Record Process field rules, integration mappings) and
+        // run on the server, so they pass the same allowlist screen as conditions before compiling.
+        const rejection = SafeExpressionEvaluator.ScreenExpression(expression, FORMULA_IDENTIFIERS);
+        if (rejection) {
+            return new Error(`Expression rejected: ${rejection}`);
+        }
         try {
             // eslint-disable-next-line @typescript-eslint/no-implied-eval
             return new Function('value', 'fields', `return (${expression});`) as CompiledExpression;
