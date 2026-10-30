@@ -1,9 +1,9 @@
 ---
-"@memberjunction/core": minor
-"@memberjunction/sqlserver-dataprovider": minor
-"@memberjunction/postgresql-dataprovider": minor
-"@memberjunction/redis-provider": minor
-"@memberjunction/server": minor
+"@memberjunction/core": patch
+"@memberjunction/sqlserver-dataprovider": patch
+"@memberjunction/postgresql-dataprovider": patch
+"@memberjunction/redis-provider": patch
+"@memberjunction/server": patch
 ---
 
 Performance and memory optimizations across cache invalidation, entity save/hydration, narrow `RunView` SQL projections, and multi-pool metadata startup:
