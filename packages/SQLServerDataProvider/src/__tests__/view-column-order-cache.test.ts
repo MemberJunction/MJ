@@ -143,7 +143,7 @@ describe('SQLServerDataProvider - per-pool view column order cache', () => {
     expect(b2.executeSpy).not.toHaveBeenCalled(); // untouched pool → shared cache hit
   });
 
-  it('shares one sys.columns scan across RW, RO, and CodeGen pools targeting the same database and propagates invalidation', async () => {
+  it('shares one sys.columns scan across pools connecting as the same SQL login to the same database and propagates invalidation', async () => {
     const rwPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd' } };
     const roPool = { config: { server: 'SQL.MJ.INTERNAL', port: 1433, database: 'mjprod' } };
     const codegenPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd' } };
