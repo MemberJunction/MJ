@@ -422,7 +422,11 @@ export class WidgetController {
     this.ownsRuntimeCall = false;
     this.sawOwnState = false;
     this.guest = null;
-    this.deps.runtime.SetSessionDeadline(null);
+    // The runtime is shared: while a call is up it belongs to another widget or the host page, and its
+    // deadline (which now ends that call) is not ours to clear. The runtime clears it when that call ends.
+    if (!this.deps.runtime.IsActive) {
+      this.deps.runtime.SetSessionDeadline(null);
+    }
   }
 
   private isAbandoned(generation: number): boolean {
@@ -534,7 +538,8 @@ export class WidgetController {
     if (this.config.launcher) {
       runtime.Launcher = this.config.launcher;
     }
-    if (prepared.deadline) {
+    // Not onto a busy runtime (see resetLaunchState): the start below is refused, and the deadline would end the other call.
+    if (prepared.deadline && !runtime.IsActive) {
       runtime.SetSessionDeadline(prepared.deadline);
     }
     if (this.deps.loadChannelClasses) {

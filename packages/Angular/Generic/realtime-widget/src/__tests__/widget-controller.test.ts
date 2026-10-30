@@ -627,6 +627,18 @@ describe('WidgetController', () => {
       expect(end).not.toHaveBeenCalled();
     });
 
+    it("never touches another call's deadline: a launch on a busy shared runtime neither clears nor replaces it", async () => {
+      const h = buildHarness({ widgetKey: 'pk_live_abc', apiUrl: 'https://api.example.com' });
+      h.guest.Next = guestSession({ token: makeJwt(9_999_999_999), voiceMaxSessionMinutes: 10 });
+      const foreign = new Date(Date.now() + 60 * 60_000);
+      h.runtime.SetSessionDeadline(foreign, { autoEnd: false });
+      // Another widget (or the host page) holds the call: the runtime refuses this start.
+      vi.spyOn(h.runtime, 'IsActive', 'get').mockReturnValue(true);
+      vi.spyOn(h.runtime, 'StartRealtimeSession').mockResolvedValue(undefined);
+      await h.controller.Start();
+      expect(h.runtime.SessionDeadline).toBe(foreign);
+    });
+
     it('ends only once: a call it did start is hung up by end(), and a later removal does not hang up again', async () => {
       const h = buildHarness({ token: makeJwt(9_999_999_999), agentId: 'agent-1', apiUrl: 'https://api.example.com' });
       await h.controller.Start();
