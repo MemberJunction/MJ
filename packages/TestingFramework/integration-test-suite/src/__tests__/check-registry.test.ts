@@ -5,6 +5,7 @@ import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testin
 // file sees the complete registry (the explicit imports below cover only the hand-pinned
 // table's bundles — the barrel covers all of them).
 import '../index';
+import { SKIP_ALLOWLIST } from '../skip-allowlist';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { CacheImmutabilityChecks } from '../checks/cache-immutability.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
@@ -95,6 +96,8 @@ import { QuerySecurityChecks } from '../checks/query-security.checks';
 import { SqlPipeMatrixChecks, SqlPipeMatrixCrossChecks } from '../checks/sqlpipe-matrix.checks';
 import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.checks';
 import { SqlPipeExtractionFixtureChecks } from '../checks/sqlpipe-extraction-fixtures.checks';
+import { AgentExecutionPrimitivesChecks } from '../checks/agent-execution-primitives.checks';
+import { AgentExecutionPrimitivesLiveChecks } from '../checks/agent-execution-primitives-live.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -144,7 +147,7 @@ describe('IntegrationCheckRegistry', () => {
 
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
-        ['server-cache', ServerCacheChecks, 32],
+        ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
@@ -243,6 +246,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['sqlpipe-extraction-fixtures', SqlPipeExtractionFixtureChecks, 40], // EF01-EF40 hand-written expected metadata per fixture query, both platforms (IT144)
         ['sqlpipe-matrix-client', SqlPipeMatrixClientChecks, 2], // SPC1-SPC2 the scenario matrix over GraphQL (IT145)
         ['sqlpipe-matrix-cross', SqlPipeMatrixCrossChecks, 4], // SPM2-SPM4 full cross products, SPM5 extraction properties (IT146)
+        ['agent-execution-primitives', AgentExecutionPrimitivesChecks, 6], // AEP1-AEP6 native tool-calling JSON bridge, multi-step loop steps[], durable TaskGraph settlement, Flow graduation round-trip (IT147)
+        ['agent-execution-primitives-live', AgentExecutionPrimitivesLiveChecks, 4], // AEPL1-AEPL4 live native-tool-calling providers running Pipeline, multi-step ForEach, and durable Tasks (IT148)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -267,9 +272,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         });
     }
 
-    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b as RequiresMutation', () => {
+    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b/S34 as RequiresMutation', () => {
         const mutating = ServerCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
+        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b', 'server-cache.S34']);
     });
 
     it('client-cache marks exactly C10 and C14 as RequiresMutation', () => {
@@ -295,6 +300,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-decisions-switch': 9,
+        'agent-execution-primitives': 6,
+        'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
@@ -418,7 +425,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,
-        'runview-features': 6,
+        'runview-features': 7,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
@@ -429,7 +436,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'search-provider-trust': 2,
         'search-scope-bound': 3,
         'self-avatar-client': 6,
-        'server-cache': 32,
+        'server-cache': 35,
         'shipped-agents-live': 4,
         'sqlpipe-extraction-fixtures': 40,
         'sqlpipe-matrix': 2,
@@ -476,7 +483,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(163);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(165);
     });
 });
 
@@ -821,6 +828,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'server-cache.S29',
         'server-cache.S30',
         'server-cache.S31b',
+        'server-cache.S34',
         'task-graph-execution.TX1',
         'task-graph-execution.TX10',
         'task-graph-execution.TX11',
@@ -888,6 +896,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-carry-forward.CF6',
         'agent-compaction-e2e.CE2',
         'agent-compaction-e2e.CE9',
+        'agent-execution-primitives-live.AEPL1',
+        'agent-execution-primitives-live.AEPL2',
+        'agent-execution-primitives-live.AEPL3',
+        'agent-execution-primitives-live.AEPL4',
         'agent-loop-live.AL1',
         'agent-loop-live.AL2',
         'agent-loop-live.AL3',
@@ -952,5 +964,17 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     it('the live-model-gated (RequiresLiveModel) set is exactly the pinned snapshot', () => {
         const actual = collectGated('RequiresLiveModel');
         expect(actual, `Live-model-gated set drifted (a check newly self-skips or un-gated). Paste over EXPECTED_LIVE_MODEL_GATED if deliberate:\n${pasteReady(actual)}`).toEqual(EXPECTED_LIVE_MODEL_GATED);
+    });
+});
+
+describe('skip allowlist', () => {
+    it('every allowlist entry names a registered check and gives a reason', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const entries = reg.GetAllowedSkips();
+        expect(entries.length).toBe(SKIP_ALLOWLIST.length);
+        const bundles = new Set(reg.GetBundleNames());
+        const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
+        expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
+        expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
     });
 });

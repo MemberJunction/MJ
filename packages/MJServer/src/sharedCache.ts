@@ -238,7 +238,7 @@ function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
         entityName,
         primaryKeyValues: null, // entity-level invalidation
-        action: event.Action,
+        action: event.Action === 'row_delta' ? 'set' : event.Action,
         sourceServerId: event.SourceServerId || 'unknown',
         timestamp: new Date(),
     });

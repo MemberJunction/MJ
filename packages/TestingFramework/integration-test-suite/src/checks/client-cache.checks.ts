@@ -228,7 +228,7 @@ export const ClientCacheChecks: NamedCheck[] = [
             const count = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'count_only' });
             Assert(count.Success, `count_only failed: ${count.ErrorMessage}`);
             AssertEqual(count.Results.length, 0, 'count_only must return no rows');
-            Assert(count.TotalRowCount > 100, `count_only TotalRowCount expected 100+, got ${count.TotalRowCount}`);
+            Assert((count.TotalRowCount ?? 0) > 100, `count_only TotalRowCount expected 100+, got ${(count.TotalRowCount ?? 0)}`);
             // And it must not poison the row cache for the same entity+filter
             const rows = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple' });
             Assert(rows.Success && rows.Results.length === count.TotalRowCount, 'row query after count_only must see all rows');

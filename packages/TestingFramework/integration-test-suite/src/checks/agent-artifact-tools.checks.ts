@@ -37,7 +37,7 @@ import type {
     MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity,
     MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { ArtifactToolManager } from '@memberjunction/ai-agents';
-import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext, SkipCheck } from '@memberjunction/testing-integration';
 import type { AgentInvoker } from './_it-live-agent-harness';
 import { UserTurn } from './agent-live-shared';
 import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
@@ -156,9 +156,9 @@ function requireFixture(): ArtifactToolsFixture {
     return fixture;
 }
 
-function guardOrSkip(checkId: string): ArtifactToolsFixture | undefined {
+function guardOrSkip(): ArtifactToolsFixture {
     const fx = requireFixture();
-    if (fx.Skip) { console.warn(`  ⚠ agent-artifact-tools.${checkId} SKIPPED — ${fx.Skip}`); return undefined; }
+    if (fx.Skip) SkipCheck(fx.Skip);
     return fx;
 }
 
@@ -301,7 +301,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT1: turn-1 prompt Messages lists the attached artifact with its alpha ID (manifest seam)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT1'); if (!fx) return;
+            const fx = guardOrSkip();
             // "do not call any tool" → the reader completes immediately; we only prove the manifest reached the prompt.
             const runId = await RunWithCompliance(
                 async () => {
@@ -323,7 +323,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT2: CSV get_rows — exact rowCount (total) and known cell values match MANIFEST',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT2'); if (!fx) return;
+            const fx = guardOrSkip();
             const tr = await interrogate(ctx, fx, 'CSV', 'text/csv', ASSET_CSV, false, 'get_rows', { start: 0, count: 5 }, 'AT2 CSV get_rows');
             const data = asRecord(tr.result.data);
             AssertEqual(data.total, MANIFEST_EXPECTED.csv.rowCount, 'AT2: CSV total row count');
@@ -340,7 +340,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT3: JSON json_path (deep value) + json_keys (top-level key set) match MANIFEST',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT3'); if (!fx) return;
+            const fx = guardOrSkip();
             const pathRes = await interrogate(ctx, fx, 'JSON', 'application/json', ASSET_JSON, false, 'json_path', { path: MANIFEST_EXPECTED.json.deepPath }, 'AT3 json_path');
             AssertEqual(pathRes.result.data, MANIFEST_EXPECTED.json.deepValue, 'AT3: json_path deep value');
 
@@ -354,7 +354,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT4: PDF get_page_count / search_text (page-located sentinel) / get_metadata match MANIFEST (pdfjs extraction)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT4'); if (!fx) return;
+            const fx = guardOrSkip();
             const pc = await interrogate(ctx, fx, 'PDF', 'application/pdf', ASSET_PDF_B64, true, 'get_page_count', {}, 'AT4 page_count');
             AssertEqual(asRecord(pc.result.data).pageCount, MANIFEST_EXPECTED.pdf.pageCount, 'AT4: PDF page count');
 
@@ -373,7 +373,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT5: Markdown grep — exact match count for a sentinel regex (text library)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT5'); if (!fx) return;
+            const fx = guardOrSkip();
             const tr = await interrogate(ctx, fx, 'Markdown Document', 'text/markdown', ASSET_MD, false, 'grep', { pattern: MANIFEST_EXPECTED.md.sentinelPattern }, 'AT5 MD grep');
             const matches = Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
             AssertEqual(matches.length, MANIFEST_EXPECTED.md.sentinelMatchCount, 'AT5: markdown grep match count');
@@ -384,7 +384,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT6: XML falls back to TextToolLibrary grep (no XMLToolLibrary today — pins current surface, Q6)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT6'); if (!fx) return;
+            const fx = guardOrSkip();
             // XML artifact type has no ToolLibraryClass → composite chain resolves to TextToolLibrary; grep works.
             const tr = await interrogate(ctx, fx, 'XML', 'application/xml', ASSET_XML, false, 'grep', { pattern: MANIFEST_EXPECTED.xml.grepPattern }, 'AT6 XML grep');
             const matches = Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
@@ -396,7 +396,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT7: PNG as Generic Binary — get_metadata sizeBytes + sha256 equal MANIFEST (the universal binary anchor)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT7'); if (!fx) return;
+            const fx = guardOrSkip();
             // Attach the PNG as Generic Binary so the get_metadata (sizeBytes/sha256) tool is available.
             const tr = await interrogate(ctx, fx, 'Generic Binary', 'image/png', ASSET_PNG_B64, true, 'get_metadata', {}, 'AT7 PNG binary');
             AssertEqual(asRecord(tr.result.data).sizeBytes, MANIFEST_EXPECTED.png.sizeBytes, 'AT7: PNG sizeBytes (store→decode→tool chain)');
@@ -408,7 +408,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT8: a malformed JSON artifact yields a STRUCTURED error result, and the run still reaches terminal',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT8'); if (!fx) return;
+            const fx = guardOrSkip();
             const runId = await RunWithCompliance(
                 async () => {
                     const instruction = toolInstruction('json_path', { path: '$.truncated' });
@@ -431,7 +431,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Name: 'AT9: a >50k text artifact is delivered tools-only — content NOT inlined in the prompt, tools still reach it',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
-            const fx = guardOrSkip('AT9'); if (!fx) return;
+            const fx = guardOrSkip();
             // Deterministic pin (no LLM): the 50k externalization boundary.
             const under = ArtifactToolManager.ShouldExternalizeContent(50_000);
             const over = ArtifactToolManager.ShouldExternalizeContent(50_001);
@@ -483,7 +483,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
         const client = ResolveClient(ctx.Provider, ctx.User);
         const reader = await LoadAgentByName(ctx.Provider, ctx.User, 'IT: Artifact Reader');
         if (!reader) {
-            fixture.Skip = 'IT: Artifact Reader not seeded — run: npx mj sync push --dir=metadata-optional/integration-test';
+            fixture.Skip = "'IT: Artifact Reader' agent not seeded — run: npx mj sync push --dir=metadata-optional/integration-test";
             return;
         }
         // Resolve the artifact type IDs the bundle attaches to.

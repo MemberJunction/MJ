@@ -15,7 +15,8 @@ import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj
 import { ParseVariableFlags } from '../utils/variable-parser';
 import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
-import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
+import { installInstrumentedCacheFirst, FormatSkipGateReport } from '@memberjunction/testing-integration';
+import { EvaluateSuiteSkipGate } from './suite-skip-gate';
 
 /**
  * Suite command - Execute a test suite
@@ -185,11 +186,20 @@ export class SuiteCommand {
             const fileOutput = flakyReport && format !== 'json' ? output + '\n' + flakyReport : output;
             OutputFormatter.writeToFile(fileOutput, flags.output);
 
+            // Skip gate: a skipped integration check verified nothing, so a skip that is not on the
+            // allowlist fails the run, as does a bundle that skipped every check and a registered
+            // check that produced no result. Allowed skips are listed so they stay visible.
+            const skipGate = EvaluateSuiteSkipGate(result, engine.Tests ?? []);
+            const skipGateOutput = FormatSkipGateReport(skipGate);
+            if (skipGateOutput) {
+                console.log(skipGateOutput);
+            }
+
             // Clean up resources
             await CloseMJProvider();
 
-            // Exit with appropriate code (non-zero if any test failed)
-            process.exit(result.failedTests === 0 ? 0 : 1);
+            // Exit with appropriate code (non-zero if any test failed or the skip gate failed)
+            process.exit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
 
         } catch (error) {
             this.spinner.fail();

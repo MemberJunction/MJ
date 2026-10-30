@@ -133,7 +133,7 @@ async function assertEntityUnconfigured(ctx: IntegrationCheckContext, entity: En
     const rows = await RequireQueryDb(ctx.Provider, SECURITY_BUNDLE).RunView({
         EntityName: 'MJ: Entity Field Permissions', ExtraFilter: `EntityFieldID IN (${entity.Fields.map(f => `'${f.ID}'`).join(', ')})`, ResultType: 'count_only', BypassCache: true,
     }, ctx.User);
-    if (entity.EnableFieldLevelSecurity || rows.TotalRowCount > 0) {
+    if (entity.EnableFieldLevelSecurity || (rows.TotalRowCount ?? 0) > 0) {
         SkipCheck(`${TAGS} already has field security configured (${rows.TotalRowCount} rule rows); the check will not change a configured entity`);
     }
 }

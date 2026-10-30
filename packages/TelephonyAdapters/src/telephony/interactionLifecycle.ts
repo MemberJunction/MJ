@@ -386,6 +386,7 @@ export class InteractionLifecycleService extends BaseSingleton<InteractionLifecy
                     ExtraFilter: `RoomName='${EscapeSQLString(roomName)}' AND Status IN ('Queued','Active')`,
                     Fields: ['ID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
                 contextUser,

@@ -5,6 +5,7 @@ import { EntityInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { EntityDataGridComponent } from './entity-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
 
 // The grid checks, per entity, whether Send Message applies. These specs cover toolbar chrome with a
 // stub provider that has no RunViews, so the communication engine is stubbed to "no message types".
@@ -172,5 +173,149 @@ describe('EntityDataGridComponent (DOM) — stale cross-entity grid state (#4244
     const r = renderWithGridState(['CareType', 'CareDate']);
     expect(r.agGridRendered).toBe(true);
     expect(r.fields).toEqual(['CareType', 'CareDate']);
+  });
+});
+
+/**
+ * Unified Export / Open in Excel toolbar control:
+ * - Combines static snapshot Export and live Open in Excel behind a single toolbar button when both apply.
+ * - Supports both saved views (`Kind: 'View'`) and unscoped `(Default)` entity grids (`Kind: 'Entity'`).
+ * - Falls back to a 1-click Export button when Open in Excel does not apply (add-in off, or scoped subgrid).
+ */
+const SAVED_VIEW_ID = '6C0E0E8B-1F2A-4B3C-9D4E-5F6A7B8C9D0E';
+const PEOPLE = entity('9B8A7C6D-5E4F-4321-8765-1A2B3C4D5E6F', 'MJ_BizApps_Common: People', ['FirstName', 'LastName', 'Email']);
+
+function renderForExcel(
+  viewID: string | null,
+  addinEnabled: boolean,
+  inputs: Record<string, unknown> = {},
+  entityMetadata: EntityInfo | null = null,
+) {
+  vi.spyOn(EntityDataGridComponent.prototype as unknown as RefreshProto, 'Refresh').mockResolvedValue(undefined);
+  return renderComponentFixture(EntityDataGridComponent, {
+    imports: CHILDREN,
+    declarations: [EntityDataGridComponent],
+    providers: [{ provide: ExportService, useValue: {} }],
+    inputs: { ShowToolbar: true, ...inputs },
+    setup: (c) => {
+      const priv = c as unknown as {
+        _viewEntity: { ID: string } | null;
+        _entityInfo: EntityInfo | null;
+        _excelAddinEnabled: boolean;
+      };
+      priv._viewEntity = viewID ? { ID: viewID } : null;
+      if (entityMetadata) {
+        priv._entityInfo = entityMetadata;
+      }
+      priv._excelAddinEnabled = addinEnabled;
+    },
+  });
+}
+
+describe('EntityDataGridComponent (DOM) — Unified Export & Open in Excel toolbar button', () => {
+  it('consolidates Export and Open in Excel into a single disclosure button for a saved view', () => {
+    const f = renderForExcel(SAVED_VIEW_ID, true);
+    const trigger = query(f, '.excel-menu-trigger') as HTMLButtonElement | null;
+    expect(trigger).not.toBeNull();
+    expect(trigger!.getAttribute('aria-expanded')).toBe('false');
+    // Menu starts closed — no separate side-by-side Open in Excel button in the toolbar
+    expect(query(f, '.excel-action-menu')).toBeNull();
+    expect(query(f, '.open-in-excel-button')).toBeNull();
+
+    trigger!.click();
+    f.detectChanges();
+    expect(trigger!.getAttribute('aria-expanded')).toBe('true');
+    expect(query(f, '.excel-action-menu')).not.toBeNull();
+    expect(query(f, '.excel-action-menu .open-in-excel-button')).not.toBeNull();
+    expect(query(f, '.excel-action-menu .export-snapshot-button')).not.toBeNull();
+  });
+
+  it('offers Open in Excel on an unscoped (Default) entity grid and sends Kind: Entity', async () => {
+    const open = vi.spyOn(ExcelAddinClient.Instance, 'OpenInExcel').mockResolvedValue({ Success: true, FileName: 'People.xlsx' });
+    const f = renderForExcel(null, true, { AllowLoad: false, AutoRefreshOnParamsChange: false }, PEOPLE);
+    const trigger = query(f, '.excel-menu-trigger') as HTMLButtonElement | null;
+    expect(trigger).not.toBeNull();
+    trigger!.click();
+    f.detectChanges();
+
+    const openBtn = query(f, '.excel-action-menu .open-in-excel-button') as HTMLButtonElement | null;
+    expect(openBtn).not.toBeNull();
+    openBtn!.click();
+    await f.whenStable();
+
+    expect(query(f, '.excel-action-menu')).toBeNull();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toEqual([{ Kind: 'Entity', ID: PEOPLE.ID }]);
+  });
+
+  it('keeps a 1-click Export button (no Excel dropdown) for a scoped subgrid with ExtraFilter and no saved view', () => {
+    const f = renderForExcel(
+      null,
+      true,
+      {
+        AllowLoad: false,
+        AutoRefreshOnParamsChange: false,
+        Provider: { Entities: [PEOPLE], CurrentUser: null } as unknown as IMetadataProvider,
+        Params: { EntityName: PEOPLE.Name, ExtraFilter: "OrganizationID = '1'" },
+      },
+      PEOPLE,
+    );
+    f.detectChanges();
+    expect(query(f, '.excel-menu-trigger')).toBeNull();
+    expect(query(f, '.export-snapshot-button')).not.toBeNull();
+  });
+
+  it('keeps a 1-click Export button when the host does not serve the add-in', () => {
+    const offHost = renderForExcel(SAVED_VIEW_ID, false);
+    expect(query(offHost, '.excel-menu-trigger')).toBeNull();
+    expect(query(offHost, '.export-snapshot-button')).not.toBeNull();
+  });
+
+  it('keeps a 1-click Export button when ShowOpenInExcelButton is false', () => {
+    const hiddenInput = renderForExcel(SAVED_VIEW_ID, true, { ShowOpenInExcelButton: false });
+    expect(query(hiddenInput, '.excel-menu-trigger')).toBeNull();
+    expect(query(hiddenInput, '.export-snapshot-button')).not.toBeNull();
+  });
+
+  it('asks the add-in client for a workbook of the saved view from the unified menu', async () => {
+    const open = vi.spyOn(ExcelAddinClient.Instance, 'OpenInExcel').mockResolvedValue({ Success: true, FileName: 'View.xlsx' });
+    const f = renderForExcel(SAVED_VIEW_ID, true);
+    (query(f, '.excel-menu-trigger') as HTMLElement).click();
+    f.detectChanges();
+    (query(f, '.excel-action-menu .open-in-excel-button') as HTMLElement).click();
+    await f.whenStable();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toEqual([{ Kind: 'View', ID: SAVED_VIEW_ID }]);
+    expect(f.componentInstance.IsOpeningInExcel).toBe(false);
+  });
+
+  it('opens the saved view when SavedViewID is passed via entity-viewer (_viewEntity is null)', async () => {
+    const open = vi.spyOn(ExcelAddinClient.Instance, 'OpenInExcel').mockResolvedValue({ Success: true, FileName: 'View.xlsx' });
+    open.mockClear();
+    const f = renderForExcel(null, true, { SavedViewID: SAVED_VIEW_ID }, PEOPLE);
+    (query(f, '.excel-menu-trigger') as HTMLElement).click();
+    f.detectChanges();
+    (query(f, '.excel-action-menu .open-in-excel-button') as HTMLElement).click();
+    await f.whenStable();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toEqual([{ Kind: 'View', ID: SAVED_VIEW_ID }]);
+  });
+
+  it('dismisses the unified menu on Escape', () => {
+    const f = renderForExcel(SAVED_VIEW_ID, true);
+    (query(f, '.excel-menu-trigger') as HTMLElement).click();
+    f.detectChanges();
+    expect(query(f, '.excel-action-menu')).not.toBeNull();
+
+    const wrapper = query(f, '.toolbar-excel-dropdown') as HTMLElement;
+    wrapper.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(query(f, '.excel-action-menu')).toBeNull();
+  });
+
+  it('renders a direct Open in Excel button when ShowExportButton is explicitly false', () => {
+    const f = renderForExcel(SAVED_VIEW_ID, true, { ShowExportButton: false });
+    expect(query(f, '.excel-menu-trigger')).toBeNull();
+    expect(query(f, '.open-in-excel-button')).not.toBeNull();
   });
 });

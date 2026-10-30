@@ -34,12 +34,12 @@
  * Teardown restores the flag through the entity path and deletes every permission row the
  * snapshot wrote (fixture SQL via ctx.Pool), so the shared database is left exactly as found.
  * If the entity is ALREADY FLS-enabled (a real administrator configured it), the fixture
- * refuses to mutate and the bundle skips-as-pass with a loud note.
+ * refuses to mutate and every check records a SKIP.
  */
 import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams, EntityFieldInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsFixture } from '@memberjunction/testing-integration';
 import {
     discoverFlsUsers, SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND,
@@ -130,18 +130,20 @@ export function rolesWithRead(entity: EntityInfo): string[] {
 }
 
 /**
- * Skip-as-pass gate. Unusable fixture (seed absent / entity pre-configured) ⇒ warn + skip.
+ * Skip gate. Unusable fixture (seed absent / entity pre-configured) ⇒ the running check ends as
+ * SKIPPED via {@link SkipCheck} (never scored as a pass); otherwise returns true, narrowing `fx`.
  * `EnableError` also leaves Usable false, but FLS1 has already FAILED loudly on it by the time
- * later checks consult this — one real failure, nineteen quiet skips, no masking.
+ * later checks consult this — one real failure, nineteen skips, no masking. `_checkId` is kept
+ * so existing call sites (`if (!SkipIfUnusable(fx, id)) return;`) still compile; the driver
+ * already labels the skip with the check id.
  */
-export function SkipIfUnusable(fx: FlsFixture | undefined, checkId: string): fx is FlsFixture {
+export function SkipIfUnusable(fx: FlsFixture | undefined, _checkId: string): fx is FlsFixture {
     if (!fx || !fx.Usable) {
-        console.warn(
-            `  ⚠ ${checkId} SKIPPED — FLS fixture not usable ` +
+        SkipCheck(
+            `FLS fixture not usable ` +
             `(${fx?.EnableError ?? fx?.Reason ?? 'fixture not provisioned'}). ` +
             `Seed with \`${SEED_FIXTURES_COMMAND}\`.`
         );
-        return false;
     }
     return true;
 }
@@ -359,8 +361,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement', {
 export async function CheckFls1EnableSnapshotShape(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.FlsFixture;
     if (!fx || (!fx.Usable && !fx.EnableError)) {
-        console.warn(`  ⚠ fls-enforcement.FLS1 SKIPPED — ${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
-        return;
+        SkipCheck(`${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
     }
     Assert(!fx.EnableError, `enabling field security on '${SEEDED_FLS_ENTITY}' through the entity path FAILED: ${fx.EnableError}`);
 
@@ -864,31 +865,28 @@ async function readFixtureRecordChanges(
 }
 
 /**
- * Skip-as-pass gate for the Record Changes checks specifically. Two preconditions the rest of the
- * bundle does not need: the audit entity must be readable by the seeded principals (a permission
- * the metadata-optional seed grants — an older seed will not have it), and the FLS entity must
- * actually be tracked, or no audit row exists to project.
+ * Skip gate for the Record Changes checks specifically: ends the running check as SKIPPED via
+ * {@link SkipCheck} unless two preconditions the rest of the bundle does not need hold: the
+ * audit entity must be readable by the seeded principals (a permission the metadata-optional
+ * seed grants — an older seed will not have it), and the FLS entity must actually be tracked,
+ * or no audit row exists to project.
  */
-function recordChangeChecksUsable(ctx: IntegrationCheckContext, fx: FlsFixture, checkId: string): boolean {
+function requireRecordChangeChecksUsable(ctx: IntegrationCheckContext, fx: FlsFixture): void {
     if (!FlsEntity(ctx).TrackRecordChanges) {
-        console.warn(`  ⚠ ${checkId} SKIPPED — '${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists to project.`);
-        return false;
+        SkipCheck(`'${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists to project.`);
     }
     const rcEntity = ctx.Provider.EntityByName(RECORD_CHANGES_ENTITY);
     if (!rcEntity) {
-        console.warn(`  ⚠ ${checkId} SKIPPED — '${RECORD_CHANGES_ENTITY}' not found in metadata.`);
-        return false;
+        SkipCheck(`'${RECORD_CHANGES_ENTITY}' not found in metadata.`);
     }
     for (const user of [fx.Reader!, fx.Writer!]) {
         if (!(rcEntity.GetUserPermisions(user)?.CanRead ?? false)) {
-            console.warn(
-                `  ⚠ ${checkId} SKIPPED — ${user.Email} lacks entity read on '${RECORD_CHANGES_ENTITY}', which is the ` +
+            SkipCheck(
+                `${user.Email} lacks entity read on '${RECORD_CHANGES_ENTITY}', which is the ` +
                 `precondition the leak needs. Re-seed with \`${SEED_FIXTURES_COMMAND}\`.`
             );
-            return false;
         }
     }
-    return true;
 }
 
 /**
@@ -949,7 +947,7 @@ function assertPayloadIsClean(row: RecordChangeRow, marker: string, context: str
 export async function CheckFls22RecordChangePayloadProjected(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS22')) return;
     const fx = ctx.FlsFixture!;
-    if (!recordChangeChecksUsable(ctx, fx, 'fls-enforcement.FLS22')) return;
+    requireRecordChangeChecksUsable(ctx, fx);
 
     const marker = `it-fls-rc-${Date.now()}@integration.test`;
     await withAuditedDeniedFieldChange(ctx, fx, marker, async () => {
@@ -991,7 +989,7 @@ export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCh
 export async function CheckFls23RecordChangeCacheSlotStillProjects(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS23')) return;
     const fx = ctx.FlsFixture!;
-    if (!recordChangeChecksUsable(ctx, fx, 'fls-enforcement.FLS23')) return;
+    requireRecordChangeChecksUsable(ctx, fx);
 
     const marker = `it-fls-rc-cache-${Date.now()}@integration.test`;
     await withAuditedDeniedFieldChange(ctx, fx, marker, async () => {
