@@ -253,7 +253,9 @@ describe('VSProductionBriefComponent DOM', () => {
     expect(summaryEl?.textContent).toContain('4:5, 1:1');
     expect(summaryEl?.textContent).toContain('Org Default Kit');
 
-    // 5. Clicking Start emits StartRequested with composed message and AppContext
+    // 5. Clicking Start emits StartRequested with composed message and AppContext, with one-line composer hint
+    const footerHintEl = query(fixture, '[data-testid="vs-brief-footer-hint"]');
+    expect(footerHintEl?.textContent).toContain('Fills the message box below');
     const startBtn = query(fixture, '[data-testid="vs-brief-start-button"]');
     expect(startBtn).not.toBeNull();
     expect(startBtn?.getAttribute('Size')).toBe('md');

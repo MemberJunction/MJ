@@ -22,10 +22,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PendingAttachment } from '@memberjunction/ng-composer';
-import {
-  ConversationChatAreaComponent,
-  ConversationsModule,
-} from '@memberjunction/ng-conversations';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
@@ -51,8 +48,8 @@ export interface VSCopilotConversationCreatedEvent {
 /**
  * Shared Video Studio slide-in panel wrapping `<mj-conversation-chat-area>` pinned
  * to the `'Video Studio'` orchestrator agent, with `<vs-production-brief>` projected
- * into the `emptyState` slot before the first message and header controls projected
- * into `mjChatSlot="headerActions"`.
+ * into `mjChatSlot="composerExtra"` before the first message and header controls
+ * projected into `mjChatSlot="headerActions"`.
  */
 @Component({
   standalone: true,
@@ -102,7 +99,7 @@ export class VSCopilotPanelComponent
   @Output() BriefStartRequested = new EventEmitter<VSProductionBriefStartEvent>();
 
   @ViewChild('chatArea')
-  private chatArea?: Pick<ConversationChatAreaComponent, 'OnEmptyStateMessageSent'>;
+  private chatArea?: { initialDraftSnapshots?: Map<string, string | null> };
 
   @ViewChild('briefComponent')
   public BriefComponent?: VSProductionBriefComponent;
@@ -112,8 +109,9 @@ export class VSCopilotPanelComponent
   public AgentMissing = false;
   public ActiveConversation: MJConversationEntity | null = null;
   public ChatIsNewConversation = true;
-  public IsStartingBrief = false;
-  public BriefStartError: string | null = null;
+  public ComposerDraft: string | null = null;
+  public IsBriefCollapsed = false;
+  public BriefSummaryLine = '';
   public IsCheckingSetupHealth = false;
   public ShowHealthySetupDetails = false;
 
@@ -129,6 +127,15 @@ export class VSCopilotPanelComponent
       void this.CheckSetupHealth();
     }
     await this.ResolveVideoStudioAgent();
+  }
+
+  public get IsBriefVisible(): boolean {
+    return this.ChatIsNewConversation && !this.ConversationId && !this.ActiveConversation;
+  }
+
+  public ToggleBriefCollapsed(): void {
+    this.IsBriefCollapsed = !this.IsBriefCollapsed;
+    this.cdr.markForCheck();
   }
 
   public get IsSetupAllOk(): boolean {
@@ -179,52 +186,22 @@ export class VSCopilotPanelComponent
 
   public OnBriefStateChange(snapshot: VSProductionBriefStateSnapshot): void {
     this.AppContext = { ...(this.AppContext ?? {}), ...snapshot.AppContext };
+    this.BriefSummaryLine = this.BriefComponent?.SummaryLine ?? '';
     this.BriefStateChange.emit(snapshot);
     this.cdr.markForCheck();
   }
 
-  public async OnBriefStartRequested(event: VSProductionBriefStartEvent): Promise<void> {
-    this.IsStartingBrief = true;
-    this.BriefStartError = null;
+  public OnBriefStartRequested(event: VSProductionBriefStartEvent): void {
     this.AppContext = { ...(this.AppContext ?? {}), ...event.AppContext };
+    this.chatArea?.initialDraftSnapshots?.delete('new');
+    this.ComposerDraft = event.Message;
     this.BriefStartRequested.emit(event);
-    this.cdr.detectChanges();
-
-    try {
-      const started = await this.StartConversation(event.Message);
-      if (!started) {
-        this.BriefStartError = "Video Studio isn't ready yet.";
-      }
-    } finally {
-      this.IsStartingBrief = false;
-      this.cdr.markForCheck();
-    }
+    this.cdr.markForCheck();
   }
 
-  /**
-   * Starts a brand-new conversation in the underlying `<mj-conversation-chat-area>`
-   * by resetting into new-conversation mode and invoking `OnEmptyStateMessageSent`.
-   * Returns `false` when the message is empty, the copilot chat area / agent is not ready,
-   * or conversation creation fails to populate `ConversationId`.
-   */
-  public async StartConversation(message: string): Promise<boolean> {
-    const trimmed = (message ?? '').trim();
-    if (
-      !trimmed ||
-      this.IsResolvingAgent ||
-      this.AgentMissing ||
-      !this.VideoStudioAgentId ||
-      !this.chatArea
-    ) {
-      return false;
-    }
-    this.ConversationId = null;
-    this.cdr.detectChanges();
-    if (!this.chatArea) {
-      return false;
-    }
-    await this.chatArea.OnEmptyStateMessageSent({ text: trimmed, attachments: [] });
-    return this.ConversationId !== null;
+  public OnComposerDraftConsumed(): void {
+    this.ComposerDraft = null;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -319,6 +296,9 @@ export class VSCopilotPanelComponent
         this.ActiveConversation = null;
       }
     } else {
+      if (!this.ChatIsNewConversation) {
+        this.IsBriefCollapsed = false;
+      }
       this.ChatIsNewConversation = true;
       this.ActiveConversation = null;
     }

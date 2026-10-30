@@ -65,6 +65,27 @@ class ChatSlotStubDirective {
 
 @Component({
   standalone: true,
+  selector: 'vs-production-brief',
+  template: '<div data-testid="stub-production-brief"></div>',
+})
+class ProductionBriefStubComponent {
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() SetupHealthResult: unknown = null;
+  @Input() IsCheckingSetupHealth = false;
+  @Input() ShowHealthySetupDetails = false;
+  @Output() ShowHealthySetupDetailsChange = new EventEmitter<boolean>();
+  @Output() SetupHealthChange = new EventEmitter<unknown>();
+  @Output() StateChange = new EventEmitter<unknown>();
+  @Output() StartRequested = new EventEmitter<unknown>();
+  public SummaryLine = '0:26 · Topic Explainer · 16:9';
+  public ApplyClientToolArchetype = vi.fn().mockReturnValue({
+    Success: true,
+    Data: { ArchetypeName: 'KPI Briefing' },
+  });
+}
+
+@Component({
+  standalone: true,
   imports: [CommonModule],
   selector: 'mj-conversation-chat-area',
   template: `
@@ -74,6 +95,23 @@ class ChatSlotStubDirective {
           <ng-container *ngTemplateOutlet="slot.templateRef; context: { $implicit: Conversation }"></ng-container>
         </div>
       }
+      @if (slot.mjChatSlot === 'composerExtra') {
+        <div data-testid="stub-composer-extra-slot">
+          <ng-container
+            *ngTemplateOutlet="
+              slot.templateRef;
+              context: {
+                $implicit: Conversation,
+                ConversationId: ConversationId,
+                IsProcessing: false
+              }
+            "
+          ></ng-container>
+        </div>
+      }
+    }
+    @if (SuppressNewConversationEmptyState || ConversationId) {
+      <div data-testid="stub-message-input"></div>
     }
   `,
 })
@@ -85,9 +123,11 @@ class ConversationChatAreaStubComponent {
   @Input() Conversation: MJConversationEntity | null = null;
   @Input() ConversationId: string | null = null;
   @Input() IsNewConversation = false;
+  @Input() SuppressNewConversationEmptyState = false;
   @Input() DefaultAgentId: string | null = null;
   @Input() ShowAgentPicker = true;
   @Input() ShowAgentModePicker = false;
+  @Input() ComposerDraft: string | null = null;
   @Input() PendingMessage: string | null = null;
   @Input() PendingArtifactId: string | null = null;
   @Input() PendingArtifactVersionNumber: number | null = null;
@@ -98,6 +138,7 @@ class ConversationChatAreaStubComponent {
   @Input() ShowArtifactIndicator = false;
   @Input() AllowAttachments = false;
 
+  @Output() ComposerDraftConsumed = new EventEmitter<void>();
   @Output() ConversationCreated = new EventEmitter<{
     conversation: MJConversationEntity;
     pendingMessage?: string;
@@ -140,6 +181,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
       imports: [
         VSCopilotPanelComponent,
         ConversationChatAreaStubComponent,
+        ProductionBriefStubComponent,
         LoadingStubComponent,
         ChatSlotStubDirective,
         MJButtonDirective,
@@ -151,6 +193,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
           imports: [
             CommonModule,
             ConversationChatAreaStubComponent,
+            ProductionBriefStubComponent,
             LoadingStubComponent,
             ChatSlotStubDirective,
             MJButtonDirective,
@@ -165,9 +208,9 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     component.CurrentUser = fakeUser;
   });
 
-  it('binds resolved agent ID via GetProviderInstance, ShowAgentPicker=false, ShowAgentModePicker=true, handles conversationCreated and consumed events', async () => {
+  it('on first open renders message input (SuppressNewConversationEmptyState=true) and collapsible brief via composerExtra, then hides brief after first message', async () => {
     component.ConversationId = null;
-    component.PendingMessage = 'Create a 45s launch teaser';
+    component.PendingMessage = null;
     component.PendingArtifactId = 'art-456';
     component.PendingArtifactVersionNumber = 2;
     component.AppContext = {
@@ -198,10 +241,10 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(chatDebugEl).not.toBeNull();
     const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
     expect(chatStub.DefaultAgentId).toBe('agent-vs-001');
+    expect(chatStub.SuppressNewConversationEmptyState).toBe(true);
     expect(chatStub.ShowAgentPicker).toBe(false);
     expect(chatStub.ShowAgentModePicker).toBe(true);
     expect(chatStub.IsNewConversation).toBe(true);
-    expect(chatStub.PendingMessage).toBe('Create a 45s launch teaser');
     expect(chatStub.PendingArtifactId).toBe('art-456');
     expect(chatStub.PendingArtifactVersionNumber).toBe(2);
     expect(chatStub.PendingArtifactConversationId).toBeNull();
@@ -210,7 +253,30 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(chatStub.AllowAttachments).toBe(true);
     expect(chatStub.AppContext).toEqual(component.AppContext);
 
-    // Emit ConversationCreated from the stub: flips ChatIsNewConversation to false and keeps the conversation ID
+    // No emptyState slot is projected; both the composerExtra brief and the message input are rendered on first open
+    expect(chatStub.slots.some((s) => s.mjChatSlot === 'emptyState')).toBe(false);
+    expect(chatStub.slots.some((s) => s.mjChatSlot === 'composerExtra')).toBe(true);
+    expect(rootEl.querySelector('[data-testid="stub-message-input"]')).not.toBeNull();
+    expect(rootEl.querySelector('[data-testid="vs-copilot-brief-drawer"]')).not.toBeNull();
+    expect(rootEl.querySelector('[data-testid="stub-production-brief"]')).not.toBeNull();
+
+    // Collapsing the brief hides the body while keeping BriefComponent available for form-fill tools
+    const briefToggle = rootEl.querySelector('[data-testid="vs-copilot-brief-toggle"]') as HTMLButtonElement;
+    const briefBody = rootEl.querySelector('[data-testid="vs-copilot-brief-drawer-body"]') as HTMLElement;
+    expect(briefToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(briefBody.hidden).toBe(false);
+
+    briefToggle.click();
+    fixture.detectChanges();
+    expect(briefToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(briefBody.hidden).toBe(true);
+    expect(component.BriefComponent).toBeDefined();
+    expect(component.BriefComponent?.ApplyClientToolArchetype('KPI Briefing')).toEqual({
+      Success: true,
+      Data: { ArchetypeName: 'KPI Briefing' },
+    });
+
+    // When a typed first message creates the conversation, the brief disappears
     const createdConv = { ID: 'conv-created-999', Name: 'Launch Teaser Chat' } as unknown as MJConversationEntity;
     chatStub.ConversationCreated.emit({
       conversation: createdConv,
@@ -223,6 +289,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(component.ActiveConversation).toBe(createdConv);
     expect(chatStub.IsNewConversation).toBe(false);
     expect(chatStub.ConversationId).toBe('conv-created-999');
+    expect(rootEl.querySelector('[data-testid="vs-copilot-brief-drawer"]')).toBeNull();
 
     // Emit consumed events: clears pending message and pending artifact
     chatStub.PendingMessageConsumed.emit();
@@ -232,90 +299,19 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(component.PendingMessage).toBeNull();
     expect(component.PendingArtifactId).toBeNull();
     expect(component.PendingArtifactVersionNumber).toBeNull();
-    expect(chatStub.PendingMessage).toBeNull();
-    expect(chatStub.PendingArtifactId).toBeNull();
-    expect(chatStub.PendingArtifactVersionNumber).toBeNull();
   });
 
-  it('StartConversation resets to a new conversation, awaits OnEmptyStateMessageSent on the chat area, and returns this.ConversationId !== null', async () => {
-    component.ConversationId = 'conv-existing-1';
+  it('OnBriefStartRequested fills ComposerDraft without creating a conversation or sending', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     const chatDebugEl = fixture.debugElement.query(By.directive(ConversationChatAreaStubComponent));
     const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
-    let resolveSend!: () => void;
-    chatStub.OnEmptyStateMessageSent.mockImplementation(
-      ({ text }: { text: string }) =>
-        new Promise<void>((resolve) => {
-          resolveSend = () => {
-            chatStub.ConversationCreated.emit({
-              conversation: { ID: 'conv-started-101', Name: 'New Production' } as unknown as MJConversationEntity,
-              pendingMessage: text,
-            });
-            resolve();
-          };
-        }),
-    );
-    expect(component.ChatIsNewConversation).toBe(false);
-
-    const firstMsg =
-      'Make a Explainer video, about Q3 product launch, 30 seconds, formats 16:9, brand kit Acme Brand, data from Q3 Revenue.';
-    let settled = false;
-    const startPromise = component.StartConversation(firstMsg).then((res) => {
-      settled = true;
-      return res;
-    });
-
-    expect(component.ConversationId).toBeNull();
-    expect(component.ChatIsNewConversation).toBe(true);
-    expect(chatStub.IsNewConversation).toBe(true);
-    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledTimes(1);
-    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledWith({
-      text: firstMsg,
-      attachments: [],
-    });
-    await Promise.resolve();
-    expect(settled).toBe(false);
-
-    resolveSend();
-    const started = await startPromise;
-    expect(settled).toBe(true);
-    expect(started).toBe(true);
-    expect(component.ConversationId).toBe('conv-started-101');
-
-    // When conversation creation fails (OnEmptyStateMessageSent resolves without emitting ConversationCreated), StartConversation returns false
-    chatStub.OnEmptyStateMessageSent.mockImplementation(async () => {
-      // Conversation creation failed inside chatArea -> no ConversationCreated emitted
-    });
-    const failedStart = await component.StartConversation(firstMsg);
-    expect(failedStart).toBe(false);
-    expect(component.ConversationId).toBeNull();
-  });
-
-  it('OnBriefStartRequested sends through one path without pre-setting PendingMessage before ConversationCreated', async () => {
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const chatDebugEl = fixture.debugElement.query(By.directive(ConversationChatAreaStubComponent));
-    const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
-
-    const pendingMessagesSeenDuringSend: Array<string | null> = [];
-    chatStub.OnEmptyStateMessageSent.mockImplementation(
-      async ({ text }: { text: string }) => {
-        pendingMessagesSeenDuringSend.push(component.PendingMessage);
-        chatStub.ConversationCreated.emit({
-          conversation: { ID: 'conv-brief-1', Name: 'Brief Production' } as unknown as MJConversationEntity,
-          pendingMessage: text,
-        });
-      },
-    );
 
     const briefMessage =
       'Make a KPI Briefing video, about Q4 ARR growth, 12 seconds, formats 16:9 and 9:16, voiceover on, captions burned in.';
-    await component.OnBriefStartRequested({
+    component.OnBriefStartRequested({
       Message: briefMessage,
       AppContext: { Surface: 'VideoStudioProductions', SuppressChatOverlay: true },
       Archetype: {
@@ -344,17 +340,17 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     });
     fixture.detectChanges();
 
-    // Before ConversationCreated emitted, PendingMessage was null (not pre-assigned)
-    expect(pendingMessagesSeenDuringSend).toEqual([null]);
-    // OnEmptyStateMessageSent was called exactly once
-    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledTimes(1);
-    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledWith({
-      text: briefMessage,
-      attachments: [],
-    });
-    // And ConversationCreated populated PendingMessage once
-    expect(component.PendingMessage).toBe(briefMessage);
-    expect(component.ConversationId).toBe('conv-brief-1');
+    // Sets ComposerDraft on the chat area and updates AppContext, without sending or creating a conversation
+    expect(component.ComposerDraft).toBe(briefMessage);
+    expect(chatStub.ComposerDraft).toBe(briefMessage);
+    expect(component.PendingMessage).toBeNull();
+    expect(component.ConversationId).toBeNull();
+    expect(chatStub.OnEmptyStateMessageSent).not.toHaveBeenCalled();
+
+    // Once the chat area consumes the draft, ComposerDraft resets to null
+    chatStub.ComposerDraftConsumed.emit();
+    fixture.detectChanges();
+    expect(component.ComposerDraft).toBeNull();
   });
 
   it('ConversationId setter flips ChatIsNewConversation both ways when updated after initial render', async () => {
@@ -368,20 +364,23 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(component.ChatIsNewConversation).toBe(true);
     expect(chatStub.IsNewConversation).toBe(true);
 
+    component.IsBriefCollapsed = true;
     component.ConversationId = 'conv-after-render-42';
     fixture.detectChanges();
     expect(component.ChatIsNewConversation).toBe(false);
     expect(chatStub.IsNewConversation).toBe(false);
     expect(chatStub.ConversationId).toBe('conv-after-render-42');
 
+    // Resetting ConversationId to null returns to new conversation mode with brief expanded
     component.ConversationId = null;
     fixture.detectChanges();
     expect(component.ChatIsNewConversation).toBe(true);
+    expect(component.IsBriefCollapsed).toBe(false);
     expect(chatStub.IsNewConversation).toBe(true);
     expect(chatStub.ConversationId).toBeNull();
   });
 
-  it('renders "Video Studio isn\'t installed or you can\'t run it", logs error, and returns false from StartConversation when agent is missing', async () => {
+  it('renders "Video Studio isn\'t installed or you can\'t run it" and logs error when agent is missing', async () => {
     mockAgentsState.agents = [{ ID: 'agent-other', Name: 'Sage' }];
 
     fixture.detectChanges();
@@ -399,12 +398,6 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(missingEl).not.toBeNull();
     expect(missingEl?.textContent).toContain("Video Studio isn't installed or you can't run it");
     expect(rootEl.querySelector('[data-testid="vs-copilot-chat-area"]')).toBeNull();
-
-    const startedWhenMissing = await component.StartConversation('Make a launch video');
-    expect(startedWhenMissing).toBe(false);
-
-    const startedWhenBlank = await component.StartConversation('   ');
-    expect(startedWhenBlank).toBe(false);
   });
 
   it('projects Video Studio title, Setup OK icon button, and Close button into mjChatSlot="headerActions" without a duplicate .vs-copilot-panel__header bar', async () => {

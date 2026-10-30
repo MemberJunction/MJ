@@ -136,8 +136,6 @@ export interface VSProductionBriefSetupHealthEvent {
 })
 export class VSProductionBriefComponent extends BaseAngularComponent implements OnInit {
   @Input() AutoLoad = true;
-  @Input() IsStarting = false;
-  @Input() StartError: string | null = null;
 
   @Input() SetupHealthResult: VideoStudioSetupHealthOutput | null = null;
   @Input() IsCheckingSetupHealth = false;
@@ -238,7 +236,6 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
 
   public get CanStartProduction(): boolean {
     return (
-      !this.IsStarting &&
       this.Topic.trim().length > 0 &&
       this.SelectedArchetype !== null &&
       this.SelectedFormats.length > 0
@@ -246,9 +243,6 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
   }
 
   public get SummaryLine(): string {
-    if (this.IsStarting) {
-      return 'Starting production…';
-    }
     if (this.Topic.trim().length === 0) {
       return 'Add a topic to start';
     }

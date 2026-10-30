@@ -240,11 +240,9 @@
     >
       {{ SummaryLine }}
     </p>
-    @if (StartError) {
-      <p class="vs-brief__error" role="alert" data-testid="vs-brief-start-error">
-        {{ StartError }}
-      </p>
-    }
+    <p class="vs-brief__hint" data-testid="vs-brief-footer-hint">
+      Fills the message box below — attach references if needed, then press Send.
+    </p>
     <button
       type="button"
       mjButton
@@ -255,7 +253,7 @@
       [disabled]="!CanStartProduction"
       (click)="OnStartClick()"
     >
-      <span>{{ IsStarting ? 'Starting…' : 'Start production' }}</span>
+      <span>Start production</span>
     </button>
   </footer>
 </div>

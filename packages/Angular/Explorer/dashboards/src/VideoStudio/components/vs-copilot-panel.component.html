@@ -46,9 +46,11 @@
         [Conversation]="ActiveConversation"
         [ConversationId]="ConversationId"
         [IsNewConversation]="ChatIsNewConversation"
+        [SuppressNewConversationEmptyState]="true"
         [DefaultAgentId]="VideoStudioAgentId"
         [ShowAgentPicker]="false"
         [ShowAgentModePicker]="true"
+        [ComposerDraft]="ComposerDraft"
         [PendingMessage]="PendingMessage"
         [PendingArtifactId]="PendingArtifactId"
         [PendingArtifactVersionNumber]="PendingArtifactVersionNumber"
@@ -58,6 +60,7 @@
         [ApplicationId]="ApplicationId"
         [ShowArtifactIndicator]="true"
         [AllowAttachments]="true"
+        (ComposerDraftConsumed)="OnComposerDraftConsumed()"
         (ConversationCreated)="OnChatConversationCreated($event)"
         (PendingMessageConsumed)="OnPendingMessageConsumed()"
         (PendingArtifactConsumed)="OnPendingArtifactConsumed()"
@@ -107,20 +110,57 @@
             </button>
           }
         </ng-template>
-        <ng-template mjChatSlot="emptyState">
-          <vs-production-brief
-            #briefComponent
-            [Provider]="ProviderToUse"
-            [IsStarting]="IsStartingBrief"
-            [StartError]="BriefStartError"
-            [SetupHealthResult]="SetupHealthResult"
-            [IsCheckingSetupHealth]="IsCheckingSetupHealth"
-            [ShowHealthySetupDetails]="ShowHealthySetupDetails"
-            (ShowHealthySetupDetailsChange)="OnBriefShowHealthySetupDetailsChange($event)"
-            (SetupHealthChange)="OnBriefSetupHealthChange($event)"
-            (StateChange)="OnBriefStateChange($event)"
-            (StartRequested)="OnBriefStartRequested($event)"
-          ></vs-production-brief>
+        <ng-template
+          mjChatSlot="composerExtra"
+          let-conversation
+          let-slotConversationId="ConversationId"
+        >
+          @if (!conversation && !slotConversationId && IsBriefVisible) {
+            <div class="vs-copilot-brief-drawer" data-testid="vs-copilot-brief-drawer">
+              <button
+                type="button"
+                class="vs-copilot-brief-drawer__header"
+                data-testid="vs-copilot-brief-toggle"
+                [attr.aria-expanded]="!IsBriefCollapsed"
+                (click)="ToggleBriefCollapsed()"
+              >
+                <span class="vs-copilot-brief-drawer__title">
+                  <i
+                    class="fa-solid"
+                    [class.fa-chevron-down]="!IsBriefCollapsed"
+                    [class.fa-chevron-right]="IsBriefCollapsed"
+                    aria-hidden="true"
+                  ></i>
+                  <span>Brief</span>
+                </span>
+                @if (BriefSummaryLine) {
+                  <span
+                    class="vs-copilot-brief-drawer__summary"
+                    data-testid="vs-copilot-brief-toggle-summary"
+                  >
+                    {{ BriefSummaryLine }}
+                  </span>
+                }
+              </button>
+              <div
+                class="vs-copilot-brief-drawer__body"
+                [hidden]="IsBriefCollapsed"
+                data-testid="vs-copilot-brief-drawer-body"
+              >
+                <vs-production-brief
+                  #briefComponent
+                  [Provider]="ProviderToUse"
+                  [SetupHealthResult]="SetupHealthResult"
+                  [IsCheckingSetupHealth]="IsCheckingSetupHealth"
+                  [ShowHealthySetupDetails]="ShowHealthySetupDetails"
+                  (ShowHealthySetupDetailsChange)="OnBriefShowHealthySetupDetailsChange($event)"
+                  (SetupHealthChange)="OnBriefSetupHealthChange($event)"
+                  (StateChange)="OnBriefStateChange($event)"
+                  (StartRequested)="OnBriefStartRequested($event)"
+                ></vs-production-brief>
+              </div>
+            </div>
+          }
         </ng-template>
       </mj-conversation-chat-area>
     } @else {
