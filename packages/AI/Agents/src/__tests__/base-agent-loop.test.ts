@@ -2891,6 +2891,67 @@ describe('BaseAgent.Execute — Loop agent-type gates read the merged params (VS
         expect(passedParams.data).toBe(callerData);
         expect(passedParams.data).toEqual({ flowConditionKey: 'present' });
     });
+
+    it('6. host allow-list: runs a task graph when every Agent task is in HostAllowedAgentIDs, and refuses without running when one is outside it', async () => {
+        const QB_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000011';
+        const SAGE_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000012';
+        const qbRow = makeAgentRow({ ID: QB_AGENT_ID, Name: 'Query Builder', Status: 'Active' });
+        const sageRow = makeAgentRow({ ID: SAGE_AGENT_ID, Name: 'Sage', Status: 'Active' });
+
+        // (a) Allowed graph runs when both agents are in ALL_AVAILABLE_AGENTS
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine1 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine1,
+            Agents: [harness.agent, qbRow, sageRow],
+        });
+
+        const allowedRun = makeAgent([() => llmEnvelope(tasksEnvelope())]);
+        const allowedResult = await allowedRun.agent.Execute(
+            makeParams({
+                data: {
+                    ALL_AVAILABLE_AGENTS: [
+                        { ID: QB_AGENT_ID, Name: 'Query Builder' },
+                        { ID: SAGE_AGENT_ID, Name: 'Sage' },
+                    ],
+                },
+            }),
+        );
+
+        expect(allowedResult.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.map((s) => s.StepType)).toContain('TaskGraph');
+
+        // (b) Disallowed agent ('Sage' omitted from ALL_AVAILABLE_AGENTS) -> nothing runs, refusal message
+        submitSpy.mockClear();
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine2 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine2,
+            Agents: [harness.agent, qbRow, sageRow],
+        });
+
+        const disallowedRun = makeAgent([() => llmEnvelope(tasksEnvelope())]);
+        const disallowedResult = await disallowedRun.agent.Execute(
+            makeParams({
+                data: {
+                    ALL_AVAILABLE_AGENTS: [{ ID: QB_AGENT_ID, Name: 'Query Builder' }],
+                },
+            }),
+        );
+
+        expect(disallowedResult.success).toBe(false);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(disallowedRun.runner.Calls).toHaveLength(1);
+        expect(disallowedResult.agentRun?.Message).toBe("Sage isn't available in this chat, so it didn't run.");
+        expect(disallowedResult.agentRun?.ErrorMessage).toContain("Sage isn't available in this chat, so it didn't run.");
+    });
 });
 
 describe('BaseAgent.Execute — single-node task-graph fold vs unfold (VS-SAGE-4)', () => {

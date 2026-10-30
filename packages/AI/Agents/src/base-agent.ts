@@ -215,6 +215,7 @@ import {
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
     IsOpeningTurn,
+    KeepHostAllowedAgents,
     MentionsAgent,
 } from './decision-discovery';
 import { ResolveHandoffTarget } from './handoff-target';
@@ -7460,14 +7461,20 @@ export class BaseAgent {
         const referencedAgents = [...new Set(spec.tasks.flatMap(extractNodeAgentNames))];
         const referencedActions = [...new Set(spec.tasks.flatMap(extractNodeActionNames))];
 
+        const hostAllowedIds = HostAllowedAgentIDs(params.data);
+        const disallowedAgents: string[] = [];
         const invalidAgents: string[] = [];
         const activeAgents = (AIEngine.Instance?.Agents ?? []).filter(a => a.Status === 'Active');
-        if (referencedAgents.length > 0 && activeAgents.length > 0) {
+        if (referencedAgents.length > 0 && (activeAgents.length > 0 || hostAllowedIds !== undefined)) {
             for (const agentName of referencedAgents) {
                 const normalized = agentName.trim().toLowerCase();
                 const matched =
                     activeAgents.find(a => a.Name?.trim().toLowerCase() === normalized)
                     ?? this.matchNamedBySanitizedToolName(agentName, activeAgents, true).match;
+                if (hostAllowedIds !== undefined && (!matched || KeepHostAllowedAgents([matched], hostAllowedIds).length === 0)) {
+                    disallowedAgents.push(agentName);
+                    continue;
+                }
                 const permitted = matched
                     ? params.contextUser
                         ? await AIAgentPermissionHelper.HasPermission(matched.ID, params.contextUser, 'run')
@@ -7477,6 +7484,26 @@ export class BaseAgent {
                     invalidAgents.push(agentName);
                 }
             }
+        }
+
+        if (disallowedAgents.length > 0) {
+            const subject = disallowedAgents.join(', ');
+            const refusalMessage =
+                disallowedAgents.length === 1
+                    ? `${subject} isn't available in this chat, so it didn't run.`
+                    : `${subject} aren't available in this chat, so they didn't run.`;
+            this.logError(refusalMessage, {
+                agent: params.agent,
+                category: 'NextStepValidation'
+            });
+            return {
+                step: 'Failed',
+                terminate: true,
+                message: refusalMessage,
+                errorMessage: refusalMessage,
+                previousPayload: nextStep.previousPayload,
+                newPayload: nextStep.newPayload || nextStep.previousPayload
+            };
         }
 
         const invalidActions: string[] = [];
