@@ -7380,7 +7380,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const snapshot = this.windowStore.GetSnapshot();
       // Recomputed per page: a loaded parent that is itself a reply moves the root further up.
       const rootId = GetThreadReplyRoots(snapshot.Details).Get(messageId);
-      if (!rootId || snapshot.Details.some(m => UUIDsEqual(m.ID, rootId))) {
+      if (!rootId || new UUIDSet(snapshot.Details.map(m => m.ID)).Has(rootId)) {
         return true;
       }
       if (!snapshot.Cursor.HasMoreAbove) {
