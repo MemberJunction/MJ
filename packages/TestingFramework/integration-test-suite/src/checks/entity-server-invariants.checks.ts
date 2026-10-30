@@ -58,7 +58,7 @@ import {
     MJTemplateParamEntity,
     MJVectorIndexEntity
 } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -82,7 +82,7 @@ const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
  * private/protected invariant methods. Runtime objects handed back by `GetEntityObject` ARE the
  * server subclasses (ClassFactory resolves the `@RegisterClass` registration loaded process-wide by
  * `mj test`), so these methods exist at runtime; TS `private`/`protected` is erased. Each check that
- * casts to one of these FIRST guards `typeof fn === 'function'` and skip-as-passes loudly when the
+ * casts to one of these FIRST guards `typeof fn === 'function'` and skips (SkipCheck) when the
  * server subclass is not registered in the current process — so a client-only bootstrap can never
  * turn "wrong entity object" into a false failure (the same attribution discipline ESI1–ESI4 use).
  */
@@ -351,8 +351,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
             const idx = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>(VECTOR_INDEX_ENTITY, ctx.User);
             const capable = idx as unknown as SanitizeIndexNameCapable;
             if (typeof capable.sanitizeIndexName !== 'function') {
-                console.warn('  ⚠ ESI5 SKIPPED — MJVectorIndexEntityServer not registered in this process (client-only bootstrap)');
-                return;
+                SkipCheck('MJVectorIndexEntityServer not registered in this process (client-only bootstrap); needs a server-transport run with the server entity subclasses loaded');
             }
             AssertEqual(capable.sanitizeIndexName('My Index_Name!'), 'my-index-name', 'spaces/underscores → hyphens, invalid chars stripped, lowercased');
             AssertEqual(capable.sanitizeIndexName('--Already--Hyphened--'), 'already-hyphened', 'multi-hyphens collapse, leading/trailing trimmed');
@@ -370,8 +369,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
             const app = await ctx.Provider.GetEntityObject<MJApplicationEntity>(APPLICATION_ENTITY, ctx.User);
             const capable = app as unknown as ApplicationSlugCapable;
             if (typeof capable.generateSlugFromName !== 'function') {
-                console.warn('  ⚠ ESI6 SKIPPED — MJApplicationEntityServer not registered in this process');
-                return;
+                SkipCheck('MJApplicationEntityServer not registered in this process; needs a server-transport run with the server entity subclasses loaded');
             }
             AssertEqual(capable.generateSlugFromName('Data Explorer'), 'data-explorer', 'basic name → kebab slug');
             AssertEqual(capable.generateSlugFromName("Bob's App (v2) [beta]"), 'bobs-app-v2-beta', 'quotes stripped, brackets removed, spaces → hyphens');
@@ -390,8 +388,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
             const run = await ctx.Provider.GetEntityObject<MJDuplicateRunEntity>(DUPLICATE_RUN_ENTITY, ctx.User);
             const capable = run as unknown as NormalizeThresholdCapable;
             if (typeof capable.normalizeThreshold !== 'function') {
-                console.warn('  ⚠ ESI7 SKIPPED — MJDuplicateRunEntityServer not registered in this process');
-                return;
+                SkipCheck('MJDuplicateRunEntityServer not registered in this process; needs a server-transport run with the server entity subclasses loaded');
             }
             const FB = 0.65;
             AssertEqual(capable.normalizeThreshold(null, FB), FB, 'null → fallback');
@@ -410,8 +407,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
             const att = await ctx.Provider.GetEntityObject<MJConversationDetailAttachmentEntity>(ATTACHMENT_ENTITY, ctx.User);
             const capable = att as unknown as MimeGateCapable;
             if (typeof capable.checkMimeRegistered !== 'function') {
-                console.warn('  ⚠ ESI8 SKIPPED — MJConversationDetailAttachmentEntityServer not registered in this process');
-                return;
+                SkipCheck('MJConversationDetailAttachmentEntityServer not registered in this process; needs a server-transport run with the server entity subclasses loaded');
             }
             // Empty MIME → gate error, no artifact side effects (nothing saved, entity unsaved).
             att.MimeType = '';
@@ -452,11 +448,10 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
             const tpl = await ctx.Provider.GetEntityObject<MJTemplateEntity>(TEMPLATE_ENTITY, ctx.User);
             // MJTemplateContentEntityServer.Save wraps param-sync in a provider TRANSACTION —
             // available in-process (SQLServerDataProvider) but not on the client GraphQL provider.
-            // Under client transport, skip loudly; the save-path leg needs a server-transport run.
+            // Under client transport, skip; the save-path leg needs a server-transport run.
             const txProvider = tpl.ProviderToUse as unknown as { BeginTransaction?: unknown };
             if (typeof txProvider.BeginTransaction !== 'function') {
-                console.warn('  ⚠ ESI9 SKIPPED — provider has no BeginTransaction (client transport); the TemplateContent param-sync save path requires an in-process server provider');
-                return;
+                SkipCheck('provider has no BeginTransaction (client transport); the TemplateContent param-sync save path requires an in-process server provider');
             }
             tpl.Name = `${marker} ${FIXTURE_TAG}`;
             tpl.Description = FIXTURE_TAG;

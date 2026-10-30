@@ -27,7 +27,12 @@ import {
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
+import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+    DescribeCatalogParameters, DescribeWrapperSQL, FieldDescriptionOf, MapPostgreSQLDescribeFields, POSTGRESQL_DESCRIBE_CATALOG_SQL, POSTGRESQL_DESCRIBE_TIMEOUT_MS,
+    type PostgreSQLDescribeCatalogRow,
+} from './statementDescription.js';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
@@ -151,11 +156,30 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
             .map(child => {
-                const schema = child.SchemaName || '__mj';
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
                 const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
                 return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
+            });
+        if (unionParts.length === 0) return '';
+        return unionParts.join(' UNION ALL ');
+    }
+
+    protected override BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const inList = recordPKValues.map(v => pgDialect.QuoteStringLiteral(v)).join(', ');
+        const aliasEntityName = pgDialect.QuoteColumnAlias('EntityName');
+        const aliasRecordPK = pgDialect.QuoteColumnAlias('RecordPK');
+        const aliasPriority = pgDialect.QuoteColumnAlias('Priority');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+                const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
+                const nameLit = pgDialect.QuoteStringLiteral(child.Name);
+                return `SELECT ${nameLit} AS ${aliasEntityName}, CAST(${pkRef} AS TEXT) AS ${aliasRecordPK}, ${idx + 1} AS ${aliasPriority} FROM ${sourceRef} WHERE ${pkRef} IN (${inList})`;
             });
         if (unionParts.length === 0) return '';
         return unionParts.join(' UNION ALL ');
@@ -504,6 +528,41 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             }
         } finally {
             await this.releaseOwnConnection(client);
+        }
+    }
+
+    /**
+     * Describes the result set of `sqlText`: it runs as `SELECT * FROM (<sql>) _q LIMIT 0` on a
+     * connection of its own, inside a read-only transaction that is always rolled back, with JIT
+     * off and a statement timeout, so no row is read and nothing it does persists. The sources
+     * come from the row description's table and column numbers. The SQL is auto-quoted as
+     * {@link ExecuteSQL} would quote it, so the description is of the statement that would run.
+     */
+    public override async DescribeStatement(sqlText: string, _contextUser?: UserInfo): Promise<DescribeStatementResult> {
+        let client: pg.PoolClient | null = null;
+        try {
+            client = await this._connectionManager.AcquireClient();
+            return await this.describeInReadOnlyTransaction(client, DescribeWrapperSQL(this.AutoQuoteIdentifiers(sqlText)));
+        } catch (e) {
+            return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (client) await this.releaseOwnConnection(client);
+        }
+    }
+
+    /** Runs the describe wrapper and its catalog lookup in a read-only transaction that is rolled back. */
+    private async describeInReadOnlyTransaction(client: pg.PoolClient, wrapper: string): Promise<DescribeStatementResult> {
+        await client.query('BEGIN READ ONLY');
+        try {
+            await client.query('SET LOCAL jit = off');
+            await client.query(`SET LOCAL statement_timeout = ${this.effectiveTimeoutMs(POSTGRESQL_DESCRIBE_TIMEOUT_MS) ?? POSTGRESQL_DESCRIBE_TIMEOUT_MS}`);
+            const fields = (await client.query(wrapper)).fields.map(FieldDescriptionOf);
+            const catalog = fields.length === 0
+                ? { rows: [] as PostgreSQLDescribeCatalogRow[] }
+                : await client.query<PostgreSQLDescribeCatalogRow>(POSTGRESQL_DESCRIBE_CATALOG_SQL, DescribeCatalogParameters(fields));
+            return MapPostgreSQLDescribeFields(fields, catalog.rows);
+        } finally {
+            await client.query('ROLLBACK').catch(() => undefined);
         }
     }
 

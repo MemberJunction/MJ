@@ -1,4 +1,6 @@
 import { MJLruCache } from '../MJLruCache';
+import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
+import { CompileTransformExpression } from './SafeTransformAstEvaluator';
 import { GetFieldTransform } from './transformRegistry';
 import type {
     TransformStep,
@@ -17,6 +19,9 @@ import type {
 
 /** Signature of a compiled custom/formula expression: `(value, fields) => result`. */
 export type CompiledExpression = (value: unknown, fields: Record<string, unknown>) => unknown;
+
+/** The only names a custom/formula expression may reference besides the approved globals. */
+const FORMULA_IDENTIFIERS: readonly string[] = ['value', 'fields'];
 
 /**
  * Framework-agnostic engine that runs a field-value transform pipeline over a single `(value, fields)`
@@ -63,6 +68,10 @@ export class FieldTransformEngine {
      * Evaluates a value-producing expression against the record. Reuses the compiled-expression cache.
      * The expression sees the current field value as `value` and all record fields as `fields`
      * (e.g. `fields.FirstName + ' ' + fields.LastName`).
+     *
+     * The expression must pass {@link SafeExpressionEvaluator.ScreenExpression} with `value` and
+     * `fields` as its only names; a rejected expression throws `Expression rejected: ...` and is
+     * never compiled.
      */
     public Evaluate(expression: string, value: unknown, fields: Record<string, unknown>): unknown {
         return this.getCompiled(expression)(value, fields);
@@ -194,7 +203,7 @@ export class FieldTransformEngine {
     private getCompiled(expression: string): CompiledExpression {
         let cached = this.compiledExpressionCache.Get(expression);
         if (cached === undefined) {
-            cached = this.compile(expression);
+            cached = this.Compile(expression);
             this.compiledExpressionCache.Set(expression, cached);
         }
         if (cached instanceof Error) {
@@ -203,12 +212,18 @@ export class FieldTransformEngine {
         return cached;
     }
 
-    private compile(expression: string): CompiledExpression | Error {
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-implied-eval
-            return new Function('value', 'fields', `return (${expression});`) as CompiledExpression;
-        } catch (err) {
-            return err instanceof Error ? err : new Error(String(err));
+    /**
+     * Screens a custom/formula expression against {@link SafeExpressionEvaluator.ScreenExpression}
+     * (with `['value', 'fields']` as the only permitted free identifiers) and compiles it into a
+     * sandboxed AST-interpreted {@link CompiledExpression} — without ever invoking `new Function`
+     * or `eval`. Returns an `Error` value (cached by {@link Evaluate}) when the expression fails
+     * syntax or allowlist validation.
+     */
+    public Compile(expression: string): CompiledExpression | Error {
+        const rejection = SafeExpressionEvaluator.ScreenExpression(expression, FORMULA_IDENTIFIERS);
+        if (rejection) {
+            return new Error(`Expression rejected: ${rejection}`);
         }
+        return CompileTransformExpression(expression);
     }
 }

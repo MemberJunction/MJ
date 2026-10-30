@@ -1,11 +1,11 @@
-import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, FindSimilarNames, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
-import { Violation } from '../component-linter';
+import { Violation, FieldAccessViolationDetails } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { LinterOptions } from '../linter-options';
-import { TypeContext, FieldTypeInfo } from '../type-context';
+import { TypeContext, FieldTypeInfo, FunctionScopeName } from '../type-context';
 
 /**
  * Rule: entity-field-access-validation
@@ -28,40 +28,30 @@ import { TypeContext, FieldTypeInfo } from '../type-context';
 
 
 /**
- * Looks up a variable's TypeInfo from the TypeContext, including scoped lookups.
+ * The scope names enclosing `path`, outermost function first, named the way type inference
+ * named them while recording variable types.
+ */
+function enclosingScopePath(path: NodePath): string[] {
+  const names: string[] = [];
+  for (let current: NodePath | null = path.parentPath; current; current = current.parentPath) {
+    if (current.isFunctionDeclaration() || current.isFunctionExpression() || current.isArrowFunctionExpression()) {
+      names.unshift(FunctionScopeName(current.node, current.parent));
+    }
+  }
+  return names;
+}
+
+/**
+ * Looks up a variable's TypeInfo in the scope where `path` reads it, resolving the name as
+ * JavaScript does (innermost enclosing function first). Two callbacks that each name their
+ * parameter `row` therefore get their own types, never each other's.
  */
 function lookupVariableTypeInfo(
   varName: string,
   typeContext: TypeContext,
   path: NodePath
 ): { type: string; entityName?: string; queryName?: string; fields?: Map<string, FieldTypeInfo>; arrayElementType?: { type: string; entityName?: string; queryName?: string; fields?: Map<string, FieldTypeInfo> } } | null {
-  let varType = typeContext.getVariableType(varName);
-
-  if (!varType || varType.type === 'unknown') {
-    // Try with scope prefix from the path
-    let current: NodePath | null = path;
-    while (current) {
-      if (current.isFunction()) {
-        let fnName: string | undefined;
-        const node = current.node;
-        if (t.isFunctionDeclaration(node) && node.id) {
-          fnName = node.id.name;
-        } else if (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) {
-          const parent = current.parent;
-          if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
-            fnName = parent.id.name;
-          }
-        }
-        if (fnName) {
-          varType = typeContext.getVariableType(`${fnName}:${varName}`);
-          if (varType && varType.type !== 'unknown') break;
-        }
-      }
-      current = current.parentPath;
-    }
-  }
-
-  return varType ?? null;
+  return typeContext.GetVariableTypeInScope(varName, enclosingScopePath(path)) ?? null;
 }
 
 /**
@@ -223,7 +213,8 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       entityName: string,
       validFields: string[],
       objectName: string,
-      propertyName: string
+      propertyName: string,
+      targetType: FieldAccessViolationDetails['TargetType']
     ): void {
       if (validFields.includes(propertyName)) return;
 
@@ -231,15 +222,27 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       // and would indicate a scope mismatch (variable shadowed by a different context)
       if (NON_ENTITY_PROPERTIES.has(propertyName)) return;
 
+      const details: FieldAccessViolationDetails = {
+        Kind: 'field-access',
+        Field: propertyName,
+        TargetType: targetType,
+        TargetName: entityName,
+        SimilarFields: FindSimilarNames(propertyName, validFields),
+        AvailableFields: [...validFields],
+      };
+
       const caseFix = FindCaseMismatch(propertyName, validFields);
       if (caseFix) {
-        violations.push(CreateViolation(
-          'entity-field-access-validation', 'medium', node,
-          `Field "${propertyName}" on entity "${entityName}" has incorrect casing. Did you mean "${caseFix}"?`,
-          `${objectName}.${propertyName}`,
-          { text: `Use the correct casing: "${caseFix}". MemberJunction entity fields use PascalCase.`,
-            example: `// Change:\n${objectName}.${propertyName}\n// To:\n${objectName}.${caseFix}` }
-        ));
+        violations.push({
+          ...CreateViolation(
+            'entity-field-access-validation', 'medium', node,
+            `Field "${propertyName}" on entity "${entityName}" has incorrect casing. Did you mean "${caseFix}"?`,
+            `${objectName}.${propertyName}`,
+            { text: `Use the correct casing: "${caseFix}". MemberJunction entity fields use PascalCase.`,
+              example: `// Change:\n${objectName}.${propertyName}\n// To:\n${objectName}.${caseFix}` }
+          ),
+          Details: details,
+        });
         return;
       }
 
@@ -247,16 +250,19 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       const preview = validFields.slice(0, 10).join(', ');
       const more = validFields.length > 10 ? ` and ${validFields.length - 10} more` : '';
 
-      violations.push(CreateViolation(
-        'entity-field-access-validation', 'high', node,
-        closest
-          ? `Field "${propertyName}" does not exist on entity "${entityName}". Did you mean "${closest}"? Available fields: ${preview}${more}`
-          : `Field "${propertyName}" does not exist on entity "${entityName}". Available fields: ${preview}${more}`,
-        `${objectName}.${propertyName}`,
-        closest
-          ? { text: `Replace "${propertyName}" with "${closest}".`, example: `${objectName}.${closest}` }
-          : { text: `Use one of the valid fields from the "${entityName}" entity.` }
-      ));
+      violations.push({
+        ...CreateViolation(
+          'entity-field-access-validation', 'high', node,
+          closest
+            ? `Field "${propertyName}" does not exist on entity "${entityName}". Did you mean "${closest}"? Available fields: ${preview}${more}`
+            : `Field "${propertyName}" does not exist on entity "${entityName}". Available fields: ${preview}${more}`,
+          `${objectName}.${propertyName}`,
+          closest
+            ? { text: `Replace "${propertyName}" with "${closest}".`, example: `${objectName}.${closest}` }
+            : { text: `Use one of the valid fields from the "${entityName}" entity.` }
+        ),
+        Details: details,
+      });
     }
 
     /**
@@ -297,7 +303,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         if (!validFields) return;
 
         const objectName = t.isIdentifier(path.node.object) ? path.node.object.name : '(expr)';
-        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName);
+        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName, resolved.queryName ? 'query' : 'entity');
       },
 
       OptionalMemberExpression(path: NodePath<t.OptionalMemberExpression>) {
@@ -320,7 +326,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         if (!validFields) return;
 
         const objectName = t.isIdentifier(path.node.object) ? path.node.object.name : '(expr)';
-        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName);
+        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName, resolved.queryName ? 'query' : 'entity');
       },
 
       // Check for numeric coercion on GUID fields

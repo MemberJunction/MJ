@@ -173,9 +173,10 @@ everything routes on.
 | `Agent` | `TaskAgentRunner` → a **new** `AIAgentRun` | `Task.AgentID` | ✅ |
 | `Action` | `TaskActionRunner` → `ActionExecutionLog` | `Task.ActionID` | ✅ |
 | `Human` | nobody — waits for a person | `Task.UserID` | ✅ |
-| `ForEach` | `TaskLoopExecutor`, body dispatched per iteration | `Task.ActionID` / `AgentID` = the **body** | ✅ |
-| `While` | `TaskLoopExecutor` | same | ✅ |
-| `Prompt` | — | `Task.PromptID` | ❌ no runner yet |
+| `Prompt` | `TaskPromptRunner` → `AIPromptRun` | `Task.PromptID` | ✅ |
+| `ForEach` | `TaskLoopExecutor`, single body or multi-step `steps[]` per iteration | `Task.ActionID` / `AgentID` / `PromptID` (`Configuration.stepActionIds` for `steps[]`) | ✅ |
+| `While` | `TaskLoopExecutor`, single body or multi-step `steps[]` per iteration | same | ✅ |
+| `Decision` | `AIDecisionTaskRunner` → typed answers under `decisions.<step>.<question>` | `Task.PromptID` (optional; defaults to `Default Decision`) | ✅ |
 | `External` | an outside system reports back | — | ❌ no runner yet |
 
 Unrunnable kinds are **refused at submission by name**, not persisted. A task nobody can run would
@@ -360,6 +361,49 @@ item the same way it reaches anything else: `payload.number`.
 A `While` loop is always sequential and always bounded; an **unevaluable condition fails the loop**
 rather than ending it quietly, because "the condition broke" and "the loop finished" must not look
 alike.
+
+### Multi-step action loop bodies (`steps[]`)
+
+Both `ForEach` and `While` accept an ordered `steps?: LoopBodyActionStep[]` sequence instead of a
+single `action` / `subAgent` / `prompt` body when each iteration needs to chain multiple Actions in
+memory without expanding into N graph nodes or paying per-item LLM turns:
+
+```json
+{
+  "collectionPath": "payload.items",
+  "itemVariable": "item",
+  "indexVariable": "idx",
+  "executionMode": "sequential",
+  "steps": [
+    {
+      "id": "fetch",
+      "name": "Get Stock Price",
+      "params": { "ticker": "{{item.symbol}}" }
+    },
+    {
+      "id": "enrich",
+      "name": "Calculate Expression",
+      "condition": "steps.fetch.CurrentPrice > 100",
+      "params": { "Expression": "{{steps.fetch.CurrentPrice}} * {{item.shares}}" },
+      "outputMapping": "{\"details.result\": \"positions[]\"}"
+    }
+  ]
+}
+```
+
+- **In-memory step output chaining (`steps.<id>.*`)**: Every completed step stores its structured
+  output under `steps[step.id ?? "step_" + stepIndex]`. Later steps in the same iteration can read
+  earlier outputs in both `params` (`{{steps.fetch.CurrentPrice}}` or `"steps.fetch.CurrentPrice"`)
+  and `condition` (`steps.fetch.CurrentPrice > 100`).
+- **Per-step `condition` and `outputMapping`**: A step whose `condition` evaluates to `false` is
+  skipped cleanly for that iteration. Each executed step's `outputMapping` folds into the loop's
+  running payload (`positions[]` appends safely even under `executionMode: "parallel"`).
+- **Pre-resolved `ActionID`s & sanitized tool names**: `TaskGraphService.Submit` resolves every
+  distinct step's `ActionID` into `Task.Configuration.stepActionIds` (setting `Task.ActionID` to
+  `steps[0]`'s action for FK/UI compatibility) and accepts both canonical MJ Action names
+  (`"Calculate Expression"`) and sanitized native tool names (`"calculate_expression"`).
+- **Lossless Flow graduation**: `ConvertTaskGraphToAgentSpec` and `CompileFlowToTaskGraph` preserve
+  `steps[]` across runtime-to-Flow graduation and compilation.
 
 ---
 

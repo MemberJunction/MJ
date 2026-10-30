@@ -143,7 +143,6 @@ module.exports = {
   //   enableAdvancedGeneration: true,
   //   features: [
   //     { name: 'EntityNames', enabled: false },
-  //     { name: 'DefaultInViewFields', enabled: true },
   //     { name: 'EntityDescriptions', enabled: false },
   //     { name: 'SmartFieldIdentification', enabled: true },
   //     { name: 'TransitiveJoinIntelligence', enabled: true },

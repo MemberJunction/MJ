@@ -96,7 +96,7 @@
 
 .dialog-btn.primary {
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-brand-on-primary);
 }
 
 .dialog-btn.primary:hover:not(:disabled) {

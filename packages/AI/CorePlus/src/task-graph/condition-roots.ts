@@ -61,54 +61,124 @@ const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
  * this stays silent rather than guessing, which keeps the check sound in the direction that matters
  * — it may miss a typo, it will never invent one.
  */
-function stripStringLiterals(expression: string): string {
+/**
+ * Replaces single- and double-quoted string literals with empty `''` placeholders in a single
+ * linear pass (`O(n)`), honoring backslash escapes without regex backtracking.
+ */
+function stripQuotedStringLiterals(expression: string): string {
     let out = '';
     let i = 0;
     while (i < expression.length) {
         const ch = expression[i];
         if (ch === "'" || ch === '"') {
             const quote = ch;
-            let j = i + 1;
-            let closed = false;
-            while (j < expression.length) {
-                const c = expression[j];
-                if (c === '\\') {
-                    j += 2;
-                    continue;
+            i++;
+            while (i < expression.length && expression[i] !== quote) {
+                if (expression[i] === '\\' && i + 1 < expression.length) {
+                    i += 2;
+                } else {
+                    i++;
                 }
-                if (c === quote) {
-                    closed = true;
-                    j++;
-                    break;
-                }
-                j++;
             }
-            if (closed) {
-                out += "''";
-                i = j;
-                continue;
+            if (i < expression.length) {
+                i++; // consume closing quote
             }
-            out += expression.slice(i);
-            break;
+            out += "''";
+        } else {
+            out += ch;
+            i++;
         }
-        out += ch;
-        i++;
     }
     return out;
 }
 
-export function UnknownConditionRoots(expression: string): string[] {
+export function UnknownConditionRoots(expression: string, extraRoots?: ReadonlySet<string>): string[] {
     if (!expression || expression.includes('=>')) return [];
 
     // Strings first: `payload.status === 'approved'` must not report `approved` as a root.
-    const code = stripStringLiterals(expression);
+    const code = stripQuotedStringLiterals(expression);
 
     const unknown = new Set<string>();
     // Lookbehind excludes both property access (`.includes`) and identifier tails, including the
     // exponent in a numeric literal (`2e5`), which is otherwise indistinguishable from a name.
     for (const [name] of code.matchAll(/(?<![A-Za-z0-9_$.])[A-Za-z_$][A-Za-z0-9_$]*/g)) {
-        if (LANGUAGE_NAMES.has(name) || SAFE_EXPRESSION_GLOBALS.has(name) || CONDITION_ROOTS.has(name)) continue;
+        if (LANGUAGE_NAMES.has(name) || SAFE_EXPRESSION_GLOBALS.has(name) || CONDITION_ROOTS.has(name) || extraRoots?.has(name)) continue;
         unknown.add(name);
     }
     return [...unknown];
+}
+
+function isIdentStart(code: number): boolean {
+    return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || code === 36;
+}
+
+function isIdentPart(code: number): boolean {
+    return isIdentStart(code) || (code >= 48 && code <= 57);
+}
+
+/**
+ * Extracts every step identifier referenced via `steps.<stepId>` or `payload.steps.<stepId>` inside
+ * a loop step condition in a single linear `O(n)` pass (with string literals stripped first).
+ *
+ * Used at validation time to reject forward references (`step[0]` reading `steps.step2.ok`),
+ * self-references, and typos in `steps.<prevId>` before the loop executes.
+ */
+export function LoopStepReferencesIn(expression: string): string[] {
+    if (!expression) return [];
+    const code = stripQuotedStringLiterals(expression);
+    const refs = new Set<string>();
+    let i = 0;
+
+    while (i < code.length) {
+        if (!isIdentStart(code.charCodeAt(i))) {
+            i++;
+            continue;
+        }
+        const prevCode = i > 0 ? code.charCodeAt(i - 1) : -1;
+        const precededByPropertyDot = prevCode === 46; // '.'
+        const start = i;
+        i++;
+        while (i < code.length && isIdentPart(code.charCodeAt(i))) {
+            i++;
+        }
+        const ident = code.slice(start, i);
+
+        // Match top-level `steps.<id>` or top-level `payload.steps.<id>`
+        let cursor = i;
+        let sawStepsRoot = false;
+        if (!precededByPropertyDot && ident === 'steps') {
+            sawStepsRoot = true;
+        } else if (!precededByPropertyDot && ident === 'payload') {
+            while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+            if (cursor < code.length && code[cursor] === '.') {
+                cursor++;
+                while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+                if (cursor < code.length && isIdentStart(code.charCodeAt(cursor))) {
+                    const subStart = cursor;
+                    cursor++;
+                    while (cursor < code.length && isIdentPart(code.charCodeAt(cursor))) cursor++;
+                    if (code.slice(subStart, cursor) === 'steps') {
+                        sawStepsRoot = true;
+                    }
+                }
+            }
+        }
+
+        if (sawStepsRoot) {
+            while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+            if (cursor < code.length && code[cursor] === '.') {
+                cursor++;
+                while (cursor < code.length && code.charCodeAt(cursor) <= 32) cursor++;
+                if (cursor < code.length && isIdentStart(code.charCodeAt(cursor))) {
+                    const idStart = cursor;
+                    cursor++;
+                    while (cursor < code.length && isIdentPart(code.charCodeAt(cursor))) cursor++;
+                    refs.add(code.slice(idStart, cursor));
+                    i = cursor;
+                }
+            }
+        }
+    }
+
+    return [...refs];
 }

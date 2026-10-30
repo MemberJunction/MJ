@@ -793,6 +793,7 @@ export class ChiefOfStaffDashboardComponent
                 ExtraFilter: "Name = 'Update Record'",
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             });
             if (result.Success && result.Results && result.Results.length > 0) {

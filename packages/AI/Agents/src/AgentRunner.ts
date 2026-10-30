@@ -1448,6 +1448,7 @@ export class AgentRunner {
                 ExtraFilter: `ArtifactID='${AgentRunner.filterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
                 OrderBy: 'VersionNumber DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, contextUser);
 
@@ -1507,6 +1508,7 @@ export class AgentRunner {
             ExtraFilter: `ArtifactID='${AgentRunner.filterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
             Fields: ['ID', 'ContentHash'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, contextUser);
 
@@ -1619,6 +1621,7 @@ export class AgentRunner {
                 `AND ArtifactVersionID='${AgentRunner.filterId(versionId, 'hasOutputLink versionId')}' AND Direction='Output'`,
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, contextUser);
 
@@ -1661,6 +1664,7 @@ export class AgentRunner {
                 ExtraFilter: `ConversationDetailID='${AgentRunner.filterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, contextUser);
 
@@ -2178,6 +2182,7 @@ export class AgentRunner {
                     ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
                     Fields: ['ID', 'UserID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
                 {
@@ -2185,6 +2190,7 @@ export class AgentRunner {
                     ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}' AND UserID='${EscapeSQLString(contextUser.ID)}' AND CanEdit=1`,
                     Fields: ['ID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
             ], contextUser);

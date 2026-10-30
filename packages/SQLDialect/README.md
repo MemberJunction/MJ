@@ -1,46 +1,172 @@
 # @memberjunction/sql-dialect
 
-**Version**: 5.2.0
-**Zero runtime dependencies**
+**No database driver dependencies.** The only runtime dependency is `@memberjunction/global`, whose class
+factory lets other packages register their own dialects.
 
 ## Overview
 
-`@memberjunction/sql-dialect` is an abstract SQL dialect layer that enables database-agnostic SQL generation across MemberJunction. It encapsulates every platform-specific SQL syntax pattern -- identifier quoting, pagination, data types, DDL generation, full-text search, and more -- into a single, testable abstraction with zero database driver dependencies.
+`@memberjunction/sql-dialect` is an abstract SQL dialect layer that enables database-agnostic SQL generation across MemberJunction. It encapsulates every platform-specific SQL syntax pattern -- identifier quoting, pagination, data types, DDL generation, full-text search, and more -- into a single, testable abstraction with no database driver dependencies.
 
-This package is used by CodeGen, data providers, and SQL converters throughout the MemberJunction monorepo. When code needs to emit SQL that works on both SQL Server and PostgreSQL, it programs against the `SQLDialect` abstract class and lets the concrete dialect handle platform differences.
+This package is used by CodeGen, data providers, the SQL parser, the RunQuery pipeline and SQL converters throughout the MemberJunction monorepo. When code needs to emit SQL that works on both SQL Server and PostgreSQL, it programs against the `SQLDialect` abstract class and lets the concrete dialect handle platform differences.
+
+It ships six dialects:
+
+- **Platform dialects** for the databases MJ itself runs on: `SQLServerDialect` (`'sqlserver'`) and `PostgreSQLDialect` (`'postgresql'`). These are full `SQLDialect`s, with DDL.
+- **Query-only dialects** for External Data Sources, databases MJ reads but does not run on: `MySQLQueryDialect` (`'mysql'`), `OracleQueryDialect` (`'oracle'`), `SnowflakeQueryDialect` (`'snowflake'`) and `DatabricksQueryDialect` (`'databricks'`). See [Query-only dialects](#query-only-dialects).
 
 ## Architecture
 
 ### Class Hierarchy
 
 ```
-SQLDialect (abstract base)
-  |-- SQLServerDialect
-  |-- PostgreSQLDialect
+QueryDialect (abstract: Key, DisplayName, Lexical, Grammar, Writer, Types, Binding)
+  |-- SQLDialect (abstract: adds PlatformKey, DDL, FormatterLanguage and the method surface below)
+  |     |-- SQLServerDialect
+  |     |-- PostgreSQLDialect
+  |-- AnsiQueryDialect (standard SQL facets)
+        |-- MySQLQueryDialect
+        |-- OracleQueryDialect
+        |-- SnowflakeQueryDialect
+        |-- DatabricksQueryDialect
 ```
 
-`SQLDialect` defines approximately 30 abstract methods spanning identifier quoting, pagination, literal expressions, INSERT/UPDATE return patterns, DDL generation, full-text search, data type mapping, and schema introspection. Each concrete dialect implements every method with platform-native SQL.
+A dialect is split into **facets**: small objects that each hold one kind of fact about the database.
+`QueryDialect` is the set of facets needed to read, screen and write queries. `SQLDialect` adds the `DDL`
+facet MJ needs to create and run its own schema. Every method listed under [Key Methods](#key-methods) is a
+member of `SQLDialect` that delegates to one of its facets; those methods are kept for existing callers,
+and new code that only needs one kind of fact can read the facet directly.
+
+### Facets
+
+| Facet | Interface | Holds | Where |
+|---|---|---|---|
+| `Lexical` | `DialectLexicalRules` | How text splits into tokens: identifier quote forms (`IdentifierQuoteForm`), string literal forms and their prefixes and escapes (`StringLiteralForm`), dollar quoting (`DollarQuoting`), Oracle-style `q'[…]'` quoting, line comment openers (`LineCommentForm`), nested or executable block comments (`BlockCommentRules`), parameter placeholder forms (`ParameterPlaceholderForm`), unquoted identifier case folding (`IdentifierCaseFolding`), and whether a server setting can turn backslash escapes on or off. | Every `QueryDialect`. A frozen plain object. |
+| `Grammar` | `DialectGrammar` | Statement-level facts: the node-sql-parser grammar (`ParserGrammar`, or `null` when there is none), the default schema, row-cap forms (`RowCapForm`), ORDER BY legality in CTEs and derived tables, nested WITH, the recursive keyword, the query-hint keyword, document tail clauses (`FOR JSON`), set operators, the correlated-join form (`CorrelatedJoinForm`), write-statement keywords, functions caller SQL may not call, keywords that start a new statement without a separator (`UnseparatedStatementKeywords`), paging ORDER BY defaults, and extra column alias forms (`ColumnAliasForm`). | Every `QueryDialect`. A frozen plain object. |
+| `Writer` | `DialectWriter` | Writes SQL fragments: identifier and schema quoting, string literals and their prefix, LIKE escaping, boolean and NULL literals, `LimitClause`, casts, null-coalescing, concatenation, JSON extraction, date arithmetic, the current UTC timestamp, `LowerCase` and `IIF`. | Every `QueryDialect`. Writers extend `AnsiWriter`. |
+| `Types` | `DialectTypes` | The SQL type names in each category (boolean, string, fixed-width string, date, integer, float, UUID, binary, JSON, currency, interval, network). | `SQLDialect`; `null` on the shipped query-only dialects. |
+| `Binding` | `DialectBinding` | How values cross to the driver: `ParameterPlaceholder`, `TypedParameter` (returns a `TypedParameterReference`), `BooleanParameterValue` and `IsConnectionError`. | `SQLDialect`; `null` on the shipped query-only dialects. |
+| `DDL` | `DialectSchemaDDL` | DDL, stored-procedure calls, migrations, schema introspection, type mapping (`TypeMap`), batch splitting, savepoints and other transaction SQL. Implementations extend `BaseSchemaDDL`. | `SQLDialect` only. |
+
+The facets of the shipped dialects are exported, so a new dialect can start from one and change only what
+differs: `ANSI_LEXICAL`, `ANSI_GRAMMAR`, `SQL_SERVER_LEXICAL`, `SQL_SERVER_GRAMMAR`, `SQL_SERVER_TYPES`,
+`POSTGRESQL_LEXICAL`, `POSTGRESQL_GRAMMAR`, `POSTGRESQL_TYPES`, `MYSQL_LEXICAL`, `MYSQL_GRAMMAR`,
+`ORACLE_LEXICAL`, `ORACLE_GRAMMAR`, `SNOWFLAKE_LEXICAL`, `SNOWFLAKE_GRAMMAR`, `DATABRICKS_LEXICAL` and
+`DATABRICKS_GRAMMAR`, plus the writer classes (`AnsiWriter`, `SQLServerWriter`, `PostgreSQLWriter`,
+`MySQLWriter`, `OracleWriter`, `SnowflakeWriter`, `DatabricksWriter`), the binding classes
+(`SQLServerBinding`, `PostgreSQLBinding`) and the DDL classes (`BaseSchemaDDL`, `SQLServerSchemaDDL`,
+`PostgreSQLSchemaDDL`).
+
+### `ParserDialect` and the deprecated `SQLParserDialect`
+
+`ParserDialect` is `Pick<QueryDialect, 'Key' | 'Lexical' | 'Grammar'>`: the part of a dialect the SQL
+tokenizer and parser in `@memberjunction/sql-parser` read. Any `QueryDialect` satisfies it.
+
+`SQLParserDialect` is the older, flat interface the parser used to read (`ParserDialect` as a string,
+`QuoteIdentifier`, `AllowsOrderByInCTE`, `SupportsEscapeStringLiterals`, `QueryHintKeyword`, and so on). It
+is **deprecated** in favour of `ParserDialect` or `QueryDialect`. `SQLDialect` still implements it, so code
+that passes a `SQLDialect` where a `SQLParserDialect` is expected keeps working; it is kept until 7.0.
 
 ### Key Interfaces
 
 | Interface | Purpose |
 |---|---|
+| `DialectKey` | The key a dialect is registered and resolved under: `'sqlserver'`, `'postgresql'`, `'mysql'`, `'oracle'`, `'snowflake'`, `'databricks'`, or any other string a consumer registered. Lower case by convention. Wider than `DatabasePlatform`. |
+| `DatabasePlatform` | Union type: `'sqlserver' \| 'postgresql'`. The platforms MJ itself runs on. |
 | `LimitClauseResult` | `{ prefix: string; suffix: string }` -- Flexible pagination fragments. SQL Server uses `prefix` (TOP), PostgreSQL uses `suffix` (LIMIT/OFFSET). |
+| `DateAddUnit` | `'MINUTE' \| 'HOUR' \| 'DAY'`, the units `DateAddExpression` accepts. |
 | `SchemaIntrospectionSQL` | Catalog query templates for discovering tables, columns, constraints, foreign keys, and indexes. |
 | `TriggerOptions` | Configuration for trigger DDL generation (schema, table, timing, events, body, function name, FOR EACH ROW/STATEMENT). |
 | `IndexOptions` | Configuration for index DDL generation (columns, uniqueness, method, partial WHERE, INCLUDE columns). |
+| `ColumnDDLOptions` / `AlterColumnOptions` | Column definitions for `AddColumnClause` and `AlterColumnDDL`. |
+| `SchemaFieldType` / `ResolveTypeOptions` | Abstract column types and the options `ResolveAbstractType` maps to a concrete SQL type. |
 | `DataTypeMap` | Maps source database types to target platform types. |
 | `MappedType` | Describes a mapped type: `typeName`, `supportsLength`, `supportsPrecisionScale`, `defaultLength`. |
-| `DatabasePlatform` | Union type: `'sqlserver' \| 'postgresql'` |
+
+## Resolving a dialect
+
+Callers get a dialect from a key instead of constructing one, so no package keeps its own
+switch over platform names.
+
+| Function | Returns |
+|---|---|
+| `GetDialect(key)` | A new full `SQLDialect` for a platform key (`'sqlserver'`, `'postgresql'`, or a full `SQLDialect` a consumer registered). **Throws** for a query-only dialect and for an unknown key: `No SQLDialect registered for "mysql". Supported platforms: sqlserver, postgresql`. |
+| `GetQueryDialect(key)` | A new `QueryDialect` for any registered key, platform or query-only. **Throws** for an unknown key: `No QueryDialect registered for "teradata". Registered dialects: sqlserver, postgresql, mysql, oracle, snowflake, databricks`. |
+| `IsSupportedPlatform(value)` | Whether a string is a platform key; narrows it to `DatabasePlatform`. False for the query-only keys. |
+| `SupportedPlatforms()` | The platform keys: `['sqlserver', 'postgresql']`. |
+| `RegisteredDialectKeys()` | Every key that resolves: the built-in ones, then any registered by a consumer. |
+| `ShippedQueryOnlyDialectKeys()` | The query-only keys this package ships: `['mysql', 'oracle', 'snowflake', 'databricks']`. |
+
+How a key resolves:
+
+1. **Keys match exactly, case included.** `'MySQL'` is an unknown key; there are no aliases (`'mssql'`,
+   `'postgres'` and `'pg'` are not recognized).
+2. **Built-in keys resolve directly.** The six shipped dialects are constructed by the factory, not looked up
+   in the class factory, so import order cannot make one unresolvable and a registration under a built-in key
+   cannot replace it.
+3. **Any other key resolves through the MJ class factory.** A package registers its dialect with
+   `@RegisterClass(QueryDialect, '<key>')`, and both `GetQueryDialect` and `RegisteredDialectKeys` then see it.
+   `GetDialect` serves such a registration only if the class is a full `SQLDialect`.
+4. **An unknown key throws**, naming the keys that do resolve. Nothing falls back to a default dialect.
+
+```typescript
+import { GetDialect, GetQueryDialect, IsSupportedPlatform } from '@memberjunction/sql-dialect';
+
+const platform = GetDialect('postgresql');       // PostgreSQLDialect
+platform.DDL.BatchSeparator();                   // ''
+
+const source = GetQueryDialect('snowflake');     // SnowflakeQueryDialect
+source.Writer.QuoteIdentifier('Name');           // '"Name"'
+source.Writer.LimitClause(10).suffix;            // 'LIMIT 10'
+source.Grammar.ParserGrammar;                    // 'Snowflake'
+
+IsSupportedPlatform('snowflake');                // false
+GetDialect('snowflake');                         // throws: not a full SQLDialect
+```
+
+## Query-only dialects
+
+A query-only dialect describes a database MJ reads through an External Data Source. It has the `Lexical`,
+`Grammar` and `Writer` facets, which is enough for MJ to:
+
+- tokenize the query text safely (strings, quoted identifiers and comments end where the database says they do);
+- screen it: refuse write statements (`WriteStatementKeywords`) and functions caller SQL may not call (`CallerSQLForbiddenFunctions`);
+- cap and page its rows with the database's own row-cap syntax;
+- render RunQuery template filters (`sqlString`, `sqlIn`, `sqlBoolean`, `sqlIdentifier`, the LIKE filters) with the database's literal and quoting rules.
+
+What a query-only dialect does **not** have:
+
+- **No `DDL` facet.** `GetDialect` refuses it, so CodeGen, migrations and anything else that creates schema cannot use it.
+- **No `Types` or `Binding` facet** on the shipped ones (both are `null`). A boolean query parameter therefore keeps its JavaScript boolean value instead of being converted for the driver.
+- **No node-sql-parser grammar for Oracle** (`ParserGrammar` is `null`), so features that need an AST are not available there.
+
+| | MySQL | Oracle | Snowflake | Databricks |
+|---|---|---|---|---|
+| Key | `'mysql'` | `'oracle'` | `'snowflake'` | `'databricks'` |
+| Identifier quoting | `` `name` `` | `"name"` (no doubled-quote escape) | `"name"` | `` `name` `` |
+| Unquoted identifiers | kept as written | folded to upper case | folded to upper case | kept as written |
+| Strings | `'…'` and `"…"`, backslash escapes | `'…'`, `q'[…]'` alternative quoting | `'…'` with backslash escapes, `$$…$$` | `'…'` and `"…"`, backslash escapes, `r'…'` raw strings |
+| Backslash escapes depend on a server setting | yes (`NO_BACKSLASH_ESCAPES`) | no | no | yes (`spark.sql.parser.escapedStringLiterals`) |
+| Comments | `#`, `-- ` (needs a space), `/* */`; `/*!` and `/*+` are executable | `--`, `/* */` | `--`, `//`, `/* */` | `--`, nestable `/* */` |
+| Placeholders | `?` | `:name`, `:1` | `?`, `:name`, `:1` | `:name`, `?` |
+| `LimitClause(10, 20)` | `LIMIT 10 OFFSET 20` | `OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY` | `LIMIT 10 OFFSET 20` | `LIMIT 10 OFFSET 20` |
+| `BooleanLiteral(true)` | `TRUE` | `1` | `TRUE` | `TRUE` |
+| `IsNull(a, b)` | `COALESCE(a, b)` | `NVL(a, b)` | `NVL(a, b)` | `COALESCE(a, b)` |
+| Concatenation | `CONCAT(…)` (no operator) | `\|\|` | `\|\|` | `\|\|` |
+| node-sql-parser grammar | `MySQL` | none | `Snowflake` | `Hive` |
+| Forbidden functions in caller SQL | `load_file`, `sleep`, `benchmark`, lock functions | none | none | `reflect`, `try_reflect`, `java_method` |
 
 ## Key Methods
+
+These are members of `SQLDialect`. Each delegates to a facet: quoting, literals and expressions to
+`Writer`, placeholders and boolean binding to `Binding`, grammar facts to `Grammar`, and DDL, return
+patterns, introspection and type mapping to `DDL`.
 
 ### Identifier Quoting
 
 | Method | Description | SQL Server | PostgreSQL |
 |---|---|---|---|
 | `QuoteIdentifier(name)` | Wraps a single identifier | `[name]` | `"name"` |
-| `QuoteSchema(schema, object)` | Schema-qualified reference | `[schema].[object]` | `schema."object"` |
+| `QuoteSchema(schema, object)` | Schema-qualified reference | `[schema].[object]` | `"schema"."object"` |
 
 #### PostgreSQL auto-quoting (whole-statement)
 
@@ -77,8 +203,8 @@ duplicates.
 | `NewUUID()` | Generate UUID | `NEWID()` | `gen_random_uuid()` |
 | `CastToText(expr)` | Cast to text type | `CAST(expr AS NVARCHAR(MAX))` | `CAST(expr AS TEXT)` |
 | `CastToUUID(expr)` | Cast to UUID type | `CAST(expr AS UNIQUEIDENTIFIER)` | `CAST(expr AS UUID)` |
-| `Coalesce(expr, fallback)` | Null coalescing (concrete) | `COALESCE(expr, fallback)` | `COALESCE(expr, fallback)` |
-| `IsNull(expr, fallback)` | Alias for Coalesce | `COALESCE(expr, fallback)` | `COALESCE(expr, fallback)` |
+| `Coalesce(expr, fallback)` | N-ary null coalescing | `COALESCE(expr, fallback)` | `COALESCE(expr, fallback)` |
+| `IsNull(expr, fallback)` | Two-argument null coalescing in the platform's native spelling | `ISNULL(expr, fallback)` | `COALESCE(expr, fallback)` |
 | `IIF(condition, trueVal, falseVal)` | Conditional expression | `IIF(cond, t, f)` | `CASE WHEN cond THEN t ELSE f END` |
 
 ### INSERT/UPDATE Return Patterns
@@ -219,7 +345,7 @@ const dialect: SQLDialect = new PostgreSQLDialect();
 
 // Identifier quoting
 dialect.QuoteIdentifier('UserName');        // "UserName"
-dialect.QuoteSchema('__mj', 'User');        // __mj."User"
+dialect.QuoteSchema('__mj', 'User');        // "__mj"."User"
 
 // Pagination
 const { prefix, suffix } = dialect.LimitClause(10, 20);
@@ -307,19 +433,119 @@ function buildSelectQuery(dialect: SQLDialect, schema: string, table: string,
 // SELECT TOP 10 [ID], [Name] FROM [__mj].[User]
 
 // PostgreSQL output:
-// SELECT "ID", "Name" FROM __mj."User" LIMIT 10
+// SELECT "ID", "Name" FROM "__mj"."User" LIMIT 10
 ```
 
 ## Adding a New Dialect
 
-To add support for a new database platform (e.g., MySQL):
+First decide which kind of dialect the database needs:
 
-1. **Create the type map class** implementing `DataTypeMap`:
+- **A query-only dialect** when MJ only reads the database through an External Data Source. It needs the
+  `Lexical`, `Grammar` and `Writer` facets, and optionally `Types` and `Binding`.
+- **A platform dialect** when MJ itself will run on the database. It needs every facet, including `DDL`.
+
+### A query-only dialect
+
+Extend `AnsiQueryDialect`, which supplies standard SQL facets, and override only what the database does
+differently. Build each data facet by spreading the closest existing one (`ANSI_LEXICAL`, `MYSQL_GRAMMAR`,
+and so on) and freezing the result; build the writer by extending `AnsiWriter` or another shipped writer.
 
 ```typescript
-import { DataTypeMap, MappedType } from '@memberjunction/sql-dialect';
+import { RegisterClass } from '@memberjunction/global';
+import {
+    QueryDialect, AnsiQueryDialect, AnsiWriter, ANSI_LEXICAL, ANSI_GRAMMAR, ANSI_WRITE_STATEMENT_KEYWORDS,
+    GetQueryDialect,
+} from '@memberjunction/sql-dialect';
+import type { DialectKey, DialectLexicalRules, DialectGrammar, DialectWriter, LimitClauseResult } from '@memberjunction/sql-dialect';
 
-class MySQLDataTypeMap implements DataTypeMap {
+/** Lexical rules: standard SQL, plus backtick identifiers and `#` line comments. */
+const ACME_LEXICAL: DialectLexicalRules = Object.freeze({
+    ...ANSI_LEXICAL,
+    IdentifierQuotes: Object.freeze([Object.freeze({ Open: '`', Close: '`', DoubledCloseEscape: true })]),
+    LineComments: Object.freeze([
+        Object.freeze({ Opener: '--', RequiresWhitespaceAfter: false }),
+        Object.freeze({ Opener: '#', RequiresWhitespaceAfter: false }),
+    ]),
+    UnquotedIdentifierCase: 'none',
+});
+
+/** Grammar facts: standard SQL, with LIMIT row caps and two extra write keywords. */
+const ACME_GRAMMAR: DialectGrammar = Object.freeze({
+    ...ANSI_GRAMMAR,
+    ParserGrammar: null,
+    RowCapForms: Object.freeze(['limit-offset'] as const),
+    WriteStatementKeywords: Object.freeze([...ANSI_WRITE_STATEMENT_KEYWORDS, 'UPSERT', 'LOAD']),
+    CallerSQLForbiddenFunctions: Object.freeze(['read_file']),
+});
+
+/** Writes what differs from standard SQL; everything else comes from AnsiWriter. */
+class AcmeWriter extends AnsiWriter {
+    QuoteIdentifier(name: string): string {
+        return `\`${name.replace(/`/g, '``')}\``;
+    }
+
+    LimitClause(limit: number, offset?: number): LimitClauseResult {
+        return { prefix: '', suffix: offset != null ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}` };
+    }
+}
+
+@RegisterClass(QueryDialect, 'acme')
+export class AcmeQueryDialect extends AnsiQueryDialect {
+    private readonly writer: DialectWriter = Object.freeze(new AcmeWriter());
+
+    get Key(): DialectKey { return 'acme'; }
+    get DisplayName(): string { return 'Acme SQL'; }
+    get Lexical(): DialectLexicalRules { return ACME_LEXICAL; }
+    get Grammar(): DialectGrammar { return ACME_GRAMMAR; }
+    get Writer(): DialectWriter { return this.writer; }
+}
+
+GetQueryDialect('acme').Writer.QuoteIdentifier('Name');   // '`Name`'
+```
+
+The lexical and grammar facts are what keep the RunQuery safety checks sound on that database: a wrong
+string or comment rule lets text hide from the scan for write statements, so take each one from the
+database's own documentation.
+
+Registered this way, in your own package, the dialect resolves as soon as the module that declares it has
+been loaded. The key must not be one of the built-in keys, which cannot be replaced.
+
+To **ship** a query-only dialect in this package instead:
+
+1. Add it under `src/dialects/` and export it, its writer and its facet constants from `src/index.ts`.
+2. Add the class to `QUERY_ONLY_DIALECT_CLASSES` in `src/dialectFactory.ts`, so it resolves without the class
+   factory. Do not register it with `@RegisterClass`.
+3. Add its row to `EXPECTED_FACTS` in `src/__tests__/conformance/dialectConformance.test.ts`. The conformance
+   suite runs over every key `RegisteredDialectKeys()` returns. It checks the declared facts, that the data
+   facets are frozen, that a quoted identifier reads back the way the lexical rules say, that row caps use a
+   form the grammar declares, and that every writer method writes without throwing.
+
+### A platform dialect
+
+Extend `SQLDialect` and supply every facet. The members listed under [Key Methods](#key-methods) are already
+implemented by `SQLDialect` and delegate to the facets, so there are no per-method overrides to write.
+
+| Member | Supply |
+|---|---|
+| `PlatformKey` | The new key. Also add it to the `DatabasePlatform` union in `sqlDialect.ts`. |
+| `DisplayName`, `FormatterLanguage` | The human-readable name and the `sql-formatter` language key. |
+| `Lexical`, `Grammar` | Frozen facet objects, as for a query-only dialect. |
+| `Writer` | A class extending `AnsiWriter`. |
+| `Types` | A frozen `DialectTypes`. Required on a `SQLDialect`. |
+| `Binding` | A class implementing `DialectBinding`. Required on a `SQLDialect`. |
+| `DDL` | A class extending `BaseSchemaDDL`, constructed over the dialect's writer, with a `DataTypeMap` for `TypeMap`. |
+
+`SQLServerDialect` and `PostgreSQLDialect` are the reference implementations. Then add the class to
+`PLATFORM_DIALECT_CLASSES` in `src/dialectFactory.ts`, export it from `src/index.ts`, and add its row to
+`EXPECTED_FACTS` in the conformance suite. The existing `crossDialect.test.ts` provides a pattern for testing
+multiple dialects against the same assertions.
+
+The `DataTypeMap` maps SQL Server types to the new platform's types:
+
+```typescript
+import type { DataTypeMap, MappedType } from '@memberjunction/sql-dialect';
+
+class AcmeDataTypeMap implements DataTypeMap {
     MapType(sourceType: string, sourceLength?: number,
             sourcePrecision?: number, sourceScale?: number): MappedType {
         const normalized = sourceType.toUpperCase().trim();
@@ -328,7 +554,7 @@ class MySQLDataTypeMap implements DataTypeMap {
                 return { typeName: 'CHAR', supportsLength: true,
                          supportsPrecisionScale: false, defaultLength: 36 };
             case 'BIT':
-                return { typeName: 'TINYINT(1)', supportsLength: false,
+                return { typeName: 'BOOLEAN', supportsLength: false,
                          supportsPrecisionScale: false };
             // ... map remaining types
             default:
@@ -346,62 +572,15 @@ class MySQLDataTypeMap implements DataTypeMap {
 }
 ```
 
-2. **Create the dialect class** extending `SQLDialect`:
-
-```typescript
-import { SQLDialect, DataTypeMap } from '@memberjunction/sql-dialect';
-
-export class MySQLDialect extends SQLDialect {
-    get PlatformKey(): DatabasePlatform { return 'mysql' as DatabasePlatform; }
-    get TypeMap(): DataTypeMap { return new MySQLDataTypeMap(); }
-
-    QuoteIdentifier(name: string): string { return `\`${name}\``; }
-    QuoteSchema(schema: string, object: string): string {
-        return `\`${schema}\`.\`${object}\``;
-    }
-    LimitClause(limit: number, offset?: number): LimitClauseResult {
-        const suffix = offset != null
-            ? `LIMIT ${limit} OFFSET ${offset}`
-            : `LIMIT ${limit}`;
-        return { prefix: '', suffix };
-    }
-    BooleanLiteral(value: boolean): string { return value ? '1' : '0'; }
-
-    // Query rendering: the pipeline reads these instead of checking the platform name
-    get SelectListPagingOrderBy(): string | null { return null; }
-    get PagingRequiresOrderBy(): boolean { return false; }
-    get SupportsEscapeStringLiterals(): boolean { return false; }
-    get SupportsDollarQuotedStrings(): boolean { return false; }
-    get QueryHintKeyword(): string | null { return null; }
-    get CallerSQLForbiddenFunctions(): readonly string[] { return ['load_file']; }
-    StringLiteralPrefix(_text: string): string { return ''; }
-    EscapeLikePattern(text: string): string {
-        return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-    }
-    BooleanParameterValue(value: boolean): boolean | number { return value ? 1 : 0; }
-    // ... implement all remaining abstract methods (~25+)
-}
-```
-
-The query rendering members decide how row caps, paging, composed queries and the RunQuery
-template filters behave on the platform; see [Query rendering members](#query-rendering-members).
-
-3. **Update the `DatabasePlatform` type** in `sqlDialect.ts` to include the new platform key.
-
-4. **Export from `index.ts`**:
-
-```typescript
-export { MySQLDialect } from './mysqlDialect.js';
-```
-
-5. **Add tests** in `src/__tests__/mysqlDialect.test.ts` covering every method. The existing `crossDialect.test.ts` provides a pattern for testing multiple dialects against the same assertions.
+The facets also decide how row caps, paging, composed queries and the RunQuery template filters behave on
+the database; see [Query rendering members](#query-rendering-members).
 
 ## Side-by-Side Dialect Comparison
 
 | Feature | SQL Server (`SQLServerDialect`) | PostgreSQL (`PostgreSQLDialect`) |
 |---|---|---|
 | **Identifier quoting** | `[name]` | `"name"` |
-| **Schema-qualified** | `[schema].[object]` | `schema."object"` |
+| **Schema-qualified** | `[schema].[object]` | `"schema"."object"` |
 | **Boolean literals** | `1` / `0` | `true` / `false` |
 | **Current UTC time** | `GETUTCDATE()` | `(NOW() AT TIME ZONE 'UTC')` |
 | **New UUID** | `NEWID()` | `gen_random_uuid()` |
@@ -432,27 +611,37 @@ export { MySQLDialect } from './mysqlDialect.js';
 
 The RunQuery rendering pipeline (SQLParser's lexer and paging-shape analysis, the paging and
 composition engines in `@memberjunction/generic-database-provider`, the template filters in
-`@memberjunction/core` and the parameter processor) reads these members rather than the platform
-name, so a new dialect gets correct rendering by declaring them:
+`@memberjunction/core` and the parameter processor) reads these facts rather than the platform
+name, so a new dialect gets correct rendering by declaring them. Each render uses the dialect of
+the request: the provider's platform, or the External Data Source's dialect for a query on one.
 
-| Member | SQL Server | PostgreSQL | Used for |
-|---|---|---|---|
-| `LimitClause(limit, offset?)` | `TOP n` / `OFFSET … FETCH` | `LIMIT … OFFSET` | Row caps and pages |
-| `DefaultPagingOrderBy` | `(SELECT NULL)` | `1` | Paging a query with no ORDER BY |
-| `SelectListPagingOrderBy` | `1` | `null` | Paging a set operation or `SELECT DISTINCT` with no ORDER BY |
-| `PagingRequiresOrderBy` | `true` | `false` | Whether a page from a derived table needs an ORDER BY |
-| `AllowsOrderByInCTE` | `false` | `true` | Stripping a composed dependency's ORDER BY |
-| `RecursiveCTESyntax()` | `WITH` | `WITH RECURSIVE` | Composing into a recursive WITH clause |
-| `QueryHintKeyword` | `OPTION` | `null` | Keeping a trailing hint clause last; lifting a dependency's hints |
-| `CallerSQLForbiddenFunctions` | `openrowset`, `openquery`, … | `query_to_xml*`, `ts_stat`, `pg_read_file`, `dblink*`, … | Refusing calls in caller-supplied SQL that read what a check of its tables cannot see |
-| `SupportsEscapeStringLiterals` | `false` | `true` | Lexing `E'…'` strings |
-| `SupportsDollarQuotedStrings` | `false` | `true` | Lexing `$$…$$` strings |
-| `QuoteIdentifier(name)` | `[name]` | `"name"` | Lexing quoted identifiers; `sqlIdentifier` |
-| `StringLiteralPrefix(text)` | `N` for non-ASCII | none | `sqlString`, `sqlIn`, LIKE filters |
-| `EscapeLikePattern(text)` | `[%]`, `[_]`, `[[]` | `\%`, `\_`, `\\` | LIKE filters |
-| `BooleanLiteral(value)` | `1` / `0` | `true` / `false` | `sqlBoolean` |
-| `BooleanParameterValue(value)` | `1` / `0` | `true` / `false` | Binding a boolean query parameter |
-| `ParserDialect` | `TransactSQL` | `PostgresQL` | node-sql-parser grammar, where the AST is used |
+The `SQLDialect` members in the first column are kept for existing callers; each reads the facet
+member in the second column, which is what code written against a `QueryDialect` reads.
+
+| `SQLDialect` member | Facet member | SQL Server | PostgreSQL | Used for |
+|---|---|---|---|---|
+| `LimitClause(limit, offset?)` | `Writer.LimitClause` | `TOP n` / `OFFSET … FETCH` | `LIMIT … OFFSET` | Row caps and pages |
+| `DefaultPagingOrderBy` | `Grammar.DefaultPagingOrderBy` | `(SELECT NULL)` | `1` | Paging a query with no ORDER BY |
+| `SelectListPagingOrderBy` | `Grammar.SelectListPagingOrderBy` | `1` | `null` | Paging a set operation or `SELECT DISTINCT` with no ORDER BY |
+| `PagingRequiresOrderBy` | `Grammar.PagingRequiresOrderBy` | `true` | `false` | Whether a page from a derived table needs an ORDER BY |
+| `AllowsOrderByInCTE` | `Grammar.AllowsOrderByInCTE` | `false` | `true` | Stripping a composed dependency's ORDER BY |
+| `RecursiveCTESyntax()` | `Grammar.RecursiveKeyword` | `WITH` | `WITH RECURSIVE` | Composing into a recursive WITH clause |
+| `QueryHintKeyword` | `Grammar.QueryHintKeyword` | `OPTION` | `null` | Keeping a trailing hint clause last; lifting a dependency's hints |
+| `CallerSQLForbiddenFunctions` | `Grammar.CallerSQLForbiddenFunctions` | `openrowset`, `openquery`, … | `query_to_xml*`, `ts_stat`, `pg_read_file`, `dblink*`, … | Refusing calls in caller-supplied SQL that read what a check of its tables cannot see |
+| `UnseparatedStatementKeywords` | `Grammar.UnseparatedStatementKeywords` | The T-SQL statement keywords (`INSERT`, `DELETE`, `EXEC`, `DECLARE`, …) | none | Finding a second statement that has no separator before it (T-SQL runs `SELECT 1 DELETE FROM t` as two statements) |
+| — | `Grammar.WriteStatementKeywords` | `INSERT`, `UPDATE`, `DELETE`, `MERGE`, … | `INSERT`, `UPDATE`, `DELETE`, `COPY`, … | Refusing a statement that writes data, changes the schema or runs code |
+| `SupportsEscapeStringLiterals` | `Lexical.StringLiterals` (an `E` prefix with backslash escapes) | `false` | `true` | Lexing `E'…'` strings |
+| `SupportsDollarQuotedStrings` | `Lexical.DollarQuotedStrings` | `false` (`'none'`) | `true` (`'tagged'`) | Lexing `$$…$$` strings |
+| `QuoteIdentifier(name)` | `Lexical.IdentifierQuotes`, `Writer.QuoteIdentifier` | `[name]` | `"name"` | Lexing quoted identifiers; `sqlIdentifier` |
+| `StringLiteralPrefix(text)` | `Writer.StringLiteralPrefix` | `N` for non-ASCII | none | `sqlString`, `sqlIn`, LIKE filters |
+| `QuoteStringLiteral(value)` | `Writer.QuoteStringLiteral` | `'…'`, `''` for a quote | `'…'`, `''` for a quote | `sqlString`, `sqlIn`, LIKE filters |
+| `EscapeLikePattern(text)` | `Writer.EscapeLikePattern` | `[%]`, `[_]`, `[[]` | `\%`, `\_`, `\\` | LIKE filters |
+| `BooleanLiteral(value)` | `Writer.BooleanLiteral` | `1` / `0` | `true` / `false` | `sqlBoolean` |
+| `BooleanParameterValue(value)` | `Binding.BooleanParameterValue` | `1` / `0` | `true` / `false` | Binding a boolean query parameter |
+| `ParserDialect` | `Grammar.ParserGrammar` | `TransactSQL` | `PostgresQL` | node-sql-parser grammar, where the AST is used. The `SQLDialect` getter throws when the grammar is `null`. |
+
+The template filters read only the `Writer` facet, so they work for a query-only dialect too. A dialect
+without a `Binding` facet keeps a boolean parameter as a JavaScript boolean.
 
 ## Installation
 
@@ -460,7 +649,7 @@ name, so a new dialect gets correct rendering by declaring them:
 npm install @memberjunction/sql-dialect
 ```
 
-Or, in a MemberJunction workspace, add the dependency to your package's `package.json` and run `npm install` from the repo root.
+Or, in a MemberJunction workspace, add the dependency to your package's `package.json` and run `pnpm install` from the repo root.
 
 ## License
 

@@ -316,6 +316,7 @@ export async function ResolvePersonTaskScope(
         ExtraFilter: `LinkedUserID = '${EscapeSQLString(currentUserId)}'`,
         Fields: ['ID'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     });
     if (!people.Success) {

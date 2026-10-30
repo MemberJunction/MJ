@@ -137,7 +137,7 @@ describe('SQLParser.OuterCap', () => {
     // Note: node-sql-parser's transactsql grammar only accepts a numeric `TOP N`
     // (TOP (@var), TOP (1+1), TOP (SELECT 1) all fail to parse), so the opaque
     // TOP branch is unreachable via parsing — it is covered directly in
-    // ASTDialectAdapter.test.ts against a synthetic AST root.
+    // nodeSqlRowCap.test.ts against a synthetic AST root.
 
     it('extracts a numeric PostgreSQL LIMIT', () => {
         expect(new SQLParser('SELECT * FROM users LIMIT 5', pg).OuterCap)

@@ -44,10 +44,11 @@ import {
     type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
@@ -475,9 +476,14 @@ export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
     return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
-/** Every action name a node references, including the action a loop repeats. */
+/** Every action name a node references, including the action(s) a loop repeats. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
-    const names = [ConfigOf(node, 'Action')?.actionName, LoopOperationOf(node)?.action?.name];
+    const loopOp = LoopOperationOf(node);
+    const names = [
+        ConfigOf(node, 'Action')?.actionName,
+        loopOp?.action?.name,
+        ...(loopOp?.steps?.map((s) => s.name) ?? []),
+    ];
     return names.filter((n): n is string => !!n);
 }
 
@@ -1393,67 +1399,54 @@ export class TaskGraphService {
         const names = [...new Set(spec.tasks.flatMap(agentNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{
-            ID: string;
-            Name: string;
-            Status: MJAIAgentEntity['Status'];
-        }>(
-            {
-                EntityName: 'MJ: AI Agents',
-                ExtraFilter: `Name IN (${quoted}) AND Status = 'Active'`,
-                Fields: ['ID', 'Name', 'Status'],
-                ResultType: 'simple',
-            },
-            context.ContextUser,
-        );
-
-        const activeRows = result.Results ?? [];
-        const activeByName = new Map(activeRows.map((r) => [r.Name, r]));
-
-        const runnableRows =
-            activeRows.length > 0
-                ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
-                : [];
-        const runnableByName = new Map<string, string>();
         const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
-        for (const r of runnableRows) {
-            if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
-                const permitted = await AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
-                if (!permitted) {
+        const resolved = await ResolveRecordsByNameOrToolName({
+            EntityName: 'MJ: AI Agents',
+            Names: names,
+            Provider: context.Provider,
+            ContextUser: context.ContextUser,
+            ActiveOnly: true,
+            StripSubAgentPrefix: true,
+            FilterCandidates: (rows) =>
+                AIAgentPermissionHelper.FilterRunnableAgents(
+                    rows as Array<Pick<MJAIAgentEntity, 'ID' | 'Name' | 'Status'>>,
+                    context.ContextUser,
+                ),
+            AllowCandidate: async (r) => {
+                if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                    return AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
+                }
+                return true;
+            },
+        });
+        if (!resolved.Success || !resolved.Map) {
+            return { Success: false, ErrorMessage: resolved.ErrorMessage };
+        }
+        const missing = resolved.Missing ?? [];
+        if (missing.length > 0) {
+            const rejected = resolved.Rejected ?? new Map();
+            const unknownOrInactive: string[] = [];
+            const notRunnable: string[] = [];
+            for (const name of missing) {
+                const row = rejected.get(name);
+                if (!row) {
+                    unknownOrInactive.push(name);
                     continue;
                 }
+                let canView = false;
+                try {
+                    canView = await AIAgentPermissionHelper.HasPermission(row.ID, context.ContextUser, 'view');
+                } catch (error) {
+                    LogError(
+                        `TaskGraphService.resolveAgents: view permission check failed for agent '${row.ID}': ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+                if (!canView) {
+                    unknownOrInactive.push(name);
+                } else {
+                    notRunnable.push(name);
+                }
             }
-            runnableByName.set(r.Name, r.ID);
-        }
-
-        const unknownOrInactive: string[] = [];
-        const notRunnable: string[] = [];
-        for (const name of names) {
-            if (runnableByName.has(name)) {
-                continue;
-            }
-            const row = activeByName.get(name);
-            if (!row) {
-                unknownOrInactive.push(name);
-                continue;
-            }
-            let canView = false;
-            try {
-                canView = await AIAgentPermissionHelper.HasPermission(row.ID, context.ContextUser, 'view');
-            } catch (error) {
-                LogError(
-                    `TaskGraphService.resolveAgents: view permission check failed for agent '${row.ID}': ${error instanceof Error ? error.message : String(error)}`,
-                );
-            }
-            if (!canView) {
-                unknownOrInactive.push(name);
-            } else {
-                notRunnable.push(name);
-            }
-        }
-
-        if (unknownOrInactive.length > 0 || notRunnable.length > 0) {
             const parts: string[] = [];
             if (unknownOrInactive.length > 0) {
                 parts.push(
@@ -1472,7 +1465,7 @@ export class TaskGraphService {
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
-        return { Success: true, Map: runnableByName };
+        return { Success: true, Map: resolved.Map };
     }
 
     /**
@@ -1516,13 +1509,6 @@ export class TaskGraphService {
     }
 
     /**
-     * Maps every referenced action name to its ID, or reports all unresolvable names at once.
-     *
-     * Deliberately a mirror of {@link resolveAgents} rather than a generalization of it: the two
-     * read different entities and produce different error prose, and the shared shape is three
-     * lines. Collapsing them would trade a readable failure message for a parameterized lookup.
-     */
-    /**
      * Maps every referenced prompt name to its ID.
      *
      * A prompt is addressed by name in the spec and stored as a foreign key on the row, exactly like
@@ -1535,11 +1521,16 @@ export class TaskGraphService {
         const names = [...new Set(spec.tasks.flatMap(promptNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
+        const quoted = names.map((n) => `'${EscapeSQLString(n)}'`).join(',');
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
             { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
             context.ContextUser,
         );
+        if (!result.Success) {
+            const reason = result.ErrorMessage || 'RunView on "MJ: AI Prompts" failed';
+            LogError(`[TaskGraph] Failed to resolve "MJ: AI Prompts" by name: ${reason}`);
+            return { Success: false, ErrorMessage: reason };
+        }
 
         const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
         const missing = names.filter((n) => !found.has(n));
@@ -1558,18 +1549,20 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        // Includes a loop's repeated action — see the note in resolveAgents.
+        // Includes a loop's repeated action(s) — see the note in resolveAgents.
         const names = [...new Set(spec.tasks.flatMap(actionNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
-        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: Actions', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
-            context.ContextUser,
-        );
-
-        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
-        const missing = names.filter((n) => !found.has(n));
+        const resolved = await ResolveRecordsByNameOrToolName({
+            EntityName: 'MJ: Actions',
+            Names: names,
+            Provider: context.Provider,
+            ContextUser: context.ContextUser,
+        });
+        if (!resolved.Success || !resolved.Map) {
+            return { Success: false, ErrorMessage: resolved.ErrorMessage };
+        }
+        const missing = resolved.Missing ?? [];
         if (missing.length > 0) {
             return {
                 Success: false,
@@ -1578,7 +1571,7 @@ export class TaskGraphService {
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
-        return { Success: true, Map: found };
+        return { Success: true, Map: resolved.Map };
     }
 
     /**
@@ -1781,15 +1774,17 @@ export class TaskGraphService {
                         // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
                         // reference a real foreign key — joinable, constrained, rename-proof — instead
                         // of a name buried in JSON, and CK_Task_Assignment still holds because a loop
-                        // body is exactly one thing.
+                        // body is exactly one thing (for multi-step action bodies, steps[0]'s ActionID
+                        // anchors the FK while stepActionIds in Configuration carries the full step map).
                         const op = LoopOperationOf(node);
                         if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
+                        else if (op?.steps?.length) task.ActionID = actionIDsByName.get(op.steps[0].name)!;
                         else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
                         else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
                         else {
                             throw new Error(
                                 `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
-                                `a prompt, or a sub-agent for it to run on each pass.`,
+                                `steps, a prompt, or a sub-agent for it to run on each pass.`,
                             );
                         }
                         break;
@@ -1813,7 +1808,19 @@ export class TaskGraphService {
                 // run in. A graph that has not started yet has no timestamps to sort by, so its
                 // structure is the only order available, and it is available from the moment it is
                 // compiled.
-                const configuration = { ...buildStepConfiguration(node), sequence: ranks.get(node.tempId) };
+                const loopOp = LoopOperationOf(node);
+                const stepActionIds = loopOp?.steps?.length
+                    ? Object.fromEntries(
+                        loopOp.steps
+                            .map((s) => [s.name, actionIDsByName.get(s.name)])
+                            .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0),
+                    )
+                    : undefined;
+                const configuration: TaskStepConfiguration = {
+                    ...buildStepConfiguration(node),
+                    ...(stepActionIds && Object.keys(stepActionIds).length > 0 ? { stepActionIds } : {}),
+                    sequence: ranks.get(node.tempId),
+                };
                 task.Configuration = JSON.stringify(configuration);
 
                 // Input rides in its own column; Description stays human-readable.

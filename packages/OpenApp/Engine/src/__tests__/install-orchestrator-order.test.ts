@@ -71,20 +71,10 @@ vi.mock('../install/config-manager.js', () => ({
     AddExcludeSchema: vi.fn(() => ({ Success: true })),
     RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
-vi.mock('../install/history-recorder.js', () => ({
-    RecordAppInstallation: vi.fn(),
-    RecordInstallHistoryEntry: vi.fn(),
-    RecordAppDependencies: vi.fn(),
-    DeleteAppDependencies: vi.fn(),
-    SetAppStatus: vi.fn(),
-    SetAppStep: vi.fn(),
-    FindInstalledApp: vi.fn(),
-    FindDependentApps: vi.fn(),
-    ListInstalledApps: vi.fn(),
-    UpdateAppRecord: vi.fn(),
-    ReplaceAppDependenciesAtomically: vi.fn(),
-    CheckSchemaSharedByOtherApps: vi.fn(),
-}));
+vi.mock('../install/history-recorder.js', async (importOriginal) => {
+    const { MockHistoryRecorder } = await import('./helpers/history-recorder-mock.js');
+    return MockHistoryRecorder(await importOriginal());
+});
 vi.mock('@memberjunction/core', () => ({
     // Only CreateTransactionGroup is used on the install path.
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },

@@ -916,6 +916,7 @@ ${compactHistory}${artifactContext}
       ExtraFilter: extraFilter,
       OrderBy: orderBy,
       MaxRows: 1,
+      SkipTotalRowCount: true,
       Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content'],
       ResultType: 'simple'
     }, this.Provider.CurrentUser ?? undefined);

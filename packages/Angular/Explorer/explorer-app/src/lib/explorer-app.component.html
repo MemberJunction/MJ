@@ -1,5 +1,5 @@
-<!-- OAuth callback route - shown regardless of auth state, component handles waiting for auth -->
-@if (isOAuthCallback) {
+<!-- Standalone routes (OAuth callback, Excel connect page) - shown regardless of auth state; each page handles waiting for auth -->
+@if (IsStandaloneRoute) {
   <router-outlet></router-outlet>
 }
 
@@ -11,8 +11,8 @@
   <mj-update-notification />
 }
 
-<!-- Normal authenticated view (not OAuth callback) -->
-@if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
+<!-- Normal authenticated view (not a standalone route) -->
+@if ((authBase.isAuthenticated() | async) && !IsStandaloneRoute) {
   @if (!preShellBlocked) {
     <div class="app-main">
       <mj-template-user-banner></mj-template-user-banner>
@@ -46,8 +46,8 @@
     </div>
   }
 }
-<!-- Login - shows when NOT authenticated AND not on OAuth callback -->
-@if (!(authBase.isAuthenticated() | async) && !isOAuthCallback) {
+<!-- Login - shows when NOT authenticated AND not on a standalone route -->
+@if (!(authBase.isAuthenticated() | async) && !IsStandaloneRoute) {
   <!-- Show environment validation errors on login page -->
   <mj-system-validation-banner></mj-system-validation-banner>
   <div class="login-wrapper"

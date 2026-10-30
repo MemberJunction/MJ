@@ -181,6 +181,7 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
                     EntityName: 'MJ: AI Bridge Agent Identities',
                     ExtraFilter: filterParts.join(' AND '),
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                 },
                 contextUser

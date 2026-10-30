@@ -51,7 +51,7 @@ import type {
 import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { MJActionExecutionLogEntity, MJSearchExecutionLogEntity, MJSearchScopePermissionEntity } from '@memberjunction/core-entities';
 import { findUserByEmail, SEEDED_NOGRANT_EMAIL, SEEDED_SCOPED_A_EMAIL } from '@memberjunction/testing-integration';
-import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, settle, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -85,13 +85,9 @@ let fixture: AudienceFixture | undefined;
 /** Why Setup could not build the fixture; every check skips loudly with it. */
 let unavailable = '';
 
-function skipNote(id: string, reason: string): void {
-  console.warn(`  ⚠ agent-run-audience.${id} SKIPPED — ${reason}`);
-}
-
-/** The fixture, or undefined after a loud skip note (client transport, or the seeded roster is missing). */
-function fixtureFor(id: string): AudienceFixture | undefined {
-  if (!fixture) skipNote(id, unavailable || 'the bundle Setup did not run');
+/** The fixture, or a recorded skip (client transport, or the seeded roster is missing). */
+function fixtureFor(): AudienceFixture {
+  if (!fixture) SkipCheck(unavailable || 'the bundle Setup did not run');
   return fixture;
 }
 
@@ -172,8 +168,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU1',
     Name: 'AU1: (deterministic) pre-execution RAG as the context user alone searches the IT scope: a Success search-log row, no Forbidden row',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU1');
-      if (!fx) return;
+      const fx = fixtureFor();
       const query = `${LOG_QUERY_PREFIX} ${fx.Marker} caller alone`;
       const result = await runRAG(ctx, fx, query);
       if (result) {
@@ -189,8 +184,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU2',
     Name: 'AU2: (deterministic) the same with an audience of the no-grant user: nothing injected, the search ran and logged ResultCount 0',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU2');
-      if (!fx) return;
+      const fx = fixtureFor();
       const query = `${LOG_QUERY_PREFIX} ${fx.Marker} room of nogrant`;
       AssertEqual(await runRAG(ctx, fx, query, [fx.NoGrant]), null, 'a room with a role-less reader must have nothing injected');
       AssertEqual((await searchLogRows(ctx, query, 'Forbidden', false)).length, 0, 'the granted reader must pass the scope gate (no Forbidden row)');
@@ -204,8 +198,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU3',
     Name: 'AU3: (deterministic) a reader with no grant on the scope: nothing injected, exactly one Forbidden row naming that reader, no search',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU3');
-      if (!fx) return;
+      const fx = fixtureFor();
       const query = `${LOG_QUERY_PREFIX} ${fx.Marker} room of ungranted`;
       AssertEqual(await runRAG(ctx, fx, query, [fx.Ungranted]), null, 'a scope refused for a reader must inject nothing');
       const refused = await searchLogRows(ctx, query, 'Forbidden', true);
@@ -221,12 +214,10 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU4',
     Name: 'AU4: (deterministic) Scoped Search through ExecuteSingleAction with an audience returns no results and no SourceCounts',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU4');
-      if (!fx) return;
+      const fx = fixtureFor();
       const scopedSearch = await activeAction(ctx, SCOPED_SEARCH_ACTION);
       if (!scopedSearch) {
-        skipNote('AU4', `the '${SCOPED_SEARCH_ACTION}' action is not Active in this database`);
-        return;
+        SkipCheck(`the '${SCOPED_SEARCH_ACTION}' action is not Active in this database`);
       }
       const control = await actionHarness(ctx, fx).call(scopedSearch, { Query: `${LOG_QUERY_PREFIX} ${fx.Marker} action control` });
       AssertEqual(control.Success, true, `control (no audience) failed: ${control.Message ?? ''}`);
@@ -244,12 +235,10 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU5',
     Name: 'AU5: (deterministic) an action without audience support is refused (AUDIENCE_UNSUPPORTED), never runs, and is locked out for the run',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU5');
-      if (!fx) return;
+      const fx = fixtureFor();
       const calc = await activeAction(ctx, UNSUPPORTED_ACTION);
       if (!calc) {
-        skipNote('AU5', `the core '${UNSUPPORTED_ACTION}' action is not Active in this database`);
-        return;
+        SkipCheck(`the core '${UNSUPPORTED_ACTION}' action is not Active in this database`);
       }
       const controlMarker = `${fx.Marker}-au5-control`;
       const control = await actionHarness(ctx, fx).call(calc, { Expression: '2 + 3', Note: controlMarker });
@@ -274,8 +263,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU6',
     Name: 'AU6: (deterministic) Execute with an audience naming an unknown user fails the run before any prompt',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU6');
-      if (!fx) return;
+      const fx = fixtureFor();
       const agent = new BaseAgent();
       const result = await agent.Execute({
         agent: fx.Agent,
@@ -289,8 +277,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
       AssertEqual(result.success, false, 'an audience naming an unknown user must fail the run');
       Assert(!!run?.IsSaved, 'the refused run is persisted (created in Phase 1, failed at the audience check)');
       if ((run!.ErrorMessage ?? '').includes('does not have permission')) {
-        skipNote('AU6', `the context user may not run '${fx.Agent.Name}', so the permission check refused the run first`);
-        return;
+        SkipCheck(`the context user may not run '${fx.Agent.Name}', so the permission check refused the run first`);
       }
       AssertEqual(run!.Status, 'Failed', 'run Status=Failed');
       const error = run!.ErrorMessage ?? '';
@@ -303,12 +290,10 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU7',
     Name: 'AU7: (deterministic) Scoped Search in a run scoped to tenant A refuses a model tenant B (INVALID_PARAM, no search) and searches A',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU7');
-      if (!fx) return;
+      const fx = fixtureFor();
       const scopedSearch = await activeAction(ctx, SCOPED_SEARCH_ACTION);
       if (!scopedSearch) {
-        skipNote('AU7', `the '${SCOPED_SEARCH_ACTION}' action is not Active in this database`);
-        return;
+        SkipCheck(`the '${SCOPED_SEARCH_ACTION}' action is not Active in this database`);
       }
       const harness = actionHarness(ctx, fx, undefined, { PrimaryScopeRecordID: RUN_TENANT_ID });
       await assertOtherTenantRefused(ctx, fx, scopedSearch, harness.call);
@@ -320,8 +305,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU8',
     Name: "AU8: (deterministic) Execute with an audience whose Mode is an inherited name ('toString') fails the run before any prompt",
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU8');
-      if (!fx) return;
+      const fx = fixtureFor();
       const result = await new BaseAgent().Execute({
         agent: fx.Agent,
         conversationMessages: [{ role: 'user', content: `${LOG_QUERY_PREFIX} ${fx.Marker} AU8 — should be refused` }],
@@ -333,8 +317,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
       if (run?.IsSaved) fx.RunIDs.push(run.ID);
       AssertEqual(result.success, false, "an audience whose Mode is 'toString' must fail the run");
       if ((run?.ErrorMessage ?? '').includes('does not have permission')) {
-        skipNote('AU8', `the context user may not run '${fx.Agent.Name}', so the permission check refused the run first`);
-        return;
+        SkipCheck(`the context user may not run '${fx.Agent.Name}', so the permission check refused the run first`);
       }
       Assert((run?.ErrorMessage ?? '').startsWith('Invalid Audience'), `the run must fail on the audience: '${run?.ErrorMessage ?? ''}'`);
       AssertEqual(await promptStepCount(ctx, run!.ID), 0, 'no prompt may run for a refused audience');
@@ -345,12 +328,10 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
     Id: 'agent-run-audience.AU9',
     Name: 'AU9: (deterministic) the Search action is refused in a tenant-scoped run (RUN_SCOPE_UNSUPPORTED, no search); an unscoped run searches',
     Fn: async (ctx): Promise<void> => {
-      const fx = fixtureFor('AU9');
-      if (!fx) return;
+      const fx = fixtureFor();
       const search = await activeAction(ctx, SEARCH_ACTION);
       if (!search) {
-        skipNote('AU9', `the '${SEARCH_ACTION}' action is not Active in this database`);
-        return;
+        SkipCheck(`the '${SEARCH_ACTION}' action is not Active in this database`);
       }
       const query = `${LOG_QUERY_PREFIX} ${fx.Marker} plain search in a scoped run`;
       const refused = await actionHarness(ctx, fx, undefined, { PrimaryScopeRecordID: RUN_TENANT_ID }).call(search, { Query: query });

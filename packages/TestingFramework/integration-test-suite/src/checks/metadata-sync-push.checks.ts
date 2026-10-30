@@ -155,7 +155,7 @@ function queryRecord(id: string, name: string, dialectID: string, marker: string
         fields: {
             Name: name,
             Description: marker,
-            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = '{{ VendorName }}'",
+            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = {{ VendorName | sqlString }}",
             Status: 'Approved',
             SQLDialectID: dialectID,
             AuditQueryRuns: false,
@@ -188,7 +188,7 @@ async function countRows(ctx: IntegrationCheckContext, entityName: string, filte
     const rv = RunView.FromMetadataProvider(ctx.Provider);
     const result = await rv.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only', BypassCache: true }, ctx.User);
     Assert(result.Success, `counting ${entityName} failed: ${result.ErrorMessage}`);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 async function expectBaseVendorUnchanged(ctx: IntegrationCheckContext, f: PushFixture, label: string): Promise<void> {

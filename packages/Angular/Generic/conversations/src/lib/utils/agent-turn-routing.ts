@@ -14,13 +14,22 @@ import type { AgentReplyMode, AgentTurnRoute, AgentTurnTarget } from '../models/
 export interface AgentTurnCandidates {
     /** Agents the message tags, in the order they appear. */
     MentionedAgentIds: readonly string[];
+    /** People the message tags (`@Person`). Addressing a person with no agent tag starts no agent turn. */
+    MentionedUserIds?: readonly string[];
+    /** The agent of the message this one replies to (`ParentID` -> `Role === 'AI'`), when set. */
+    ReplyParentAgentId?: string | null;
+    /** True when this message replies (`ParentID`) to another person's message (`Role === 'User'`). */
+    ReplyParentIsHuman?: boolean;
     /** The last agent that answered in the conversation, other than the conversation manager. */
     ContinuityAgentId: string | null;
     /**
      * True when a routing decision put `ContinuityAgentId` there in place of the last agent that
-     * answered. The turn is then labelled `DecisionRouted` instead of `Continuity`.
+     * answered (or confirmed it in a multi-person chat). The turn is then labelled `DecisionRouted`
+     * instead of `Continuity`.
      */
     ContinuityDecisionRouted?: boolean;
+    /** True when a routing decision in a multi-person chat concluded the message is addressed to a person. */
+    DecisionAddressedToHuman?: boolean;
     /** The agent pinned on the conversation. */
     ConversationDefaultAgentId: string | null;
     /** The host's `DefaultAgentId` input. */
@@ -38,29 +47,62 @@ export interface AgentTurnRules {
 }
 
 /**
+ * True when a message with no allowed `@Agent` mention is intentionally addressed to a person
+ * rather than an agent: it tags a person (`@Person`), replies (`ParentID`) to another person's
+ * message, or was judged human-addressed by the routing decision.
+ */
+export function IsAddressedToHuman(candidates: AgentTurnCandidates): boolean {
+    return (candidates.MentionedUserIds?.length ?? 0) > 0
+        || Boolean(candidates.ReplyParentIsHuman)
+        || Boolean(candidates.DecisionAddressedToHuman);
+}
+
+/**
  * Picks the agent and route for one message, or null when no turn starts.
  *
- * The order is MJ's: the first tagged agent the host allows, then (under `Always` only) the last
- * agent that answered, the conversation's pinned agent, the host's default agent, and the
- * conversation manager. A candidate the host doesn't allow is skipped. A continuity candidate that
- * a routing decision chose (`ContinuityDecisionRouted`) takes the `DecisionRouted` label.
+ * The order is MJ's: the first tagged agent the host allows, a direct thread reply (`ParentID`) to
+ * a runnable agent, a continuity candidate that a routing decision chose (`DecisionRouted`), and
+ * then (under `Always` only) the last agent that answered, the conversation's pinned agent, the
+ * host's default agent, and the conversation manager. A message that tags a person, replies to
+ * another person's message, or receives a `NoAgent` routing decision with no allowed `@Agent` tag
+ * starts no turn. A candidate the host doesn't allow is skipped.
  *
  * A continuity or default candidate that `isKnownAgent` doesn't recognise falls back to the
  * conversation manager, as MJ always has, rather than to the next route. A tagged agent is taken
- * as tagged.
+ * as tagged; a `ThreadReply` target must pass `isRunnableAgent`.
  *
  * @param candidates The agent each route would use.
  * @param rules The host's reply mode and allowed list.
  * @param isKnownAgent True when the agent exists in the client's agent catalog.
+ * @param isRunnableAgent True when the current user can run the agent directly (defaults to `isKnownAgent`).
  */
 export function ResolveAgentTurn(
     candidates: AgentTurnCandidates,
     rules: AgentTurnRules,
-    isKnownAgent: (agentId: string) => boolean
+    isKnownAgent: (agentId: string) => boolean,
+    isRunnableAgent: (agentId: string) => boolean = isKnownAgent
 ): AgentTurnTarget | null {
     const mentioned = candidates.MentionedAgentIds.find(id => IsAgentAllowed(id, rules.AllowedAgentIDs));
     if (mentioned) {
         return { AgentId: mentioned, Route: 'Mention' };
+    }
+    if ((candidates.MentionedUserIds?.length ?? 0) > 0 || candidates.ReplyParentIsHuman) {
+        return null;
+    }
+    const replyAgent = candidates.ReplyParentAgentId;
+    if (replyAgent && IsAgentAllowed(replyAgent, rules.AllowedAgentIDs) && isRunnableAgent(replyAgent)) {
+        return { AgentId: replyAgent, Route: 'ThreadReply' };
+    }
+    if (candidates.DecisionAddressedToHuman) {
+        return null;
+    }
+    if (
+        candidates.ContinuityDecisionRouted
+        && candidates.ContinuityAgentId
+        && IsAgentAllowed(candidates.ContinuityAgentId, rules.AllowedAgentIDs)
+        && isKnownAgent(candidates.ContinuityAgentId)
+    ) {
+        return { AgentId: candidates.ContinuityAgentId, Route: 'DecisionRouted' };
     }
     if (rules.ReplyMode === 'MentionOnly') {
         return null;

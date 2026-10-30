@@ -79,18 +79,23 @@ interface LoopAgentResponse {
                 name: string;
                 description: string;
                 /** What runs this step. Picks which `configuration` shape applies. */
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'Decision';
                 configuration:
-                    | { agentName: string; message?: string; presetName?: string }      // kind: 'Agent'
-                    | { actionName: string }                        // kind: 'Action'
-                    | { assignToUserID?: string; instructions?: string }  // kind: 'Human'
-                    | { promptName: string };                       // kind: 'Prompt'
-                /** A bare tempId waits unconditionally; the object form gates the edge on a condition. */
-                dependsOn: Array<string | { tempId: string; condition?: string }>;
+                    | { agentName: string; message?: string; templateParameters?: Record<string, string>; presetName?: string }  // kind: 'Agent'
+                    | { actionName: string; inputMapping?: string; outputMapping?: string }                  // kind: 'Action'
+                    | { assignToUserID?: string; instructions?: string; expiresInHours?: number }            // kind: 'Human'
+                    | { promptName: string; templateParameters?: Record<string, string> }                    // kind: 'Prompt'
+                    | ForEachOperation                                                                       // kind: 'ForEach'
+                    | WhileOperation                                                                         // kind: 'While'
+                    | { promptName?: string; state?: string; questions: Record<string, AgentDecisionQuestion & { minConfidence?: number }> }; // kind: 'Decision'
+                /** A bare tempId waits unconditionally; the object form gates on a condition or forms an XOR fork (`exclusiveGroup` + `priority`). */
+                dependsOn: Array<string | { tempId: string; condition?: string; exclusiveGroup?: string; priority?: number }>;
                 inputPayload?: Record<string, unknown>;
+                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             }>;
             continuation?: 'message' | 'reinvoke' | 'none';
             durable?: boolean;
+            failureSemantics?: 'block' | 'edges';
         };
 
 
@@ -173,7 +178,7 @@ Stop only when: goal complete OR unrecoverable failure.
 - `taskComplete`: true only when **ENTIRE** user request fulfilled
 - `payloadChangeRequest`: Include only changes (new/update/remove)
 - `terminateAfter`: Usually false - review sub-agent results before completing
-- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever
+- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: Extract and store any unmapped loop results in the payload immediately after loop completion, or they're lost forever (fields mapped via `action.outputMapping` or `steps[].outputMapping` are already in the payload — do **not** re-write or re-append them via `newElements`)
 
 
 - **⚠️ Plan mode is active: you MUST present a plan (`type: "Plan"`) and get it approved before using `type: "Actions"` or `type: "Sub-Agent"`**
@@ -243,7 +248,7 @@ When you have an array in the payload and need to perform the same operation on 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `action.outputMapping` or `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items).
 
 - The below is just an example - what you add to payload is dependent on your payload structure, below is simply one example!
 
@@ -349,6 +354,44 @@ Note the difference:
 - `"city.name"` → whole-value reference, resolves to the raw value (string, number, or object)
 - `"company in {{city.name}}"` → inline template, interpolates `{{}}` expressions into the surrounding text
 
+#### Chaining Multiple Actions per Iteration (`steps[]`)
+
+When each item requires 2+ dependent actions (for example compute → transform → store), use `steps` instead of `action` (both `ForEach` and `While` support `steps`). Give upstream steps an `id` and reference their outputs via `{{steps.<id>.<OutputField>}}`, gate optional steps with `condition`, and fold outputs into the payload with `outputMapping` (`[]` appends across iterations):
+
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Chain two calculations per line item in a single ForEach turn without intermediate LLM round-trips",
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "lineItems",
+      "itemVariable": "line",
+      "steps": [
+        {
+          "id": "subtotal",
+          "name": "Calculate Expression",
+          "params": {
+            "Expression": "{{line.qty}} * {{line.unitPrice}}"
+          }
+        },
+        {
+          "id": "withTax",
+          "name": "Calculate Expression",
+          "condition": "steps.subtotal.Result > 0",
+          "params": {
+            "Expression": "{{steps.subtotal.Result}} * 1.08"
+          },
+          "outputMapping": "{\"Result\": \"lineTotals[]\"}"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Note on `action.outputMapping` and `steps[].outputMapping`:** Fields mapped via `outputMapping` (including `[]` array appends like `"lineTotals[]"`) are **already written directly into your shared payload** during loop execution — check `<mj-runtime-state>` on the next turn and do **not** re-append those values again via `payloadChangeRequest`, `payload_change_request`, or `complete_task`.
+
 
 
 
@@ -387,7 +430,7 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response. After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `action.outputMapping` or `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items). After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
 
 
 
@@ -430,11 +473,11 @@ Static values need no syntax: `"Welcome!"`
     "type": "ForEach",
     "forEach": {
       "collectionPath": "items",
+      "itemVariable": "item",
       "action": { "name": "Process Item", "params": { "id": "item.id" } }
     }
   }
 }
-// All 10 items processed, results in payload.forEachResults
 ```
 
 
@@ -767,19 +810,20 @@ You have 1 sub-agents. Delegate appropriately.
 Execute one at a time. Their completion ≠ your task completion.
 [[SUB-AGENTS]]
 ## Actions (2 available)
-Actions are **server-side tools**, declared to you as native tools on this request rather than described here. Call them directly through the tool-calling interface — never describe an action inside the JSON envelope, and never invent a `type: "Actions"` step; that step type does not exist in this mode.
+Actions are **server-side tools**, declared to you as native tools on this request rather than described here. Call them directly through the tool-calling interface — never describe a single action turn inside the JSON envelope, and never invent a `type: "Actions"` step; that step type does not exist in this mode.
 
 - **Calling a tool continues the loop.** The framework runs the action, returns its result to you, and you decide again. You do not need to say anything alongside the call.
-- **When you are not calling a tool, reply with the JSON envelope** for everything else — completing the task, chatting, dispatching a sub-agent, retrying.
+- **When you are not calling a tool, reply with the JSON envelope** for everything else — completing the task, chatting, dispatching a sub-agent, running a `ForEach`/`While` loop, executing a `Pipeline`, submitting a `Tasks` graph, or retrying. Never combine a native tool call with a JSON envelope on the same turn; inside `ForEach`, `While`, `Pipeline`, or `Tasks`, Actions and sub-agents may be named by either their canonical MemberJunction name or their declared native tool name.
 - Call several tools in one turn when they are independent.
 
-**A tool call asks for another turn — so do not make one when you do not need another turn.** These three situations end or redirect the turn, and each is answered with the envelope and never with a tool call:
+**A tool call asks for another turn — so do not make one when you want an envelope step or completion.** Each of these situations is answered with **only** the JSON envelope and never with a native tool call:
 
 | when | answer with |
 |---|---|
 | You already hold what was asked for, and are reporting or summarising it | `taskComplete: true` |
 | The work belongs to one of the sub-agents listed above | `nextStep.type: 'Sub-Agent'` |
 | You need something only the user can give you | `nextStep.type: 'Chat'` |
+| You are iterating over a collection or condition (`ForEach` / `While`), chaining a linear server-side dataflow (`Pipeline`), or submitting a durable DAG (`Tasks`) | `nextStep.type: 'ForEach'` / `'While'` / `'Pipeline'` / `'Tasks'` |
 
 Every tool stays available on your next turn. Reaching for a plausible-looking one after the task is already answered spends an iteration and throws your answer away.
 ## Skills (1 available)
@@ -912,54 +956,51 @@ Memory Manager.
 
 ## Durable Task Graphs (`nextStep.type = 'Tasks'`)
 
-You can hand off a dependency-ordered set of tasks to run **outside this conversation turn**.
+You can hand off a dependency-ordered DAG of tasks — including actions, sub-agents, loops, structured LLM decisions, and human approvals — to run **outside this conversation turn**.
 
-**The distinction from `subAgents[]` is durability, not parallelism.** Both fan out. But
-`subAgents[]` is *ephemeral*: it blocks this run, and if the run ends — the user reloads, the
-server restarts — the work is gone. A task graph is *durable*: it becomes real Task rows that a
-server-side dispatcher owns, visible in the Tasks UI, resumable after a restart, and able to wait
-on a human.
+### Choosing the Right Execution Primitive
 
-**Reach for `Tasks` when** the work is long-running, has real dependencies between steps, should
-survive the user closing the tab, or needs a person to approve or complete a step.
+Pick the lightest primitive that fits the shape of the work so you do not spend unnecessary LLM turns:
+1. **Direct Action / Tool Call** — 1–N independent actions whose outputs you need to inspect immediately.
+2. **`Pipeline` (`nextStep.type = 'Pipeline'`)** — a fast, in-turn linear server-side dataflow (`fetch → filter/map/sort/project/aggregate`) where intermediate stage outputs do not need to enter your context window.
+3. **In-Turn `ForEach` / `While`** — batch iteration over a collection or condition (`action`, multi-step `steps[]`, or `subAgent`) when the entire loop finishes quickly and you want the results in this same run.
+4. **Durable `Tasks` (`nextStep.type = 'Tasks'`)** — a multi-step DAG with conditional branches, loops, sub-agents, long-running jobs, or human checkpoints that should persist as real `MJ: Tasks` rows, survive browser reloads or server restarts, and optionally put your run to sleep (`continuation: 'reinvoke'`) until the graph settles.
 
-**Stay with `subAgents[]` when** you need the results *in this turn* to keep reasoning. Submitting a
-graph ends your turn — you cannot read its output before replying.
+**Stay with in-turn `subAgents[]` / `ForEach` / `Pipeline` when** you need the results *before* ending your current turn. Submitting a durable `Tasks` graph ends your current turn immediately.
 
-### How to write one
+### Node Kinds & Configurations
 
-- Give every task a `tempId` unique within the graph. Express dependencies with `dependsOn`, using
-  those `tempId`s — you cannot know real IDs at authoring time.
-- The graph must be **acyclic**. A cycle can never execute, because nothing would ever become
-  eligible to start, so it is rejected outright.
-- Every task declares a `kind` and a matching `configuration`:
-  - `kind: 'Agent'` → `configuration: { agentName }` — must match an existing agent's exact name (verified from your preloaded sub-agents or `Find Candidate Agents`; never guess or invent an agent name)
-  - `kind: 'Action'` → `configuration: { actionName }` — must name a real action
-  - `kind: 'Human'` → `configuration: {}` — a step a person completes
-  - `kind: 'Prompt'` → `configuration: { promptName }`
-  The pairing is the whole assignment; there is no separate flag to set.
-- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'output.severity === "high"' }]`
-  runs the step only when the expression holds against the upstream task's output (`output.<field>`, `status`, `succeeded`, `failed`, `errorMessage`). Use it for "only if" work rather than inventing a branching step. Note: `Query Builder` returns `{ query, rows, columns, metadata: { rowCount, executionTimeMs, sql } }`, so row-count conditions on a `Query Builder` step must use `output.metadata.rowCount > 0` (or `output.rows.length > 0`), never `output.resultCount` or `output.rowCount`.
-- Put structured inputs in `inputPayload`. Describe intent in `description` — that is what the
-  assigned agent reads.
-- Maximum 50 tasks per graph.
+Give every task a unique `tempId` (maximum 50 tasks, strictly **acyclic**) and wire prerequisites in `dependsOn` by `tempId`. Every task pairs `kind` with its `configuration`:
 
-### What happens after you submit
+- **`kind: 'Action'`** → `configuration: { actionName, inputMapping?, outputMapping? }`
+  - `actionName` must name an active Action (canonical MJ name or declared native tool name).
+  - `inputMapping` (JSON object string) wires upstream payload fields into action params (e.g. `"{\"Expression\": \"payload.formula\", \"Precision\": \"static:2\"}"`). Static inputs can also live in `inputPayload`.
+  - `outputMapping` (JSON object string) maps action output params onto the graph's shared payload so downstream nodes and edge conditions can read them (e.g. `"{\"Result\": \"subtotal\"}"` or `"{\"Result\": \"results[]\"}"` to append).
+  - For pure sandboxed JavaScript data reshaping between steps (filtering, grouping, math, string assembly), use `actionName: "Execute Code"` with `Language: "JavaScript"` when available.
+- **`kind: 'Agent'`** → `configuration: { agentName, message?, templateParameters? }` — `agentName` must match an existing runnable agent (from your preloaded sub-agents or `Find Candidate Agents`; never guess). Put task instructions in `description` (and/or `message`).
+- **`kind: 'ForEach'`** → `configuration: ForEachOperation` — durable collection loop (`collectionPath` in shared payload or `"static:[...]"` literal JSON array, `itemVariable`, `executionMode: 'sequential' | 'parallel'`, and one body arm: single `action`, multi-step `steps: [{ id, name, params, condition?, outputMapping? }]` chaining `{{steps.<id>.<Field>}}`, `subAgent`, or `prompt`).
+- **`kind: 'While'`** → `configuration: WhileOperation` — durable conditional/polling loop (`condition`, `itemVariable`, `maxIterations`, `delayBetweenIterationsMs`, and one body arm: `action`, multi-step `steps[]`, `subAgent`, or `prompt`).
+- **`kind: 'Decision'`** → `configuration: { promptName?, state?, questions }` — evaluates 1+ typed `Choice`, `Likelihood`, or `Score` questions in a single structured decision call (no prose). Downstream edges route synchronously via `decisions.<tempId>.<questionKey>.value` (for `Choice`/`Score`) or `decisions.<tempId>.<questionKey>.probability` (for `Likelihood`). Note: when a `Choice` fork routes on `decisions.<tempId>.<questionKey>.value`, cover every declared option (or use an `exclusiveGroup` fallback edge).
+- **`kind: 'Prompt'`** → `configuration: { promptName, templateParameters? }` — executes a stored `MJ: AI Prompts` row.
+- **`kind: 'Human'`** → `configuration: { assignToUserID?, instructions?, expiresInHours? }` — parks on a person for approval or manual input without consuming compute while waiting.
 
-Your turn ends. You do **not** wait, and you must not claim the work is finished — say it has
-*started*. When the graph completes, `continuation` decides what happens:
+### Branching, Exclusive Forks & Failure Edges
 
-- `'message'` (default) — the results are posted into the conversation.
-- `'reinvoke'` — you get a fresh turn with the outcome, so you can synthesize a final answer.
-- `'none'` — nothing further happens.
+- **Conditional edges**: `dependsOn: [{ tempId: 'analyze', condition: 'output.severity === "high"' }]` runs only when the condition holds (`output.<field>`, `payload.<field>`, `decisions.<node>.<q>.*`, `status`, `succeeded`, `failed`, `errorMessage`). Note: `Query Builder` returns `{ query, rows, columns, metadata: { rowCount, executionTimeMs, sql } }`, so row-count checks must use `output.metadata.rowCount > 0` (or `output.rows.length > 0`).
+- **Exclusive XOR forks (`exclusiveGroup` + `priority`)**: When multiple tasks depend on the same upstream `tempId` and share an `exclusiveGroup` string (e.g. `{ tempId: 'triage', exclusiveGroup: 'route', priority: 10, condition: 'output.score >= 80' }` and `{ tempId: 'triage', exclusiveGroup: 'route', priority: 0 }`), the highest-priority satisfied edge wins and losing branches are automatically marked `Skipped`.
+- **Failure recovery paths (`failureSemantics: 'edges'`)**: Default `'block'` halts dependents when an upstream task fails. Set top-level `failureSemantics: 'edges'` when you draw explicit recovery edges (`condition: 'failed'` or `condition: '!succeeded'`) alongside normal `condition: 'succeeded'` edges.
 
-A one-task `Agent` graph with no dependencies is automatically run in-line instead and returns the
-outcome to you on the next step of your current run, since a graph of one needs no dispatcher.
-Omit `continuation` and `durable` on one-task delegations so they run in-line; set `durable: true`
-only if you specifically want a durable background Task row.
 
-If your graph is malformed you will get every problem back at once — fix them all and re-emit the
-**complete** graph, not a patch.
+### What Happens After You Submit (Sleep & Wake)
+
+Your current turn ends immediately — never claim background work is already finished; say it has *started* (or is running). When the graph settles, `continuation` controls wakeup:
+- `'message'` (default) — posts the completed outcome directly into the conversation.
+- `'reinvoke'` — **sleep/wake**: your run goes to sleep at zero token/compute cost while the dispatcher executes the graph, and automatically wakes you on a fresh turn with the graph's outputs so you can inspect results, continue reasoning, or synthesize a final answer.
+- `'none'` — finishes silently with no follow-up turn.
+
+A one-task `Agent` graph with no dependencies automatically folds into an in-line sub-agent call and returns on your next step (omit `continuation` and `durable` for one-task delegations unless you explicitly want a background `MJ: Tasks` row via `durable: true`).
+
+If your graph fails validation you will receive every problem at once — fix all of them and re-emit the **complete** `tasks` spec, never a partial patch.
 
 
 

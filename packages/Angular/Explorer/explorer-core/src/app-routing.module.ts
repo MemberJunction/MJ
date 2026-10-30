@@ -7,6 +7,8 @@ import {
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { OfficeConnectComponent } from './lib/office/office-connect.component';
+import { OFFICE_CONNECT_ROUTE_PATH } from '@memberjunction/excel-addin';
 import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
@@ -750,6 +752,15 @@ const routes: Routes = [
   {
     path: 'claims/redeem',
     component: ClaimRedeemComponent
+  },
+
+  // Excel add-in sign-in window — opened by the add-in pane in an Office dialog with its one-time
+  // public key and state (office/connect?pk=..&state=..). Same posture as the claim page: no
+  // AuthGuard (the component waits for the session and offers sign-in itself), and a direct
+  // component for the same library-routing reason.
+  {
+    path: OFFICE_CONNECT_ROUTE_PATH,
+    component: OfficeConnectComponent
   },
 
   // App-scoped resource routes (new pattern)

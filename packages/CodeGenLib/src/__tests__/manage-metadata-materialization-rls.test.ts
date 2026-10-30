@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
-import { SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import type { Metadata, EntityInfo } from '@memberjunction/core';
 
 /**
@@ -62,6 +62,13 @@ class TestableRLS extends ManageMetadataBase {
     /** Exposes the COMPOSITE row-restriction gate every materialization gate calls. */
     public hasRestriction(entity: FakeEntity): boolean {
         return this.entityHasRowLevelRestriction(entity as unknown as EntityInfo);
+    }
+}
+
+/** The same guard on PostgreSQL, where the SQL parser fills `public` (not `dbo`) for an unqualified ref. */
+class TestablePostgresRLS extends TestableRLS {
+    protected get dialect(): SQLDialect {
+        return new PostgreSQLDialect();
     }
 }
 
@@ -150,6 +157,17 @@ describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
         // missed the __mj source, leaving the escalation hole open for the common unqualified-ref case.
         const sql = 'SELECT o.total, p.name FROM orders o JOIN products p ON o.pid = p.id';
         const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"Products"');
+    });
+
+    // ExtractTableRefs fills the dialect default schema for an unqualified ref: `public` on PostgreSQL
+    // (DISCUSSION §6, 2026-10-27; COMPAT-MAP §4 B2). The guard must read that as unqualified too.
+    it('FAILS CLOSED on an UNQUALIFIED ref to an under-linked __mj entity on PostgreSQL (parser defaults refs to public)', () => {
+        const pg = new TestablePostgresRLS();
+        const sql = 'SELECT o.total, p.name FROM orders o JOIN products p ON o.pid = p.id';
+        const v = pg.assess({ e1: orders, e3: products }, ['e1'], sql);
         expect(v.safe).toBe(false);
         expect(v.reason).toMatch(/P1 under-linking guard/i);
         expect(v.reason).toContain('"Products"');

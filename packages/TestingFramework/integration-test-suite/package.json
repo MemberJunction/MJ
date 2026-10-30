@@ -52,6 +52,7 @@
     "@memberjunction/core-entities-server": "6.2.0-edge.6",
     "@memberjunction/credentials": "6.2.0-edge.6",
     "@memberjunction/encryption": "6.2.0-edge.6",
+    "@memberjunction/external-data-sources": "6.2.0-edge.6",
     "@memberjunction/feature-pipelines": "6.2.0-edge.6",
     "@memberjunction/feature-pipelines-engine": "6.2.0-edge.6",
     "@memberjunction/postgresql-dataprovider": "6.2.0-edge.6",

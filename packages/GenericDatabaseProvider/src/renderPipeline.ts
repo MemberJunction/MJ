@@ -1,11 +1,13 @@
 import { BuildQueryTemplateContext, DatabasePlatform, UserInfo, QueryDependencySpec, LogStatus } from '@memberjunction/core';
-import { MJQueryEntityExtended, MJQueryParameterEntity, QueryEngine } from '@memberjunction/core-entities';
-import { UUIDMap, UUIDSet } from '@memberjunction/global';
+import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery, FindForbiddenFunctionCalls } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL, RowCapOutcome } from './queryPagingEngine.js';
-import { QueryParameterProcessor, type QueryServerValues, type QueryTemplateInput } from '@memberjunction/query-processor';
+import { type QueryTemplateInput } from '@memberjunction/query-processor';
+import type { AssembledComposition } from './composition/compositionAssembler.js';
+import { SafetyGate } from './composition/safetyGate.js';
+import { CTEInfoOf } from './composition/compositionInfo.js';
+import { AssembleComposition, NewCompositionRender, OuterRenderRequest } from './composition/renderSteps.js';
 
 // ════════════════════════════════════════════════════════════════════
 // Types
@@ -28,20 +30,48 @@ export interface CompositionDiagnostic {
 }
 
 /**
+ * One composed query instance as it was rendered: a composed query with one set of evaluated
+ * arguments, emitted as one CTE.
+ */
+export interface RenderInstanceTrace {
+    /** ID of the composed query (a synthetic ID for an inline dependency). */
+    QueryID: string;
+    QueryName: string;
+    /** The composition path as written. */
+    CategoryPath: string;
+    /** The CTE the instance is emitted as. */
+    CTEName: string;
+    /** The arguments, evaluated in the caller's scope, keyed by the composed query's parameter names. */
+    Arguments: Record<string, unknown>;
+    /** The instance's own SQL after its template rendered (its compositions replaced by their CTE names). */
+    RenderedSQL: string;
+}
+
+/**
  * Pipeline trace capturing the SQL state after each pass.
- * Used for error diagnosis — when SQL Server rejects the output, the
- * caller can see what each pass produced to identify which pass
- * mangled the SQL.
+ * Used for error diagnosis — when the database rejects the output, the caller can see what each
+ * pass produced.
+ *
+ * Composition renders first, then composes: the outer template renders once, each composed query
+ * instance renders on its own ({@link Instances}), and the plain SQL is assembled from them.
  */
 export interface RenderTrace {
-    /** SQL after composition ({{ }}/{% %} tokens still present) */
+    /**
+     * The assembled SQL: every template rendered, every composition emitted as a CTE. For a query
+     * without compositions, its rendered SQL. Before row caps and paging.
+     */
     AfterComposition: string;
     /** Composition metadata: which deps resolved, which CTEs generated */
     CompositionDiagnostics: CompositionDiagnostic[];
-    /** SQL after Nunjucks template evaluation (fully resolved, executable) */
+    /**
+     * The fully resolved, executable SQL before row caps and paging: the same text as
+     * {@link AfterComposition}. Authorization checks read it, so it always holds every composed query.
+     */
     AfterTemplates: string;
     /** SQL after paging (final) — only set if paging was applied */
     AfterPaging: string | null;
+    /** Each composed query instance, dependencies first. Empty when the query composes nothing. */
+    Instances: RenderInstanceTrace[];
 }
 
 /**
@@ -50,6 +80,16 @@ export interface RenderTrace {
 export interface RenderContext {
     /** Target database platform */
     Platform: DatabasePlatform;
+    /**
+     * The key of the dialect the template's SQL filters and boolean values render for. Defaults
+     * to {@link Platform}. Every render names its dialect, so two providers on different platforms
+     * in one process each render with their own filters.
+     */
+    DialectKey?: string;
+    /** ID of the saved query being rendered, so a composition that leads back to it is refused as a cycle. */
+    QueryID?: string;
+    /** The saved query's name, for refusals written for its owners. */
+    QueryName?: string;
     /** User context for permission checks on referenced queries */
     ContextUser?: UserInfo;
     /** Parameter values from the caller */
@@ -65,7 +105,10 @@ export interface RenderContext {
     Now?: Date;
     /** Formal parameter definitions (for validation). Null = skip validation. */
     ParameterDefinitions?: MJQueryParameterEntity[];
-    /** Whether the outer query uses Nunjucks templates */
+    /**
+     * Whether the outer query is a template. A template passes the MJ Query interpreter gate
+     * (`QueryTemplate.Validate`, Refresh mode, refused on errors) before Nunjucks evaluates it.
+     */
     UsesTemplate?: boolean;
     /** Inline dependency specs for transient query testing */
     Dependencies?: QueryDependencySpec[];
@@ -80,11 +123,11 @@ export interface RenderContext {
     /** MaxRows safety limit. Mutually exclusive with {@link Paging}. */
     MaxRows?: number;
     /**
-     * Require the rendered SQL to be a single read query: one statement that starts with `SELECT`
-     * or `WITH`, reads in every CTE, and does not `SELECT … INTO` a table. Set it wherever the
-     * caller, not a saved query, supplies the SQL (ad-hoc SQL, transient test queries). Anything
-     * else is refused with an error that says why. Saved queries are admin-authored and are not
-     * held to it.
+     * Every rendered statement is held to the read-only check (one statement that starts with
+     * `SELECT` or `WITH`, reads in every CTE, does not `SELECT … INTO` a table, and calls no
+     * forbidden function), saved queries included. Set this where the caller, not a saved query,
+     * supplies the SQL (ad-hoc SQL, transient test queries): SQL with no statement at all is then
+     * refused too.
      */
     RequireReadStatement?: boolean;
 }
@@ -122,33 +165,71 @@ export interface RenderResult {
 // ════════════════════════════════════════════════════════════════════
 
 /**
- * RenderPipeline wraps the existing composition → template → paging calls
- * into a single entry point with enforced ordering and diagnostic tracing.
+ * RenderPipeline is the one entry point that turns query SQL into the SQL that runs, with
+ * enforced ordering and a diagnostic trace. Every path uses it: saved queries, ad hoc SQL,
+ * TestQuerySQL, specs and data contexts.
  *
- * **Pipeline order** (this is a data dependency, not a convention):
- * 1. **Composition** resolves `{{query:"..."}}` tokens into CTEs. Must run
- *    BEFORE Nunjucks because pass-through parameters rename `{{ innerParam }}`
- *    to `{{ outerParam }}` — Nunjucks needs those tokens intact.
- * 2. **Nunjucks** evaluates `{{ param | filter }}` and `{% if/for %}` blocks.
- *    Must run AFTER composition and BEFORE paging.
- * 3. **Paging** detects ORDER BY and injects OFFSET/FETCH or LIMIT/OFFSET.
- *    Must run AFTER Nunjucks because it needs to detect whether
- *    `{% if SortField %} ORDER BY ... {% endif %}` resolved to an actual
- *    ORDER BY or not — that depends on runtime parameter values.
- *
- * The `Trace` field on the result captures the SQL state after each pass,
- * enabling diagnosis when SQL Server rejects the output.
+ * **Pipeline order** (a data dependency, not a convention):
+ * 1. **Comments** are removed first, so template tags in them are inert.
+ * 2. **Interpreter gate**: a template must pass the MJ Query language check
+ *    (`QueryTemplate.Validate`, Refresh mode); a template with errors is refused.
+ * 3. **Render, then compose**: Nunjucks renders the outer template once. Each composition it
+ *    reaches records an instance (the composed query + its arguments evaluated in the caller's
+ *    scope) and writes the instance's CTE name. Each instance then renders on its own, with only
+ *    its arguments, recursively. The plain SQL is assembled from the rendered parts and is never
+ *    rendered again, so a value that looks like a template tag stays a value.
+ * 4. **Safety**: the assembled statement must be a single read query (token-based; see
+ *    {@link SafetyGate}).
+ * 5. **Row cap / paging** detect ORDER BY and inject TOP / OFFSET-FETCH / LIMIT, after rendering,
+ *    because `{% if SortField %} ORDER BY … {% endif %}` decides whether there is an ORDER BY.
  */
 export class RenderPipeline {
 
     /**
-     * Runs the full rendering pipeline: composition → Nunjucks → paging.
+     * Runs the full rendering pipeline.
      *
      * @param sql - Raw SQL with potential composition tokens and template expressions
      * @param ctx - Pipeline context (platform, user, parameters, paging, etc.)
      * @returns Final SQL, applied parameters, composition metadata, and diagnostic trace
      */
     static Run(sql: string, ctx: RenderContext): RenderResult {
+        const caps = RenderPipeline.capsOf(ctx);
+        const dialect = GetDialect(ctx.Platform);
+        const context = BuildQueryTemplateContext({ User: ctx.ContextUser, TimeZone: ctx.TimeZone, Now: ctx.Now });
+        const render = NewCompositionRender(ctx, dialect, context, false);
+        const outer = render.RenderOuter(OuterRenderRequest(sql, ctx));
+        const assembled = AssembleComposition(outer.SQL, render.Instances, dialect);
+        SafetyGate.AssertSafeToExecute(assembled.SQL, dialect, ctx.RequireReadStatement === true);
+
+        let currentSQL = assembled.SQL;
+        let rowCap: RowCapOutcome | null = null;
+        if (caps.HasMaxRows) {
+            const capResult = QueryPagingEngine.ApplyMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
+            currentSQL = capResult.SQL;
+            rowCap = capResult.Outcome;
+            if (!rowCap.Applied) {
+                LogStatus(`RenderPipeline: MaxRows ${ctx.MaxRows} was not applied — ${rowCap.Reason}. The query runs uncapped.`);
+            }
+        }
+        let pagingResult: PagingWrappedSQL | null = null;
+        if (caps.HasPaging) {
+            pagingResult = QueryPagingEngine.WrapWithPaging(currentSQL, ctx.Paging!.StartRow, ctx.Paging!.MaxRows, ctx.Platform);
+            currentSQL = pagingResult.DataSQL;
+        }
+        return {
+            FinalSQL: currentSQL,
+            AppliedParameters: outer.AppliedParameters,
+            ContextValues: context.ReadValues(),
+            HasCompositions: outer.HasCompositions,
+            CTEs: render.Instances.map(CTEInfoOf),
+            Trace: RenderPipeline.traceOf(assembled, pagingResult ? currentSQL : null),
+            PagingResult: pagingResult,
+            RowCap: rowCap,
+        };
+    }
+
+    /** Whether a MaxRows cap and paging were asked for; refuses both at once. */
+    private static capsOf(ctx: RenderContext): { HasMaxRows: boolean; HasPaging: boolean } {
         const hasMaxRows = ctx.MaxRows != null && ctx.MaxRows > 0;
         const hasPaging = ctx.Paging != null && QueryPagingEngine.ShouldPage(ctx.Paging.StartRow, ctx.Paging.MaxRows);
         if (hasMaxRows && hasPaging) {
@@ -158,154 +239,17 @@ export class RenderPipeline {
                 `Got MaxRows=${ctx.MaxRows} and Paging=${JSON.stringify(ctx.Paging)}.`
             );
         }
-
-        let currentSQL = sql;
-        let appliedParameters: Record<string, string> = {};
-        let contextValues: Record<string, string> = {};
-
-        // ── Step 1: Composition ──────────────────────────────────────
-        const compositionResult = RenderPipeline.runComposition(currentSQL, ctx);
-        currentSQL = compositionResult.ResolvedSQL;
-        const afterComposition = currentSQL;
-        const compositionDiagnostics = buildCompositionDiagnostics(compositionResult);
-
-        // ── Step 1.5: Strip SQL comments ─────────────────────────────
-        // Comments serve no runtime purpose in executed SQL and can contain
-        // {{ }} patterns (e.g. documentation examples) that would crash
-        // Nunjucks. Strip them after composition (which correctly ignores
-        // comment-embedded tokens) and before Nunjucks processes the SQL.
-        // Comments are still visible in Trace.AfterComposition for debugging.
-        currentSQL = SQLParser.StripComments(currentSQL, GetDialect(ctx.Platform));
-
-        // ── Step 2: Nunjucks template evaluation ─────────────────────
-        const templateResult = RenderPipeline.runTemplates(currentSQL, sql, ctx, compositionResult);
-        currentSQL = templateResult.processedSQL;
-        appliedParameters = templateResult.appliedParameters;
-        contextValues = templateResult.contextValues;
-        const afterTemplates = currentSQL;
-
-        // ── Step 2.5: Safety validation (mutation + injection guard) ──
-        // The fully-resolved query is the point where composition and parameter
-        // substitution — the only injection vectors — are complete, and where
-        // StatementKind reflects the user's actual statement (paging wrapping
-        // below always produces a SELECT). Saved queries otherwise skip the
-        // dangerous-keyword validation that ad-hoc queries get at execution.
-        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform, ctx.RequireReadStatement ?? false);
-
-        // ── Step 3: MaxRows safety limit (if specified) ──────────────
-        let rowCap: RowCapOutcome | null = null;
-        if (hasMaxRows) {
-            const capResult = QueryPagingEngine.ApplyMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
-            currentSQL = capResult.SQL;
-            rowCap = capResult.Outcome;
-            if (!rowCap.Applied) {
-                LogStatus(`RenderPipeline: MaxRows ${ctx.MaxRows} was not applied — ${rowCap.Reason}. The query runs uncapped.`);
-            }
-        }
-
-        // ── Step 4: Paging (if requested) ────────────────────────────
-        let pagingResult: PagingWrappedSQL | null = null;
-        let afterPaging: string | null = null;
-
-        if (hasPaging) {
-            pagingResult = QueryPagingEngine.WrapWithPaging(
-                currentSQL, ctx.Paging!.StartRow, ctx.Paging!.MaxRows, ctx.Platform
-            );
-            currentSQL = pagingResult.DataSQL;
-            afterPaging = currentSQL;
-        }
-
-        return {
-            FinalSQL: currentSQL,
-            AppliedParameters: appliedParameters,
-            ContextValues: contextValues,
-            HasCompositions: compositionResult.HasCompositions,
-            CTEs: compositionResult.CTEs,
-            Trace: {
-                AfterComposition: afterComposition,
-                CompositionDiagnostics: compositionDiagnostics,
-                AfterTemplates: afterTemplates,
-                AfterPaging: afterPaging,
-            },
-            PagingResult: pagingResult,
-            RowCap: rowCap,
-        };
+        return { HasMaxRows: hasMaxRows, HasPaging: hasPaging };
     }
 
     /**
-     * Defense-in-depth guard on the fully-resolved query: throws when the
-     * rendered SQL contains a write statement anywhere — a DML mutation
-     * (INSERT / UPDATE / DELETE / MERGE / REPLACE), DDL (DROP / CREATE / ALTER /
-     * TRUNCATE / RENAME), or EXEC / CALL / GRANT / REVOKE / USE.
+     * Resolves only the composition step: the composed queries are rendered with the static
+     * arguments written in their composition tokens and assembled as CTEs; the outer SQL itself is
+     * not rendered (its own template tags stay as written). For callers that run SQL with
+     * compositions but no parameter values (GetData).
      *
-     * {@link SQLParser.HasWriteStatement} inspects EVERY top-level statement, so
-     * it catches both a single rendered mutation and a stacked-statement
-     * injection payload (e.g. `SELECT 1; DROP TABLE x`) that the first-statement
-     * `StatementKind` alone would miss. It is AST-precise: matching is on the
-     * statement type, so it cannot false-positive on legitimate read queries —
-     * the `REPLACE()` string function, parenthesized SELECTs, trailing
-     * semicolons, or benign `SET` / `DECLARE` prefixes all pass.
-     *
-     * A second, token-based check rejects stacked statements (an internal
-     * statement-separating `;`). Unlike the AST check it fires even when the
-     * trailing payload makes the SQL unparseable — e.g. `SELECT 1; EXEC
-     * xp_cmdshell '…'` or `SELECT 1; WAITFOR DELAY '…'` — which is the
-     * stacked-injection class the AST scan misses (the whole string fails to
-     * parse, so there is no AST to classify). A rendered read query must be a
-     * single statement.
-     *
-     * When `requireReadStatement` is set (SQL a caller supplied rather than a
-     * saved query), the statement must first pass {@link IsReadOnlyQuery}: one
-     * statement, starting with SELECT or WITH, reading in every CTE, and not
-     * writing its rows into a table. That check works from tokens, so it also
-     * refuses a `SET` or `DECLARE` the AST check lets through, and it still
-     * accepts read queries the parser cannot read. Such SQL also may not call
-     * the functions the dialect lists in `CallerSQLForbiddenFunctions`
-     * (`query_to_xml`, `pg_read_file`, `OPENROWSET`, …): they read what a check
-     * of the tables the SQL references cannot see.
-     *
-     * The broader dangerous-keyword scan
-     * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
-     * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
-     * a blanket gate here because it rejects legitimate read constructs (the
-     * `REPLACE()` string function, parenthesized SELECTs, etc.).
-     */
-    private static assertSafeToExecute(sql: string, platform: DatabasePlatform, requireReadStatement: boolean): void {
-        const dialect = GetDialect(platform);
-        if (requireReadStatement) {
-            const check = IsReadOnlyQuery(sql, dialect);
-            if (!check.IsReadOnly) {
-                throw new Error(`RenderPipeline: only a single read query may be run here, and this SQL is not one: ${check.Reason}.`);
-            }
-            const forbidden = FindForbiddenFunctionCalls(sql, dialect);
-            if (forbidden.length > 0) {
-                throw new Error(
-                    `RenderPipeline: SQL supplied here may not call ${forbidden.join(', ')}. These functions run SQL ` +
-                    'given as a string, or read files or other databases, so what they read cannot be checked.',
-                );
-            }
-        }
-        const parsed = new SQLParser(sql, dialect);
-        if (parsed.HasWriteStatement) {
-            throw new Error(
-                'RenderPipeline: rendered SQL contains a write statement ' +
-                '(mutation / DDL) — only a read query may be rendered for execution.',
-            );
-        }
-        if (SQLParser.HasStackedStatements(sql, dialect)) {
-            throw new Error(
-                'RenderPipeline: rendered SQL contains multiple statements ' +
-                '(a stacked-statement injection) — only a single read query may be rendered.',
-            );
-        }
-    }
-
-    /**
-     * Resolves only the composition step — for callers that need composition
-     * without the full pipeline (e.g., save-time token analysis).
-     *
-     * Wraps {@link QueryCompositionEngine.ResolveComposition} to maintain the
-     * existing public API while the internal implementation may change.
+     * @throws Error when a composition of the outer SQL passes a value of the outer query: without
+     *         rendering there is no value to pass. Use {@link Run} for those.
      */
     static ResolveCompositionOnly(
         sql: string,
@@ -329,122 +273,29 @@ export class RenderPipeline {
 
     // ════════════════════════════════════════════════════════════════
     // Internal pass implementations
-    // ═════════════════════════════════════════════════════���══════════
+    // ════════════════════════════════════════════════════════════════
 
-    private static runComposition(sql: string, ctx: RenderContext): CompositionResult {
-        const engine = new QueryCompositionEngine();
-
-        if (!engine.HasCompositionTokens(sql) || !ctx.ContextUser) {
-            return {
-                ResolvedSQL: sql,
-                CTEs: [],
-                DependencyGraph: new Map<string, string[]>(),
-                HasCompositions: false,
-                AnyDependencyUsesTemplates: false,
-            };
-        }
-
-        return engine.ResolveComposition(
-            sql, ctx.Platform, ctx.ContextUser, ctx.Parameters, ctx.Dependencies
-        );
-    }
-
-    private static runTemplates(
-        composedSQL: string,
-        originalSQL: string,
-        ctx: RenderContext,
-        compositionResult: CompositionResult
-    ): { processedSQL: string; appliedParameters: Record<string, string>; contextValues: Record<string, string> } {
-        const needsTemplateProcessing = ctx.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
-
-        if (!needsTemplateProcessing) {
-            return { processedSQL: composedSQL, appliedParameters: {}, contextValues: {} };
-        }
-
-        // Build the template input. When a QueryInfo object is provided (saved
-        // query path), pass it directly so processQueryTemplate gets the real
-        // Parameters array for validation. Otherwise build a synthetic input.
-        const templateInput = ctx.QueryInfo ?? {
-            SQL: ctx.OriginalSQL ?? originalSQL,
-            UsesTemplate: ctx.UsesTemplate ?? false,
-            Parameters: ctx.ParameterDefinitions ?? [],
-        };
-
-        const skipUnknownParamCheck = compositionResult.AnyDependencyUsesTemplates || !ctx.ParameterDefinitions;
-        const result = QueryParameterProcessor.ProcessQueryTemplate(
-            templateInput,
-            ctx.Parameters,
-            composedSQL,
-            skipUnknownParamCheck,
-            RenderPipeline.buildServerValues(ctx, compositionResult)
-        );
-
-        if (!result.success) {
-            throw new Error(result.error);
-        }
-
+    private static traceOf(assembled: AssembledComposition, afterPaging: string | null): RenderTrace {
         return {
-            processedSQL: result.processedSQL,
-            appliedParameters: (result.appliedParameters || {}) as Record<string, string>,
-            contextValues: result.contextValues ?? {},
+            AfterComposition: assembled.SQL,
+            CompositionDiagnostics: assembled.Instances.map(a => ({
+                DepName: a.Instance.Resolved.Query.Name,
+                CategoryPath: a.Instance.Path.FullPath,
+                CTEName: a.Instance.CTEName,
+                OrderByStripped: a.OrderByStripped,
+                InnerCTEsHoisted: a.InnerCTEsHoisted,
+            })),
+            AfterTemplates: assembled.SQL,
+            AfterPaging: afterPaging,
+            Instances: assembled.Instances.map(a => ({
+                QueryID: a.Instance.Resolved.Query.ID,
+                QueryName: a.Instance.Resolved.Query.Name,
+                CategoryPath: a.Instance.Path.FullPath,
+                CTEName: a.Instance.CTEName,
+                Arguments: { ...a.Instance.Arguments },
+                RenderedSQL: a.Instance.RenderedSQL,
+            })),
         };
     }
-
-    /**
-     * What the server sets on this render: its `ServerParameters`, the names that reach a
-     * server-set parameter of a composed query, and the `Context` object, worked out from the
-     * context user and the run's time zone. Context members resolve only when the template reads them.
-     */
-    private static buildServerValues(ctx: RenderContext, compositionResult: CompositionResult): QueryServerValues {
-        return {
-            ServerParameters: ctx.ServerParameters,
-            ProtectedNames: RenderPipeline.composedServerSetNames(compositionResult),
-            Context: BuildQueryTemplateContext({ User: ctx.ContextUser, TimeZone: ctx.TimeZone, Now: ctx.Now }),
-        };
-    }
-
-    /**
-     * The names a caller value may not use because they reach a server-set parameter of a composed
-     * query: the parameter's own name when the composition token leaves it unmapped (it then reads
-     * the outer render context), or the outer name it is passed through from. A static value in the
-     * token is the query author's and protects nothing.
-     */
-    private static composedServerSetNames(compositionResult: CompositionResult): string[] {
-        if (compositionResult.CTEs.length === 0) {
-            return [];
-        }
-        const composedIDs = new UUIDSet(compositionResult.CTEs.map(c => c.QueryID));
-        const composed = new UUIDMap<MJQueryEntityExtended>(
-            QueryEngine.Instance.Queries.filter(q => composedIDs.Has(q.ID)).map((q): [string, MJQueryEntityExtended] => [q.ID, q])
-        );
-        const names = new Set<string>();
-        for (const cte of compositionResult.CTEs) {
-            for (const param of composed.Get(cte.QueryID)?.QueryParameters.filter(p => p.IsServerSet) ?? []) {
-                const mapped = cte.Parameters[param.Name];
-                const passThrough = mapped === undefined ? param.Name : /^\{\{\s*([A-Za-z_]\w*)\s*\}\}$/.exec(mapped)?.[1];
-                if (passThrough) {
-                    names.add(passThrough);
-                }
-            }
-        }
-        return [...names];
-    }
-
 }
 
-// ════════════════════════════════════════════════════════════════════
-// Helpers
-// ════════════════════════════════════════════════════════════════════
-
-function buildCompositionDiagnostics(result: CompositionResult): CompositionDiagnostic[] {
-    return result.CTEs.map(cte => ({
-        DepName: cte.QueryName,
-        CategoryPath: cte.CategoryPath,
-        CTEName: cte.CTEName,
-        // We can't easily tell if ORDER BY was stripped without comparing
-        // original vs resolved SQL, so this is a best-effort flag based on
-        // whether the original had ORDER BY and the resolved doesn't.
-        OrderByStripped: /ORDER\s+BY\b/i.test(cte.OriginalSQL) && !/ORDER\s+BY\b/i.test(cte.ResolvedSQL),
-        InnerCTEsHoisted: 0, // TODO: track in composition engine
-    }));
-}
