@@ -2344,11 +2344,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return row;
     }
 
+    private _isaParentPreSaveSnapshot = new WeakMap<BaseEntity, Map<string, { dirty: boolean; oldValue: unknown }>>();
+
     /**
      * Checks whether `field` is dirty on `entity` or, for IS-A child entities where parent
      * fields are mirrored as virtual fields, on any ancestor in the `ISAParent` chain.
      */
     private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
+        const snap = this._isaParentPreSaveSnapshot.get(entity)?.get(field.Name);
+        if (snap?.dirty) {
+            return true;
+        }
         if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(field.Name)) {
             const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
             if (parentField) {
@@ -2363,6 +2369,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * chain for the authoritative `OldValue` of parent-owned fields.
      */
     private getFieldOldValueOnChain(entity: BaseEntity, field: EntityField): unknown {
+        const snap = this._isaParentPreSaveSnapshot.get(entity)?.get(field.Name);
+        if (snap !== undefined) {
+            return snap.oldValue;
+        }
         if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(field.Name)) {
             const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
             if (parentField) {
@@ -2431,6 +2441,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
         // mutation will include all chain fields. Return current entity state.
         if (options?.IsParentEntitySave) {
+            const snapshot = new Map<string, { dirty: boolean; oldValue: unknown }>();
+            for (const f of entity.Fields) {
+                snapshot.set(f.Name, {
+                    dirty: this.isFieldDirtyOnChain(entity, f),
+                    oldValue: this.getFieldOldValueOnChain(entity, f),
+                });
+            }
+            this._isaParentPreSaveSnapshot.set(entity, snapshot);
             const result = new BaseEntityResult();
             result.StartedAt = new Date();
             result.EndedAt = new Date();
@@ -2751,6 +2769,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
             return null;
+        }
+        finally {
+            let p = entity.ISAParent;
+            while (p) {
+                this._isaParentPreSaveSnapshot.delete(p);
+                p = p.ISAParent;
+            }
         }
     }
 

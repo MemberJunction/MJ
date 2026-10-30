@@ -129,12 +129,17 @@ function buildDogEntityInfo(): EntityInfo {
     });
 }
 
-/** Exposes the two private chain slots the ORM's GetEntityObject → InitializeParentEntity fills. */
+/** Exposes the private chain slots the ORM's GetEntityObject → InitializeParentEntity / EnsureISAChild fills. */
 class TestIsaEntity extends BaseEntity {
     public WireParent(parent: BaseEntity): void {
         (this as unknown as { _parentEntity: BaseEntity | null })._parentEntity = parent;
         (this as unknown as { _parentEntityFieldNames: Set<string> | null })._parentEntityFieldNames =
             this.EntityInfo.ParentEntityFieldNames;
+        (parent as unknown as { _childEntity: BaseEntity | null })._childEntity = this;
+    }
+
+    public override CheckPermissions(): boolean {
+        return true;
     }
 }
 
@@ -323,6 +328,49 @@ describe('GraphQLDataProvider Save — IS-A promotion carries the shared primary
         const input = lastInputRecord();
         expect(input['ID']).toBe(EXISTING_ANIMAL_ID);
         expect(input['Name']).toBe('Biscuit II');
+        expect(input).not.toHaveProperty('MicrochipNumber');
+        expect(input).not.toHaveProperty('IsHouseTrained');
+
+        const oldValues = input['OldValues___'] as Array<{ Key: string; Value: unknown }>;
+        expect(oldValues).toEqual([
+            { Key: 'ID', Value: EXISTING_ANIMAL_ID },
+            { Key: 'Name', Value: 'Biscuit' },
+        ]);
+    });
+
+    it('full BaseEntity.Save() on an IS-A parent or child preserves parent dirty state and OldValue across IsParentEntitySave + parent.finalizeSave (MJ#6220)', async () => {
+        const animal = existingAnimal();
+        const dog = new TestIsaEntity(dogInfo, provider);
+        dog.WireParent(animal);
+        dog.LoadFromData({
+            ID: EXISTING_ANIMAL_ID,
+            Name: 'Biscuit',
+            MicrochipNumber: '985112000000001',
+            IsHouseTrained: false,
+            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+        expect(dog.IsSaved).toBe(true);
+
+        // Mutate a parent-owned field ('Name') on the parent and call animal.Save(), which
+        // delegates to dog.Save() -> animal.Save({ IsParentEntitySave: true }) + animal.finalizeSave()
+        // BEFORE provider.Save(dog) inspects isFieldDirtyOnChain / getFieldOldValueOnChain.
+        animal.Set('Name', 'Biscuit III');
+        GraphQLWire.EnqueueResponse({
+            UpdateShelterDog: {
+                ID: EXISTING_ANIMAL_ID,
+                Name: 'Biscuit III',
+                _mj__CreatedAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+                _mj__UpdatedAt: new Date('2026-01-02T00:00:00Z').toISOString(),
+            },
+        });
+
+        const saved = await animal.Save();
+        expect(saved).toBe(true);
+
+        const input = lastInputRecord();
+        expect(input['ID']).toBe(EXISTING_ANIMAL_ID);
+        expect(input['Name']).toBe('Biscuit III');
         expect(input).not.toHaveProperty('MicrochipNumber');
         expect(input).not.toHaveProperty('IsHouseTrained');
 
