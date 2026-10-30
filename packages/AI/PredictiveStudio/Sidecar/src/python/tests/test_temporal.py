@@ -17,6 +17,11 @@ from app import temporal as T
 from app.array_types import FArr, IntArr
 
 
+def _steps(first: int, last: int) -> IntArr:
+    """Steps past a training window's last period, first..last inclusive (1 = the next period)."""
+    return np.arange(first, last + 1, dtype=np.int64)
+
+
 # ------------------------------------------------------------------ design ------------------------------------------
 
 def test_rolling_origins_design() -> None:
@@ -44,12 +49,39 @@ def test_rolling_origins_refuses_a_first_window_below_min_train() -> None:
 
 def test_seasonal_naive_and_scale_use_the_origin_window_only() -> None:
     y = np.arange(48, dtype=float) % 12 + np.repeat(np.arange(4), 12) * 10.0
-    fc = T.seasonal_naive(y[:36], 12, 12)
+    fc = T.seasonal_naive(y[:36], _steps(1, 12), 12)
     assert np.array_equal(fc, y[24:36])
-    assert np.array_equal(T.seasonal_naive(y[:36], 15, 12)[12:], y[24:27])
+    assert np.array_equal(T.seasonal_naive(y[:36], _steps(1, 15), 12)[12:], y[24:27])
+    assert np.array_equal(T.seasonal_naive(y[:36], _steps(3, 4), 12), y[26:28])
     assert T.mase_scale(y[:36], 12) == pytest.approx(10.0)
-    assert np.array_equal(T.naive_last(y[:36], 3), np.full(3, y[35]))
-    assert np.array_equal(T.series_mean(y[:36], 2), np.full(2, float(np.mean(y[:36]))))
+    assert np.array_equal(T.naive_last(y[:36], _steps(1, 3)), np.full(3, y[35]))
+    assert np.array_equal(T.series_mean(y[:36], _steps(2, 3)), np.full(2, float(np.mean(y[:36]))))
+
+
+def test_seasonal_naive_keeps_the_season_aligned_across_a_gap() -> None:
+    """On a purely seasonal series the seasonal-naive forecast of any period after the window is exact, however many
+    periods separate the window from it."""
+    t = np.arange(60, dtype=np.int64)
+    y = 10.0 + 3.0 * (t % 12)
+    for gap in (0, 1, 2):
+        future = np.arange(36 + gap, 48 + gap, dtype=np.int64)
+        assert np.array_equal(T.seasonal_naive(y[:36], future - 35, 12), y[future])
+        assert np.array_equal(T.SeriesBaseline("seasonal-naive", 12).fit(y[:36], t[:36]).forecast(future), y[future])
+
+
+def test_backtest_seasonal_naive_errors_with_a_gap_are_last_year_differences() -> None:
+    """Seasonal naive at step s past the window forecasts period t from period t - season * ceil(s / season), so on a
+    seasonal series with a small alternating yearly level its error is exactly y[t] - y[that period]."""
+    t = np.arange(120, dtype=np.int64)
+    y = 10.0 + 3.0 * (t % 12) + 0.001 * ((t // 12) % 2)
+    for gap in (0, 1, 2):
+        design = T.rolling_origins(120, 5, 12, gap, 24, "expanding")
+        for s, o in zip(T.backtest(y, design, 12, lambda o: np.zeros(len(o.test))), design):
+            test = np.asarray(o.test, dtype=np.int64)
+            steps = test - o.last_train
+            source = test - 12 * ((steps + 11) // 12)
+            assert np.array_equal(s.raw_errors["seasonalNaive"], y[test] - y[source])
+            assert float(np.max(np.abs(s.raw_errors["seasonalNaive"]))) <= 0.001 + 1e-12
 
 
 def test_baselines_and_scale_refuse_windows_they_cannot_use() -> None:
@@ -58,22 +90,28 @@ def test_baselines_and_scale_refuse_windows_they_cannot_use() -> None:
     with pytest.raises(ValueError, match="seasonal-naive MAE is 0"):
         T.mase_scale(np.tile(np.arange(12, dtype=float), 3), 12)
     with pytest.raises(ValueError, match="shorter than the seasonal period"):
-        T.seasonal_naive(np.arange(5, dtype=float), 3, 12)
+        T.seasonal_naive(np.arange(5, dtype=float), _steps(1, 3), 12)
     with pytest.raises(ValueError, match="empty"):
-        T.naive_last(np.zeros(0), 3)
+        T.naive_last(np.zeros(0), _steps(1, 3))
     with pytest.raises(ValueError, match="empty"):
-        T.series_mean(np.zeros(0), 3)
+        T.series_mean(np.zeros(0), _steps(1, 3))
+    with pytest.raises(ValueError, match="only periods after the training window"):
+        T.naive_last(np.ones(3), np.array([0, 1], dtype=np.int64))
 
 
 def test_series_baseline_forecasts_through_the_window_functions() -> None:
     y = np.arange(30, dtype=float) ** 1.5
     t = np.arange(30, dtype=np.int64)
-    future = np.arange(30, 37, dtype=np.int64)
-    assert np.array_equal(T.SeriesBaseline("naive", 12).fit(y, t).forecast(future), T.naive_last(y, 7))
-    assert np.array_equal(T.SeriesBaseline("seasonal-naive", 12).fit(y, t).forecast(future), T.seasonal_naive(y, 7, 12))
-    assert np.array_equal(T.SeriesBaseline("mean", 12).fit(y, t).forecast(future), T.series_mean(y, 7))
+    for future in (np.arange(30, 37, dtype=np.int64), np.arange(33, 40, dtype=np.int64)):
+        steps = future - 29
+        assert np.array_equal(T.SeriesBaseline("naive", 12).fit(y, t).forecast(future), T.naive_last(y, steps))
+        assert np.array_equal(T.SeriesBaseline("seasonal-naive", 12).fit(y, t).forecast(future),
+                              T.seasonal_naive(y, steps, 12))
+        assert np.array_equal(T.SeriesBaseline("mean", 12).fit(y, t).forecast(future), T.series_mean(y, steps))
     with pytest.raises(ValueError, match="not fitted"):
-        T.SeriesBaseline("naive", 12).forecast(future)
+        T.SeriesBaseline("naive", 12).forecast(np.arange(30, 37, dtype=np.int64))
+    with pytest.raises(ValueError, match="only periods after the training window"):
+        T.SeriesBaseline("mean", 12).fit(y, t).forecast(np.arange(25, 32, dtype=np.int64))
 
 
 # ------------------------------------------------------------------ autocorrelation ---------------------------------
@@ -251,6 +289,70 @@ def test_series_models_refuse_what_they_cannot_fit_or_forecast() -> None:
         m.forecast(t[15:25])
 
 
+def test_trend_season_ar1_fit_matches_refpipe() -> None:
+    """Coefficients, sigma^2, forecasts and a 0.9 interval pinned to `truthsuite.refpipe.models.SeriesModel`
+    ("trend_season_ar1", season position = (t + 3) % 12) fitted on the same 84 periods."""
+    y, t = _ar_series(96, 2)
+    m = T.SeriesModel("trend_season_ar1", 12, 3).fit(y[:84], t[:84])
+    assert m.beta.tolist() == pytest.approx(
+        [9.24311906835271, 0.10459480186354103, -0.5494195787522453, -0.2075532998919072, -0.5405669203370638,
+         -1.1096237202447012, -0.4343249756947568, -0.4424419967372483, -1.7508327569093385, 2.38084088539922,
+         -0.2566745007495444, -0.838651847106529, -0.9868732827049368, 0.5759524841689712], abs=1e-9)
+    assert m.sigma2 == pytest.approx(0.9285726766061739, abs=1e-9)
+    fc = m.forecast(t[84:])
+    lo, hi = m.interval(t[84:], 0.9)
+    pick = [0, 5, 11]
+    assert fc[pick].tolist() == pytest.approx([41.15556456588542, 44.37049467435128, 44.10866676669324], abs=1e-9)
+    assert lo[pick].tolist() == pytest.approx([39.570542885641366, 42.432882465386946, 42.16976413458623], abs=1e-9)
+    assert hi[pick].tolist() == pytest.approx([42.740586246129475, 46.30810688331561, 46.04756939880025], abs=1e-9)
+
+
+def test_ar1_const_is_conditional_least_squares_on_the_previous_value() -> None:
+    """AR(1) + constant regresses y_t on [1, y_{t-1}] over the window; sigma^2 is the residual sum of squares over
+    (n - 1) - 2 degrees of freedom."""
+    y, t = _ar_series(60, 8)
+    m = T.SeriesModel("ar1_const", 12, 0).fit(y, t)
+    X = np.column_stack([np.ones(59), y[:-1]])
+    beta = np.linalg.lstsq(X, y[1:], rcond=None)[0]
+    resid = y[1:] - X @ beta
+    assert np.allclose(m.beta, beta, rtol=0, atol=1e-10)
+    assert np.allclose(m.resid, resid, rtol=0, atol=1e-10)
+    assert m.sigma2 == pytest.approx(float(np.sum(resid ** 2)) / (59 - 2), abs=1e-12)
+    assert m.phi == pytest.approx(float(beta[1]), abs=1e-12)
+
+
+def _falling_series(n: int) -> Tuple[FArr, IntArr]:
+    rng = np.random.default_rng(9)
+    t = np.arange(n, dtype=np.int64)
+    y = 40.0 - 0.6 * t + 1.5 * np.cos(2 * np.pi * t / 12) + rng.normal(scale=0.3, size=n)
+    return np.asarray(y, dtype=np.float64), t
+
+
+def test_non_negative_windows_clip_forecasts_and_interval_bounds_at_zero() -> None:
+    """A window with no negative value clips the forecast and both interval bounds at 0; the interval is centred on
+    the unclipped forecast. One negative value anywhere in the window turns clipping off."""
+    y, t = _falling_series(60)
+    y[3] = 0.0
+    assert float(np.min(y)) == 0.0 and y[-1] > 0
+    future = np.arange(60, 101, dtype=np.int64)
+    m = T.SeriesModel("trend_season_ols", 12, 0).fit(y, t)
+    raw = _season_rows(future, 12, 0) @ m.beta
+    half = 1.6448536269514722 * math.sqrt(m.sigma2)
+    assert float(raw.min()) < -half
+    assert np.allclose(m.forecast(future), np.maximum(raw, 0.0), rtol=0, atol=1e-9)
+    lo, hi = m.interval(future, 0.9)
+    assert np.allclose(lo, np.maximum(raw - half, 0.0), rtol=0, atol=1e-9)
+    assert np.allclose(hi, np.maximum(raw + half, 0.0), rtol=0, atol=1e-9)
+    assert float(hi.min()) == 0.0
+
+    y[3] = -0.5
+    neg = T.SeriesModel("trend_season_ols", 12, 0).fit(y, t)
+    raw_neg = _season_rows(future, 12, 0) @ neg.beta
+    assert np.allclose(neg.forecast(future), raw_neg, rtol=0, atol=1e-9)
+    lo_n, hi_n = neg.interval(future, 0.9)
+    assert float(lo_n.min()) < 0 and float(hi_n.min()) < 0
+
+
 def test_series_algo_narrows_a_driver_key() -> None:
     assert [T.series_algo(a) for a in T.SERIES_ALGOS] == list(T.SERIES_ALGOS)
     assert T.series_algo("lightgbm") is None
@@ -275,8 +377,9 @@ def test_backtest_scores_each_origin_against_its_own_window() -> None:
         assert s.scale == pytest.approx(T.mase_scale(window, 12), abs=1e-12)
         assert np.array_equal(s.actual, y[list(o.test)])
         assert set(s.forecasts) == {"model", "mean", "naive", "seasonalNaive"}
-        assert np.array_equal(s.forecasts["seasonalNaive"], T.seasonal_naive(window, 12, 12))
-        assert np.array_equal(s.forecasts["mean"], T.series_mean(window, 12))
+        steps = np.asarray(o.test, dtype=np.int64) - o.last_train
+        assert np.array_equal(s.forecasts["seasonalNaive"], T.seasonal_naive(window, steps, 12))
+        assert np.array_equal(s.forecasts["mean"], T.series_mean(window, steps))
         for name, fc in s.forecasts.items():
             assert np.allclose(s.raw_errors[name], s.actual - fc, rtol=0, atol=0)
             assert np.allclose(s.scaled_errors[name], np.abs(s.actual - fc) / s.scale, rtol=0, atol=0)

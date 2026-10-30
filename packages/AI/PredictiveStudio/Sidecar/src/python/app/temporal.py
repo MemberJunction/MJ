@@ -4,8 +4,9 @@ test, residual autocorrelation, and the series models.
   rolling_origins    >= 5 non-overlapping h-period test windows ending at the last period; origin k trains on the
                      periods up to `gap` before its first test period, from period 0 (expanding) or from the last
                      `min_train` periods (sliding)
-  SeriesBaseline     naive (last value), seasonal-naive (last season repeated) and training-window mean, each from
-                     the window it was fitted on only (naive_last / seasonal_naive / series_mean)
+  SeriesBaseline     naive (last value), seasonal-naive (last season, aligned by season position across any gap) and
+                     training-window mean, each from the window it was fitted on only (naive_last / seasonal_naive /
+                     series_mean)
   mase_scale         in-sample seasonal-naive MAE of a training window, the MASE denominator (Hyndman & Athanasopoulos,
                      FPP3 5.8)
   backtest           scores a forecaster and the three baselines at every origin, scaled by that origin's own MASE scale
@@ -18,10 +19,11 @@ test, residual autocorrelation, and the series models.
 The statistics are ports of the truth suite's reference pipeline (`truthsuite.refpipe.scoring`: mase_scale, acf,
 ljung_box, hac_se, panel_acf, diebold_mariano; `truthsuite.refpipe.baselines`: naive_last, seasonal_naive,
 series_mean), with input checks added: a function that cannot compute on its input raises ValueError naming it. The
-series models follow `truthsuite.refpipe.models.SeriesModel` with two differences. AR(1) + constant is fitted by
-conditional least squares rather than statsmodels' exact ARIMA likelihood, because statsmodels is not a sidecar
-dependency; that moves a rolling-origin MASE in the fourth decimal. The reference pipeline's additive Holt-Winters
-candidate is not offered, for the same reason.
+series models follow `truthsuite.refpipe.models.SeriesModel` with two differences, both because statsmodels is not a
+sidecar dependency. AR(1) + constant is fitted by conditional least squares with a Gaussian sigma^2 * sum phi^(2j)
+interval, not by statsmodels' exact ARIMA likelihood and its forecast interval, so its forecasts, intervals and
+MASE differ from the reference pipeline's (on the 240-month monthly truth series with 12 origins: MASE 0.6229
+against 0.6242). The reference pipeline's additive Holt-Winters candidate is not offered.
 """
 
 from __future__ import annotations
@@ -97,23 +99,42 @@ def _window(y_train: FArr) -> FArr:
     return tr
 
 
-def naive_last(y_train: FArr, h: int) -> FArr:
-    """The window's last value, repeated h times."""
-    return np.full(h, float(_window(y_train)[-1]), dtype=np.float64)
+def _steps_after(t: IntArr, last_t: int, what: str) -> IntArr:
+    """Each period's step past a window ending at period `last_t` (1 = the next period); earlier periods refused."""
+    return _checked_steps(np.asarray(t, dtype=np.int64) - last_t, what, f" (last period {last_t})")
 
 
-def seasonal_naive(y_train: FArr, h: int, season: int) -> FArr:
-    """The window's last full season, repeated over h periods."""
+def _checked_steps(steps: IntArr, what: str, where: str = "") -> IntArr:
+    s = np.asarray(steps, dtype=np.int64)
+    if len(s) > 0 and int(s.min()) < 1:
+        raise ValueError(f"{what} forecasts only periods after the training window{where}")
+    return s
+
+
+def naive_last(y_train: FArr, steps: IntArr) -> FArr:
+    """The window's last value at every step past the window."""
+    s = _checked_steps(steps, "naive")
+    return np.full(len(s), float(_window(y_train)[-1]), dtype=np.float64)
+
+
+def seasonal_naive(y_train: FArr, steps: IntArr, season: int) -> FArr:
+    """The window's last full season, read at each step's position in the season: step s past the window takes the
+    value s - season * ceil(s / season) periods from the window's end, so a gap between the window and the forecast
+    periods keeps the season aligned. (The reference pipeline's `truthsuite.refpipe.baselines.seasonal_naive` takes a
+    horizon and assumes the first forecast period follows the window; its series pipeline never leaves a gap, and at
+    gap 0 both give the same values.)"""
+    s = _checked_steps(steps, "seasonal-naive")
     tr = _window(y_train)
     if len(tr) < season:
         raise ValueError(f"the training window ({len(tr)} periods) is shorter than the seasonal period {season}")
     last = tr[-season:]
-    return np.array([float(last[i % season]) for i in range(h)], dtype=np.float64)
+    return np.asarray(last[(s - 1) % season], dtype=np.float64)
 
 
-def series_mean(y_train: FArr, h: int) -> FArr:
-    """The window's mean, repeated h times."""
-    return np.full(h, float(np.mean(_window(y_train))), dtype=np.float64)
+def series_mean(y_train: FArr, steps: IntArr) -> FArr:
+    """The window's mean at every step past the window."""
+    s = _checked_steps(steps, "mean")
+    return np.full(len(s), float(np.mean(_window(y_train))), dtype=np.float64)
 
 
 def mase_scale(y_train: FArr, season: int) -> float:
@@ -130,27 +151,31 @@ def mase_scale(y_train: FArr, season: int) -> float:
 @dataclass
 class SeriesBaseline:
     """Naive, seasonal-naive or training-window-mean forecaster. `fit`/`forecast` take period indices like
-    `SeriesModel` so either can stand as a series member; the baselines read only the window's values."""
+    `SeriesModel` so either can stand as a series member. A baseline reads only the window's values; the periods
+    place each forecast at its step past the window."""
 
     kind: BaselineKind
     season: int = 12
     history: FArr = field(default_factory=lambda: np.zeros(0, dtype=np.float64))
+    last_t: int = -1
 
     def fit(self, y: FArr, t: IntArr) -> "SeriesBaseline":
         if len(y) != len(t):
             raise ValueError(f"y ({len(y)}) and t ({len(t)}) must have the same length")
         self.history = np.asarray(y, dtype=np.float64)
+        self.last_t = int(t[-1]) if len(t) > 0 else -1
         return self
 
     def forecast(self, t: IntArr) -> FArr:
+        """Forecasts for periods t after the window, each at its own step past the window's last period."""
         if len(self.history) == 0:
             raise ValueError(f"the {self.kind} baseline is not fitted")
-        h = len(t)
+        steps = _steps_after(t, self.last_t, f"the {self.kind} baseline")
         if self.kind == "naive":
-            return naive_last(self.history, h)
+            return naive_last(self.history, steps)
         if self.kind == "seasonal-naive":
-            return seasonal_naive(self.history, h, self.season)
-        return series_mean(self.history, h)
+            return seasonal_naive(self.history, steps, self.season)
+        return series_mean(self.history, steps)
 
 
 # ------------------------------------------------------------------ backtest ----------------------------------------
@@ -272,7 +297,7 @@ def hac_se(d: FArr, lags: int) -> float:
 
 @dataclass(frozen=True)
 class DMResult:
-    statistic: float   # < 0: loss_a is the more accurate; NaN when the loss differential has no variance
+    statistic: float   # < 0: loss_a is the more accurate; NaN when the differential's HAC variance is not positive
     p_value: float
     mean_diff: float
     n: int
@@ -280,8 +305,9 @@ class DMResult:
 
 def diebold_mariano(loss_a: FArr, loss_b: FArr, h: int) -> DMResult:
     """DM test of equal accuracy on d = loss_a - loss_b: HAC variance with h-1 lags, the Harvey-Leybourne-Newbold
-    small-sample correction, a t(n-1) reference. Identical losses give a NaN statistic and p-value, as in the
-    reference pipeline: there is no difference to test."""
+    small-sample correction, a t(n-1) reference. The statistic and p-value are NaN, as in the reference pipeline,
+    when the HAC variance of the differential is not positive: identical losses, or a differential so negatively
+    autocorrelated that gamma_0 + 2 * sum(gamma_k) <= 0."""
     a = np.asarray(loss_a, dtype=np.float64)
     b = np.asarray(loss_b, dtype=np.float64)
     if len(a) != len(b):
@@ -385,11 +411,7 @@ class SeriesModel:
         """Each requested period's step past the window's last period (1 = the next period)."""
         if len(self.beta) == 0:
             raise ValueError(f"the {self.algo} model is not fitted")
-        steps = np.asarray(t, dtype=np.int64) - self.last_t
-        if len(steps) > 0 and int(steps.min()) < 1:
-            raise ValueError(f"{self.algo} forecasts only periods after the training window (last period "
-                             f"{self.last_t})")
-        return steps
+        return _steps_after(t, self.last_t, self.algo)
 
     def _raw_forecast(self, t: IntArr) -> FArr:
         """The unclipped forecast (the interval is centred on it, then clipped)."""
