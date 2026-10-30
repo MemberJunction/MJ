@@ -130,7 +130,9 @@ describe('TrainingEngine.trainModel — happy path', () => {
     const engine = buildEngine();
     const { deps, factory, sidecar, store } = TrainingHarness.BuildDeps();
 
-    const { model, run } = await engine.trainModel({ pipelineId: 'pipe-1', sidecarVersion: 'sidecar-1.0' }, deps);
+    const trained = await engine.trainModel({ pipelineId: 'pipe-1', sidecarVersion: 'sidecar-1.0' }, deps);
+    const model = TrainingHarness.ModelOf(trained);
+    const run = trained.run;
 
     // --- Model is an immutable Draft with all the payloads (§4.3) ---
     expect(model.Status).toBe('Draft');
@@ -200,7 +202,7 @@ describe('TrainingEngine.trainModel — locked holdout (§8.2)', () => {
     const engine = buildEngine();
     const { deps, sidecar } = TrainingHarness.BuildDeps();
 
-    const { model } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await engine.trainModel({ pipelineId: 'pipe-1' }, deps));
 
     // Training data and holdout are disjoint and together cover all 10 rows.
     const trainRows = sidecar.LastRequest!.data!.rows;
@@ -233,7 +235,9 @@ describe('TrainingEngine.trainModel — leakage dominance (§6.4)', () => {
     const engine = buildEngine();
     const { deps } = TrainingHarness.BuildDeps({ response: leaky });
 
-    const { model, run } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+    const trained = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(trained);
+    const run = trained.run;
 
     expect(model.Status).toBe('Draft'); // never auto-promoted
     expect(run.Status).toBe('Completed');
@@ -296,7 +300,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
 
   it("still trains Mode='none'", async () => {
     const { deps } = TrainingHarness.BuildDeps();
-    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
     expect(model.Status).toBe('Draft');
   });
 
@@ -304,7 +308,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
     const pipeline = new FakeMLPipeline();
     pipeline.AsOfStrategy = '{}';
     const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
     expect(model.Status).toBe('Draft');
     expect(JSON.parse(model.Lineage!).asOfStrategy).toEqual({ Mode: 'none' });
   });
@@ -313,7 +317,9 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
 describe('TrainingEngine — evaluation record and the time-index containment', () => {
   it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
     const { deps } = TrainingHarness.BuildDeps();
-    const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const trained = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(trained);
+    const run = trained.run;
     expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: 'split_or_impurity' });
     expect(run.Notes).not.toContain('Trust withheld');
   });
@@ -322,7 +328,7 @@ describe('TrainingEngine — evaluation record and the time-index containment', 
     const pipeline = new FakeMLPipeline();
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' });
     const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
     expect(EvaluationLineage.Read(model.Lineage)?.MajorityBaselineRule).toBe('warn');
   });
 
@@ -340,7 +346,9 @@ describe('TrainingEngine — evaluation record and the time-index containment', 
     const pipeline = new FakeMLPipeline();
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
     const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const trained = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(trained);
+    const run = trained.run;
     expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
     expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
     expect(TrustVerdicts.DeriveTrustVerdict(model)).toMatchObject({ grade: 'Poor', canAct: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast });
@@ -349,7 +357,7 @@ describe('TrainingEngine — evaluation record and the time-index containment', 
   it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {
     const legacySidecarResponse: TrainResponse = { ...cleanResponse, validation_out_of_sample: undefined };
     const { deps } = TrainingHarness.BuildDeps({ response: legacySidecarResponse });
-    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
     expect(EvaluationLineage.Read(model.Lineage)?.ValidationOutOfSample).toBe(false);
   });
 });
@@ -381,7 +389,7 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
 
   it('writes the locked holdout class counts into the model Lineage next to lockedHoldoutRowCount', async () => {
     const { deps } = TrainingHarness.BuildDeps();
-    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
     const lineage = JSON.parse(model.Lineage!);
     expect(lineage.lockedHoldoutRowCount).toBe(2);
     expect(lineage.lockedHoldoutClassCounts).toEqual({ '0': 1, '1': 1 });
@@ -391,7 +399,7 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
     const pipeline = new FakeMLPipeline();
     pipeline.ProblemType = 'regression';
     const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
     expect(JSON.parse(model.Lineage!).lockedHoldoutClassCounts).toEqual({});
   });
 });
@@ -476,7 +484,9 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('excludes the unresolved 2026 cycle, stores the counts, and records the unit in the model lineage', async () => {
     const { engine, deps, pipeline, files, snapshots } = TrainingHarness.ForUnit(years, unitColumns);
-    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const trained = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const model = TrainingHarness.ModelOf(trained);
+    const run = trained.run;
     const rows = snapshotRows(await storedContent(files, snapshots[0]));
     expect(rows).toHaveLength(8);   // 2024 + 2025 only
     expect(rows.every((r) => r.__ps_label === '0' || r.__ps_label === '1')).toBe(true);
@@ -854,7 +864,7 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
 
   it('stores an empty importance map with no importance kind when the trainer measured none (a forecast reports none)', async () => {
     const { engine, deps, pipeline } = protocolHarness(cannedFor);
-    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const model = TrainingHarness.ModelOf(await engine.trainModel({ pipelineId: pipeline.ID }, deps));
     expect(model.FeatureImportance).toBe('{}');
     expect(EvaluationLineage.Read(model.Lineage)?.ImportanceKind).toBe('none');
   });

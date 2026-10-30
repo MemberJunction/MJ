@@ -304,10 +304,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
-    this.assertStatusCanScore(model);
-    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
+    const artifactFileId = this.assertStatusCanScore(model);
+    const bytes = await this.deps.artifactLoader.load(artifactFileId, context.ContextUser);
     if (!bytes) {
-      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, artifactFileId)}`);
     }
     return this.buildLoadedModel(model, bytes, context);
   }
@@ -316,28 +316,29 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * Refuse a model whose lifecycle status or missing artifact forbids scoring, in this order: a Draft with no artifact
    * needs training (the opt-in auto-train path reacts to that, D2-C3) and a trained Draft is not scorable; Validated and
    * Published score once they have an artifact; any other status (Archived, or a value CodeGen adds later) is refused
-   * before the artifact is looked at.
+   * before the artifact is looked at. Returns the artifact file of a model that may score.
    */
-  private assertStatusCanScore(model: MJMLModelEntity): void {
+  private assertStatusCanScore(model: MJMLModelEntity): string {
     const status: MJMLModelEntity['Status'] = model.Status;
     switch (status) {
       case 'Draft':
-        this.assertHasArtifact(model);
+        this.requireArtifactFileId(model);
         throw new ModelNotScorableError(this.modelId, status);
       case 'Validated':
       case 'Published':
-        this.assertHasArtifact(model);
-        return;
+        return this.requireArtifactFileId(model);
       default:
         throw new ModelNotScorableError(this.modelId, status);
     }
   }
 
-  /** Throw "needs training" when the model has no trained artifact reference. */
-  private assertHasArtifact(model: MJMLModelEntity): void {
-    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+  /** The model's trained artifact file; throws "needs training" when it has none. */
+  private requireArtifactFileId(model: MJMLModelEntity): string {
+    const fileId = model.ArtifactFileID;
+    if (!ModelHasTrainedArtifact(model) || fileId === null || fileId === '') {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
     }
+    return fileId;
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */

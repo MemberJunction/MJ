@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 
 import { PredictiveStudioScheduleModelScoringAction } from '../schedule-model-scoring.action';
@@ -95,6 +96,19 @@ describe('PredictiveStudioScheduleModelScoringAction — validation', () => {
 });
 
 describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', () => {
+  it("passes the caller's provider through, and the global provider when the caller supplied none", async () => {
+    const callerProvider = { tag: 'caller' } as unknown as IMetadataProvider;
+    const withProvider = new MockScheduler(STUB_RESULT);
+    await new TestableAction(withProvider.fn).run({ ...params(validParams()), Provider: callerProvider } as RunActionParams);
+    expect(withProvider.LastOpts?.provider).toBe(callerProvider);
+    const global = { tag: 'global' } as unknown as IMetadataProvider;
+    vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(global);
+    const withoutProvider = new MockScheduler(STUB_RESULT);
+    await new TestableAction(withoutProvider.fn).run(params(validParams()));
+    expect(withoutProvider.LastOpts?.provider).toBe(global);
+    vi.restoreAllMocks();
+  });
+
   it('maps the conversational params onto the helper options and returns the RP id + cron', async () => {
     const scheduler = new MockScheduler(STUB_RESULT);
     const p = params(validParams());

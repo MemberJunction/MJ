@@ -145,6 +145,10 @@ export class RunViewDataAccess implements ICountingDataAccess {
     if (!result.Success) {
       return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: result.ErrorMessage };
     }
+    // The read does not skip the count, so RunView reports it; a read without one cannot be checked for truncation.
+    if (result.TotalRowCount === undefined) {
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `${params.EntityName}: the read returned no total row count, so it cannot be checked for truncation` };
+    }
     return { Success: true, Rows: result.Results || [], TotalRowCount: result.TotalRowCount };
   }
 
@@ -170,8 +174,9 @@ export class RunViewDataAccess implements ICountingDataAccess {
       { EntityName: params.EntityName, ExtraFilter: params.ExtraFilter || '', ResultType: 'count_only', IgnoreMaxRows: true },
       this.contextUser,
     );
-    return result.Success
-      ? { Success: true, Count: result.TotalRowCount }
-      : { Success: false, Count: 0, ErrorMessage: result.ErrorMessage };
+    if (!result.Success) return { Success: false, Count: 0, ErrorMessage: result.ErrorMessage };
+    // A count_only read always counts; a result without one is not a count.
+    if (result.TotalRowCount === undefined) return { Success: false, Count: 0, ErrorMessage: `${params.EntityName}: the count read returned no total row count` };
+    return { Success: true, Count: result.TotalRowCount };
   }
 }

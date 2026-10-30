@@ -23,7 +23,8 @@ export class TableDataAccess implements ICountingDataAccess {
       rows.sort((x, y) => OrdinalCompare(String(y[field]), String(x[field])));   // ordinal, like the database
     }
     const page = rows.slice(0, p.MaxRows ?? rows.length);
-    return { Success: true, Rows: p.Fields ? page.map((r) => TableDataAccess.project(r, p.Fields)) : page, TotalRowCount: rows.length };
+    const fields = p.Fields;
+    return { Success: true, Rows: fields ? page.map((r) => TableDataAccess.project(r, fields)) : page, TotalRowCount: rows.length };
   }
 
   public async fetchEmbedding(): Promise<number[] | null> {

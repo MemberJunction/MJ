@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
 
 import { FeaturePipelineEngine } from '../feature-pipeline-engine';
@@ -192,5 +193,24 @@ describe('FeaturePipelineEngine OutputMapping parsing', () => {
 describe('FeaturePipelineEngine category constant', () => {
   it('exposes the seeded category name used to match Record Processes', () => {
     expect(FEATURE_PIPELINE_CATEGORY_NAME).toBe('Feature Pipeline');
+  });
+});
+
+describe('FeaturePipelineEngine.Config — the provider it loads on', () => {
+  /** The protected BaseEngine loader, as a spy target (test boundary). */
+  type Loader = { Load: (configs: unknown[], provider: IMetadataProvider, forceRefresh: boolean, contextUser: unknown) => Promise<void> };
+
+  it("loads on the caller's provider, and on the engine's own provider when the caller passes none", async () => {
+    const engine = FeaturePipelineEngine.Instance;
+    const load = vi.spyOn(engine as unknown as Loader, 'Load').mockResolvedValue(undefined);
+    const global = { tag: 'global' } as unknown as IMetadataProvider;
+    const globalGetter = vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(global);
+    const caller = { tag: 'caller' } as unknown as IMetadataProvider;
+    await engine.Config(true, undefined, caller);
+    await engine.Config(true, undefined);
+    // The engine is not bound to a provider (Load is stubbed), so its own provider is the global one.
+    expect(load.mock.calls.map((c) => c[1])).toEqual([caller, global]);
+    load.mockRestore();
+    globalGetter.mockRestore();
   });
 });

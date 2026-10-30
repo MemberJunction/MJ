@@ -27,7 +27,7 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
@@ -95,7 +95,7 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
         name: this.getStringParam(params, 'Name'),
         timezone: this.getStringParam(params, 'Timezone'),
         contextUser: params.ContextUser,
-        provider: params.Provider,
+        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; the action contract falls back to the global provider (ActionEngine-Base.ts RunActionParams.Provider)
       });
 
       return this.mapResult(params, result);

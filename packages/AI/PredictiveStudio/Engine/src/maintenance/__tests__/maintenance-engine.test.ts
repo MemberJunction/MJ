@@ -419,7 +419,7 @@ describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
     expect(outcome.comparison?.challengerValue).toBe(0.85);
     expect(outcome.comparison?.delta).toBeCloseTo(0.05, 5);
     expect(outcome.comparison?.recommendation).toBe('promote');
-    expect(outcome.challenger?.model.ID).toMatch(/challenger/);
+    expect(outcome.challenger?.model?.ID).toMatch(/challenger/);
   });
 
   it('keeps the incumbent with no comparison, and logs the stored reason, when the retrain shipped no model', async () => {

@@ -80,6 +80,7 @@ import {
   type SourceRow,
 } from '../../feature-assembly';
 import type { RecordRef, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
+import { TrainingHarness } from '../fakes/training-fakes';
 
 // region: opt-in + venv availability ----------------------------------------
 
@@ -528,7 +529,9 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     const engine = new TrainingEngine(assembler);
 
     const input: TrainModelInput = { pipelineId: pipeline.ID, sidecarVersion: 'it-1' };
-    const { model, run } = await engine.trainModel(input, deps);
+    const trained = await engine.trainModel(input, deps);
+    const model = TrainingHarness.ModelOf(trained);
+    const run = trained.run;
 
     const modelRec = factory.lastOf('MJ: ML Models')!;
     const runRec = factory.lastOf('MJ: ML Training Runs')!;
@@ -648,7 +651,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       provider: TRAINING_PROVIDER,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
-    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const model = TrainingHarness.ModelOf(await engine.trainModel({ pipelineId: pipeline.ID }, deps));
 
     const modelRec = factory.lastOf('MJ: ML Models')!;
     const holdoutAuc = readMetric(modelRec, 'HoldoutMetrics', 'auc');
@@ -697,7 +700,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       provider: TRAINING_PROVIDER,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
-    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const model = TrainingHarness.ModelOf(await engine.trainModel({ pipelineId: pipeline.ID }, deps));
 
     const modelRec = factory.lastOf('MJ: ML Models')!;
     expect(modelRec.Fields.ProblemType).toBe('regression');

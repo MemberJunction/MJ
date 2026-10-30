@@ -286,6 +286,14 @@ describe('PipelineAutoTrainer', () => {
     expect(trainer.Repointed).toHaveLength(0);
   });
 
+  it('does not archive the reused model when the process already pointed at it (IDs compared as UUIDs, any letter case)', async () => {
+    const gate = new RecordingGate();
+    const trainer = new TestableAutoTrainer(gate, OLD.toLowerCase());
+    const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER);
+    expect(id).toBe(OLD.toLowerCase());
+    expect(gate.Calls).toEqual([]);
+  });
+
   it('rejects a malformed pipeline id before touching anything', async () => {
     const trainer = new TestableAutoTrainer(new RecordingGate(), null);
     await expect(

@@ -6,7 +6,7 @@
  */
 import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type {
+import type { MJMLModelEntity,
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
   MJTrainingSnapshotEntity,
@@ -29,7 +29,7 @@ import type {
 import { EvaluationProtocol } from '@memberjunction/predictive-studio-core';
 import { TrainingEngine } from '../../training/training-engine';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
-import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator, TrainingDeps } from '../../training/types';
+import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator, TrainModelResult, TrainingDeps } from '../../training/types';
 import type { IEvaluationProtocolStore, StoredEvaluationProtocol } from '../../training/evaluation-protocol-store';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
@@ -326,6 +326,15 @@ export class TrainerAnswers {
 
 /** Builders for a TrainingEngine's dependencies over the fakes in this module. */
 export class TrainingHarness {
+  /**
+   * The model a training run created; throws when the run shipped none. For tests of paths that always create one (a
+   * pipeline without a Prediction Unit, or a gate decision that ships an artifact).
+   */
+  public static ModelOf(result: TrainModelResult): MJMLModelEntity {
+    if (result.model === null) throw new Error(`training run ${result.run.ID} shipped no model`);
+    return result.model;
+  }
+
   /**
    * The protocol row a unit harness serves: {@link ProtocolRowFixture.Row} with a minority-class minimum of 1. The
    * unit-years world's locked holdout holds one row of its rarer class, so the default minimum (20) would refuse every

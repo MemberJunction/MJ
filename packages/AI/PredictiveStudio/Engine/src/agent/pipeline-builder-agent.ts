@@ -289,6 +289,16 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
    * the sub-agent with Success (build ran — even when the model is held, that's a successful run with
    * a held outcome) or Failed (the build itself errored).
    */
+  /**
+   * The approved plan a payload carries. The payload's `Leaderboard` is a previous build's results (its scores may be
+   * null), not the plan's ranking, so it is left out; nothing in the build reads a plan leaderboard.
+   */
+  public static PlanOf(payload: PredictiveStudioBuilderPayload): ModelingPlanSpec {
+    const { Leaderboard: previousResults, ...plan } = payload;
+    void previousResults;
+    return plan;
+  }
+
   protected override async executeAgentInternal<P = PredictiveStudioBuilderPayload>(
     params: ExecuteAgentParams,
     _config: AgentConfiguration,
@@ -305,7 +315,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
     let result: BuildPredictionResult;
     try {
-      result = await this.createBuilder().Build({ spec: payload, provider, user });
+      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilderAgent: build threw: ${errorMessage}`);

@@ -253,8 +253,13 @@ export class AsOfFeatureAssembler {
       if (fold.folded.length > 0) kept.set(i, new Set(fold.kept));
     });
     if (kept.size === 0) return { Rows: [...rows], Folds: folds, Levels: levels };
-    const foldedRows = rows.map((r) => ({ ...r, Values: r.Values.map((v, i) => (typeof v === 'string' && kept.has(i) && !kept.get(i).has(v) ? OTHER_CATEGORY_LEVEL : v)) }));
+    const foldedRows = rows.map((r) => ({ ...r, Values: r.Values.map((v, i) => AsOfFeatureAssembler.foldedValue(v, kept.get(i))) }));
     return { Rows: foldedRows, Folds: folds, Levels: levels };
+  }
+
+  /** A string outside its column's kept levels becomes the other level; a column with no fold (no kept set) keeps its values. */
+  private static foldedValue<V>(v: V, keptLevels: ReadonlySet<string> | undefined): V | typeof OTHER_CATEGORY_LEVEL {
+    return typeof v === 'string' && keptLevels !== undefined && !keptLevels.has(v) ? OTHER_CATEGORY_LEVEL : v;
   }
 
   /** A column the fold cannot treat honestly fails: scoring without training's levels, or a stored `__other` value. */
@@ -561,7 +566,7 @@ export class AsOfFeatureAssembler {
       ? (AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable')
       : AsOfFeatureAssembler.judgeStoredValue(history, key, field, at, storedCreatedAt(key)));
     const instants = AsOfFeatureAssembler.instantsOf(reads);
-    const outcomes = reads.map((r) => AsOfFeatureAssembler.outcomeOf(r, instants.get(r.Rows), judge));
+    const outcomes = reads.map((r) => AsOfFeatureAssembler.outcomeOf(r, AsOfFeatureAssembler.instantsFor(instants, r.Rows), judge));
     const changed = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'changed', judge);
     if (changed > 0) throw new AssemblyRefused({ kind: 'select-changes-after-decision-date', entity: entity.Name, field, changesAfter: changed });
     const uncovered = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'uncovered', judge);
@@ -637,6 +642,18 @@ export class AsOfFeatureAssembler {
       out.set(r.Rows, times.map((t) => new Date(t)));
     }
     return out;
+  }
+
+  /**
+   * The decision instants of one read's rows. `instantsOf` keys every read's `Rows` array, so a miss means the map was
+   * built from other reads: an internal error, not a data condition.
+   *
+   * @throws Error when the rows have no entry
+   */
+  private static instantsFor(instants: ReadonlyMap<readonly AssemblyRowRef[], readonly Date[]>, rows: readonly AssemblyRowRef[]): readonly Date[] {
+    const found = instants.get(rows);
+    if (found === undefined) throw new Error('AsOfFeatureAssembler: no decision instants for a read; the instants were built from other reads');
+    return found;
   }
 
   /** The number of distinct unit rows the reads stand for. */

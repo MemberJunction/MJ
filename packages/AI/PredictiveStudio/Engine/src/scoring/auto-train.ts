@@ -31,7 +31,7 @@
 
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
-import { IsValidUUID } from '@memberjunction/global';
+import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 
 import { TrainingDelegation } from '../operations/delegation';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
@@ -180,9 +180,10 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   protected async repoint(request: AutoTrainRequest, modelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
     const factory = new MetadataEntityFactory(provider);
     let rp: MJRecordProcessEntity | null = null;
-    if (IsValidUUID(request.recordProcessId)) {
+    const recordProcessId = request.recordProcessId;
+    if (recordProcessId !== null && IsValidUUID(recordProcessId)) {
       rp = await factory.getEntityObject<MJRecordProcessEntity>('MJ: Record Processes', contextUser);
-      if (await rp.Load(request.recordProcessId)) {
+      if (await rp.Load(recordProcessId)) {
         const config = this.parseConfig(rp.Configuration);
         config.modelId = modelId;
         rp.Configuration = JSON.stringify(config);
@@ -196,7 +197,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
     const bindings = await this.loadBindings(request, rp?.ID ?? null, contextUser, provider);
     for (const binding of bindings) {
-      if (binding.MLModelID === modelId) {
+      if (UUIDsEqual(binding.MLModelID, modelId)) {
         continue;
       }
       binding.MLModelID = modelId;
@@ -242,7 +243,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
   /** Archive the superseded model when it was Published (best-effort — never fails the run). */
   protected async archiveSuperseded(oldModelId: string | null, newModelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
-    if (!IsValidUUID(oldModelId) || oldModelId.toLowerCase() === newModelId.toLowerCase()) {
+    if (oldModelId === null || !IsValidUUID(oldModelId) || UUIDsEqual(oldModelId, newModelId)) {
       return;
     }
     try {

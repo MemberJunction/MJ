@@ -299,8 +299,11 @@ class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
 
 /** The agent with the builder seam stubbed and a provider supplied, exposing the protected run. */
 class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
+  constructor(private readonly builder: PredictiveStudioPipelineBuilder = new UnmeasuredBuilder()) {
+    super();
+  }
   protected override createBuilder(): PredictiveStudioPipelineBuilder {
-    return new UnmeasuredBuilder();
+    return this.builder;
   }
   protected override get ProviderToUse(): IMetadataProvider {
     return {} as IMetadataProvider;
@@ -333,5 +336,28 @@ describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — unmeasur
     expect(payload.Markdown).not.toContain('🏆');
     expect(payload.Markdown).not.toMatch(/0\.850|0\.833/);
     expect(payload.Markdown).toContain('**AUC** = **not measured**');
+  });
+});
+
+/** A builder stub whose training run shipped no model (the gate decided no-signal): built, held with the stored reason. */
+class NoModelBuilder extends PredictiveStudioPipelineBuilder {
+  public Specs: ModelingPlanSpec[] = [];
+  public override async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    this.Specs.push(input.spec);
+    return {
+      success: true, pipelineId: 'pipe-1', published: false, leakageFlagged: false, errorMessage: null, leaderboard: [],
+      heldReason: 'Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.',
+    };
+  }
+}
+
+describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — the plan it builds from', () => {
+  it("builds from the plan without a previous build's results leaderboard", async () => {
+    const builder = new NoModelBuilder();
+    const previous: MLLeaderboardEntryPayload = { IterationID: 'run-0', Metric: null, score: null, isWinner: false };
+    await new TestableBuilderAgent(builder).Run({ ...plan, Leaderboard: [previous] });
+    expect(builder.Specs).toHaveLength(1);
+    expect('Leaderboard' in builder.Specs[0]).toBe(false);
+    expect(builder.Specs[0].Goal).toBe('Predict renewal');
   });
 });

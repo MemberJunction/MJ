@@ -90,7 +90,7 @@ describe('WriteHistorySnapshots', () => {
     expect(written).toBe(2);
     expect(provider.Saved.map((s) => s.RecordID).sort()).toEqual(['ID|P2', 'ID|P3']);
     expect(provider.Saved[0]).toMatchObject({ EntityID: 'E-P', UserID: 'U-1', Type: 'Snapshot', Source: 'Internal', Status: 'Complete', ChangesJSON: '{}', ChangesDescription: 'History snapshot for Predictive Studio as-of coverage' });
-    expect(JSON.parse(provider.Saved.find((s) => s.RecordID === 'ID|P2').FullRecordJSON)).toEqual({ ID: 'P2', Status: 'Lapsed' });
+    expect(JSON.parse(provider.Saved.find((s) => s.RecordID === 'ID|P2')?.FullRecordJSON || 'null')).toEqual({ ID: 'P2', Status: 'Lapsed' });
     expect(provider.Reads.every((r) => r.ResultType === 'simple' && Array.isArray(r.Fields) && r.IgnoreMaxRows === true)).toBe(true);
   });
 
