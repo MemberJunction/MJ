@@ -1200,6 +1200,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // so the default request is unchanged.
                 if (params.IncludeBinaryFields !== undefined)
                     innerParams.IncludeBinaryFields = params.IncludeBinaryFields;
+                // Only forward when set so the default request is unchanged.
+                if (params.SkipTotalRowCount !== undefined)
+                    innerParams.SkipTotalRowCount = params.SkipTotalRowCount;
                 // AlternateBaseView selects a registered EntityAlternateBaseView by Name, or "" to
                 // force the entity's default BaseView over a saved UserView pin. Also forwards a
                 // ViewEntity pin when ViewEntity itself is not serialized over the wire.
@@ -1410,6 +1413,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.IncludeBinaryFields !== undefined) {
                         innerParam.IncludeBinaryFields = param.IncludeBinaryFields;
                     }
+                    if (param.SkipTotalRowCount !== undefined) {
+                        innerParam.SkipTotalRowCount = param.SkipTotalRowCount;
+                    }
                     const batchEffectiveAbv = GetEffectiveAlternateBaseViewName(param) ?? param.AlternateBaseView;
                     if (batchEffectiveAbv !== undefined) {
                         innerParam.AlternateBaseView = batchEffectiveAbv;
@@ -1547,6 +1553,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // Forwarded on this transport too, so a CacheLocal batch that asked for binary
                     // fields gets them (the slot fingerprint already distinguishes the two widths).
                     IncludeBinaryFields: item.params.IncludeBinaryFields,
+                    SkipTotalRowCount: item.params.SkipTotalRowCount,
                     // BypassCache needs the same forwarding as the fields above, and omitting it INVERTED
                     // the caller's intent rather than merely losing it. A param that bypasses the cache is
                     // ineligible for a cache status, so none is attached below —

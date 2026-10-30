@@ -831,7 +831,8 @@ coverage loss):
 | `remote-op-ai-authoring` | RO4-1→RO4-3 (3) | server | AI-generated Remote Operation | IT19 (live-model) | The AI-authored operation loop (save → approve → emit) |
 | `lists` | LS1–LS3 (3) | server | List fixture | IT20 | Lists substrate + the ListSource keyset-pagination change |
 | `open-app-teardown` | OAT1–OAT2 (2) | server | seeded Open-App metadata | IT21 | Open-App metadata teardown seam |
-| `user-routines` | UR1–UR16 (16) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end |
+| `user-routines` | UR1–UR18 (18) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end; UR17–UR18 the manual-run path (`RunRoutineNow`) keeps a one-shot's schedule |
+| `chief-of-staff` | COS1–COS8 (8) | server | own policy (skips COS6–COS8 if one exists) + routine fixtures | IT138 | Chief of Staff MJ-core layers, no Open App: policy and request ownership guards, Run User Routine Now, the policy cache following a save, email approval before transport |
 | `metadata-consistency` | 7 | server | — | IT24 | Read-only audit: entity metadata vs the physical DB catalog |
 | `view-execution` | 9 | client | — | IT25 | Viewing-system deterministic tier, over the wire |
 | `app-wiring` | AW1–AW10 (10) | client | — | IT26 | Every shipped app wired correctly (parameterized over all apps) |

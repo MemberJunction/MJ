@@ -853,6 +853,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           )`,
           Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'simple'
         }
       ], this.CurrentUser);
@@ -1752,6 +1753,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
             ExtraFilter: versionFilter,
             Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
           }, this.CurrentUser);
           convDetailRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
@@ -1794,6 +1796,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
               EntityName: 'MJ: Conversation Details',
               ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.CurrentUser.ID}'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               Fields: ['ID'],
               ResultType: 'simple'
             }, this.CurrentUser);

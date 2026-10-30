@@ -851,6 +851,7 @@ export class SyncEngine {
       EntityName: entityName,
       ExtraFilter: extraFilter,
       MaxRows: 1,
+      SkipTotalRowCount: true,
       // BypassCache: lookups during a push must always go to the DB.
       // The provider's RunView cache can return stale or filtered results
       // (especially across the LOWER()-based case-insensitive lookups
@@ -1564,7 +1565,8 @@ export class SyncEngine {
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: filters.join(' AND '),
-      MaxRows: 1
+      MaxRows: 1,
+      SkipTotalRowCount: true
     }, this.contextUser);
     
     // If no record found, return null without attempting to load

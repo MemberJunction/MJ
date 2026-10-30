@@ -80,6 +80,17 @@ describe('shared cache event routing', () => {
         expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', expect.objectContaining({ entityName: 'MJ: AI Models', action: 'set', primaryKeyValues: null }));
     });
 
+    it('dispatches a RunView row_delta to LocalCacheManager while normalizing browser CACHE_INVALIDATION action to set', () => {
+        const deltaEvt = event({
+            CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1',
+            Action: 'row_delta',
+            Data: JSON.stringify({ primaryKeyFields: ['ID'], upsertedRows: [{ ID: '1' }], deletedPrimaryKeys: [], rowCount: 1, maxUpdatedAt: '' }),
+        });
+        RouteSharedCacheEvent(deltaEvt, provider(false));
+        expect(dispatch).toHaveBeenCalledWith(deltaEvt);
+        expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', expect.objectContaining({ entityName: 'MJ: AI Models', action: 'set', primaryKeyValues: null }));
+    });
+
     it('does not relay other categories or category clears to browsers', () => {
         RouteSharedCacheEvent(event({ Category: 'default', CacheKey: '___MJCore_Metadata_AllMetadata' }), provider(false));
         RouteSharedCacheEvent(event({ Category: 'DatasetCache', CacheKey: 'ds' }), provider(false));

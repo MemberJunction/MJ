@@ -8,7 +8,8 @@ import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './
  * Server-side `MJ: AI Agent Sessions` entity.
  *
  * It keeps the **server-authoritative keys** inside `Config` (the janitor's
- * `maxSessionDeadlineIso`, the `identityVerification` state) out of the session owner's reach, and keeps an
+ * `maxSessionDeadlineIso`, the `identityVerification` state) and the server-only `CloseReason` values (`TimeLimit`,
+ * `Idle`, `Janitor`, `Shutdown`) out of the session owner's reach, and keeps an
  * anonymous visitor from re-pointing an existing session's `ConversationID` (the anonymous ownership key —
  * see `CheckAnonymousOwnershipKeyChange`). The
  * owner can legitimately write the row — the `UI` and `Widget Guest` roles hold `CanUpdate` on their
@@ -26,12 +27,16 @@ import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './
  * every save, whereas async validation can be skipped by an option, and a guard that a caller can opt
  * out of is not a guard.
  */
+/** The close reasons a session owner may record; every other value is stamped by the server. */
+const OWNER_CLOSE_REASONS: ReadonlySet<string> = new Set(['Explicit', 'Error']);
+
 @RegisterClass(BaseEntity, 'MJ: AI Agent Sessions')
 export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         const violations = [
             this.checkProtectedConfigKeys(),
+            this.checkServerManagedCloseReason(),
             CheckAnonymousOwnershipKeyChange(this, 'ConversationID'),
         ].filter((v): v is ValidationErrorInfo => v !== null);
         if (violations.length > 0) {
@@ -39,6 +44,31 @@ export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
             result.Success = false;
         }
         return result;
+    }
+
+    /**
+     * Returns a refusal when an untrusted save writes or overwrites a server-only `CloseReason`, else null. The owner may
+     * close their own row as `Explicit` or `Error`; `TimeLimit` is stamped only after `SessionManager.CloseSession`
+     * verifies it against the stored deadline, and `Idle`, `Janitor` and `Shutdown` belong to the janitor and the
+     * host. A stamped server-only reason is the record of how the session ended, so the owner cannot replace it either.
+     * Server code that stamps them saves inside `RunWithTrustedSessionConfigWrites`.
+     */
+    private checkServerManagedCloseReason(): ValidationErrorInfo | null {
+        const field = this.GetFieldByName('CloseReason');
+        if (IsTrustedSessionConfigWriteActive() || !field?.Dirty) {
+            return null;
+        }
+        const previous = typeof field.OldValue === 'string' ? field.OldValue : null;
+        const serverOnly = [this.CloseReason, previous].find((reason) => reason !== null && !OWNER_CLOSE_REASONS.has(reason));
+        if (serverOnly === undefined) {
+            return null;
+        }
+        return new ValidationErrorInfo(
+            'CloseReason',
+            `CloseReason '${serverOnly}' is server-managed; a session owner can close a session only as Explicit or Error, and cannot change a reason the server recorded.`,
+            this.CloseReason,
+            ValidationErrorType.Failure,
+        );
     }
 
     /** Returns a refusal when an untrusted save changes a protected `Config` key, else null. */

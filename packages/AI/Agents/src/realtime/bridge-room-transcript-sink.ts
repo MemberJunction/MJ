@@ -160,6 +160,7 @@ async function resolveOrCreateConversation(
         Fields: ['ID'],
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, contextUser);
     if (found.Success && found.Results.length > 0) {
@@ -224,6 +225,7 @@ async function resolveApplicationIdByName(
         ExtraFilter: `Name='${EscapeSQLString(name)}'`,
         Fields: ['ID'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, contextUser);
     if (result.Success && result.Results.length > 0) {

@@ -838,6 +838,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId, branchId, branches),
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 Fields: ['ID', 'Status', 'CancellationReason'],
                 ResultType: 'simple',
                 // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
@@ -875,6 +876,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, contextUser);
 

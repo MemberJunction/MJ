@@ -26,6 +26,7 @@ export class WatermarkService {
             ExtraFilter: `EntityMapID='${entityMapID}' AND Direction='${direction}'`,
             OrderBy: 'LastSyncAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
             // A watermark is created then re-read within the same sync run (and across ApplyAll retries).
             // A cache-stale null here makes the load-or-create path (Update / SaveKeysetPosition /
