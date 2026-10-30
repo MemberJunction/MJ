@@ -118,8 +118,8 @@ export interface TrainExperimentInput {
  * compute/token cost attributed to the attempt (for budget enforcement, §8.4).
  */
 export interface TrainExperimentResult {
-  /** The immutable `MJ: ML Models` row produced (Draft). */
-  model: MJMLModelEntity;
+  /** The immutable `MJ: ML Models` row produced (Draft); null when the run's gate decision shipped no artifact. */
+  model: MJMLModelEntity | null;
   /** The `MJ: ML Training Runs` leaf recording the attempt (linked to the iteration). */
   run: MJMLTrainingRunEntity;
   /** Normalized holdout metric for the plan's `SuccessMetric` — drives the leaderboard; null when the holdout did not measure it. */

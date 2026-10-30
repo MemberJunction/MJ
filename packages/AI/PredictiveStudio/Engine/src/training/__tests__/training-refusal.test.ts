@@ -72,3 +72,19 @@ describe('TrainingRefusedError.DescribeTrainingRefusal', () => {
     expect(new TrainingRefusedError(refusal).message).toBe('Refused (selection-invalid): candidate-pruned — rf was scored on 5 folds, the others on 15');
   });
 });
+
+describe('TrainingRefusedError.DescribeTrainingRefusal — the gate stage', () => {
+  it('states a sidecar gate mismatch with both decisions and a missing comparison by its key', () => {
+    const mismatch = TrainingRefusedError.DescribeTrainingRefusal({
+      stage: 'gate',
+      reason: {
+        kind: 'sidecar-gate-mismatch',
+        sidecar: { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null },
+        engine: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null },
+      },
+    });
+    expect(mismatch).toBe("Refused (sidecar-gate-mismatch): the trainer decided c:no-signal (nothing) but the engine's transcription decided b:keep-simple-baseline (glm); the two implementations of the gate disagree and nothing is stored as a decision.");
+    expect(TrainingRefusedError.DescribeTrainingRefusal({ stage: 'gate', reason: { kind: 'missing-comparison', comparison: 'glmVsDummy' } }))
+      .toBe('Refused (missing-comparison): the trainer returned no "glmVsDummy" comparison, so the gate cannot be decided.');
+  });
+});

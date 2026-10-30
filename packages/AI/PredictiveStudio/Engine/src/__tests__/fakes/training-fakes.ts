@@ -219,12 +219,22 @@ export class FakeEntityFactory implements IEntityFactory {
   }
 }
 
-/** Record-loader fake — returns a configured pipeline + next version. */
+/** Record-loader fake — returns a configured pipeline + next version, and resolves driver keys from a small catalog. */
 export class FakeRecordLoader implements IRecordLoader {
+  /** The algorithm catalog by driver key: the two GLM drivers the baselines fit that have a catalog row. */
+  public static readonly DefaultCatalog: Readonly<Record<string, string>> = { logistic_regression: 'algo-logreg', ridge: 'algo-ridge' };
+  /** Every driver key looked up, in order. */
+  public readonly DriverLookups: string[] = [];
   constructor(
     private readonly pipeline: FakeMLPipeline | null,
     private readonly nextVersion = 5,
+    private readonly catalog: Readonly<Record<string, string>> = FakeRecordLoader.DefaultCatalog,
   ) {}
+
+  async ResolveAlgorithmIdForDriver(driverKey: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<string | null> {
+    this.DriverLookups.push(driverKey);
+    return Object.prototype.hasOwnProperty.call(this.catalog, driverKey) ? this.catalog[driverKey] : null;
+  }
 
   async loadPipeline(_pipelineId: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null> {
     return this.pipeline as unknown as MJMLTrainingPipelineEntity | null;
@@ -316,6 +326,15 @@ export class TrainerAnswers {
 
 /** Builders for a TrainingEngine's dependencies over the fakes in this module. */
 export class TrainingHarness {
+  /**
+   * The protocol row a unit harness serves: {@link ProtocolRowFixture.Row} with a minority-class minimum of 1. The
+   * unit-years world's locked holdout holds one row of its rarer class, so the default minimum (20) would refuse every
+   * shipped outcome; a test of that guard binds the default row itself.
+   */
+  public static UnitProtocolRow(): EvaluationProtocolColumns {
+    return ProtocolRowFixture.Row({ MinMinorityClassRows: 1 });
+  }
+
   /** Deps over the fakes: a pipeline (default `FakeMLPipeline`, `null` for none), a canned legacy answer and an in-memory artifact store. */
   public static BuildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeline | null; response?: TrainResponse }): {
     deps: TrainingDeps;
@@ -370,7 +389,7 @@ export class TrainingHarness {
     pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
     const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
     const trainer = new FakeTrainer((r) => TrainerAnswers.CannedFor(r));
-    const protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row()]);
+    const protocols = new FakeEvaluationProtocolStore([TrainingHarness.UnitProtocolRow()]);
     deps.trainer = trainer;
     deps.protocols = protocols;
     deps.predictionUnits = new FakePredictionUnitStore(unitColumns);

@@ -2,7 +2,11 @@
  * Typed trainer results the Engine tests share: a completed binary run and a failed one.
  */
 import { createHash } from 'node:crypto';
-import type { BaselineResult, EvaluationProtocolSpec, MetricWithInterval, ReturnedArtifact, TrainerCompleted, TrainerResult } from '@memberjunction/predictive-studio-core';
+import {
+  GateRecords, TRAINING_RUN_RESULTS_SCHEMA,
+  type BaselineResult, type EvaluationProtocolSpec, type MetricWithInterval, type ReturnedArtifact, type TrainerCompleted, type TrainerResult, type TrainingRunResults,
+} from '@memberjunction/predictive-studio-core';
+import { ProtocolRowFixture } from './protocol-row';
 
 /** Typed trainer-result fixtures (static members on one owner). */
 export class TrainerResultFixtures {
@@ -22,11 +26,13 @@ export class TrainerResultFixtures {
 
   /**
    * The same completed result with `finalist` as its one scored candidate, its finalist and the candidate its holdout
-   * was read for, with that candidate's artifact: a report the engine's selection check accepts for that name.
+   * was read for, with that candidate's artifact: a report the engine's selection check accepts for that name. A gate
+   * that ships the model ships the renamed finalist.
    */
   public static WithFinalist(result: TrainerCompleted, finalist: string, featureSchemaHash: string): TrainerCompleted {
     return {
       ...result, finalist,
+      gate: result.gate.outcome === 'model' ? { ...result.gate, shipped: finalist } : result.gate,
       innerScores: result.innerScores.map((s) => ({ ...s, candidate: finalist })),
       holdoutAccess: { ...result.holdoutAccess, finalist },
       artifacts: [TrainerResultFixtures.Artifact(finalist, featureSchemaHash)],
@@ -70,6 +76,57 @@ export class TrainerResultFixtures {
       importance: [], leakageFlags: [], predictionIntervalCoverage: [], residualDiagnostics: null, forecast: null, innerSplitContrast: null,
     };
   }
+
+  /**
+   * {@link CannedCompleted} where neither the finalist nor any simple member beats the dummy: the sidecar gate decides
+   * no-signal, and so does the table.
+   */
+  public static CannedNoSignal(trainingRunId: string, protocol: Pick<EvaluationProtocolSpec, 'budgets'>, featureSchemaHash: string = 'f'.repeat(64)): TrainerCompleted {
+    const base = TrainerResultFixtures.CannedCompleted(trainingRunId, protocol, featureSchemaHash);
+    return {
+      ...base,
+      comparisons: {
+        modelVsDummy: { value: 0.004, ci: [-0.01, 0.018], beats: false },
+        oneFeatureVsDummy: { value: 0.002, ci: [-0.005, 0.009], beats: false },
+        glmVsDummy: { value: 0.003, ci: [-0.004, 0.011], beats: false },
+        'modelVs:glm': { value: 0.001, ci: [-0.006, 0.008], beats: false },
+        'modelVs:oneFeature': { value: 0.002, ci: [-0.004, 0.008], beats: false },
+      },
+      gate: { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null },
+    };
+  }
+
+  /** {@link CannedCompleted} where the finalist beats the dummy and the best simple member (`glm`): the gate ships `xgb`. */
+  public static CannedModelWins(trainingRunId: string, protocol: Pick<EvaluationProtocolSpec, 'budgets'>, featureSchemaHash: string = 'f'.repeat(64)): TrainerCompleted {
+    const base = TrainerResultFixtures.CannedCompleted(trainingRunId, protocol, featureSchemaHash);
+    return {
+      ...base,
+      comparisons: { ...base.comparisons, 'modelVs:glm': { value: 0.006, ci: [0.002, 0.01], beats: true } },
+      gate: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+    };
+  }
+
+  /**
+   * The `ValidationResults` a completed no-signal unit run stores: the v2 envelope with the gate record of
+   * {@link CannedNoSignal} under {@link ProtocolRowFixture}, its reason `nothing-beats-dummy`.
+   */
+  public static NoSignalValidationResults(): string {
+    const protocol = ProtocolRowFixture.Spec();
+    const built = GateRecords.BuildStoredGateRecord({
+      Result: TrainerResultFixtures.CannedNoSignal('00000000-0000-0000-0000-0000000000a1', protocol),
+      Protocol: protocol, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, Carve: null,
+    });
+    if (built.Ok === false) throw new Error(`NoSignalValidationResults: the gate record was refused: ${built.Refusal.kind}`);
+    const envelope: TrainingRunResults = {
+      schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+      unitResolution: { rowsRead: 8, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 8, dataCutoff: '2026-01-01' },
+      legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate: built.Record,
+    };
+    return JSON.stringify(envelope);
+  }
+
+  /** The reason text of {@link NoSignalValidationResults}'s gate record. */
+  public static readonly NoSignalReason = 'Neither the model (0.0040 [-0.0100, 0.0180]) nor any simple baseline beats the flat guess on log-loss: no signal.';
 
   /** A failed run at stage inner-cv. */
   public static CannedFailed(trainingRunId: string): TrainerResult {

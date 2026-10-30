@@ -7,6 +7,7 @@ import { TrainingEngine } from '../../training/training-engine';
 import { TrainingRefusedError } from '../../training/training-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 
 /**
  * Unit tests for the Train ML Model action. NO live DB, NO live sidecar — the
@@ -106,6 +107,16 @@ describe('PredictiveStudioTrainModelAction — happy path', () => {
     expect(out(p, 'ModelID')).toBe('model-1');
     expect(out(p, 'HoldoutMetrics')).toBe(JSON.stringify({ auc: 0.81 }));
     expect(out(p, 'LeakageFlagged')).toBe(false);
+  });
+});
+
+describe('PredictiveStudioTrainModelAction — a run that shipped no model', () => {
+  it('succeeds with ModelID and HoldoutMetrics null, the message the stored gate reason', async () => {
+    const run = { ID: 'run-1', Notes: 'Trainer completed.', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() } as unknown as MJMLTrainingRunEntity;
+    const p = params([{ Name: 'PipelineID', Type: 'Input', Value: 'pipe-1' }]);
+    const result = await new TestableTrainAction(new MockTrainingEngine({ model: null, run })).run(p);
+    expect([result.Success, out(p, 'ModelID'), out(p, 'HoldoutMetrics'), out(p, 'LeakageFlagged')]).toEqual([true, null, null, false]);
+    expect(result.Message).toBe(`Training run run-1 completed and shipped no model: ${TrainerResultFixtures.NoSignalReason}`);
   });
 });
 

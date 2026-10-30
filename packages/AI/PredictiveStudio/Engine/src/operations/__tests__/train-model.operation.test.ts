@@ -8,6 +8,7 @@ import { TrainingEngine } from '../../training/training-engine';
 import { TrainingRefusedError } from '../../training/training-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
 import { CapturingContext } from './helpers';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 
 /**
  * Unit tests for the Train ML Model Remote Operation. NO live DB / sidecar — the
@@ -105,6 +106,17 @@ describe('PredictiveStudioTrainModelServerOperation — happy path', () => {
     expect(ctx.Progress[0].OperationKey).toBe('PredictiveStudio.TrainModel');
   });
 
+});
+
+describe('PredictiveStudioTrainModelServerOperation — a run that shipped no model', () => {
+  it('succeeds with the model fields null and reports the stored gate reason', async () => {
+    const run = { ID: 'run-1', Notes: 'Trainer completed.', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() } as unknown as MJMLTrainingRunEntity;
+    const ctx = new CapturingContext();
+    const result = await new TestableTrainOp(new MockTrainingEngine({ model: null, run })).ExecuteServer({ pipelineId: 'pipe-99' }, ctx);
+    expect(result.Success).toBe(true);
+    expect(result.Output).toEqual({ modelId: null, trainingRunId: 'run-1', version: null, holdoutMetrics: undefined, leakageFlagged: false, status: null });
+    expect(ctx.Progress[ctx.Progress.length - 1].Message).toBe(`Training run run-1 completed and shipped no model: ${TrainerResultFixtures.NoSignalReason}`);
+  });
 });
 
 describe('PredictiveStudioTrainModelServerOperation — inputs that decision dates replace are refused', () => {

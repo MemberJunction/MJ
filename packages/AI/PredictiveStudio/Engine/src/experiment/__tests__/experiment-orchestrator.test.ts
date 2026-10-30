@@ -847,6 +847,12 @@ describe('TrainingEngineExperimentTrainer', () => {
     expect([runs.length, protocolTrainer.Requests.length]).toEqual([0, 0]);
   });
 
+  it('completes an iteration whose run shipped no model with no score and no model, and charges its compute', async () => {
+    const { trainer } = unitTrainer((r) => TrainerResultFixtures.CannedNoSignal(r.trainingRunId, ProtocolRowFixture.Spec(), r.snapshot.featureSchemaHash));
+    const result = await trainer.train(input(null));
+    expect([result.model, result.Score, result.run.Status, result.ComputeSeconds]).toEqual([null, null, 'Completed', 12.5]);
+  });
+
   it("leaves the protocol's timeout when the session has no seconds bound, and reports the run's compute seconds", async () => {
     const { trainer, protocolTrainer } = unitTrainer((r) => canned(r));
     const result = await trainer.train(input(null));

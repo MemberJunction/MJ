@@ -104,6 +104,17 @@ export interface IRecordLoader {
    * @returns the `DriverClass` driver key, or `null` when not found
    */
   resolveAlgorithmDriverKey?(algorithmId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * The `MJ: ML Algorithms` row whose `DriverClass` is `driverKey`: the algorithm a shipped baseline member's model row
+   * names. Null when the catalog has no row for the driver (the baseline-only GLMs and the forecast baselines have none).
+   *
+   * @param driverKey the sidecar driver key (e.g. `logistic_regression`)
+   * @param contextUser request user
+   * @param provider the provider the read runs on (no global fallback)
+   * @throws Error naming both rows when two catalog rows share the driver key
+   */
+  ResolveAlgorithmIdForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;
 }
 
 /**
@@ -263,8 +274,11 @@ export interface TrainingDeps {
  * produced model and the run that produced it.
  */
 export interface TrainModelResult {
-  /** The immutable `MJ: ML Models` row produced (Draft status). */
-  model: MJMLModelEntity;
+  /**
+   * The immutable `MJ: ML Models` row produced (Draft status), or null when the run's gate decision ships no artifact
+   * (`no-signal`, or the unit's existing heuristic rule kept); the run's stored gate record says why.
+   */
+  model: MJMLModelEntity | null;
   /** The `MJ: ML Training Runs` row recording this attempt. */
   run: MJMLTrainingRunEntity;
 }
@@ -305,6 +319,14 @@ export interface ModelTrainingLineage {
 export interface TrainerModelLineage {
   evaluationProtocolId: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
   artifactFormat: typeof PREDICTOR_ARTIFACT_FORMAT;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /** What the gate shipped as this model: the finalist's name, or the simple baseline member kept (`glm`, `oneFeature`, `naive`, `seasonalNaive`). */
+  shippedMember: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /**
+   * The driver key of the shipped artifact. It can differ from the driver of the model row's `AlgorithmID`: a shipped
+   * count or non-negative GLM (`poisson_glm`, `tweedie_glm`) or forecast baseline (`naive`, `seasonal-naive`) has no
+   * `MJ: ML Algorithms` row, so the row names the pipeline's algorithm and this key holds the truth.
+   */
+  shippedDriver: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

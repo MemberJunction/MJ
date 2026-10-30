@@ -37,6 +37,7 @@ import { TrainingDelegation } from '../operations/delegation';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
 import type { IModelPromotionGate, PromoteModelOutcome } from '../actions/promote-model.action';
 import { MetadataEntityFactory } from '../training/seams';
+import { TrainingEngine } from '../training/training-engine';
 import { LocalArtifactLoader } from './artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
 import { ModelHasTrainedArtifact } from './model-readiness';
@@ -44,6 +45,17 @@ import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './typ
 
 /** Signature of the train step (production: {@link TrainingDelegation.TrainModelViaEngine}); injectable for tests. */
 export type AutoTrainTrainFn = (pipelineId: string, provider: IMetadataProvider, user: UserInfo) => Promise<MJMLModelEntity>;
+
+/**
+ * The pipeline's training run completed without a model: its gate decision shipped no artifact (`no-signal`, or the
+ * unit's existing rule kept), so there is nothing to publish or score. The message carries the run's stored reason.
+ */
+export class AutoTrainShippedNoModelError extends Error {
+  constructor(public readonly PipelineID: string, public readonly TrainingRunID: string, public readonly Reason: string) {
+    super(`Auto-train: training pipeline ${PipelineID} (run ${TrainingRunID}) shipped no model, so there is nothing to score with: ${Reason}`);
+    this.name = 'AutoTrainShippedNoModelError';
+  }
+}
 
 /** Optional seams for {@link PipelineAutoTrainer} (all default to production implementations). */
 export interface PipelineAutoTrainerOptions {
@@ -64,9 +76,20 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   private readonly artifactLoader: IArtifactLoader;
 
   constructor(options: PipelineAutoTrainerOptions = {}) {
-    this.train = options.train ?? (async (pipelineId, provider, user) => (await TrainingDelegation.TrainModelViaEngine({ pipelineId }, provider, user)).model);
+    this.train = options.train || PipelineAutoTrainer.TrainThroughEngine;
     this.gate = options.gate ?? new ProductionModelPromotionGate();
     this.artifactLoader = options.artifactLoader ?? new LocalArtifactLoader();
+  }
+
+  /**
+   * The production train step: train the pipeline through the training engine and return its model.
+   *
+   * @throws AutoTrainShippedNoModelError when the run's gate decision shipped no model, carrying its stored reason
+   */
+  public static async TrainThroughEngine(pipelineId: string, provider: IMetadataProvider, user: UserInfo): Promise<MJMLModelEntity> {
+    const result = await TrainingDelegation.TrainModelViaEngine({ pipelineId }, provider, user);
+    if (result.model === null) throw new AutoTrainShippedNoModelError(pipelineId, result.run.ID, TrainingEngine.NoModelReason(result));
+    return result.model;
   }
 
   /** @inheritdoc */

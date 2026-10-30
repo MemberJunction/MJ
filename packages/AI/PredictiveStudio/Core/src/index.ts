@@ -38,6 +38,7 @@ export * from './evaluation-protocol-rules';
 export * from './utc-day';
 export * from './holdout-carve';
 export * from './training-run-results';
+export * from './run-evaluation';
 export * from './snapshot-format';
 export * from './store-schemas';
 export * from './incumbent-heuristic';

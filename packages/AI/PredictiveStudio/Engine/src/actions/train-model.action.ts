@@ -68,14 +68,17 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
    */
   protected mapResult(params: RunActionParams, result: TrainModelResult): ActionResultSimple {
     const leakageFlagged = this.wasLeakageFlagged(result);
-    this.addOutputParam(params, 'ModelID', result.model.ID);
-    this.addOutputParam(params, 'HoldoutMetrics', result.model.HoldoutMetrics ?? null);
+    const model = result.model;
+    this.addOutputParam(params, 'ModelID', model === null ? null : model.ID);
+    this.addOutputParam(params, 'HoldoutMetrics', model === null ? null : model.HoldoutMetrics || null);
     this.addOutputParam(params, 'LeakageFlagged', leakageFlagged);
+    // A run whose gate decision ships no artifact succeeds without a model; the message is the stored reason.
+    if (model === null) return this.ok(params, `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`);
 
     const note = leakageFlagged
       ? ' A single feature is doing almost all the predicting — a human must confirm this is not target leakage before the model is trusted.'
       : '';
-    return this.ok(params, `Trained model ${result.model.ID} (v${result.model.Version}).${note}`);
+    return this.ok(params, `Trained model ${model.ID} (v${model.Version}).${note}`);
   }
 
   /**

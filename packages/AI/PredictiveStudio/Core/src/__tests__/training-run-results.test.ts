@@ -54,6 +54,12 @@ describe('TrainingRunResultsParser', () => {
     const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
     expect(r.Ok && r.Value.status === 'completed' ? r.Value.carve : 'not read').toBeNull();
   });
+  it('reads a completed envelope written before the gate record was stored with gate as null', () => {
+    // The shape a unit run stored before the gate member existed (trainer, request and carve members, no gate key).
+    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null });
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
+    expect(r.Ok && r.Value.status === 'completed' ? r.Value.gate : 'not read').toBeNull();
+  });
   it('reads back a stored carve summary and refuses one with a wrong-typed member', () => {
     const carve = {
       kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: '2025-01-01', developmentRowCount: 20, holdoutRowCount: 4, excludedAfterHoldoutEnd: 4,

@@ -26,6 +26,8 @@ import { MS_PER_DAY } from '@memberjunction/predictive-studio-core';
 import { DEFAULT_RETRAINING_POLICY } from '../types';
 import type { TrainingEngine } from '../../training';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the MaintenanceEngine (plan §12 / SP10). NO live DB, NO live
@@ -165,9 +167,14 @@ const FixedClock: IMaintenanceClock = { now: () => NOW };
 class FakeTrainingEngine {
   public trainCalls: TrainModelInput[] = [];
   public challengerAuc = 0.85;
+  /** When true the retrain's gate ships no model (a stored no-signal decision). */
+  public shipsNoModel = false;
 
   async trainModel(input: TrainModelInput, _deps: TrainingDeps): Promise<TrainModelResult> {
     this.trainCalls.push(input);
+    if (this.shipsNoModel) {
+      return { model: null, run: { ID: 'run-no-model', Notes: '', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() } as unknown as TrainModelResult['run'] };
+    }
     const challenger = new FakeModel(`model-challenger-${this.trainCalls.length}`);
     challenger.PipelineID = input.pipelineId;
     challenger.HoldoutMetrics = JSON.stringify({ roc_auc: this.challengerAuc });
@@ -413,6 +420,20 @@ describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
     expect(outcome.comparison?.delta).toBeCloseTo(0.05, 5);
     expect(outcome.comparison?.recommendation).toBe('promote');
     expect(outcome.challenger?.model.ID).toMatch(/challenger/);
+  });
+
+  it('keeps the incumbent with no comparison, and logs the stored reason, when the retrain shipped no model', async () => {
+    const status = ConsoleCapture.Status();
+    const { deps, trainingEngine } = buildDeps();
+    trainingEngine.shipsNoModel = true;
+    const incumbent = new FakeModel('m1');
+    incumbent.HoldoutMetrics = JSON.stringify({ roc_auc: 0.8 });
+    const staleness = { bindingId: 'b1', modelId: 'm1', stale: true, reasons: [{ trigger: 'cadence' as const, detail: 'old' }] };
+
+    const outcome = await engine.TriggerRetrainIfStale(asBinding(new FakeBinding('b1', 'm1')), asModel(incumbent), staleness, { promotionMargin: 0.01 }, deps);
+
+    expect([outcome.retrained, outcome.incumbentModelId, outcome.comparison, outcome.challenger?.model]).toEqual([true, 'm1', undefined, null]);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining(`MaintenanceEngine: binding b1: the retrain of model m1 shipped no model (run run-no-model); the incumbent stays. ${TrainerResultFixtures.NoSignalReason}`)]);
   });
 
   it('recommends HOLD when the challenger does not beat the incumbent by margin', async () => {

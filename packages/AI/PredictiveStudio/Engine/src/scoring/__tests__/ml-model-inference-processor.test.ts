@@ -390,7 +390,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
     return {
       entityFactory: { getEntityObject: unused },
-      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1 },
+      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, ResolveAlgorithmIdForDriver: async () => null },
       sidecar: { train: unused },
       artifactStore: { save: unused, Delete: unused },
       contextUser: user,

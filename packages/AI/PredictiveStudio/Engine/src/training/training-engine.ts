@@ -42,11 +42,14 @@
  * rows on or after its `holdoutEnd` left out of the snapshot; a seeded row-hash carve; or a forecast's
  * rolling-origin test periods; identical content reuses the existing snapshot; the protocol decides the
  * incumbent-score and slice columns). The protocol trainer (`TrainingDeps.trainer`) is sent pre-authorised downloads of the
- * snapshot files, its result is recorded on the run (compute, code version), every returned artifact
- * is stored in `MJ: Files`, and the model row is created from the finalist's artifact with the
- * trainer's held-out permutation importance; a single feature dominating that importance flags the run
- * (the same LEAKAGE WARNING note as above) and the model stays `Draft`. The run stores the trainer's result with its artifacts
- * as file references, never their bytes, the unit resolution counts, the holdout carve's summary and
+ * snapshot files, its result is recorded on the run (compute, code version), and the gate is decided
+ * in TypeScript ({@link GateRecords.BuildStoredGateRecord}): a sidecar decision that differs from the transcription
+ * refuses the run (`sidecar-gate-mismatch`). Every returned artifact is stored in `MJ: Files`, and the model row is
+ * created from the artifact the decision ships only: the finalist's for `model` (with the trainer's held-out
+ * permutation importance), the kept simple baseline member's for `keep-simple-baseline`, and none for `no-signal` or
+ * a kept heuristic rule. A single feature dominating the finalist's importance flags the run (the same LEAKAGE WARNING
+ * note as above) and the model stays `Draft`. The run stores the trainer's result with its artifacts
+ * as file references, never their bytes, the unit resolution counts, the holdout carve's summary, the gate record and
  * the request settings a retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
  * categorical levels scoring reuses, the snapshot's ID and content hash, and the protocol. A refusal
  * is recorded on the run as a `refused` envelope ({@link TrainingRefusedError}); a failed trainer
@@ -92,6 +95,15 @@ import {
   type TrainerResult,
   type HoldoutCarveSummary,
   InnerScoreSelection,
+  GateRecords,
+  GateRules,
+  type BaselineResult,
+  type BaselineSpec,
+  type GateDecision,
+  type StoredGateRecord,
+  type TaskKind,
+  type TaskType,
+  type TrainerRequest,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
@@ -211,6 +223,14 @@ interface TrainerOutcome {
   readonly Evaluation: EvaluationRecord;
   /** The single-feature-dominance check of `Importance` against the pipeline's leakage guard. */
   readonly Dominance: DominanceResult;
+}
+
+/** The artifact the gate decision ships: the finalist, or a simple baseline member the trainer fitted. */
+interface ShippedArtifact {
+  /** The artifact's candidate name: the finalist's, or the member's (`glm`, `oneFeature`, `naive`, `seasonalNaive`). */
+  readonly Name: string;
+  /** The baseline member that ships; null when the finalist ships. */
+  readonly Member: BaselineResult | null;
 }
 
 /**
@@ -451,14 +471,17 @@ export class TrainingEngine {
   /**
    * Train a unit run through the trainer: build the request over the frozen snapshot (the search's candidates, or the
    * pipeline's own algorithm as the single candidate; the timeout is the protocol's compute budget, or less when an
-   * enclosing budget has less left), record the result on the run (compute, code version, status), store every
-   * returned artifact in `MJ: Files`, create the model row from the finalist's artifact and complete the run with the
-   * stored result (artifacts as file references, never bytes), the holdout carve's summary, the request settings a
-   * retrain replays and the leakage note of the single-feature-dominance check over the trainer's importance. A failed
-   * result is the refusal `trainer-failed` and a result whose code version cannot be recorded is `lineage-incomplete`;
-   * both keep the compute they recorded.
+   * enclosing budget has less left), record the result on the run (compute, code version, status), decide the gate
+   * and refuse a sidecar decision that differs from it, store every returned artifact in `MJ: Files`, create the model
+   * row from the artifact the decision ships (none for `no-signal` or a kept heuristic rule) and complete the run with
+   * the stored result (artifacts as file references, never bytes), the holdout carve's summary, the gate record, the
+   * request settings a retrain replays and the leakage note of the single-feature-dominance check over the trainer's
+   * importance. A failed result is the refusal `trainer-failed` and a result whose code version cannot be recorded is
+   * `lineage-incomplete`; both keep the compute they recorded. The gate stage's refusals are stored before any artifact.
+   *
+   * @returns the model row, or null when the decision ships no artifact
    */
-  private async trainThroughTrainer(x: TrainerRunInputs): Promise<MJMLModelEntity> {
+  private async trainThroughTrainer(x: TrainerRunInputs): Promise<MJMLModelEntity | null> {
     const { Run: run, Resolved: resolved, Snapshot: snapshot, Training: training, Deps: deps } = x;
     const candidates = x.Input.candidates || [TrainerRequestBuilder.CandidateFromPipeline(resolved.algorithmDriverKey, resolved.pipeline.AlgorithmID, resolved.algorithmDriverKey, resolved.pipeline.Hyperparameters)];
     const request = await TrainerRequestBuilder.BuildTrainerRequest({
@@ -468,25 +491,81 @@ export class TrainingEngine {
     const result = TrainingEngine.recordTrainerResult(run, await training.Trainer.RunTrainer(request), x.UsdPerSecond);
     TrainingEngine.checkAnswerBelongsToRun(run, snapshot, result);
     TrainingEngine.checkSelection(result);
+    const gate = TrainingEngine.buildGateRecord(x, result);
+    const shipped = TrainingEngine.shippedArtifact(gate.decision, result);
     const fileIds = await this.storeTrainerArtifacts(run, result, deps);
-    const finalistFile = fileIds.get(result.finalist);
-    if (finalistFile === undefined) throw new Error(`TrainingEngine: the trainer returned no artifact for its finalist '${result.finalist}'`);
     const outcome = this.trainerOutcome(x, result, candidates);
-    const model = await this.createTrainerModelRow(x, outcome, finalistFile);
+    const model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(fileIds, shipped.Name));
+    await this.completeTrainerRun(x, request, outcome, gate, fileIds, model);
+    return model;
+  }
+
+  /**
+   * Complete a trainer run: the envelope (the stored result with artifacts as file references, the carve, the gate
+   * record and the request settings), the resulting model (null when nothing ships), the features, the hyperparameters
+   * of what ships (a kept baseline member has none of its own) and the notes: the trainer's, the gate's reason and the
+   * leakage note every run carries.
+   */
+  private async completeTrainerRun(
+    x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, fileIds: ReadonlyMap<string, string>, model: MJMLModelEntity | null,
+  ): Promise<void> {
+    const run = x.Run;
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
       legacy: null, legacyRequest: null,
-      trainer: TrainerContract.ToStoredTrainerResult(result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
-      carve: x.Carve,
+      trainer: TrainerContract.ToStoredTrainerResult(outcome.Result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
+      carve: x.Carve, gate,
     };
-    run.ResultingModelID = model.ID;
-    run.FeaturesUsed = JSON.stringify(snapshot.Content.Header.featureSchema.map((f) => f.Name));
-    run.Hyperparameters = JSON.stringify(outcome.Finalist ? outcome.Finalist.hyperparameters : {});
+    run.ResultingModelID = model === null ? null : model.ID;
+    run.FeaturesUsed = JSON.stringify(x.Snapshot.Content.Header.featureSchema.map((f) => f.Name));
+    run.Hyperparameters = JSON.stringify(gate.decision.outcome !== 'keep-simple-baseline' && outcome.Finalist ? outcome.Finalist.hyperparameters : {});
     run.ValidationResults = JSON.stringify(results);
-    // The trainer's note, then the same leakage note every run carries (a dominant feature is a LEAKAGE WARNING).
-    run.Notes = TrainingEngine.withUncoveredNote(`${run.Notes || ''} ${this.buildRunNotes(outcome.Dominance, outcome.Evaluation)}`.trim(), x.Uncovered);
+    // The trainer's note, the gate's reason, then the same leakage note every run carries (a dominant feature is a LEAKAGE WARNING).
+    const notes = `${run.Notes || ''} ${gate.reason.text} ${this.buildRunNotes(outcome.Dominance, outcome.Evaluation)}`.trim();
+    run.Notes = TrainingEngine.withUncoveredNote(notes, x.Uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
-    return model;
+  }
+
+  /**
+   * The run's gate record: the decision TypeScript derives from the trainer's paired intervals under the bound protocol,
+   * with its guards. Refused at the `gate` stage when a comparison the gate needs is missing or the sidecar decided
+   * differently (`sidecar-gate-mismatch`); runs before anything is stored.
+   */
+  private static buildGateRecord(x: TrainerRunInputs, result: TrainerCompleted): StoredGateRecord {
+    const built = GateRecords.BuildStoredGateRecord({ Result: result, Protocol: x.Training.Protocol.Protocol, Task: x.Unit.label.outcome, Carve: x.Carve });
+    if (built.Ok === false) throw new TrainingRefusedError({ stage: 'gate', reason: built.Refusal });
+    return built.Record;
+  }
+
+  /**
+   * The artifact the decision ships: the finalist for `model`, the kept simple baseline member for
+   * `keep-simple-baseline`, and nothing for `no-signal` or a kept heuristic rule (a rule, not an artifact: the decision
+   * is stored and delivery publishes the rule). Runs before anything is stored.
+   *
+   * @throws Error when the kept member is not a simple baseline of the result, or the trainer returned no artifact for what ships
+   */
+  private static shippedArtifact(decision: GateDecision, result: TrainerCompleted): ShippedArtifact | null {
+    if (decision.outcome === 'no-signal') return null;
+    const member = decision.outcome === 'model' ? null : TrainingEngine.keptMember(decision.shipped, result);
+    if (member !== null && member.baseline.kind === 'incumbent-heuristic') return null;
+    if (!result.artifacts.some((a) => a.candidate === decision.shipped)) {
+      throw new Error(`TrainingEngine: the trainer returned no artifact for the shipped '${decision.shipped}' (returned: ${result.artifacts.map((a) => a.candidate).join(', ') || 'none'})`);
+    }
+    return { Name: decision.shipped, Member: member };
+  }
+
+  /** The simple baseline whose member name the decision kept. */
+  private static keptMember(name: string, result: TrainerCompleted): BaselineResult {
+    const member = result.baselines.find((b) => b.role === 'simple' && GateRules.BaselineMemberName(b.baseline) === name);
+    if (member === undefined) throw new Error(`TrainingEngine: the gate kept '${name}', which is not a simple baseline of the trainer's result`);
+    return member;
+  }
+
+  /** The stored file of the shipped artifact (checked to be among the returned artifacts before they were stored). */
+  private static storedFileOf(fileIds: ReadonlyMap<string, string>, name: string): string {
+    const fileId = fileIds.get(name);
+    if (fileId === undefined) throw new Error(`TrainingEngine: no stored file for the shipped artifact '${name}'`);
+    return fileId;
   }
 
   /**
@@ -503,6 +582,15 @@ export class TrainingEngine {
       Evaluation: EvaluationLineage.Build(x.Resolved.validation, { ValidationOutOfSample: true, ImportanceKind: TrainerContract.ImportanceKindOf(result.importance), MajorityBaselineRule: x.MajorityBaselineRule }),
       Dominance: this.checkLeakage(importance, x.Resolved.leakageGuard),
     };
+  }
+
+  /**
+   * Why a completed training run shipped no model: the reason of its stored gate decision (`no-signal`, or the unit's
+   * existing rule kept), or the run's notes when it stored no gate record.
+   */
+  public static NoModelReason(result: TrainModelResult): string {
+    const gate = GateRecords.ParseStoredGateRecord(result.run.ValidationResults);
+    return gate === null ? result.run.Notes || `training run ${result.run.ID} stored no gate decision` : gate.reason.text;
   }
 
   /**
@@ -588,32 +676,34 @@ export class TrainingEngine {
   }
 
   /**
-   * The model row of a trainer run: the finalist's artifact (the trainer's envelope carries its own in-fold encoding,
-   * so there is no separate fitted preprocessing) and algorithm (the pipeline's when the finalist is not a candidate),
-   * the finalist's inner score as `Metrics`, the holdout scores as `HoldoutMetrics`, the held-out permutation
-   * importance per source column as `FeatureImportance` (the shares the legacy trainer stores; `{}` when the trainer
-   * measured none, as for a forecast), and the split the trainer was sent (the snapshot's manifest roles).
+   * The model row of a trainer run, from the artifact the gate shipped (the trainer's envelope carries its own in-fold
+   * encoding, so there is no separate fitted preprocessing), and the split the trainer was sent (the snapshot's manifest
+   * roles). For the finalist: its algorithm (the pipeline's when the finalist is not a candidate), its inner score as
+   * `Metrics`, the holdout scores as `HoldoutMetrics` and the held-out permutation importance per source column as
+   * `FeatureImportance` (`{}` when the trainer measured none, as for a forecast). For a kept baseline member: the
+   * catalog algorithm of its driver ({@link shippedAlgorithmId}), its holdout score as `HoldoutMetrics`, and `{}` for
+   * `Metrics` and `FeatureImportance` (a baseline has no inner score and no importance of its own).
    */
-  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, artifactFileId: string): Promise<MJMLModelEntity> {
+  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, artifactFileId: string): Promise<MJMLModelEntity> {
     const { Resolved: resolved, Snapshot: snapshot, Deps: deps } = x;
-    const { Result: result, Finalist: finalist } = outcome;
+    const result = outcome.Result;
     const content = snapshot.Content;
     const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
     const model = await deps.entityFactory.getEntityObject<MJMLModelEntity>('MJ: ML Models', deps.contextUser);
     model.PipelineID = resolved.pipeline.ID;
     model.Version = version;
-    model.AlgorithmID = finalist ? finalist.algorithmId : resolved.pipeline.AlgorithmID;
+    model.AlgorithmID = await this.shippedAlgorithmId(x, outcome, shipped);
     model.ArtifactFileID = artifactFileId;
     model.FittedPreprocessing = '{}';
     model.FeatureSchema = JSON.stringify(content.Header.featureSchema);
     model.TargetVariable = PredictionUnit.DescribeLabelRule(x.Unit);
     model.ProblemType = resolved.problemType;
-    const inner = result.innerScores.find((s) => s.candidate === result.finalist);
+    const inner = shipped.Member === null ? result.innerScores.find((s) => s.candidate === result.finalist) : undefined;
     model.Metrics = JSON.stringify(inner ? { [inner.inner.metric]: inner.inner.value } : {});
-    model.HoldoutMetrics = JSON.stringify(TrainerContract.HoldoutMetricsOf(result.holdout));
-    model.FeatureImportance = JSON.stringify(outcome.Importance);
-    model.Lineage = JSON.stringify(this.trainerLineage(x, outcome, split));
+    model.HoldoutMetrics = JSON.stringify(TrainerContract.HoldoutMetricsOf(shipped.Member === null ? result.holdout : { primary: shipped.Member.holdout, secondary: [] }));
+    model.FeatureImportance = JSON.stringify(shipped.Member === null ? outcome.Importance : {});
+    model.Lineage = JSON.stringify(this.trainerLineage(x, outcome, split, shipped));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(result.computeSeconds);
     model.TrainingRowCount = split.TrainingRowCount;
@@ -626,16 +716,63 @@ export class TrainingEngine {
    * The Lineage of a trainer run's model: the keys every model carries (the trainer's sidecar version, the snapshot's
    * split), the unit's, and the protocol it was judged under with its artifact format. Its evaluation record states
    * out-of-sample scoring (the holdout rows are scored once by the finalist that never trained on them) and the kind of
-   * the stored importance.
+   * the stored importance. It names what shipped and that artifact's driver.
    */
-  private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
+  private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit, shipped: ShippedArtifact): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
     return {
       ...this.buildLineage(x.Resolved, x.Input, split, outcome.Evaluation, x.UnitLineage),
       sidecarVersion: outcome.Result.codeVersion.sidecarVersion,
       evaluationProtocolId: x.Training.Protocol.RowID,
       artifactFormat: PREDICTOR_ARTIFACT_FORMAT,
+      shippedMember: shipped.Name,
+      shippedDriver: TrainingEngine.shippedDriver(x, outcome, shipped),
     };
   }
+
+  /**
+   * The `MJ: ML Algorithms` row the model row names. The finalist: its candidate's algorithm, or the pipeline's when the
+   * finalist is not a candidate. A kept baseline member: the catalog row of its driver; a driver with no catalog row
+   * (the baseline-only count and non-negative GLMs, the forecast baselines) names the pipeline's algorithm, and the
+   * lineage's `shippedDriver` holds the driver that shipped.
+   */
+  private async shippedAlgorithmId(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact): Promise<string> {
+    if (shipped.Member === null) return outcome.Finalist ? outcome.Finalist.algorithmId : x.Resolved.pipeline.AlgorithmID;
+    const catalogId = await x.Deps.recordLoader.ResolveAlgorithmIdForDriver(TrainingEngine.shippedDriver(x, outcome, shipped), x.Deps.contextUser, x.Deps.provider);
+    return catalogId || x.Resolved.pipeline.AlgorithmID;
+  }
+
+  /** The driver key of the shipped artifact: the finalist candidate's (the pipeline's when not a candidate), or the kept member's. */
+  private static shippedDriver(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact): string {
+    if (shipped.Member === null) return outcome.Finalist ? outcome.Finalist.driverKey : x.Resolved.algorithmDriverKey;
+    return TrainingEngine.MemberDriverKey(shipped.Member.baseline, x.Unit.label.outcome);
+  }
+
+  /**
+   * The driver a shippable baseline member is fitted with, as the trainer fits it: the GLM and the one-feature baseline
+   * use the GLM of the task's family (a forecast's family is its value kind); the forecast baselines are their own
+   * series drivers. The dummy and the incumbent heuristic are yardsticks and never ship.
+   *
+   * @throws Error for a yardstick baseline
+   */
+  public static MemberDriverKey(spec: BaselineSpec, task: TaskType): string {
+    switch (spec.kind) {
+      case 'glm':
+      case 'one-feature':
+        return TrainingEngine.glmDriver[task.kind === 'forecast' ? task.valueKind : task.kind];
+      case 'naive':
+        return 'naive';
+      case 'seasonal-naive':
+        return 'seasonal-naive';
+      case 'dummy':
+      case 'incumbent-heuristic':
+        throw new Error(`TrainingEngine: a ${spec.kind} baseline is a yardstick and never ships as an artifact`);
+    }
+  }
+
+  /** The GLM each task family's GLM baseline fits (the trainer's own table, `baselines.GLM_DRIVER`). */
+  private static readonly glmDriver: { readonly [K in Exclude<TaskKind, 'forecast'>]: string } = {
+    binary: 'logistic_regression', multiclass: 'logistic_regression', continuous: 'ridge', count: 'poisson_glm', 'non-negative': 'tweedie_glm',
+  };
 
   /**
    * Assemble a unit pipeline's training matrix as of each unit row's decision date: the pipeline's steps resolve into

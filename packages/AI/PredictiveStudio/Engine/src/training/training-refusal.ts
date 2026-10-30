@@ -50,7 +50,8 @@ export class TrainingRefusedError extends Error {
       case 'no-development-rows':
       case 'no-holdout-rows':
       case 'seeded-random-side-empty':
-      case 'too-few-periods': return `Refused (${reason.kind}): ${HoldoutCarve.DescribeCarveRefusal(reason)}`;
+      case 'too-few-periods': return `Refused (${reason.kind}): ${HoldoutCarve.DescribeCarveRefusal(reason)}`;      case 'sidecar-gate-mismatch': return `Refused (sidecar-gate-mismatch): the trainer decided ${reason.sidecar.branch} (${reason.sidecar.shipped || 'nothing'}) but the engine's transcription decided ${reason.engine.branch} (${reason.engine.shipped || 'nothing'}); the two implementations of the gate disagree and nothing is stored as a decision.`;
+      case 'missing-comparison': return `Refused (missing-comparison): the trainer returned no "${reason.comparison}" comparison, so the gate cannot be decided.`;
     }
   }
 }

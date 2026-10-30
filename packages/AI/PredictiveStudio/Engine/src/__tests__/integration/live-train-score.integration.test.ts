@@ -345,6 +345,11 @@ class FakeRecordLoader implements IRecordLoader {
   public async nextModelVersion(): Promise<number> {
     return ++this.version;
   }
+
+  /** These pipelines have no Prediction Unit, so no gate ships a baseline member and no driver is looked up. */
+  public async ResolveAlgorithmIdForDriver(): Promise<string | null> {
+    return null;
+  }
 }
 
 /**

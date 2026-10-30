@@ -123,7 +123,9 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
     return {
       model,
       run,
-      Score: ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric),
+      // A run whose gate decision shipped no artifact has no model to score: the iteration completes with no score
+      // (its run's stored gate record says why) and the session continues.
+      Score: model === null ? null : ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric),
       // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
       // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,

@@ -36,6 +36,7 @@ import {
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { TrainingDelegation, WasTrainingLeakageFlagged } from '../operations/delegation';
+import { TrainingEngine } from '../training/training-engine';
 import type { ProposedExperiment } from '../experiment/types';
 import type { TrainModelResult } from '../training/types';
 import { MetadataEntityFactory } from '../training/seams';
@@ -202,6 +203,7 @@ export class PredictiveStudioPipelineBuilder {
         ? await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user)
         : await this.trainWithoutUnit(pipeline, approved, sidecarVersion, provider, user);
       const model = training.Train.model;
+      if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, collectedWarnings);
       const trust = TrustVerdicts.DeriveTrustVerdict(model);
       const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
       const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
@@ -222,6 +224,19 @@ export class PredictiveStudioPipelineBuilder {
         warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     }
+  }
+
+  /**
+   * The result of a build whose training run shipped no model (the gate decided `no-signal`, or kept the unit's existing
+   * rule): built, not published, held with the run's stored reason, and no trust verdict (there is no model to judge).
+   */
+  private static heldWithoutModel(pipeline: MJMLTrainingPipelineEntity, training: BuildTraining, warnings: FeatureStepWarning[]): BuildPredictionResult {
+    return {
+      success: true, pipelineId: pipeline.ID, pipeline, published: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
+      heldReason: `Not published — the training run shipped no model: ${TrainingEngine.NoModelReason(training.Train)}`,
+      errorMessage: null, leaderboard: training.Leaderboard, untrainedExperiments: training.Untrained,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
   }
 
   /** The plan's proposed experiments, highest priority (lowest `Priority`) first; ties keep plan order. */
@@ -313,6 +328,8 @@ export class PredictiveStudioPipelineBuilder {
    */
   private async trainWithoutUnit(pipeline: MJMLTrainingPipelineEntity, approved: readonly ProposedExperiment[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
     const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+    // A pipeline without a unit trains on the legacy path, which has no gate and always creates its model row.
+    if (train.model === null) throw new Error(`Training run ${train.run.ID} of pipeline ${pipeline.ID} (no Prediction Unit) completed without a model.`);
     // The pipeline was built from the first approved experiment (ModelingPlanToPipelineConfig refuses a plan without one).
     const [trained, ...untrained] = approved;
     const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, TrustVerdicts.DeriveTrustVerdict(train.model), trained.Label);
@@ -331,7 +348,8 @@ export class PredictiveStudioPipelineBuilder {
 
   /**
    * A search's leaderboard from the run's stored trainer result: every candidate best-first by inner-fold mean with its
-   * interval, each optimistic, the trainer's finalist the winner. The model is the finalist's, so only its row links it.
+   * interval, each optimistic, the trainer's finalist the winner. The finalist's row links the model only when the gate
+   * shipped the finalist; a kept baseline member's model, or no model, links no candidate row.
    *
    * @throws Error when the completed run stores no trainer result
    */
@@ -341,10 +359,12 @@ export class PredictiveStudioPipelineBuilder {
       throw new Error(`Training run ${train.run.ID} completed without a stored trainer result; its search has no leaderboard.`);
     }
     const trainer = results.Value.trainer;
+    const gate = results.Value.gate;
+    const finalistModelId = train.model !== null && gate !== null && gate.decision.outcome === 'model' ? train.model.ID : undefined;
     return InnerScoreSelection.LeaderboardFromInnerScores(trainer.innerScores, trainer.finalist).map((row) => ({
-      IterationID: train.run.ID, Metric: row.Mean, ModelID: row.IsFinalist ? train.model.ID : undefined, rank: row.Rank, algorithm: row.Candidate,
+      IterationID: train.run.ID, Metric: row.Mean, ModelID: row.IsFinalist ? finalistModelId : undefined, rank: row.Rank, algorithm: row.Candidate,
       featureSet: 'Pipeline feature set', score: row.Mean, metricName: row.Metric, innerLower: row.Lower, innerUpper: row.Upper,
-      optimistic: row.Optimistic, modelId: row.IsFinalist ? train.model.ID : undefined, isWinner: row.IsFinalist,
+      optimistic: row.Optimistic, modelId: row.IsFinalist ? finalistModelId : undefined, isWinner: row.IsFinalist,
     }));
   }
 

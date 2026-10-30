@@ -8,6 +8,7 @@ import {
   TrustVerdicts,
   type EvaluationProtocolSpec,
   type SourceColumnImportance,
+  type TaskType,
   type TrainerCompleted,
   type TrainerRequest,
   type TrainingRunResults,
@@ -45,6 +46,7 @@ import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
 import {
   FakeEntityFactory,
   FakeEvaluationProtocolStore,
+  FakeRecordLoader,
   FakeMLModel,
   FakeMLPipeline,
   FakeMLRun,
@@ -424,6 +426,16 @@ function cannedFor(r: TrainerRequest): TrainerCompleted {
   return TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec(), r.snapshot.featureSchemaHash);
 }
 
+/** The answer whose gate ships the finalist (`xgb` beats the dummy and the GLM): the model row is the finalist's. */
+function cannedModelFor(r: TrainerRequest): TrainerCompleted {
+  return TrainerResultFixtures.CannedModelWins(r.trainingRunId, protocolSpec(), r.snapshot.featureSchemaHash);
+}
+
+/** The answer whose gate decides no-signal: nothing beats the dummy. */
+function cannedNoSignalFor(r: TrainerRequest): TrainerCompleted {
+  return TrainerResultFixtures.CannedNoSignal(r.trainingRunId, protocolSpec(), r.snapshot.featureSchemaHash);
+}
+
 /** A source column's held-out permutation importance, as the trainer reports it. */
 function importanceOf(sourceColumn: string, value: number): SourceColumnImportance {
   return { sourceColumn, permutationImportance: TrainerResultFixtures.Mwi('log-loss', value, value, value, 8) };
@@ -446,7 +458,7 @@ class FailingArtifactStore extends InMemoryArtifactStore {
 /** The unit harness (bound to the protocol row) with the given trainer answer, protocol row, artifact store and steps. */
 function protocolHarness(
   answer: ConstructorParameters<typeof FakeTrainer>[0],
-  protocolRow = ProtocolRowFixture.Row(),
+  protocolRow = TrainingHarness.UnitProtocolRow(),
   artifacts: InMemoryArtifactStore = new InMemoryArtifactStore(),
   featureSteps?: FeatureStepGraph,
 ): ReturnType<typeof TrainingHarness.ForUnit> & { artifacts: InMemoryArtifactStore } {
@@ -626,7 +638,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it("sends the pipeline's own algorithm as the single candidate and records the finalist's hyperparameters on the run", async () => {
     const { engine, deps, pipeline, runs, models } = TrainingHarness.ForUnit(years, unitColumns);
-    const trainer = new FakeTrainer((r) => TrainerResultFixtures.WithFinalist(cannedFor(r), 'xgboost', r.snapshot.featureSchemaHash));
+    const trainer = new FakeTrainer((r) => TrainerResultFixtures.WithFinalist(cannedModelFor(r), 'xgboost', r.snapshot.featureSchemaHash));
     deps.trainer = trainer;
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(trainer.Requests.map((r) => r.candidates)).toEqual([[{ name: 'xgboost', algorithmId: 'algo-xgb', driverKey: 'xgboost', hyperparameters: { max_depth: 4 } }]]);
@@ -682,7 +694,9 @@ describe('TrainingEngine — no unit pipeline trains without the protocol versio
   });
 
   it("sends the search's candidates and records the finalist's algorithm and hyperparameters", async () => {
-    const { engine, deps, trainer, pipeline, runs, models } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const { engine, deps, pipeline, runs, models } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const trainer = new FakeTrainer(cannedModelFor);
+    deps.trainer = trainer;
     const candidates = [TrainerRequestBuilder.CandidateFromPipeline('glm', 'algo-glm', 'logistic_regression', '{"C":0.5}'), TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb2', 'xgboost', '{"max_depth":2}')];
     await engine.trainModel({ pipelineId: pipeline.ID, candidates }, deps);
     expect(trainer.Requests[0].candidates).toEqual(candidates);
@@ -802,35 +816,38 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
       kind: 'date-carved', cutoff: '2025-01-01', holdoutEnd: null, developmentRowCount: 4, holdoutRowCount: 4, excludedAfterHoldoutEnd: 0,
       holdoutClassCounts: { 0: 1, 1: 3 }, holdoutPeriods: ['2025-01-01'], newEntity: null,
     });
+    // Every returned artifact is stored (lineage); the gate kept the GLM, so the model row is the GLM's artifact.
     expect(artifacts.Saved.size).toBe(3);
-    const xgbFile = results.trainer?.artifacts.find((a) => a.candidate === 'xgb')?.fileId;
-    expect(model.ArtifactFileID).toBe(xgbFile);
-    expect(JSON.parse(model.Lineage || '{}')).toMatchObject({ evaluationProtocolId: ProtocolRowFixture.ID, artifactFormat: 'ps-predictor/v2', trainingSnapshotId: run.TrainingSnapshotID });
+    expect(results.gate?.decision).toEqual({ outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null });
+    const glmFile = results.trainer?.artifacts.find((a) => a.candidate === 'glm')?.fileId;
+    expect(model?.ArtifactFileID).toBe(glmFile);
+    expect(run.ResultingModelID).toBe(model?.ID);
+    expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ evaluationProtocolId: ProtocolRowFixture.ID, artifactFormat: 'ps-predictor/v2', trainingSnapshotId: run.TrainingSnapshotID, shippedMember: 'glm', shippedDriver: 'logistic_regression' });
     expect(sidecar.CallCount).toBe(0);
   });
 
   it("stores the trainer's held-out permutation importance as the legacy share map and its kind in the evaluation record", async () => {
     const importance = [importanceOf('EventsAttended', 0.375), importanceOf('Region', 0.125), importanceOf('StartDate', -0.01)];
-    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), importance }));
+    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedModelFor(r), importance }));
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    expect(JSON.parse(model.FeatureImportance!)).toEqual({ EventsAttended: 0.75, Region: 0.25, StartDate: 0 });
-    expect(EvaluationLineage.Read(model.Lineage)?.ImportanceKind).toBe('held_out_permutation');
+    expect(JSON.parse(model?.FeatureImportance || 'null')).toEqual({ EventsAttended: 0.75, Region: 0.25, StartDate: 0 });
+    expect(EvaluationLineage.Read(model?.Lineage)?.ImportanceKind).toBe('held_out_permutation');
   });
 
   it('flags a run whose trainer importance is dominated by one feature with the LEAKAGE WARNING note, and keeps the model Draft', async () => {
     const importance = [importanceOf('EventsAttended', 0.95), importanceOf('Region', 0.01)];
-    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), importance }));
+    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedModelFor(r), importance }));
     const result = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    expect(result.run.Notes).toMatch(/^Trainer completed: finalist 'xgb'\. LEAKAGE WARNING: one field \("EventsAttended"\) is doing almost all the predicting \(99\.0% of total importance, over the 60% threshold\)/);
+    expect(result.run.Notes).toMatch(/^Trainer completed: finalist 'xgb'\. The model beats the flat guess by 0\.0680 \[0\.0500, 0\.0850\] and the best simple baseline by 0\.0060 \[0\.0020, 0\.0100\] \(log-loss, lower is better\)\. LEAKAGE WARNING: one field \("EventsAttended"\) is doing almost all the predicting \(99\.0% of total importance, over the 60% threshold\)/);
     expect(WasTrainingLeakageFlagged(result)).toBe(true);
-    expect(result.model.Status).toBe('Draft');
+    expect(result.model?.Status).toBe('Draft');
   });
 
   it('notes no dominance when no feature dominates the trainer importance, or the trainer measured none', async () => {
     for (const importance of [[importanceOf('EventsAttended', 0.5), importanceOf('Region', 0.5)], []]) {
       const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), importance }));
       const result = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-      expect(result.run.Notes).toBe("Trainer completed: finalist 'xgb'. Training completed. No single-feature dominance detected.");
+      expect(result.run.Notes).toBe("Trainer completed: finalist 'xgb'. The simple baseline glm beats the flat guess by 0.0650 [0.0480, 0.0820] (log-loss); the trained model does not beat it, so the simple baseline is kept. Training completed. No single-feature dominance detected.");
       expect(WasTrainingLeakageFlagged(result)).toBe(false);
     }
   });
@@ -1026,5 +1043,122 @@ describe('TrainingEngine — compute pricing on the run', () => {
     expect(sidecar.CallCount).toBe(0);
     expect(factory.Runs.length).toBe(0);
     expect(factory.Models.length).toBe(0);
+  });
+});
+
+describe('TrainingEngine — the gate decision decides what ships', () => {
+  /** The C1-shaped heuristic member "renewed last year", the lowest simple score, which the model does not beat. */
+  const heuristicKept = (r: TrainerRequest): TrainerCompleted => {
+    const canned = cannedFor(r);
+    return {
+      ...canned,
+      baselines: [...canned.baselines, { baseline: { kind: 'incumbent-heuristic', name: 'renewed last year' }, role: 'simple', holdout: TrainerResultFixtures.Mwi('log-loss', 0.44, 0.42, 0.46, 1205) }],
+      comparisons: {
+        ...canned.comparisons,
+        'heuristic:renewed last yearVsDummy': { value: 0.08, ci: [0.06, 0.1], beats: true },
+        'modelVs:heuristic:renewed last year': { value: -0.012, ci: [-0.02, -0.004], beats: false },
+      },
+      gate: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'heuristic:renewed last year', shippedRole: 'simpleBaseline', note: null },
+    };
+  };
+
+  it("creates the kept GLM's model row: its artifact, its catalog algorithm, its holdout score, and no inner score, importance or hyperparameters", async () => {
+    const { engine, deps, pipeline, runs, models } = protocolHarness((r) => ({ ...cannedFor(r), importance: [importanceOf('EventsAttended', 0.4)] }));
+    const loader = new FakeRecordLoader(pipeline);
+    deps.recordLoader = loader;
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const results = storedResults(run.ValidationResults);
+    if (results.status !== 'completed') throw new Error('not completed');
+    expect(models).toHaveLength(1);
+    expect(model?.ArtifactFileID).toBe(results.trainer?.artifacts.find((a) => a.candidate === 'glm')?.fileId);
+    expect(loader.DriverLookups).toEqual(['logistic_regression']);
+    expect([model?.AlgorithmID, model?.Metrics, model?.FeatureImportance, runs[0].Hyperparameters]).toEqual(['algo-logreg', '{}', '{}', '{}']);
+    expect(JSON.parse(model?.HoldoutMetrics || 'null')).toEqual({ 'log-loss': 0.455 });
+    expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ shippedMember: 'glm', shippedDriver: 'logistic_regression' });
+    expect([results.gate?.decision.outcome, results.gate?.reason.code, results.gate?.holdoutRows]).toEqual(['keep-simple-baseline', 'simple-baseline-carries-signal', 1205]);
+  });
+
+  it("names the pipeline's algorithm when the kept member's driver has no catalog row, and stores the shipped driver in the lineage", async () => {
+    const { engine, deps, pipeline } = protocolHarness(cannedFor);
+    deps.recordLoader = new FakeRecordLoader(pipeline, 5, {});
+    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(model?.AlgorithmID).toBe('algo-xgb');
+    expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ shippedMember: 'glm', shippedDriver: 'logistic_regression' });
+  });
+
+  it("creates the finalist's model row when the gate ships the model", async () => {
+    // The finalist is the request's one candidate (the pipeline's own algorithm, `xgboost`).
+    const wins = (r: TrainerRequest): TrainerCompleted => TrainerResultFixtures.WithFinalist({ ...cannedModelFor(r), importance: [importanceOf('EventsAttended', 0.4)] }, 'xgboost', r.snapshot.featureSchemaHash);
+    const { engine, deps, pipeline, runs } = protocolHarness(wins);
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const results = storedResults(run.ValidationResults);
+    if (results.status !== 'completed') throw new Error('not completed');
+    expect(model?.ArtifactFileID).toBe(results.trainer?.artifacts.find((a) => a.candidate === 'xgboost')?.fileId);
+    expect([model?.AlgorithmID, model?.Metrics, model?.FeatureImportance, runs[0].Hyperparameters]).toEqual(['algo-xgb', '{"log-loss":0.45}', '{"EventsAttended":1}', '{"max_depth":4}']);
+    expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ shippedMember: 'xgboost', shippedDriver: 'xgboost' });
+    expect([results.gate?.decision.outcome, results.gate?.guards.modelAucInterval]).toEqual(['model', { level: 0.95, lower: 0.63, upper: 0.71 }]);
+  });
+
+  it('completes a no-signal run with its gate record and the reason, stores every artifact and creates no model row', async () => {
+    const { engine, deps, pipeline, runs, models, artifacts } = protocolHarness(cannedNoSignalFor);
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const results = storedResults(run.ValidationResults);
+    if (results.status !== 'completed') throw new Error('not completed');
+    expect([model, models.length, run.ResultingModelID, runs[0].Status, artifacts.Saved.size]).toEqual([null, 0, null, 'Completed', 3]);
+    expect([results.gate?.decision.outcome, results.gate?.reason.code]).toEqual(['no-signal', 'nothing-beats-dummy']);
+    expect(run.Notes).toContain('nor any simple baseline beats the flat guess on log-loss: no signal.');
+    expect(TrainingEngine.NoModelReason({ model, run })).toBe(results.gate?.reason.text);
+  });
+
+  it('refuses a run whose sidecar gate differs from the engine decision: Failed, a gate-stage refusal, no artifact and no model', async () => {
+    const differs = (r: TrainerRequest): TrainerCompleted => ({ ...cannedFor(r), gate: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'oneFeature', shippedRole: 'simpleBaseline', note: null } });
+    const { engine, deps, pipeline, runs, models, artifacts } = protocolHarness(differs);
+    const training = engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    await expect(training).rejects.toBeInstanceOf(TrainingRefusedError);
+    await expect(training).rejects.toThrow("Refused (sidecar-gate-mismatch): the trainer decided b:keep-simple-baseline (oneFeature) but the engine's transcription decided b:keep-simple-baseline (glm)");
+    expect([runs[0].Status, runs[0].ResultingModelID, models.length, artifacts.Saved.size]).toEqual(['Failed', null, 0, 0]);
+    const stored = storedResults(runs[0].ValidationResults);
+    expect(stored.status === 'refused' ? [stored.refusal.stage, stored.refusal.reason.kind] : null).toEqual(['gate', 'sidecar-gate-mismatch']);
+  });
+
+  it("stores no-signal with the guard's reason when the holdout's minority class is below the protocol minimum, and creates no model row", async () => {
+    const { engine, deps, pipeline, models } = protocolHarness(cannedFor, ProtocolRowFixture.Row());
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const results = storedResults(run.ValidationResults);
+    if (results.status !== 'completed') throw new Error('not completed');
+    expect([model, models.length]).toEqual([null, 0]);
+    expect([results.gate?.transcribed.outcome, results.gate?.decision.outcome, results.gate?.reason.code]).toEqual(['keep-simple-baseline', 'no-signal', 'minority-class-below-minimum']);
+    expect(results.gate?.guards.holdoutClassCounts).toEqual({ 0: 1, 1: 3 });
+  });
+
+  it("stores a kept heuristic rule's decision and creates no model row (a rule is not an artifact)", async () => {
+    const { engine, deps, pipeline, models } = protocolHarness(heuristicKept);
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const results = storedResults(run.ValidationResults);
+    if (results.status !== 'completed') throw new Error('not completed');
+    expect([model, models.length, run.ResultingModelID, run.Hyperparameters]).toEqual([null, 0, null, '{}']);
+    expect([results.gate?.decision.shipped, results.gate?.reason.code]).toEqual(['heuristic:renewed last year', 'heuristic-carries-signal']);
+  });
+
+  it('fails a run whose trainer returned no artifact for the shipped member before anything is stored', async () => {
+    const noGlm = (r: TrainerRequest): TrainerCompleted => { const c = cannedFor(r); return { ...c, artifacts: c.artifacts.filter((a) => a.candidate !== 'glm') }; };
+    const { engine, deps, pipeline, runs, models, artifacts } = protocolHarness(noGlm);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow("the trainer returned no artifact for the shipped 'glm' (returned: xgb, oneFeature)");
+    expect([runs[0].Status, models.length, artifacts.Saved.size]).toEqual(['Failed', 0, 0]);
+  });
+
+  it("maps a shippable member to the driver the trainer fits it with, and refuses a yardstick", () => {
+    const binary: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 };
+    const glm = { kind: 'glm', family: 'logistic', penalty: 'l2' } as const;
+    const oneFeature = { kind: 'one-feature', selection: 'best-single-feature-inner-cv' } as const;
+    expect(TrainingEngine.MemberDriverKey(glm, binary)).toBe('logistic_regression');
+    expect(TrainingEngine.MemberDriverKey(oneFeature, { kind: 'multiclass', classOrder: ['a', 'b', 'c'], adverseIndices: [0] })).toBe('logistic_regression');
+    expect(TrainingEngine.MemberDriverKey(oneFeature, { kind: 'continuous' })).toBe('ridge');
+    expect(TrainingEngine.MemberDriverKey(glm, { kind: 'count' })).toBe('poisson_glm');
+    expect(TrainingEngine.MemberDriverKey(glm, { kind: 'non-negative', tweediePower: 1.5 })).toBe('tweedie_glm');
+    expect(TrainingEngine.MemberDriverKey(glm, { kind: 'forecast', valueKind: 'count' })).toBe('poisson_glm');
+    expect(TrainingEngine.MemberDriverKey({ kind: 'naive' }, { kind: 'forecast', valueKind: 'continuous' })).toBe('naive');
+    expect(TrainingEngine.MemberDriverKey({ kind: 'seasonal-naive', season: 12 }, { kind: 'forecast', valueKind: 'continuous' })).toBe('seasonal-naive');
+    expect(() => TrainingEngine.MemberDriverKey({ kind: 'dummy', name: 'base-rate' }, binary)).toThrow('a dummy baseline is a yardstick and never ships as an artifact');
   });
 });

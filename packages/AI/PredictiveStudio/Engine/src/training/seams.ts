@@ -15,7 +15,8 @@ import {
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
   TrainRequest,
   TrainResponse,
@@ -120,6 +121,33 @@ export class RunViewRecordLoader implements IRecordLoader {
       return null;
     }
     return result.Results[0].DriverClass ?? null;
+  }
+
+  /**
+   * One read of `MJ: ML Algorithms` by `DriverClass` (at most two rows). Two rows are refused rather than one picked,
+   * the same ambiguity rule the agent's algorithm-name resolver applies (`PredictiveStudioPipelineBuilder.MatchAlgorithm`).
+   *
+   * @inheritdoc
+   * @throws Error when the read fails, or naming both rows when two share the driver key
+   */
+  public async ResolveAlgorithmIdForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLAlgorithmEntity, 'ID' | 'Name'>>(
+      {
+        EntityName: 'MJ: ML Algorithms',
+        ExtraFilter: `DriverClass='${EscapeSQLString(driverKey)}'`,
+        Fields: ['ID', 'Name'],
+        MaxRows: 2,
+        SkipTotalRowCount: true,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!result.Success) throw new Error(`Reading MJ: ML Algorithms for driver '${driverKey}' failed: ${result.ErrorMessage || 'unknown error'}`);
+    if (result.Results.length > 1) {
+      const named = result.Results.map((a) => `'${a.Name}' (${NormalizeUUID(a.ID)})`).join(' and ');
+      throw new Error(`Driver '${driverKey}' matches more than one MJ: ML Algorithms row: ${named}; the shipped model's algorithm is ambiguous.`);
+    }
+    return result.Results.length === 1 ? result.Results[0].ID : null;
   }
 }
 

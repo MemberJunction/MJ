@@ -75,21 +75,25 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
 
     const result = await TrainingDelegation.TrainModelViaEngine(engineInput, provider, user, this.engine());
 
+    const model = result.model;
     context.emitProgress({
       OperationKey: this.OperationKey,
       Processed: 1,
       Total: 1,
       Status: 'Running',
-      Message: `Trained model ${result.model.ID} (v${result.model.Version}).`,
+      Message: model === null
+        ? `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`
+        : `Trained model ${model.ID} (v${model.Version}).`,
     });
-
+    // A run whose gate decision ships no artifact completes without a model: the model fields are null and the run's
+    // stored gate record holds the reason.
     return {
-      modelId: result.model.ID,
+      modelId: model === null ? null : model.ID,
       trainingRunId: result.run.ID,
-      version: result.model.Version,
-      holdoutMetrics: result.model.HoldoutMetrics ?? undefined,
+      version: model === null ? null : model.Version,
+      holdoutMetrics: model === null ? undefined : model.HoldoutMetrics || undefined,
       leakageFlagged: WasTrainingLeakageFlagged(result),
-      status: result.model.Status,
+      status: model === null ? null : model.Status,
     };
   }
 

@@ -8,18 +8,22 @@
  * references, never bytes) and the request settings (`trainerRequest`); a unit run stored before every unit run was
  * trained under its protocol holds the legacy trainer's metrics and row counts (`legacy`) and the request settings
  * (`legacyRequest`), and is read but no longer written. A completed run also stores the
- * locked-holdout carve its protocol declared (`carve`). An envelope written before trainer results or the carve were
- * stored has no `trainer`/`trainerRequest`/`carve` members and reads them as null.
+ * locked-holdout carve its protocol declared (`carve`) and the gate decision with its reason (`gate`, the record
+ * `GateRecords.BuildStoredGateRecord` builds). An envelope written before trainer results, the carve or the gate record
+ * were stored has no `trainer`/`trainerRequest`/`carve`/`gate` members and reads them as null. A run whose sidecar
+ * gate decision differs from the TypeScript transcription is refused at the `gate` stage.
  */
 import { z } from 'zod';
 import type { AssemblyRefusal } from './assembly-contract';
 import type { HoldoutSplit } from './evaluation-protocol';
+import type { GateGuardInputs, GateGuardRefusal, GateReason, GateReasonCode, StoredGateIntervals, StoredInterval } from './gate';
+import type { GateStageRefusal, SliceCoverage, StoredGateRecord } from './run-evaluation';
 import type { CarveRefusal, HoldoutCarveSummary } from './holdout-carve';
 import type { UnitRefusal } from './prediction-unit';
 import { TASK_KINDS } from './task-type';
 import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
 import type { StoredTrainerResult, TrainerFailureStage, TrainerRequestConfig } from './trainer-contract';
-import { TrainerResultSchemas } from './trainer-result-schemas';
+import { METRIC_KEYS, TrainerResultSchemas } from './trainer-result-schemas';
 import { SELECTION_FAILURE_REASONS, type SelectionFailureReason } from './selection';
 
 export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
@@ -46,7 +50,8 @@ export type TrainingRefusal =
   | { readonly stage: 'unit'; readonly reason: UnitRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly stage: 'assembly'; readonly reason: AssemblyRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly stage: 'trainer'; readonly reason: TrainerRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'carve'; readonly reason: CarveRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'carve'; readonly reason: CarveRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'gate'; readonly reason: GateStageRefusal };  // case-violation-ok-legacy-back-compat: stored envelope key
 
 export interface UnitResolutionCounts {
   readonly rowsRead: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -94,6 +99,8 @@ export type TrainingRunResults =
       readonly trainerRequest: TrainerRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       /** The locked-holdout carve the protocol declared; null for a run without one and for an envelope stored before it existed. */
       readonly carve: HoldoutCarveSummary | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      /** The gate decision with its reason; null for a run without a trainer result and for an envelope stored before it existed. */
+      readonly gate: StoredGateRecord | null;  // case-violation-ok-legacy-back-compat: stored envelope key
     };
 
 // The stored envelope is parsed with zod, never `JSON.parse(...) as T`: the column is text any writer
@@ -179,12 +186,63 @@ const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary, z.ZodTypeDef, un
     trainingGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/).nullable().default(null),
   }).nullable(),
 });
+/** Every gate reason code; `satisfies` refuses a value that is not one. */
+const GATE_REASON_CODES = [
+  'model-beats-best-simple', 'only-model-beats-dummy', 'simple-baseline-carries-signal', 'heuristic-carries-signal',
+  'nothing-beats-dummy', 'minority-class-below-minimum', 'auc-interval-contains-chance', 'auc-interval-missing',
+] as const satisfies readonly GateReasonCode[];
+/** Compile-time completeness: a reason code added without listing it here breaks the build (its stored record would be refused on read). */
+const gateReasonCodesComplete: ListsEveryMember<GateReasonCode, (typeof GATE_REASON_CODES)[number]> = true;
+void gateReasonCodesComplete;
+const storedIntervalSchema: z.ZodType<StoredInterval> = z.object({ value: z.number(), lower: z.number(), upper: z.number() });
+const storedGateIntervalsSchema: z.ZodType<StoredGateIntervals> = z.object({
+  modelName: z.string(),
+  modelVsDummy: storedIntervalSchema,
+  modelVsBestSimple: storedIntervalSchema.nullable(),
+  memberVsDummy: z.record(storedIntervalSchema),
+  memberScores: z.record(z.number()),
+  deliveredMember: z.string().nullable(),
+});
+const gateGuardInputsSchema: z.ZodType<GateGuardInputs> = z.object({
+  taskKind: z.enum(TASK_KINDS),
+  holdoutClassCounts: z.record(nonNegativeCount).nullable(),
+  modelAucInterval: TrainerResultSchemas.Interval.nullable(),
+  minMinorityClassRows: nonNegativeCount,
+});
+const gateGuardRefusalSchema: z.ZodType<GateGuardRefusal> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('minority-class-below-minimum'), classLabel: z.string(), rows: z.number().int(), minimum: z.number().int() }),
+  z.object({ kind: z.literal('auc-interval-contains-chance'), lower: z.number(), upper: z.number() }),
+  z.object({ kind: z.literal('auc-interval-missing') }),
+]);
+const gateReasonSchema: z.ZodType<GateReason> = z.object({ code: z.enum(GATE_REASON_CODES), text: z.string() });
+const sliceCoverageSchema: z.ZodType<SliceCoverage> = z.object({
+  missingSubgroups: z.array(z.string()), missingPeriods: z.array(z.string()), slicesWithoutInterval: nonNegativeCount,
+});
+const storedGateRecordSchema: z.ZodType<StoredGateRecord> = z.object({
+  evaluationProtocolId: z.string(),
+  margin: z.number().nonnegative(),
+  primaryMetric: z.enum(METRIC_KEYS),
+  holdoutRows: nonNegativeCount,
+  intervals: storedGateIntervalsSchema,
+  guards: gateGuardInputsSchema,
+  transcribed: TrainerResultSchemas.GateDecision,
+  decision: TrainerResultSchemas.GateDecision,
+  guardRefusal: gateGuardRefusalSchema.nullable(),
+  reason: gateReasonSchema,
+  incumbentDiff: TrainerResultSchemas.IncumbentDiff.nullable(),
+  sliceCoverage: sliceCoverageSchema,
+});
+const gateStageRefusalSchema: z.ZodType<GateStageRefusal> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('sidecar-gate-mismatch'), sidecar: TrainerResultSchemas.GateDecision, engine: TrainerResultSchemas.GateDecision }),
+  z.object({ kind: z.literal('missing-comparison'), comparison: z.string() }),
+]);
 const trainingRefusalSchema: z.ZodType<TrainingRefusal> = z.discriminatedUnion('stage', [
   z.object({ stage: z.literal('pipeline'), reason: pipelineRefusalSchema }),
   z.object({ stage: z.literal('unit'), reason: unitRefusalSchema }),
   z.object({ stage: z.literal('assembly'), reason: assemblyRefusalSchema }),
   z.object({ stage: z.literal('trainer'), reason: trainerRefusalSchema }),
   z.object({ stage: z.literal('carve'), reason: carveRefusalSchema }),
+  z.object({ stage: z.literal('gate'), reason: gateStageRefusalSchema }),
 ]);
 const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
   rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
@@ -208,7 +266,7 @@ const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
     random_state: z.number().int().optional(),
   }),
 });
-// The input type is left open (`unknown`) because `trainer`, `trainerRequest` and `carve` may be absent on read (an
+// The input type is left open (`unknown`) because `trainer`, `trainerRequest`, `carve` and `gate` may be absent on read (an
 // envelope written before they existed) while the parsed value always has them (absent reads as null).
 const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unknown> = z.discriminatedUnion('status', [
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('refused'), refusal: trainingRefusalSchema }),
@@ -221,6 +279,7 @@ const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unkn
     trainer: TrainerResultSchemas.StoredTrainerResult.nullable().default(null),
     trainerRequest: TrainerResultSchemas.TrainerRequestConfig.nullable().default(null),
     carve: holdoutCarveSummarySchema.nullable().default(null),
+    gate: storedGateRecordSchema.nullable().default(null),
   }),
 ]);
 

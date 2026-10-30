@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse, FeatureSchemaEntry } from '@memberjunction/predictive-studio-core';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 
@@ -12,7 +12,9 @@ import {
   ModelArtifactMissingMessage,
   ModelNeedsTrainingError,
 } from '../model-readiness';
-import { PipelineAutoTrainer } from '../auto-train';
+import { AutoTrainShippedNoModelError, PipelineAutoTrainer } from '../auto-train';
+import { TrainingDelegation } from '../../operations/delegation';
+import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import type { AutoTrainRequest, IMLModelLoader, IModelAutoTrainer, ISidecarPredictor, MLInferenceDeps } from '../types';
 import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
@@ -290,5 +292,24 @@ describe('PipelineAutoTrainer', () => {
       trainer.EnsureTrainedModel({ pipelineId: "x' OR 1=1 --", currentModelId: null, recordProcessId: null }, USER, PROVIDER),
     ).rejects.toThrow(/not a valid/);
     expect(trainer.TrainCount).toBe(0);
+  });
+});
+
+describe('PipelineAutoTrainer.TrainThroughEngine', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('throws a named error carrying the stored reason when the training run shipped no model', async () => {
+    const run = { ID: 'run-7', Notes: '', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() } as unknown as MJMLTrainingRunEntity;
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: null, run });
+    const attempt = PipelineAutoTrainer.TrainThroughEngine(PIPE, PROVIDER, USER);
+    await expect(attempt).rejects.toBeInstanceOf(AutoTrainShippedNoModelError);
+    await expect(attempt).rejects.toMatchObject({ PipelineID: PIPE, TrainingRunID: 'run-7', Reason: TrainerResultFixtures.NoSignalReason });
+    await expect(attempt).rejects.toThrow(`Auto-train: training pipeline ${PIPE} (run run-7) shipped no model, so there is nothing to score with: ${TrainerResultFixtures.NoSignalReason}`);
+  });
+
+  it("returns the run's model when one shipped", async () => {
+    const model = { ID: 'new-model' } as unknown as MJMLModelEntity;
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model, run: { ID: 'run-8' } as unknown as MJMLTrainingRunEntity });
+    await expect(PipelineAutoTrainer.TrainThroughEngine(PIPE, PROVIDER, USER)).resolves.toBe(model);
   });
 });

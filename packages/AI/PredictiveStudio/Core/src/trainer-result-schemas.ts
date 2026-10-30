@@ -11,13 +11,14 @@
  * name in `Sidecar/src/python/app/trainer_schemas.py`, so a test can compare the two declarations member by member.
  */
 import { z } from 'zod';
-import type { BaselineSpec, Budgets, CalibrationMethod, MetricKey, MetricWithInterval } from './evaluation-protocol';
+import type { BaselineSpec, Budgets, CalibrationMethod, Interval, MetricKey, MetricWithInterval } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
 import type {
   CandidateSpec,
   LeakageFlag,
   SliceResult,
   StoredTrainerResult,
+  TrainerCompleted,
   TrainerFailureStage,
   TrainerRequestConfig,
   TrainerResult,
@@ -26,8 +27,8 @@ import type {
 /** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
 type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
 
-/** Every metric key; `satisfies` refuses a value that is not one. */
-const METRIC_KEYS = [
+/** Every metric key; `satisfies` refuses a value that is not one (the one list every stored-metric schema reads). */
+export const METRIC_KEYS = [
   'log-loss', 'brier', 'multiclass-log-loss', 'rmse', 'mae', 'poisson-deviance', 'tweedie-deviance', 'mase',
   'auc', 'accuracy', 'f1', 'precision', 'recall', 'r2', 'calibration-slope',
 ] as const satisfies readonly MetricKey[];
@@ -226,6 +227,8 @@ const MODEL_OBJECTS = {
 export class TrainerResultSchemas {
   /** The whole answer: a completed run or a failure naming its stage. */
   public static readonly TrainerResult: z.ZodType<TrainerResult> = z.discriminatedUnion('status', [trainerCompleted, trainerFailed]);
+  /** An interval at a stated level. */
+  public static readonly Interval: z.ZodType<Interval> = interval;
   /** One score with its interval. */
   public static readonly MetricWithInterval: z.ZodType<MetricWithInterval> = metricWithInterval;
   /** One baseline specification. */
@@ -234,6 +237,8 @@ export class TrainerResultSchemas {
   public static readonly Budgets: z.ZodType<Budgets> = budgets;
   /** One paired comparison. */
   public static readonly PairedComparison: z.ZodType<PairedComparison> = pairedComparison;
+  /** The finalist against the current published model on the same holdout rows. */
+  public static readonly IncumbentDiff: z.ZodType<NonNullable<TrainerCompleted['incumbentDiff']>> = incumbentDiff;
   /** The gate's decision. */
   public static readonly GateDecision: z.ZodType<GateDecision> = z.discriminatedUnion('outcome', [gateModel, gateKeepSimple, gateNoSignal]);
   /** One leakage-audit finding. */

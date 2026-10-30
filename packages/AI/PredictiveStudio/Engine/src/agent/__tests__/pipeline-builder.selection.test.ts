@@ -4,13 +4,14 @@ import { fileURLToPath } from 'node:url';
 import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import {
-  TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrustVerdicts,
-  type CandidateInnerScore, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
+  GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrainingRunResultsParser, TrustVerdicts,
+  type CandidateInnerScore, type StoredGateRecord, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioPipelineBuilder, RESERVED_CANDIDATE_NAMES, RESERVED_CANDIDATE_PREFIX, type AlgorithmRow } from '../pipeline-builder';
 import { TrainingDelegation } from '../../operations/delegation';
 import type { TrainModelInput, TrainModelResult } from '../../training/types';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
@@ -139,15 +140,36 @@ function measuredModel(): MJMLModelEntity {
   return { ID: 'M-1', Version: 1, Metrics: null, HoldoutMetrics: JSON.stringify({ auc: 0.8 }), ProblemType: 'classification', FeatureImportance: null, Lineage: null } as unknown as MJMLModelEntity;
 }
 
-function completedRun(innerScores: readonly CandidateInnerScore[], finalist: string): MJMLTrainingRunEntity {
-  const canned = TrainerResultFixtures.CannedCompleted(RUN_ID, { budgets: { maxComputeSeconds: 3600, maxTokens: 0, maxCandidates: 10, hardStop: true } });
-  const result = { ...canned, innerScores, finalist, holdoutAccess: { ...canned.holdoutAccess, finalist }, artifacts: [TrainerResultFixtures.Artifact(finalist, 'f'.repeat(64))] };
+/**
+ * A completed search run whose stored trainer result has these inner scores and finalist, and whose stored gate record
+ * ships the finalist (`model`) or keeps the GLM (`keep-simple-baseline`).
+ */
+function completedRun(innerScores: readonly CandidateInnerScore[], finalist: string, outcome: 'model' | 'keep-simple-baseline' = 'model'): MJMLTrainingRunEntity {
+  const budgets = { budgets: { maxComputeSeconds: 3600, maxTokens: 0, maxCandidates: 10, hardStop: true as const } };
+  const canned = outcome === 'model' ? TrainerResultFixtures.CannedModelWins(RUN_ID, budgets) : TrainerResultFixtures.CannedCompleted(RUN_ID, budgets);
+  const result = { ...TrainerResultFixtures.WithFinalist(canned, finalist, 'f'.repeat(64)), innerScores };
+  const gate = GateRecords.BuildStoredGateRecord({ Result: result, Protocol: ProtocolRowFixture.Spec(), Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, Carve: null });
+  if (gate.Ok === false) throw new Error(`completedRun: the gate record was refused: ${gate.Refusal.kind}`);
   const results: TrainingRunResults = {
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 10, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 10, dataCutoff: '2026-01-01' },
-    legacy: null, legacyRequest: null, trainer: TrainerContract.ToStoredTrainerResult(result, new Map([[finalist, 'F-1']])), trainerRequest: null, carve: null,
+    legacy: null, legacyRequest: null, trainer: TrainerContract.ToStoredTrainerResult(result, new Map([[finalist, 'F-1']])), trainerRequest: null, carve: null, gate: gate.Record,
   };
   return { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: JSON.stringify(results) } as unknown as MJMLTrainingRunEntity;
+}
+
+/** The completed envelope a run stores. */
+function storedEnvelope(run: MJMLTrainingRunEntity): Extract<TrainingRunResults, { status: 'completed' }> {
+  const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+  if (!parsed.Ok || parsed.Value.status !== 'completed') throw new Error('storedEnvelope: not a completed envelope');
+  return parsed.Value;
+}
+
+/** The gate record a completed run stores. */
+function storedGate(run: MJMLTrainingRunEntity): StoredGateRecord {
+  const gate = storedEnvelope(run).gate;
+  if (gate === null) throw new Error('storedGate: the run stores no gate record');
+  return gate;
 }
 
 const inner = (candidate: string, value: number): CandidateInnerScore => ({ candidate, inner: TrainerResultFixtures.Mwi('log-loss', value, value - 0.02, value + 0.02, 400), folds: 15, optimistic: true });
@@ -211,6 +233,28 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
       [5, 'D', 0.45, 0.43, 0.47, true, false, undefined, undefined],
     ].map((row) => row.map((v) => (typeof v === 'number' ? expect.closeTo(v, 12) : v))));
     expect(result.leaderboard?.every((r) => r.metricName === 'log-loss')).toBe(true);
+  });
+
+  it("links no candidate row to the model when the gate kept a simple baseline (the model is the baseline's, not the finalist's)", async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    spyTraining(world, completedRun([inner('A', 0.42), inner('B', 0.40)], 'B', 'keep-simple-baseline'));
+    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: false });
+    expect(result.leaderboard?.map((r) => [r.algorithm, r.isWinner, r.ModelID, r.modelId])).toEqual([['B', true, undefined, undefined], ['A', false, undefined, undefined]]);
+  });
+
+  it('holds a build whose training run shipped no model, with the stored reason, and publishes nothing', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const run = completedRun([inner('A', 0.42)], 'A', 'keep-simple-baseline');
+    const noModel = { ...storedEnvelope(run), gate: { ...storedGate(run), decision: { outcome: 'no-signal' as const, branch: 'c:no-signal' as const, shipped: null, shippedRole: null, note: null }, reason: { code: 'nothing-beats-dummy' as const, text: 'Neither the model nor any simple baseline beats the flat guess.' } } };
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: null, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: JSON.stringify(noModel) } as unknown as MJMLTrainingRunEntity });
+    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
+    expect([result.success, result.published, result.modelId, result.model, result.trust]).toEqual([true, false, undefined, undefined, undefined]);
+    expect(result.heldReason).toBe('Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.');
+    expect(result.leaderboard?.map((r) => r.ModelID)).toEqual([undefined]);
   });
 
   it('binds a default protocol to a unit pipeline before the search trains, with a budget for every candidate', async () => {

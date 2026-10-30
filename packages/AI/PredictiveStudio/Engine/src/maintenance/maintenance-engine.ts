@@ -28,13 +28,14 @@
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError, type UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, type UserInfo } from '@memberjunction/core';
 import { MS_PER_DAY, MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLModelEntity,
   MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
 import type { TrainModelInput, TrainModelResult } from '../training';
+import { TrainingEngine } from '../training/training-engine';
 
 import type {
   RetrainingPolicy,
@@ -248,7 +249,8 @@ export class MaintenanceEngine {
    * Retrain when stale: if `staleness.stale`, retrain the binding's model against
    * the SAME pipeline → a new immutable version, then compare the challenger's
    * holdout metric vs the incumbent's and return a promotion RECOMMENDATION
-   * (`promote` / `hold`). Never auto-promotes.
+   * (`promote` / `hold`). Never auto-promotes. A retrain whose gate decision ships no model has no challenger: the
+   * outcome carries the run without a comparison, the incumbent stays, and the stored reason is logged.
    *
    * @param binding the binding whose model may be retrained
    * @param incumbent the current (stale) model
@@ -276,6 +278,11 @@ export class MaintenanceEngine {
 
     const p = this.resolvePolicy(policy);
     const challenger = await this.retrainSamePipeline(incumbent, deps, trainInputOverrides);
+    if (challenger.model === null) {
+      // The retrain's gate decision shipped no artifact: there is no challenger to compare, so the incumbent stays.
+      LogStatus(`MaintenanceEngine: binding ${binding.ID}: the retrain of model ${incumbent.ID} shipped no model (run ${challenger.run.ID}); the incumbent stays. ${TrainingEngine.NoModelReason(challenger)}`);
+      return { bindingId: binding.ID, incumbentModelId: incumbent.ID, retrained: true, stalenessReasons: staleness.reasons, challenger };
+    }
     const comparison = this.CompareChallenger(incumbent, challenger.model, p);
 
     return {
