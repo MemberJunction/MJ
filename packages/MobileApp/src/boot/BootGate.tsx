@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, usePathname } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useMJ } from '@/providers/mj-provider';
@@ -30,6 +30,7 @@ import { Colors, Radius, Type } from '@/theme/tokens';
  */
 export function BootGate({ children }: { children: ReactNode }) {
     const { status, error, signOut } = useMJ();
+    const pathname = usePathname();
     const [showEscape, setShowEscape] = useState(false);
 
     useEffect(() => {
@@ -75,7 +76,13 @@ export function BootGate({ children }: { children: ReactNode }) {
         );
     }
     if (status === 'ready') return <>{children}</>;
-    return <Redirect href="/login" />;
+    if (pathname === '/login') return <>{children}</>;
+    return (
+        <>
+            {children}
+            <Redirect href="/login" />
+        </>
+    );
 }
 
 const styles = StyleSheet.create({

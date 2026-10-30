@@ -13,14 +13,25 @@ import { useAppLock } from '@/auth/useAppLock';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Render `children` when unlocked; otherwise render the lock screen.
+ * Render `children` at all times so navigation state, drafts, and active voice
+ * sessions survive background transitions; when locked, cover `children` with
+ * an opaque full-screen {@link LockScreen} overlay that intercepts touches.
  *
  * @param props.children The app content to protect (the router stack).
  */
 export function AppLockGate({ children }: { children: ReactNode }) {
     const { State: state, Unlock: unlock } = useAppLock();
-    if (state === 'unlocked') return <>{children}</>;
-    return <LockScreen authenticating={state === 'authenticating'} onUnlock={() => void unlock()} />;
+    const isLocked = state !== 'unlocked';
+    return (
+        <View style={styles.container}>
+            {children}
+            {isLocked ? (
+                <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+                    <LockScreen authenticating={state === 'authenticating'} onUnlock={() => void unlock()} />
+                </View>
+            ) : null}
+        </View>
+    );
 }
 
 /**
@@ -51,6 +62,7 @@ function LockScreen({ authenticating, onUnlock }: { authenticating: boolean; onU
 }
 
 const styles = StyleSheet.create({
+    container: { flex: 1 },
     root: { flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
     badge: {
         width: 72,

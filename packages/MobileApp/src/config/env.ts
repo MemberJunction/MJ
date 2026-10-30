@@ -27,12 +27,20 @@ import { Platform } from 'react-native';
 const LocalApiHost: string =
   process.env.EXPO_PUBLIC_MJ_API_HOST ?? (Platform.OS === 'android' ? '10.0.2.2' : 'localhost');
 
+const LocalApiPort: string = process.env.EXPO_PUBLIC_MJ_API_PORT ?? '4000';
+
+const ResolvedGraphqlUrl: string =
+  process.env.EXPO_PUBLIC_MJ_GRAPHQL_URL ?? `http://${LocalApiHost}:${LocalApiPort}/graphql`;
+
+const ResolvedGraphqlWsUrl: string =
+  process.env.EXPO_PUBLIC_MJ_WS_URL ?? ResolvedGraphqlUrl.replace(/^http/i, 'ws');
+
 export const Env = {
   /** MJAPI GraphQL endpoint. */
-  graphqlUrl: `http://${LocalApiHost}:4001/graphql`,
+  graphqlUrl: ResolvedGraphqlUrl,
 
   /** WebSocket subscription endpoint. */
-  graphqlWsUrl: `ws://${LocalApiHost}:4001/graphql`,
+  graphqlWsUrl: ResolvedGraphqlWsUrl,
 
   // ---------------------------------------------------------------------
   // Auth0 (primary mobile auth path)

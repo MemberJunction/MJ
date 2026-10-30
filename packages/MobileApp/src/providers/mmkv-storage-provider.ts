@@ -176,4 +176,15 @@ export class MMKVStorageProvider implements ILocalStorageProvider {
     async GetCategoryKeys(category: string): Promise<string[]> {
         return Array.from(this.getCategoryIndex(category || DEFAULT_CATEGORY));
     }
+
+    /**
+     * Wipe every cached entry and category index in the underlying MMKV store.
+     * Invoked on `signOut()` so one user's cached datasets and RunView results
+     * never survive into the next user's session on a shared device.
+     */
+    ClearAll(): void {
+        if (typeof this._mmkv.clearAll === 'function') {
+            this._mmkv.clearAll();
+        }
+    }
 }

@@ -41,7 +41,7 @@ export default function HomeScreen() {
         () => (status === 'ready' ? new Metadata().CurrentUser ?? null : null),  // global-provider-ok: single-provider mobile client
         [status],
     );
-    const { conversations, loading, refresh } = useConversations();
+    const { Conversations: conversations, Loading: loading, Refresh: refresh } = useConversations();
     const { agents } = useAgents();
     const [apps, setApps] = useState<MobileApplication[]>([]);
 
@@ -120,21 +120,21 @@ export default function HomeScreen() {
                     >
                         {recent.map((c) => (
                             <Pressable
-                                key={c.id}
+                                key={c.Id}
                                 style={styles.row}
                                 accessibilityRole="button"
-                                accessibilityLabel={c.title}
-                                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: c.id } })}
+                                accessibilityLabel={c.Title}
+                                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: c.Id } })}
                             >
-                                <View style={[styles.rowAvatar, { backgroundColor: c.agents[0]?.color ?? Colors.brand }]}>
-                                    <Text style={styles.rowAvatarText}>{c.agents[0]?.initial ?? 'A'}</Text>
+                                <View style={[styles.rowAvatar, { backgroundColor: c.Agents[0]?.color ?? Colors.brand }]}>
+                                    <Text style={styles.rowAvatarText}>{c.Agents[0]?.initial ?? 'A'}</Text>
                                 </View>
                                 <View style={styles.rowBody}>
-                                    <Text style={styles.rowTitle} numberOfLines={1}>{c.title}</Text>
-                                    <Text style={styles.rowSnippet} numberOfLines={1}>{c.snippet}</Text>
+                                    <Text style={styles.rowTitle} numberOfLines={1}>{c.Title}</Text>
+                                    <Text style={styles.rowSnippet} numberOfLines={1}>{c.Snippet}</Text>
                                 </View>
-                                {c.live ? <View style={styles.liveDot} /> : null}
-                                <Text style={styles.rowTime}>{c.timestamp}</Text>
+                                {c.Live ? <View style={styles.liveDot} /> : null}
+                                <Text style={styles.rowTime}>{c.Timestamp}</Text>
                             </Pressable>
                         ))}
                     </Section>

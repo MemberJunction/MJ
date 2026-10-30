@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
+import { LocalCacheManager } from '@memberjunction/core';
+import { GraphQLDataProvider, GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
 import { Env } from '@/config/env';
 import {
     ClearAuth0Tokens,
@@ -18,7 +19,14 @@ import {
     type MJAuthTokens,
 } from '@/auth/msal';
 import { ResetMentionCaches } from '@/data/mention-display';
+import { Clear as ClearOfflineQueue } from '@/data/offline-queue';
+import { ClearPendingChatHandoff } from '@/data/pending-chat-handoff';
+import { ClearUserPreferences, SyncPreferencesFromServer } from '@/data/preferences';
 import { ResetModalityCache } from '@/data/services/attachment-storage';
+import { UnregisterDeviceToken } from '@/data/services/notifications';
+import { MMKVStorageProvider } from '@/providers/mmkv-storage-provider';
+
+const mobileCacheStorage = new MMKVStorageProvider();
 
 /**
  * MJ provider boot. Supports three auth paths in priority order:
@@ -139,6 +147,13 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 },
             );
 
+            config.LocalStorageProvider = mobileCacheStorage;
+            if (!LocalCacheManager.Instance.IsInitialized) {
+                await LocalCacheManager.Instance.Initialize(mobileCacheStorage);
+            } else {
+                await LocalCacheManager.Instance.SetStorageProvider(mobileCacheStorage);
+            }
+
             // Hard timeout so a hung MJAPI / bad token doesn't lock us in 'loading' forever.
             const SETUP_TIMEOUT_MS = 15_000;
             await Promise.race([
@@ -147,6 +162,7 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                     setTimeout(() => reject(new Error(`Connection to ${Env.graphqlUrl} timed out after ${SETUP_TIMEOUT_MS}ms`)), SETUP_TIMEOUT_MS),
                 ),
             ]);
+            SyncPreferencesFromServer();
             setAuthMethod(method);
             setStatus('ready');
         } catch (e) {
@@ -282,23 +298,34 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
     }, [bootWith]);
 
     /**
-     * Sign out: clear all stored credentials (Auth0, MSAL, and dev-token
-     * secure-store keys) and revert to the `no-token` state so the login
-     * screen takes over. Does not itself tear down the GraphQL client.
+     * Sign out: unregister push token while authenticated, clear all stored
+     * credentials (Auth0, MSAL, and dev-token secure-store keys), purge per-user
+     * offline mutations, caches, preferences, and WebSocket subscriptions, and
+     * revert to the `no-token` state so the login screen takes over.
      */
     const signOut = useCallback(async () => {
+        // 1. Best-effort push token unregistration while the departing user's
+        //    GraphQL credentials are still active.
+        await UnregisterDeviceToken().catch(() => undefined);
+
+        // 2. Clear stored credentials.
         await ClearAuth0Tokens();
         await clearMsalTokens();
         await SecureStore.deleteItemAsync(DEV_TOKEN_KEY).catch(() => undefined);
 
-        // Drop every per-user cache along with the credentials. These are process-wide singletons
-        // that survive a sign-out on their own, and two of them hold PERMISSION-FILTERED data: the
-        // mention engine's agent/skill rosters, and the user-settings cache. On a shared or demo
-        // device the next person to sign in would otherwise open the `@` picker and be served the
-        // previous user's run-permitted agents, because the engine short-circuits when it believes
-        // it is already initialized.
+        // 3. Purge the offline mutation queue, staged chat handoff, local MMKV/RunView
+        //    caches, and per-user preferences so User A's data never leaks to User B.
+        ClearOfflineQueue();
+        ClearPendingChatHandoff();
+        await LocalCacheManager.Instance.ClearAll().catch(() => undefined);
+        mobileCacheStorage.ClearAll();
+        ClearUserPreferences();
+
+        // 4. Drop process-wide singletons that cache permission-filtered rosters
+        //    and tear down the active GraphQL WebSocket connection.
         ResetMentionCaches();
         ResetModalityCache();
+        GraphQLDataProvider.Instance?.ForceSocketReconnect();
 
         setAuthMethod(null);
         setError(null);

@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
@@ -50,6 +51,9 @@ const DEMO_SPEC = ParseInteractiveSpec(
 );
 
 export default function InteractiveDemoScreen() {
+    if (!__DEV__) {
+        return <Redirect href="/" />;
+    }
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
             <View style={styles.banner}>

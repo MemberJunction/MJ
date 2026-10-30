@@ -20,6 +20,7 @@ import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { AdaptConversation, AdaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
 import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/data/services/agents';
 import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { ConsumePendingChatHandoff } from '@/data/pending-chat-handoff';
 import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
 import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
@@ -74,9 +75,9 @@ function delay(ms: number): Promise<void> {
  * Mockup: `plans/mobile-app-react-native/html/chat-thread.html`.
  */
 export default function ChatThreadScreen() {
-    const { id, autosend, autosendAttachment } = useLocalSearchParams<{ id: string; autosend?: string; autosendAttachment?: string }>();
-    const { data, loading, error, refresh } = useConversation(id);
-    const { conversations: allConversations, refresh: refreshList } = useConversations();
+    const { id, autosend } = useLocalSearchParams<{ id: string; autosend?: string }>();
+    const { Data: data, Loading: loading, Error: error, Refresh: refresh } = useConversation(id);
+    const { Conversations: allConversations, Refresh: refreshList } = useConversations();
 
     const [sending, setSending] = useState(false);
     const [stalled, setStalled] = useState(false);
@@ -178,33 +179,29 @@ export default function ChatThreadScreen() {
         }
     }, [id, refresh, refreshList]);
 
-    // Optional deep-link auto-send: /chat/<id>?autosend=<text> sends once on open,
-    // running the full send flow (working indicator + agent run + refresh). Useful for
-    // deep links / QA without manual typing.
+    // First-turn handoff from NewConversationScreen (in-memory only, never URL query params for attachments).
+    // URL `?autosend` is honored ONLY in __DEV__ for automated simulator QA harnesses.
     const autoSentRef = useRef(false);
     useEffect(() => {
-        if (autosend && !autoSentRef.current && view && !sending) {
+        if (autoSentRef.current || !view || sending) return;
+        const handoff = ConsumePendingChatHandoff(id);
+        if (handoff) {
             autoSentRef.current = true;
-            // A first message started from the new-conversation screen may carry an attachment.
-            // Parsing is tolerant: a malformed descriptor costs the attachment, never the message.
-            let firstAttachment: CapturedAttachment | null = null;
-            if (autosendAttachment) {
-                try {
-                    firstAttachment = JSON.parse(autosendAttachment) as CapturedAttachment;
-                } catch {
-                    firstAttachment = null;
-                }
-            }
-            void handleSend(autosend, firstAttachment);
+            void handleSend(handoff.Prompt, handoff.Attachment);
+            return;
         }
-    }, [autosend, autosendAttachment, view, sending, handleSend]);
+        if (__DEV__ && autosend) {
+            autoSentRef.current = true;
+            void handleSend(autosend, null);
+        }
+    }, [id, autosend, view, sending, handleSend]);
 
     // Recents strip = top 5 most recent conversations excluding the active one
     const recentChips = useMemo(() => {
         if (!allConversations) return [];
         const summaries = allConversations.map(AdaptConversationToSummary);
         return summaries
-            .filter((s) => s.id !== id)
+            .filter((s) => s.Id !== id)
             .slice(0, 5);
     }, [allConversations, id]);
 
@@ -405,21 +402,21 @@ function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip
             contentContainerStyle={styles.recentsContent}
         >
             {chips.map((chip) => {
-                const active = chip.id === activeId;
+                const active = chip.Id === activeId;
                 return (
                     <Pressable
-                        key={chip.id}
+                        key={chip.Id}
                         style={[styles.chip, active && styles.chipActive]}
-                        onPress={() => !active && router.replace({ pathname: '/chat/[id]', params: { id: chip.id } })}
+                        onPress={() => !active && router.replace({ pathname: '/chat/[id]', params: { id: chip.Id } })}
                     >
-                        {active && chip.live ? <View style={styles.chipPulse} /> : null}
+                        {active && chip.Live ? <View style={styles.chipPulse} /> : null}
                         <AgentAvatarStack
-                            agents={chip.agents}
+                            agents={chip.Agents}
                             size={13}
                             borderColor={active ? Colors.ink : Colors.surface}
                         />
                         <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-                            {chip.title}
+                            {chip.Title}
                         </Text>
                     </Pressable>
                 );
