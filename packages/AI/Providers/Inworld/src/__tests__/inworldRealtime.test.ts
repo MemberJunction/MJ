@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock @memberjunction/global so @RegisterClass is a no-op decorator.
 vi.mock('@memberjunction/global', () => ({
@@ -37,11 +37,13 @@ vi.mock('@memberjunction/ai', async () => {
     // registry and skips every key in it), while membership of the registry — that `firstMessage` is
     // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
     // can drift without the other failing.
-    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools'];
+    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools', 'turnDetection'];
     // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
     // module without the barrel: the drop tests below assert against shipped behavior.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter };
+    // The turn-detection reader is dependency-free too, so the mapping tests run against the real one.
+    const { ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection } = await import('../../../../Core/src/generic/realtimeTurnDetection');
+    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter, ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection };
 });
 
 import {
@@ -50,6 +52,8 @@ import {
     INWORLD_REALTIME_WS_URL,
     INWORLD_DEFAULT_MODEL_ID,
     INWORLD_DEFAULT_VAD_EAGERNESS,
+    BuildInworldTurnDetection,
+    MapInworldEagerness,
     type InworldRealtimeSocket,
     type InworldConnectArgs,
     type InworldServerEvent,
@@ -261,6 +265,71 @@ describe('InworldRealtime', () => {
             await startReadySession(driver, { Config: { turn_detection: { type: 'server_vad', threshold: 0.6 } } });
             const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
             expect(update.session?.['turn_detection']).toEqual({ type: 'server_vad', threshold: 0.6 });
+        });
+
+        describe('normalized turnDetection', () => {
+            let warn: ReturnType<typeof vi.spyOn>;
+            beforeEach(() => {
+                warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            });
+            afterEach(() => {
+                warn.mockRestore();
+            });
+
+            it('maps Eagerness onto semantic-VAD eagerness, auto becoming medium', () => {
+                expect(MapInworldEagerness('low')).toBe('low');
+                expect(MapInworldEagerness('auto')).toBe('medium');
+                expect(MapInworldEagerness('high')).toBe('high');
+                expect(MapInworldEagerness(undefined)).toBeUndefined();
+                expect(BuildInworldTurnDetection({ turnDetection: { Eagerness: 'low' } })).toEqual({
+                    Block: { type: 'semantic_vad', eagerness: 'low' },
+                    Warning: undefined,
+                });
+            });
+
+            it('sends the normalized Eagerness on the session and does not forward turnDetection raw', async () => {
+                await startReadySession(driver, { Config: { turnDetection: { Eagerness: 'high' } } });
+                const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+                expect(update.session?.['turn_detection']).toEqual({ type: 'semantic_vad', eagerness: 'high' });
+                expect(update.session?.['turnDetection']).toBeUndefined();
+                expect(warn).not.toHaveBeenCalled();
+            });
+
+            it('lets the flat eagerness shorthand win over the normalized Eagerness', () => {
+                expect(BuildInworldTurnDetection({ eagerness: 'high', turnDetection: { Eagerness: 'low' } }).Block).toEqual({ type: 'semantic_vad', eagerness: 'high' });
+            });
+
+            it("maps Mode 'serverVad' with Threshold and SilenceDurationMs onto server_vad", () => {
+                const result = BuildInworldTurnDetection({ turnDetection: { Mode: 'serverVad', Threshold: 0.55, SilenceDurationMs: 800 } });
+                expect(result.Block).toEqual({ type: 'server_vad', threshold: 0.55, silence_duration_ms: 800 });
+                expect(result.Warning).toBeUndefined();
+            });
+
+            it('warns at launch for Threshold and SilenceDurationMs outside server VAD', async () => {
+                await startReadySession(driver, { Config: { turnDetection: { Eagerness: 'low', Threshold: 0.6, SilenceDurationMs: 900 } } });
+                const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+                expect(update.session?.['turn_detection']).toEqual({ type: 'semantic_vad', eagerness: 'low' });
+                expect(warn).toHaveBeenCalledTimes(1);
+                const line = String(warn.mock.calls[0][0]);
+                expect(line).toContain('[InworldRealtime]');
+                expect(line).toContain('Threshold=0.6');
+                expect(line).toContain('SilenceDurationMs=900');
+                expect(line).not.toContain('Eagerness=');
+            });
+
+            it('warns for Eagerness under server VAD, and for Coverage and Mode native', () => {
+                expect(BuildInworldTurnDetection({ turnDetection: { Mode: 'serverVad', Eagerness: 'low' } }).Warning).toContain('Eagerness="low"');
+                const native = BuildInworldTurnDetection({ turnDetection: { Mode: 'native', Coverage: 'audioActivityOnly' } });
+                expect(native.Block).toEqual({ type: 'semantic_vad', eagerness: INWORLD_DEFAULT_VAD_EAGERNESS });
+                expect(native.Warning).toContain('Mode="native"');
+                expect(native.Warning).toContain('Coverage="audioActivityOnly"');
+            });
+
+            it('sends a raw turn_detection block as given and warns that the normalized request was not applied', () => {
+                const result = BuildInworldTurnDetection({ turn_detection: { type: 'server_vad', threshold: 0.6 }, turnDetection: { Eagerness: 'low' } });
+                expect(result.Block).toEqual({ type: 'server_vad', threshold: 0.6 });
+                expect(result.Warning).toContain('raw `turn_detection`');
+            });
         });
 
         /**

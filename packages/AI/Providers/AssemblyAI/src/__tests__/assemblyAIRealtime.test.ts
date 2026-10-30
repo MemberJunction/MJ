@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type {
     IRealtimeSession,
     RealtimeSessionParams,
@@ -17,6 +17,7 @@ import {
     AssemblyAIServerEvent,
     ASSEMBLYAI_AGENT_WS_URL,
     ASSEMBLYAI_TOKEN_TTL_SECONDS,
+    BuildAssemblyAITurnDetection,
 } from '../assemblyAIRealtime';
 
 /* ------------------------------------------------------------------ */
@@ -195,6 +196,49 @@ describe('AssemblyAIRealtime session-object construction', () => {
             keyterms: ['MemberJunction', 'CodeGen'],
         });
         expect(session['unrelated']).toBeUndefined();
+    });
+
+    describe('normalized turnDetection', () => {
+        let warn: ReturnType<typeof vi.spyOn>;
+        beforeEach(() => {
+            warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        });
+        afterEach(() => {
+            warn.mockRestore();
+        });
+
+        it('maps Threshold onto vad_threshold without a warning', () => {
+            const session = AssemblyAIRealtime.BuildSessionObject(makeParams({ Config: { turnDetection: { Threshold: 0.6 } } }));
+            expect(session['input']).toEqual({ turn_detection: { vad_threshold: 0.6 } });
+            expect(session['turnDetection']).toBeUndefined();
+            expect(warn).not.toHaveBeenCalled();
+        });
+
+        it('lets a raw turn_detection field win over the mapped one', () => {
+            const result = BuildAssemblyAITurnDetection({ turnDetection: { Threshold: 0.6 }, turn_detection: { vad_threshold: 0.4, min_silence: 1400 } });
+            expect(result.Block).toEqual({ vad_threshold: 0.4, min_silence: 1400 });
+        });
+
+        it('warns at launch for SilenceDurationMs, Eagerness, Mode and Coverage, which it cannot express', () => {
+            const session = AssemblyAIRealtime.BuildSessionObject(
+                makeParams({ Config: { turnDetection: { Mode: 'serverVad', Eagerness: 'low', Threshold: 0.5, SilenceDurationMs: 800, Coverage: 'audioActivityOnly' } } })
+            );
+            expect(session['input']).toEqual({ turn_detection: { vad_threshold: 0.5 } });
+            expect(warn).toHaveBeenCalledTimes(1);
+            const line = String(warn.mock.calls[0][0]);
+            expect(line).toContain('[AssemblyAIRealtime]');
+            expect(line).toContain('Mode="serverVad"');
+            expect(line).toContain('Eagerness="low"');
+            expect(line).toContain('SilenceDurationMs=800');
+            expect(line).toContain('Coverage="audioActivityOnly"');
+            expect(line).not.toContain('Threshold');
+        });
+
+        it('sends no turn_detection block when nothing maps', () => {
+            expect(BuildAssemblyAITurnDetection({ turnDetection: { Eagerness: 'high' } }).Block).toBeUndefined();
+            expect(BuildAssemblyAITurnDetection({}).Block).toBeUndefined();
+            expect(BuildAssemblyAITurnDetection({}).Warning).toBeUndefined();
+        });
     });
 
     it('accepts the neutral `firstMessage` key for the opening utterance (issue #3557)', () => {
