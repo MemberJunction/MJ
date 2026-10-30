@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+    IsAddressedToHuman,
     ResolveAgentTurn,
     FindDisallowedTaskGraphAgents,
     type AgentTurnCandidates,
@@ -153,19 +154,84 @@ describe('ResolveAgentTurn — a continuity candidate a routing decision chose',
         expect(ResolveAgentTurn(routed, rules('Always'), isKnown)).toEqual({ AgentId: OTHER, Route: 'DecisionRouted' });
     });
 
-    it('still loses to a tag, and still starts no turn under MentionOnly', () => {
+    it('still loses to a tag, and routes under MentionOnly when a decision chose it', () => {
         expect(ResolveAgentTurn({ ...routed, MentionedAgentIds: [TAGGED] }, rules('Always'), isKnown))
             .toEqual({ AgentId: TAGGED, Route: 'Mention' });
-        expect(ResolveAgentTurn(routed, rules('MentionOnly'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(routed, rules('MentionOnly'), isKnown))
+            .toEqual({ AgentId: OTHER, Route: 'DecisionRouted' });
+        expect(ResolveAgentTurn({ ...routed, ContinuityDecisionRouted: false }, rules('MentionOnly'), isKnown))
+            .toBeNull();
     });
 
     it('is skipped like any candidate the host does not allow', () => {
         expect(ResolveAgentTurn(routed, rules('Always', [HOST]), isKnown)).toEqual({ AgentId: HOST, Route: 'HostDefault' });
+        expect(ResolveAgentTurn(routed, rules('MentionOnly', [HOST]), isKnown)).toBeNull();
     });
 
     it('without the flag, the same candidate is plain continuity', () => {
         expect(ResolveAgentTurn({ ...routed, ContinuityDecisionRouted: false }, rules('Always'), isKnown))
             .toEqual({ AgentId: OTHER, Route: 'Continuity' });
+    });
+});
+
+describe('ResolveAgentTurn — multi-party signals (human mentions, thread replies, and decision no-agent)', () => {
+    it('starts no turn when a person is @-mentioned without an @Agent mention', () => {
+        const humanMention = candidates({
+            MentionedUserIds: ['user-2'],
+            ContinuityAgentId: LAST,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(humanMention, rules('Always'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(humanMention, rules('MentionOnly'), isKnown)).toBeNull();
+    });
+
+    it('routes to the @Agent when both a person and an agent are @-mentioned', () => {
+        const both = candidates({
+            MentionedAgentIds: [TAGGED],
+            MentionedUserIds: ['user-2'],
+        });
+        expect(ResolveAgentTurn(both, rules('MentionOnly'), isKnown)).toEqual({ AgentId: TAGGED, Route: 'Mention' });
+    });
+
+    it('routes a thread reply to an AI message directly to that agent under both Always and MentionOnly when runnable', () => {
+        const replyToAi = candidates({
+            ReplyParentAgentId: OTHER,
+            ContinuityAgentId: LAST,
+        });
+        expect(ResolveAgentTurn(replyToAi, rules('Always'), isKnown)).toEqual({ AgentId: OTHER, Route: 'ThreadReply' });
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly'), isKnown)).toEqual({ AgentId: OTHER, Route: 'ThreadReply' });
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly', [TAGGED]), isKnown)).toBeNull();
+        // When the parent agent is readable (isKnown) but not runnable by this user, ThreadReply does not fire
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly'), isKnown, id => id !== OTHER)).toBeNull();
+    });
+
+    it('identifies intentional human-addressed candidates via IsAddressedToHuman', () => {
+        expect(IsAddressedToHuman(candidates())).toBe(false);
+        expect(IsAddressedToHuman(candidates({ MentionedUserIds: ['user-2'] }))).toBe(true);
+        expect(IsAddressedToHuman(candidates({ ReplyParentIsHuman: true }))).toBe(true);
+        expect(IsAddressedToHuman(candidates({ DecisionAddressedToHuman: true }))).toBe(true);
+    });
+
+    it('starts no turn for a thread reply to a human message unless an agent is explicitly @-mentioned', () => {
+        const replyToHuman = candidates({
+            ReplyParentIsHuman: true,
+            ContinuityAgentId: LAST,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(replyToHuman, rules('Always'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(replyToHuman, rules('MentionOnly'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn({ ...replyToHuman, MentionedAgentIds: [TAGGED] }, rules('MentionOnly'), isKnown))
+            .toEqual({ AgentId: TAGGED, Route: 'Mention' });
+    });
+
+    it('starts no turn when the routing decision determined the message is addressed to a human', () => {
+        const humanAddressed = candidates({
+            DecisionAddressedToHuman: true,
+            ContinuityAgentId: null,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(humanAddressed, rules('Always'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(humanAddressed, rules('MentionOnly'), isKnown)).toBeNull();
     });
 });
 

@@ -40,7 +40,7 @@
 }
 .lz-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #264FAF 0%, #0076b6 100%);
+    background: linear-gradient(90deg, var(--mj-brand-primary-active) 0%, var(--mj-brand-primary) 100%);
     border-radius: 100px;
     transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -211,7 +211,7 @@
 
 .lz-load-btn {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border: 1px solid var(--mj-brand-primary);
     padding: 6px 12px;
     border-radius: 7px;

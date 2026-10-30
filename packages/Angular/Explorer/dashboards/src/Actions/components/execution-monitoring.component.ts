@@ -8,6 +8,13 @@ import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { ValidateEnumParam, BoundNameList } from '../../shared/agent-tool-validation';
 import { FindByIdOrError, FindByIdOrNameOrError } from '../agent-tool-helpers';
+import {
+  ActionResultClass,
+  ActionResultColor,
+  ActionResultIcon,
+  ActionSuccessRate,
+  ClassifyActionResultCode,
+} from '../action-result-code';
 
 /** The two agent-tool modes for the execution monitor: the log list, or a single
  *  selected execution. Drives the mode-scoped tool re-registration. */
@@ -167,22 +174,46 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     this.TimeRangeOptions = value;
   }
 
-  public ResultOptions = [
+  /**
+   * The visible result filter. `Failed` and `Error` were two separate options that both
+   * matched the stored code literally; they are one option now because they are one OUTCOME —
+   * a run that ended without succeeding — and the codes for it (`RUNTIME_ERROR`, `TIMEOUT`,
+   * `NOT_APPROVED`, legacy `Failed`…) never matched either label anyway. `Error` is still
+   * ACCEPTED as an alias (see {@link RESULT_FILTER_CLASSES}) so an agent or a restored filter
+   * asking for it keeps working.
+   */
+  private static readonly RESULT_OPTIONS: ReadonlyArray<{ text: string; value: string }> = [
     { text: 'All Results', value: 'all' },
-    { text: 'Success', value: 'Success' },
-    { text: 'Failed', value: 'Failed' },
-    { text: 'Error', value: 'Error' },
+    { text: 'Successful', value: 'Success' },
+    { text: 'Failed or errored', value: 'Failed' },
     { text: 'Running', value: 'Running' }
   ];
 
+  /**
+   * A constant list, so it lives on the class rather than on each instance — which also makes
+   * it readable without constructing the component, and therefore testable alongside
+   * {@link RESULT_FILTER_CLASSES}. Those two must agree: every offered value has to select
+   * something.
+   */
+  public get ResultOptions(): ReadonlyArray<{ text: string; value: string }> {
+    return ActionExecutionMonitoringComponent.RESULT_OPTIONS;
+  }
+
   /** @deprecated Use {@link ResultOptions}. */
-  public get resultOptions() {
+  public get resultOptions(): ReadonlyArray<{ text: string; value: string }> {
     return this.ResultOptions;
   }
-  /** @deprecated Use {@link ResultOptions}. */
-  public set resultOptions(value) {
-    this.ResultOptions = value;
-  }
+
+  /**
+   * Which outcome class each accepted filter value selects. `Failed` and `Error` deliberately
+   * map to the same class — see {@link ResultOptions}.
+   */
+  private static readonly RESULT_FILTER_CLASSES: Readonly<Record<string, ActionResultClass | undefined>> = {
+    Success: 'success',
+    Failed: 'failure',
+    Error: 'failure',
+    Running: 'running',
+  };
 
   public ActionOptions: Array<{text: string; value: string}> = [
     { text: 'All Actions', value: 'all' }
@@ -342,7 +373,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       },
       {
         Name: 'FilterExecutionsByResult',
-        Description: 'Filter executions by result. Allowed: all, Success, Failed, Error, Running.',
+        Description: 'Filter executions by result outcome, not by literal result code. Allowed: all, Success, Failed, Error (an alias for Failed), Running.',
         ParameterSchema: { type: 'object', properties: { result: { type: 'string', enum: [...this.resultFilterValues] } }, required: ['result'] },
         Handler: async (params) => {
           const v = ValidateEnumParam(params['result'], this.resultFilterValues, 'result');
@@ -534,10 +565,12 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
 
     this.Metrics = {
       totalExecutions: this.Executions.length,
-      successfulExecutions: this.Executions.filter(e => e.ResultCode === 'Success').length,
-      failedExecutions: this.Executions.filter(e => 
-        e.ResultCode && ['Failed', 'Error'].includes(e.ResultCode)
-      ).length,
+      // Classified, not string-compared. The writer emits UPPER_SNAKE (`SUCCESS`,
+      // `RUNTIME_ERROR`, …) while these comparisons looked for Title Case, so a database of
+      // successful runs reported 0 successes and 0 failures — beside rows that rendered
+      // green, because the colour helpers lowercased and these did not.
+      successfulExecutions: this.Executions.filter(e => ClassifyActionResultCode(e.ResultCode) === 'success').length,
+      failedExecutions: this.Executions.filter(e => ClassifyActionResultCode(e.ResultCode) === 'failure').length,
       averageDuration: this.calculateAverageDuration(),
       executionsToday: this.Executions.filter(e => 
         new Date(e.StartedAt!) >= today
@@ -545,8 +578,8 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       executionsThisWeek: this.Executions.filter(e => 
         new Date(e.StartedAt!) >= weekAgo
       ).length,
-      currentlyRunning: this.Executions.filter(e => 
-        e.ResultCode === 'Running' || !e.EndedAt
+      currentlyRunning: this.Executions.filter(e =>
+        ClassifyActionResultCode(e.ResultCode) === 'running' || !e.EndedAt
       ).length
     };
   }
@@ -594,9 +627,10 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       
       if (trend) {
         trend.total++;
-        if (execution.ResultCode === 'Success') {
+        const klass = ClassifyActionResultCode(execution.ResultCode);
+        if (klass === 'success') {
           trend.successful++;
-        } else if (execution.ResultCode && ['Failed', 'Error'].includes(execution.ResultCode)) {
+        } else if (klass === 'failure') {
           trend.failed++;
         }
       }
@@ -620,10 +654,14 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     // Apply result filter
     const result = this.SelectedResult$.value;
     if (result !== 'all') {
-      if (result === 'Running') {
-        filtered = filtered.filter(e => !e.EndedAt || e.ResultCode === 'Running');
-      } else {
-        filtered = filtered.filter(e => e.ResultCode === result);
+      const wanted = ActionExecutionMonitoringComponent.RESULT_FILTER_CLASSES[result];
+      if (wanted === 'running') {
+        filtered = filtered.filter(e => !e.EndedAt || ClassifyActionResultCode(e.ResultCode) === 'running');
+      } else if (wanted) {
+        // Compared by CLASS, not by literal equality. The old `e.ResultCode === result`
+        // matched the chip label against the stored code, so every chip returned an empty
+        // list on a database written by the Runtime executor.
+        filtered = filtered.filter(e => ClassifyActionResultCode(e.ResultCode) === wanted);
       }
     }
 
@@ -717,7 +755,9 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         type: 'dropdown',
         label: 'Result',
         icon: 'fa-solid fa-circle-info',
-        options: this.ResultOptions
+        // Copied because FilterFieldConfig.options is a mutable array and the source list is
+        // a shared constant — the panel must not be able to reorder it for every instance.
+        options: [...this.ResultOptions]
       },
       {
         key: 'action',
@@ -799,14 +839,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   public GetResultColor(resultCode: string | null): 'success' | 'warning' | 'error' | 'info' {
-    if (!resultCode) return 'info';
-    switch (resultCode.toLowerCase()) {
-      case 'success': return 'success';
-      case 'failed':
-      case 'error': return 'error';
-      case 'running': return 'warning';
-      default: return 'info';
-    }
+    return ActionResultColor(resultCode);
   }
 
   /** @deprecated Use {@link GetResultColor}. */
@@ -815,14 +848,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   public GetResultIcon(resultCode: string | null): string {
-    if (!resultCode) return 'fa-solid fa-question';
-    switch (resultCode.toLowerCase()) {
-      case 'success': return 'fa-solid fa-check-circle';
-      case 'failed':
-      case 'error': return 'fa-solid fa-exclamation-circle';
-      case 'running': return 'fa-solid fa-spinner fa-spin';
-      default: return 'fa-solid fa-info-circle';
-    }
+    return ActionResultIcon(resultCode);
   }
 
   /** @deprecated Use {@link GetResultIcon}. */
@@ -849,9 +875,13 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     return this.GetDuration(execution);
   }
 
+  /**
+   * Successes as a share of SETTLED runs — see {@link ActionSuccessRate}. Dividing by
+   * `totalExecutions` put still-running and unrecognised-code rows in the denominator, which
+   * drags the rate down for reasons that are not failures.
+   */
   public GetSuccessRate(): number {
-    if (this.Metrics.totalExecutions === 0) return 0;
-    return Math.round((this.Metrics.successfulExecutions / this.Metrics.totalExecutions) * 100);
+    return ActionSuccessRate(this.Executions.map(e => e.ResultCode));
   }
 
   /** @deprecated Use {@link GetSuccessRate}. */

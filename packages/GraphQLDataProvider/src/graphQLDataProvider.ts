@@ -2344,12 +2344,58 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return row;
     }
 
+    private _isaParentPreSaveSnapshot = new WeakMap<
+        BaseEntity,
+        Map<string, { dirty: boolean; value: unknown; oldValue: unknown }>
+    >();
+
+    private getParentPreSaveFieldSnapshot(
+        entity: BaseEntity,
+        field: EntityField
+    ): { dirty: boolean; value: unknown; oldValue: unknown } | undefined {
+        const snapshot = this._isaParentPreSaveSnapshot.get(entity);
+        if (!snapshot) {
+            return undefined;
+        }
+        const fSnap = snapshot.get(field.Name);
+        if (!fSnap) {
+            return undefined;
+        }
+        // If a prior chain save aborted after IsParentEntitySave (before provider.Save(leaf) ran)
+        // and the caller subsequently reverted or reloaded the parent, the field's current value
+        // no longer matches the value captured when IsParentEntitySave finalized it.
+        if (field.Value !== fSnap.value) {
+            this._isaParentPreSaveSnapshot.delete(entity);
+            return undefined;
+        }
+        return fSnap;
+    }
+
+    /**
+     * Clears any pre-save dirty/OldValue snapshots recorded for `entity`'s `ISAParent` chain.
+     */
+    public ClearISAParentPreSaveSnapshots(entity: BaseEntity): void {
+        let p = entity.ISAParent;
+        while (p) {
+            this._isaParentPreSaveSnapshot.delete(p);
+            p = p.ISAParent;
+        }
+    }
+
     /**
      * Checks whether `field` is dirty on `entity` or, for IS-A child entities where parent
      * fields are mirrored as virtual fields, on any ancestor in the `ISAParent` chain.
      */
+    public IsFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
+        return this.isFieldDirtyOnChain(entity, field);
+    }
+
     private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
-        if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(field.Name)) {
+        const snap = this.getParentPreSaveFieldSnapshot(entity, field);
+        if (snap?.dirty) {
+            return true;
+        }
+        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
             const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
             if (parentField) {
                 return this.isFieldDirtyOnChain(entity.ISAParent, parentField) || field.Dirty;
@@ -2363,7 +2409,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * chain for the authoritative `OldValue` of parent-owned fields.
      */
     private getFieldOldValueOnChain(entity: BaseEntity, field: EntityField): unknown {
-        if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(field.Name)) {
+        const snap = this.getParentPreSaveFieldSnapshot(entity, field);
+        if (snap !== undefined) {
+            return snap.oldValue;
+        }
+        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
             const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
             if (parentField) {
                 return this.getFieldOldValueOnChain(entity.ISAParent, parentField);
@@ -2431,6 +2481,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
         // mutation will include all chain fields. Return current entity state.
         if (options?.IsParentEntitySave) {
+            const snapshot = new Map<string, { dirty: boolean; value: unknown; oldValue: unknown }>();
+            for (const f of entity.Fields) {
+                snapshot.set(f.Name, {
+                    dirty: this.isFieldDirtyOnChain(entity, f),
+                    value: f.Value,
+                    oldValue: this.getFieldOldValueOnChain(entity, f),
+                });
+            }
+            this._isaParentPreSaveSnapshot.set(entity, snapshot);
             const result = new BaseEntityResult();
             result.StartedAt = new Date();
             result.EndedAt = new Date();
@@ -2442,6 +2501,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
 
         const result = new BaseEntityResult();
+        let deferParentSnapshotCleanup = false;
         try {
             entity.RegisterTransactionPreprocessing(); // as of the time of writing, this isn't technically needed because we are not doing any async preprocessing, but it is good to have it here for future use in case something is added with async between here and the TransactionItem being added.
 
@@ -2711,6 +2771,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                 }));
 
+                deferParentSnapshotCleanup = true;
                 return true; // part of a TG always return true after we setup the transaction group item above
             }
             else {
@@ -2752,7 +2813,53 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             LogError(e);
             return null;
         }
+        finally {
+            if (!deferParentSnapshotCleanup) {
+                this.ClearISAParentPreSaveSnapshots(entity);
+            }
+        }
     }
+
+    /**
+     * Resolves the `EntityField` on `entity` that one of a CompositeKey's `FieldName`s refers to.
+     *
+     * The direct, case- and whitespace-insensitive name match is the normal path. It misses when
+     * the caller built the key from a HARDCODED column name — `CompositeKey.FromID(id)` invents
+     * `'ID'` — while the entity's real primary key is called something else (`cst_key`,
+     * `individual_id`). Every MJ core entity happens to be `ID`-keyed, so that mismatch is
+     * invisible across the whole core product and appears only on entities mapped from an
+     * external schema.
+     *
+     * When the key names exactly ONE column and the entity has exactly ONE primary key, the
+     * caller's intent is unambiguous — the single name it supplied can only mean "the primary
+     * key" — so the entity's primary key is used regardless of what the name was. Anything else
+     * (a composite key, or a name that is genuinely not a primary-key column) is a real defect
+     * and is now reported as one, naming the entity and the key it was handed. Previously both
+     * cases dereferenced `undefined` and surfaced as the bare TypeError
+     * `Cannot read properties of undefined (reading 'EntityFieldInfo')`, which says nothing
+     * about which entity or which key name was wrong.
+     */
+    protected ResolvePrimaryKeyField(entity: BaseEntity, keyFieldName: string, keyColumnCount: number): EntityField {
+        // next's indexed, case- and whitespace-insensitive lookup
+        const direct: EntityField | null = entity.GetFieldByName(keyFieldName);
+        if (direct) {
+            return direct;
+        }
+        if (keyColumnCount === 1 && entity.PrimaryKeys.length === 1) {
+            const single: EntityField | undefined = entity.FirstPrimaryKey; // first-pk-ok: guarded on BOTH lengths being 1 — a one-column key against a one-column PK, so the caller's single name can only mean this field
+            // A primary key declared in metadata but absent from the field collection would make
+            // this undefined; fall through to the named error rather than hand back nothing.
+            if (single) {
+                return single;
+            }
+        }
+        const declared: string = entity.EntityInfo.PrimaryKeys.map(pk => pk.Name).join(', ') || '(none)';
+        throw new Error(
+            `Primary key field '${keyFieldName}' does not exist on entity '${entity.EntityInfo.Name}' ` +
+            `(its primary key is: ${declared}). The record key was built with a field name this entity does not have.`
+        );
+    }
+
     public async Load(entity: BaseEntity, primaryKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
             const vars = {};
@@ -2760,7 +2867,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
 
             for (let i = 0; i < primaryKey.KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.EntityInfo.FieldByName(primaryKey.KeyValuePairs[i].FieldName);
+                const field: EntityFieldInfo = this.ResolvePrimaryKeyField(entity, primaryKey.KeyValuePairs[i].FieldName, primaryKey.KeyValuePairs.length).EntityFieldInfo;
                 const val = primaryKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = field.GraphQLType;
 
@@ -2894,7 +3001,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
             let returnValues: string = '';
             for (let kv of entity.PrimaryKey.KeyValuePairs) {
-                const pk = entity.GetFieldByName(kv.FieldName); // get the field for the primary key field
+                // Same resolution as the single-record Load above — one helper so the two cannot drift.
+                const pk: EntityField = this.ResolvePrimaryKeyField(entity, kv.FieldName, entity.PrimaryKey.KeyValuePairs.length);
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
                 // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
@@ -3055,10 +3163,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 Results: null
             };
@@ -3203,10 +3311,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetStatusByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetStatusByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 EntityUpdateDates: null
             };
