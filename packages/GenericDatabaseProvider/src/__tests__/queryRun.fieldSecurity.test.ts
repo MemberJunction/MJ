@@ -535,6 +535,85 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
     });
 });
 
+/**
+ * A server-side result cache that keeps whatever a run returned, already narrowed for its caller,
+ * under the slot key the provider hands its cache hooks. Keeping narrowed rows is the careless
+ * case: it is safe only because the slot key separates field-security profiles.
+ */
+class SlotCachingProvider extends QueryFlsProvider {
+    public readonly Slots = new Map<string, RunQueryResult>();
+    public readonly KeysSeen: string[] = [];
+    private lastKey = '';
+    protected override async checkQueryCache(_q: MJQueryEntityExtended, _p: RunQueryParams, _a: Record<string, string>, slotKey: string): Promise<RunQueryResult | null> {
+        return this.lookUp(slotKey);
+    }
+    protected override async checkPagedQueryCache(_q: MJQueryEntityExtended, _p: RunQueryParams, _a: Record<string, string>, slotKey: string): Promise<RunQueryResult | null> {
+        return this.lookUp(slotKey);
+    }
+    private lookUp(slotKey: string): RunQueryResult | null {
+        this.KeysSeen.push(slotKey);
+        this.lastKey = slotKey;
+        return this.Slots.get(slotKey) ?? null;
+    }
+    public override async Run(params: RunQueryParams, user: UserInfo): Promise<RunQueryResult> {
+        const result = await super.Run(params, user);
+        if (result.Success && !result.CacheHit) this.Slots.set(this.lastKey, { ...result, CacheHit: true });
+        return result;
+    }
+}
+
+describe('a server-side result cache keeps one slot per rendered statement and field-security profile', () => {
+    const PERSON_ROW = { ID: 'p-1', Name: 'Ada', Salary: 250000, DepartmentID: 'd-1' };
+    const NARROWED = { ID: 'p-1', Name: 'Ada', DepartmentID: 'd-1' };
+    const otherStaff = user('A0000000-0000-0000-0000-0000000000A3', [STAFF_ROLE]);
+    let provider: SlotCachingProvider;
+
+    beforeEach(() => {
+        provider = new SlotCachingProvider();
+        provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
+        provider.Rows = [{ ...PERSON_ROW }];
+        provider.Description = [['ID', 'vwPeople.ID'], ['Name', 'vwPeople.Name'], ['Salary', 'vwPeople.Salary'], ['DepartmentID', 'vwPeople.DepartmentID']];
+        provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT * FROM vwPeople' })]);
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    for (const [label, paging] of [['a full run', {}], ['a paged run', { StartRow: 0, MaxRows: 10 }]] as const) {
+        it(`never serves ${label} narrowed for a restricted caller to an unrestricted one, or the reverse`, async () => {
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, staff)).Results).toEqual([NARROWED]);
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, hr)).Results).toEqual([PERSON_ROW]);
+            provider.Slots.clear();
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, hr)).Results).toEqual([PERSON_ROW]);
+            expect((await provider.Run({ QueryID: 'q-1', ...paging }, staff)).Results).toEqual([NARROWED]);
+            expect(provider.Executed.length).toBe(paging.MaxRows ? 8 : 4);
+        });
+
+        it(`shares ${label}'s slot between callers with the same field-security profile`, async () => {
+            await provider.Run({ QueryID: 'q-1', ...paging }, staff);
+            const second = await provider.Run({ QueryID: 'q-1', ...paging }, otherStaff);
+            expect(second.CacheHit).toBe(true);
+            expect(second.Results).toEqual([NARROWED]);
+            expect(provider.KeysSeen[0]).toBe(provider.KeysSeen[1]);
+        });
+    }
+
+    it('keys a slot by the rendered statement, so different parameter values never share one', async () => {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: "SELECT ID, Name FROM vwPeople WHERE Name = {{ name | sqlString }}", UsesTemplate: true })]);
+        await provider.Run({ QueryID: 'q-1', Parameters: { name: 'Ada' } }, hr);
+        await provider.Run({ QueryID: 'q-1', Parameters: { name: 'Bob' } }, hr);
+        expect(new Set(provider.KeysSeen).size).toBe(2);
+        expect(provider.Executed.length).toBe(2);
+    });
+
+    it('keys each page apart from the full result and from other pages', async () => {
+        await provider.Run({ QueryID: 'q-1' }, hr);
+        await provider.Run({ QueryID: 'q-1', StartRow: 0, MaxRows: 10 }, hr);
+        await provider.Run({ QueryID: 'q-1', StartRow: 10, MaxRows: 10 }, hr);
+        expect(new Set(provider.KeysSeen).size).toBe(3);
+    });
+});
+
 describe('ad-hoc SQL run in-process reads only what the caller may read unscoped', () => {
     let provider: QueryFlsProvider;
 

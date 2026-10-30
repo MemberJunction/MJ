@@ -192,6 +192,14 @@ interface MaterializedBinder {
     Bind(column: string, value: unknown): string | null;
 }
 
+/** The keys a server-side query-result cache stores and reads one run's result under. */
+interface QueryResultCacheSlot {
+    /** The slot of the run's full result. */
+    readonly Key: string;
+    /** The slot of one page of it. */
+    PageKey(params: RunQueryParams): string;
+}
+
 /** The output columns a run must drop for its caller, and the description they were chosen from. */
 interface QueryColumnFilter {
     /** The description's key ({@link StatementMemo.KeyOf}). */
@@ -6103,6 +6111,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 throw new Error(this.queryRunRefusalMessage(requestedLabel));
             }
             const columnFilter = authorization.NeedsColumnFiltering ? await this.queryColumnFilter(query, finalSQL, requestedLabel, contextUser) : null;
+            const cacheSlot = this.queryResultCacheSlot(query, finalSQL, authorization.NeedsColumnFiltering, contextUser);
 
             // ── Phase 2: materialized read redirect (plan §5) ──
             // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
@@ -6212,7 +6221,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     throw new Error(this.queryRunRefusalMessage(requestedLabel));
                 }
                 // Check paged cache before executing SQL
-                const pagedCacheHit = await this.checkPagedQueryCache(query, params, appliedParameters);
+                const pagedCacheHit = await this.checkPagedQueryCache(query, params, appliedParameters, cacheSlot.PageKey(params));
                 if (pagedCacheHit) {
                     return { ...pagedCacheHit, Results: this.filterQueryRows(pagedCacheHit.Results, columnFilter) };
                 }
@@ -6240,7 +6249,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     : paginatedResult.length;
             } else {
                 // Check full-result cache before executing
-                const cachedResult = await this.checkQueryCache(query, params, appliedParameters);
+                const cachedResult = await this.checkQueryCache(query, params, appliedParameters, cacheSlot.Key);
                 if (cachedResult) {
                     return { ...cachedResult, Results: this.filterQueryRows(cachedResult.Results, columnFilter) };
                 }
@@ -6255,7 +6264,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 totalRowCount = paginated.totalRowCount;
 
                 // Cache full (unpaginated) results if enabled (fire-and-forget)
-                void this.cacheQueryResults(query, params.Parameters || {}, fullResult);
+                void this.cacheQueryResults(query, params.Parameters || {}, fullResult, cacheSlot.Key);
             }
 
             // Optional, additive post-query enrichment (e.g. append an ML prediction
@@ -6818,13 +6827,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     // wrapWithMaxRows is now handled by RenderPipeline.applyMaxRows
 
     /**
+     * Where a server-side result cache keeps this run's rows: one slot per rendered statement and
+     * dialect, and, when the caller is denied a field the statement's projection star reads, per
+     * field-security profile ({@link FieldSecuritySQLGate.CatalogDenialProfileKey}). Callers whose
+     * runs drop the same columns share a slot; a restricted caller and an unrestricted one never do.
+     * The rendered statement carries every parameter value, server-set ones included, so they need
+     * no separate part of the key.
+     */
+    private queryResultCacheSlot(query: MJQueryEntityExtended, renderedSQL: string, needsColumnFiltering: boolean, contextUser?: UserInfo): QueryResultCacheSlot {
+        const user = contextUser || this.CurrentUser;
+        const profile = needsColumnFiltering && user ? FieldSecuritySQLGate.CatalogDenialProfileKey(this.Entities, user) : '';
+        const key = `${query.ID}|${StatementMemo.KeyOf(renderedSQL, this.Dialect.Key)}|fs:${profile}`;
+        return {
+            Key: key,
+            PageKey: (params: RunQueryParams) => `${key}|page:${QueryPagingEngine.ResolveStartRow(params.StartRow)}:${params.MaxRows ?? ''}`,
+        };
+    }
+
+    /**
      * Checks the query cache for existing results and returns them if valid.
      * Currently always returns null (query caching is not active).
+     *
+     * An override must look results up by `slotKey` alone, the same key {@link cacheQueryResults}
+     * stores under: it separates rendered statements and field-security profiles, so a slot never
+     * serves one caller rows shaped for another. The returned rows must be the statement's full
+     * output; the caller's withheld columns are dropped from them after the hit.
      */
     protected async checkQueryCache(
         _query: MJQueryEntityExtended,
         _params: RunQueryParams,
         _appliedParameters: Record<string, string>,
+        _slotKey: string,
     ): Promise<RunQueryResult | null> {
         return null;
     }
@@ -6833,11 +6866,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * Checks the paged cache for a specific page of query results.
      * Returns a full RunQueryResult on hit, null on miss.
      * Currently always returns null (query caching is not active).
+     *
+     * An override must look the page up by `slotKey` alone: it names the rendered statement, the
+     * caller's field-security profile and the page, so a page cached for a restricted caller is
+     * never served to an unrestricted one or the reverse. The caller's withheld columns are dropped
+     * from the returned rows after the hit.
      */
     protected async checkPagedQueryCache(
         _query: MJQueryEntityExtended,
         _params: RunQueryParams,
         _appliedParameters: Record<string, string>,
+        _slotKey: string,
     ): Promise<RunQueryResult | null> {
         return null;
     }
@@ -6990,8 +7029,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Caches query results if caching is enabled for the query.
      * Currently a no-op (query caching is not active).
+     *
+     * `results` is the statement's full output, before the caller's withheld columns are dropped.
+     * An override must store it under `slotKey`, the key {@link checkQueryCache} reads.
      */
-    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[]): Promise<void> {
+    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[], _slotKey: string): Promise<void> {
         // No-op: query caching has been removed
     }
 
