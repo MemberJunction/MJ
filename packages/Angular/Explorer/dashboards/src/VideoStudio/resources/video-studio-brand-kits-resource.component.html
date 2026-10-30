@@ -163,19 +163,10 @@
                 </span>
               </div>
 
-              @if (kit.Description) {
-                <p class="vs-brand-kit-description">{{ kit.Description }}</p>
-              }
-
               <div class="vs-brand-kit-footer">
                 <span class="vs-brand-kit-meta-item" data-testid="brand-kit-company-badge">
                   <i class="fa-solid fa-building" aria-hidden="true"></i>
                   <span>{{ kit.CompanyName || 'Workspace default' }}</span>
-                </span>
-
-                <span class="vs-brand-kit-meta-item" data-testid="brand-kit-asset-count">
-                  <i class="fa-solid fa-photo-film" aria-hidden="true"></i>
-                  <span>{{ kit.AssetCount }} {{ kit.AssetCount === 1 ? 'asset' : 'assets' }}</span>
                 </span>
 
                 <button
@@ -197,6 +188,22 @@
           </article>
         }
       </div>
+    }
+
+    @if (IsBrandKitCreatorOpen) {
+      <mj-dialog
+        [Visible]="true"
+        Title="New brand kit"
+        Size="lg"
+        (Close)="CloseBrandKitCreator()"
+      >
+        <mj-brand-kit-creator
+          [Provider]="ProviderToUse"
+          (Saved)="OnBrandKitCreatorSaved($event)"
+          (Cancelled)="CloseBrandKitCreator()"
+          (OpenMoreSettings)="OnBrandKitCreatorOpenMoreSettings($event)"
+        ></mj-brand-kit-creator>
+      </mj-dialog>
     }
   </mj-page-body>
   </mj-page-layout>

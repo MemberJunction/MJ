@@ -30,9 +30,11 @@ import {
   VideoBeatStripItem,
 } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { BrandKitCreatorComponent } from '@memberjunction/ng-brand-kits';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
   MJButtonDirective,
+  MJDialogComponent,
   MJDropdownComponent,
   MJNumericInputComponent,
 } from '@memberjunction/ng-ui-components';
@@ -119,7 +121,9 @@ export interface VSProductionBriefSetupHealthEvent {
     CommonModule,
     FormsModule,
     SharedGenericModule,
+    BrandKitCreatorComponent,
     MJButtonDirective,
+    MJDialogComponent,
     MJDropdownComponent,
     MJNumericInputComponent,
     MJVideoFormatGlyphComponent,
@@ -167,6 +171,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
   public LoadError: string | null = null;
   public IsSearchingQueries = false;
   public FilteredBrandKits: BrandKitCardSnapshot[] = [];
+  public IsBrandKitCreatorOpen = false;
 
   private querySearchRequestId = 0;
   private readonly cdr = inject(ChangeDetectorRef);
@@ -471,6 +476,78 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     }
     this.emitStateChange();
     this.cdr.markForCheck();
+  }
+
+  public OpenBrandKitCreator(): void {
+    this.IsBrandKitCreatorOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public CloseBrandKitCreator(): void {
+    this.IsBrandKitCreatorOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  public async OnBrandKitCreatorSaved(newBrandKitId: string): Promise<void> {
+    const trimmedId = (newBrandKitId ?? '').trim();
+    if (!trimmedId) {
+      this.IsBrandKitCreatorOpen = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      const bkEngine = BrandKitEngine.GetProviderInstance<BrandKitEngine>(
+        this.ProviderToUse,
+        BrandKitEngine,
+      ) as BrandKitEngine;
+      const user = this.ProviderToUse?.CurrentUser ?? undefined;
+      await bkEngine.Config(true, user, this.ProviderToUse);
+      const activeKits = (bkEngine.BrandKits ?? []).filter(
+        (k) => k.Status === 'Active' || !k.Status,
+      );
+      if (activeKits.length > 0) {
+        const refreshed = activeKits.map((k) => this.mapBrandKitToCard(k, bkEngine));
+        const existingExtra = this.AllBrandKits.filter(
+          (existing) => !refreshed.some((r) => UUIDsEqual(r.ID, existing.ID)),
+        );
+        this.AllBrandKits = [...refreshed, ...existingExtra];
+      }
+    } catch {
+      // Non-fatal in test/disconnected environments; fallback card below ensures selection works.
+    }
+
+    let targetKit = this.AllBrandKits.find((k) => UUIDsEqual(k.ID, trimmedId)) ?? null;
+    if (!targetKit) {
+      targetKit = {
+        ID: trimmedId,
+        Name: 'New brand kit',
+        Description: '',
+        CompanyID:
+          this.SelectedCompanyId && this.SelectedCompanyId !== 'all'
+            ? this.SelectedCompanyId
+            : null,
+        CompanyName: null,
+        IsDefault: false,
+        Status: 'Active',
+        Swatches: [],
+        PrimaryLogoFileID: null,
+        PrimaryLogoUrl: null,
+        AssetCount: 0,
+      };
+      this.AllBrandKits = [...this.AllBrandKits, targetKit];
+    }
+
+    if (
+      this.SelectedCompanyId !== 'all' &&
+      targetKit.CompanyID !== null &&
+      !UUIDsEqual(targetKit.CompanyID, this.SelectedCompanyId)
+    ) {
+      this.SelectedCompanyId = targetKit.CompanyID;
+    }
+    this.applyCompanyBrandKitFilter();
+    this.IsBrandKitCreatorOpen = false;
+    this.SelectBrandKitById(trimmedId);
   }
 
   public IsFormatSelected(format: string): boolean {

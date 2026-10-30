@@ -261,11 +261,26 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     expect(confirmStub.ConfirmDelete).toHaveBeenCalledTimes(1);
     expect(callOrder).toEqual(['a-1', 'a-2', 'kit-default']);
 
-    // Click New Brand Kit button
+    // Click New Brand Kit button — opens mj-brand-kit-creator in mj-dialog
     const newBtn = query(fixture, '[data-testid="new-brand-kit-button"]') as HTMLElement | null;
     expect(newBtn).not.toBeNull();
     newBtn!.click();
-    expect(navStub.OpenNewEntityRecord).toHaveBeenCalledWith('MJ: Brand Kits');
+    fixture.detectChanges();
+    expect(instance.IsBrandKitCreatorOpen).toBe(true);
+    expect(query(fixture, '[data-testid="brand-kit-creator"]')).not.toBeNull();
+
+    // "More settings" after save opens the entity record and closes the dialog
+    instance.OnBrandKitCreatorOpenMoreSettings('kit-default');
+    fixture.detectChanges();
+    expect(instance.IsBrandKitCreatorOpen).toBe(false);
+    expect(navStub.OpenEntityRecord).toHaveBeenCalledWith(
+      'MJ: Brand Kits',
+      expect.anything(),
+    );
+
+    // Card shows logo, palette strip, name, company, status, and delete button — no description or asset count
+    expect(query(fixture, '[data-testid="brand-kit-asset-count"]')).toBeNull();
+    expect(query(fixture, '.vs-brand-kit-description')).toBeNull();
 
     // Click a brand kit card
     const firstCard = query(fixture, '[data-testid="brand-kit-card-kit-default"]') as HTMLElement | null;

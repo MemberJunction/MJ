@@ -133,9 +133,20 @@
 
     <!-- 6. Brand kit (optional) -->
     <section class="vs-brief__section" aria-labelledby="vs-brief-brand-heading">
-      <h3 class="vs-brief__heading" id="vs-brief-brand-heading">
-        Brand kit (optional)
-      </h3>
+      <div class="vs-brief__section-header">
+        <h3 class="vs-brief__heading" id="vs-brief-brand-heading">
+          Brand kit (optional)
+        </h3>
+        <button
+          type="button"
+          class="vs-brief__action-link"
+          data-testid="vs-brief-new-brand-kit-link"
+          (click)="OpenBrandKitCreator()"
+        >
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>New brand kit</span>
+        </button>
+      </div>
       <div class="vs-brief__field-grid">
         <div class="vs-brief__field">
           <span class="vs-brief__sublabel" id="vs-brief-company-label">Company</span>
@@ -202,6 +213,23 @@
       }
     </section>
   </div>
+
+  @if (IsBrandKitCreatorOpen) {
+    <mj-dialog
+      [Visible]="true"
+      Title="New brand kit"
+      Size="lg"
+      (Close)="CloseBrandKitCreator()"
+    >
+      <mj-brand-kit-creator
+        [Provider]="ProviderToUse"
+        [Companies]="AvailableCompanies"
+        [InitialCompanyId]="SelectedCompanyId"
+        (Saved)="OnBrandKitCreatorSaved($event)"
+        (Cancelled)="CloseBrandKitCreator()"
+      ></mj-brand-kit-creator>
+    </mj-dialog>
+  }
 
   <!-- 8. Sticky Start production footer -->
   <footer class="vs-brief__footer" data-testid="vs-brief-footer">

@@ -34,11 +34,42 @@
   gap: var(--mj-space-1-5);
 }
 
+.vs-brief__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+}
+
 .vs-brief__heading {
   margin: 0;
   font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
+}
+
+.vs-brief__action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-brand-primary);
+  cursor: pointer;
+}
+
+.vs-brief__action-link:hover {
+  text-decoration: underline;
+}
+
+.vs-brief__action-link:focus-visible {
+  outline: none;
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .vs-brief__sublabel {

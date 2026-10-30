@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
+import { BrandKitCreatorComponent } from '@memberjunction/ng-brand-kits';
 import {
   ArtifactCollectionPickerModalComponent,
   ArtifactShareModalComponent,
@@ -53,6 +54,7 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     FormsModule,
     SharedGenericModule,
     ArtifactsModule,
+    BrandKitCreatorComponent,
     ArtifactShareModalComponent,
     ArtifactCollectionPickerModalComponent,
     VSAudioOptionsComponent,

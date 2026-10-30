@@ -9,17 +9,27 @@ import {
   Output,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { LogError, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJBrandKitAssetEntity, MJBrandKitEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FileStorageModule, FileUploadEvent } from '@memberjunction/ng-file-storage';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
+import {
+  BrandKitAssetType,
+  CreateBrandKitAssetFromUpload,
+  IMAGE_THUMBNAIL_ASSET_TYPES,
+  MintBrandKitFilePreviewUrl,
+  VISUAL_GENERATION_REFERENCE_ASSET_TYPES,
+} from '../brand-kit-asset-upload';
 
-export type BrandKitAssetType = MJBrandKitAssetEntity['AssetType'];
+export {
+  BrandKitAssetType,
+  IMAGE_THUMBNAIL_ASSET_TYPES,
+  VISUAL_GENERATION_REFERENCE_ASSET_TYPES,
+};
 
 export interface BrandKitAssetGroup {
   AssetType: BrandKitAssetType;
@@ -43,21 +53,6 @@ export const ALL_BRAND_KIT_ASSET_TYPES: ReadonlyArray<{
   { Type: 'Font', Label: 'Fonts', Icon: 'fa-solid fa-font' },
   { Type: 'Other', Label: 'Other assets', Icon: 'fa-solid fa-file' },
 ];
-
-export const VISUAL_GENERATION_REFERENCE_ASSET_TYPES: ReadonlySet<BrandKitAssetType> = new Set<BrandKitAssetType>([
-  'Image',
-  'Screenshot',
-  'Logo',
-  'LogoMark',
-  'Video',
-]);
-
-export const IMAGE_THUMBNAIL_ASSET_TYPES: ReadonlySet<BrandKitAssetType> = new Set<BrandKitAssetType>([
-  'Logo',
-  'LogoMark',
-  'Image',
-  'Screenshot',
-]);
 
 export const AUDIO_ASSET_TYPES: ReadonlySet<BrandKitAssetType> = new Set<BrandKitAssetType>([
   'Music',
@@ -287,31 +282,22 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent {
       return;
     }
 
-    const uploadedFileId = event.file.ID;
     this.SaveError = null;
     try {
-      const entity = await this.ProviderToUse.GetEntityObject<MJBrandKitAssetEntity>(
-        'MJ: Brand Kit Assets',
-        this.ProviderToUse.CurrentUser
-      );
-      entity.NewRecord();
-      entity.BrandKitID = this._brandKit.ID;
-      entity.FileID = uploadedFileId;
-      entity.Name = this.NewAssetName.trim() || event.file.Name || 'Untitled Asset';
-      entity.AssetType = this.NewAssetType;
-      entity.Usage = this.NewAssetUsage.trim() || null;
-      entity.IsPrimary = this.NewAssetIsPrimary;
-      entity.Sequence = this.Assets.length + 1;
-      entity.IsGenerationReference = this.IsVisualGenerationReferenceEligible(this.NewAssetType)
-        ? this.NewAssetIsGenerationReference
-        : false;
+      const result = await CreateBrandKitAssetFromUpload({
+        Provider: this.ProviderToUse,
+        BrandKitID: this._brandKit.ID,
+        UploadEvent: event,
+        AssetType: this.NewAssetType,
+        Name: this.NewAssetName,
+        Usage: this.NewAssetUsage,
+        IsPrimary: this.NewAssetIsPrimary,
+        Sequence: this.Assets.length + 1,
+        IsGenerationReference: this.NewAssetIsGenerationReference,
+      });
 
-      const saved = await entity.Save();
-      if (!saved) {
-        this.SaveError =
-          entity.LatestResult?.CompleteMessage ||
-          entity.LatestResult?.Message ||
-          'Failed to create Brand Kit Asset record.';
+      if (!result.Success || !result.Asset) {
+        this.SaveError = result.ErrorMessage || 'Failed to create Brand Kit Asset record.';
         this.cdr.markForCheck();
         return;
       }
@@ -320,12 +306,10 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent {
       this.NewAssetUsage = '';
       this.NewAssetIsPrimary = false;
       this.NewAssetIsGenerationReference = false;
-      this.Assets = [...this.Assets, entity];
+      this.Assets = [...this.Assets, result.Asset];
       this.rebuildGroups();
       await this.mintThumbnails(this.loadSequence);
       this.AssetsChanged.emit(this.Assets);
-    } catch (err) {
-      this.SaveError = err instanceof Error ? err.message : String(err);
     } finally {
       this.cdr.markForCheck();
     }
@@ -350,24 +334,15 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent {
   }
 
   private async mintThumbnails(expectedSequence: number): Promise<void> {
-    if (!(this.ProviderToUse instanceof GraphQLDataProvider)) {
-      return;
-    }
-
-    const storageClient = new GraphQLFileStorageClient(this.ProviderToUse);
     const visualAssets = this.Assets.filter(
       (a) => this.IsImagePreviewType(a.AssetType) && a.FileID && !this.ThumbnailUrls.has(a.FileID)
     );
 
     await Promise.all(
       visualAssets.map(async (asset) => {
-        try {
-          const res = await storageClient.CreateMediaAccessToken(asset.FileID);
-          if (expectedSequence === this.loadSequence && res.Success && res.Url) {
-            this.ThumbnailUrls.set(asset.FileID, res.Url);
-          }
-        } catch (err) {
-          LogError(err instanceof Error ? err.message : String(err));
+        const url = await MintBrandKitFilePreviewUrl(this.ProviderToUse, asset.FileID);
+        if (expectedSequence === this.loadSequence && url) {
+          this.ThumbnailUrls.set(asset.FileID, url);
         }
       })
     );

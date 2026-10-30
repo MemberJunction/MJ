@@ -71,21 +71,24 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
       page.locator('mj-video-studio-brand-kits-resource'),
     ).toBeVisible({ timeout: 30_000 });
 
-    // Step 1: Click new-brand-kit-button, name the kit, and save the form
+    // Step 1: Click new-brand-kit-button, name the kit in mj-brand-kit-creator, save, and open More settings
     const newKitButton = page.getByTestId('new-brand-kit-button');
     await expect(newKitButton).toBeVisible({ timeout: 30_000 });
     await newKitButton.click();
 
-    const nameInput = page
-      .locator('mj-form-field[fieldname="Name"] input, input[name="Name"]')
-      .first();
-    await expect(nameInput).toBeVisible({ timeout: 30_000 });
-    await nameInput.fill(kitName);
+    const creatorNameInput = page.getByTestId('bkc-name-input');
+    await expect(creatorNameInput).toBeVisible({ timeout: 30_000 });
+    await creatorNameInput.fill(kitName);
+
+    const creatorSaveButton = page.getByTestId('bkc-save-btn');
+    await expect(creatorSaveButton).toBeVisible();
+    await creatorSaveButton.click();
+
+    const moreSettingsButton = page.getByTestId('bkc-more-settings-btn');
+    await expect(moreSettingsButton).toBeVisible({ timeout: 30_000 });
+    await moreSettingsButton.click();
 
     const saveFormButton = page.getByRole('button', { name: /^save$/i }).first();
-    await expect(saveFormButton).toBeVisible();
-    await saveFormButton.click();
-
     const assetsEditor = page.locator('mj-brand-kit-assets-editor');
     const policyEditor = page.locator('mj-brand-kit-generation-policy-editor');
     await expect(assetsEditor).toBeVisible({ timeout: 30_000 });
@@ -152,7 +155,6 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
     await expect(createdCard.getByTestId('brand-kit-logo-thumb')).toBeVisible();
     await expect(createdCard.getByTestId('brand-kit-palette-strip')).toBeVisible();
     await expect(createdCard.getByTestId('brand-kit-company-badge')).toBeVisible();
-    await expect(createdCard.getByTestId('brand-kit-asset-count')).toBeVisible();
 
     await createdCard.locator('[data-testid^="brand-kit-delete-"]').click();
     const confirmButton = page

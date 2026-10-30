@@ -60,6 +60,7 @@ export class VideoStudioBrandKitsResourceComponent
   public LoadError: string | null = null;
   public DeleteError: string | null = null;
   public DeletingKitId: string | null = null;
+  public IsBrandKitCreatorOpen = false;
 
   public AllBrandKits: BrandKitCardSnapshot[] = [];
   public FilteredBrandKits: BrandKitCardSnapshot[] = [];
@@ -202,7 +203,32 @@ export class VideoStudioBrandKitsResourceComponent
   }
 
   public CreateNewBrandKit(): void {
-    this.navigationService.OpenNewEntityRecord('MJ: Brand Kits');
+    this.IsBrandKitCreatorOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public CloseBrandKitCreator(): void {
+    this.IsBrandKitCreatorOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  public async OnBrandKitCreatorSaved(newBrandKitId: string): Promise<void> {
+    await this.LoadBrandKits(true);
+    const created = this.AllBrandKits.find((k) => UUIDsEqual(k.ID, newBrandKitId));
+    if (created) {
+      this.SelectedBrandKit = created;
+      this.syncAgentContext();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnBrandKitCreatorOpenMoreSettings(brandKitId: string): void {
+    this.IsBrandKitCreatorOpen = false;
+    this.navigationService.OpenEntityRecord(
+      'MJ: Brand Kits',
+      CompositeKey.FromID(brandKitId),
+    );
+    this.cdr.markForCheck();
   }
 
   public OpenBrandKit(item: BrandKitCardSnapshot): void {

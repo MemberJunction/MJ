@@ -272,6 +272,30 @@ describe('VSProductionBriefComponent DOM', () => {
     expect(vsContext['NarrationEnabled']).toBe(true);
     expect(vsContext['CaptionsMode']).toBe('Sidecar');
 
+    // 6. "New brand kit" link opens mj-brand-kit-creator and selects the newly saved kit after Saved
+    const newKitLink = query(fixture, '[data-testid="vs-brief-new-brand-kit-link"]') as HTMLElement | null;
+    expect(newKitLink).not.toBeNull();
+    newKitLink!.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.IsBrandKitCreatorOpen).toBe(true);
+    expect(query(fixture, '[data-testid="brand-kit-creator"]')).not.toBeNull();
+
+    fakeBrandKits.push({
+      ID: 'kit-created-99',
+      Name: 'Freshly Created Kit',
+      Description: '',
+      CompanyID: null,
+      IsDefault: false,
+      Status: 'Active',
+    });
+    await fixture.componentInstance.OnBrandKitCreatorSaved('kit-created-99');
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.IsBrandKitCreatorOpen).toBe(false);
+    expect(fixture.componentInstance.SelectedBrandKit?.ID).toBe('kit-created-99');
+    expect(fixture.componentInstance.SelectedBrandKit?.Name).toBe('Freshly Created Kit');
+
     sub.unsubscribe();
     fixture.destroy();
     vi.restoreAllMocks();
