@@ -193,4 +193,21 @@ describe('SQLServerTransactionGroup — provider-scoped transaction lifecycle', 
     expect(requestProvider.InTransaction).toBe(false);
     expect(postCommitFired).toEqual(['outer-task']);
   });
+
+  it('throws the descriptive ambient-transaction-ended error when ExecuteOnTransactionHandle is called after the transaction settled', async () => {
+    await requestProvider.BeginTransaction();
+    const endedHandle = requestProvider.ActiveTransactionHandle!;
+    expect(endedHandle).not.toBeNull();
+    await requestProvider.CommitTransaction();
+    expect(requestProvider.ActiveTransactionHandle).toBeNull();
+
+    await expect(
+      requestProvider.ExecuteOnTransactionHandle(endedHandle, 'late query', async () => ({
+        recordsets: [],
+        recordset: [],
+        output: {},
+        rowsAffected: [0],
+      })),
+    ).rejects.toThrow('The ambient transaction ended before this TransactionGroup request ran');
+  });
 });

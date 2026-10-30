@@ -689,38 +689,46 @@ describe('SQLServerDataProvider delete inside a TransactionGroup (result callbac
     Metadata.Provider = previousProvider as IMetadataProvider;
   });
 
-  async function deleteInGroup(info: EntityInfo, recordsets: Record<string, unknown>[][]): Promise<BaseEntity> {
+  async function deleteInGroup(
+    info: EntityInfo,
+    recordsets: Record<string, string | null>[][],
+    expectedSubmitResult = true,
+  ): Promise<BaseEntity> {
     const provider = makeProvider();
     provider.SetTestEntities([info, makeRecordChangesEntityInfo()]);
-    Metadata.Provider = provider as unknown as IMetadataProvider;
+    Metadata.Provider = provider as object as IMetadataProvider;
     const group = new SQLServerTransactionGroup();
     const entity = makeSavedWidgetEntity(info, TEST_USER);
     entity.TransactionGroup = group;
     expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(true); // queued, not run
     mssqlState.QueueResult({ recordsets });
-    expect(await group.Submit()).toBe(true);
+    expect(await group.Submit()).toBe(expectedSubmitResult);
     return entity;
   }
 
   it('CascadeDeletes: succeeds when the first result set carries the key', async () => {
     const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
-    const entity = await deleteInGroup(info, [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }]]);
+    const entity = await deleteInGroup(info, [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }]], true);
 
     expect(mssqlState.Queries[0].sql).toContain('@MJDeleteRowExisted');
     expect(entity.LatestResult?.Success).toBe(true);
   });
 
-  it('CascadeDeletes: fails when the row did not exist (NULL key), instead of reporting success', async () => {
+  it('CascadeDeletes: fails and rolls back the group when the row did not exist (NULL key), instead of reporting success', async () => {
     const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
-    const entity = await deleteInGroup(info, [[{ ID: null }], [{ ID: null }]]);
+    const entity = await deleteInGroup(info, [[{ ID: null }], [{ ID: null }]], false);
 
+    expect(mssqlState.EventKinds()).toContain('rollback');
+    expect(mssqlState.EventKinds()).not.toContain('commit');
     expect(entity.LatestResult?.Success).toBe(false);
     expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
   });
 
-  it('fails when the proc echoes a different key', async () => {
-    const entity = await deleteInGroup(makeWidgetEntityInfo(), [[{ ID: 'some-other-record' }]]);
+  it('fails and rolls back the group when the proc echoes a different key', async () => {
+    const entity = await deleteInGroup(makeWidgetEntityInfo(), [[{ ID: 'some-other-record' }]], false);
 
+    expect(mssqlState.EventKinds()).toContain('rollback');
+    expect(mssqlState.EventKinds()).not.toContain('commit');
     expect(entity.LatestResult?.Success).toBe(false);
     expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
   });

@@ -2073,8 +2073,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
-                                    this.OnAfterSaveExecute(entity, user, options, saveContext);
-                                    entityResult.Success = true;
+                                    if (bNewRecord) {
+                                        let hydratedPk = false;
+                                        for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                            const fieldObj = entity.Fields.find((f) => f.Name === pkField.Name);
+                                            if (
+                                                fieldObj &&
+                                                (fieldObj.Value === null || fieldObj.Value === undefined) &&
+                                                transactionResult[pkField.Name] != null
+                                            ) {
+                                                fieldObj.Value = transactionResult[pkField.Name];
+                                                hydratedPk = true;
+                                            }
+                                        }
+                                        if (hydratedPk) {
+                                            entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                        }
+                                    }
                                     if (preSaveValues) {
                                         for (const [key, val] of Object.entries(preSaveValues as Record<string, TransactionRowValue>)) {
                                             if (!(key in transactionResult)) {
@@ -2091,10 +2106,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                     if (patches) {
                                         Object.assign(transactionResult, patches);
                                     }
+                                    this.OnAfterSaveExecute(entity, user, options, saveContext);
+                                    entityResult.Success = true;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 } else {
                                     entityResult.Success = false;
-                                    entityResult.Message = 'Transaction Failed';
+                                    if (!entityResult.Message) {
+                                        entityResult.Message =
+                                            transactionResult instanceof Error ? transactionResult.message : 'Transaction Failed';
+                                    }
                                 }
                             },
                         ),
@@ -2262,14 +2282,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 // (PostgreSQL accepts its legacy `_result_id` shape there).
                                 if (!this.ValidateDeleteResult(entity, [transactionResult], entityResult)) {
                                     entityResult.Success = false;
-                                    return;
+                                    throw new Error(
+                                        entityResult.Message ||
+                                            `Failed to delete ${entity.EntityInfo.Name}: record not found or primary key mismatch`,
+                                    );
                                 }
                                 this.OnAfterDeleteExecute(entity, user, options);
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
                             } else {
                                 entityResult.Success = false;
-                                entityResult.Message = 'Transaction failed to commit';
+                                if (!entityResult.Message) {
+                                    entityResult.Message =
+                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction failed to commit';
+                                }
                             }
                         },
                     ),

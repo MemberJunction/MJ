@@ -3265,6 +3265,12 @@ IF ${varName} IS NOT NULL
     description: string,
     run: (tx: sql.Transaction) => Promise<sql.IResult<TRow>>,
   ): Promise<sql.IResult<TRow>> {
+    if (this._endedHandles.has(transaction)) {
+      throw new Error(
+        'The ambient transaction ended before this TransactionGroup request ran. ' +
+        'Await every query issued on the transaction before committing or rolling back.'
+      );
+    }
     if (transaction !== this._transaction) {
       return run(transaction);
     }
