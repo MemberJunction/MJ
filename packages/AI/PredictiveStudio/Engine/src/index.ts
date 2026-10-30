@@ -24,6 +24,10 @@ export * from './feature-assembly';
 // holdout carver, the snapshot builder, and training and retraining from a snapshot.
 export * from './snapshot/index';
 
+// Evaluation Protocol version rows — EvaluationProtocolVersioning: version 1 as its own lineage root, every later
+// version under it, written the way Prediction Unit versions are.
+export * from './protocol';
+
 // Prediction Unit rows — PredictionUnitRowReader: one row per grain record (or grain record x period) with its
 // decision date, outcome window and label; censored, label-known and empty-label rows are excluded and counted.
 export * from './prediction-unit';

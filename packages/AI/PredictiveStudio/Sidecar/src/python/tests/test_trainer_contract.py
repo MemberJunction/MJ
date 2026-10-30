@@ -8,7 +8,9 @@ import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.failures import RunClock, TrainerFailure
-from app.trainer_schemas import EvaluationProtocol, TrainerCompleted, TrainerFailed, TrainerRequest, TrainerResult
+from app.trainer_schemas import (
+    EvaluationProtocol, SeededRandomHoldout, TrainerCompleted, TrainerFailed, TrainerRequest, TrainerResult,
+)
 from tests.tools.trainer_fixture import FileServer, JsonObject, JsonValue, candidates, protocol, request, snapshot_files
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
@@ -125,6 +127,9 @@ _DRIFT = {"kind": "calibration-drift", "slopeOutside": [0.8, 1.2], "consecutiveP
     ("holdout fraction 1", _with("holdout.newEntityReport", {"groupKey": "EntityKey", "holdoutFraction": 1})),
     ("holdout end at cutoff", _with("holdout.holdoutEnd", "2024-01-01")),
     ("holdout end before cutoff", _with("holdout.holdoutEnd", "2023-06-01")),
+    ("seeded-random fraction 0", _with("holdout", {"kind": "seeded-random", "fraction": 0})),
+    ("seeded-random fraction 1", _with("holdout", {"kind": "seeded-random", "fraction": 1})),
+    ("seeded-random without a fraction", _with("holdout", {"kind": "seeded-random"})),
     ("empty group key", _with("innerValidation", {"kind": "grouped-kfold", "folds": 5, "repeats": 1, "groupKey": ""})),
     ("degradation over 0 periods",
      _with("retrainTriggers", [{"kind": "outcome-degradation", "margin": 0, "consecutivePeriods": 0}])),
@@ -143,6 +148,8 @@ def test_the_protocol_accepts_the_boundaries_the_core_parser_accepts() -> None:
     ok["retrainTriggers"] = [{**_DRIFT, "consecutivePeriods": 1}]
     ok["holdout"]["newEntityReport"] = {"groupKey": "EntityKey", "holdoutFraction": 0.3}
     assert EvaluationProtocol.model_validate(ok).seed == 0
+    seeded = EvaluationProtocol.model_validate(_with("holdout", {"kind": "seeded-random", "fraction": 0.25})).holdout
+    assert isinstance(seeded, SeededRandomHoldout) and seeded.fraction == 0.25
 
 
 def test_budget_hard_stop_raises_budget_exceeded() -> None:

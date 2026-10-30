@@ -34,6 +34,7 @@ export * from './experiment-sessions';
 export * from './prediction-unit';
 export * from './assembly-contract';
 export * from './evaluation-protocol';
+export * from './evaluation-protocol-rules';
 export * from './training-run-results';
 export * from './snapshot-format';
 export * from './store-schemas';

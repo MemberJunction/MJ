@@ -52,7 +52,11 @@ export type HoldoutSplit =
       readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly newEntityReport: { readonly groupKey: string; readonly holdoutFraction: number } | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
     }
-  | { readonly kind: 'rolling-origin'; readonly origins: number; readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number; readonly window: 'expanding' | 'sliding' };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'rolling-origin'; readonly origins: number; readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number; readonly window: 'expanding' | 'sliding' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Units with one fixed decision date (cross-sectional data): a reproducible row-hash holdout of this fraction of the rows. */
+  | { readonly kind: 'seeded-random'; readonly fraction: number };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+/** A rolling-origin backtest needs at least this many origins (the shape check and the parser read it). */
+export const MIN_ROLLING_ORIGINS = 5;
 export type InnerValidation =
   | { readonly kind: 'repeated-stratified-kfold'; readonly folds: number; readonly repeats: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'grouped-kfold'; readonly folds: number; readonly repeats: number; readonly groupKey: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -139,6 +143,8 @@ export interface EvaluationProtocolSpec {
 
 /** A calendar day, yyyy-mm-dd (the holdout cutoff and end). */
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** The one sentence the shape check and the parser give a seeded-random holdout whose fraction is not in (0, 1). */
+const SEEDED_RANDOM_FRACTION_PROBLEM = 'Holdout seeded-random needs a fraction strictly between 0 and 1';
 /** Every `SecondaryMetric`; `satisfies` refuses a value that is not one. */
 const SECONDARY_METRICS = ['auc', 'accuracy', 'f1', 'precision', 'recall', 'r2', 'calibration-slope'] as const satisfies readonly SecondaryMetric[];
 /** Compile-time completeness: a `SecondaryMetric` added without listing it in SECONDARY_METRICS breaks the build. */
@@ -176,7 +182,8 @@ export class EvaluationProtocol {
   /**
    * The shape checks run by `MJEvaluationProtocolEntityServer.Validate()`: every JSON column parses, the fixed
    * fields hold their only admissible values, the primary score is proper for its family, the margin is >= 0,
-   * rolling-origin has >= 5 origins and no-signal cannot be omitted. Seed (an integer >= 0) and Version (an integer
+   * rolling-origin has at least {@link MIN_ROLLING_ORIGINS} origins, a seeded-random fraction lies strictly between 0
+   * and 1, and no-signal cannot be omitted. Seed (an integer >= 0) and Version (an integer
    * >= 1) are checked here too, so a row the typed parser would refuse is refused at save time as well. The full typed
    * parse and the save-time rules are separate members.
    */
@@ -249,21 +256,31 @@ export class EvaluationProtocol {
     return Object.prototype.hasOwnProperty.call(PROPER_SCORES_BY_FAMILY, family);
   }
 
-  /** A date-carved holdout names its date column and cutoff (and an end after it); rolling-origin needs >= 5 origins. */
+  /**
+   * A date-carved holdout names its date column and cutoff (and an end after it); rolling-origin needs at least
+   * {@link MIN_ROLLING_ORIGINS} origins; seeded-random holds out a fraction strictly between 0 and 1.
+   */
   private static checkHoldoutShape(holdout: JsonValue | null, problems: string[]): void {
     if (holdout === null || !JsonParse.IsJsonObject(holdout)) return;
     const kind = JsonParse.JsonString(holdout, 'kind');
     if (kind === 'rolling-origin') {
       const origins = JsonParse.JsonInteger(holdout, 'origins');
-      if (origins === null || origins < 5) problems.push(`Holdout rolling-origin needs at least 5 origins (${origins === null ? 'none' : origins} given)`);
+      if (origins === null || origins < MIN_ROLLING_ORIGINS) problems.push(`Holdout rolling-origin needs at least ${MIN_ROLLING_ORIGINS} origins (${origins === null ? 'none' : origins} given)`);
     } else if (kind === 'date-carved') {
       const cutoff = JsonParse.JsonString(holdout, 'cutoff') || '';
       if (!JsonParse.JsonString(holdout, 'dateColumn') || !ISO_DAY.test(cutoff)) problems.push('Holdout date-carved needs dateColumn and cutoff yyyy-mm-dd');
       const end = holdout['holdoutEnd'];
       if (end !== undefined && end !== null && (typeof end !== 'string' || !ISO_DAY.test(end) || end <= cutoff)) problems.push('Holdout date-carved holdoutEnd must be null or a yyyy-mm-dd date after cutoff');
+    } else if (kind === 'seeded-random') {
+      if (!EvaluationProtocol.isOpenUnitFraction(JsonParse.JsonNumber(holdout, 'fraction'))) problems.push(SEEDED_RANDOM_FRACTION_PROBLEM);
     } else {
-      problems.push('Holdout kind must be date-carved or rolling-origin');
+      problems.push('Holdout kind must be date-carved, rolling-origin or seeded-random');
     }
+  }
+
+  /** A fraction strictly between 0 and 1 (a seeded-random holdout share). */
+  private static isOpenUnitFraction(f: number | null): f is number {
+    return f !== null && f > 0 && f < 1;
   }
 
   private static isSecondaryMetric(s: string): s is SecondaryMetric {
@@ -443,7 +460,7 @@ export class EvaluationProtocol {
       return null;
     }
     if (kind === 'rolling-origin') {
-      const origins = EvaluationProtocol.intAtLeast(v, 'origins', 5);
+      const origins = EvaluationProtocol.intAtLeast(v, 'origins', MIN_ROLLING_ORIGINS);
       const horizonPeriods = EvaluationProtocol.intAtLeast(v, 'horizonPeriods', 1);
       const gapPeriods = EvaluationProtocol.intAtLeast(v, 'gapPeriods', 0);
       const minTrainPeriods = EvaluationProtocol.intAtLeast(v, 'minTrainPeriods', 1);
@@ -451,7 +468,13 @@ export class EvaluationProtocol {
       if (origins !== null && horizonPeriods !== null && gapPeriods !== null && minTrainPeriods !== null && (window === 'expanding' || window === 'sliding')) {
         return { kind, origins, horizonPeriods, gapPeriods, minTrainPeriods, window };
       }
-      errors.push('Holdout rolling-origin needs origins>=5, horizonPeriods>=1, gapPeriods>=0, minTrainPeriods>=1, window expanding|sliding');
+      errors.push(`Holdout rolling-origin needs origins>=${MIN_ROLLING_ORIGINS}, horizonPeriods>=1, gapPeriods>=0, minTrainPeriods>=1, window expanding|sliding`);
+      return null;
+    }
+    if (kind === 'seeded-random') {
+      const fraction = JsonParse.JsonNumber(v, 'fraction');
+      if (EvaluationProtocol.isOpenUnitFraction(fraction)) return { kind, fraction };
+      if (!errors.includes(SEEDED_RANDOM_FRACTION_PROBLEM)) errors.push(SEEDED_RANDOM_FRACTION_PROBLEM);
       return null;
     }
     return null; // the shape check already reported an unknown kind

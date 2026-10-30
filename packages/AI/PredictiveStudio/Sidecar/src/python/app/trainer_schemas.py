@@ -174,7 +174,13 @@ class RollingOriginHoldout(_Frozen):
     window: Literal["expanding", "sliding"]
 
 
-HoldoutSplit = Annotated[Union[DateCarvedHoldout, RollingOriginHoldout], Field(discriminator="kind")]
+class SeededRandomHoldout(_Frozen):
+    """A row-hash holdout for units with one fixed decision date; the roles arrive in the manifest."""
+    kind: Literal["seeded-random"]
+    fraction: float = Field(gt=0, lt=1)
+
+
+HoldoutSplit = Annotated[Union[DateCarvedHoldout, RollingOriginHoldout, SeededRandomHoldout], Field(discriminator="kind")]
 
 
 class RepeatedStratifiedKFold(_Frozen):
