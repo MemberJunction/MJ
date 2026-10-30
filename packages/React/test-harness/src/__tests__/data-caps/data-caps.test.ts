@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   ResolveDataCapMaxRows,
   BuildDataAccessRecord,
+  StartDataAccessRecord,
+  SettleDataAccessRecord,
+  FinalizePendingDataAccess,
   DescribeDataCap,
   DEFAULT_RUN_VIEW_MAX_ROWS,
   DEFAULT_RUN_QUERY_MAX_ROWS,
@@ -95,6 +98,63 @@ describe('BuildDataAccessRecord', () => {
   });
 });
 
+describe('BuildDataAccessRecord with a failed result', () => {
+  const maxRows = { applied: 1000, requested: undefined };
+
+  it('records Success=false as a failure with its message, not as a 0-row success', () => {
+    // A client-database timeout comes back this way, not as a thrown error.
+    const rec = BuildDataAccessRecord(
+      'RunQuery', { target: 'Roster', identity: {} },
+      { Success: false, ErrorMessage: 'canceling statement due to statement timeout', Results: [] },
+      maxRows, 14000
+    );
+    expect(rec.error).toBe('canceling statement due to statement timeout');
+    expect(rec.rowsReturned).toBe(0);
+  });
+
+  it('names the failure when the provider gives no message', () => {
+    const rec = BuildDataAccessRecord('RunView', { target: 'Causes', identity: {} }, { Success: false }, maxRows, 1);
+    expect(rec.error).toBe('the call failed with no error message');
+  });
+
+  it('adds no error to a successful result', () => {
+    const rec = BuildDataAccessRecord('RunQuery', { target: 'Q', identity: {} }, { Success: true, Results: [1, 2] }, maxRows, 1);
+    expect(rec.error).toBeUndefined();
+  });
+});
+
+describe('in-flight data calls', () => {
+  const maxRows = { applied: 1000, requested: undefined };
+  const target = { target: 'Roster', identity: {} };
+
+  it('records a call when it starts and completes it when it returns', () => {
+    const dataAccess: Parameters<typeof FinalizePendingDataAccess>[0] = [];
+    const placeholder = StartDataAccessRecord(dataAccess, 'RunQuery', target, maxRows, 1000);
+    expect(dataAccess).toHaveLength(1);
+    SettleDataAccessRecord(placeholder, BuildDataAccessRecord('RunQuery', target, { Results: [1, 2, 3] }, maxRows, 250));
+    FinalizePendingDataAccess(dataAccess, 60000);
+    expect(dataAccess[0]).toMatchObject({ rowsReturned: 3, durationMs: 250 });
+    expect(dataAccess[0].error).toBeUndefined();
+  });
+
+  it('reports a call still running when the test finishes, instead of omitting it', () => {
+    const dataAccess: Parameters<typeof FinalizePendingDataAccess>[0] = [];
+    StartDataAccessRecord(dataAccess, 'RunQuery', target, maxRows, 1000);
+    FinalizePendingDataAccess(dataAccess, 16000);
+    expect(dataAccess[0].durationMs).toBe(15000);
+    expect(dataAccess[0].error).toBe('still running after 15.0s when the test finished');
+  });
+
+  it('keeps a record reported as still running unchanged when the call returns later', () => {
+    const dataAccess: Parameters<typeof FinalizePendingDataAccess>[0] = [];
+    const placeholder = StartDataAccessRecord(dataAccess, 'RunQuery', target, maxRows, 1000);
+    FinalizePendingDataAccess(dataAccess, 16000);
+    SettleDataAccessRecord(placeholder, BuildDataAccessRecord('RunQuery', target, { Results: [1] }, maxRows, 40000));
+    expect(dataAccess[0].rowsReturned).toBe(0);
+    expect(dataAccess[0].error).toContain('still running');
+  });
+});
+
 describe('DescribeDataCap', () => {
   it('names both numbers when capped', () => {
     const rec = BuildDataAccessRecord(
@@ -122,6 +182,7 @@ describe('DescribeQueryTarget', () => {
     expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: 'MJ/AI/Agents' })).toBe('/MJ/AI/Agents/Foo');
     expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: '/MJ/AI/Agents/' })).toBe('/MJ/AI/Agents/Foo');
     expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: '/' })).toBe('/Foo');
+    expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: '///MJ//AI///' })).toBe('/MJ//AI/Foo');
   });
 
   it('distinguishes same-named queries in different categories', () => {
@@ -209,5 +270,14 @@ describe('structured identity (correlatable against declared dataRequirements)',
   it('omits absent fields rather than emitting undefined keys', () => {
     expect(ResolveQueryTarget({}).identity).toEqual({});
     expect(ResolveViewTarget({}).identity).toEqual({});
+  });
+});
+
+describe('DescribeQueryTarget on long runs of slashes', () => {
+  it('trims them in linear time', () => {
+    const path = '/'.repeat(200_000) + 'x' + '/'.repeat(200_000);
+    const started = performance.now();
+    expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: path })).toBe('/x/Foo');
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
