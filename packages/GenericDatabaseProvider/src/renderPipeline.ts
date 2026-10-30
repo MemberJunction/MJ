@@ -88,6 +88,8 @@ export interface RenderContext {
     DialectKey?: string;
     /** ID of the saved query being rendered, so a composition that leads back to it is refused as a cycle. */
     QueryID?: string;
+    /** The saved query's name, for refusals written for its owners. */
+    QueryName?: string;
     /** User context for permission checks on referenced queries */
     ContextUser?: UserInfo;
     /** Parameter values from the caller */

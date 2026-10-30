@@ -6570,6 +6570,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Platform: this.PlatformKey as DatabasePlatform,
                 DialectKey: dialectKey,
                 QueryID: query.ID,
+                QueryName: query.Name,
                 ContextUser: contextUser ?? this.CurrentUser,
                 Parameters: parameters,
                 ServerParameters: serverSet?.ServerParameters,

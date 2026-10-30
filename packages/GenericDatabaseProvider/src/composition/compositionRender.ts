@@ -39,6 +39,8 @@ export interface UnitRenderRequest {
     readonly RendersTemplate: boolean;
     /** Names the query in errors. */
     readonly Label: string;
+    /** The saved query's name (a composed query's full path), for refusals written for its owners; absent for SQL that is not a saved query. */
+    readonly Name?: string;
     readonly Definitions: ReadonlyArray<QueryParameterDefinition>;
     /** Values a caller supplied (or, for a composed query, arguments that came from caller values). */
     readonly Parameters?: Record<string, unknown>;
@@ -108,7 +110,7 @@ export class CompositionRender {
         let sql: string;
         let applied: Record<string, string> = {};
         if (this.rendersAsTemplate(request, unit) && !staticOnly) {
-            unit.AssertRenderable(request.Label, request.Definitions);
+            unit.AssertRenderable(request.Label, request.Definitions, request.Name ?? null);
             const result = this.process(request, unit, unit.TemplateText(), recorder, request.Definitions);
             sql = result.SQL;
             applied = result.Applied;
@@ -237,6 +239,7 @@ export class CompositionRender {
             SQL: query.GetPlatformSQL(this.options.Platform) ?? '',
             RendersTemplate: query.UsesTemplate === true,
             Label: `"${instance.Path.FullPath}"`,
+            Name: instance.Path.FullPath,
             Definitions: instance.Resolved.ParameterDefinitions,
             Parameters: values.Caller,
             ServerParameters: values.Server,

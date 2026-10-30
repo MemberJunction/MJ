@@ -535,6 +535,58 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
     });
 });
 
+describe('a saved query that writes a value tag inside a SQL string literal is refused at run time', () => {
+    const QUOTED = "SELECT ID, Name FROM vwProjects WHERE OwnerID = '{{ Owner }}'";
+    let provider: QueryFlsProvider;
+
+    beforeEach(() => {
+        provider = new QueryFlsProvider();
+        provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function seed(sql: string, permissionRoles?: string[]): void {
+        provider.SeedQueries([makeQuery({ ID: 'q-1', Name: 'Projects By Owner', SQL: sql, UsesTemplate: true, PermissionRoles: permissionRoles })]);
+    }
+
+    it('refuses the run before anything executes, naming the query, the parameter, the position and the fix', async () => {
+        seed(QUOTED);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Owner: "x' OR 1=1 --" } }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/^Query "Projects By Owner" cannot run: .*\{\{ Owner \}\} \(parameter "Owner"\) at line 1, column 50: '\{\{ Owner \}\}'\./);
+        expect(result.ErrorMessage).toContain('a value that contains a quote can change the statement');
+        expect(result.ErrorMessage).toContain("Fix: replace '{{ Owner }}' with {{ Owner | sqlString }} and drop the surrounding quotes");
+        expect(result.ErrorMessage).toContain('mj query refresh --all --dry-run');
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('gives a caller who may not run the query the not-found message, never the detail', async () => {
+        seed(QUOTED, [HR_ROLE]);
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Owner: 'a' } }, staff);
+        expect(result.ErrorMessage).toBe("Query 'q-1' does not exist or you do not have permission to run it.");
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Owner: 'a' } } }], staff);
+        expect(batch.results.map(r => r.errorMessage)).toEqual(["Query 'q-1' does not exist or you do not have permission to run it."]);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('refuses an authorized caller in a cache-checked batch with the same detail, running nothing', async () => {
+        seed(QUOTED);
+        const batch = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'q-1', Parameters: { Owner: 'a' } } }], staff);
+        expect(batch.results[0].status).toBe('error');
+        expect(batch.results[0].errorMessage).toMatch(/^Query "Projects By Owner" cannot run: /);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('runs the same query written with the filter and no quotes', async () => {
+        seed('SELECT ID, Name FROM vwProjects WHERE OwnerID = {{ Owner | sqlString }}');
+        const result = await provider.Run({ QueryID: 'q-1', Parameters: { Owner: "O'Brien" } }, staff);
+        expect(result.Success).toBe(true);
+        expect(provider.Executed).toEqual(["SELECT ID, Name FROM vwProjects WHERE OwnerID = 'O''Brien'"]);
+    });
+});
+
 /**
  * A server-side result cache that keeps whatever a run returned, already narrowed for its caller,
  * under the slot key the provider hands its cache hooks. Keeping narrowed rows is the careless

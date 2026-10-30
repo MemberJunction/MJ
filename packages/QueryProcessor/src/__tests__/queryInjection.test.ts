@@ -2,8 +2,9 @@
  * Template injection through a tag inside a string literal.
  *
  * `WHERE r.ID = '{{ agentRunID }}'` puts the caller's value between quotes the template wrote, so a
- * value carrying its own quote closes the literal and appends a predicate. The rule decided for this
- * is a save-time rule: a tag inside a string literal is refused. These tests render the shipped
+ * value carrying its own quote closes the literal and appends a predicate. A tag inside a string
+ * literal is refused at save and on every run, by the provider's render gate in front of this
+ * processor. These tests render the shipped
  * `GetAgentRunTree` SQL (read from the repo) and a minimal synthetic copy of the same shape.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -83,19 +84,8 @@ describe('Template injection: a tag inside a string literal', () => {
         expect(result.processedSQL).toMatch(/r\.ID = N?'x'' OR ''1''=''1'/);
     });
 
-    // Pinned: Save-time template rule — a tag inside a string literal is refused (DISCUSSION §6, 2026-10-26).
-    // TEST-INVENTORY T1 (and S1). Observed today: ProcessQueryTemplate returns success: true with
-    // "WHERE r.ID = 'x' OR '1'='1'" in processedSQL (expected false to be true).
-    // Intended API: the save-time checker on the new lexer refuses the template when the query is saved;
-    // this pin asserts the processor no longer emits the injected SQL for the same template.
-    it.fails('refuses the shipped GetAgentRunTree template rather than rendering the injected predicate', () => {
-        expect(isRefused(AGENT_RUN_TREE_SQL, INJECTION)).toBe(true);
-    });
-
-    // Pinned: Save-time template rule — a tag inside a string literal is refused (DISCUSSION §6, 2026-10-26).
-    // TEST-INVENTORY T1 (and S1). Observed today: success: true, processedSQL ends
-    // "WHERE r.ID = 'x' OR '1'='1'" (expected false to be true).
-    it.fails("refuses the synthetic WHERE r.ID = '{{ agentRunID }}' template rather than rendering the injected predicate", () => {
-        expect(isRefused(SYNTHETIC_SQL, INJECTION)).toBe(true);
-    });
+    // The refusal is not this processor's job: it renders whatever the provider's render gate lets
+    // through. The gate (GenericDatabaseProvider TemplateUnit.AssertRenderable) refuses a saved query
+    // with a value tag inside a string literal on every run, and a save refuses it too; those tests
+    // live with the gate (renderPipeline.test.ts, queryRun.fieldSecurity.test.ts).
 });

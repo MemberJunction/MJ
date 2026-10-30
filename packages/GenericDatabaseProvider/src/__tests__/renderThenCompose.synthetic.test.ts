@@ -107,9 +107,9 @@ describe('render-then-compose (synthetic cases)', () => {
         it("H1: a static argument into a quoted dependency variable is never emitted as ''Act'%'", () => {
             const sql = render(SyntheticCases.H1);
             expect(sql).not.toContain("''Act'%'");
-            // The tag-in-literal rule is a save-time rule (refused at save, reported by refresh); an existing
-            // query keeps running, and the dependency renders once, with the value as passed.
-            expect(sql).toContain("LIKE 'Act%'");
+            // A value tag inside a string literal stops a run whenever the query was saved: the run is
+            // refused, and the refusal names the dependency and the filter that fixes it.
+            expect(sql).toMatch(/^RENDER ERROR: Query "Syn\/InString" cannot run: .*Fix: replace '\{\{ Prefix \}\}%' with \{\{ Prefix \| sqlLikeBegins \}\}/);
         });
 
         // Fixed by render-then-compose (was pinned): render-then-compose, one instance per evaluated argument set (DISCUSSION §6, 2026-10-27). TEST-INVENTORY C3 (F2).
@@ -168,9 +168,9 @@ describe('render-then-compose (synthetic cases)', () => {
         it("H1-pg: a static argument into a quoted dependency variable is never emitted as ''Act'%'", () => {
             const sql = renderPG(SyntheticCasesPG.H1);
             expect(sql).not.toContain("''Act'%'");
-            // The tag-in-literal rule is a save-time rule (refused at save, reported by refresh); an existing
-            // query keeps running, and the dependency renders once, with the value as passed.
-            expect(sql).toContain("LIKE 'Act%'");
+            // A value tag inside a string literal stops a run whenever the query was saved: the run is
+            // refused, and the refusal names the dependency and the filter that fixes it.
+            expect(sql).toMatch(/^RENDER ERROR: Query "Syn\/InString" cannot run: .*Fix: replace '\{\{ Prefix \}\}%' with \{\{ Prefix \| sqlLikeBegins \}\}/);
         });
 
         // Fixed by render-then-compose (was pinned): render-then-compose, one instance per evaluated argument set (DISCUSSION §6, 2026-10-27). TEST-INVENTORY C3 (F2), PostgreSQL.

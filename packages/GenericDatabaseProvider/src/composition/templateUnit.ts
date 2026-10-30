@@ -4,6 +4,7 @@ import type {
     CompositionReference, DeclaredTemplateParameter, Diagnostic, TemplateExpression, TemplateLiteralValue,
 } from '@memberjunction/sql-parser';
 import type { QueryParameterDefinition } from '@memberjunction/query-processor';
+import { IsQuotedValueTag, QuotedTagRefusalMessage } from './quotedTagRefusal.js';
 
 /** The body of a composition tag, `query:"…"`. */
 const COMPOSITION_TAG = /^\s*query\s*:/;
@@ -15,13 +16,17 @@ export const COMPOSITION_RECORDER_NAME = '__mjComposition';
  * The MJ Query rules that apply to new and edited queries only: authoring rules (where a tag may
  * sit, which values need a filter, hole and argument shapes, composition placement) that a query
  * saved before the language existed may rely on. A save refuses them and a refresh reports them;
- * a run of an existing query does not stop for them (DISCUSSION §6: "existing queries keep
- * running"). Every other error stops a run, so a construct outside the language (an unsupported
- * tag, a function call, attribute access other than `.length`, a subscript, an unknown filter, a
- * malformed tag) never reaches Nunjucks. A code added later stops a run until it is listed here.
+ * a run of an existing query does not stop for them ("existing queries keep running"). Every
+ * other error stops a run, so a construct outside the language (an unsupported tag, a function
+ * call, attribute access other than `.length`, a subscript, an unknown filter, a malformed tag)
+ * never reaches Nunjucks. A code added later stops a run until it is listed here.
+ *
+ * A value tag inside a SQL string literal (`MJQ_TAG_IN_STRING_LITERAL`) is not listed: its value
+ * is pasted between the quotes unescaped, so a value holding a quote can change the statement, and
+ * a run stops for it whenever the query was saved. A composition tag, block or comment inside a
+ * literal pastes no value and does not stop a run.
  */
 export const SAVE_TIME_ONLY_RULES: ReadonlySet<string> = new Set([
-    MJQueryDiagnosticCodes.TagInStringLiteral,
     MJQueryDiagnosticCodes.TagInQuotedIdentifier,
     MJQueryDiagnosticCodes.UnfilteredValue,
     MJQueryDiagnosticCodes.UnfilteredUntyped,
@@ -41,6 +46,9 @@ export const SAVE_TIME_ONLY_RULES: ReadonlySet<string> = new Set([
 export class TemplateUnit {
     /** The SQL with comments removed. */
     readonly SQL: string;
+    /** The SQL as given, comments included: refusals give positions in it. */
+    private readonly source: string;
+    private readonly dialect: SQLDialect;
     readonly Template: QueryTemplate;
     /**
      * The compositions that are SQL (not inside a string literal or quoted identifier), in source
@@ -49,6 +57,8 @@ export class TemplateUnit {
     readonly References: readonly CompositionReference[];
 
     private constructor(sql: string, dialect: SQLDialect, keepComments: boolean) {
+        this.source = sql;
+        this.dialect = dialect;
         this.SQL = keepComments ? sql : SQLParser.StripComments(sql, dialect);
         this.Template = QueryTemplate.Parse(this.SQL, dialect);
         this.References = this.Template.CompositionReferences().Value.filter(r => r.Node.SqlContext === 'Code');
@@ -66,15 +76,38 @@ export class TemplateUnit {
     /**
      * The interpreter gate: validates the template by the MJ Query language in Refresh mode and
      * refuses it on any error other than the {@link SAVE_TIME_ONLY_RULES}. Nunjucks only ever
-     * evaluates a template that passed.
+     * evaluates a template that passed. A tag inside a SQL string literal is refused with a message
+     * for the query's owners ({@link QuotedTagRefusalMessage}): where each tag is, why, the fix,
+     * and how to find every query with the same problem.
+     *
+     * Callers authorize the run (`UserCanRun`, for the query and each query it composes) before
+     * this gate, so the message only reaches a caller allowed to run the query.
+     *
      * @param label - Names the query in the error.
+     * @param queryName - Names the query in the quoted-tag refusal; `null` for SQL that is not a saved query.
      * @throws Error listing every refusing diagnostic.
      */
-    AssertRenderable(label: string, declared: ReadonlyArray<QueryParameterDefinition>): void {
+    AssertRenderable(label: string, declared: ReadonlyArray<QueryParameterDefinition>, queryName: string | null = null): void {
         const check = this.Template.Validate({ Mode: 'Refresh', DeclaredParameters: declaredParameters(declared) });
-        const refusals = check.Diagnostics.filter(d => d.Severity === 'Error' && !SAVE_TIME_ONLY_RULES.has(d.Code));
+        const refusals = check.Diagnostics.filter(d => d.Severity === 'Error' && this.stopsRun(d));
         if (refusals.length === 0) return;
-        throw new Error(`Query template ${label} cannot be rendered: ${refusals.map(describe).join(' ')}`);
+        const quoted = refusals.some(d => d.Code === MJQueryDiagnosticCodes.TagInStringLiteral)
+            ? QuotedTagRefusalMessage(queryName, this.source, this.dialect) : null;
+        const others = refusals.filter(d => d.Code !== MJQueryDiagnosticCodes.TagInStringLiteral);
+        const rest = others.length > 0 ? `Query template ${label} cannot be rendered: ${others.map(describe).join(' ')}` : null;
+        throw new Error([quoted, rest].filter((m): m is string => m !== null).join(' ')
+            || `Query template ${label} cannot be rendered: ${refusals.map(describe).join(' ')}`);
+    }
+
+    /**
+     * Whether an error stops a run: every error but the {@link SAVE_TIME_ONLY_RULES}, and, of the
+     * tags inside a SQL string literal, those that paste a value ({@link IsQuotedValueTag}).
+     */
+    private stopsRun(diagnostic: Diagnostic): boolean {
+        if (diagnostic.Code === MJQueryDiagnosticCodes.TagInStringLiteral) {
+            return IsQuotedValueTag(this.SQL.substring(diagnostic.Span.Start, diagnostic.Span.End));
+        }
+        return !SAVE_TIME_ONLY_RULES.has(diagnostic.Code);
     }
 
     /**

@@ -406,7 +406,7 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
                 SQL: `SELECT YEAR(m.JoinDate) AS JoinYear, COUNT(*) AS MemberCount
 FROM Members m
 {% if StartDate %}
-WHERE m.JoinDate >= '{{ StartDate }}'
+WHERE m.JoinDate >= {{ StartDate | sqlString }}
 {% endif %}
 GROUP BY YEAR(m.JoinDate)
 ORDER BY JoinYear`,
@@ -506,7 +506,7 @@ ORDER BY JoinYear`,
                 CategoryPath: '/Reports/',
                 SQL: `SELECT m.ID, m.Name FROM Members m
 {% if Region %}
-WHERE m.Region = '{{ Region }}'
+WHERE m.Region = {{ Region | sqlString }}
 {% endif %}`,
                 Reusable: true,
                 UsesTemplate: true,
@@ -544,7 +544,7 @@ WHERE m.Region = '{{ Region }}'
                 SQL: `SELECT m.ID, m.Name
 FROM Members m
 {% if Region %}
-WHERE m.Region = '{{ Region }}'
+WHERE m.Region = {{ Region | sqlString }}
 {% endif %}`,
                 Reusable: true,
                 UsesTemplate: true,
@@ -1385,7 +1385,7 @@ describe('GenericDatabaseProvider — server-set parameters and Context (#4789 A
     it("renders Context from the context user and the run's time zone, and refuses a caller's Context", async () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date('2026-10-14T23:30:00.000Z'));
-        const query = templatedQuery({ ID: 'q-mine', Name: 'Mine', SQL: "SELECT * FROM T WHERE OwnerID = {{ Context.UserID | sqlString }} AND Day = '{{ Context.Today }}'" }, []);
+        const query = templatedQuery({ ID: 'q-mine', Name: 'Mine', SQL: "SELECT * FROM T WHERE OwnerID = {{ Context.UserID | sqlString }} AND Day = {{ Context.Today | sqlString }}" }, []);
         provider.setMockQueries([query]);
 
         const tokyo = await provider.testInternalRunQuery({ QueryID: 'q-mine', TimeZone: 'Asia/Tokyo' }, mockUser);
@@ -1546,7 +1546,7 @@ describe('GenericDatabaseProvider — query cache keys cover server-set values (
     });
 
     it('never caches a result that read Context.Now, nor a RequireApproved run', async () => {
-        useQuery("SELECT * FROM T WHERE At <= '{{ Context.Now }}'");
+        useQuery("SELECT * FROM T WHERE At <= {{ Context.Now | sqlString }}");
         await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true }, mockUser);
         await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true, RequireApproved: true }, mockUser);
         expect(fingerprints).not.toHaveBeenCalled();

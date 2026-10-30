@@ -513,7 +513,9 @@ describe('Skip Regression — Bug D: Nunjucks expression inside SQL string liter
      * token, then the leading `'` in token N+1 re-enters "inside string"
      * mode permanently — the trailing ORDER BY is never detected.
      */
-    it('Skip run B047FD9F — strips ORDER BY when dep SQL has Nunjucks expression inside a SQL string literal', () => {
+    // The dependency writes a value tag inside a SQL string literal: its value would be pasted between
+    // the quotes unescaped, so the composing query's run is refused, naming the dependency and the fix.
+    it('Skip run B047FD9F — refuses the run when a dependency writes a value tag inside a SQL string literal, naming the dependency', () => {
         const engine = setupNoMetadata();
 
         const inlineDeps: QueryDependencySpec[] = [
@@ -547,38 +549,16 @@ ORDER BY TotalActivityCount DESC`,
 FROM {{query:"Golden-Queries/Analytics/MemberActivityCounts(MembershipType=MembershipType)"}} [mac]
 ORDER BY [mac].[TotalActivityCount] DESC`;
 
-        const result = compose(outerSQL, inlineDeps, { MembershipType: 'Gold' });
-
-        expect(result.HasCompositions).toBe(true);
-
-        // The dep's trailing ORDER BY TotalActivityCount DESC must be
-        // STRIPPED (it's illegal inside a CTE without TOP/OFFSET).
-        // The outer query's ORDER BY [mac].[TotalActivityCount] DESC
-        // must be PRESERVED (it's on the outer SELECT).
-        const resolvedUpper = result.ResolvedSQL.toUpperCase();
-
-        // Count top-level ORDER BY occurrences — only the outer one should remain.
-        // The dep's ORDER BY should have been stripped or made legal via OFFSET.
-        const hasDepOrderBy = /ORDER\s+BY\s+TotalActivityCount\s+DESC/i.test(result.ResolvedSQL);
-        const hasOffset = /OFFSET\s+0\s+ROWS/i.test(result.ResolvedSQL);
-
-        // Either the dep ORDER BY was stripped, or OFFSET 0 ROWS was injected
-        expect(hasDepOrderBy === false || hasOffset === true).toBe(true);
-
-        // The CTE body must be intact — the '{{ MembershipType }}' pattern
-        // must NOT have caused truncation or misidentification.
-        expect(result.ResolvedSQL).toContain('MemberActivities');
-        expect(result.ResolvedSQL).toContain('TotalActivityCount');
-
-        // The outer query's ORDER BY must be preserved
-        expect(result.ResolvedSQL).toContain('ORDER BY [mac].[TotalActivityCount] DESC');
+        expect(() => compose(outerSQL, inlineDeps, { MembershipType: 'Gold' })).toThrow(
+            /^Query "Golden-Queries\/Analytics\/MemberActivityCounts" cannot run: .*\(parameter "MembershipType"\) at line 16, column 22: '\{\{ MembershipType \}\}'.*Fix: replace '\{\{ MembershipType \}\}' with \{\{ MembershipType \| sqlString \}\}/,
+        );
     });
 
     /**
-     * Test 7 — Minimal reproduction: simple dep with '{{ StatusFilter }}'
-     * inside a string literal + trailing ORDER BY. No CTEs, no comments.
+     * Test 7 — Minimal reproduction, as now written: the value renders the string literal
+     * (`| sqlString`), with a trailing ORDER BY. No CTEs, no comments.
      */
-    it('strips ORDER BY when dep has template expression inside string literal (minimal case)', () => {
+    it('strips ORDER BY when a dep\'s filtered value renders a string literal (minimal case)', () => {
         const engine = setupNoMetadata();
 
         const inlineDeps: QueryDependencySpec[] = [
@@ -588,7 +568,7 @@ ORDER BY [mac].[TotalActivityCount] DESC`;
                 UsesTemplate: true,
                 SQL: `SELECT [ID], [Name]
 FROM [data].[vwRecords]
-WHERE [Status] = '{{ StatusFilter }}'
+WHERE [Status] = {{ StatusFilter | sqlString }}
 ORDER BY [Name] ASC`,
             },
         ];
@@ -606,8 +586,7 @@ ORDER BY [Name] ASC`,
 
         // CTE body must be intact
         expect(result.ResolvedSQL).toContain('[data].[vwRecords]');
-        // The dependency is rendered with the value passed to it (render-then-compose), so the
-        // template expression inside the literal is its value, not a renamed tag.
+        // The dependency is rendered with the value passed to it (render-then-compose).
         expect(result.ResolvedSQL).toContain("[Status] = 'Active'");
 
     });

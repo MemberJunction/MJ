@@ -85,10 +85,12 @@ mj query refresh --all             # apply
 - `mj query refresh` runs in process as the system user. A refresh started from Explorer or the `Query.RefreshExtraction` remote operation needs Update on `MJ: Queries`, Create/Update/Delete on `MJ: Query Fields`, `MJ: Query Parameters`, `MJ: Query Entities` and `MJ: Query Dependencies`, and read access to the entities the queries read; queries the caller may not refresh are reported as not permitted and left alone. The command exits non-zero when a query fails, or when a query named with `--id` or `--name` cannot be refreshed.
 - Client query caches miss once after the upgrade, because a query's definition signature now includes its field facts.
 
+**Saved queries with a template tag inside quotes stop running until they are fixed.** A saved query that writes a value tag inside a SQL string literal, such as `WHERE Region = '{{ Region }}'`, is now refused on every run, not only when its SQL is saved: the value is pasted between the quotes without escaping, so a value containing a quote can change the statement. The refusal names the query, each tag's parameter, line and column, and the fix. To find them, run `mj query refresh --all --dry-run`: they are listed as `Error` (`MJQ_TAG_IN_STRING_LITERAL`). The fix is one line per tag: replace `'{{ Region }}'` with `{{ Region | sqlString }}` and drop the surrounding quotes (`sqlString` adds the quotes and escapes the value); use `sqlLikeContains` for `'%{{ x }}%'`, and `sqlNumber`, `sqlDate` or `sqlBoolean` when the value is not text. A caller who may not run the query still gets the not-found message.
+
 **Saved queries to review after the refresh.** These kinds of existing queries may report `Warning` or `Error`. Unless noted, they keep running as before, but a save that changes their SQL is refused until it is fixed; the message names the rule and the fix (`guides/MJ_QUERY_LANGUAGE.md` lists every rule, and which ones also stop a run).
 
 - A query that composes another query and relies on a same-named parameter flowing into it without passing it: `Warning` (`MJQ_COMPOSITION_IMPLICIT_ARGUMENT`), **and its results change** (see below).
-- A template tag inside a string literal or quoted identifier (`'{{ x }}'`, `[{{ x }}]`).
+- A template tag inside a string literal (`'{{ x }}'`): **refused at run time** (see above). A tag inside a quoted identifier (`[{{ x }}]`) keeps running.
 - A string, array or date value written into the SQL without an MJ SQL filter (`sqlString`, `sqlIn`, `sqlDate`, …), unless the parameter is server-set.
 - A composition reference whose category path is partial or wrong, or a composition outside a FROM / JOIN table position.
 - Two output columns with the same name (compared case-insensitively).

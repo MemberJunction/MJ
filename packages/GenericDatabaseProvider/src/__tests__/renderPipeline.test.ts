@@ -200,13 +200,20 @@ describe('Nunjucks templates', () => {
     });
 
     // SQL quoting does not hide a tag (guides/MJ_QUERY_LANGUAGE.md §1): a tag inside a string literal or a quoted
-    // identifier is still a tag, so it renders (B12). Save refuses both placements (MJQ_TAG_IN_STRING_LITERAL,
-    // MJQ_TAG_IN_QUOTED_IDENTIFIER); a stored query that has one keeps running, as it did when flagged.
-    it('renders a tag inside a string literal (B12; refused at save)', () => {
+    // identifier is still a tag (B12). Save refuses both placements (MJQ_TAG_IN_STRING_LITERAL,
+    // MJQ_TAG_IN_QUOTED_IDENTIFIER). A value tag inside a string literal also stops every run, since its value would be
+    // pasted between the quotes unescaped; a tag in a quoted identifier keeps running, as it did when flagged.
+    it('refuses to run a value tag inside a string literal, with the fix (B12)', () => {
         stubMetadata();
         const sql = `SELECT 'literal {{ word }} text' AS s FROM t`;
-        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { word: 'plain' } });
-        expect(result.FinalSQL).toBe(`SELECT 'literal plain text' AS s FROM t`);
+        expect(() => RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { word: "x' + (SELECT 1) + '" } }))
+            .toThrow(/^This query cannot run: .*\{\{ word \}\} \(parameter "word"\) at line 1, column 17: 'literal \{\{ word \}\} text'.*CONCAT\('…', \{\{ word \| sqlString \}\}, '…'\)/);
+    });
+
+    it('runs the same value written with a filter outside the quotes', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run(`SELECT {{ word | sqlString }} AS s FROM t`, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { word: "O'Brien" } });
+        expect(result.FinalSQL).toBe(`SELECT 'O''Brien' AS s FROM t`);
     });
 
     it('renders a tag inside a bracket identifier (B12; refused at save)', () => {

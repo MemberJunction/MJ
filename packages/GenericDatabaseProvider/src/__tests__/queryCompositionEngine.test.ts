@@ -1155,7 +1155,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 ID: 'leaf-tpl',
                 Name: 'Leaf With Template',
                 CategoryPath: '/Test/',
-                SQL: "SELECT * FROM Data {% if Filter %}WHERE x = '{{ Filter }}'{% endif %}",
+                SQL: "SELECT * FROM Data {% if Filter %}WHERE x = {{ Filter | sqlString }}{% endif %}",
                 UsesTemplate: true,
             });
 
@@ -1319,7 +1319,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 CategoryPath: '/Test/',
                 SQL: `SELECT m.ID, m.Name FROM Members m
 {% if Region %}
-WHERE m.Region = '{{ Region }}'
+WHERE m.Region = {{ Region | sqlString }}
 {% endif %}
 ORDER BY m.Name`,
                 UsesTemplate: true,
@@ -1808,14 +1808,14 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
 )
 SELECT * FROM MemberActivities WHERE 1=1
 {% if MinActivityCount %}AND TotalActivityCount >= {{ MinActivityCount | sqlNumber }}{% endif %}
-{% if MembershipType %}AND EXISTS (SELECT 1 FROM [AssociationDemo].[vwMemberships] ms INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID WHERE ms.MemberID = MemberActivities.MemberID AND ms.Status = 'Active' AND mt.Name = '{{ MembershipType }}'){% endif %}
+{% if MembershipType %}AND EXISTS (SELECT 1 FROM [AssociationDemo].[vwMemberships] ms INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID WHERE ms.MemberID = MemberActivities.MemberID AND ms.Status = 'Active' AND mt.Name = {{ MembershipType | sqlString }}){% endif %}
 ORDER BY TotalActivityCount DESC`;
 
         const CHAPTER_ENGAGEMENT_SUMMARY_SQL = `WITH ChapterMembers AS (
     SELECT c.ID AS ChapterID, c.Name AS ChapterName, c.ChapterType, c.Region, c.State, c.IsActive,
         COUNT(DISTINCT cm.MemberID) AS ActiveMemberCount, AVG(DATEDIFF(DAY, cm.JoinDate, GETDATE())) AS AvgMemberTenureDays
     FROM [AssociationDemo].[vwChapters] c LEFT JOIN [AssociationDemo].[vwChapterMemberships] cm ON c.ID = cm.ChapterID AND cm.Status = 'Active'
-    WHERE c.IsActive = 1 {% if ChapterType %}AND c.ChapterType = '{{ ChapterType }}'{% endif %}
+    WHERE c.IsActive = 1 {% if ChapterType %}AND c.ChapterType = {{ ChapterType | sqlString }}{% endif %}
     GROUP BY c.ID, c.Name, c.ChapterType, c.Region, c.State, c.IsActive
 ),
 ChapterEventActivity AS (
@@ -1856,7 +1856,7 @@ FROM [AssociationDemo].[vwMembers] m
 LEFT JOIN CurrentMembership cm ON m.ID = cm.MemberID AND cm.rn = 1
 LEFT JOIN MemberRevenue rev ON m.ID = rev.MemberID
 WHERE 1=1
-{% if MembershipType %}AND cm.MembershipType = '{{ MembershipType }}'{% endif %}`;
+{% if MembershipType %}AND cm.MembershipType = {{ MembershipType | sqlString }}{% endif %}`;
 
         const BOARD_OF_DIRECTORS_SQL = `WITH board_committee AS (
     SELECT Id FROM nams.vwNU__Committee__cs WHERE Name = 'MSTA Board of Directors' AND NU__Type__c = 'Board'

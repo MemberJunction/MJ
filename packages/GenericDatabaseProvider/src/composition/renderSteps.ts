@@ -32,6 +32,7 @@ export function OuterRenderRequest(sql: string, ctx: RenderContext): UnitRenderR
         SQL: sql,
         RendersTemplate: ctx.UsesTemplate ?? ctx.QueryInfo?.UsesTemplate ?? false,
         Label: 'of this query',
+        Name: ctx.QueryName,
         Definitions: definitions,
         Parameters: ctx.Parameters,
         ServerParameters: ctx.ServerParameters,

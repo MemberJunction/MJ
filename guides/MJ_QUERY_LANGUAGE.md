@@ -14,8 +14,8 @@ MemberJunction developers and for the AI agents that write queries (Skip's query
   document when the query is saved. At run time Nunjucks renders the template with the caller's values and the
   MJ SQL filters.
 - **Strictness.** A query that breaks a rule is refused when it is saved new or edited (a save that changes its SQL).
-  Queries already saved keep running, unless they use a construct outside the language (see
-  [Running a saved query](#running-a-saved-query)). A refresh of an existing query reports what breaks the rules, and
+  Queries already saved keep running, unless they use a construct outside the language or put a value tag inside a
+  SQL string literal (see [Running a saved query](#running-a-saved-query)). A refresh of an existing query reports what breaks the rules, and
   three rules are only warnings there (see [Save-time checks reference](#12-save-time-checks-reference)).
 
 The reference implementation is `@memberjunction/sql-parser`:
@@ -607,7 +607,7 @@ re-extracts a query uses `Mode: 'Refresh'`. **Error** refuses the save. **Warnin
 | Code | Severity | Triggered by | Fix |
 |---|---|---|---|
 | `MJQ_UNCLOSED_TAG` | Error | `{{`, `{%` or `{#` with no closer | Close the tag, or remove the opener. |
-| `MJQ_TAG_IN_STRING_LITERAL` | Error | A tag inside a SQL string literal | Put the tag outside the quotes and use a filter (`sqlLikeContains` for `'%…%'`). |
+| `MJQ_TAG_IN_STRING_LITERAL` | Error; **also stops a run** for a `{{ }}` value tag | A tag inside a SQL string literal | Put the tag outside the quotes and use a filter (`sqlString` for `'{{ x }}'`, `sqlLikeContains` for `'%…%'`). |
 | `MJQ_TAG_IN_QUOTED_IDENTIFIER` | Error | A tag inside `[…]`, `"…"` or `` `…` `` | Use `sqlIdentifier` outside any quotes, or write the identifier out. |
 | `MJQ_EXPRESSION_IN_COMMENT` | Info | A template tag mentioned inside a SQL comment: inert, never rendered or analyzed | Write template notes in a `{# #}` comment. |
 | `MJQ_UNCLOSED_BLOCK` | Error | An `if` or `for` with no `endif` / `endfor`, or left open when an outer block closes | Close the block. |
@@ -655,11 +655,23 @@ Where they come from: lexing, structure and expression-syntax codes (and `MJQ_CO
 
 Before a saved query is rendered, it is validated in `Refresh` mode (without a composition resolver). These errors
 are authoring rules that a query saved before the language existed may rely on, so they never stop a run:
-`MJQ_TAG_IN_STRING_LITERAL`, `MJQ_TAG_IN_QUOTED_IDENTIFIER`, `MJQ_UNFILTERED_VALUE`, `MJQ_UNFILTERED_UNTYPED`,
+`MJQ_TAG_IN_QUOTED_IDENTIFIER`, `MJQ_UNFILTERED_VALUE`, `MJQ_UNFILTERED_UNTYPED`,
 `MJQ_ARITHMETIC_IN_HOLE`, `MJQ_HOLE_NOT_A_VALUE`, `MJQ_DEFAULT_NOT_LITERAL`, `MJQ_FOR_ITERABLE`,
 `MJQ_FILTER_TYPE_MISMATCH`, `MJQ_PARAMETER_TYPE_CONFLICT` and `MJQ_COMPOSITION_POSITION`. Every other error refuses
 the run, so a construct outside the language (an unsupported tag, a function call, attribute access other than
 `.length`, a subscript, an unknown filter, a malformed tag) never reaches Nunjucks.
+
+A `{{ }}` value tag inside a SQL string literal (`MJQ_TAG_IN_STRING_LITERAL`, such as `WHERE Region = '{{ Region }}'`)
+also refuses the run, however old the query. The value is pasted between the quotes without escaping, so a value
+that contains a quote can change the statement. The refusal names the query (or, for a composed query, its full
+path), each tag with its parameter, line and column, and the exact fix: replace `'{{ Region }}'` with
+`{{ Region | sqlString }}` and drop the quotes (`sqlString` adds the quotes and escapes the value), use
+`sqlLikeContains` / `sqlLikeBegins` / `sqlLikeEnds` for `'%{{ x }}%'` / `'{{ x }}%'` / `'%{{ x }}'`, or the filter
+for the value's type (`sqlNumber`, `sqlDate`, `sqlBoolean`). `mj query refresh --all --dry-run` lists every saved
+query with the problem as an `Error`. The run is authorized first (the query's run permissions, and those of each
+query it composes), so a caller who may not run the query gets the usual not-found message, never these details.
+A composition tag (`'{{query:"…"}}'`), a block or a `{# #}` comment inside a literal pastes no value and does not
+stop a run.
 
 ### Error examples: bad, then good
 
