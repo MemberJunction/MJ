@@ -340,7 +340,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -349,6 +349,7 @@ jobs:
           src/__tests__/UUIDCompliance.test.ts
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
+          src/__tests__/PlatformStringCompliance.test.ts
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}

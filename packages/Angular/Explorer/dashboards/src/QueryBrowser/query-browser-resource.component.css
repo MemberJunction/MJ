@@ -908,3 +908,9 @@ mj-query-viewer {
         flex-direction: column;
     }
 }
+
+.drawer-diagnostics {
+  margin-bottom: var(--mj-space-3);
+  max-height: 40vh;
+  overflow: auto;
+}
