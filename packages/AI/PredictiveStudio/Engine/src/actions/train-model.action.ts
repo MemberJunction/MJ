@@ -21,7 +21,7 @@ import { BaseAction } from '@memberjunction/actions';
 
 import { TrainingEngine } from '../training/training-engine';
 import type { TrainingDeps, TrainModelResult } from '../training/types';
-import { BuildTrainingDeps } from '../operations/delegation';
+import { TrainingDelegation } from '../operations/delegation';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 import { PredictiveStudioRefusals } from '../operations/refusals';
 
@@ -97,12 +97,12 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
   /**
    * Build the engine's production dependency bundle from the action's run params
    * (threading `ContextUser` + `Provider` for isolation/multi-provider
-   * correctness) through {@link BuildTrainingDeps} — the same wiring the Train
+   * correctness) through {@link TrainingDelegation.BuildTrainingDeps} — the same wiring the Train
    * Model operation uses, so both surfaces pick the artifact-store family the same
    * way. Overridable so tests inject in-memory seams.
    */
   protected async buildDeps(params: RunActionParams): Promise<TrainingDeps> {
     const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
-    return BuildTrainingDeps(provider, params.ContextUser);
+    return TrainingDelegation.BuildTrainingDeps(provider, params.ContextUser);
   }
 }

@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "Local File System",
+      "Description": "A local file-system driver for development and CI: files in a directory of the server's own disk (STORAGE_LOCAL_ROOT). Files are as durable as that disk and readable only on that host. Inactive by default, so it never takes over provider selection from a configured cloud provider; a caller that needs it selects it by name.",
+      "ServerDriverKey": "Local File System Storage",
+      "ClientDriverKey": "Local File System Storage",
+      "Priority": 1000,
+      "IsActive": false,
+      "SupportsSearch": false,
+      "RequiresOAuth": false
+    },
+    "primaryKey": {
+      "ID": "BCC08E0E-F0A8-4703-A9C4-1F2A040786A2"
+    }
+  }
+]

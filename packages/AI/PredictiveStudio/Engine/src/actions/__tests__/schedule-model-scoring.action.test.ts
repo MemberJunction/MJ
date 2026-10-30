@@ -7,6 +7,7 @@ import type {
   ScheduleModelScoringOptions,
   ScheduledModelScoringResult,
 } from '../../scheduling/scheduled-model-scoring';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Schedule Model Scoring action. NO live DB — the scheduling
@@ -160,10 +161,12 @@ describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', 
   });
 
   it('maps a thrown helper error onto SCHEDULE_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
     const scheduler = { fn: async (): Promise<ScheduledModelScoringResult> => { throw new Error('save blew up'); } };
     const result = await new TestableAction(scheduler.fn).run(params(validParams()));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('SCHEDULE_FAILED');
     expect(result.Message).toContain('save blew up');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("save blew up")]);
   });
 });

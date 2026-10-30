@@ -56,7 +56,7 @@ describe('ProductionScoreRecordSetRunner â€” refused models write nothing (W1 â†
   for (const status of ['Draft', 'Archived'] as const) {
     it(`a ${status} model with write-back throws before scoring and saves 0 rows`, async () => {
       const artifacts = new InMemoryArtifactLoader();
-      artifacts.set('file-1', new TextEncoder().encode('bytes'));
+      artifacts.Set('file-1', new TextEncoder().encode('bytes'));
       const sidecar = new CountingSidecar();
       const runner = new TestRunner({ modelLoader: new Loader(new StatusModel(status)), artifactLoader: artifacts, sidecar }, new SaveCounter());
       await expect(

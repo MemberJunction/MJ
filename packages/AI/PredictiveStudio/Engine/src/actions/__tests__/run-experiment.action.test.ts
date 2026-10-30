@@ -21,6 +21,7 @@ import {
 import type { TrainExperimentInput } from '../../experiment/types';
 import { ExperimentOrchestrator } from '../../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../../experiment/types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Run Experiment Session action. NO live DB, NO live sidecar —
@@ -198,6 +199,7 @@ describe('PredictiveStudioRunExperimentAction — happy path', () => {
 
 describe('PredictiveStudioRunExperimentAction — orchestrator error', () => {
   it('maps a thrown orchestrator error to EXPERIMENT_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
     class ThrowingOrch extends ExperimentOrchestrator {
       public override async runSession(): Promise<ExperimentSessionResult> {
         throw new Error('no pipeline resolver configured');
@@ -209,6 +211,7 @@ describe('PredictiveStudioRunExperimentAction — orchestrator error', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('EXPERIMENT_FAILED');
     expect(result.Message).toContain('pipeline resolver');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("no pipeline resolver configured")]);
   });
 });
 

@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C2 -> S6.2 #2",
+    "Description": "Gate G2.35 (phase 2, dataset C2, criterion S6.2 #2): over C2's 400-seed n400 set the 95% paired interval of the dummy's minus the finalist's holdout log loss covers the planted difference (the same difference in expectation under the planted probabilities) on 372-388 of 400 seeds. A statistical gate: it runs on all 400 seeds only, once on the final head. It fails when the difference interval is centred on the model's score alone, not paired with the dummy on the same resampled rows (coverage outside the band).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.35\",\"owner:PR3\",\"phase:2\",\"dataset:C2\",\"criterion:S6.2 #2\"]",
+    "MaxExecutionTimeMS": 1800000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The model-minus-dummy log-loss interval covers the planted difference on 372-388 of 400 C2 seeds (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c2-s6-2-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "151EA5B0-F9A8-4533-BFB3-DD480FFD0BCB"
+  }
+}

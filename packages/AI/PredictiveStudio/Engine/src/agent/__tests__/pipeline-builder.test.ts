@@ -5,6 +5,7 @@ import { InvalidMajorityBaselineRuleError, type ModelingPlanSpec, type TrustVerd
 import { PredictiveStudioPipelineBuilder, TournamentRanking, type TrainedCandidate } from '../pipeline-builder';
 import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
 import { ReadCapExceededError } from '../../feature-assembly/read-cap-error';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
   const dummyUser = { Email: 'test@example.com' } as unknown as UserInfo;
@@ -14,6 +15,7 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
   } as unknown as IMetadataProvider;
 
   it('preserves warnings on failure path when pipeline creation fails', async () => {
+    const errors = ConsoleCapture.Errors();
     const builder = new PredictiveStudioPipelineBuilder();
     const spec: ModelingPlanSpec = {
       Goal: 'Predict cancellations',
@@ -36,7 +38,7 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
       ProposedBudget: {},
     };
 
-    const res = await builder.build({
+    const res = await builder.Build({
       spec,
       provider: mockProvider,
       user: dummyUser,
@@ -51,9 +53,11 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
       Kind: 'llm-derived',
       Reason: expect.stringMatching(/upstream Feature Pipeline/),
     });
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("PredictiveStudioPipelineBuilder.build failed: Target entity 'NonExistentEntity' was not found in metadata.")]);
   });
 
   it('deduplicates warnings across tournament candidate experiments', async () => {
+    const errors = ConsoleCapture.Errors();
     const builder = new PredictiveStudioPipelineBuilder();
     const spec: ModelingPlanSpec = {
       Goal: 'Predict cancellations',
@@ -79,7 +83,7 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
       ProposedBudget: {},
     };
 
-    const res = await builder.build({
+    const res = await builder.Build({
       spec,
       provider: mockProvider,
       user: dummyUser,
@@ -92,6 +96,11 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
     // Although 3 candidates each had JobTitleNorm and EmbeddingCol, they must be deduplicated
     expect(res.warnings).toHaveLength(2);
     expect(res.warnings?.map((w) => w.FeatureName)).toEqual(['JobTitleNorm', 'EmbeddingCol']);
+    // One line per refused candidate (they train concurrently, so in any order), then the build's own failure.
+    const logged = ConsoleCapture.Lines(errors);
+    expect(logged).toHaveLength(4);
+    expect(logged.slice(0, 3).sort()).toEqual(['logistic_regression', 'random_forest', 'xgboost'].map((a) => expect.stringContaining(`PredictiveStudioPipelineBuilder: candidate '${a}' failed: Target entity 'NonExistentEntity'`)).sort());
+    expect(logged[3]).toContain('PredictiveStudioPipelineBuilder.build failed: All proposed experiment candidates failed to train');
   });
 });
 
@@ -100,6 +109,7 @@ describe('PredictiveStudioPipelineBuilder — tournament failures keep their rea
   const mockProvider = { EntityByName: () => undefined, Entities: [] } as unknown as IMetadataProvider;
 
   it('reports the shared refusal when every candidate is refused the same way', async () => {
+    const errors = ConsoleCapture.Errors();
     const spec: ModelingPlanSpec = {
       Goal: 'Predict cancellations',
       TargetDefinition: { EntityName: 'Members', TargetVariable: 'Status', ProblemType: 'classification', SuccessMetric: 'AUC', AsOfStrategy: { Mode: 'column', Column: 'JoinDate' } },
@@ -116,6 +126,10 @@ describe('PredictiveStudioPipelineBuilder — tournament failures keep their rea
     const res = await new PredictiveStudioPipelineBuilder().Build({ spec, provider: mockProvider, user: dummyUser });
     expect(res.success).toBe(false);
     expect(res.errorMessage).toMatch(/^Training refused: the modeling plan's TargetDefinition\.AsOfStrategy \(Mode='column'\)/);
+    const logged = ConsoleCapture.Lines(errors);
+    expect(logged).toHaveLength(3);
+    expect(logged.filter((l) => l.startsWith('PredictiveStudioPipelineBuilder: candidate ')).length).toBe(2);
+    expect(logged[2]).toMatch(/^PredictiveStudioPipelineBuilder\.build failed: Training refused: the modeling plan's TargetDefinition\.AsOfStrategy/);
   });
 
   it('rethrows the first refusal when all candidates share its refusal class', () => {

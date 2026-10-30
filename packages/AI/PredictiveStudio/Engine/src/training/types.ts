@@ -24,12 +24,23 @@ import type {
   AsOfStrategy,
   OutcomeConfig,
   EvaluationRecord,
+  TrainerRequest,
+  TrainerResult,
+  PREDICTOR_ARTIFACT_FORMAT,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
   MJMLModelEntity,
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
+import type { ICountingDataAccess } from '../feature-assembly/data-access';
+import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
+import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
+import type { IHoldoutCarver } from '../snapshot/holdout-carver';
+import type { ITrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import type { IEvaluationProtocolStore } from './evaluation-protocol-store';
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -96,6 +107,19 @@ export interface IRecordLoader {
 }
 
 /**
+ * The protocol-driven training seam: one Training Run over one immutable Training Snapshot per call, answered with a
+ * {@link TrainerResult}. Kept apart from {@link ISidecarTrainer} so the legacy `train` seam and its test doubles stay
+ * untouched while the legacy path exists.
+ */
+export interface ITrainerEvaluator {
+  /**
+   * Run one training. Transport failures and sidecar faults are retried up to `req.maxRetries` times; a refused request
+   * or a malformed answer throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
+   */
+  RunTrainer(req: TrainerRequest): Promise<TrainerResult>;
+}
+
+/**
  * Sidecar seam — the `/train` call. Wraps {@link MLSidecar} from
  * `@memberjunction/predictive-studio-sidecar` in production; tests inject a fake
  * that returns a canned {@link TrainResponse} and captures the request so the
@@ -138,6 +162,16 @@ export interface IArtifactStore {
    * @returns the file id to store in `MLModel.ArtifactFileID`
    */
   save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * Remove an artifact this store saved: its file record and its bytes. Used to roll back the artifacts of a run that
+   * could not store all of them, so none is left unreferenced.
+   *
+   * @param fileId the id `save` returned
+   * @param contextUser request user — required on the server for isolation/audit
+   * @throws Error when the artifact cannot be removed
+   */
+  Delete(fileId: string, contextUser?: UserInfo): Promise<void>;
 }
 
 /**
@@ -154,9 +188,9 @@ export interface TrainModelInput {
    */
   experimentSessionIterationId?: string;
   /**
-   * Optional per-record label-event dates (keyed by record primary key). Feature assembly's `offset` as-of mode
-   * reads them, but training refuses every as-of mode other than `none` before assembly
-   * (`AsOfSettingHasNoEffectError`), so training does not use them today.
+   * Optional per-record label-event dates (keyed by record primary key). Decision dates come from the pipeline's
+   * Prediction Unit, so a unit pipeline refuses them (`input-not-accepted`) and a pipeline without a unit, which
+   * refuses every point-in-time as-of mode (`unit-required`), never reads them.
    */
   labelEventDates?: Record<string, Date>;
   /** Optional primary-key field on the target entity (defaults to `ID`). */
@@ -186,6 +220,34 @@ export interface TrainingDeps {
   contextUser: UserInfo;
   /** The provider every training read runs on; required because the training reads have no global fallback. */
   provider: IMetadataProvider;
+  /** Prediction Unit store for a pipeline that points at a unit; defaults to a `RunViewPredictionUnitStore` on `provider`. */
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Entity metadata the unit row reader resolves against; defaults to a `ProviderAssemblyMetadata` on `provider`. */
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The counting data access the unit rows are read through; defaults to a `RunViewDataAccess` on `provider`. */
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The clock for a unit whose censoring cutoff is `now`; defaults to the current time. */
+  now?: () => Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The Record Changes history the as-of assembly replays; defaults to a `RunViewRecordHistoryReader` (complete reads) over `dataAccess`. */
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * Where a Prediction Unit run writes its Training Snapshot's files. Required on the unit path: a unit run trains only
+   * from a snapshot, so a unit run without a file store fails with an error (incomplete deps; the run is recorded
+   * `Failed`, not as a `refused` envelope) rather than training from rows nothing recorded.
+   */
+  snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Assigns each unit row its manifest role; defaults to a `TrailingFractionCarver` over the pipeline's `LockedHoldoutFraction`. */
+  holdoutCarver?: IHoldoutCarver;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
+  snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * The trainer a pipeline bound to an Evaluation Protocol trains through. Required on that path: a protocol-bound run
+   * without one fails before anything is read. Production wiring passes the same `MJSidecarTrainer` it uses for
+   * `sidecar`, so both reach one sidecar process.
+   */
+  trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */
+  protocols?: IEvaluationProtocolStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**
@@ -226,6 +288,15 @@ export interface ModelTrainingLineage {
   assembledAt: string;
   /** How the stored metrics were measured (`EvaluationLineage.Key`). */
   evaluation: EvaluationRecord;
+}
+
+/**
+ * What the Lineage of a model trained under an Evaluation Protocol adds: the protocol it was judged under and the
+ * format of its artifact (the trainer's envelope, which carries its own in-fold encoding).
+ */
+export interface TrainerModelLineage {
+  evaluationProtocolId: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  artifactFormat: typeof PREDICTOR_ARTIFACT_FORMAT;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

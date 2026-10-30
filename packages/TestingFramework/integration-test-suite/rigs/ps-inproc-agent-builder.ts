@@ -136,7 +136,7 @@ async function main(): Promise<void> {
 
     banner('BUILD: PredictiveStudioPipelineBuilder.build(plan) — create pipeline → train → publish-gated-on-trust');
     const t0 = Date.now();
-    const result = await new PredictiveStudioPipelineBuilder().build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
+    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
     console.log(`  Built in ${Date.now() - t0}ms — success=${result.success} pipelineId=${result.pipelineId} modelId=${result.modelId}`);
     console.log(`  Trust: grade=${result.trust?.grade} canAct=${result.trust?.canAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason ?? '(n/a)'}`);
     created.pipelineId = result.pipelineId;

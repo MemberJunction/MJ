@@ -10,6 +10,7 @@ import type {
   PromoteModelOutcome,
 } from '../promote-model.action';
 import { ProductionModelPromotionGate } from '../promote-model.gate';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Promote ML Model action + its leakage sign-off gate. NO live
@@ -247,6 +248,7 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
   });
 
   it('allows a leakage-flagged model when SignOff is true WITH a reason — lifecycle only + audit note', async () => {
+    const status = ConsoleCapture.Status();
     const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
     const outcome = await new TestableGate(model).promote(
       req({ signOff: true, reason: 'Reviewed; cancelled_flag is a legitimate feature here.', targetStatus: 'Validated' }),
@@ -262,6 +264,7 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
     }
     expect(model.Status).toBe('Validated'); // only Status changed
     expect(model.SaveCallCount).toBe(1);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Leakage sign-off override for ML Model 'model-1'")]);
   });
 
   it('refuses a sign-off override of a flagged model when no reason is supplied (audit trail required)', async () => {

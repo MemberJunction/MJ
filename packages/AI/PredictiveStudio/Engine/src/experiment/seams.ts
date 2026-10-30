@@ -16,7 +16,7 @@ import {
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { MetricDirections } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training';
 import type { TrainingDeps } from '../training';
@@ -117,6 +117,8 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       model,
       run,
       Score: score,
+      // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
+      // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
       TokensUsed: 0,
     };
@@ -151,19 +153,9 @@ export function ExtractNormalizedScore(
   }
   // `problemType` is retained on the signature for callers/back-compat; the
   // error-metric direction is metric-name driven (shared with maintenance via
-  // the Core `isErrorMetric`) so the two consumers can never drift apart.
+  // `MetricDirections.IsErrorMetric` in Core) so the two consumers can never drift apart.
   void problemType;
-  return isErrorMetric(key) ? -raw : raw;
-}
-
-/** @deprecated Use {@link ExtractNormalizedScore}. */
-export function extractNormalizedScore(
-  holdoutMetricsJson: string | null,
-  trainMetricsJson: string | null,
-  successMetric: string,
-  problemType: 'classification' | 'regression',
-): number {
-  return ExtractNormalizedScore(holdoutMetricsJson, trainMetricsJson, successMetric, problemType);
+  return MetricDirections.IsErrorMetric(key) ? -raw : raw;
 }
 
 /** Parse a metrics JSON column into a lower-cased numeric record, or null. */

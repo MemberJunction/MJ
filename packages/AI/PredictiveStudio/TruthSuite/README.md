@@ -21,6 +21,13 @@ The catalog (`src/data/catalog.ts`) has 24 entries. With their base seeds that m
 - The generators are in `src/generators/`. `fixtures/golden-hashes.json` pins the `rows.csv` and `truth.csv` of every base seed byte for byte (T3-lag included). The W2-noise seeds s120–s159 that G0.2 also loads have no pin.
 - `pnpm run truth:data` generates datasets into the cache (`.data/`, or `$TRUTH_DATA_DIR`). The cache key covers the spec, the generator, the files it reads (the worlds domain `fixtures/worlds-domain/domain.json` for worlds, `make_scenario.ts` for T3-lag), the shared generator modules and the Loom pin.
 
+### C1 corpus
+
+`fixtures/c1-corpus/` holds the C1 corpus: the MoreCheese person-periods (6,673 final-valid dues periods for 2,015 payers, of which 4,873 are the reference's resolved person-years, listed in `person_years_keys.csv`) with their orders, non-dues lines and dated activity, one CSV per table, pinned by `SHA256SUMS`.
+- `python/fixtures/build_c1_corpus.py` builds it from the pinned MoreCheese corpus and ps-review's `person_years.parquet`. IDs are UUIDv5 under a fixed namespace, so a rebuild is byte-identical, and the builder refuses a build whose counts differ from the reference.
+- `migrations/V202610201300__pstruth_c1_corpus.sql` creates the eight `pstruth.C1*` tables and `metadata/entities/.pstruth-c1-entities.json` gives their entities the direct-SQL opt-in (`node scripts/gen-pstruth-ddl.mjs --metadata` writes it).
+- `C1CorpusFixture.LoadC1Corpus` (`src/fixtures/c1-corpus-loader.ts`) replaces the C1 tables' contents with the fixture after checking the sums and the opt-in. `ImmutableFieldDeclarations.Apply` (`src/fixtures/immutable-fields.ts`) sets `AllowUpdateAPI = false` on the fields `TRUTH_IMMUTABLE_FIELDS` declares fixed at creation.
+
 ### Harness
 
 `src/harness/` is the `TruthHarness` the gate checks get from `RunFixtures.HarnessFor(provider, user)`. It does the following:
@@ -50,6 +57,8 @@ pnpm run setup:python      # create .venv from python/requirements.txt
 pnpm run truth:provision   # create the pstruth schema, register its entities, push their direct-SQL opt-ins
 pnpm run truth:sidecar     # start the single-threaded sidecar; writes its URL to .run/sidecar.url
 ```
+
+To load the C1 corpus, run `npx tsx scripts/load-c1-corpus.ts` with MJAPI running (it loads the C1 tables, then declares the immutable fields through MJAPI), and restart MJAPI afterwards so it reads the changed field metadata.
 
 Start MJAPI with `PREDICTIVE_STUDIO_SIDECAR_URL` set to the URL in `.run/sidecar.url`. After `truth:provision`, restart MJAPI so it loads the `pstruth` entities.
 

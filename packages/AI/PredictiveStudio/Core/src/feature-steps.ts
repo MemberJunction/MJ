@@ -8,6 +8,8 @@
  * FeatureAssembly executor replays identically across training and scoring
  * (plan §6.1) to avoid train/serve skew.
  */
+import type { RowFilter } from './prediction-unit';
+import type { ColumnEncodingKind, DatedSource, WindowedAggregateSource } from './assembly-contract';
 
 /**
  * The set of step kinds supported by the FeatureAssembly executor. Each maps to
@@ -22,7 +24,9 @@ export type FeatureStepKind =
   | 'embedding'
   | 'llm-derived'
   | 'flow-agent'
-  | 'vision-llm';
+  | 'vision-llm'
+  | 'windowed-aggregate'
+  | 'series';
 
 /**
  * Fields shared by every step in the DAG. `Inputs` lists the ids of upstream
@@ -47,6 +51,50 @@ export interface SelectFeatureStep extends FeatureStepBase {
   Kind: 'select';
   /** Columns to carry forward. */
   Columns: string[];
+  /** Unit pipelines: the entity the columns are on (default: the unit's row entity). */
+  Entity?: string;
+  /** Unit pipelines: field on the unit row holding `Entity`'s primary key (default for the grain entity of a grain × periods unit: its foreign key). */
+  KeyField?: string;
+  /** Unit pipelines: declared encoding per column, overriding the one chosen from the field type. */
+  Encodings?: Record<string, ColumnEncodingKind>;
+  /** Forecast units: periods before the row's own period each column's value refers to; must be >= the horizon. */
+  PeriodOffsets?: Record<string, number>;
+}
+
+/** `windowed-aggregate` — a summary of a dated child table as of the row's decision date (unit pipelines only). */
+export interface WindowedAggregateFeatureStep extends FeatureStepBase {
+  Kind: 'windowed-aggregate';
+  /** Name of the single numeric feature column this step produces. */
+  FeatureName: string;
+  /** The dated child entity summarised. */
+  ChildEntity: string;
+  /** Field on the child holding the owning row's key. */
+  ForeignKey: string;
+  /** Field on the unit row whose value the child's `ForeignKey` matches (default: the row's entity key). */
+  OwnerKeyField?: string;
+  /** Child date field compared with the decision date. */
+  DateField: string;
+  /** For `active-at`: the child field ending the row's active span. */
+  EndDateField?: string;
+  /** Child date field from which the child row stops counting (e.g. a reversal date). */
+  VoidedAtField?: string;
+  /** The summary computed over the child rows in the window. */
+  Aggregate: WindowedAggregateSource['aggregate'];
+  /** Child field aggregated by `sum`, `mean` and `distinct`. */
+  ValueField?: string;
+  /** Window length in days ending at the decision date; absent = every child row on or before it. */
+  WindowDays?: number;
+  /** Child-row filters applied before aggregating. */
+  Filter?: RowFilter[];
+}
+
+/** `series` — a lag or rolling window declared in the unit's Temporal Spec, by index (unit pipelines only). */
+export interface SeriesFeatureStep extends FeatureStepBase {
+  Kind: 'series';
+  /** Name of the feature column this step produces. */
+  FeatureName: string;
+  /** Which Temporal Spec lag or rolling window, by its index in that list. */
+  Feature: Extract<DatedSource, { kind: 'series' }>['feature'];
 }
 
 /**
@@ -235,7 +283,9 @@ export type FeatureStep =
   | EmbeddingFeatureStep
   | LLMDerivedFeatureStep
   | FlowAgentFeatureStep
-  | VisionLLMFeatureStep;
+  | VisionLLMFeatureStep
+  | WindowedAggregateFeatureStep
+  | SeriesFeatureStep;
 
 /**
  * The whole feature-engineering DAG for a pipeline — the frozen spec the

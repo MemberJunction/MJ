@@ -1,6 +1,6 @@
 # @memberjunction/predictive-studio-sidecar
 
-> A self-managing TypeScript wrapper for Predictive Studio's **Python ML sidecar** — `new MLSidecar(); await s.start()` and you have a live training/inference service. **No Docker required.**
+> A self-managing TypeScript wrapper for Predictive Studio's **Python ML sidecar** — `new MLSidecar(); await s.Start()` and you have a live training/inference service. **No Docker required.**
 
 **What** — `MLSidecar`, a TypeScript class fronting a CPU-only FastAPI service (bundled in `src/python/`) that **trains** and **serves** tabular ML models over the contract defined in [`@memberjunction/predictive-studio-core`](../Core/src/sidecar-contract.ts).
 
@@ -13,7 +13,7 @@ For the full architecture, read the
 
 ## Two topologies
 
-| Mode | When | What `start()` does |
+| Mode | When | What `Start()` does |
 |------|------|---------------------|
 | **Managed** (default) | nothing configured | Spawns the bundled FastAPI service on `127.0.0.1` with an **ephemeral port**, reads `PREDICTIVE_STUDIO_SIDECAR_PORT=<n>` from its stdout, polls `/health` until ready, registers SIGINT/SIGTERM/exit cleanup. |
 | **Remote** | `url` option **or** `PREDICTIVE_STUDIO_SIDECAR_URL` env set | Connects only — no child process — and just verifies `/health`. Use for a containerized/scaled sidecar. |
@@ -24,9 +24,9 @@ For the full architecture, read the
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 
 const s = new MLSidecar();          // managed mode by default
-await s.start();                    // spawns the bundled Python service
+await s.Start();                    // spawns the bundled Python service
 
-const trained = await s.train({
+const trained = await s.Train({
   algorithm: 'xgboost',
   problem_type: 'classification',
   hyperparameters: {},
@@ -37,23 +37,23 @@ const trained = await s.train({
   data: { columns: ['x0', 'x1', 'label'], rows: [/* ... */] },
 });
 
-const { predictions } = await s.predict({
+const { predictions } = await s.Predict({
   artifact_b64: trained.artifact_b64,
   fitted_preprocessing: trained.fitted_preprocessing,
   feature_schema: [{ Name: 'x0', Kind: 'numeric' }, { Name: 'x1', Kind: 'numeric' }],
   rows: [{ x0: 1.2, x1: -0.4 }],
 });
 
-await s.stop();                     // shut the child down
+await s.Stop();                     // shut the child down
 ```
 
 ### Remote mode
 
 ```ts
 const s = new MLSidecar({ url: 'http://predictive-studio-sidecar:8000' });
-await s.start();                    // just verifies /health — no spawn
+await s.Start();                    // just verifies /health — no spawn
 // ... train / predict / health ...
-// stop() is a no-op (this client never owned the process)
+// Stop() is a no-op (this client never owned the process)
 ```
 
 ## `MLSidecar` API
@@ -66,18 +66,19 @@ new MLSidecar(options?: {
   requestTimeoutMs?: number;    // default 300000 (training can be slow)
 });
 
-await s.start(): Promise<void>;                       // spawn (managed) or verify /health (remote)
-await s.stop(): Promise<void>;                        // SIGTERM the child (no-op in remote mode)
-await s.train(req: TrainRequest): Promise<TrainResponse>;
-await s.predict(req: PredictRequest): Promise<PredictResponse>;
-await s.health(): Promise<SidecarHealthResponse>;
+await s.Start(): Promise<void>;                       // spawn (managed) or verify /health (remote)
+await s.Stop(): Promise<void>;                        // SIGTERM the child (no-op in remote mode)
+await s.Train(req: TrainRequest): Promise<TrainResponse>;
+await s.Predict(req: PredictRequest): Promise<PredictResponse>;
+await s.Health(): Promise<SidecarHealthResponse>;
+await s.RunTrainer(req: TrainerRequest): Promise<TrainerResult>;  // POST /trainer; transport timeout = req.timeoutSeconds + 60 s
 
 s.IsRunning: boolean;   // remote always true; managed needs a live child
 s.IsRemote:  boolean;
 s.Port:      number | null;   // ephemeral port in managed mode, null in remote
 ```
 
-`TrainRequest` / `TrainResponse` / `PredictRequest` / `PredictResponse` are imported
+`TrainRequest` / `TrainResponse` / `PredictRequest` / `PredictResponse` / `TrainerRequest` / `TrainerResult` are imported
 from `@memberjunction/predictive-studio-core` — import them from there, not from this
 package.
 

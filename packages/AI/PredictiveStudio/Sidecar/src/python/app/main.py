@@ -7,28 +7,44 @@ feature matrix and orchestrates; this service fits/serves the model.
 Endpoints:
   * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
   * ``POST /train``   — fit a model, return artifact + fitted preprocessing + metrics
-  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``POST /trainer`` — one protocol-driven training: inner-CV selection, one holdout scoring, baselines, the gate
+  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing (legacy or v2 artifacts)
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Optional, Protocol, Sequence, Tuple
 
 import numpy as np
+import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 if TYPE_CHECKING:  # scikit-learn is imported function-local at runtime; this import is for the type checker only.
     from sklearn.preprocessing import LabelEncoder
 
 from . import algorithms, artifacts, metrics, preprocessing
+from .array_types import FArr
+from .artifacts_v2 import PredictorEnvelope
+from .evaluation import PERMUTATION_REPEATS
+from .failures import RequestRefused
+from .importance import permutation_importance
+from .preprocessing import FittedPreprocessing
+from .scores import PrimaryMetric, primary_score
+from .run import run_trainer
+from .trainer import DriverBaseline, TrainedPredictor, single_coef_row, top_signed_drivers
+from .trainer_schemas import TrainerRequest
 from .schemas import (
     ImportanceKind,
     HealthResponse,
     PredictRequest,
     PredictResponse,
     Prediction,
+    PredictionContribution,
     TrainRequest,
     TrainResponse,
 )
@@ -119,6 +135,18 @@ def train(req: TrainRequest) -> TrainResponse:
     )
 
 
+@app.post("/trainer")
+def trainer(req: TrainerRequest) -> JSONResponse:
+    """Run one protocol-driven training: inner-CV selection on development rows, one scoring of the locked holdout
+    for one finalist, baselines, the gate and artifacts. Returns the TrainerResult (`completed`, or `failed` with its
+    stage); a request that must not run at all (e.g. a primary score of another family) is a 400."""
+    try:
+        result = run_trainer(req)
+    except RequestRefused as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(result.model_dump(mode="json"))
+
+
 def _feature_columns(req: TrainRequest) -> List[str]:
     """Ordered feature column names: prefer feature_schema, else data minus target."""
     if req.feature_schema:
@@ -193,7 +221,8 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
          (never re-fit) to the holdout rows.
       4. Fit + score via :func:`_fit_and_score` (honest, train-fold-only validation),
          then re-fit the production estimator on all dev rows.
-      5. Score the locked holdout exactly once.
+      5. Score the locked holdout exactly once, and measure held-out permutation importance per source column on
+         the same rows (the importance re-predicts permuted copies; it never refits).
 
     Returns:
         A dict with ``estimator``, ``fitted``, ``metrics``, ``feature_importance``,
@@ -281,8 +310,20 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     # Stash decode map so the serialized model can map int predictions -> labels.
     if is_classification:
         estimator.mj_label_classes_ = label_classes
+    # The mean development row in the frozen-preprocessed column space, stashed with the model so per-row drivers can
+    # be measured from the average training row rather than from zero.
+    estimator.mj_driver_baseline_ = np.asarray(X_dev, dtype=float).mean(axis=0)
 
-    feature_importance, importance_kind = _extract_importance(estimator, output_columns)
+    # Importance is measured on the locked-holdout rows, transformed with the frozen `fitted` payload.
+    if hold_rows:
+        X_hold, y_hold = _transform_holdout(
+            hold_columns, hold_rows, target, fitted, feature_cols, is_classification, encoder
+        )
+    else:
+        X_hold, y_hold = np.empty((0, len(output_columns))), np.empty(0)
+    feature_importance, importance_kind = _extract_importance(
+        estimator, fitted, X_hold, y_hold, is_classification, rng
+    )
 
     result: Dict[str, Any] = {
         "estimator": estimator,
@@ -295,9 +336,6 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     }
 
     if hold_rows:
-        X_hold, y_hold = _transform_holdout(
-            hold_columns, hold_rows, target, fitted, feature_cols, is_classification, encoder
-        )
         result["holdout_metrics"] = _score(estimator, X_hold, y_hold, is_classification)
     return result
 
@@ -394,7 +432,7 @@ def _fit_and_score(
 
     def build() -> Any:
         return algorithms.build_estimator(
-            req.algorithm, req.problem_type, req.hyperparameters
+            req.algorithm, req.problem_type, req.hyperparameters, random_state
         )
 
     fold_ctx = FoldContext(dev_rows, columns, feature_cols, ops_spec, target_idx, y, build)
@@ -411,7 +449,7 @@ def _fit_and_score(
         out_of_sample = True  # pooled out-of-fold: each row is scored by a fold model that never saw it
     else:
         # `train_test_split` and `holdout` (the schema's Literal admits nothing else) share one out-of-sample split
-        # (F-SC-1): `holdout` used to score in-sample.
+        # so `holdout` is scored on rows the scoring model never trained on.
         test_size = req.validation.test_size or 0.2
         idx = np.arange(n_dev)
         stratify = y if is_classification and len(np.unique(y)) > 1 else None
@@ -561,29 +599,70 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
     return np.asarray(estimator.predict(X), dtype=float)
 
 
-def _extract_importance(estimator: Any, columns: List[str]) -> Tuple[Dict[str, float], ImportanceKind]:
-    """Build a ``(feature_name -> importance map, kind)`` pair from a fitted estimator.
+# The legacy response carries importance shares only (no interval), so no bootstrap draws are spent on one.
+_LEGACY_IMPORTANCE_DRAWS = 0
 
-    Prefers ``feature_importances_`` (tree models); falls back to the absolute,
-    class-summed ``coef_`` magnitude (linear models). Returns ``({}, "none")`` when the
-    estimator exposes neither. The kind says which of the two numbers the map holds. The map drives the leakage guard's single-feature-
-    dominance check (plan §6.4).
+
+class _FittedEstimator(Protocol):
+    """What held-out importance calls on a fitted legacy estimator: `predict` for a regressor, `predict_proba` for a
+    classifier (only a classifier's is ever called)."""
+
+    def predict(self, X: np.ndarray) -> np.ndarray: ...
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray: ...
+
+
+def _importance_predictions(
+    estimator: _FittedEstimator, is_classification: bool, columns: List[str]
+) -> Callable[[pd.DataFrame], FArr]:
+    """The predictions the held-out loss scores: P(class 1) for a binary classifier, the class probabilities for a
+    multiclass one, the prediction for a regressor. Each is the shape `scores` expects."""
+
+    def predict(frame: pd.DataFrame) -> FArr:
+        X = frame[columns].to_numpy(dtype=float)
+        if not is_classification:
+            return np.asarray(estimator.predict(X), dtype=np.float64)
+        proba = np.asarray(estimator.predict_proba(X), dtype=np.float64)
+        return proba[:, 1] if proba.shape[1] == 2 else proba
+
+    return predict
+
+
+def _extract_importance(
+    estimator: _FittedEstimator,
+    fitted: FittedPreprocessing,
+    X_eval: np.ndarray,
+    y_eval: np.ndarray,
+    is_classification: bool,
+    seed: int,
+) -> Tuple[Dict[str, float], ImportanceKind]:
+    """Held-out permutation importance per source column, as shares of the total, on the locked-holdout rows.
+
+    Every output column one source produces (one-hot levels, the missing indicator) is permuted together, so an
+    encoding cannot split a source's importance, and the importance is the increase of the held-out loss (log loss
+    for classification, RMSE for regression; a decrease counts as zero). It is model-agnostic, so every algorithm
+    reports it, and it carries none of the impurity or split-count bias toward noisy and many-valued columns. The map
+    drives the leakage guard's single-feature-dominance check. Returns ``({}, "none")`` below 2 held-out rows;
+    otherwise the kind is ``"held_out_permutation"``.
     """
-    if hasattr(estimator, "feature_importances_"):
-        values = np.asarray(estimator.feature_importances_, dtype=float)
-        kind: ImportanceKind = "split_or_impurity"
-    elif hasattr(estimator, "coef_"):
-        raw = np.asarray(estimator.coef_, dtype=float)
-        # Multi-class linear models produce (n_classes, n_features); sum magnitudes across classes
-        values = np.sum(np.abs(raw), axis=0) if raw.ndim > 1 else np.abs(raw)
-        kind = "coefficient"
-    else:
+    if X_eval.shape[0] < 2:
         return {}, "none"
-    total = float(np.sum(np.abs(values)))
-    if total > 0:
-        values = values / total
-    n = min(len(columns), len(values))
-    return {columns[i]: float(values[i]) for i in range(n)}, kind
+    columns = list(fitted["output_columns"])
+    metric: PrimaryMetric = "log-loss" if is_classification else "rmse"
+    found = permutation_importance(
+        _importance_predictions(estimator, is_classification, columns),
+        pd.DataFrame(X_eval, columns=columns),
+        np.asarray(y_eval, dtype=np.float64),
+        primary_score(metric, None).aggregate,
+        preprocessing.source_map(fitted),
+        PERMUTATION_REPEATS,
+        seed,
+        _LEGACY_IMPORTANCE_DRAWS,
+        None,
+    )
+    drops = {c.source_column: max(0.0, c.drop) for c in found}
+    total = sum(drops.values())
+    return {src: (drop / total if total > 0 else 0.0) for src, drop in drops.items()}, "held_out_permutation"
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +683,9 @@ def predict(req: PredictRequest) -> PredictResponse:
         HTTPException: 400 for a missing artifact/cache key, missing
             ``fitted_preprocessing`` (with ``output_columns``), or a transform error.
     """
+    v2 = _load_v2(req.artifact_b64)
+    if v2 is not None:
+        return _predict_v2(v2[0], v2[1], req)
     try:
         estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
     except (ValueError, artifacts.ArtifactRefusedError) as exc:
@@ -635,24 +717,61 @@ def predict(req: PredictRequest) -> PredictResponse:
     # model's coef_ for per-record contributions (P1-5). Absent/mismatched → contributions degrade to None.
     output_cols = list(req.fitted_preprocessing.get("output_columns") or [])
     predictions = _build_predictions(estimator, X, is_classification, label_classes, output_cols)
-    return PredictResponse(predictions=predictions)
+    return PredictResponse(predictions=predictions, classOrder=list(label_classes) if label_classes else None)
 
 
-def _linear_coef_row(estimator: Any) -> Optional[np.ndarray]:
-    """The single coefficient vector for a linear model, or None when per-row attribution isn't exact.
-
-    Returns the 1-D ``coef_`` for regression (Ridge) or binary classification (LogisticRegression,
-    ``coef_`` shape ``(1, n)``). Returns None for tree/ensemble models (no ``coef_``) and for multiclass
-    (``coef_`` shape ``(k, n)``, k>1) — those fall back to global importance rather than a dishonest guess.
-    """
-    if not hasattr(estimator, "coef_"):
+def _load_v2(artifact_b64: Optional[str]) -> Optional[Tuple[TrainedPredictor, PredictorEnvelope]]:
+    """(predictor, envelope) when `artifact_b64` carries a ps-predictor/v2 envelope; None when it is another envelope
+    (the legacy loader owns it). A refused v2 envelope is a 400, never a 500."""
+    if not artifact_b64:
         return None
-    coef = np.asarray(estimator.coef_, dtype=float)
-    if coef.ndim == 1:
-        return coef
-    if coef.ndim == 2 and coef.shape[0] == 1:
-        return coef[0]
-    return None
+    try:
+        raw = base64.b64decode(artifact_b64.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError):  # not base64 at all: the legacy loader reports it
+        return None
+    try:
+        return artifacts.load_v2_envelope(raw)
+    except artifacts.NotAV2EnvelopeError:
+        return None
+    except artifacts.ArtifactRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: PredictRequest) -> PredictResponse:
+    """Score raw rows with a v2 predictor, its own in-fold encoding applied (never re-fit). Classification returns
+    every class's probability in the artifact's declared classOrder; `score` is P(classOrder[1]) for binary, else
+    the predicted class's probability. A linear predictor's rows carry signed drivers measured from the envelope's
+    training mean; an envelope without one gives no driver."""
+    names = [c.name for c in envelope.featureColumns if c.encoding.kind != "identifier"]
+    missing = sorted(n for n in names if not any(n in r for r in req.rows))
+    if req.rows and missing:
+        raise HTTPException(status_code=400, detail=f"rows lack the model's feature columns: {missing}")
+    frame = pd.DataFrame([{n: r.get(n) for n in names} for r in req.rows], columns=names)
+    try:
+        out = np.asarray(predictor.predict(frame), dtype=np.float64)
+        drivers = predictor.contributions(frame, _envelope_driver_baseline(envelope))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    contribs = [None if d is None else [PredictionContribution(feature=f, value=v) for f, v in d] for d in drivers]
+    order = envelope.classOrder
+    if order is None:
+        return PredictResponse(predictions=[Prediction(score=float(v), contributions=c) for v, c in zip(out, contribs)],
+                               classOrder=None)
+    probs = np.column_stack([1 - out, out]) if out.ndim == 1 else out
+    preds: List[Prediction] = []
+    for row, c in zip(probs, contribs):
+        k = int(np.argmax(row))
+        score = float(row[1]) if len(order) == 2 else float(row[k])
+        preds.append(Prediction.model_validate({"score": score, "class": order[k], "contributions": c,
+                                                "probabilities": [float(v) for v in row]}))
+    return PredictResponse(predictions=preds, classOrder=list(order))
+
+
+def _envelope_driver_baseline(envelope: PredictorEnvelope) -> Optional[DriverBaseline]:
+    """The training mean a v2 envelope carries with its encoded column names, or None when either is absent."""
+    if envelope.driverBaseline is None or envelope.transformedColumns is None:
+        return None
+    return DriverBaseline(np.asarray(envelope.driverBaseline, dtype=np.float64), list(envelope.transformedColumns))
 
 
 def _row_contributions(
@@ -660,27 +779,27 @@ def _row_contributions(
 ) -> List[Optional[List[Dict[str, Any]]]]:
     """Top signed per-record feature contributions for a LINEAR model (P1-5), else all-None.
 
-    For a linear model the exact contribution of feature j to row i's output is ``coef[j] * X[i, j]``
-    (the log-odds contribution for classification, the value contribution for regression). We rank by
-    magnitude and return the top ``top_k`` non-negligible ones per row. Any shape mismatch or unexpected
-    estimator yields ``[None, ...]`` so /predict never fails because of the explanation layer — the score
-    path is unaffected and the UI falls back to global importance.
+    For a linear model the contribution of feature j to row i's output, measured from the mean development row
+    ``x_bar`` stashed at training as ``mj_driver_baseline_``, is ``coef[j] * (X[i, j] - x_bar[j])`` (the log-odds
+    contribution for classification, the value contribution for regression), so a driver says how the row differs
+    from the training population rather than from zero. We rank by magnitude and return the top ``top_k``
+    non-negligible ones per row. A model without the stashed mean (trained before it was stashed), any shape
+    mismatch or an unexpected estimator yields ``[None, ...]``: no driver rather than one measured from zero, and
+    /predict never fails because of the explanation layer — the score path is unaffected and the UI falls back to
+    global importance.
     """
     n_rows = int(X.shape[0]) if hasattr(X, "shape") and X.ndim >= 1 else 0
     try:
-        coef = _linear_coef_row(estimator)
-        if coef is None or X.ndim != 2 or X.shape[1] != coef.shape[0] or len(feature_names) != coef.shape[0]:
+        coef = single_coef_row(estimator)
+        stashed = getattr(estimator, "mj_driver_baseline_", None)
+        baseline = None if stashed is None else np.asarray(stashed, dtype=float).reshape(-1)
+        if coef is None or baseline is None or X.ndim != 2 or X.shape[1] != coef.shape[0] \
+                or len(feature_names) != coef.shape[0] or baseline.shape[0] != coef.shape[0]:
             return [None] * n_rows
         out: List[Optional[List[Dict[str, Any]]]] = []
         for i in range(n_rows):
-            contrib = coef * np.asarray(X[i], dtype=float)
-            order = np.argsort(-np.abs(contrib))[:top_k]
-            row = [
-                {"feature": feature_names[j], "value": float(contrib[j])}
-                for j in order
-                if abs(float(contrib[j])) > 1e-9
-            ]
-            out.append(row or None)
+            drivers = top_signed_drivers(coef * (np.asarray(X[i], dtype=float) - baseline), feature_names, top_k)
+            out.append(None if drivers is None else [{"feature": f, "value": v} for f, v in drivers])
         return out
     except Exception:  # never let the explanation layer break scoring
         return [None] * n_rows
@@ -708,10 +827,14 @@ def _build_predictions(
         # estimator.classes_ are the encoded ints [0..n-1]; map idx -> string label.
         encoded_labels = estimator.predict(X)
         scores = _positive_scores(estimator, X)
-        return [
+        out = [
             _classification_prediction(scores, encoded_labels, label_classes, i, contribs[i])
             for i in range(X.shape[0])
         ]
+        if scores.ndim == 2 and label_classes and scores.shape[1] == len(label_classes):
+            for i, pred in enumerate(out):
+                pred.probabilities = [float(v) for v in scores[i]]  # every class, in label order
+        return out
     values = np.asarray(estimator.predict(X), dtype=float)
     return [
         Prediction(score=float(values[i]), contributions=contribs[i]) for i in range(X.shape[0])

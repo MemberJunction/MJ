@@ -28,6 +28,7 @@
     "@memberjunction/predictive-studio": "6.2.0-edge.6",
     "@memberjunction/predictive-studio-core": "6.2.0-edge.6",
     "@memberjunction/predictive-studio-sidecar": "6.2.0-edge.6",
+    "@memberjunction/storage": "6.2.0-edge.6",
     "@memberjunction/testing-integration": "6.2.0-edge.6",
     "mssql": "^12.2.0"
   },

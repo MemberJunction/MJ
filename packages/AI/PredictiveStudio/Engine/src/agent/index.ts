@@ -2,7 +2,7 @@
  * @module agent
  *
  * The Predictive Studio Agent's deterministic builder layer:
- * - {@link modelingPlanToPipelineConfig} — pure ModelingPlanSpec → pipeline-config mapper
+ * - {@link ModelingPlanToPipelineConfig} — pure ModelingPlanSpec → pipeline-config mapper
  * - {@link PredictiveStudioPipelineBuilder} — commits it to metadata, trains, publishes gated on trust
  * - {@link PredictiveStudioPipelineBuilderAgent} — the code sub-agent wrapping the builder
  * - {@link PredictiveStudioModelDevAgent} — the orchestrator that FORCES approve→build deterministically

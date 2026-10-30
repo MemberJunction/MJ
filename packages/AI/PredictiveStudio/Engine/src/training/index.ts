@@ -8,8 +8,15 @@
  */
 
 export * from './types';
+export * from './unit-model-lineage';
 export * from './artifact-store';
 export * from './seams';
 export * from './as-of-refusal';
+export * from './training-refusal';
 export * from './locked-holdout';
+export * from './train-request';
 export * from './training-engine';
+export * from './compute-cost';
+export * from './trainer-result';
+export * from './trainer-request';
+export * from './evaluation-protocol-store';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isErrorMetric } from '../index';
+import { MetricDirections } from '../index';
 import type {
   TrainRequest,
   PredictResponse,
@@ -10,15 +10,16 @@ import type {
   ValidationStrategy,
 } from '../index';
 
-describe('isErrorMetric', () => {
+describe('MetricDirections.IsErrorMetric', () => {
   it('flags lower-is-better error metrics (case/whitespace-insensitive)', () => {
-    for (const m of ['rmse', 'RMSE', ' mae ', 'mse', 'loss', 'logloss', 'log_loss']) {
-      expect(isErrorMetric(m)).toBe(true);
+    for (const m of ['rmse', 'RMSE', ' mae ', 'mse', 'loss', 'logloss', 'log_loss', 'brier', 'log-loss',
+      'multiclass-log-loss', 'poisson-deviance', 'tweedie-deviance', 'mase', 'mape', 'pinball']) {
+      expect(MetricDirections.IsErrorMetric(m)).toBe(true);
     }
   });
   it('does NOT flag higher-is-better ranking metrics', () => {
     for (const m of ['roc_auc', 'auc', 'f1', 'accuracy', 'r2', 'explained_variance']) {
-      expect(isErrorMetric(m)).toBe(false);
+      expect(MetricDirections.IsErrorMetric(m)).toBe(false);
     }
   });
 });

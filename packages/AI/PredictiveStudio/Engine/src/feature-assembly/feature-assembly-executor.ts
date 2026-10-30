@@ -399,6 +399,9 @@ export class FeatureAssemblyExecutor {
           }
           break;
         }
+        case 'windowed-aggregate':
+        case 'series':
+          throw new Error(`Feature step ${step.Id} (${step.Kind}) needs a Prediction Unit pipeline: it is assembled as of each row's decision date`);
         default: {
           const exhaustive: never = step;
           throw new Error(`Unsupported FeatureStep kind: ${String((exhaustive as FeatureStep).Kind)}`);

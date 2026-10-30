@@ -14,6 +14,7 @@ import {
   daysSinceLastActivityAsOf,
 } from '../feature-assembly';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { ConsoleCapture } from './fakes/console-capture';
 
 /** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
 const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
@@ -525,6 +526,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
   });
 
   it('skips column emission when Columns is empty', async () => {
+    const status = ConsoleCapture.Status();
     const members: SourceRow[] = [
       { ID: 'm1', tenure: 10, Renewed: 1 },
     ];
@@ -554,6 +556,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
 
     expect(result.featureSchema.map((s) => s.Name)).toEqual(['tenure']);
     expect(result.matrix.columns).toEqual(['tenure', 'Renewed']);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Feature step llm-empty (llm-derived) has no Columns configured; skipping column emission.")]);
   });
 });
 

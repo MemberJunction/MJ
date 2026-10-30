@@ -33,7 +33,7 @@ import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } f
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { IsValidUUID } from '@memberjunction/global';
 
-import { TrainModelViaEngine } from '../operations/delegation';
+import { TrainingDelegation } from '../operations/delegation';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
 import type { IModelPromotionGate, PromoteModelOutcome } from '../actions/promote-model.action';
 import { MetadataEntityFactory } from '../training/seams';
@@ -42,7 +42,7 @@ import { UpsertScoringBinding } from './scoring-binding';
 import { ModelHasTrainedArtifact } from './model-readiness';
 import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
 
-/** Signature of the train step (production: {@link TrainModelViaEngine}); injectable for tests. */
+/** Signature of the train step (production: {@link TrainingDelegation.TrainModelViaEngine}); injectable for tests. */
 export type AutoTrainTrainFn = (pipelineId: string, provider: IMetadataProvider, user: UserInfo) => Promise<MJMLModelEntity>;
 
 /** Optional seams for {@link PipelineAutoTrainer} (all default to production implementations). */
@@ -64,7 +64,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   private readonly artifactLoader: IArtifactLoader;
 
   constructor(options: PipelineAutoTrainerOptions = {}) {
-    this.train = options.train ?? (async (pipelineId, provider, user) => (await TrainModelViaEngine({ pipelineId }, provider, user)).model);
+    this.train = options.train ?? (async (pipelineId, provider, user) => (await TrainingDelegation.TrainModelViaEngine({ pipelineId }, provider, user)).model);
     this.gate = options.gate ?? new ProductionModelPromotionGate();
     this.artifactLoader = options.artifactLoader ?? new LocalArtifactLoader();
   }

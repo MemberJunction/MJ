@@ -88,3 +88,6 @@ export * from './custom/rubrics/evaluationSubmit';
 export * from './custom/rubrics/scaleFreeze';
 export * from './custom/MJInteractionEventEntityServer.server';
 export * from './custom/MJFileEntityServer.server';
+export * from './custom/MJPredictionUnitEntityServer.server';
+export * from './custom/MJEvaluationProtocolEntityServer.server';
+export * from './custom/MJTrainingSnapshotEntityServer.server';

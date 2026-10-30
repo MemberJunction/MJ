@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R2-real -> S4.4",
+    "Description": "Gate G2.28 (phase 2, dataset R2-real, criterion S4.4): on R2-real a request that ranks a non-negative (Tweedie, power 1.5) target's candidates by RMSE is refused with HTTP 400 before anything is fitted, 1 of 1. It fails when the cross-family RMSE refusal is removed (the request is accepted).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.28\",\"owner:PR3\",\"phase:2\",\"dataset:R2-real\",\"criterion:S4.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Ranking a non-negative target's candidates by RMSE is refused with HTTP 400, 1 of 1 (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r2-real-s4-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "A19F329A-929E-443B-BCDA-6DAC04AB0217"
+  }
+}

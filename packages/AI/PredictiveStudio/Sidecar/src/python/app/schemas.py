@@ -22,7 +22,7 @@ Cell = Union[str, float, int, bool, None]
 
 FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived'
 # Which kind of number a feature-importance map holds.
-ImportanceKind = Literal["coefficient", "split_or_impurity", "none"]
+ImportanceKind = Literal["coefficient", "split_or_impurity", "held_out_permutation", "none"]
 ProblemType = str  # 'classification' | 'regression'
 
 
@@ -47,6 +47,8 @@ class PreprocessingOp(BaseModel):
     fillValue: Optional[Union[str, float, int]] = None
     # bin-specific (the contract leaves `op` open so we extend additively)
     bins: Optional[int] = None
+    # impute-specific: also emit a `<col>__missing` indicator column before filling
+    indicator: bool = False
 
 
 class ValidationConfig(BaseModel):
@@ -140,6 +142,8 @@ class Prediction(BaseModel):
     # Top signed drivers behind THIS row's prediction (linear models only; None otherwise — callers
     # fall back to global feature importance). See app/main.py::_row_contributions.
     contributions: Optional[List[PredictionContribution]] = None
+    # Every class's probability, in PredictResponse.classOrder; None for a regression.
+    probabilities: Optional[List[float]] = None
 
     model_config = {"populate_by_name": True}
 
@@ -148,6 +152,8 @@ class PredictResponse(BaseModel):
     """``POST /predict`` response body."""
 
     predictions: List[Prediction]
+    # The class order `probabilities` follow: the artifact's declared classOrder (v2) or the trained label order.
+    classOrder: Optional[List[str]] = None
 
 
 class HealthResponse(BaseModel):

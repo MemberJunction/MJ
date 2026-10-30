@@ -24,7 +24,7 @@ import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/
  * because sources come from heterogeneous entities/queries; the executor selects
  * and types the columns it needs downstream.
  */
-export type SourceRow = Record<string, string | number | boolean | null | undefined>;
+export type SourceRow = Record<string, string | number | boolean | Date | null | undefined>;
 
 /**
  * Read parameters for fetching rows from a named source. A subset of MJ's
@@ -92,13 +92,26 @@ export interface IFeatureDataAccess {
   fetchEmbedding(entity: string, recordId: string, embeddingModelRef: string, dims: number): Promise<number[] | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
+/** Result of {@link ICountingDataAccess.CountRows}. */
+export interface CountRowsResult {
+  readonly Success: boolean;
+  readonly Count: number;
+  readonly ErrorMessage?: string;
+}
+
+/** Data access that can also count a source exactly, as complete reads require. */
+export interface ICountingDataAccess extends IFeatureDataAccess {
+  /** The number of rows `fetchRows` with the same entity and filter must return. */
+  CountRows(params: { readonly EntityName: string; readonly ExtraFilter?: string }): Promise<CountRowsResult>;
+}
+
 /**
  * Production {@link IFeatureDataAccess} backed by `@memberjunction/core`'s
  * `RunView`. Always passes `contextUser` so server-side reads honor per-user
  * data isolation, and always reads through the caller's `IMetadataProvider`
  * (multi-provider correctness — there is no global-provider fallback).
  */
-export class RunViewDataAccess implements IFeatureDataAccess {
+export class RunViewDataAccess implements ICountingDataAccess {
   private readonly runView: RunView;
   private readonly contextUser: UserInfo;
 
@@ -149,5 +162,16 @@ export class RunViewDataAccess implements IFeatureDataAccess {
    */
   public async fetchEmbedding(_entity: string, _recordId: string, _embeddingModelRef: string, _dims: number): Promise<number[] | null> {
     return null;
+  }
+
+  /** @inheritdoc */
+  public async CountRows(params: { readonly EntityName: string; readonly ExtraFilter?: string }): Promise<CountRowsResult> {
+    const result = await this.runView.RunView<SourceRow>(
+      { EntityName: params.EntityName, ExtraFilter: params.ExtraFilter || '', ResultType: 'count_only', IgnoreMaxRows: true },
+      this.contextUser,
+    );
+    return result.Success
+      ? { Success: true, Count: result.TotalRowCount }
+      : { Success: false, Count: 0, ErrorMessage: result.ErrorMessage };
   }
 }

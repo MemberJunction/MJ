@@ -10,7 +10,7 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
  * it carries no training logic. The actual orchestration (locked-holdout carve,
  * sidecar `/train`, immutable model persist, leakage flag) lives in the engine, and
- * the production wiring is shared with the Train action via {@link TrainModelViaEngine}.
+ * the production wiring is shared with the Train action via {@link TrainingDelegation.TrainModelViaEngine}.
  *
  * Marked `LongRunning` (training can take a while): it emits coarse start/finish
  * progress through the server context. The engine does not expose a per-epoch
@@ -27,10 +27,10 @@ import {
   type PredictiveStudioTrainModelOutput,
 } from '@memberjunction/core-entities';
 
-import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import type { TrainModelInput } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
-import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
+import { TrainingRefusedError } from '../training/training-refusal';
+import { TrainingDelegation, WasTrainingLeakageFlagged } from './delegation';
 import { PredictiveStudioRefusals } from './refusals';
 
 /**
@@ -63,9 +63,8 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
     if (!input?.pipelineId) {
       throw new Error('pipelineId is required');
     }
-    if (AsOfSettingHasNoEffectError.WouldBeIgnored(input.asOf)) {
-      throw new AsOfSettingHasNoEffectError('train-input', input.asOf.Mode, input.pipelineId);
-    }
+    // Mapped before any progress is reported: a refused input never starts a training run.
+    const engineInput = this.toEngineInput(input);
 
     context.emitProgress({
       OperationKey: this.OperationKey,
@@ -74,7 +73,7 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
       Message: `Training model from pipeline ${input.pipelineId}…`,
     });
 
-    const result = await TrainModelViaEngine(this.toEngineInput(input), provider, user, this.engine());
+    const result = await TrainingDelegation.TrainModelViaEngine(engineInput, provider, user, this.engine());
 
     context.emitProgress({
       OperationKey: this.OperationKey,
@@ -95,11 +94,17 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
   }
 
   /**
-   * Map the operation's typed input onto the engine's {@link TrainModelInput}.
-   * The shapes are nearly 1:1; `labelEventDates` is the only field that differs —
-   * the wire shape carries ISO date strings, the engine wants `Date`s.
+   * Map the operation's typed input onto the engine's {@link TrainModelInput}. Decision dates come from the pipeline's
+   * Prediction Unit, so a point-in-time `asOf` input and `labelEventDates` are refused by name (`input-not-accepted`)
+   * instead of being silently ignored; an `asOf` of `Mode: 'none'` asks for nothing and is accepted.
    */
   protected toEngineInput(input: PredictiveStudioTrainModelInput): TrainModelInput {
+    if (input.asOf && input.asOf.Mode !== 'none') {
+      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: "decision dates come from the pipeline's Prediction Unit; the asOf input is no longer accepted (it was silently ignored before)" } });
+    }
+    if (input.labelEventDates) {
+      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: "decision dates come from the pipeline's Prediction Unit; labelEventDates are no longer accepted (they were silently ignored before)" } });
+    }
     const engineInput: TrainModelInput = { pipelineId: input.pipelineId };
     if (input.experimentSessionIterationId) {
       engineInput.experimentSessionIterationId = input.experimentSessionIterationId;
@@ -113,19 +118,7 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
     if (input.sidecarVersion) {
       engineInput.sidecarVersion = input.sidecarVersion;
     }
-    if (input.labelEventDates) {
-      engineInput.labelEventDates = this.parseLabelEventDates(input.labelEventDates);
-    }
     return engineInput;
-  }
-
-  /** Parse the wire's `{ recordKey: ISO-string }` label-event map into `Date`s. */
-  protected parseLabelEventDates(map: Record<string, string>): Record<string, Date> {
-    const out: Record<string, Date> = {};
-    for (const [key, iso] of Object.entries(map)) {
-      out[key] = new Date(iso);
-    }
-    return out;
   }
 
   /**

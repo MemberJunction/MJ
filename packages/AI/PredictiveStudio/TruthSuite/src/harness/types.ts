@@ -5,6 +5,7 @@ import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity
   PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
   PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import type { ProvenanceCheck } from '../fixtures/provenance-resolver';
 import type { RunRecords } from './cleanup';
 
 export type WorldID = 'W1-signal' | 'W2-noise' | 'W3-leak-row' | 'W4-pit' | 'W5-censor' | 'W6-drift'
@@ -81,6 +82,9 @@ export interface GateMeasurement {
   Detail: string;
 }
 
+/** One row of a world's truth.csv (`MembershipYearID,Cycle,TrueP,Drawn,Censored`). */
+export interface WorldTruthRow { readonly Cycle: number; readonly TrueP: number; readonly Censored: boolean }
+
 /** What `Promote` reports: whether the operation applied the transition and the model's status after it. */
 export interface PromoteAttempt { Promoted: boolean; Status: MJMLModelEntity['Status'] }
 
@@ -107,4 +111,12 @@ export interface TruthHarness {
   GenerateStory(modelId: string): Promise<string | null>;
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
+  /** The planted truth of a loaded W1–W8 seed, keyed by lower-cased MembershipYearID. */
+  ReadWorldTruth(dataset: LoadedDataset): Promise<ReadonlyMap<string, WorldTruthRow>>;
+  /** A seeded sample of n primary keys of the dataset's row table. */
+  SampleRowIds(dataset: LoadedDataset, n: number, seed: number): Promise<string[]>;
+  /** Whether one assembled value names its scored row and resolves to its source, source version and computed-at. */
+  ResolveProvenance(check: ProvenanceCheck): Promise<boolean>;
+  /** Route this process's in-process engine calls to the suite sidecar; returns its URL. */
+  UseSuiteSidecar(): string;
 }

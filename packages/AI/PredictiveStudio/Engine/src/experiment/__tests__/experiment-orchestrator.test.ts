@@ -18,6 +18,7 @@ import type {
   TrainExperimentInput,
   TrainExperimentResult,
 } from '../types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the ExperimentOrchestrator. NO live DB, NO live sidecar, NO
@@ -548,6 +549,7 @@ describe('ExperimentOrchestrator.runSession', () => {
   });
 
   it('keeps the pruned entry when its Pruned save returns false (no silent loss)', async () => {
+    const errors = ConsoleCapture.Errors();
     const factory = new SaveFailingPruneFactory(new Set(['B']));
     const clock = new FakeClock();
     const trainer = new FakeTrainer({ A: 0.9, B: 0.1 });
@@ -562,10 +564,13 @@ describe('ExperimentOrchestrator.runSession', () => {
     const b = factory.Iterations.find((it) => it.Label === 'B')!;
     // B's prune-status Save failed → B STAYS on the leaderboard (not dropped).
     expect(result.leaderboard.map((e) => e.IterationID)).toContain(b.ID);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ExperimentOrchestrator: failed to persist Pruned status for iteration")]);
+    expect(ConsoleCapture.Lines(errors)[0]).toContain('forced Pruned save failure');
   });
 
   // M9 — failIteration checks the Save boolean and logs on failure (no throw).
   it('records a failed iteration even when its Failed-status save returns false', async () => {
+    const errors = ConsoleCapture.Errors();
     const factory = new SaveFailingFailFactory(new Set(['A']));
     const clock = new FakeClock();
     const trainer = new FakeTrainer({ A: 0.9, B: 0.8 }, undefined, 0, 1, new Set(['A']));
@@ -582,6 +587,8 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.stopReason).toBe('completed');
     expect(result.leaderboard.length).toBe(1); // only B scored
     expect(result.leaderboard[0].Metric).toBe(0.8);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ExperimentOrchestrator: failed to record iteration failure for")]);
+    expect(ConsoleCapture.Lines(errors)[0]).toContain('forced Failed save failure');
   });
 });
 
@@ -673,7 +680,7 @@ describe('runBounded', () => {
   });
 });
 
-describe('extractNormalizedScore', () => {
+describe('ExtractNormalizedScore', () => {
   it('prefers holdout metrics and passes ranking metrics through', () => {
     expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), JSON.stringify({ auc: 0.95 }), 'AUC', 'classification')).toBe(0.81);
   });

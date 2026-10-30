@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRemotableOperation } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingRunEntity, PredictiveStudioTrainModelInput } from '@memberjunction/core-entities';
 
 import { PredictiveStudioTrainModelServerOperation } from '../train-model.operation';
 import { TrainingEngine } from '../../training/training-engine';
+import { TrainingRefusedError } from '../../training/training-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
 import { CapturingContext } from './helpers';
 
@@ -36,6 +37,10 @@ class TestableTrainOp extends PredictiveStudioTrainModelServerOperation {
   }
   protected override engine(): TrainingEngine {
     return this.mock;
+  }
+  /** Exposes the protected input mapping to the tests. */
+  public MapInput(input: PredictiveStudioTrainModelInput): TrainModelInput {
+    return this.toEngineInput(input);
   }
 }
 
@@ -100,15 +105,34 @@ describe('PredictiveStudioTrainModelServerOperation — happy path', () => {
     expect(ctx.Progress[0].OperationKey).toBe('PredictiveStudio.TrainModel');
   });
 
-  it('parses ISO labelEventDates into Date objects for the engine', async () => {
+});
+
+describe('PredictiveStudioTrainModelServerOperation — inputs that decision dates replace are refused', () => {
+  const op = new TestableTrainOp(new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) }));
+
+  it('refuses a point-in-time asOf input by name, as a typed refusal', () => {
+    expect(() => op.MapInput({ pipelineId: 'p', asOf: { Mode: 'column', Column: 'X' } })).toThrow(TrainingRefusedError);
+    let caught: Error | null = null;
+    try { op.MapInput({ pipelineId: 'p', asOf: { Mode: 'column', Column: 'X' } }); } catch (e) { caught = e as Error; }
+    expect(caught).toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf' } } });
+  });
+
+  it('refuses labelEventDates by name, as a typed refusal', () => {
+    let caught: Error | null = null;
+    try { op.MapInput({ pipelineId: 'p', labelEventDates: { 'rec-1': '2026-01-15T00:00:00.000Z' } }); } catch (e) { caught = e as Error; }
+    expect(caught).toBeInstanceOf(TrainingRefusedError);
+    expect(caught).toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
+  });
+
+  it("accepts an asOf input of Mode 'none' (it asks for nothing)", () => {
+    expect(op.MapInput({ pipelineId: 'p', asOf: { Mode: 'none' } })).toEqual({ pipelineId: 'p' });
+  });
+
+  it('returns AS_OF_NO_EFFECT for a refused asOf input without calling the engine', async () => {
     const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
-    await new TestableTrainOp(engine).ExecuteServer(
-      { pipelineId: 'p1', labelEventDates: { 'rec-1': '2026-01-15T00:00:00.000Z' } },
-      new CapturingContext(),
-    );
-    const dates = engine.LastInput?.labelEventDates;
-    expect(dates?.['rec-1']).toBeInstanceOf(Date);
-    expect(dates?.['rec-1'].toISOString()).toBe('2026-01-15T00:00:00.000Z');
+    const result = await new TestableTrainOp(engine).ExecuteServer({ pipelineId: 'p1', asOf: { Mode: 'offset', OffsetDays: 30 } }, new CapturingContext());
+    expect(result.ResultCode).toBe('AS_OF_NO_EFFECT');
+    expect(engine.CallCount).toBe(0);
   });
 });
 
@@ -148,18 +172,7 @@ describe('PredictiveStudioTrainModelServerOperation — errors', () => {
   });
 });
 
-describe('PredictiveStudioTrainModelServerOperation — asOf input (W4 → S2.1, F-PIT-7)', () => {
-  it('refuses an asOf input that would change nothing, before calling the engine', async () => {
-    const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
-    const result = await new TestableTrainOp(engine).ExecuteServer(
-      { pipelineId: 'p1', asOf: { Mode: 'offset', OffsetDays: 30 } },
-      new CapturingContext(),
-    );
-    expect(result.Success).toBe(false);
-    expect(result.ErrorMessage).toContain("the Train operation's asOf input (Mode='offset') has no effect");
-    expect(engine.CallCount).toBe(0);
-  });
-
+describe('PredictiveStudioTrainModelServerOperation — an asOf input that asks for nothing', () => {
   it("accepts asOf { Mode: 'none' }", async () => {
     const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
     const result = await new TestableTrainOp(engine).ExecuteServer({ pipelineId: 'p1', asOf: { Mode: 'none' } }, new CapturingContext());

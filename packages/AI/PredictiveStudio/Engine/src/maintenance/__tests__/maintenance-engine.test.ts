@@ -206,7 +206,7 @@ function buildDeps(overrides: Partial<MaintenanceDeps> = {}): {
 
 // ===========================================================================
 
-describe('MaintenanceEngine.detectStaleness', () => {
+describe('MaintenanceEngine.DetectStaleness', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -220,7 +220,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     model.TrainingRowCount = 1000;
     deps.rowCounter && ((deps.rowCounter as FakeRowCounter).count = 1000); // no data-volume growth
 
-    const result = await engine.detectStaleness(asBinding(binding), asModel(model), { cadenceDays: 30, dataVolumeGrowthThreshold: 0 }, deps);
+    const result = await engine.DetectStaleness(asBinding(binding), asModel(model), { cadenceDays: 30, dataVolumeGrowthThreshold: 0 }, deps);
 
     expect(result.stale).toBe(true);
     expect(result.reasons.map((r) => r.trigger)).toContain('cadence');
@@ -234,7 +234,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     model.TrainingRowCount = 1000;
     (deps.rowCounter as FakeRowCounter).count = 1010; // 1% growth, under threshold
 
-    const result = await engine.detectStaleness(asBinding(binding), asModel(model), DEFAULT_RETRAINING_POLICY, deps);
+    const result = await engine.DetectStaleness(asBinding(binding), asModel(model), DEFAULT_RETRAINING_POLICY, deps);
 
     expect(result.stale).toBe(false);
     expect(result.reasons).toHaveLength(0);
@@ -248,7 +248,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     model.TrainingRowCount = 1000;
     (deps.rowCounter as FakeRowCounter).count = 1400; // 40% growth
 
-    const result = await engine.detectStaleness(asBinding(binding), asModel(model), { cadenceDays: 30, dataVolumeGrowthThreshold: 0.25 }, deps);
+    const result = await engine.DetectStaleness(asBinding(binding), asModel(model), { cadenceDays: 30, dataVolumeGrowthThreshold: 0.25 }, deps);
 
     expect(result.stale).toBe(true);
     const dv = result.reasons.find((r) => r.trigger === 'data-volume');
@@ -263,7 +263,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     const model = new FakeModel('m1');
     model.TrainedAt = null;
 
-    const result = await engine.detectStaleness(asBinding(binding), asModel(model), { cadenceDays: 30, dataVolumeGrowthThreshold: 0 }, deps);
+    const result = await engine.DetectStaleness(asBinding(binding), asModel(model), { cadenceDays: 30, dataVolumeGrowthThreshold: 0 }, deps);
 
     expect(result.stale).toBe(true);
     expect(result.reasons[0].trigger).toBe('cadence');
@@ -276,7 +276,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     const model = new FakeModel('m1');
     model.TrainedAt = new Date(NOW.getTime() - 1 * DAY); // fresh by trained, but stale by scored
 
-    const result = await engine.detectStaleness(
+    const result = await engine.DetectStaleness(
       asBinding(binding),
       asModel(model),
       { cadenceDays: 30, cadenceAnchor: 'lastScored', dataVolumeGrowthThreshold: 0 },
@@ -295,7 +295,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     const model = new FakeModel('m1');
     model.TrainedAt = new Date(NOW.getTime() - 1 * DAY); // fresh by cadence
 
-    const result = await engine.detectStaleness(
+    const result = await engine.DetectStaleness(
       asBinding(binding),
       asModel(model),
       { cadenceDays: 30, dataVolumeGrowthThreshold: 0, driftEnabled: true },
@@ -316,7 +316,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
     const model = new FakeModel('m1');
     model.TrainedAt = new Date(NOW.getTime() - 1 * DAY);
 
-    const result = await engine.detectStaleness(
+    const result = await engine.DetectStaleness(
       asBinding(binding),
       asModel(model),
       { cadenceDays: 30, dataVolumeGrowthThreshold: 0, driftEnabled: false },
@@ -328,7 +328,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
   });
 });
 
-describe('MaintenanceEngine.rescoreScheduledBinding', () => {
+describe('MaintenanceEngine.RescoreScheduledBinding', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -340,7 +340,7 @@ describe('MaintenanceEngine.rescoreScheduledBinding', () => {
     binding.Mode = 'Scheduled';
     const model = new FakeModel('m1');
 
-    const result = await engine.rescoreScheduledBinding(asBinding(binding), asModel(model), deps);
+    const result = await engine.RescoreScheduledBinding(asBinding(binding), asModel(model), deps);
 
     expect(result).toEqual({ scoredCount: 1200, failedCount: 3 });
     expect(binding.LastRowCount).toBe(1200);
@@ -357,7 +357,7 @@ describe('MaintenanceEngine.rescoreScheduledBinding', () => {
     binding.Mode = 'OnDemand';
     const model = new FakeModel('m1');
 
-    const result = await engine.rescoreScheduledBinding(asBinding(binding), asModel(model), deps);
+    const result = await engine.RescoreScheduledBinding(asBinding(binding), asModel(model), deps);
 
     expect(result).toBeNull();
     expect(rescoreRunner.requests).toHaveLength(0);
@@ -371,11 +371,11 @@ describe('MaintenanceEngine.rescoreScheduledBinding', () => {
     binding.failSaveWith('permission denied');
     const model = new FakeModel('m1');
 
-    await expect(engine.rescoreScheduledBinding(asBinding(binding), asModel(model), deps)).rejects.toThrow(/permission denied/);
+    await expect(engine.RescoreScheduledBinding(asBinding(binding), asModel(model), deps)).rejects.toThrow(/permission denied/);
   });
 });
 
-describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
+describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -387,7 +387,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     const model = new FakeModel('m1');
     const staleness = { bindingId: 'b1', modelId: 'm1', stale: false, reasons: [] };
 
-    const outcome = await engine.triggerRetrainIfStale(asBinding(binding), asModel(model), staleness, {}, deps);
+    const outcome = await engine.TriggerRetrainIfStale(asBinding(binding), asModel(model), staleness, {}, deps);
 
     expect(outcome.retrained).toBe(false);
     expect(outcome.challenger).toBeUndefined();
@@ -403,7 +403,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     incumbent.HoldoutMetrics = JSON.stringify({ roc_auc: 0.8 });
     const staleness = { bindingId: 'b1', modelId: 'm1', stale: true, reasons: [{ trigger: 'cadence' as const, detail: 'old' }] };
 
-    const outcome = await engine.triggerRetrainIfStale(asBinding(binding), asModel(incumbent), staleness, { promotionMargin: 0.01 }, deps);
+    const outcome = await engine.TriggerRetrainIfStale(asBinding(binding), asModel(incumbent), staleness, { promotionMargin: 0.01 }, deps);
 
     expect(outcome.retrained).toBe(true);
     expect(trainingEngine.trainCalls[0].pipelineId).toBe('pipeline-99'); // same pipeline
@@ -423,7 +423,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     incumbent.HoldoutMetrics = JSON.stringify({ roc_auc: 0.8 });
     const staleness = { bindingId: 'b1', modelId: 'm1', stale: true, reasons: [{ trigger: 'cadence' as const, detail: 'old' }] };
 
-    const outcome = await engine.triggerRetrainIfStale(asBinding(binding), asModel(incumbent), staleness, { promotionMargin: 0.01 }, deps);
+    const outcome = await engine.TriggerRetrainIfStale(asBinding(binding), asModel(incumbent), staleness, { promotionMargin: 0.01 }, deps);
 
     expect(outcome.retrained).toBe(true);
     expect(outcome.comparison?.recommendation).toBe('hold');
@@ -437,7 +437,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     incumbent.HoldoutMetrics = null; // no incumbent metric
     const staleness = { bindingId: 'b1', modelId: 'm1', stale: true, reasons: [{ trigger: 'cadence' as const, detail: 'old' }] };
 
-    const outcome = await engine.triggerRetrainIfStale(asBinding(binding), asModel(incumbent), staleness, {}, deps);
+    const outcome = await engine.TriggerRetrainIfStale(asBinding(binding), asModel(incumbent), staleness, {}, deps);
 
     expect(outcome.comparison?.recommendation).toBe('hold');
     expect(outcome.comparison?.incumbentValue).toBeNull();
@@ -455,7 +455,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     const chWorse = new FakeModel('m2');
     chWorse.ProblemType = 'regression';
     chWorse.HoldoutMetrics = JSON.stringify({ rmse: 6.0 });
-    const hold = engine.compareChallenger(asModel(incWorseCh), asModel(chWorse), policy);
+    const hold = engine.CompareChallenger(asModel(incWorseCh), asModel(chWorse), policy);
     expect(hold.metric).toBe('rmse');
     expect(hold.recommendation).toBe('hold');
 
@@ -466,7 +466,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     const chBetter = new FakeModel('m4');
     chBetter.ProblemType = 'regression';
     chBetter.HoldoutMetrics = JSON.stringify({ rmse: 4.0 });
-    const promote = engine.compareChallenger(asModel(incBetterCh), asModel(chBetter), policy);
+    const promote = engine.CompareChallenger(asModel(incBetterCh), asModel(chBetter), policy);
     expect(promote.recommendation).toBe('promote');
     // delta is still reported as challenger − incumbent (−1.0) for transparency.
     expect(promote.delta).toBeCloseTo(-1.0, 5);
@@ -479,7 +479,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
     challenger.HoldoutMetrics = JSON.stringify({ roc_auc: 0.9 });
     const policy: RetrainingPolicy = { ...DEFAULT_RETRAINING_POLICY, promotionMargin: 0.05 };
 
-    const cmp = engine.compareChallenger(asModel(incumbent), asModel(challenger), policy);
+    const cmp = engine.CompareChallenger(asModel(incumbent), asModel(challenger), policy);
 
     expect(cmp.recommendation).toBe('promote');
     // models untouched (no Status mutation here — promotion is a separate gate)
@@ -488,7 +488,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
   });
 });
 
-describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
+describe('MaintenanceEngine.RunMaintenancePass (+ free-function entry)', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -507,7 +507,7 @@ describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
     loader.bindings.set('b1', binding);
     loader.models.set('m1', model);
 
-    const result = await engine.runMaintenancePass(
+    const result = await engine.RunMaintenancePass(
       [asBinding(binding)],
       { cadenceDays: 30, dataVolumeGrowthThreshold: 0.25, promotionMargin: 0.01 },
       deps,
@@ -532,7 +532,7 @@ describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
     loader.bindings.set('b1', binding);
     loader.models.set('m1', model);
 
-    const result = await engine.runMaintenancePass(
+    const result = await engine.RunMaintenancePass(
       [asBinding(binding)],
       DEFAULT_RETRAINING_POLICY,
       deps,
@@ -558,7 +558,7 @@ describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
 
     const orphan = new FakeBinding('b-orphan', 'm-missing'); // model not in loader
 
-    const result = await engine.runMaintenancePass(
+    const result = await engine.RunMaintenancePass(
       [asBinding(orphan), asBinding(good)],
       DEFAULT_RETRAINING_POLICY,
       deps,
@@ -587,13 +587,13 @@ describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
 });
 
 describe('maintenance metric helpers', () => {
-  it('resolveComparisonMetric honors a pinned metric name', () => {
+  it('ResolveComparisonMetric honors a pinned metric name', () => {
     const inc = new FakeModel('m1');
     const ch = new FakeModel('m2');
     expect(ResolveComparisonMetric('accuracy', asModel(inc), asModel(ch))).toBe('accuracy');
   });
 
-  it('resolveComparisonMetric auto-picks roc_auc for classification when present on both', () => {
+  it('ResolveComparisonMetric auto-picks roc_auc for classification when present on both', () => {
     const inc = new FakeModel('m1');
     inc.HoldoutMetrics = JSON.stringify({ roc_auc: 0.8, accuracy: 0.7 });
     const ch = new FakeModel('m2');
@@ -601,7 +601,7 @@ describe('maintenance metric helpers', () => {
     expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('roc_auc');
   });
 
-  it('resolveComparisonMetric auto-picks r2 for regression', () => {
+  it('ResolveComparisonMetric auto-picks r2 for regression', () => {
     const inc = new FakeModel('m1');
     inc.ProblemType = 'regression';
     inc.HoldoutMetrics = JSON.stringify({ r2: 0.6, rmse: 5 });
@@ -610,7 +610,15 @@ describe('maintenance metric helpers', () => {
     expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('r2');
   });
 
-  it('readMetric returns null for missing / unparseable metrics', () => {
+  it('ResolveComparisonMetric auto skips closer-to-one and unknown keys', () => {
+    const inc = new FakeModel('m1');
+    inc.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 0.9, explained_variance: 0.5, brier: 0.2 });
+    const ch = new FakeModel('m2');
+    ch.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 1.0, explained_variance: 0.6, brier: 0.18 });
+    expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('brier');
+  });
+
+  it('ReadMetric returns null for missing / unparseable metrics', () => {
     expect(ReadMetric(null, 'roc_auc')).toBeNull();
     expect(ReadMetric('{not json', 'roc_auc')).toBeNull();
     expect(ReadMetric(JSON.stringify({ accuracy: 0.7 }), 'roc_auc')).toBeNull();

@@ -21,6 +21,13 @@ export interface StoredWithheldVerdict {
   Reason: string;
 }
 
+/** One scored row whose top per-record driver is the label a gate asked about. */
+export interface TopDriverRow {
+  RecordID: string;
+  /** `AtRiskRules.DriverRaisesRisk` of that driver: false renders the green "Lowers Risk" badge. */
+  RaisesRisk: boolean;
+}
+
 /** How the gate bodies read containment behaviour. Static members only: the class is the one seam. */
 export class ContainmentProbe {
   /** Refused before training: the operation returned the expected refusal code and produced no model. */
@@ -77,16 +84,16 @@ export class ContainmentProbe {
   }
 
   /**
-   * Whether each row's top per-record driver raises the displayed risk, for rows whose top driver has `label`
+   * The rows whose top per-record driver has `label`, each with whether that driver raises the displayed risk
    * (`AtRiskRules.DriverRaisesRisk`, the rule the drawer's badge renders from).
    */
-  public static TopDriverRaisesRisk(details: RunDetailLike[], label: string, model: OutcomeModelLike): boolean[] {
-    const raises: boolean[] = [];
+  public static TopDriverRows(details: RunDetailLike[], label: string, model: OutcomeModelLike): TopDriverRow[] {
+    const out: TopDriverRow[] = [];
     for (const row of ContainmentProbe.resourceRows(details, model)) {
       const top = row.Drivers?.[0];
-      if (top && top.Label === label) raises.push(top.Up);
+      if (top && top.Label === label) out.push({ RecordID: row.RecordID, RaisesRisk: top.Up });
     }
-    return raises;
+    return out;
   }
 
   /** The record ids "Send to a list" puts on the At-Risk list. */

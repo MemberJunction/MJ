@@ -9,6 +9,7 @@ pydantic==2.7.4
 xgboost==2.0.3
 lightgbm==4.3.0
 scikit-learn==1.4.2
+threadpoolctl==3.7.0  # transitive via scikit-learn; the trainer limits native thread pools with it
 numpy==1.26.4
 scipy==1.17.1  # transitive via scikit-learn; pinned so the sidecar and the truth-suite judges compute with the same scipy
 pandas==2.2.2

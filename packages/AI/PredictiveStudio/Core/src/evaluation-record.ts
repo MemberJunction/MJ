@@ -5,7 +5,7 @@
  * by the trust verdict. Pure; no dependencies beyond the pipeline spec types.
  */
 import type { MajorityBaselineRule, ValidationStrategy } from './pipeline-spec';
-import type { ImportanceKind } from './sidecar-contract';
+import { IMPORTANCE_KINDS, type ImportanceKind } from './sidecar-contract';
 
 /** How a model's stored numbers were measured; training writes it into `MLModel.Lineage` under `evaluation`. */
 export interface EvaluationRecord {
@@ -95,7 +95,8 @@ export class EvaluationLineage {
   }
 
   private static isImportanceKind(value: unknown): value is ImportanceKind {
-    return value === 'coefficient' || value === 'split_or_impurity' || value === 'none';
+    // A stored kind outside IMPORTANCE_KINDS reads as null.
+    return typeof value === 'string' && (IMPORTANCE_KINDS as ReadonlyArray<string>).includes(value);
   }
 
   private static isMajorityBaselineRule(value: string): value is MajorityBaselineRule {

@@ -17,12 +17,15 @@
  * sidecar. Embedding dimensions arrive as individual `numeric` columns; this
  * `Kind` describes the *origin* of the feature for schema/UI purposes.
  */
-export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
 
 /**
  * The two supported supervised-learning problem shapes. Predictive Studio is
  * deliberately opinionated (plan §1.2) — classification (yes/no, multiclass) and
  * regression (predict a number) cover the canonical use cases.
+ *
+ * @deprecated The declared task is `TaskType` on the Prediction Unit; this two-valued type remains only for the
+ * legacy `TrainRequest` and the `ProblemType` columns, and is removed together with `TrainRequest`.
  */
 export type ProblemType = 'classification' | 'regression';
 
@@ -72,6 +75,8 @@ export interface PreprocessingOp {
   fillValue?: string | number;
   /** Number of bins to fit when `op` is `bin`. The sidecar fits the edges; absent ⇒ sidecar default. */
   bins?: number;
+  /** When `op` is `impute`: also emit a `<col>__missing` column (1 where the value was missing) before filling, so a missing value stays distinct from a true zero. */
+  indicator?: boolean; // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**
@@ -111,14 +116,23 @@ export interface ValidationConfig {
 export type ModelMetrics = Record<string, number>;
 
 /**
- * Per-feature contribution map (importance/coefficient magnitude). Used by the
- * leakage guard's single-feature-dominance check (plan §6.4) and surfaced in the
- * experiment-results artifact.
+ * Feature importance as a name -> share map; `ImportanceKind` says which number it holds. The sidecar's held-out
+ * permutation importance is keyed by source column (one-hot levels and missing indicators count toward their
+ * source); older models hold |coefficient| or split/impurity values per encoded column. Used by the leakage guard's
+ * single-feature-dominance check and surfaced in the experiment-results artifact.
  */
 export type FeatureImportance = Record<string, number>;
 
-/** Which kind of number a `FeatureImportance` map holds: |coefficient|, tree split/impurity counts, or none. */
-export type ImportanceKind = 'coefficient' | 'split_or_impurity' | 'none';
+/**
+ * Every kind of number a `FeatureImportance` map can hold: |coefficient|, tree split/impurity counts, the held-out
+ * permutation share per source column (the increase of the held-out loss when the column is permuted), or none. The
+ * one TS list of the kinds: `ImportanceKind` is derived from it, and a Core test holds it to the sidecar's
+ * `ImportanceKind` literal in `schemas.py`.
+ */
+export const IMPORTANCE_KINDS = ['coefficient', 'split_or_impurity', 'held_out_permutation', 'none'] as const;
+
+/** Which kind of number a `FeatureImportance` map holds; one of {@link IMPORTANCE_KINDS}. */
+export type ImportanceKind = (typeof IMPORTANCE_KINDS)[number];
 
 /**
  * Inline data payload — the assembled feature matrix in columnar header +
@@ -190,7 +204,7 @@ export interface TrainResponse {
   fitted_preprocessing: FittedPreprocessing;
   /** Train + validation metrics. */
   metrics: ModelMetrics;
-  /** Per-feature importance/contribution. */
+  /** Feature importance shares; see `FeatureImportance`. */
   feature_importance: FeatureImportance;
   /** Which kind of number `feature_importance` holds. Absent on sidecars that predate it. */
   feature_importance_kind?: ImportanceKind;
@@ -241,6 +255,13 @@ export interface Prediction {
    * `Col=Value`), so a UI should collapse/humanize them for display.
    */
   contributions?: PredictionContribution[];
+  /**
+   * The full class-probability vector, aligned with {@link PredictResponse.classOrder}. Present for classification and
+   * null otherwise (the sidecar sends null rather than leaving the key out); `score` keeps its meaning (P(class 1) for
+   * binary, P(predicted class) for multiclass). The sidecar always sends the key; it stays optional so the test
+   * doubles of the predictor seam, which build responses by hand, need not state it.
+   */
+  probabilities?: number[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** One signed per-record feature contribution: `value > 0` pushes the score up, `< 0` down. */
@@ -258,6 +279,11 @@ export interface PredictionContribution {
 export interface PredictResponse {
   /** One prediction per input row, in request order. */
   predictions: Prediction[];
+  /**
+   * The class order every `probabilities` vector follows (the artifact's declared order for v2 predictors); null for
+   * regression, as the sidecar sends it. Optional for the same reason as {@link Prediction.probabilities}.
+   */
+  classOrder?: string[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**

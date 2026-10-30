@@ -95,11 +95,6 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
   };
 }
 
-/** @deprecated Use {@link SummarizeBuildResult}. */
-export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
-  return SummarizeBuildResult(result);
-}
-
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
 export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   const warningText = o.warnings && o.warnings.length > 0
@@ -111,11 +106,6 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
   return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
-}
-
-/** @deprecated Use {@link BuildOutcomeMessage}. */
-export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
-  return BuildOutcomeMessage(o);
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */
@@ -143,11 +133,6 @@ export function ParseFeatureImportance(raw: unknown): MLFeatureImportancePayload
     // Ignore JSON parse failure
   }
   return [];
-}
-
-/** @deprecated Use {@link ParseFeatureImportance}. */
-export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
-  return ParseFeatureImportance(raw);
 }
 
 /** The hidden-list note for a model whose stored weights are not of a kind shown as drivers but are not split/impurity counts. */
@@ -254,22 +239,6 @@ function measurementNote(isTournament: boolean, hasWinner: boolean): string {
   return 'The score comes from the rows held back from training.';
 }
 
-/** @deprecated Use {@link GenerateMarkdownReport}. */
-export function generateMarkdownReport(
-  name: string,
-  goal: string,
-  targetVar: string,
-  targetMetric: string,
-  score: number,
-  trustGrade: string,
-  oneLiner: string,
-  published: boolean,
-  features: MLFeatureImportancePayload[],
-  leaderboard?: MLLeaderboardEntryPayload[],
-): string {
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard, false, ImportanceDisplay.HiddenNote);
-}
-
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
 export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
   /**
@@ -294,7 +263,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
     let result: BuildPredictionResult;
     try {
-      result = await this.createBuilder().build({ spec: payload, provider, user });
+      result = await this.createBuilder().Build({ spec: payload, provider, user });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilderAgent: build threw: ${errorMessage}`);

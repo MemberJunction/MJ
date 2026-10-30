@@ -43,7 +43,7 @@ The cardinal correctness rule runs through all four: **one feature-assembly code
 | Package | What it is | Read |
 |---|---|---|
 | **[`@memberjunction/predictive-studio-core`](./Core/README.md)** | The shared **type contracts** — the sidecar `/train`+`/predict` shapes, the declarative pipeline spec, the visual FeatureStep DAG, the Model Development Agent's `ModelingPlanSpec`, plus the zod runtime validators and the metric-direction helper. Defined once; imported by everything; importing (almost) nothing. | [Core/README.md](./Core/README.md) |
-| **[`@memberjunction/predictive-studio-sidecar`](./Sidecar/README.md)** | A self-managing TypeScript wrapper (`MLSidecar`) around a **bundled** Python FastAPI ML service. `new MLSidecar(); await s.start()` and you have a live training/inference service — **no Docker required** (managed child-process spawn on an ephemeral port; remote-URL mode for scaled deployments). | [Sidecar/README.md](./Sidecar/README.md) |
+| **[`@memberjunction/predictive-studio-sidecar`](./Sidecar/README.md)** | A self-managing TypeScript wrapper (`MLSidecar`) around a **bundled** Python FastAPI ML service. `new MLSidecar(); await s.Start()` and you have a live training/inference service — **no Docker required** (managed child-process spawn on an ephemeral port; remote-URL mode for scaled deployments). | [Sidecar/README.md](./Sidecar/README.md) |
 | **[`@memberjunction/predictive-studio`](./Engine/README.md)** | The **server-side engine** — `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator`, plus feature-pipeline discovery, maintenance, and the **Actions + Remote Operations** invocation surfaces. | [Engine/README.md](./Engine/README.md) |
 
 ### Dependency direction
@@ -82,10 +82,10 @@ Then train + score in TypeScript:
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 
 const sidecar = new MLSidecar();   // managed mode — spawns the bundled Python service
-await sidecar.start();
-const trained = await sidecar.train(/* TrainRequest from @memberjunction/predictive-studio-core */);
-const { predictions } = await sidecar.predict(/* PredictRequest */);
-await sidecar.stop();
+await sidecar.Start();
+const trained = await sidecar.Train(/* TrainRequest from @memberjunction/predictive-studio-core */);
+const { predictions } = await sidecar.Predict(/* PredictRequest */);
+await sidecar.Stop();
 ```
 
 For the full path — pipeline → `TrainingEngine` → immutable `MJ: ML Models` row → `MLModelInferenceProcessor` scoring, plus the experiment search and the Studio dashboard — see the [Engine README](./Engine/README.md) and the [guide](../../../guides/PREDICTIVE_STUDIO_GUIDE.md).

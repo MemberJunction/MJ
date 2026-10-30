@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R3 -> S1.4",
+    "Description": "Gate G1.8 (phase 1, dataset R3, criterion S1.4): the R3 Poisson count target declared continuous is refused with task-type-mismatch, and the same target declared count trains to a Completed run. It fails when the unit target validation drops the rule that a count-shaped target cannot be declared continuous, so the Poisson target is accepted as continuous.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.8\",\"owner:PR3\",\"phase:1\",\"dataset:R3\",\"criterion:S1.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Declared continuous: refused with task-type-mismatch; declared count: the run completes."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r3-s1-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "D642AE91-25E7-431F-A591-AE5E6F2B8C57"
+  }
+}

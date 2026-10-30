@@ -149,10 +149,10 @@ flowchart LR
 
 Two topologies, chosen automatically:
 
-| Mode | When | What `start()` does |
+| Mode | When | What `Start()` does |
 |------|------|---------------------|
 | **Managed** (default) | nothing configured | Spawns the bundled FastAPI service on `127.0.0.1` with an **OS-assigned ephemeral port**, reads `PREDICTIVE_STUDIO_SIDECAR_PORT=<n>` from its stdout, polls `/health` until ready, and registers SIGINT/SIGTERM/exit cleanup so the child dies with the parent. |
-| **Remote** | `url` option **or** `PREDICTIVE_STUDIO_SIDECAR_URL` env set | Connects only — no child process — and just verifies `/health`. Use for a containerized/horizontally-scaled sidecar. `stop()` is then a no-op (this client never owned the process). |
+| **Remote** | `url` option **or** `PREDICTIVE_STUDIO_SIDECAR_URL` env set | Connects only — no child process — and just verifies `/health`. Use for a containerized/horizontally-scaled sidecar. `Stop()` is then a no-op (this client never owned the process). |
 
 The public surface (`Sidecar/src/index.ts`): `MLSidecar`, `SidecarError`, plus the `MLSidecarOptions` and `SidecarHealthResponse` types.
 
@@ -160,12 +160,12 @@ The public surface (`Sidecar/src/index.ts`): `MLSidecar`, `SidecarError`, plus t
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 
 const s = new MLSidecar();   // managed mode by default
-await s.start();             // spawns the bundled Python service
+await s.Start();             // spawns the bundled Python service
 
-const trained = await s.train({ /* TrainRequest */ });
-const { predictions } = await s.predict({ /* PredictRequest */ });
+const trained = await s.Train({ /* TrainRequest */ });
+const { predictions } = await s.Predict({ /* PredictRequest */ });
 
-await s.stop();              // SIGTERM the child (no-op in remote mode)
+await s.Stop();              // SIGTERM the child (no-op in remote mode)
 ```
 
 `MLSidecar` exposes `IsRemote`, `IsRunning` (remote always `true`; managed needs a live child), and `Port` (ephemeral in managed, `null` in remote). On macOS it automatically appends `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` to the spawn environment so XGBoost/LightGBM find the OpenMP runtime.
@@ -216,11 +216,11 @@ The shared vocabulary across the sidecar, the engine, the UI, and the agent. **S
 | `feature-steps.ts` | the visual **FeatureStep DAG** — a discriminated union on `Kind` (**8 kinds**: `select`/`impute`/`standardize`/`onehot`/`bin`/`embedding`/`llm-derived`/`flow-agent`/`vision-llm`) + `FeatureStepGraph` |
 | `modeling-plan-spec.ts` | `ModelingPlanSpec` (the Model Development Agent's strongly-typed payload), `Budget`, `LeaderboardEntry` |
 | `modeling-plan-schema.ts` | **Zod** `ModelingPlanSpecSchema` / `BudgetSchema` + `validateModelingPlanSpec()` / `validateBudget()` — the **runtime** plan/budget validators the Start-Experiment op and Run-Experiment action call before any iteration runs |
-| `metrics-util.ts` | `isErrorMetric(metricKey)` + the canonical **lower-is-better** key set (`rmse`/`mae`/`mse`/`loss`/`logloss`/`log_loss`) — lifted to Core so the leaderboard (§7) and the challenger-vs-incumbent comparison (§14) **cannot drift** on metric direction |
+| `metrics-util.ts` | `MetricDirections.IsErrorMetric(metricKey)` / `MetricDirections.MetricDirectionOf(metricKey)` — the lower-is-better set is read from Core's `METRIC_DIRECTION` declaration (plus the legacy spellings such as `mse`/`loss`/`logloss`/`log_loss`) — lifted to Core so the leaderboard (§7) and the challenger-vs-incumbent comparison (§14) **cannot drift** on metric direction |
 
 ```typescript
 import type { ModelingPlanSpec, TrainRequest, FeatureStepGraph } from '@memberjunction/predictive-studio-core';
-import { validateModelingPlanSpec, isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { validateModelingPlanSpec, MetricDirections } from '@memberjunction/predictive-studio-core';
 ```
 
 > **Note on dependencies:** Core is *almost* pure types, but it carries **one** runtime dependency — `zod` — for `modeling-plan-schema.ts`. Plan/budget validation is a correctness invariant shared by every consumer, so it lives in Core (push-to-generic) rather than being re-implemented per call site. Everything else in the package is interfaces and union types.
@@ -526,7 +526,7 @@ flowchart LR
 | Concern | How |
 |---|---|
 | **Wave generation** | the `IWaveStrategist` seam — default `PlanOrderWaveStrategist` (priority order); swap in an LLM-backed strategist for adaptive "what next" without touching the orchestrator |
-| **Leaderboard** (`src/experiment/leaderboard.ts`) | `LeaderboardEntry[]` ranked by a **normalized** score (prefers `HoldoutMetrics`, falls back to training metrics; error metrics negated via Core's `isErrorMetric` so higher always = better) |
+| **Leaderboard** (`src/experiment/leaderboard.ts`) | `LeaderboardEntry[]` ranked by a **normalized** score (prefers `HoldoutMetrics`, falls back to training metrics; error metrics negated via Core's `MetricDirections.IsErrorMetric` so higher always = better) |
 | **Pruning** | `selectPrunedIterationIds()` — top-K / relative-threshold rules; pruned iterations marked `Pruned` + removed from the leaderboard |
 | **Budget gate** | `MaxRuns` / `MaxComputeCost` / `MaxWallclockMinutes` checked **both** between waves *and inside the bounded runner* (see below) |
 | **Concurrency** | `runBounded()` (`src/experiment/concurrency.ts`) with a configurable max |
@@ -609,12 +609,12 @@ All are `@RegisterClass(BaseRemotableOperation, '<key>')` Manual-mode subclasses
 
 | Operation key | Server class | Mode | Delegates to |
 |---|---|---|---|
-| `PredictiveStudio.TrainModel` | `PredictiveStudioTrainModelServerOperation` | `LongRunning` | `trainModelViaEngine` → `TrainingEngine.trainModel` |
-| `PredictiveStudio.ScoreRecordSet` | `PredictiveStudioScoreRecordSetServerOperation` | `LongRunning` | `scoreRecordSetViaRunner` → `ProductionScoreRecordSetRunner` → `MLModelInferenceProcessor` |
+| `PredictiveStudio.TrainModel` | `PredictiveStudioTrainModelServerOperation` | `LongRunning` | `TrainingDelegation.TrainModelViaEngine` → `TrainingEngine.trainModel` |
+| `PredictiveStudio.ScoreRecordSet` | `PredictiveStudioScoreRecordSetServerOperation` | `LongRunning` | `ScoreRecordSetViaRunner` → `ProductionScoreRecordSetRunner` → `MLModelInferenceProcessor` |
 | `PredictiveStudio.RunFeaturePipeline` | `PredictiveStudioRunFeaturePipelineServerOperation` | `LongRunning` | `RecordProcessExecutor.RunByID` (the RSP substrate — §11) |
-| `PredictiveStudio.StartExperimentSession` | `PredictiveStudioStartExperimentSessionServerOperation` | `LongRunning` | `runExperimentSessionViaOrchestrator` → `ExperimentOrchestrator.runSession` |
+| `PredictiveStudio.StartExperimentSession` | `PredictiveStudioStartExperimentSessionServerOperation` | `LongRunning` | `RunExperimentSessionViaOrchestrator` → `ExperimentOrchestrator.runSession` |
 | `PredictiveStudio.ControlExperimentSession` | `PredictiveStudioControlExperimentSessionServerOperation` | `Sync` | a lifecycle `Status` write on the `MJ: Experiment Sessions` row (pause/resume/cancel) |
-| `PredictiveStudio.PromoteModel` | `PredictiveStudioPromoteModelServerOperation` | `Sync` | `promoteModelViaGate` → `ProductionModelPromotionGate` (§13) |
+| `PredictiveStudio.PromoteModel` | `PredictiveStudioPromoteModelServerOperation` | `Sync` | `PromoteModelViaGate` → `ProductionModelPromotionGate` (§13) |
 | `PredictiveStudio.CreateScoringProcess` | `PredictiveStudioCreateScoringProcessServerOperation` | `Sync` | `CreateScoringProcess` (creates an on-demand `'ML Model'` Record Process + scoring binding) |
 
 The four `LongRunning` ops emit `context.emitProgress({ OperationKey, Processed, Total?, Status, Message })`. **RunFeaturePipeline is the richest** — it forwards the RSP executor's per-batch `onProgress` as typed progress, so attached *and* over-the-wire callers see live progress (mirroring `RecordProcess.RunNow`); Train/Score/StartExperiment emit coarse start/finish phases (the underlying engines expose no per-step hook). The wire input/output types are defined inline in the generated `remote_operations.ts`; `Budget` and `ModelingPlanSpec` come from Core and are runtime-validated by `validateBudget` / `validateModelingPlanSpec` before any work runs. Tree-shaking anchor: `LoadPredictiveStudioOperations()`.
@@ -653,7 +653,9 @@ branch on the code, never on the message text.
 | `ResultCode` | Fires when |
 |---|---|
 | `READ_CAP_EXCEEDED` | A caller-supplied row cap (`MaxRows` on Train, `maxRows` in a Score `filter` scope) is smaller than the rows in scope. Reads are uncapped by default: training reads every row of the target entity and filter-scoped scoring reads every matching row, so a cap that would cut the scope short is refused instead of training or scoring on a sample. |
-| `AS_OF_NO_EFFECT` | Training is asked for point-in-time assembly (an `AsOfStrategy` mode other than `none`) that it cannot perform, so the model would be identical to `Mode: 'none'` (§4.3). |
+| `AS_OF_NO_EFFECT` | The Train request carries an `asOf` input other than `Mode: 'none'`. Decision dates come from the pipeline's Prediction Unit, so the input is refused by name (`input-not-accepted`) instead of being ignored (§4.3). |
+| `UNIT_REQUIRED` | Training a pipeline with no Prediction Unit whose `AsOfStrategy` asks for point-in-time assembly (a mode other than `none`): that assembly lives in a Prediction Unit. The refusal is recorded on the training run. |
+| `AS_OF_SOURCE_UNDATED` | A unit pipeline's feature cannot be read as of a decision date: its Record Changes history does not cover the date (`decision-date-before-change-history`), or its stored value changed after it (`select-changes-after-decision-date`). |
 | `INVALID_EVALUATION_SETTING` | Training a pipeline whose `ValidationStrategy.MajorityBaselineRule` is not `"enforce"` or `"warn"` (§5.1); it is refused before any training row is written. |
 | `MODEL_NEEDS_TRAINING` | Scoring or promoting a model with no trained artifact, or whose artifact is not on this server (§6.x). |
 | `MODEL_NOT_SCORABLE` | Scoring a trained model whose status does not allow it: only Validated and Published models score, so a trained Draft must be promoted first and an Archived model cannot score. |
@@ -826,7 +828,7 @@ The Model Development Agent is elevated to the **Database-Designer / Agent-Manag
 
 - **`PredictiveStudioModelDevAgent`** (the parent's `DriverClass`) — overrides `determineNextStep`: when `shouldForceBuild` matches (a payload with `ProposedExperiments` and either `Approved: true` or an approval phrase in the latest user message, provided no `Pipeline Builder` sub-agent step has already run), the orchestrator forces routing to the builder sub-agent with `Approved: true`. Every other decision stays LLM-driven via `super`.
 - **`PredictiveStudioPipelineBuilderAgent`** (the **Pipeline Builder** code sub-agent, `executeAgentInternal`, no LLM) — wraps:
-- **`PredictiveStudioPipelineBuilder`** (`pipeline-builder.ts`) — the pure builder: `modelingPlanToPipelineConfig(ModelingPlanSpec)` deterministically maps the plan → the exact `MJ: ML Training Pipelines` field shapes (SourceBindings, the FeatureStep DAG with one-hot for categoricals, AsOfStrategy, LeakageGuard from the plan's exclude-notes, ValidationStrategy); it creates the pipeline, trains via `trainModelViaEngine`, then **publishes the model ONLY if `deriveTrustVerdict` clears the bar** (`@memberjunction/predictive-studio-core`) and training wasn't leakage-flagged — otherwise it stays Draft with a plain held-reason. The bar is the trust grade of one holdout number, not an interval, so a model whose holdout AUC interval contains 0.5 can clear it and be published (the assessment's agent runs published two). The builder sets `Status = 'Published'` itself, without the promotion gate: the model skips the gate's state machine and artifact check and gets no per-model scoring Action (§15.3).
+- **`PredictiveStudioPipelineBuilder`** (`pipeline-builder.ts`) — the pure builder: `ModelingPlanToPipelineConfig(ModelingPlanSpec)` deterministically maps the plan → the exact `MJ: ML Training Pipelines` field shapes (SourceBindings, the FeatureStep DAG with one-hot for categoricals, AsOfStrategy, LeakageGuard from the plan's exclude-notes, ValidationStrategy); it creates the pipeline, trains via `TrainingDelegation.TrainModelViaEngine`, then **publishes the model ONLY if `deriveTrustVerdict` clears the bar** (`@memberjunction/predictive-studio-core`) and training wasn't leakage-flagged — otherwise it stays Draft with a plain held-reason. The bar is the trust grade of one holdout number, not an interval, so a model whose holdout AUC interval contains 0.5 can clear it and be published (the assessment's agent runs published two). The builder sets `Status = 'Published'` itself, without the promotion gate: the model skips the gate's state machine and artifact check and gets no per-model scoring Action (§15.3).
 
 Proven by: unit tests (mapper, gate logic, projection helpers), an in-process integration test (`ps-inproc-agent-builder.ts` — builds + trains + asserts the publish gate), and an **agent-loop test through the real `AgentRunner`** (`ps-inproc-agent-run.ts` — the sub-agent runs end-to-end and the gate fires). "+ New prediction" on the business surface opens this agent as a docked `mj-conversation-chat-area` co-pilot.
 
@@ -884,17 +886,17 @@ The Remote Op surfaces these as clean `EXECUTION_ERROR`s with the same plain-lan
 
 > **Built, not wired.** Nothing runs the maintenance pass: no Action exists for it and its scheduled job ("Predictive Studio Maintenance") is Disabled. The design below is what the engine code implements.
 
-`MaintenanceEngine` (`Engine/src/maintenance/maintenance-engine.ts`, entry `runMaintenancePass(...)`) drives staleness detection, scheduled re-scoring, and retraining-with-comparison off the `MJ: ML Model Scoring Bindings`.
+`MaintenanceEngine` (`Engine/src/maintenance/maintenance-engine.ts`, entry `RunMaintenancePass(...)`) drives staleness detection, scheduled re-scoring, and retraining-with-comparison off the `MJ: ML Model Scoring Bindings`.
 
 ```mermaid
 flowchart TB
-    BIND["MJ: ML Model Scoring Bindings"] --> DET["detectStaleness"]
+    BIND["MJ: ML Model Scoring Bindings"] --> DET["DetectStaleness"]
     DET --> CAD{"cadence?<br/>(anchor: lastScored or TrainedAt<br/>older than cadenceDays)"}
     DET --> VOL{"data-volume?<br/>(growth > threshold)"}
     DET --> DRIFT{"drift?<br/>(IDriftDetector seam)"}
-    CAD & VOL & DRIFT -->|any fires| STALE["stale → triggerRetrainIfStale"]
+    CAD & VOL & DRIFT -->|any fires| STALE["stale → TriggerRetrainIfStale"]
     STALE --> CHAL["train challenger (TrainingEngine)"]
-    CHAL --> CMP["compareChallenger<br/>(metric-direction aware)"]
+    CHAL --> CMP["CompareChallenger<br/>(metric-direction aware)"]
     CMP --> REC{"improvement ≥ margin?"}
     REC -->|yes| PROP["recommendation = 'promote'<br/>(PROPOSE only)"]
     REC -->|no / unknown| HOLD["recommendation = 'hold'"]
@@ -902,19 +904,19 @@ flowchart TB
     style HUMAN fill:#fee2e2,stroke:#dc2626
 ```
 
-**Staleness — three triggers.** `detectStaleness` accumulates `StalenessReason[]`; the binding is stale if any fires:
+**Staleness — three triggers.** `DetectStaleness` accumulates `StalenessReason[]`; the binding is stale if any fires:
 - **Cadence** — anchor is `binding.LastScoredAt` (when `cadenceAnchor='lastScored'`) or `model.TrainedAt`; stale if older than `cadenceDays`. A never-scored/never-trained binding is treated as stale so it's picked up on the first pass.
 - **Data-volume** — `growth = (currentRowCount − model.TrainingRowCount) / model.TrainingRowCount`; stale if `growth > dataVolumeGrowthThreshold` (current count via an injected `rowCounter`).
 - **Drift** — gated by `policy.driftEnabled`, delegated to an injected `IDriftDetector` seam.
 
-Scheduled re-scoring (`rescoreScheduledBinding`, for `Mode='Scheduled'` bindings) stamps `LastScoredAt = now` and `LastRowCount = scoredCount` after each pass.
+Scheduled re-scoring (`RescoreScheduledBinding`, for `Mode='Scheduled'` bindings) stamps `LastScoredAt = now` and `LastRowCount = scoredCount` after each pass.
 
-**Challenger-vs-incumbent — respects metric direction, never auto-promotes.** When a binding is stale, a challenger is trained and compared. Direction is handled via Core's shared `isErrorMetric`:
+**Challenger-vs-incumbent — respects metric direction, never auto-promotes.** When a binding is stale, a challenger is trained and compared. Direction is handled via Core's shared `MetricDirections.IsErrorMetric`:
 
 ```typescript
 private metricImprovement(metric, incumbentValue, challengerValue): number | null {
     if (incumbentValue == null || challengerValue == null) return null;
-    return isErrorMetric(metric) ? incumbentValue - challengerValue   // lower-is-better
+    return MetricDirections.IsErrorMetric(metric) ? incumbentValue - challengerValue   // lower-is-better
                                  : challengerValue - incumbentValue;  // higher-is-better
 }
 private recommendPromotion(improvement, margin): PromotionRecommendation {
@@ -923,9 +925,9 @@ private recommendPromotion(improvement, margin): PromotionRecommendation {
 }
 ```
 
-Positive `improvement` always means "better," whichever direction the metric runs. `compareChallenger` returns only a `recommendation` (`'promote' | 'hold'`) — it performs **no promotion**. The class doc is explicit: *"It NEVER auto-promotes — promotion is a separate signed-off Action,"* and the comparison detail always appends *"Promotion still requires explicit human sign-off — nothing has been promoted automatically."* Promotion only ever happens through the §13 gate with its sign-off.
+Positive `improvement` always means "better," whichever direction the metric runs. `CompareChallenger` returns only a `recommendation` (`'promote' | 'hold'`) — it performs **no promotion**. The class doc is explicit: *"It NEVER auto-promotes — promotion is a separate signed-off Action,"* and the comparison detail always appends *"Promotion still requires explicit human sign-off — nothing has been promoted automatically."* Promotion only ever happens through the §13 gate with its sign-off.
 
-> One nuance: the `'auto'` comparison-metric *selection* (`metrics.ts → resolveComparisonMetric`) only auto-picks higher-is-better keys; a **pinned** error metric is still compared direction-correctly via `metricImprovement`, but `'auto'` won't land on an error metric by itself.
+> One nuance: the `'auto'` comparison-metric *selection* (`metrics.ts → ResolveComparisonMetric`) only auto-picks keys whose direction `MetricDirections.MetricDirectionOf` declares higher- or lower-is-better (closer-to-one keys such as calibration slope and unknown keys are skipped), and `metricImprovement` compares either direction correctly.
 
 ---
 
@@ -968,7 +970,7 @@ flowchart TB
 **Key entry points.**
 
 - `registerMLScoringProcessor(deps: MLInferenceDeps): void` (`Engine/src/scoring/register.ts`) — installs a factory into `RecordProcessorRegistry.Instance` for both `'ML Model'` and the `'MLModelInference'` alias. The factory reads the per-run `MLScoringConfiguration` (`{ modelId, primaryKeyField?, datedSources? }`) off the Record Process's `Configuration` JSON and closes over the injected `MLInferenceDeps` (model loader / artifact loader / sidecar).
-- `PredictiveStudioScoringStartup` (`Engine/src/scoring/startup-register.ts`) — a `@RegisterForStartup`-decorated `IStartupSink` (a `BaseSingleton`) whose `HandleStartup()` calls `registerMLScoringProcessor(buildProductionMLInferenceDeps())` **once at MJAPI boot**. It warms no `BaseEngine` cache and touches no DB — the injected seams take their `provider` + `user` per call — so the registration is a cheap synchronous map write (not `deferred`). Mirrors `RemoteBrowserEngine`'s startup pattern.
+- `PredictiveStudioScoringStartup` (`Engine/src/scoring/startup-register.ts`) — a `@RegisterForStartup`-decorated `IStartupSink` (a `BaseSingleton`) whose `HandleStartup()` calls `registerMLScoringProcessor(BuildProductionMLInferenceDeps())` **once at MJAPI boot**. It warms no `BaseEngine` cache and touches no DB — the injected seams take their `provider` + `user` per call — so the registration is a cheap synchronous map write (not `deferred`). Mirrors `RemoteBrowserEngine`'s startup pattern.
 - The **migration** `migrations/v5/V202606280215__v5.44.x__RecordProcess_WorkType_AddMLModel.sql` adds `'ML Model'` to the `CK_RecordProcess_WorkType` CHECK constraint — **drop the old constraint + add the new one** (`'Action' | 'Agent' | 'Infer' | 'FieldRules' | 'ML Model'`) **in a single migration**. The CHECK is the **source of truth**: CodeGen derives the field's value list, its `ValueListType`, and the generated TypeScript union from it, and the value validates at SAVE time (a typo'd work type is rejected up front). Work-type **resolution** still happens at execution time via `RecordProcessExecutor.buildProcessor() → RecordProcessorRegistry.Resolve()` (the registry is the pluggable seam) — the CHECK just guarantees the stored value is a known work type. To add further work types, extend the CHECK the same way + re-run `mj codegen`. *(Never hand-edit `EntityFieldValue` / `ValueListType` to do this — that metadata is CodeGen-derived from the CHECK; see [`migrations/CLAUDE.md`](../migrations/CLAUDE.md).)*
 
 **Dry-run write-back fix.** PS2-1 also hardened the substrate's write-back so a **dry-run** of any wrapped work type (Action / Agent / Infer / **ML Model**) computes its effect without mutating data. `applyOutputMapping(... dryRun: true)` (`packages/RecordSetProcessor/engine/src/writeBack.ts`) now still resolves the mapped values and validates the target entity/field metadata, but saves nothing — returning the would-be values in `previewFields` / `previewChild` (`WriteBackResult.dryRun`). This mirrors the first-class `ProcessRun.DryRun` flag threaded through `WriteBackProcessor.ts` and `RecordProcessExecutor.ts`, and through the action's `ScoreRecordSetRequest.dryRun`.

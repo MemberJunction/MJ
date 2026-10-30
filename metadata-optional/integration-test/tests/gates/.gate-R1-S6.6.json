@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R1 -> S6.6",
+    "Description": "Gate G2.17 (phase 2, dataset R1, criterion S6.6): on R1 one run declares split-conformal prediction intervals at 80% and 90% for a fully grown random-forest finalist; their observed coverage of the 1,500 held-out rows lies in 0.769-0.831 and 0.877-0.923 (nominal +/- 3 binomial standard errors), 2 of 2 levels. It fails when prediction intervals are sized from the refit finalist's training residuals instead of the out-of-fold rows (80% coverage falls to 0.361).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.17\",\"owner:PR3\",\"phase:2\",\"dataset:R1\",\"criterion:S6.6\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "80% and 90% split-conformal intervals of a random-forest finalist on R1 cover 0.769-0.831 and 0.877-0.923 of the 1,500 held-out rows (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r1-s6-6"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "C40BFDCC-B00D-4C7E-9465-96E7CE583367"
+  }
+}

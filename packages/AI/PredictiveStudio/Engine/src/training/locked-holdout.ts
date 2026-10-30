@@ -6,8 +6,12 @@
  * so the same training read with the same seed always holds out the same rows. Classification holdouts are
  * stratified on the label (as the sidecar's own split is), so an imbalanced or small target keeps every class in the
  * holdout when the data allows it; regression holdouts are a plain seeded sample.
+ *
+ * A Prediction Unit run does not carve here: its Training Snapshot's row manifest already names each row's role, and
+ * {@link LockedHoldoutSplitter.FromManifest} reads the split back from it.
  */
 import type { MatrixData, ProblemType } from '@memberjunction/predictive-studio-core';
+import type { SnapshotContent } from '../snapshot/snapshot-serialization';
 
 /**
  * The seed for every training split: the engine's locked-holdout carve and the sidecar's train/test and k-fold splits
@@ -67,7 +71,7 @@ export class LockedHoldoutSplitter {
     const total = matrix.rows.length;
     const holdoutCount = LockedHoldoutSplitter.HoldoutCount(total, fraction);
     const targetIdx = matrix.columns.indexOf(targetColumn);
-    const random = LockedHoldoutSplitter.mulberry32(seed);
+    const random = LockedHoldoutSplitter.Mulberry32(seed);
     const holdoutIndices =
       problemType === 'classification' && targetIdx >= 0
         ? LockedHoldoutSplitter.stratifiedPick(matrix, targetIdx, holdoutCount, random)
@@ -82,6 +86,30 @@ export class LockedHoldoutSplitter {
       HoldoutRowCount: holdoutRows.length,
       TrainingRowCount: trainingRows.length,
       HoldoutClassCounts: problemType === 'classification' && targetIdx >= 0 ? LockedHoldoutSplitter.countLabels(holdoutRows, targetIdx) : {},
+    };
+  }
+
+  /**
+   * The split a Training Snapshot's row manifest records: the development rows are the training portion and the
+   * locked-holdout rows the holdout, each in matrix order, with every snapshot column. Nothing is re-carved, so the
+   * counts and the holdout class counts describe exactly the rows the manifest names.
+   *
+   * @param content the snapshot content (matrix row i is manifest line i)
+   * @param labelColumn the label column the holdout class counts are read from
+   * @param problemType classification counts the holdout rows per label; regression stores no class counts
+   */
+  public static FromManifest(content: SnapshotContent, labelColumn: string, problemType: ProblemType): LockedHoldoutSplit {
+    const columns = [...content.Header.columns];
+    const training: MatrixData['rows'] = [];
+    const holdout: MatrixData['rows'] = [];
+    content.Rows.forEach((row, i) => (content.Manifest[i].role === 'locked-holdout' ? holdout : training).push([...row]));
+    const targetIdx = columns.indexOf(labelColumn);
+    return {
+      Training: { columns, rows: training },
+      LockedHoldout: { columns, rows: holdout },
+      HoldoutRowCount: holdout.length,
+      TrainingRowCount: training.length,
+      HoldoutClassCounts: problemType === 'classification' && targetIdx >= 0 ? LockedHoldoutSplitter.countLabels(holdout, targetIdx) : {},
     };
   }
 
@@ -172,10 +200,10 @@ export class LockedHoldoutSplitter {
   }
 
   /**
-   * mulberry32: a small, fast 32-bit seeded generator returning floats in [0, 1). Local so the carve has no dependency
+   * Mulberry32: a small, fast 32-bit seeded generator returning floats in [0, 1). Local so the carve has no dependency
    * whose algorithm could change under it — the same seed must give the same holdout across releases.
    */
-  private static mulberry32(seed: number): () => number {
+  public static Mulberry32(seed: number): () => number {
     let state = seed >>> 0;
     return () => {
       state = (state + 0x6d2b79f5) >>> 0;

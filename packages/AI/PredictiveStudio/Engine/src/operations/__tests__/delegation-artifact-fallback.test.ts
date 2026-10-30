@@ -11,7 +11,7 @@ import {
 /**
  * Tests for the artifact-store wiring in `operations/delegation` / `training/artifact-store`:
  * the active-provider lookup that stamps every artifact's `MJ: Files` row, and that
- * `buildArtifactStore` always produces an FK-valid `MJFilesArtifactStore`. NO live DB
+ * `BuildArtifactStore` always produces an FK-valid `MJFilesArtifactStore`. NO live DB
  * / sidecar — the provider lookup runs through a spy provider whose `RunView` returns
  * canned rows.
  */
@@ -39,7 +39,7 @@ function makeSpyProvider(rows: Array<{ ID: string }>): {
   return { provider: spy as unknown as IMetadataProvider, calls };
 }
 
-describe('resolveActiveFileStorageProviderId', () => {
+describe('ResolveActiveFileStorageProviderId', () => {
   it('returns the first active provider id when one exists', async () => {
     const { provider, calls } = makeSpyProvider([{ ID: 'PROVIDER-1' }]);
     const id = await ResolveActiveFileStorageProviderId({ Email: 'u@x' } as UserInfo, provider);
@@ -57,7 +57,7 @@ describe('resolveActiveFileStorageProviderId', () => {
   });
 });
 
-describe('buildArtifactStore', () => {
+describe('BuildArtifactStore', () => {
   it('builds an MJFilesArtifactStore (real File row + local bytes) when a provider id is present', () => {
     const store = BuildArtifactStore('PROVIDER-1', new MetadataEntityFactory(makeSpyProvider([]).provider));
     expect(store).toBeInstanceOf(MJFilesArtifactStore);

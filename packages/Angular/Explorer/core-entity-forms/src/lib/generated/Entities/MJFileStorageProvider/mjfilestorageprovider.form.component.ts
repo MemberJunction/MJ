@@ -24,6 +24,7 @@ export class MJFileStorageProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFiles', sectionName: 'Files', isExpanded: false },
             { sectionKey: 'mJFileStorageAccounts', sectionName: 'File Storage Accounts', isExpanded: false },
             { sectionKey: 'mJAIAgentsRecordingStorageProviderID', sectionName: 'AI Agents (Recording Storage Provider)', isExpanded: false },
+            { sectionKey: 'mJTrainingSnapshots', sectionName: 'Training Snapshots', isExpanded: false },
             { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false },
             { sectionKey: 'mJAIAgentsAttachmentStorageProviderID', sectionName: 'AI Agents', isExpanded: false }
         ]);

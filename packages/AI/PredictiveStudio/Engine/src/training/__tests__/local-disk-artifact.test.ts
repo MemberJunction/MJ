@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, rm, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, rm, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -14,6 +14,7 @@ import {
 } from '../artifact-store';
 import { LocalArtifactLoader } from '../../scoring/artifact-loader';
 import type { IEntityFactory } from '../types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Round-trip tests for the single coherent artifact store + loader (dev / on-prem
@@ -39,9 +40,16 @@ class FakeFile {
     this.saveOk = saveOk;
   }
 
+  public Deleted = false;
+
   public async Save(): Promise<boolean> {
     this.LatestResult = { CompleteMessage: this.saveOk ? '' : 'forced save failure' };
     return this.saveOk;
+  }
+
+  public async Delete(): Promise<boolean> {
+    this.Deleted = true;
+    return true;
   }
 }
 
@@ -134,6 +142,7 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
   });
 
   it('throws when the File row fails to save (no bytes written)', async () => {
+    const errors = ConsoleCapture.Errors();
     const baseDir = await makeScratchDir();
     const fileId = randomUUID();
     const store = new MJFilesArtifactStore(new FakeFileFactory(() => new FakeFile(fileId, false)), {
@@ -144,6 +153,21 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
     await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact file/i);
     const files = await readdir(baseDir).catch(() => [] as string[]);
     expect(files).toEqual([]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MJFilesArtifactStore: failed to persist artifact file row 'm.bin': forced save failure")]);
+  });
+
+  it('deletes its own File row when the bytes cannot be written, then throws', async () => {
+    const errors = ConsoleCapture.Errors();
+    const parent = await makeScratchDir();
+    const blocker = join(parent, 'not-a-directory');
+    await writeFile(blocker, 'x');   // the base directory's parent is a file, so the bytes cannot be written
+    const factory = new FakeFileFactory(() => new FakeFile(randomUUID()));
+    const store = new MJFilesArtifactStore(factory, { providerId: 'prov-1', baseDir: join(blocker, 'artifacts') });
+
+    await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact bytes/i);
+    expect(factory.Created).toHaveLength(1);
+    expect(factory.Created[0].Deleted).toBe(true);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("but failed to write bytes under")]);
   });
 
   it('keeps the fake-file cast honest (the stand-in satisfies the store contract)', () => {
@@ -171,11 +195,11 @@ describe('LocalArtifactLoader — missing files return null', () => {
 });
 
 describe('local artifact path + base dir resolution', () => {
-  it('localArtifactPath builds <baseDir>/<fileId>.bin', () => {
+  it('LocalArtifactPath builds <baseDir>/<fileId>.bin', () => {
     expect(LocalArtifactPath('/base', 'abc-123')).toBe(join('/base', 'abc-123.bin'));
   });
 
-  it('resolveLocalArtifactBaseDir honors PS_ARTIFACT_DIR, else os tmpdir', () => {
+  it('ResolveLocalArtifactBaseDir honors PS_ARTIFACT_DIR, else os tmpdir', () => {
     const prev = process.env.PS_ARTIFACT_DIR;
     try {
       process.env.PS_ARTIFACT_DIR = '/custom/ps/artifacts';

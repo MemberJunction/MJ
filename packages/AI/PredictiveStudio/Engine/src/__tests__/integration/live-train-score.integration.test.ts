@@ -409,7 +409,7 @@ function buildPipeline(opts: {
  * production — the test no longer needs a bespoke trainer that reaches around the
  * contract via `validation.holdout_size`.
  *
- * `MJSidecarTrainer.train` calls `sidecar.start()` lazily, which is a no-op when
+ * `MJSidecarTrainer.train` calls `sidecar.Start()` lazily, which is a no-op when
  * the suite has already started the sidecar (lifecycle stays owned by the test).
  */
 function makeProductionTrainer(sidecar: MLSidecar): MJSidecarTrainer {
@@ -421,7 +421,7 @@ class LiveSidecarPredictor implements ISidecarPredictor {
   constructor(private readonly sidecar: MLSidecar) {}
 
   public async predict(req: PredictRequest): Promise<PredictResponse> {
-    return this.sidecar.predict(req);
+    return this.sidecar.Predict(req);
   }
 }
 
@@ -465,6 +465,12 @@ function readMetric(model: RecordingEntity, field: 'Metrics' | 'HoldoutMetrics',
 
 // region: the suite ----------------------------------------------------------
 
+/**
+ * The models trained here belong to pipelines without a Prediction Unit. Scoring asks the pipeline whether its models
+ * do; the fake provider has no RunView for the production lookup, so the answer is given here.
+ */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+
 describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score (real sidecar)', () => {
   // 3,000 rows: the locked holdout is a seeded, stratified 20% sample (LockedHoldoutSplitter), and on
   // this generator the xgboost holdout AUC's 1st percentile across random 600-row holdouts is 0.77,
@@ -478,15 +484,15 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
 
   beforeAll(async () => {
     sidecar = new MLSidecar({ pythonPath: VENV_PYTHON ?? undefined });
-    await sidecar.start();
-    const health = await sidecar.health();
+    await sidecar.Start();
+    const health = await sidecar.Health();
     // eslint-disable-next-line no-console
     console.info(`[PS integration] sidecar up on port ${sidecar.Port}; algorithms: ${health.algorithms?.join(', ')}`);
   }, 60_000);
 
   afterAll(async () => {
     if (sidecar) {
-      await sidecar.stop();
+      await sidecar.Stop();
     }
   });
 
@@ -552,6 +558,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader,
       artifactLoader,
       sidecar: new LiveSidecarPredictor(sidecar),
+      pipelineUnits: NO_PIPELINE_UNITS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
 
@@ -647,6 +654,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
       sidecar: new LiveSidecarPredictor(sidecar),
+      pipelineUnits: NO_PIPELINE_UNITS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
     const [pos, neg] = await processor.ProcessBatch(
@@ -699,6 +707,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
       sidecar: new LiveSidecarPredictor(sidecar),
+      pipelineUnits: NO_PIPELINE_UNITS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
     const [hi, lo] = await processor.ProcessBatch(

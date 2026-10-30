@@ -18,7 +18,12 @@
  * 2. **Assemble features** via the SAME {@link FeatureAssemblyExecutor} as
  *    training, in the **on-demand / transform-only** context, using the model's
  *    FROZEN `FeatureSchema` + `FittedPreprocessing` (never re-fit — the anti-skew
- *    guarantee, §6.2). The matrix shape matches what the model expects.
+ *    guarantee, §6.2). The matrix shape matches what the model expects. A model
+ *    trained on a Prediction Unit is assembled instead by
+ *    {@link MLModelInferenceProcessor.AssembleForScoring}: the scoped rows are dated
+ *    by the unit's decision-date rule and read as of that date through the same
+ *    `AsOfFeatureAssembler` training used, with the feature columns and categorical
+ *    levels training stored in the model Lineage.
  * 3. **Call the sidecar `/predict`** with the artifact + frozen preprocessing +
  *    feature schema + the assembled row(s) → predictions (score + class).
  * 4. **Produce the per-record `RecordResult`** carrying the prediction.
@@ -39,7 +44,7 @@
  * processor dynamically by work-type key via {@link resolveMLInferenceProcessor}.
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView } from '@memberjunction/core';
 import type {
   IRecordProcessor,
@@ -66,10 +71,26 @@ import {
   type FeatureStepGraph,
   type MatrixData,
   type OutcomeConfig,
+  type PredictionUnitSpec,
+  LABEL_COLUMN,
+  PredictionUnit,
 } from '@memberjunction/predictive-studio-core';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
 import type { SourceRow } from '../feature-assembly';
+import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
+import { ProviderAssemblyMetadata, type AssemblyEntityInfo, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import { AsOfFeatureAssembler, type AsOfAssemblyResult, type AssemblyRowRef } from '../feature-assembly/as-of/as-of-assembler';
+import { KeyedReader } from '../feature-assembly/as-of/read-by-keys';
+import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import type { SeriesHistory } from '../feature-assembly/as-of/series-features';
+import { PredictionUnitRowReader } from '../prediction-unit/unit-row-reader';
+import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+import { UtcDay } from '../prediction-unit/utc-day';
+import { TrainingEngine } from '../training/training-engine';
+import { TrainingRefusedError } from '../training/training-refusal';
+import { UnitModelLineageParser } from '../training/unit-model-lineage';
+import { RunViewPipelineUnitLookup } from './seams';
 import {
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
@@ -83,7 +104,11 @@ import type {
   MLModelInferenceProcessorOptions,
   MLInferenceDeps,
   LoadedModel,
+  LoadedUnitModel,
 } from './types';
+
+/** The read seams a unit model's scoring assembly uses: the run's metadata and counting data access. */
+interface ScoringSeams { readonly Metadata: IAssemblyMetadata; readonly DataAccess: ICountingDataAccess }
 
 /** Stable work-type keys this processor is registered under on the ClassFactory. */
 export const ML_INFERENCE_WORK_TYPE = 'ML Model';
@@ -140,9 +165,14 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
    */
   public async Preflight(context: RecordProcessorContext): Promise<void> {
+    const model = await this.loadForPreflight(context);
+    this.assertScopeEntity(model, context);
+  }
+
+  /** Warm-load the model, training it first when it needs training and the run opted into auto-train. */
+  private async loadForPreflight(context: RecordProcessorContext): Promise<LoadedModel> {
     try {
-      await this.ensureModel(context);
-      return;
+      return await this.ensureModel(context);
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
@@ -162,11 +192,23 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       context.Provider,
     );
     try {
-      await this.ensureModel(context);
+      return await this.ensureModel(context);
     } catch (err) {
       this.resetModelCache();
       throw err;
     }
+  }
+
+  /**
+   * A unit model scores records of its unit's row entity only: a scope over another entity is refused before any
+   * record is read (`scope-entity-mismatch`), since its records would be read through the wrong rows.
+   */
+  private assertScopeEntity(model: LoadedModel, context: RecordProcessorContext): void {
+    if (model.unit === null || !context.EntityID) return;
+    const modelEntity = context.Provider.EntityByName(model.unit.RowEntity);
+    if (modelEntity && UUIDsEqual(modelEntity.ID, context.EntityID)) return;
+    const scopeEntity = context.Provider.EntityByID(context.EntityID)?.Name || context.EntityID;
+    throw new TrainingRefusedError({ stage: 'assembly', reason: { kind: 'scope-entity-mismatch', modelEntity: model.unit.RowEntity, scopeEntity } });
   }
 
   /** Drop the warm-model cache (and any memoized failed load). */
@@ -300,6 +342,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
   private async buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    // The unit part first: a unit model with an unreadable Lineage fails here, before anything else reads the Lineage.
+    const unit = await this.loadUnitModel(model, context);
     let pipeline = this.resolvePipelineConfig(model);
     if ((pipeline.featureSteps.Steps.length === 0 || !pipeline.targetEntityName) && model.PipelineID) {
       pipeline = await this.loadPipelineFallback(model.PipelineID, pipeline, context);
@@ -317,6 +361,37 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
       outcomeConfig: pipeline.outcomeConfig,
+      unit,
+    };
+  }
+
+  /**
+   * The unit a model was trained on, with the feature columns and categorical levels its Lineage stored; null for a
+   * legacy model. A model is a unit model when its pipeline points at a unit OR its Lineage names one: the pipeline's
+   * `PredictionUnitID` is an editable column, so a model trained on a unit whose pipeline was later cleared still takes
+   * the unit path (the unit its Lineage stored). A unit model whose Lineage is missing or fails validation, or whose
+   * unit cannot be loaded or parsed, fails loudly naming the model and the first problem; it is never scored through
+   * the legacy current-value path.
+   */
+  private async loadUnitModel(model: MJMLModelEntity, context: RecordProcessorContext): Promise<LoadedUnitModel | null> {
+    const lookup = this.deps.pipelineUnits || new RunViewPipelineUnitLookup();
+    const pipelineUnitId = await lookup.PredictionUnitIDOf(model.PipelineID, context.ContextUser, context.Provider);
+    if (!pipelineUnitId && !UnitModelLineageParser.NamesUnit(model.Lineage)) return null;
+    const lineage = UnitModelLineageParser.ParseUnitModelLineage(model.Lineage);
+    if (lineage.Ok === false) {
+      throw new Error(`MLModelInferenceProcessor: model '${model.ID}' was trained on a Prediction Unit but its Lineage cannot be read: ${lineage.Errors[0]}`);
+    }
+    const unitId = lineage.Value.predictionUnitId;
+    const store = this.deps.predictionUnits || new RunViewPredictionUnitStore(context.Provider, context.ContextUser);
+    const row = await store.Load(unitId);
+    if (!row) throw new Error(`MLModelInferenceProcessor: Prediction Unit ${unitId} of model '${model.ID}' was not found`);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) throw new Error(`MLModelInferenceProcessor: Prediction Unit ${unitId} of model '${model.ID}' is invalid: ${parsed.Errors.join('; ')}`);
+    return {
+      Spec: parsed.Value,
+      Features: lineage.Value.featureSpec,
+      RowEntity: lineage.Value.unitRowEntity,
+      CategoryLevels: new Map(Object.entries(lineage.Value.categoryLevels)),
     };
   }
 
@@ -405,6 +480,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     rows: SourceRow[],
     context: RecordProcessorContext,
   ): Promise<FeatureAssemblyResult> {
+    if (model.unit !== null) return this.assembleUnitFeatures(model, rows, context);
     const assembly = await this.assembler.assemble({
       targetEntityName: model.targetEntityName,
       records: rows,
@@ -419,7 +495,12 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       contextUser: context.ContextUser,
       provider: context.Provider,
     });
+    this.assertHasColumns(model, assembly);
+    return assembly;
+  }
 
+  /** Refuse to score with an empty matrix when the model's schema expects features (degenerate predictions). */
+  private assertHasColumns(model: LoadedModel, assembly: FeatureAssemblyResult): void {
     if (assembly.matrix.columns.length === 0 && model.featureSchema.length > 0) {
       throw new Error(
         `MLModelInferenceProcessor: feature assembly produced 0 columns for model '${model.modelId}' ` +
@@ -427,8 +508,111 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           `Refusing to score with empty features to avoid degenerate predictions.`,
       );
     }
+  }
 
+  /**
+   * A unit model's matrix, assembled as of each row's decision date. A refusal is thrown as a typed
+   * {@link TrainingRefusedError}; a row whose history does not cover its decision date fails the batch, since its
+   * prediction would be made from values the model never saw for that date and the results are aligned by position.
+   */
+  private async assembleUnitFeatures(model: LoadedModel, rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
+    const assembled = await this.AssembleForScoring(rows, context, 'unit-rule');
+    if (assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembled.Refusal });
+    if (assembled.ExcludedRowIds.size > 0) {
+      const named = assembled.UncoveredRowsExcluded.map((u) => `${u.entity}.${u.field} ${u.rows}`).join(', ');
+      throw new Error(`MLModelInferenceProcessor: ${assembled.ExcludedRowIds.size} of ${rows.length} record(s) cannot be read as of their decision date (uncovered history: ${named})`);
+    }
+    const assembly = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembled, null, LABEL_COLUMN);
+    this.assertHasColumns(model, assembly);
     return assembly;
+  }
+
+  // region: as-of assembly (unit models) ----------------------------------------
+
+  /**
+   * Assemble a unit model's feature rows for scoring through the same `AsOfFeatureAssembler` training uses. The scoped
+   * rows are read by key (only the fields that date them: the decision-date column, the grain foreign key, the time
+   * column); each is dated by the unit's rule (`'unit-rule'`, the reader's own rule) or, given a date, every row is read
+   * as of that day. The assembler gets the feature columns and kept categorical levels training stored, so a value
+   * reads and folds exactly as it did in training. A refusal (a key that is not found, a read the history does not
+   * cover) is returned as the refused result; the scoring path throws it as a typed `TrainingRefusedError`.
+   *
+   * @param rows the rows to score; each carries the unit row entity's primary key
+   * @param context the run's user and provider
+   * @param asOf `'unit-rule'` to date each row by the unit, or one date for every row
+   */
+  public async AssembleForScoring(rows: SourceRow[], context: RecordProcessorContext, asOf: 'unit-rule' | Date): Promise<AsOfAssemblyResult> {
+    const unit = this.requireUnit(await this.ensureModel(context));
+    const seams = this.scoringSeams(context);
+    const rowEntity = seams.Metadata.Entity(unit.RowEntity);
+    if (!rowEntity) throw new Error(`MLModelInferenceProcessor: the unit row entity "${unit.RowEntity}" of model '${this.modelId}' is not registered`);
+    const keys = rows.map((r) => this.rowKey(r, rowEntity));
+    const read = await KeyedReader.ReadByKeys(seams.DataAccess, rowEntity.Name, rowEntity.PrimaryKey, keys, MLModelInferenceProcessor.datingFields(unit.Spec));
+    if (read.Status === 'refused') return read;
+    const refs = keys.map((k) => MLModelInferenceProcessor.rowRef(unit.Spec, rowEntity, read.Rows.get(k.toLowerCase()), k, asOf));
+    return new AsOfFeatureAssembler().Assemble({
+      Context: 'score',
+      Unit: unit.Spec,
+      RowEntity: rowEntity,
+      Rows: refs,
+      Features: unit.Features,
+      SeriesHistory: await MLModelInferenceProcessor.seriesHistory(unit.Spec, seams),
+      Read: { mode: 'complete' },
+      DataAccess: seams.DataAccess,
+      History: this.deps.history || new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }),
+      Metadata: seams.Metadata,
+      AssembledAt: new Date(),
+      CategoryLevels: unit.CategoryLevels,
+    });
+  }
+
+  /** The unit part of a loaded model; a model trained without a unit has no as-of assembly. */
+  private requireUnit(model: LoadedModel): LoadedUnitModel {
+    if (model.unit === null) throw new Error(`MLModelInferenceProcessor: model '${model.modelId}' was not trained on a Prediction Unit, so it has no as-of assembly`);
+    return model.unit;
+  }
+
+  /** The run's metadata and data access, unless the deps supply them; never a global provider. */
+  private scoringSeams(context: RecordProcessorContext): ScoringSeams {
+    return {
+      Metadata: this.deps.assemblyMetadata || new ProviderAssemblyMetadata(context.Provider),
+      DataAccess: this.deps.dataAccess || new RunViewDataAccess(context.ContextUser, context.Provider),
+    };
+  }
+
+  /** A scoped row's key: the unit row entity's primary key (or the processor's key field); a row without one fails. */
+  private rowKey(row: SourceRow, rowEntity: AssemblyEntityInfo): string {
+    const value = row[rowEntity.PrimaryKey] !== undefined ? row[rowEntity.PrimaryKey] : row[this.primaryKeyField];
+    if (value === null || value === undefined || value === '') throw new Error(`MLModelInferenceProcessor: a scoped row has no ${rowEntity.Name}.${rowEntity.PrimaryKey}`);
+    return value instanceof Date ? value.toISOString() : String(value);
+  }
+
+  /** The row fields the unit's rule dates a row with: its decision-date or period column, grain foreign key and time column. */
+  private static datingFields(spec: PredictionUnitSpec): string[] {
+    const fields: string[] = [];
+    if (spec.rows.kind === 'grain-x-periods') {
+      fields.push(spec.rows.periodDate, spec.rows.foreignKey);
+    } else if (spec.rows.decisionDate.kind !== 'fixed') {
+      fields.push(spec.rows.decisionDate.column);
+    }
+    if (spec.temporal) fields.push(spec.temporal.timeColumn);
+    return [...new Set(fields)];
+  }
+
+  /** One scoped row as the assembler reads it, by the unit row rule the training reader uses; `asOf` sets its decision day. */
+  private static rowRef(spec: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, row: SourceRow | undefined, key: string, asOf: 'unit-rule' | Date): AssemblyRowRef {
+    if (!row) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${key} was not read`);
+    const decision = asOf === 'unit-rule' ? PredictionUnitRowReader.UnitDecisionDate(spec, row) : UtcDay.ToUtcDay(asOf);
+    if (decision === null) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${key} has no decision date under its Prediction Unit's rule`);
+    return PredictionUnitRowReader.UnitRowRef(spec, rowEntity, row, decision);
+  }
+
+  /** A unit with a Temporal Spec reads its lags from the unit's resolved rows, built the way training builds them. */
+  private static async seriesHistory(spec: PredictionUnitSpec, seams: ScoringSeams): Promise<SeriesHistory | null> {
+    if (!spec.temporal) return null;
+    const read = await new PredictionUnitRowReader().Read(spec, { DataAccess: seams.DataAccess, Metadata: seams.Metadata, Read: { mode: 'complete' }, Now: new Date() });
+    if (read.Status === 'refused') throw new TrainingRefusedError(read.Refusal);
+    return TrainingEngine.SeriesHistoryFor(spec, read.Rows);
   }
 
   // region: sidecar predict -----------------------------------------------------
@@ -562,14 +746,6 @@ export function MatrixToFeatureRows(
     }
     return obj;
   });
-}
-
-/** @deprecated Use {@link MatrixToFeatureRows}. */
-export function matrixToFeatureRows(
-  matrix: MatrixData,
-  featureSchema: FeatureSchemaEntry[],
-): Array<Record<string, string | number | boolean | null>> {
-  return MatrixToFeatureRows(matrix, featureSchema);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */

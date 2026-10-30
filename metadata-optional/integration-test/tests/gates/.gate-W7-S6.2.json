@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W7 -> S6.2",
+    "Description": "Gate G2.33 (phase 2, dataset W7, criterion S6.2): on W7-small-imbalanced s42-s44 every number the trainer reports (holdout primary and secondary scores, every baseline, every candidate's inner score and every paired comparison) carries a finite lower and upper bound on either side of its estimate, 3 of 3 seeds. This is the sidecar half of the gate: the trainer result's numbers; the stored metric rows are covered when the engine's stored rows are measured. It fails when a paired comparison's interval collapses its lower bound onto its estimate (fewer than 3 of 3 seeds with both bounds).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.33\",\"owner:PR3\",\"phase:2\",\"dataset:W7\",\"criterion:S6.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every reported score and paired comparison on W7 s42-s44 carries both bounds around its estimate (3 of 3 pytest cases pass)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w7-s6-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "426873B3-7692-4374-BFE6-4524501645D6"
+  }
+}

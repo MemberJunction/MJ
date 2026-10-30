@@ -15,7 +15,7 @@
  */
 
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { MetricDirections } from '@memberjunction/predictive-studio-core';
 
 /** Default higher-is-better metric per problem type, in priority order. */
 const DEFAULT_METRICS_BY_PROBLEM: Record<'classification' | 'regression', string[]> = {
@@ -51,12 +51,12 @@ export function ResolveComparisonMetric(
       return name;
     }
   }
-  // First numeric metric present on BOTH — but skip error metrics here so the
-  // `'auto'` fallback always lands on a higher-is-better key (an explicit pinned
-  // metric name still wins above, where the comparison handles direction).
+  // First numeric metric present on BOTH whose direction is declared and rankable (higher- or
+  // lower-is-better): closer-to-one keys (calibration slope) and unknown keys are never auto-picked,
+  // because the comparison can only rank a metric by its direction. An explicit pinned name still wins above.
   const sharedNumeric = Object.keys(incumbentMetrics).find(
     (k) =>
-      !isErrorMetric(k) &&
+      isRankableDirection(MetricDirections.MetricDirectionOf(k)) &&
       isFiniteNumber(incumbentMetrics[k]) &&
       isFiniteNumber(challengerMetrics[k]),
   );
@@ -64,15 +64,6 @@ export function ResolveComparisonMetric(
     return sharedNumeric;
   }
   return (DEFAULT_METRICS_BY_PROBLEM[problem] ?? ['roc_auc'])[0];
-}
-
-/** @deprecated Use {@link ResolveComparisonMetric}. */
-export function resolveComparisonMetric(
-  configured: string,
-  incumbent: MJMLModelEntity,
-  challenger: MJMLModelEntity,
-): string {
-  return ResolveComparisonMetric(configured, incumbent, challenger);
 }
 
 /**
@@ -86,11 +77,6 @@ export function ReadMetric(holdoutMetricsJson: string | null | undefined, metric
   const metrics = parseMetrics(holdoutMetricsJson);
   const value = metrics[metric];
   return isFiniteNumber(value) ? value : null;
-}
-
-/** @deprecated Use {@link ReadMetric}. */
-export function readMetric(holdoutMetricsJson: string | null | undefined, metric: string): number | null {
-  return ReadMetric(holdoutMetricsJson, metric);
 }
 
 /** Parse a `HoldoutMetrics` JSON blob into a name → value map (empty on null/parse error). */
@@ -109,4 +95,9 @@ function parseMetrics(raw: string | null | undefined): Record<string, unknown> {
 /** Type guard: a finite number. */
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+/** A direction the comparison can rank on: closer-to-one and unknown (null) keys are not rankable. */
+function isRankableDirection(direction: ReturnType<typeof MetricDirections.MetricDirectionOf>): boolean {
+  return direction === 'higher-is-better' || direction === 'lower-is-better';
 }

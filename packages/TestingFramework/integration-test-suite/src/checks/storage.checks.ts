@@ -3,14 +3,15 @@
  * DETERMINISTIC seams, exercised against the live DB + the real compiled driver registry
  * (packages/MJStorage — a subsystem that previously had zero integration coverage).
  *
- * SERVER TRANSPORT, no cloud credentials: every shipped storage driver (AWS S3, Azure Blob,
+ * SERVER TRANSPORT, no cloud credentials: every shipped cloud storage driver (AWS S3, Azure Blob,
  * GCS, Google Drive, Dropbox, Box, SharePoint) demands provider credentials in its CONSTRUCTOR
- * (env-var `.required()` calls), and there is no filesystem/local driver in the package — so a
- * real put/get/list/delete round-trip is structurally impossible in the credential-free CI
- * environment. What IS real and deterministic without credentials — and what this bundle pins:
+ * (env-var `.required()` calls), so a real cloud put/get/list/delete round-trip is structurally
+ * impossible in the credential-free CI environment. (The local file-system driver needs no
+ * credentials; its round-trip is covered by its unit tests in packages/MJStorage.) What IS real
+ * and deterministic without credentials — and what this bundle pins:
  *
  *   - ST1  The seeded provider catalog: `FileStorageEngine.Config` against the live DB loads
- *          the 7 canonical `MJ: File Storage Providers` rows with their EXACT
+ *          the 8 canonical `MJ: File Storage Providers` rows with their EXACT
  *          ServerDriverKey/ClientDriverKey values (the DB half of the dispatch seam).
  *   - ST2  Metadata↔ClassFactory parity: every canonical ServerDriverKey resolves to a REAL
  *          compiled `FileStorageBase` subclass registration — a renamed driver key (either
@@ -99,7 +100,8 @@ const ACTION_ACCESS_DENIED = 'ACCESS_DENIED';
 const UNKNOWN_ACCOUNT_ID = '00000000-0000-0000-0000-0000000000fe';
 
 /**
- * The canonical provider catalog seeded by the baseline migration: display Name → the exact
+ * The canonical provider catalog (the seven cloud rows seeded by the baseline migration, plus the
+ * local file-system row from metadata/file-storage-providers): display Name → the exact
  * ServerDriverKey each row must carry, which must in turn resolve on the ClassFactory. These
  * strings are the dispatch contract between `MJ: File Storage Providers` rows and the
  * `@RegisterClass(FileStorageBase, '<key>')` decorations in packages/MJStorage/src/drivers.
@@ -111,7 +113,8 @@ const CANONICAL_PROVIDERS: ReadonlyArray<{ Name: string; ServerDriverKey: string
     { Name: 'Google Drive', ServerDriverKey: 'Google Drive Storage' },
     { Name: 'Dropbox', ServerDriverKey: 'Dropbox Storage' },
     { Name: 'Box.com', ServerDriverKey: 'Box.com Storage' },
-    { Name: 'SharePoint Storage', ServerDriverKey: 'SharePoint Storage' }
+    { Name: 'SharePoint Storage', ServerDriverKey: 'SharePoint Storage' },
+    { Name: 'Local File System', ServerDriverKey: 'Local File System Storage' }
 ];
 
 /** Ensures the engine is configured against the run-scoped provider before any assertion. */

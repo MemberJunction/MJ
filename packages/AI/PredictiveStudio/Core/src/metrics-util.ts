@@ -1,48 +1,49 @@
 /**
  * @module metrics-util
  *
- * Shared metric-direction helpers for Predictive Studio. A model metric is
- * either **higher-is-better** (ranking/quality metrics like AUC, F1, accuracy,
- * R²) or **lower-is-better** (error metrics like RMSE, MAE, MSE, log-loss).
+ * Metric direction for Predictive Studio, derived from the one declaration `METRIC_DIRECTION`. A metric is
+ * **lower-is-better** (log loss, Brier, deviances, RMSE, MAE, MASE), **higher-is-better** (AUC, accuracy, F1,
+ * precision, recall, R²) or **closer-to-one** (calibration slope, never ranked).
  *
- * This direction matters in two independent places that MUST agree:
- *  - the experiment leaderboard normalization (`extractNormalizedScore`), which
- *    negates error metrics so a higher normalized Score is always "better"; and
- *  - the maintenance challenger-vs-incumbent comparison, which must compute the
- *    improvement in the metric's natural direction before testing it against the
- *    promotion margin.
- *
- * Lifting the canonical error-metric set here (rather than duplicating it in
- * each consumer) prevents the two from drifting apart — a divergence that
- * silently promotes a *worse* model when comparing on an error metric.
- *
- * Pure / dependency-free so it stays in Core, which holds browser-safe, dependency-free runtime logic shared by
- * the server engine, the UI and the agent.
+ * Direction matters in two places that must agree: the experiment leaderboard normalisation and the maintenance
+ * challenger-vs-incumbent comparison. Deriving the lower-is-better set from `METRIC_DIRECTION` (plus the legacy
+ * spellings stored by the earlier trainer) keeps them from drifting, so a Brier score or a deviance can never be
+ * ranked backwards.
  */
+import { METRIC_DIRECTION, type MetricDirection, type MetricKey } from './evaluation-protocol';
+
+/** Spellings stored by the earlier trainer (sidecar snake_case and short forms) that are lower-is-better. */
+const LEGACY_LOWER_IS_BETTER: readonly string[] = [
+  'mse', 'loss', 'logloss', 'log_loss', 'brier_score', 'brier_score_loss', 'multiclass_log_loss',
+  'poisson_deviance', 'tweedie_deviance', 'mape', 'smape', 'pinball', 'pinball_loss',
+];
+
+function isMetricKey(k: string): k is MetricKey {
+  return Object.prototype.hasOwnProperty.call(METRIC_DIRECTION, k);
+}
 
 /** The canonical set of lower-is-better metric keys (lower-cased). */
 const ERROR_METRIC_KEYS: ReadonlySet<string> = new Set([
-  'rmse',
-  'mae',
-  'mse',
-  'loss',
-  'logloss',
-  'log_loss',
+  ...Object.keys(METRIC_DIRECTION).filter((k) => isMetricKey(k) && METRIC_DIRECTION[k] === 'lower-is-better'),
+  ...LEGACY_LOWER_IS_BETTER,
 ]);
 
-/**
- * Whether a metric is **lower-is-better** (an error/loss metric). The check is
- * case-insensitive and trims surrounding whitespace, so callers can pass a raw
- * metric name or a pre-lower-cased key interchangeably.
- *
- * @param metricKey the metric name (e.g. `RMSE`, `rmse`, `roc_auc`)
- * @returns `true` for error metrics (RMSE/MAE/MSE/loss/logloss), else `false`
- */
-export function IsErrorMetric(metricKey: string): boolean {
-  return ERROR_METRIC_KEYS.has(metricKey.trim().toLowerCase());
-}
+/** Metric direction lookups: static members on one owner. */
+export class MetricDirections {
+  /**
+   * Whether a metric is **lower-is-better** (an error/loss metric). Case-insensitive and whitespace-tolerant.
+   *
+   * @param metricKey the metric name (e.g. `brier`, `RMSE`, `poisson-deviance`, `auc`)
+   * @returns `true` for every lower-is-better key in `METRIC_DIRECTION` and the legacy spellings, else `false`
+   */
+  public static IsErrorMetric(metricKey: string): boolean {
+    return ERROR_METRIC_KEYS.has(metricKey.trim().toLowerCase());
+  }
 
-/** @deprecated Use {@link IsErrorMetric}. */
-export function isErrorMetric(metricKey: string): boolean {
-  return IsErrorMetric(metricKey);
+  /** The declared direction of a metric, or null for a key Predictive Studio does not know (callers must not rank on it). */
+  public static MetricDirectionOf(metricKey: string): MetricDirection | null {
+    const k = metricKey.trim().toLowerCase();
+    if (isMetricKey(k)) return METRIC_DIRECTION[k];
+    return ERROR_METRIC_KEYS.has(k) ? 'lower-is-better' : null;
+  }
 }

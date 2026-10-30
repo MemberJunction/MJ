@@ -9,10 +9,12 @@
  *
  * ## Flow ({@link TrainingEngine.trainModel})
  * 1. Resolve the pipeline (parse its JSON columns via the core type contracts),
- *    then refuse — before any row is written — an as-of mode training would ignore
- *    ({@link AsOfSettingHasNoEffectError}) and an unknown `MajorityBaselineRule`
+ *    then refuse — before any row is written — an unknown `MajorityBaselineRule`
  *    (`InvalidMajorityBaselineRuleError`).
- * 2. Create the training-run row (`Status='Running'`, `StartedAt`).
+ * 2. Create the training-run row (`Status='Running'`, `StartedAt`). A pipeline
+ *    without a Prediction Unit whose AsOfStrategy asks for point-in-time assembly
+ *    is refused here (`unit-required`, recorded on the run): that assembly lives
+ *    in a Prediction Unit.
  * 3. Assemble the raw matrix + schema + preprocessing ops via FeatureAssembly
  *    (context `'train'`), carrying the label column. The target read is ordered by
  *    the entity's primary key, so the same data always arrives in the same order.
@@ -28,19 +30,39 @@
  *    flags the run, keeps the model `Draft`, and NEVER auto-promotes.
  * 9. Finalize the run (`Completed`/`Failed`, results, costs, notes).
  *
+ * A pipeline that points at a Prediction Unit takes the unit path instead: the unit
+ * row reader reads every unit row (censored and label-known rows excluded and
+ * counted), the target is validated, and the matrix is assembled as of each row's
+ * decision date by {@link TrainingEngine.AssembleForTraining} — the same
+ * `AsOfFeatureAssembler` the scoring path calls. The assembled rows are then frozen
+ * into an immutable Training Snapshot (the trailing fraction of rows, in decision-date
+ * order, is the locked holdout; identical content reuses the existing snapshot), and
+ * the sidecar is trained from the snapshot's development rows and scores its
+ * locked-holdout rows once. A refusal is recorded on the run as a `refused` envelope
+ * ({@link TrainingRefusedError}); a completed run references its snapshot and stores
+ * the unit resolution counts and the request it trained with, and the model Lineage
+ * names the unit version, the typed feature columns, the kept categorical levels
+ * scoring reuses, and the snapshot's ID and content hash.
+ *
+ * A unit pipeline bound to an Evaluation Protocol is trained through the protocol trainer instead
+ * (`TrainingDeps.trainer`): the protocol is parsed before the snapshot is built (it decides the
+ * incumbent-score and slice columns), the trainer is sent pre-authorised downloads of the snapshot
+ * files, its result is recorded on the run (compute, code version), every returned artifact is
+ * stored in `MJ: Files`, and the model row is created from the finalist's artifact. The run stores
+ * the trainer's result with its artifacts as file references, never their bytes, and the request
+ * settings a retrain replays. A failed trainer result is recorded as a `trainer` refusal.
+ *
  * Every external dependency is injected (see {@link TrainingDeps}) so the engine
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError } from '@memberjunction/core';
+import { LogError, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
-  type TrainRequest,
   type TrainResponse,
   type ValidationConfig,
   type MatrixData,
-  type FeatureSchemaEntry,
-  type PreprocessingOp,
   type SourceBinding,
   type AsOfStrategy,
   type LeakageGuard,
@@ -52,28 +74,122 @@ import {
   resolveOutcomeConfig,
   EvaluationLineage,
   type EvaluationRecord,
+  LABEL_COLUMN,
+  JsonParse,
+  PredictionUnit,
+  TaskTypeRules,
+  TRAINING_RUN_RESULTS_SCHEMA,
+  type PredictionUnitSpec,
+  type TrainingRunResults,
+  type UnitResolutionCounts,
+  type UncoveredRowsCount,
+  type FeatureColumnSpec,
+  type LegacyRequestConfig,
+  TrainerContract,
+  PREDICTOR_ARTIFACT_FORMAT,
+  type EvaluationProtocolSpec,
+  type TrainerCompleted,
+  type TrainerResult,
 } from '@memberjunction/predictive-studio-core';
-import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
-import { AsOfSettingHasNoEffectError } from './as-of-refusal';
+import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
+import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
+import { FeatureResolver } from '../feature-assembly/as-of/feature-resolution';
+import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import { SeriesFeatures, type SeriesHistory, type SeriesPoint } from '../feature-assembly/as-of/series-features';
+import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '../prediction-unit/unit-row-reader';
+import { UnitTargetValidator } from '../prediction-unit/target-validation';
+import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+import { TrainingRefusedError } from './training-refusal';
+import { TrailingFractionCarver } from '../snapshot/holdout-carver';
+import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapshot-builder';
+import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
+import type { SnapshotContent } from '../snapshot/snapshot-serialization';
+import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import { SnapshotRetrainer } from '../snapshot/snapshot-retrainer';
+import { SnapshotHash } from '../snapshot/snapshot-hash';
 import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
-import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage } from './types';
+import { TrainRequestBuilder } from './train-request';
+import { TrainerRequestBuilder } from './trainer-request';
+import { TrainerRunRecorder, TrainerLineageRefusedError } from './trainer-result';
+import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore } from './evaluation-protocol-store';
+import { ComputePricing } from './compute-cost';
+import type { ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage } from './types';
+import type { UnitModelLineage } from './unit-model-lineage';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
-interface ResolvedPipeline {
-  pipeline: MJMLTrainingPipelineEntity;
-  targetEntityName: string;
-  targetVariable: string;
-  problemType: ProblemType;
-  algorithmDriverKey: string;
-  hyperparameters: Record<string, unknown>;
-  sourceBindings: SourceBinding[];
-  featureSteps: FeatureStepGraph;
-  asOf: AsOfStrategy;
-  leakageGuard: LeakageGuard;
-  validation: ValidationStrategy;
-  outcomeConfig: OutcomeConfig;
+export interface ResolvedPipeline {
+  pipeline: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  targetEntityName: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  targetVariable: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  problemType: ProblemType;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  algorithmDriverKey: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  hyperparameters: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  sourceBindings: SourceBinding[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  featureSteps: FeatureStepGraph;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  asOf: AsOfStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  leakageGuard: LeakageGuard;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  validation: ValidationStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  outcomeConfig: OutcomeConfig;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+}
+
+/** The unit rows a complete read returned. */
+export type UnitRowsRead = Extract<UnitRowReadResult, { Status: 'read' }>;
+
+/** What a unit training run already holds when it asks for the matrix, so the assembly does not read it twice. */
+export interface UnitAssemblyInputs {
+  readonly Resolved: ResolvedPipeline;
+  readonly Unit: PredictionUnitSpec;
+  readonly UnitRead: UnitRowsRead;
+  readonly DataAccess: ICountingDataAccess;
+  readonly Metadata: IAssemblyMetadata;
+  /**
+   * The bound protocol's slice fields. Each must be a column the assembly will write (a feature column, or one of a
+   * date column's parts) or a field of every unit row; one that is neither is refused (`unresolved-column`) before the
+   * as-of assembly reads anything.
+   */
+  readonly SliceFields?: readonly string[];
+}
+
+/**
+ * A unit pipeline's matrix as training assembles it: the unit, its rows, the typed feature columns (empty when feature
+ * resolution refused) and the assembled matrix or the first refusal.
+ */
+export interface UnitTrainingAssembly {
+  readonly Unit: PredictionUnitSpec;
+  readonly UnitRead: UnitRowsRead;
+  readonly Features: readonly FeatureColumnSpec[];
+  readonly Assembled: AsOfAssemblyResult;
+}
+
+/** The read seams of the unit path: the request's metadata and counting data access. */
+interface UnitSeams { readonly Metadata: IAssemblyMetadata; readonly DataAccess: ICountingDataAccess }
+
+/** How a unit pipeline bound to an Evaluation Protocol is trained: the parsed protocol and the trainer it runs on. */
+interface ProtocolTraining {
+  readonly Protocol: EvaluationProtocolSpec;
+  readonly Trainer: ITrainerEvaluator;
+}
+
+/** What a protocol-bound unit run hands the trainer step once its snapshot is frozen. */
+interface TrainerRunInputs {
+  readonly Run: MJMLTrainingRunEntity;
+  /** The pipeline resolved for the unit (its target entity is the unit's row entity). */
+  readonly Resolved: ResolvedPipeline;
+  readonly Input: TrainModelInput;
+  readonly Unit: PredictionUnitSpec;
+  readonly Snapshot: BuiltSnapshot;
+  readonly Files: ISnapshotFileStore;
+  readonly Training: ProtocolTraining;
+  readonly UnitLineage: UnitModelLineage;
+  readonly Counts: UnitResolutionCounts;
+  readonly Uncovered: readonly UncoveredRowsCount[];
+  readonly MajorityBaselineRule: ReturnType<typeof EvaluationLineage.ParseMajorityBaselineRule>;
+  readonly UsdPerSecond: number | null;
+  readonly Deps: TrainingDeps;
 }
 
 /**
@@ -82,6 +198,7 @@ interface ResolvedPipeline {
  */
 export class TrainingEngine {
   private readonly assembler: FeatureAssemblyExecutor;
+  private readonly unitReader = new PredictionUnitRowReader();
 
   /**
    * @param assembler optional FeatureAssembly executor override (tests may inject one)
@@ -98,15 +215,29 @@ export class TrainingEngine {
    * @returns the produced `Draft` model and the `Completed`/`Failed` training run
    */
   public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+    // The compute rate is read before anything is written or trained, so a misconfigured rate fails fast.
+    const usdPerSecond = ComputePricing.ReadComputeRate();
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
-    if (AsOfSettingHasNoEffectError.WouldBeIgnored(resolved.asOf)) {
-      throw new AsOfSettingHasNoEffectError('pipeline', resolved.asOf.Mode, resolved.pipeline.ID);
-    }
-    // Validates the evaluation settings (D2-C5d: an unknown MajorityBaselineRule is refused) before any row is written.
+    return resolved.pipeline.PredictionUnitID
+      ? this.trainUnitPipeline(resolved, resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond)
+      : this.trainLegacyPipeline(resolved, input, deps, usdPerSecond);
+  }
+
+  /**
+   * Train a pipeline that does not point at a Prediction Unit: the `MajorityBaselineRule` parse runs before the run row
+   * is written; a point-in-time AsOfStrategy is refused on the run (`unit-required`); then the target entity is
+   * assembled, the locked holdout carved and the sidecar trained.
+   */
+  private async trainLegacyPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
+    // Validates the evaluation settings (an unknown MajorityBaselineRule is refused) before any row is written.
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
+      if (resolved.asOf.Mode !== 'none') {
+        const why = "point-in-time assembly now lives in a Prediction Unit; this pipeline's AsOfStrategy has no effect without one";
+        throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why } });
+      }
       const assembly = await this.assemble(resolved, input, deps);
       const targetIdx = assembly.matrix.columns.indexOf(resolved.targetVariable);
       const cleanRows = targetIdx >= 0
@@ -114,10 +245,19 @@ export class TrainingEngine {
         : assembly.matrix.rows;
       const cleanMatrix: MatrixData = { columns: assembly.matrix.columns, rows: cleanRows };
       const split = this.carveLockedHoldout(cleanMatrix, resolved, DEFAULT_SPLIT_SEED);
-      const validation = this.buildValidationConfig(resolved.validation);
-      const trainRequest = this.buildTrainRequest(resolved, assembly, split.Training, validation);
+      const trainRequest = TrainRequestBuilder.Build({
+        Algorithm: resolved.algorithmDriverKey,
+        ProblemType: resolved.problemType,
+        Hyperparameters: resolved.hyperparameters,
+        Validation: this.buildValidationConfig(resolved.validation),
+        FeatureSchema: assembly.featureSchema,
+        Preprocessing: assembly.preprocessing,
+        Target: resolved.targetVariable,
+        Data: split.Training,
+      });
 
       const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
+      TrainingEngine.recordCompute(run, response, usdPerSecond);
       const evaluation = EvaluationLineage.Build(resolved.validation, {
         ValidationOutOfSample: response.validation_out_of_sample === true,
         ImportanceKind: response.feature_importance_kind || null,
@@ -126,12 +266,513 @@ export class TrainingEngine {
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps);
+      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation);
       return { model, run };
     } catch (err) {
-      await this.finalizeRunFailure(run, err, deps);
+      await this.recordRunError(run, err, deps);
       throw err;
     }
+  }
+
+  /** Record a run that ended in an error: a refusal as the `refused` envelope, any other error as a failure. */
+  private async recordRunError(run: MJMLTrainingRunEntity, err: unknown, deps: TrainingDeps): Promise<void> {
+    if (err instanceof TrainingRefusedError) {
+      await this.finalizeRunRefused(run, err);
+    } else {
+      await this.finalizeRunFailure(run, err, deps);
+    }
+  }
+
+  // region: Prediction Unit pipelines -------------------------------------------
+
+  /**
+   * Train a pipeline that points at a Prediction Unit. The unit decides the rows, their decision dates and their
+   * labels: inputs that would override them (`maxRows`, `labelEventDates`, a point-in-time AsOfStrategy) are refused,
+   * censored and label-known rows are excluded and counted, and a target that cannot train a model is refused before
+   * the sidecar is called. The matrix is assembled as of each decision date ({@link AssembleForTraining}) and frozen
+   * into a Training Snapshot the run references; the sidecar trains from the snapshot's rows. A refusal is recorded on
+   * the run row as a `refused` envelope; the counts, the unit's identity and the snapshot are stored on a completed run
+   * and its model. Deps without a snapshot file store are incomplete and the run fails before anything is read.
+   */
+  private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
+    const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
+    const run = await this.createRunRow(resolved, input, deps);
+    try {
+      TrainingEngine.refuseUnitOverrides(input, resolved);
+      const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
+      const training = await this.protocolTrainingOf(resolved, deps);
+      const unit = await this.loadUnitSpec(unitId, deps);
+      // A protocol that does not fit the unit is refused before any row is read or assembled.
+      if (training) TrainerRequestBuilder.RefuseGroupKeyMismatch(training.Protocol, unit);
+      const seams = this.unitSeams(deps);
+      const unitRead = await this.readUnitRows(unit, seams, deps);
+      const validation = UnitTargetValidator.ValidateUnitTargets(unitRead.Rows, unit.label.outcome, unitRead.Counts);
+      if (validation.status === 'refused') throw new TrainingRefusedError({ stage: 'unit', reason: validation.reason });
+
+      const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, {
+        Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata,
+        SliceFields: training ? training.Protocol.slices.subgroups : [],
+      });
+      if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
+      const snapshot = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, training ? training.Protocol : null, deps);
+      run.TrainingSnapshotID = snapshot.Entity.ID;
+      const unitResolved: ResolvedPipeline = { ...resolved, targetEntityName: unitRead.RowEntity.Name, targetVariable: LABEL_COLUMN, problemType: TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome) };
+      const lineage = this.unitLineage(unit, resolved, unitRead, assembly.Features, assembly.Assembled.CategoryLevels, snapshot.Entity);
+      if (training) {
+        const model = await this.trainThroughTrainer({
+          Run: run, Resolved: unitResolved, Input: input, Unit: unit, Snapshot: snapshot, Files: snapshotFiles, Training: training,
+          UnitLineage: lineage, Counts: unitRead.Counts, Uncovered: assembly.Assembled.UncoveredRowsExcluded,
+          MajorityBaselineRule: majorityBaselineRule, UsdPerSecond: usdPerSecond, Deps: deps,
+        });
+        return { model, run };
+      }
+      const model = await this.fitUnitModel(run, unitResolved, input, snapshot.Content, deps, majorityBaselineRule, lineage, unitRead.Counts, assembly.Assembled.UncoveredRowsExcluded, usdPerSecond);
+      return { model, run };
+    } catch (err) {
+      await this.recordRunError(run, err, deps);
+      throw err;
+    }
+  }
+
+  /** The unit decides rows and decision dates, so a capped read, label-event dates and an as-of strategy are refused. */
+  private static refuseUnitOverrides(input: TrainModelInput, resolved: ResolvedPipeline): void {
+    if (input.maxRows !== null && input.maxRows !== undefined) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows', why: 'a Prediction Unit pipeline reads every unit row; a capped read is not a complete read' } });
+    if (input.labelEventDates) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: 'decision dates come from the Prediction Unit' } });
+    if (resolved.asOf.Mode !== 'none') throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } });
+  }
+
+  /**
+   * The deps' snapshot file store. A unit run trains only from a Training Snapshot, so deps without one are incomplete
+   * (a wiring error, not a refusal of the pipeline) and the run fails rather than training from rows nothing recorded.
+   */
+  private static requireSnapshotFiles(deps: TrainingDeps): ISnapshotFileStore {
+    if (!deps.snapshotFiles) {
+      throw new Error('TrainingEngine: the training deps are incomplete: a Prediction Unit pipeline trains from a Training Snapshot, and no snapshot file store (snapshotFiles) was supplied');
+    }
+    return deps.snapshotFiles;
+  }
+
+  /** How a pipeline bound to an Evaluation Protocol is trained (its trainer is checked first), or null when it is not bound to one. */
+  private async protocolTrainingOf(resolved: ResolvedPipeline, deps: TrainingDeps): Promise<ProtocolTraining | null> {
+    const protocolId = resolved.pipeline.EvaluationProtocolID;
+    if (!protocolId) return null;
+    const trainer = TrainingEngine.requireTrainer(deps);
+    return { Protocol: await this.loadProtocolSpec(resolved.pipeline.ID, protocolId, deps), Trainer: trainer };
+  }
+
+  /**
+   * The deps' trainer. A pipeline bound to an Evaluation Protocol trains only through it, so deps without one are
+   * incomplete (a wiring error) and the run fails before anything is read.
+   */
+  private static requireTrainer(deps: TrainingDeps): ITrainerEvaluator {
+    if (!deps.trainer) {
+      throw new Error('TrainingEngine: the training deps are incomplete: a pipeline bound to an Evaluation Protocol trains through the trainer, and no trainer (trainer) was supplied');
+    }
+    return deps.trainer;
+  }
+
+  /**
+   * The pipeline's Evaluation Protocol, parsed. A protocol row that does not exist refuses the pipeline
+   * (`protocol-required`: it is trained only under its protocol); a failed read or a row that does not parse throws.
+   */
+  private async loadProtocolSpec(pipelineId: string, protocolId: string, deps: TrainingDeps): Promise<EvaluationProtocolSpec> {
+    const store = deps.protocols || new RunViewEvaluationProtocolStore(this.requireProvider(deps), deps.contextUser);
+    const spec = await EvaluationProtocolSpecs.LoadSpec(store, protocolId);
+    if (!spec) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId } });
+    return spec;
+  }
+
+  /**
+   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the holdout carver (by
+   * default the trailing `LockedHoldoutFraction` of the rows in decision-date order), and identical content reuses the
+   * snapshot that already holds it. A bound protocol decides the evaluation columns: the incumbent-score column when
+   * it declares an incumbent-heuristic baseline and the unit has a rule to score it, and one slice column per subgroup
+   * field it declares. Without a protocol the snapshot has neither.
+   */
+  private async freezeSnapshot(
+    resolved: ResolvedPipeline, assembly: UnitTrainingAssembly, assembled: AsOfAssembledMatrix, files: ISnapshotFileStore,
+    protocol: EvaluationProtocolSpec | null, deps: TrainingDeps,
+  ): Promise<BuiltSnapshot> {
+    const carver = deps.holdoutCarver || new TrailingFractionCarver(resolved.validation.LockedHoldoutFraction);
+    const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
+    return new TrainingSnapshotBuilder().Build({
+      PipelineID: resolved.pipeline.ID,
+      FeatureSpecVersion: resolved.pipeline.Version,
+      Unit: assembly.Unit,
+      UnitRead: assembly.UnitRead,
+      Features: assembly.Features,
+      Assembled: assembled,
+      Roles: carver.AssignRoles(assembled.Rows),
+      EvaluationProtocolID: resolved.pipeline.EvaluationProtocolID || null,
+      IncumbentScore: protocol !== null && assembly.Unit.incumbent.kind === 'rule' && protocol.baselines.some((b) => b.kind === 'incumbent-heuristic'),
+      SliceFields: protocol ? protocol.slices.subgroups : [],
+      Files: files,
+      EntityFactory: deps.entityFactory,
+      ContextUser: deps.contextUser,
+      ExistingByContentHash: (contentHash) => snapshots.FindByContentHash(contentHash),
+    });
+  }
+
+  /**
+   * The request settings a unit run trains with: the algorithm's driver key, the unit's problem type, the pipeline's
+   * hyperparameters (a column that is not a JSON object sends none) and its validation.
+   */
+  private legacyRequestFor(resolved: ResolvedPipeline): LegacyRequestConfig {
+    const hyper = JsonParse.ParseJsonText(resolved.pipeline.Hyperparameters || '{}', 'Hyperparameters');
+    return {
+      algorithm: resolved.algorithmDriverKey,
+      problemType: resolved.problemType,
+      hyperparameters: hyper.Ok && JsonParse.IsJsonObject(hyper.Value) ? hyper.Value : {},
+      validation: this.buildValidationConfig(resolved.validation),
+    };
+  }
+
+  /**
+   * Train through the sidecar from the snapshot's rows (development rows trained on, locked-holdout rows scored once),
+   * create the model row and complete the run. The run and model record the split the trainer was sent.
+   */
+  private async fitUnitModel(
+    run: MJMLTrainingRunEntity,
+    resolved: ResolvedPipeline,
+    input: TrainModelInput,
+    content: SnapshotContent,
+    deps: TrainingDeps,
+    majorityBaselineRule: ReturnType<typeof EvaluationLineage.ParseMajorityBaselineRule>,
+    lineage: UnitModelLineage,
+    counts: UnitResolutionCounts,
+    uncovered: readonly UncoveredRowsCount[],
+    usdPerSecond: number | null,
+  ): Promise<MJMLModelEntity> {
+    const request = this.legacyRequestFor(resolved);
+    const { Response: response, Split: split } = await SnapshotRetrainer.TrainOnSnapshot(content, request, deps.sidecar);
+    TrainingEngine.recordCompute(run, response, usdPerSecond);
+    const schema = { featureSchema: [...content.Header.featureSchema] };
+    const evaluation = EvaluationLineage.Build(resolved.validation, {
+      ValidationOutOfSample: response.validation_out_of_sample === true,
+      ImportanceKind: response.feature_importance_kind || null,
+      MajorityBaselineRule: majorityBaselineRule,
+    });
+    const dominance = this.checkLeakage(response, resolved.leakageGuard);
+    const model = await this.createModelRow(resolved, input, schema, split, response, evaluation, deps, lineage);
+    await this.finalizeUnitRunSuccess(run, model, schema, resolved, response, dominance, evaluation, counts, split, uncovered, request);
+    return model;
+  }
+
+  /**
+   * Train a protocol-bound unit run through the trainer: build the request over the frozen snapshot, record the result
+   * on the run (compute, code version, status), store every returned artifact in `MJ: Files`, create the model row from
+   * the finalist's artifact and complete the run with the stored result (artifacts as file references, never bytes) and
+   * the request settings a retrain replays. A failed result is the refusal `trainer-failed` and a result whose code
+   * version cannot be recorded is `lineage-incomplete`; both keep the compute they recorded.
+   */
+  private async trainThroughTrainer(x: TrainerRunInputs): Promise<MJMLModelEntity> {
+    const { Run: run, Resolved: resolved, Snapshot: snapshot, Training: training, Deps: deps } = x;
+    const candidate = TrainerRequestBuilder.CandidateFromPipeline(resolved.algorithmDriverKey, resolved.pipeline.AlgorithmID, resolved.algorithmDriverKey, resolved.pipeline.Hyperparameters);
+    const request = await TrainerRequestBuilder.BuildTrainerRequest({
+      TrainingRunID: run.ID, Snapshot: snapshot.Entity, Files: x.Files, Protocol: training.Protocol, Unit: x.Unit, Task: x.Unit.label.outcome,
+      Candidates: [candidate],
+    });
+    const result = TrainingEngine.recordTrainerResult(run, await training.Trainer.RunTrainer(request), x.UsdPerSecond);
+    TrainingEngine.checkAnswerBelongsToRun(run, snapshot, result);
+    const fileIds = await this.storeTrainerArtifacts(run, result, deps);
+    const finalistFile = fileIds.get(result.finalist);
+    if (finalistFile === undefined) throw new Error(`TrainingEngine: the trainer returned no artifact for its finalist '${result.finalist}'`);
+    const model = await this.createTrainerModelRow(x, result, finalistFile);
+    const results: TrainingRunResults = {
+      schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
+      legacy: null, legacyRequest: null,
+      trainer: TrainerContract.ToStoredTrainerResult(result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
+    };
+    run.ResultingModelID = model.ID;
+    run.FeaturesUsed = JSON.stringify(snapshot.Content.Header.featureSchema.map((f) => f.Name));
+    run.Hyperparameters = JSON.stringify(candidate.hyperparameters);
+    run.ValidationResults = JSON.stringify(results);
+    run.Notes = TrainingEngine.withUncoveredNote(run.Notes || '', x.Uncovered);
+    await this.saveOrThrow(run, 'finalize ML Training Run');
+    return model;
+  }
+
+  /**
+   * Record the trainer's result on the run and return it when it completed. A failed result is refused as
+   * `trainer-failed` and a completed one with lineage gaps as `lineage-incomplete`, each after its compute is recorded.
+   */
+  private static recordTrainerResult(run: MJMLTrainingRunEntity, result: TrainerResult, usdPerSecond: number | null): TrainerCompleted {
+    try {
+      TrainerRunRecorder.ApplyTrainerResultToRun(run, result, usdPerSecond);
+    } catch (err) {
+      if (err instanceof TrainerLineageRefusedError) throw new TrainingRefusedError({ stage: 'trainer', reason: { kind: 'lineage-incomplete', gaps: err.Gaps } });
+      throw err;
+    }
+    if (result.status === 'failed') {
+      throw new TrainingRefusedError({ stage: 'trainer', reason: { kind: 'trainer-failed', stage: result.stage, message: result.message, computeSeconds: result.computeSeconds } });
+    }
+    return result;
+  }
+
+  /**
+   * Refuse to store an answer that does not belong to this run: it names another training run (IDs compared as UUIDs),
+   * an artifact's bytes do not hash to the SHA-256 it states (that hash is what later checks of the artifact trust), or
+   * an artifact was built for another feature schema than the snapshot's. Runs before anything is stored.
+   *
+   * @throws Error naming the mismatch
+   */
+  private static checkAnswerBelongsToRun(run: MJMLTrainingRunEntity, snapshot: BuiltSnapshot, result: TrainerCompleted): void {
+    if (!UUIDsEqual(result.trainingRunId, run.ID)) {
+      throw new Error(`TrainingEngine: the trainer answered for training run ${result.trainingRunId}, not ${run.ID}`);
+    }
+    for (const a of result.artifacts) {
+      const actual = SnapshotHash.Sha256Hex(decodeArtifact(a.bytesBase64));
+      if (actual !== a.sha256) throw new Error(`TrainingEngine: artifact '${a.candidate}': its bytes hash to ${actual}, not the stated ${a.sha256}`);
+      if (a.featureSchemaHash !== snapshot.Entity.FeatureSchemaHash) {
+        throw new Error(`TrainingEngine: artifact '${a.candidate}' was built for feature schema ${a.featureSchemaHash}, not the snapshot's ${snapshot.Entity.FeatureSchemaHash}`);
+      }
+    }
+  }
+
+  /**
+   * Store every returned artifact's decoded bytes as an `MJ: Files` row; the file IDs by candidate. When any save
+   * fails, the artifacts already saved are deleted through the same store before the error is rethrown, so a failed run
+   * leaves no artifact nothing references.
+   */
+  private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, string>> {
+    const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[string, string]> => {
+      const fileId = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`, deps.contextUser);
+      return [a.candidate, fileId];
+    }));
+    const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
+    const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
+    if (failure === undefined) return new Map(saved);
+    const rollback = await Promise.allSettled(saved.map(([, fileId]) => deps.artifactStore.Delete(fileId, deps.contextUser)));
+    rollback.forEach((r, k) => {
+      if (r.status === 'rejected') LogError(`TrainingEngine: could not delete artifact file ${saved[k][1]} of failed run ${run.ID}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+    });
+    throw failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason));
+  }
+
+  /**
+   * The model row of a trainer run: the finalist's artifact (the trainer's envelope carries its own in-fold encoding,
+   * so there is no separate fitted preprocessing), the finalist's inner score as `Metrics`, the holdout scores as
+   * `HoldoutMetrics`, and the split the trainer was sent (the snapshot's manifest roles).
+   */
+  private async createTrainerModelRow(x: TrainerRunInputs, result: TrainerCompleted, artifactFileId: string): Promise<MJMLModelEntity> {
+    const { Resolved: resolved, Snapshot: snapshot, Deps: deps } = x;
+    const content = snapshot.Content;
+    const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
+    const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
+    const model = await deps.entityFactory.getEntityObject<MJMLModelEntity>('MJ: ML Models', deps.contextUser);
+    model.PipelineID = resolved.pipeline.ID;
+    model.Version = version;
+    model.AlgorithmID = resolved.pipeline.AlgorithmID;
+    model.ArtifactFileID = artifactFileId;
+    model.FittedPreprocessing = '{}';
+    model.FeatureSchema = JSON.stringify(content.Header.featureSchema);
+    model.TargetVariable = PredictionUnit.DescribeLabelRule(x.Unit);
+    model.ProblemType = resolved.problemType;
+    const inner = result.innerScores.find((s) => s.candidate === result.finalist);
+    model.Metrics = JSON.stringify(inner ? { [inner.inner.metric]: inner.inner.value } : {});
+    model.HoldoutMetrics = JSON.stringify(TrainerContract.HoldoutMetricsOf(result.holdout));
+    model.FeatureImportance = '{}';
+    model.Lineage = JSON.stringify(this.trainerLineage(x, result, split));
+    model.TrainedAt = new Date();
+    model.TrainingDurationSec = Math.round(result.computeSeconds);
+    model.TrainingRowCount = split.TrainingRowCount;
+    model.Status = 'Draft';
+    await this.saveOrThrow(model, 'create ML Model');
+    return model;
+  }
+
+  /**
+   * The Lineage of a trainer run's model: the keys every model carries (the trainer's sidecar version, the snapshot's
+   * split), the unit's, and the protocol it was judged under with its artifact format. Its evaluation record states
+   * out-of-sample scoring: the holdout rows are scored once by the finalist that never trained on them.
+   */
+  private trainerLineage(x: TrainerRunInputs, result: TrainerCompleted, split: LockedHoldoutSplit): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
+    const evaluation = EvaluationLineage.Build(x.Resolved.validation, { ValidationOutOfSample: true, ImportanceKind: null, MajorityBaselineRule: x.MajorityBaselineRule });
+    return {
+      ...this.buildLineage(x.Resolved, x.Input, split, evaluation, x.UnitLineage),
+      sidecarVersion: result.codeVersion.sidecarVersion,
+      evaluationProtocolId: x.Training.Protocol.id,
+      artifactFormat: PREDICTOR_ARTIFACT_FORMAT,
+    };
+  }
+
+  /**
+   * Assemble a unit pipeline's training matrix as of each unit row's decision date: the pipeline's steps resolve into
+   * typed columns (the pipeline's LeakageGuard deny lists excluded) and the as-of assembler reads them. This is the one
+   * assembly function training uses; the scoring path calls the same assembler with the columns and levels training
+   * stored. With `prepared` (a training run) the pipeline, unit and rows already read are reused; without it (a check
+   * that only needs the matrix) the pipeline, unit and rows are read here, and a pipeline without a unit is refused
+   * (`unit-required`).
+   *
+   * @param pipelineId the `MJ: ML Training Pipelines` row
+   * @param deps the training deps (provider, user and the unit seams; `history` defaults to complete Record Changes reads)
+   * @param prepared what a training run has already read
+   */
+  public async AssembleForTraining(pipelineId: string, deps: TrainingDeps, prepared?: UnitAssemblyInputs): Promise<UnitTrainingAssembly> {
+    const inputs = prepared || (await this.prepareUnitAssembly(pipelineId, deps));
+    const { Resolved: resolved, Unit: unit, UnitRead: unitRead } = inputs;
+    const exclusions = { denyFields: resolved.leakageGuard.DenyFields || [], denySources: resolved.leakageGuard.DenySources || [] };
+    const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions);
+    if (resolution.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: resolution };
+    // The names the assembly will write (date parts included), so this check accepts exactly what the builder does.
+    const columnNames = new Set(AsOfFeatureAssembler.ColumnNamesOf(resolution.Columns));
+    const sources = unitRead.Rows.map((r) => r.Source);
+    const unresolvedSlice = (inputs.SliceFields || []).find((field) => !TrainingSnapshotBuilder.SliceFieldResolves(field, columnNames, sources));
+    if (unresolvedSlice !== undefined) {
+      return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: unit.name, field: unresolvedSlice } } };
+    }
+    const assembled = await new AsOfFeatureAssembler().Assemble({
+      Context: 'train',
+      Unit: unit,
+      RowEntity: unitRead.RowEntity,
+      Rows: unitRead.Rows.map((r) => ({ RowId: r.RowId, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
+      Features: resolution.Columns,
+      SeriesHistory: TrainingEngine.SeriesHistoryFor(unit, unitRead.Rows),
+      Read: { mode: 'complete' },
+      DataAccess: inputs.DataAccess,
+      History: deps.history || new RunViewRecordHistoryReader(inputs.DataAccess, { mode: 'complete' }),
+      Metadata: inputs.Metadata,
+      AssembledAt: deps.now?.() || new Date(),
+      ExplicitOps: resolution.ExplicitOps,
+    });
+    return { Unit: unit, UnitRead: unitRead, Features: resolution.Columns, Assembled: assembled };
+  }
+
+  /**
+   * The series history a unit with a Temporal Spec reads its lags and rolling windows from: the unit rows' labels by
+   * entity and period. Null for a unit without one.
+   */
+  public static SeriesHistoryFor(unit: PredictionUnitSpec, rows: readonly UnitRow[]): SeriesHistory | null {
+    const temporal = unit.temporal;
+    return temporal ? SeriesFeatures.BuildSeriesHistory(rows.map((r) => TrainingEngine.toPoint(r)), temporal) : null;
+  }
+
+  /** A unit row as a series point; a forecast row always has a period and a numeric label once the target is validated. */
+  private static toPoint(r: UnitRow): SeriesPoint {
+    if (r.Period === null) throw new Error(`TrainingEngine: unit row ${r.RowId} has no period, so it cannot be a series point`);
+    if (typeof r.Label !== 'number') throw new Error(`TrainingEngine: unit row ${r.RowId} has the non-numeric label "${r.Label}", so it cannot be a series point`);
+    return { EntityKey: r.EntityKey, Period: r.Period, Value: r.Label, RowId: r.RowId };
+  }
+
+  /** Read the pipeline, its unit and the unit's rows, for an assembly that is not part of a training run. */
+  private async prepareUnitAssembly(pipelineId: string, deps: TrainingDeps): Promise<UnitAssemblyInputs> {
+    const resolved = await this.resolvePipeline(pipelineId, deps);
+    const unitId = resolved.pipeline.PredictionUnitID;
+    if (!unitId) {
+      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why: 'only a pipeline that points at a Prediction Unit is assembled as of decision dates' } });
+    }
+    const unit = await this.loadUnitSpec(unitId, deps);
+    const seams = this.unitSeams(deps);
+    const unitRead = await this.readUnitRows(unit, seams, deps);
+    return { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata };
+  }
+
+  /** The unit path reads through the request's provider (never a global RunView) unless the deps supply the seams. */
+  private unitSeams(deps: TrainingDeps): UnitSeams {
+    return {
+      Metadata: deps.assemblyMetadata || new ProviderAssemblyMetadata(this.requireProvider(deps)),
+      DataAccess: deps.dataAccess || new RunViewDataAccess(deps.contextUser, this.requireProvider(deps)),
+    };
+  }
+
+  /** Every unit row, read completely; a refused read is the run's refusal. */
+  private async readUnitRows(unit: PredictionUnitSpec, seams: UnitSeams, deps: TrainingDeps): Promise<UnitRowsRead> {
+    const unitRead = await this.unitReader.Read(unit, { DataAccess: seams.DataAccess, Metadata: seams.Metadata, Read: { mode: 'complete' }, Now: deps.now?.() || new Date() });
+    if (unitRead.Status === 'refused') throw new TrainingRefusedError(unitRead.Refusal);
+    return unitRead;
+  }
+
+  /** Load the pipeline's unit version and parse it; a missing or unparseable unit is the refusal `unit-invalid`. */
+  private async loadUnitSpec(unitId: string, deps: TrainingDeps): Promise<PredictionUnitSpec> {
+    const store = deps.predictionUnits || new RunViewPredictionUnitStore(this.requireProvider(deps), deps.contextUser);
+    const row = await store.Load(unitId);
+    if (!row) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-invalid', unitId, errors: ['not found'] } });
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-invalid', unitId, errors: parsed.Errors } });
+    return parsed.Value;
+  }
+
+  /** The unit's identity, the typed feature columns, the kept categorical levels and the snapshot, stored in the model Lineage. */
+  private unitLineage(
+    unit: PredictionUnitSpec, resolved: ResolvedPipeline, unitRead: UnitRowsRead, features: readonly FeatureColumnSpec[], levels: ReadonlyMap<string, readonly string[]>,
+    snapshot: MJTrainingSnapshotEntity,
+  ): UnitModelLineage {
+    return {
+      predictionUnitId: unit.id,
+      predictionUnitVersion: unit.version,
+      labelVersion: unit.label.labelVersion,
+      featureSpecVersion: resolved.pipeline.Version,
+      unitRowEntity: unitRead.RowEntity.Name,
+      featureSpec: [...features],
+      categoryLevels: Object.fromEntries([...levels].map(([column, kept]) => [column, [...kept]])),
+      trainingSnapshotId: snapshot.ID,
+      snapshotContentHash: snapshot.ContentHash,
+    };
+  }
+
+  /** The provider the unit path's production seams read through; the unit path has no global fallback. */
+  private requireProvider(deps: TrainingDeps): IMetadataProvider {
+    if (!deps.provider) throw new Error('TrainingEngine: a metadata provider is required for Prediction Unit pipelines');
+    return deps.provider;
+  }
+
+  /**
+   * Record a refused run (best-effort — never masks the refusal): `Failed`, the `refused` envelope in
+   * ValidationResults and the refusal sentence in Notes. The caller rethrows the refusal.
+   */
+  private async finalizeRunRefused(run: MJMLTrainingRunEntity, err: TrainingRefusedError): Promise<void> {
+    const results: TrainingRunResults = { schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: err.Refusal };
+    run.Status = 'Failed';
+    run.CompletedAt = new Date();
+    run.ValidationResults = JSON.stringify(results);
+    run.Notes = err.message;
+    try {
+      if (!(await run.Save())) {
+        LogError(`TrainingEngine: failed to record the refusal on run ${run.ID}: ${run.LatestResult?.CompleteMessage || 'unknown error'}`);
+      }
+    } catch (saveErr) {
+      LogError(`TrainingEngine: failed to record the refusal on run ${run.ID}: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
+    }
+  }
+
+  /**
+   * Mark a unit run `Completed` with the `completed` envelope: the unit resolution counts, the trainer's metrics and
+   * the request settings it trained with. The run's Hyperparameters are the request's, so the run's two records of
+   * them cannot disagree.
+   */
+  private async finalizeUnitRunSuccess(
+    run: MJMLTrainingRunEntity,
+    model: MJMLModelEntity,
+    assembly: Pick<FeatureAssemblyResult, 'featureSchema'>,
+    resolved: ResolvedPipeline,
+    response: TrainResponse,
+    dominance: DominanceResult,
+    evaluation: EvaluationRecord,
+    counts: UnitResolutionCounts,
+    split: LockedHoldoutSplit,
+    uncovered: readonly UncoveredRowsCount[],
+    request: LegacyRequestConfig,
+  ): Promise<void> {
+    const results: TrainingRunResults = {
+      schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts,
+      legacy: { metrics: response.metrics ?? {}, holdoutMetrics: response.holdout_metrics ?? null, trainingRowCount: split.TrainingRowCount, holdoutRowCount: split.HoldoutRowCount },
+      legacyRequest: request,
+      trainer: null, trainerRequest: null,
+    };
+    run.ResultingModelID = model.ID;
+    run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
+    run.Hyperparameters = JSON.stringify(request.hyperparameters);
+    run.ValidationResults = JSON.stringify(results);
+    run.Status = 'Completed';
+    run.CompletedAt = new Date();
+    run.Notes = TrainingEngine.withUncoveredNote(this.buildRunNotes(dominance, evaluation), uncovered);
+    await this.saveOrThrow(run, 'finalize ML Training Run');
+  }
+
+  /** Rows excluded because a read field's history did not cover their decision date, named per entity and field. */
+  private static withUncoveredNote(notes: string, uncovered: readonly UncoveredRowsCount[]): string {
+    if (uncovered.length === 0) return notes;
+    return `${notes} Excluded for uncovered history: ${uncovered.map((u) => `${u.entity}.${u.field} ${u.rows}`).join(', ')}.`;
   }
 
   // region: pipeline resolution -------------------------------------------------
@@ -180,6 +821,9 @@ export class TrainingEngine {
     if (input.experimentSessionIterationId) {
       run.ExperimentSessionIterationID = input.experimentSessionIterationId;
     }
+    if (resolved.pipeline.EvaluationProtocolID) {
+      run.EvaluationProtocolID = resolved.pipeline.EvaluationProtocolID;
+    }
     run.Hyperparameters = JSON.stringify(resolved.hyperparameters);
     run.Status = 'Running';
     run.StartedAt = new Date();
@@ -196,7 +840,6 @@ export class TrainingEngine {
     response: TrainResponse,
     dominance: DominanceResult,
     evaluation: EvaluationRecord,
-    deps: TrainingDeps,
   ): Promise<void> {
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
@@ -208,9 +851,18 @@ export class TrainingEngine {
     });
     run.Status = 'Completed';
     run.CompletedAt = new Date();
-    run.ComputeCost = 0;
     run.Notes = this.buildRunNotes(dominance, evaluation);
     await this.saveOrThrow(run, 'finalize ML Training Run');
+  }
+
+  /**
+   * Record the compute a run really used: the sidecar's measured wall-clock training seconds, priced at the configured
+   * rate (NULL when no rate is configured), never a constant. Called as soon as the sidecar returns, so a run that
+   * fails afterwards (a model row that does not save) still records the compute it spent.
+   */
+  private static recordCompute(run: MJMLTrainingRunEntity, response: TrainResponse, usdPerSecond: number | null): void {
+    run.ComputeSeconds = ComputePricing.RoundSeconds(response.duration_sec);
+    run.ComputeCost = ComputePricing.ComputeCostFor(response.duration_sec, usdPerSecond);
   }
 
   /** Record a failed run (best-effort — never masks the original error). */
@@ -299,27 +951,6 @@ export class TrainingEngine {
     };
   }
 
-  // region: sidecar request -----------------------------------------------------
-
-  /** Build the `/train` request from the resolved pipeline + assembled training matrix. */
-  private buildTrainRequest(
-    resolved: ResolvedPipeline,
-    assembly: FeatureAssemblyResult,
-    trainingMatrix: MatrixData,
-    validation: ValidationConfig,
-  ): TrainRequest {
-    return {
-      algorithm: resolved.algorithmDriverKey,
-      problem_type: resolved.problemType,
-      hyperparameters: resolved.hyperparameters,
-      validation,
-      feature_schema: assembly.featureSchema as FeatureSchemaEntry[],
-      preprocessing: assembly.preprocessing as PreprocessingOp[],
-      target: resolved.targetVariable,
-      data: trainingMatrix,
-    };
-  }
-
   // region: leakage -------------------------------------------------------------
 
   /** Run the single-feature-dominance check against the leakage threshold (§6.4). */
@@ -337,11 +968,12 @@ export class TrainingEngine {
   private async createModelRow(
     resolved: ResolvedPipeline,
     input: TrainModelInput,
-    assembly: FeatureAssemblyResult,
+    assembly: Pick<FeatureAssemblyResult, 'featureSchema'>,
     split: LockedHoldoutSplit,
     response: TrainResponse,
     evaluation: EvaluationRecord,
     deps: TrainingDeps,
+    unitLineage: UnitModelLineage | null = null,
   ): Promise<MJMLModelEntity> {
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
     const artifactName = `model-${resolved.pipeline.ID}-v${version}.bin`;
@@ -361,7 +993,7 @@ export class TrainingEngine {
       model.HoldoutMetrics = JSON.stringify(response.holdout_metrics);
     }
     model.FeatureImportance = JSON.stringify(response.feature_importance ?? {});
-    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation));
+    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation, unitLineage));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(response.duration_sec ?? 0);
     model.TrainingRowCount = response.training_row_count ?? split.TrainingRowCount;
@@ -379,15 +1011,17 @@ export class TrainingEngine {
    * `asOfStrategy` when the pipeline row isn't separately loaded. Omitting
    * `targetEntityName` or `featureSteps` here would leave the model unable to
    * produce any feature columns at inference (train/serve break), so both are
-   * persisted alongside the other provenance fields.
+   * persisted alongside the other provenance fields. A unit model adds its {@link UnitModelLineage}.
    */
   private buildLineage(
     resolved: ResolvedPipeline,
     input: TrainModelInput,
     split: LockedHoldoutSplit,
     evaluation: EvaluationRecord,
-  ): ModelTrainingLineage {
+    unitLineage: UnitModelLineage | null,
+  ): ModelTrainingLineage & Partial<UnitModelLineage> {
     return {
+      ...(unitLineage || {}),
       pipelineId: resolved.pipeline.ID,
       pipelineVersion: resolved.pipeline.Version,
       targetEntityName: resolved.targetEntityName,

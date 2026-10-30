@@ -14,6 +14,11 @@ import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+
+/** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+
 
 /**
  * Write-back wiring tests (plan §10.1). The MLModelInferenceProcessor is
@@ -123,6 +128,7 @@ function buildInner(): MLModelInferenceProcessor {
   const deps: MLInferenceDeps = {
     modelLoader: new FakeModelLoader(new FakeMLModel()),
     artifactLoader: new InMemoryArtifactLoader(new Map([['file-1', new TextEncoder().encode('bytes')]])),
+    pipelineUnits: NO_PIPELINE_UNITS,
     sidecar: new FakeSidecar(),
   };
   return new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
@@ -175,6 +181,7 @@ describe('scoring write-back wiring (§10.1)', () => {
   });
 
   it('does not write when the inner record fails', async () => {
+    const errors = ConsoleCapture.Errors();
     // A processor whose model load fails → Failed result → write path untouched.
     const failing = new MLModelInferenceProcessor(
       {
@@ -191,5 +198,6 @@ describe('scoring write-back wiring (§10.1)', () => {
     const result = await wrapped.ProcessRecord(record('m1'), CTX);
     expect(result.Status).toBe('Failed');
     expect(wrapped.Writes.length).toBe(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MLModelInferenceProcessor: scoring failed for record 'm1': MLModelInferenceProcessor: ML Model 'missing' not found")]);
   });
 });

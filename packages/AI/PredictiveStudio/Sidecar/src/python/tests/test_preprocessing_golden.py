@@ -9,6 +9,7 @@ these tests fail.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from app import preprocessing
 
@@ -160,3 +161,49 @@ def test_output_column_order_stable():
     # onehot city indicators come first (in op order), then numeric passthrough
     assert output_columns[:3] == ["city=LA", "city=NY", "city=SF"]
     assert set(output_columns[3:]) == {"age", "income", "score"}
+
+
+def test_text_in_numeric_passthrough_column_is_refused_naming_it():
+    columns = ["Region", "label"]
+    rows = [["EU", 1], ["R7", 0]]
+    with pytest.raises(preprocessing.NonNumericFeatureError) as exc:
+        preprocessing.fit_transform(columns, rows, [], ["Region"])
+    # structured fields, not the message text
+    assert exc.value.column == "Region" and exc.value.value == "EU"
+
+
+def test_impute_with_indicator_emits_a_missing_column_and_keeps_true_zero_distinct():
+    columns = ["x", "label"]
+    rows = [[0.0, 1], [None, 0], [2.0, 1]]
+    ops = [{"op": "impute", "col": "x", "strategy": "median", "indicator": True}]
+    matrix, out_cols, fitted = preprocessing.fit_transform(columns, rows, ops, ["x"])
+    assert out_cols == ["x__missing", "x"]
+    assert matrix.tolist() == [[0.0, 0.0], [1.0, 1.0], [0.0, 2.0]]
+    again = preprocessing.transform([{"x": None}], fitted, ["x"])
+    assert again.tolist() == [[1.0, 1.0]]
+
+
+def test_text_in_standardized_column_is_refused_naming_column_and_value():
+    columns = ["age", "label"]
+    rows = [[30.0, 1], ["abc", 0], [40.0, 1]]
+    ops = [{"op": "standardize", "cols": ["age"]}]
+    with pytest.raises(preprocessing.NonNumericFeatureError) as exc:
+        preprocessing.fit_transform(columns, rows, ops, ["age"])
+    assert exc.value.column == "age" and exc.value.value == "abc"
+
+
+def test_text_in_binned_column_is_refused_naming_column_and_value():
+    columns = ["age", "label"]
+    rows = [[30.0, 1], ["abc", 0], [40.0, 1], [50.0, 0]]
+    ops = [{"op": "bin", "col": "age", "bins": 2}]
+    with pytest.raises(preprocessing.NonNumericFeatureError) as exc:
+        preprocessing.fit_transform(columns, rows, ops, ["age"])
+    assert exc.value.column == "age" and exc.value.value == "abc"
+
+
+def test_duplicate_output_column_is_refused_naming_it():
+    columns = ["x", "x__missing", "label"]
+    rows = [[1.0, 5.0, 1], [None, 6.0, 0], [2.0, 7.0, 1]]
+    ops = [{"op": "impute", "col": "x", "strategy": "mean", "indicator": True}]
+    with pytest.raises(ValueError, match="x__missing"):
+        preprocessing.fit_transform(columns, rows, ops, ["x", "x__missing"])

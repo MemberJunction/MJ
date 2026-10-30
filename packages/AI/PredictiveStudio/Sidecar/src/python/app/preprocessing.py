@@ -53,6 +53,34 @@ def _to_float(value: Any) -> Optional[float]:
         return None
 
 
+class NonNumericFeatureError(ValueError):
+    """A non-numeric value reached a numeric matrix column.
+
+    The value is never coerced to 0.0: the column must be bound with a
+    categorical or date encoding instead.
+    """
+
+    def __init__(self, column: str, value: Any) -> None:
+        super().__init__(
+            f"Column '{column}' is numeric but holds the non-numeric value {value!r}; "
+            "bind it with a categorical or date encoding"
+        )
+        self.column = column
+        self.value = value
+
+
+def _present_float(value: Any, column: str) -> Optional[float]:
+    """Float for a present numeric value, ``None`` when missing.
+
+    Raises:
+        NonNumericFeatureError: When the value is present but not a number.
+    """
+    f = _to_float(value)
+    if f is None and not _is_missing(value):
+        raise NonNumericFeatureError(column, value)
+    return f
+
+
 # ---------------------------------------------------------------------------
 # FIT helpers — each returns the learned params for one op (train only)
 # ---------------------------------------------------------------------------
@@ -83,7 +111,13 @@ def _fit_impute(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
         fill = op.get("fillValue")
     else:
         raise ValueError(f"Unknown impute strategy '{strategy}'")
-    return {"op": "impute", "col": col, "strategy": strategy, "fill": fill}
+    return {
+        "op": "impute",
+        "col": col,
+        "strategy": strategy,
+        "fill": fill,
+        "indicator": bool(op.get("indicator", False)),
+    }
 
 
 def _fit_standardize(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
@@ -150,9 +184,16 @@ _FIT_DISPATCH = {
 # Each mutates `row` (a dict) and/or appends to the ordered `out` column list.
 # ---------------------------------------------------------------------------
 
-def _apply_impute(params: Dict[str, Any], row: Dict[str, Any]) -> None:
-    """Apply a fitted impute op: fill the column with the frozen value if missing."""
+def _apply_impute(params: Dict[str, Any], row: Dict[str, Any], out: List[Tuple[str, Any]]) -> None:
+    """Apply a fitted impute op: fill the column with the frozen value if missing.
+
+    When the op carries the indicator flag, a ``<col>__missing`` column (1.0 when the
+    value was missing, else 0.0) is appended to ``out`` before the fill, so a
+    missing value stays distinguishable from a genuine zero.
+    """
     col = params["col"]
+    if params.get("indicator"):
+        out.append((f"{col}__missing", 1.0 if _is_missing(row.get(col)) else 0.0))
     if _is_missing(row.get(col)):
         row[col] = params.get("fill")
 
@@ -160,7 +201,7 @@ def _apply_impute(params: Dict[str, Any], row: Dict[str, Any]) -> None:
 def _apply_standardize(params: Dict[str, Any], row: Dict[str, Any]) -> None:
     """Apply fitted standardization: z-score each column; missing values become 0."""
     for col, st in params["stats"].items():
-        val = _to_float(row.get(col))
+        val = _present_float(row.get(col), col)
         if val is None:
             row[col] = 0.0  # centered missing -> 0 after standardization
         else:
@@ -189,7 +230,7 @@ def _apply_bin(params: Dict[str, Any], row: Dict[str, Any]) -> None:
     """
     col = params["col"]
     edges = params["edges"]
-    val = _to_float(row.get(col))
+    val = _present_float(row.get(col), col)
     if val is None:
         row[col] = 0
         return
@@ -213,9 +254,10 @@ def _transform_one(
 ) -> List[Tuple[str, Any]]:
     """Apply the fitted ops to a single row dict, returning ordered columns.
 
-    Non-onehot ops mutate the row in place (impute/standardize/bin). Onehot ops
-    emit indicator columns immediately at their position and consume the raw
-    column. After all ops run, any remaining row keys are emitted as pass-through
+    Non-onehot ops mutate the row in place (impute/standardize/bin); an impute op
+    with the indicator flag also emits its ``<col>__missing`` column into ``out``.
+    Onehot ops emit indicator columns immediately at their position and consume the
+    raw column. After all ops run, any remaining row keys are emitted as pass-through
     numeric columns in insertion order.
     """
     out: List[Tuple[str, Any]] = []
@@ -223,7 +265,7 @@ def _transform_one(
     for params in ops:
         op = params["op"]
         if op == "impute":
-            _apply_impute(params, row)
+            _apply_impute(params, row, out)
         elif op == "standardize":
             _apply_standardize(params, row)
         elif op == "bin":
@@ -238,11 +280,20 @@ def _transform_one(
     return out, onehot_consumed
 
 
-def _coerce_numeric(value: Any) -> float:
+def _coerce_numeric(value: Any, column: str) -> float:
+    """A numeric matrix cell: numbers pass, a missing value (None, NaN, blank) is 0.0, text refuses.
+
+    A missing value becomes 0.0 only on a legacy passthrough column that no imputer
+    covers; a genuinely non-numeric value is never coerced.
+
+    Raises:
+        NonNumericFeatureError: When the value is present but not a number.
+    """
+    if _is_missing(value):
+        return 0.0
     f = _to_float(value)
     if f is None:
-        # final guard: non-numeric pass-through becomes 0.0 (model needs floats)
-        return 0.0
+        raise NonNumericFeatureError(column, value)
     return f
 
 
@@ -293,6 +344,26 @@ def transform(
     return matrix
 
 
+def source_map(fitted: FittedPreprocessing) -> Dict[str, List[str]]:
+    """Each source column's output columns, in output order, from a fitted payload.
+
+    A one-hot op's ``<col>=<level>`` columns and an impute op's ``<col>__missing`` indicator belong to ``<col>``; a
+    pass-through column is its own source. Read from the fitted ops, never parsed from the names, so a source whose
+    name holds ``=`` or ``__`` still groups correctly.
+    """
+    owner: Dict[str, str] = {}
+    for op in fitted.get("ops", []):
+        if op["op"] == "impute" and op.get("indicator"):
+            owner[f"{op['col']}__missing"] = op["col"]
+        elif op["op"] == "onehot":
+            for category in op["vocabulary"]:
+                owner[f"{op['col']}={category}"] = op["col"]
+    out: Dict[str, List[str]] = {}
+    for column in fitted["output_columns"]:
+        out.setdefault(owner.get(column, column), []).append(column)
+    return out
+
+
 def _build_matrix(
     records: List[Dict[str, Any]],
     fitted_ops: List[Dict[str, Any]],
@@ -301,9 +372,13 @@ def _build_matrix(
 ) -> Tuple[np.ndarray, List[str]]:
     """Transform every record and assemble a dense float matrix.
 
-    Determines the global output column order from the first record (or uses
-    ``force_columns`` when supplied, e.g. at predict time), then projects every
-    row onto that exact column set — filling absent columns with 0.0.
+    The output column order is the missing indicators (impute op order), then the
+    one-hot columns (op order), then the passthrough features; ``force_columns``
+    replaces it when supplied (predict time). Every row is projected onto that exact
+    column set — filling absent columns with 0.0.
+
+    Raises:
+        ValueError: When the assembled output columns contain a duplicate name.
     """
     onehot_cols = {op["col"] for op in fitted_ops if op["op"] == "onehot"}
     # pass-through feature columns = declared features minus those consumed by onehot
@@ -315,18 +390,25 @@ def _build_matrix(
         emitted, _ = _transform_one(fitted_ops, row)
         rec_map: Dict[str, float] = {name: float(val) for name, val in emitted}
         for c in passthrough:
-            rec_map[c] = _coerce_numeric(row.get(c))
+            rec_map[c] = _coerce_numeric(row.get(c), c)
         transformed_records.append(rec_map)
 
     if force_columns is not None:
         output_columns = list(force_columns)
     else:
-        # deterministic order: onehot indicators (in op order) then passthrough
-        ordered: List[str] = []
+        # deterministic order: missing indicators (op order), onehot indicators (op order), passthrough
+        ordered: List[str] = [
+            f"{op['col']}__missing"
+            for op in fitted_ops
+            if op["op"] == "impute" and op.get("indicator")
+        ]
         for op in fitted_ops:
             if op["op"] == "onehot":
                 ordered.extend(f"{op['col']}={cat}" for cat in op["vocabulary"])
         ordered.extend(passthrough)
+        duplicates = sorted({c for c in ordered if ordered.count(c) > 1})
+        if duplicates:
+            raise ValueError(f"Duplicate output column '{duplicates[0]}' in the training matrix")
         output_columns = ordered
 
     matrix = np.array(

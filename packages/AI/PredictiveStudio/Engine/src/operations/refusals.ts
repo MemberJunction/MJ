@@ -1,6 +1,7 @@
 import type { RemoteOpResult } from '@memberjunction/core';
 import { InvalidMajorityBaselineRuleError, type PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
+import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import { ModelNotScorableError, ModelNeedsTrainingError } from '../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
@@ -16,12 +17,33 @@ export class PredictiveStudioRefusals {
   /** The refusal code for a Predictive Studio refusal error; null for any other error. */
   public static CodeOf(e: Error): PredictiveStudioRefusalCode | null {
     if (e instanceof ReadCapExceededError) return 'READ_CAP_EXCEEDED';
+    if (e instanceof TrainingRefusedError) return PredictiveStudioRefusals.trainingRefusalCode(e);
+    // A modeling plan that asks for point-in-time assembly is refused before any pipeline exists (the pipeline builder).
     if (e instanceof AsOfSettingHasNoEffectError) return 'AS_OF_NO_EFFECT';
     if (e instanceof ModelNotScorableError) return 'MODEL_NOT_SCORABLE';
     if (e instanceof ModelNeedsTrainingError) return 'MODEL_NEEDS_TRAINING';
     if (e instanceof ExperimentSessionsUnavailableError) return 'EXPERIMENT_SESSIONS_UNAVAILABLE';
     if (e instanceof InvalidMajorityBaselineRuleError) return 'INVALID_EVALUATION_SETTING';
     return null;
+  }
+
+  /**
+   * The code of a refused training run, read off its refusal kind. Kinds without a code return null, so the operation
+   * reports `EXECUTION_ERROR`; the detailed kind and stage stay in the run's `ValidationResults.refusal`.
+   */
+  private static trainingRefusalCode(e: TrainingRefusedError): PredictiveStudioRefusalCode | null {
+    const reason = e.Refusal.reason;
+    switch (reason.kind) {
+      case 'unit-required': return 'UNIT_REQUIRED';
+      // The asOf input still has no effect; it is now refused by name instead of being ignored.
+      case 'input-not-accepted': return reason.input === 'asOf' ? 'AS_OF_NO_EFFECT' : null;
+      case 'decision-date-before-change-history':
+      case 'select-changes-after-decision-date': return 'AS_OF_SOURCE_UNDATED';
+      case 'protocol-required': return 'PROTOCOL_REQUIRED';
+      // Only a stop at the compute budget has a code; every other trainer stage is reported as a failure.
+      case 'trainer-failed': return reason.stage === 'budget-exceeded' ? 'BUDGET_EXCEEDED' : null;
+      default: return null;
+    }
   }
 
   /** The operation's server-side run with refusal errors returned as their codes. */

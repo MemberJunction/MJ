@@ -1424,6 +1424,9 @@ importers:
 
   packages/AI/PredictiveStudio/Core:
     dependencies:
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.6
+        version: link:../../../MJGlobal
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -1482,6 +1485,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.2.0-edge.6
         version: link:../../../RecordSetProcessor/base
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.6
+        version: link:../../../MJStorage
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -1544,6 +1550,9 @@ importers:
       '@memberjunction/predictive-studio-sidecar':
         specifier: 6.2.0-edge.6
         version: link:../Sidecar
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.6
+        version: link:../../../MJStorage
       '@memberjunction/testing-integration':
         specifier: 6.2.0-edge.6
         version: link:../../../TestingFramework/testing-integration
