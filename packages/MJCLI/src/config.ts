@@ -6,6 +6,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS } from './lib/migration-timeout';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
@@ -370,7 +371,7 @@ export const GetSkywayConfig = async (
     Options: {
       Encrypt: mjConfig.dbEncrypt,
       TrustServerCertificate: mjConfig.dbTrustServerCertificate,
-      ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
+      RequestTimeout: mjConfig.dbRequestTimeout ?? DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS,
     },
   };
 

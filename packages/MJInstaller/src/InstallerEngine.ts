@@ -125,11 +125,21 @@ export class InstallerEngine {
   }
 
   /**
-   * Concrete release tag resolved by the scaffold phase this run. Pinned into
-   * `mj.config.cjs` by the configure phase so later `mj migrate` runs target the
-   * same version as the installed code. Undefined when scaffold was skipped (resume).
+   * Concrete release tag resolved by the scaffold phase. Persisted in the
+   * install state, so a resumed install restores it. Pinned into
+   * `mj.config.cjs` by the configure phase and used by the dependency, migrate
+   * and codegen phases so they all target the same version as the installed code.
    */
   private resolvedVersion?: string;
+
+  /**
+   * The one tag every post-scaffold phase uses: the tag the scaffold resolved,
+   * else the plan's explicit tag. `undefined` only when neither is known (the
+   * plan still says `'latest'` and scaffold never recorded a resolution).
+   */
+  private effectiveTag(plan: InstallPlan): string | undefined {
+    return this.resolvedVersion ?? (plan.Tag !== 'latest' ? plan.Tag : undefined);
+  }
 
   // -------------------------------------------------------------------------
   // Public API
@@ -277,6 +287,17 @@ export class InstallerEngine {
 
     const config = MergeConfigs(...configSources);
 
+    // The monorepo is a pnpm workspace and its build fails under any other package
+    // manager, so coerce rather than fail in the dependencies phase (#4562).
+    if (config.InstallMode === 'monorepo' && config.PackageManager && config.PackageManager !== 'pnpm') {
+      this.emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'preflight',
+        Message: `PackageManager "${config.PackageManager}" is not supported for a monorepo install; using pnpm instead.`,
+      });
+      config.PackageManager = 'pnpm';
+    }
+
     // ── Prompt safety net (non-interactive mode) ──────────────────────────
     // In --yes mode, install a catch-all listener that auto-resolves any
     // unexpected prompt with its default value. This prevents indefinite
@@ -311,6 +332,8 @@ export class InstallerEngine {
     if (!state) {
       state = new InstallState(plan.Dir, plan.Tag);
     }
+    // Restore the tag a previous run's scaffold resolved (undefined on a fresh install).
+    this.resolvedVersion = state.ResolvedTag;
 
     // Iterate through phases
     for (const phaseInfo of plan.Phases) {
@@ -352,6 +375,9 @@ export class InstallerEngine {
         }
 
         state.MarkCompleted(phaseInfo.Id);
+        if (phaseInfo.Id === 'scaffold' && this.resolvedVersion) {
+          state.SetResolvedTag(this.resolvedVersion);
+        }
         await state.Save();
         phasesCompleted.push(phaseInfo.Id);
 
@@ -651,9 +677,8 @@ export class InstallerEngine {
     yes: boolean,
     overwriteConfig: boolean = false
   ): Promise<PhaseExecutionResult> {
-    // Prefer the tag resolved this run; on resume (scaffold skipped) fall back to
-    // the plan's explicit tag, but never pin the placeholder 'latest'.
-    const resolvedVersion = this.resolvedVersion ?? (plan.Tag !== 'latest' ? plan.Tag : undefined);
+    // Never pin the placeholder 'latest'.
+    const resolvedVersion = this.effectiveTag(plan);
 
     const result = await this.configure.Run({
       Dir: plan.Dir,
@@ -697,7 +722,7 @@ export class InstallerEngine {
       Config: this.resolvedConfig,
       PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
-      VersionTag: plan.Tag,
+      VersionTag: this.effectiveTag(plan),
     });
 
     return { Warnings: [] };
@@ -723,7 +748,7 @@ export class InstallerEngine {
   private async executeDependencies(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.dependency.Run({
       Dir: plan.Dir,
-      Tag: plan.Tag,
+      Tag: this.effectiveTag(plan) ?? plan.Tag,
       PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
     });
@@ -737,7 +762,7 @@ export class InstallerEngine {
       Dir: plan.Dir,
       Emitter: this.emitter,
       Fast: fast,
-      VersionTag: plan.Tag,
+      VersionTag: this.effectiveTag(plan),
       PackageManager: this.packageManager.Name,
     });
 

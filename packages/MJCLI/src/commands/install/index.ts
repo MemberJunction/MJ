@@ -1,6 +1,8 @@
 import { select, confirm, input, password } from '@inquirer/prompts';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import {
   InstallerEngine,
   type PromptEvent,
@@ -19,6 +21,30 @@ import {
   requireInteractive,
   WithNonInteractiveHandling,
 } from '../../lib/interactive-guard.js';
+
+/**
+ * The resume guidance printed after a failed install. It names the absolute
+ * install directory, because a bare `mj install` resumes into the current
+ * directory. Inside a monorepo scaffold, `mj` / `npx mj` resolves to the
+ * workspace's own CLI package, which is not built until the install finishes
+ * (it fails with `command install not found`), so the resume must run from
+ * outside that directory with the CLI used for the first attempt.
+ *
+ * @param dir - Absolute install directory.
+ * @param monorepoScaffold - Whether `dir` holds a full source (monorepo) checkout.
+ */
+export function ResumeInstructions(dir: string, monorepoScaffold: boolean): string[] {
+  const dirArg = /\s/.test(dir) ? `'${dir}'` : dir;
+  const lines = [`Run "mj install --dir ${dirArg}" to resume from the last checkpoint.`];
+  if (monorepoScaffold) {
+    lines.push(
+      '  Run it from outside that directory, with the same mj CLI you just used (global install or npx @memberjunction/cli):',
+      '  inside the monorepo, mj resolves to the workspace CLI, which is not built yet.'
+    );
+  }
+  lines.push(`Run "mj install --dir ${dirArg} --no-resume" to start fresh.`);
+  return lines;
+}
 
 export default class Install extends Command {
   static description = 'Install MemberJunction from a GitHub release';
@@ -120,6 +146,9 @@ export default class Install extends Command {
     'no-claude-pack'?: boolean;
   }): Promise<void> {
     const engine = new InstallerEngine();
+    // Resolve once: phases join paths onto the plan's Dir, and a relative Dir
+    // gets doubled when a phase later runs a child process with Cwd = Dir (#4478).
+    const dir = path.resolve(flags.dir);
     const fast = flags.fast ?? false;
     const yes = flags.yes ?? false;
 
@@ -127,7 +156,7 @@ export default class Install extends Command {
 
     const plan = await engine.CreatePlan({
       Tag: flags.tag,
-      Dir: flags.dir,
+      Dir: dir,
       SkipDB: flags['skip-db'],
       SkipStart: flags['skip-start'],
       Fast: fast,
@@ -164,7 +193,7 @@ export default class Install extends Command {
       Config: flags.monorepo ? { InstallMode: 'monorepo' as const } : undefined,
     });
 
-    this.renderResult(result, fast);
+    this.renderResult(result, dir, fast);
   }
 
   // ---------------------------------------------------------------------------
@@ -341,7 +370,7 @@ export default class Install extends Command {
     Warnings: string[];
     PhasesCompleted: string[];
     PhasesFailed: string[];
-  }, fast: boolean = false): void {
+  }, dir: string, fast: boolean = false): void {
     this.log('');
 
     if (result.Success) {
@@ -369,8 +398,10 @@ export default class Install extends Command {
     this.log(chalk.cyan('  A diagnostic report has been saved to mj-diagnostic-report.md'));
     this.log(chalk.cyan('  Share this file when requesting installation support.'));
     this.log('');
-    this.log(chalk.yellow('Run "mj install" to resume from the last checkpoint.'));
-    this.log(chalk.yellow('Run "mj install --no-resume" to start fresh.'));
+    const monorepoScaffold = existsSync(path.join(dir, 'packages', 'MJCLI', 'package.json'));
+    for (const line of ResumeInstructions(dir, monorepoScaffold)) {
+      this.log(chalk.yellow(line));
+    }
     this.log(chalk.yellow('Run "mj doctor" to diagnose issues.'));
     this.log(chalk.yellow('Run "mj doctor --report" to regenerate the diagnostic report.'));
     this.log(chalk.yellow('Run "mj doctor --report_extended" for a detailed report with config snapshots and service logs.'));

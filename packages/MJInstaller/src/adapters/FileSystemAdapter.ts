@@ -9,7 +9,7 @@
  * pattern allows phases to be unit-tested with mock file system implementations.
  *
  * @module adapters/FileSystemAdapter
- * @see ScaffoldPhase — uses ExtractZip, CreateTempDir, RemoveFile.
+ * @see ScaffoldPhase — uses CreateTempDir, CopyDirectory, RemoveDir.
  * @see PreflightPhase — uses GetFreeDiskSpace, CanWrite, DirectoryExists.
  * @see ConfigurePhase — uses WriteText, ReadText, FileExists, ListFiles.
  * @see CodeGenPhase — uses ReadText, WriteText, GetModifiedTime, FindFiles.
@@ -35,7 +35,7 @@ import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js'
  * Methods are organized into categories:
  * - **ZIP operations**: {@link ExtractZip}
  * - **Directory operations**: {@link CreateDirectory}, {@link DirectoryExists},
- *   {@link IsDirectoryEmpty}, {@link ListDirectoryEntries}, {@link RemoveDir}
+ *   {@link IsDirectoryEmpty}, {@link ListDirectoryEntries}, {@link CopyDirectory}, {@link RemoveDir}
  * - **File operations**: {@link FileExists}, {@link RemoveFile}, {@link ReadJSON},
  *   {@link WriteJSON}, {@link WriteText}, {@link ReadText}
  * - **Disk checks**: {@link GetFreeDiskSpace}, {@link CanWrite}
@@ -272,6 +272,17 @@ export class FileSystemAdapter {
    */
   async CreateTempDir(prefix: string = 'mj-install-'): Promise<string> {
     return fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  }
+
+  /**
+   * Recursively copy a directory's contents into another directory, overwriting
+   * files that already exist there. The destination is created if missing.
+   *
+   * @param sourceDir - Absolute path of the directory to copy from.
+   * @param targetDir - Absolute path of the directory to copy into.
+   */
+  async CopyDirectory(sourceDir: string, targetDir: string): Promise<void> {
+    await fs.cp(sourceDir, targetDir, { recursive: true, force: true });
   }
 
   /**

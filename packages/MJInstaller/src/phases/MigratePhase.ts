@@ -25,6 +25,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
+import { TagToNpmVersion } from './DependencyPhase.js';
 
 /**
  * Input context for the migrate phase.
@@ -215,7 +216,7 @@ export class MigratePhase {
     // Fall back to the package manager's remote-exec with version pinning
     // (distribution layout): `npx <spec>` / `pnpm dlx <spec>`.
     const cliPackage = versionTag
-      ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
+      ? `@memberjunction/cli@${TagToNpmVersion(versionTag)}`
       : '@memberjunction/cli';
 
     const dlx = pm.Dlx(cliPackage, cliArgs);
