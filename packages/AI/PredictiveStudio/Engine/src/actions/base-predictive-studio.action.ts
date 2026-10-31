@@ -78,6 +78,31 @@ export abstract class BasePredictiveStudioAction extends BaseAction {
   }
 
   /**
+   * Read a string-array param: an array value, a JSON array of strings, or a comma-separated list. Blank entries are
+   * dropped; an absent param is an empty list.
+   */
+  protected getStringArrayParam(params: RunActionParams, name: string): string[] {
+    const param = this.findParam(params, name);
+    if (!param || param.Value === undefined || param.Value === null) return [];
+    const items = Array.isArray(param.Value) ? param.Value : this.parseListText(String(param.Value));
+    return items.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter((v) => v.length > 0);
+  }
+
+  /** A JSON array's elements, or the comma-separated parts of any other text (`unknown[]`: untrusted JSON, narrowed by the caller's `typeof` filter). */
+  private parseListText(text: string): unknown[] {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // not JSON: read as a comma-separated list below
+      }
+    }
+    return trimmed.split(',');
+  }
+
+  /**
    * Read a JSON-object param. Accepts either an object value or a JSON string that
    * parses to an object. Returns `undefined` when missing or not an object.
    */

@@ -55,6 +55,10 @@ export * from './experiment';
 // score / experiment / promote), so agents / UI / workflows can invoke them (§12).
 export * from './actions';
 
+// The legacy-pipeline data migration — PipelineMigration: version-1 Prediction Units and Evaluation Protocols for
+// pipelines that predate them (or an archive or hold with the reason), run by the Migrate Pipelines Action.
+export * from './migration';
+
 // Remote Operations — the six Manual-mode server bodies for the CodeGen-emitted
 // `PredictiveStudio.*` operation bases. The typed peers of the Actions (same engine
 // delegation path), invocable by stable key from client or server (§12).

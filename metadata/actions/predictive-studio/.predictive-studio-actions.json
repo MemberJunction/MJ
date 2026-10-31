@@ -1088,5 +1088,138 @@
       "lastModified": "2026-07-01T17:33:33.586Z",
       "checksum": "235c098a3be2ec1579ed84a9cfc8fad0ae93a9604e71375a4b3c6074249aace7"
     }
+  },
+  {
+    "_comments": [
+      "Migrate Pipelines to Prediction Units and Evaluation Protocols — the Prediction Unit data migration, run by the release step (dry run by default, idempotent; a re-run migrates held pipelines once their adverse class is declared).",
+      "Type='Custom' + DriverClass binds to @RegisterClass(BaseAction,'PredictiveStudioMigratePipelinesAction')."
+    ],
+    "fields": {
+      "Name": "Migrate Pipelines to Prediction Units and Evaluation Protocols",
+      "Description": "Gives every ML Training Pipeline that lacks one a version-1 Prediction Unit (from TargetEntity, TargetVariable, ProblemType and AsOfStrategy) and a version-1 Evaluation Protocol (from ValidationStrategy and LeakageGuard: the trailing holdout fraction becomes a date cutoff, k-fold becomes repeated inner folds, the deny lists become exclusions), and binds both. Pipelines that cannot be expressed (offset as-of, a single-valued target, sequence models) are archived with the reason in their description; a binary pipeline whose adverse class its OutcomeConfig, newest model or target name does not declare is held (kept as is, training refused, reason in its description) until a later run migrates it. Dry run by default; skips pipelines already bound. Outputs a per-pipeline report.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioMigratePipelinesAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-right-left"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "true (default) reports what would be created or archived without saving."
+          },
+          "primaryKey": {
+            "ID": "DF3F1253-BA20-4224-9B87-A19E05B9FE3A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PipelineIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Optional subset of MJ: ML Training Pipelines ids; all pipelines when omitted."
+          },
+          "primaryKey": {
+            "ID": "3EB79100-19DA-4341-8AC2-2950BE29A8F5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Report",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON array, one row per pipeline: action (migrated, would-migrate, archived, would-archive, held, would-hold, skipped, failed), reason, unit and protocol ids, cutoff, notes."
+          },
+          "primaryKey": {
+            "ID": "03DEA6E2-A25E-43B8-85C1-94F0C1454DE5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MigratedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines migrated (or that a dry run would migrate)."
+          },
+          "primaryKey": {
+            "ID": "AF55093A-B866-47B7-9DDB-9C39948F3169"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArchivedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines archived (or that a dry run would archive) because they have no Prediction Unit form."
+          },
+          "primaryKey": {
+            "ID": "6C1F8E2B-0D4A-4C7E-9B35-2F8A61D04E77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HeldCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines held (or that a dry run would hold) because their adverse class is not declared; training them is refused until a later run migrates them."
+          },
+          "primaryKey": {
+            "ID": "7D66347C-E018-431A-8C36-7E7C799B1AEC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkippedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines skipped (already bound to a unit and a protocol, or already archived)."
+          },
+          "primaryKey": {
+            "ID": "D450982D-E9B7-4D1A-8484-E1666EF1D4A5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines whose migration failed; the report names the reason."
+          },
+          "primaryKey": {
+            "ID": "9E2D4B71-35C8-4F0A-A6E1-7B03C5D8F214"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5748E03D-0233-4BDD-83EA-FF9A946ADEA2"
+    }
   }
 ]
