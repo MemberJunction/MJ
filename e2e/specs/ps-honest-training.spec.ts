@@ -68,10 +68,17 @@ async function openRecordInApp(page: Page, entity: string, id: string): Promise<
   await page.evaluate((p) => { history.pushState(null, '', p); dispatchEvent(new PopStateEvent('popstate')); }, target);
 }
 
-/** Opens the latest version of the named lineage from a Studio list section, on its record form. */
-async function openLineage(page: Page, section: 'units' | 'protocols', name: string): Promise<void> {
+/** Opens the latest version of the named lineage from a Studio list section on its record form, by mouse or keyboard. */
+async function openLineage(page: Page, section: 'units' | 'protocols', name: string, via: 'mouse' | 'keyboard'): Promise<void> {
   await openSignedIn(page, `/app/predictive-studio/Studio?section=${section}`);
-  await page.locator('[data-testid="ps-versioned-row"]', { hasText: name }).locator('[data-testid="ps-versioned-open"]').click();
+  const open = page.locator('[data-testid="ps-versioned-row"]', { hasText: name }).locator('[data-testid="ps-versioned-open"]');
+  if (via === 'mouse') {
+    await open.click();
+  } else {
+    await open.focus();
+    await expect(open).toBeFocused();
+    await page.keyboard.press('Enter');
+  }
 }
 
 async function expectReadable(page: Page, selector: string): Promise<void> {
@@ -87,7 +94,7 @@ async function expectReadable(page: Page, selector: string): Promise<void> {
 
 test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
   test('Prediction Units: the C1 lineage is listed and "Create version N+1" with window 365 saves a new version', async ({ page }) => {
-    await openLineage(page, 'units', need('PS_C1_UNIT_NAME'));
+    await openLineage(page, 'units', need('PS_C1_UNIT_NAME'), 'keyboard');
     const versions = page.locator('[data-testid="ps-unit-version-list"] li');
     await expect(versions.first()).toBeVisible();
     const before = await versions.count();
@@ -98,7 +105,7 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
   });
 
   test('Evaluation Protocols: a negative margin is refused in the editor and 0.002 saves the next version', async ({ page }) => {
-    await openLineage(page, 'protocols', need('PS_C1_PROTOCOL_NAME'));
+    await openLineage(page, 'protocols', need('PS_C1_PROTOCOL_NAME'), 'mouse');
     const versions = page.locator('[data-testid="ps-protocol-version-list"] li');
     await expect(versions.first()).toBeVisible();
     const before = await versions.count();
@@ -117,6 +124,11 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
     await expect(page.locator('[data-testid="ps-pipeline-bindings"]')).toBeVisible();
     await page.locator('[data-testid="ps-bind-latest-protocol"]').click();
     await expect(page.locator('[data-testid="ps-bind-latest-protocol"]')).toHaveCount(0);
+    // The record-form container heard the widget's save and re-read the pipeline: its protocol field links to the newest
+    // version (a stale copy would still hold v1, and a later form save would write it back). Both versions share a name,
+    // so the link is followed and the protocol record's versions panel shows which version the form pointed at.
+    await page.locator('mj-form-field[fieldname="EvaluationProtocolID"] a[aria-label^="Open MJ: Evaluation Protocols record"]').click();
+    await expect(page.locator('[data-testid="ps-protocol-version-list"] button[aria-pressed="true"]')).toContainText('v2');
   });
 
   test('the model form shows the stored protocol results, readable in light and dark themes', async ({ page }) => {

@@ -86,7 +86,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                     @if (group) { <div class="ps-nav-group">{{ group }}</div> }
                     @for (item of ItemsForGroup(group); track item.key) {
                       <button class="ps-nav-item" [class.active]="ActiveSection === item.key"
-                        [attr.data-testid]="'ps-nav-' + item.key" (click)="selectSection(item.key)">
+                        [attr.data-testid]="'ps-nav-' + item.key" (click)="SelectSection(item.key)">
                         <i [class]="item.icon"></i> <span>{{ item.label }}</span>
                       </button>
                     }
@@ -131,7 +131,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                               [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="true"
                               [showAgentPicker]="false" [showAgentModePicker]="false"
                               [defaultAgentId]="ModelDevAgentId" [pendingMessage]="PendingPrompt"
-                              [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="ChatAppContext"
+                              [applicationScope]="'Application'" [applicationId]="ApplicationID" [appContext]="ChatAppContext"
                               (conversationCreated)="OnChatConversationCreated($event)"
                               (pendingMessageConsumed)="OnChatPendingMessageConsumed()"
                               (navigationRequest)="OnNavigationRequest($event)">
@@ -227,7 +227,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
   @ViewChild('pipelinesComp') PipelinesComponent?: PSPipelinesComponent;
 
   public OnCreatePipelineFromCatalog(algo: MJMLAlgorithmEntity): void {
-    this.selectSection('pipelines');
+    this.SelectSection('pipelines');
     setTimeout(() => {
       this.PipelinesComponent?.openWizard(algo.ID);
     }, 50);
@@ -354,7 +354,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
           const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
           const match = ResolvePSRecord(check.value, candidates);
           if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
-          this.selectSection(match.ID as PSPanelKey);
+          this.SelectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },
       },
@@ -392,7 +392,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
     return map[this.ActiveSection] || '';
   }
 
-  public selectSection(key: PSPanelKey): void {
+  public SelectSection(key: PSPanelKey): void {
     if (this.ActiveSection === key) return;
     this.ActiveSection = key;
     this.UpdateQueryParams({ section: key });
@@ -409,20 +409,24 @@ export class PSStudioResourceComponent extends PSResourceBase {
   public MapNavigate(key: PSPanelKey): void {
     const target = RouteHomeNavigate(key);
     if (target.Kind === 'section') {
-      this.selectSection(target.Key);
+      this.SelectSection(target.Key);
     } else if (target.Kind === 'app') {
       void this.navigationService.SwitchToApp(PREDICTIVE_STUDIO_APP_ID, target.NavLabel, { section: target.Section });
     }
   }
 
   // ── copilot ──────────────────────────────────────────────────────
-  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
+  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser || null; }
 
   public get ChatEnvironmentId(): string {
-    return (this.Data?.Configuration?.['environmentId'] as string | undefined) || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+    const id = this.Data?.Configuration?.['environmentId'];
+    return typeof id === 'string' && id ? id : MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
-  public get applicationId(): string | null { return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? null; }
+  public get ApplicationID(): string | null {
+    const id = this.Data?.Configuration?.['applicationId'];
+    return typeof id === 'string' && id ? id : null;
+  }
   public get ModelDevAgentId(): string | null { return this._modelDevAgentId; }
 
   public get ChatAppContext(): Record<string, unknown> {
@@ -471,7 +475,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
 
   /** Chat-area created its backing conversation on the first send — capture it + leave new-mode so the thread renders. */
   public OnChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
-    this.PendingPrompt = event.pendingMessage ?? null;
+    this.PendingPrompt = event.pendingMessage || null;
     this.ChatConversation = event.conversation;
     this.ChatConversationId = event.conversation.ID;
     this.ChatIsNewConversation = false;
@@ -487,9 +491,9 @@ export class PSStudioResourceComponent extends PSResourceBase {
   private async ensureModelDevAgentResolved(): Promise<void> {
     if (this._modelDevAgentId) return;
     try {
-      await AIEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser ?? undefined);
+      await AIEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser || undefined);
       this._modelDevAgentId =
-        AIEngineBase.Instance.Agents?.find((a) => a.Name?.trim().toLowerCase() === MODEL_DEV_AGENT_NAME.toLowerCase())?.ID ?? null;
+        AIEngineBase.Instance.Agents?.find((a) => a.Name?.trim().toLowerCase() === MODEL_DEV_AGENT_NAME.toLowerCase())?.ID || null;
       if (!this._modelDevAgentId) LogError(`PSStudioResource: '${MODEL_DEV_AGENT_NAME}' not found — chat uses default-agent routing.`);
       this.cdrLocal.detectChanges();
     } catch (err) {

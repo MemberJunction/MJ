@@ -60,7 +60,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
                     @if (group) { <div class="ps-nav-group">{{ group }}</div> }
                     @for (item of ItemsForGroup(group); track item.key) {
                       <button class="ps-nav-item" [class.active]="ActiveSection === item.key"
-                        [attr.data-testid]="'ps-nav-' + item.key" (click)="selectSection(item.key)">
+                        [attr.data-testid]="'ps-nav-' + item.key" (click)="SelectSection(item.key)">
                         <i [class]="item.icon"></i> <span>{{ item.label }}</span>
                       </button>
                     }
@@ -196,7 +196,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
     if (params['modelId']) {
       this.initialModelId = params['modelId'];
       if (this.engine && !this.engine.Models.some((m) => UUIDsEqual(m.ID, params['modelId']))) {
-        await this.engine.Config(true, this.ProviderToUse.CurrentUser ?? undefined, this.ProviderToUse);
+        await this.engine.Config(true, this.ProviderToUse.CurrentUser || undefined, this.ProviderToUse);
       }
     }
     this.cdrLocal.detectChanges();
@@ -233,7 +233,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
           const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
           const match = ResolvePSRecord(check.value, candidates);
           if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
-          this.selectSection(match.ID as PSPanelKey);
+          this.SelectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },
       },
@@ -252,10 +252,10 @@ export class PSModelsResourceComponent extends PSResourceBase {
       registry: 'Versioned trained models, their metrics, and lineage.',
       production: "What's scoring live, and its recent runs.",
     };
-    return map[this.ActiveSection] ?? '';
+    return map[this.ActiveSection] || '';
   }
 
-  public selectSection(key: PSPanelKey): void {
+  public SelectSection(key: PSPanelKey): void {
     if (this.ActiveSection === key) return;
     this.ActiveSection = key;
     this.UpdateQueryParams({ section: key });

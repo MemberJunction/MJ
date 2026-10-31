@@ -1,10 +1,10 @@
 /**
  * The Predictive Studio record-form panels (L3): each mounts one of the Studio widgets on an entity's record form and
- * turns the widget's events into navigation and record updates. They register when the Predictive Studio chunk loads
+ * turns the widget's events into navigation. They register when the Predictive Studio chunk loads
  * (`PSStudioResourceComponent.RecordPanels` keeps them in it), so a record form opened after that chunk shows them.
  */
 import { Component, inject } from '@angular/core';
-import { CompositeKey, LogError } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/core';
 import { RegisterClassEx } from '@memberjunction/global';
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { BaseFormPanel, BaseFormsModule } from '@memberjunction/ng-base-forms';
@@ -13,7 +13,7 @@ import { PSPipelineBindingsComponent } from '../components/pipeline-bindings/pip
 import { PSProtocolVersionsComponent } from '../components/protocol-versions/protocol-versions.component';
 import { PSRunEvaluationComponent } from '../components/run-evaluation/run-evaluation.component';
 import { PSUnitVersionsComponent } from '../components/unit-versions/unit-versions.component';
-import type { AfterBindingChangedEventArgs, AfterVersionSavedEventArgs } from '../components/ps-widget-events';
+import type { AfterVersionSavedEventArgs } from '../components/ps-widget-events';
 
 /** The record's ID once it is saved; null for a new record (the widgets then show nothing to load). */
 function savedId(record: { IsSaved: boolean; ID: string }): string | null {
@@ -74,6 +74,11 @@ export class PSUnitVersionsPanel extends BaseFormPanel<MJPredictionUnitEntity> {
   }
 }
 
+/**
+ * The bindings widget saves the pipeline row itself. The panel does nothing more: the record-form container hears that
+ * save of the same record (`wireRemoteRecordInvalidation`) and refreshes a clean form in place, or, in edit mode,
+ * merges the new binding into the record's clean fields and keeps the user's unsaved edits.
+ */
 @RegisterClassEx(BaseFormPanel, {
   key: 'form-panel:MJMLTrainingPipelines:bindings',
   metadata: { entity: 'MJ: ML Training Pipelines', slot: 'before-fields', sortKey: 95, contributionKey: 'ps-pipeline-bindings', inclusion: 'Primary' },
@@ -84,27 +89,13 @@ export class PSUnitVersionsPanel extends BaseFormPanel<MJPredictionUnitEntity> {
   imports: [BaseFormsModule, PSPipelineBindingsComponent],
   template: `
     <mj-collapsible-panel SectionKey="ps-pipeline-bindings" SectionName="Prediction Unit and Evaluation Protocol" Icon="fa-solid fa-link" [Form]="FormComponent" [FormContext]="FormContext" [Order]="DisplayOrder" [DefaultExpanded]="true">
-      <mj-ps-pipeline-bindings [Provider]="FormComponent.ProviderToUse" [PipelineID]="RecordID" (AfterBindingChanged)="OnBindingChanged($event)"></mj-ps-pipeline-bindings>
+      <mj-ps-pipeline-bindings [Provider]="FormComponent.ProviderToUse" [PipelineID]="RecordID"></mj-ps-pipeline-bindings>
     </mj-collapsible-panel>
   `,
 })
 export class PSPipelineBindingsPanel extends BaseFormPanel<MJMLTrainingPipelineEntity> {
   public get RecordID(): string | null {
     return savedId(this.Record);
-  }
-
-  /**
-   * The widget saved the pipeline row itself, so the form's copy of it is stale: a later form save would write the old
-   * binding back. A clean record is re-read; a record with unsaved edits keeps them and takes the new binding.
-   */
-  public async OnBindingChanged(e: AfterBindingChangedEventArgs): Promise<void> {
-    if (!e.Success) return;
-    if (!this.Record.Dirty) {
-      if (!(await this.Record.Refresh())) LogError(`PSPipelineBindingsPanel: the pipeline ${e.PipelineID} could not be re-read after rebinding.`);
-      return;
-    }
-    if (e.Which === 'unit') this.Record.PredictionUnitID = e.VersionID;
-    else this.Record.EvaluationProtocolID = e.VersionID;
   }
 }
 
