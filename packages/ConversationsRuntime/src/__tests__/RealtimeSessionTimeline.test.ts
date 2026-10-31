@@ -217,6 +217,8 @@ describe('session card presentation', () => {
       expect(chip('Explicit')).toEqual({ Label: 'Ended', Tone: 'neutral' });
       expect(chip('Janitor')).toEqual({ Label: 'Timed out', Tone: 'neutral' });
       expect(chip('Shutdown')).toEqual({ Label: 'Interrupted', Tone: 'neutral' });
+      expect(chip('TimeLimit')).toEqual({ Label: 'Time limit', Tone: 'neutral' });
+      expect(chip('Idle')).toEqual({ Label: 'Idle — no activity', Tone: 'neutral' });
       expect(chip('Error')).toEqual({ Label: 'Error', Tone: 'error' });
     });
 

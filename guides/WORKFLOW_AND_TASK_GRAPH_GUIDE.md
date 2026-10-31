@@ -164,9 +164,10 @@ everything routes on.
 | `Agent` | `TaskAgentRunner` → a **new** `AIAgentRun` | `Task.AgentID` | ✅ |
 | `Action` | `TaskActionRunner` → `ActionExecutionLog` | `Task.ActionID` | ✅ |
 | `Human` | nobody — waits for a person | `Task.UserID` | ✅ |
-| `ForEach` | `TaskLoopExecutor`, body dispatched per iteration | `Task.ActionID` / `AgentID` = the **body** | ✅ |
-| `While` | `TaskLoopExecutor` | same | ✅ |
-| `Prompt` | — | `Task.PromptID` | ❌ no runner yet |
+| `Prompt` | `TaskPromptRunner` → `AIPromptRun` | `Task.PromptID` | ✅ |
+| `ForEach` | `TaskLoopExecutor`, single body or multi-step `steps[]` per iteration | `Task.ActionID` / `AgentID` / `PromptID` (`Configuration.stepActionIds` for `steps[]`) | ✅ |
+| `While` | `TaskLoopExecutor`, single body or multi-step `steps[]` per iteration | same | ✅ |
+| `Decision` | `AIDecisionTaskRunner` → typed answers under `decisions.<step>.<question>` | `Task.PromptID` (optional; defaults to `Default Decision`) | ✅ |
 | `External` | an outside system reports back | — | ❌ no runner yet |
 
 Unrunnable kinds are **refused at submission by name**, not persisted. A task nobody can run would
@@ -352,6 +353,49 @@ A `While` loop is always sequential and always bounded; an **unevaluable conditi
 rather than ending it quietly, because "the condition broke" and "the loop finished" must not look
 alike.
 
+### Multi-step action loop bodies (`steps[]`)
+
+Both `ForEach` and `While` accept an ordered `steps?: LoopBodyActionStep[]` sequence instead of a
+single `action` / `subAgent` / `prompt` body when each iteration needs to chain multiple Actions in
+memory without expanding into N graph nodes or paying per-item LLM turns:
+
+```json
+{
+  "collectionPath": "payload.items",
+  "itemVariable": "item",
+  "indexVariable": "idx",
+  "executionMode": "sequential",
+  "steps": [
+    {
+      "id": "fetch",
+      "name": "Get Stock Price",
+      "params": { "ticker": "{{item.symbol}}" }
+    },
+    {
+      "id": "enrich",
+      "name": "Calculate Expression",
+      "condition": "steps.fetch.CurrentPrice > 100",
+      "params": { "Expression": "{{steps.fetch.CurrentPrice}} * {{item.shares}}" },
+      "outputMapping": "{\"details.result\": \"positions[]\"}"
+    }
+  ]
+}
+```
+
+- **In-memory step output chaining (`steps.<id>.*`)**: Every completed step stores its structured
+  output under `steps[step.id ?? "step_" + stepIndex]`. Later steps in the same iteration can read
+  earlier outputs in both `params` (`{{steps.fetch.CurrentPrice}}` or `"steps.fetch.CurrentPrice"`)
+  and `condition` (`steps.fetch.CurrentPrice > 100`).
+- **Per-step `condition` and `outputMapping`**: A step whose `condition` evaluates to `false` is
+  skipped cleanly for that iteration. Each executed step's `outputMapping` folds into the loop's
+  running payload (`positions[]` appends safely even under `executionMode: "parallel"`).
+- **Pre-resolved `ActionID`s & sanitized tool names**: `TaskGraphService.Submit` resolves every
+  distinct step's `ActionID` into `Task.Configuration.stepActionIds` (setting `Task.ActionID` to
+  `steps[0]`'s action for FK/UI compatibility) and accepts both canonical MJ Action names
+  (`"Calculate Expression"`) and sanitized native tool names (`"calculate_expression"`).
+- **Lossless Flow graduation**: `ConvertTaskGraphToAgentSpec` and `CompileFlowToTaskGraph` preserve
+  `steps[]` across runtime-to-Flow graduation and compilation.
+
 ---
 
 ## Failure
@@ -409,6 +453,124 @@ returns a handle immediately.
 
 Author workflows as declarative metadata under `metadata/` and push with `mj sync push`, so they are
 reviewable and travel between environments. See [`metadata/CLAUDE.md`](../metadata/CLAUDE.md).
+
+---
+
+## Triggers: when a workflow runs
+
+Everything above defines *what* a workflow does. *When* it runs is declared beside it, in a
+`WorkflowSpec` (`packages/AI/CorePlus/src/task-graph/workflow-spec.ts`):
+
+| Field | Meaning |
+|---|---|
+| `name`, `description` | The workflow as people see it |
+| `status` | `Draft` (the default), `Active` or `Paused` |
+| `graph` | A `TaskGraphSpec`, verbatim: the same shape the canvas, a Loop agent and a past run produce |
+| `triggers` | When it runs. Empty means on demand |
+| `notifications` | Who hears about a run: `Always`, `OnFailure` or `OnChange`, to a list of user IDs |
+
+**There is no `Workflow` table.** Saving a spec *reconciles* rows that already exist: the Flow agent
+behind the graph, a Scheduled Job for a schedule, an Entity Action binding for a record change. Each
+owned row is matched by a marker in its own configuration, so ownership survives a rename, and
+re-saving updates rows in place rather than deleting and recreating them, so a live trigger is never
+detached for a moment.
+
+### The three trigger kinds
+
+| `type` | Fires | What saving creates or updates |
+|---|---|---|
+| `OnDemand` | Only when something asks: **Run** in the Workflows app, an agent, the `TaskGraph.Submit` operation | Nothing |
+| `Schedule` | On `cron`, in `timezone` (an IANA zone; absent means the job's own default) | One `MJ: Scheduled Jobs` row of the existing `Agent` job type, pointing at the workflow's agent |
+| `EntityEvent` | After a record of `entityName` is created, updated or deleted, when `filter` allows | An `MJ: Entity Actions` binding on that entity dispatching to the existing `Execute Agent` action: an `MJ: Entity Action Invocations` row for the event, `MJ: Entity Action Params` carrying the agent and the changed record, and, when `filter` is set, an `MJ: Action Filters` row bound through `MJ: Entity Action Filters` |
+
+### Record-change (`EntityEvent`) triggers
+
+```jsonc
+"triggers": [{
+  "type": "EntityEvent",
+  "entityName": "Invoices",
+  "invocationType": "Update",
+  "filter": "DidFieldChangeToValue('Status', 'Approved')"
+}]
+```
+
+- **`invocationType`** is `AfterCreate`, `AfterUpdate` or `AfterDelete`, or the shorthand `Create`,
+  `Update`, `Delete`, which resolves to the *After* form. `Validate` and the `Before*` types are
+  refused: they run inside the save, holding its transaction open with the power to abort it, and a
+  workflow bound there would put an agent run in the middle of a user's save.
+- **`filter`** is a JavaScript boolean expression about the change. In scope:
+  `DidFieldChange('Field')`, `DidFieldChangeToValue('Field', value)`, `OldValues`, `NewValues`, and
+  `ActionFilterContext`. **Write the transition, not the state**: `NewValues.Status === 'Approved'` is
+  true on every later save too, while `DidFieldChangeToValue('Status', 'Approved')` is true once, on
+  the save that made it so. **A create reports no changed fields**, so a `Create` trigger tests
+  `NewValues` instead. The expression is syntax-checked when the workflow is validated, and at run time
+  it **fails closed**: one that throws prevents the run. It is the same language a plain entity action
+  filter and a Record Process `OnChangeFilter` use; the full vocabulary is in
+  [`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md#transition-filters--deciding-on-the-change-not-the-end-state).
+- **`scopeEntityName` / `scopeRecordID`** narrow the trigger from the whole entity to one record.
+
+### Saving: `Workflow.Draft`, `Workflow.Validate`, `Workflow.Save`
+
+Three remote operations, implemented in `packages/TaskGraph/src/operations/WorkflowOperations.ts`:
+
+| Operation | Does |
+|---|---|
+| `Workflow.Draft` | Turns a plain-English description into a `TaskGraphSpec`, constrained to agents that exist. **Persists nothing**; the Workflows app's *Describe it* path uses it, and the author reviews the draft on the canvas |
+| `Workflow.Validate` | Runs exactly the validation `Workflow.Save` runs and returns every problem, each with a code, so an agent can iterate before committing |
+| `Workflow.Save` | Validates, persists the Flow agent, then reconciles the triggers (`packages/TaskGraph/src/WorkflowSpecSync.ts`). Returns the `agentID`, the Scheduled Jobs it touched, and `unreconciled`: any trigger it could not wire is reported, never silently dropped |
+
+`Workflow.Save` needs the agent-authoring package loaded on the host; without it the save is refused
+with that reason rather than half-persisting a workflow.
+
+Removing a trigger **disables** what it owned rather than deleting it: a Scheduled Job keeps its
+counts and run history, and a removed filter's row keeps the expression someone wrote.
+
+### Status, and two current gaps
+
+A schedule follows the workflow's status: its job is `Active` only while the spec is `Active`, so a
+`Draft` or `Paused` workflow keeps its schedule without running on it.
+
+**Record-change triggers do not follow status yet.** Today:
+
+1. An `EntityEvent` trigger's binding is saved `Active` whatever the workflow's status, so a `Draft`
+   workflow with one fires on the next matching save.
+2. Removing an `EntityEvent` trigger from the spec leaves its binding `Active`.
+
+Until that changes, save record-change triggers only on a workflow that is ready to run, and stop one
+by setting its `MJ: Entity Actions` row to `Disabled`.
+
+### Where people work with triggers
+
+| Surface | What it does with triggers |
+|---|---|
+| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow **on demand**. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
+| **Workflows** app → list | Does not read triggers back yet, so every workflow shows as *On demand* |
+| A conversation's plan card → **Save as workflow** | Saves an agent's plan as an on-demand workflow |
+| **Scheduling** app | Shows the job a `Schedule` trigger owns, and its runs |
+| `Workflow.Save`, from code, an agent or an MCP client | The way to add or change a `Schedule` or `EntityEvent` trigger today |
+
+### Which record-change mechanism to use
+
+All three below share the same filter language and end up as the same Entity Action rows, so a person
+who learns one has learned the others.
+
+| You need | Use |
+|---|---|
+| One action when a record changes ("send the customer a confirmation") | A plain Entity Action with an Action Filter: [`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md) |
+| One operation over a set of records, on demand, on a schedule or on change | A Record Process: [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md), §7 |
+| Several steps, a branch, a person in the loop, or work that takes minutes | A workflow with an `EntityEvent` trigger |
+
+**Durability.** A record-change dispatch is an `After*` entity action, which runs fire-and-forget in
+the saving process unless its binding's `RunMode` is `Durable`. For a workflow that matters less
+than it sounds: `Execute Agent` submits the workflow as a durable task graph, so only the hand-off
+runs in that process. For a plain Entity Action whose work has an outside effect (an email, a call to
+another system), set `RunMode = 'Durable'`. The work then survives a restart and is tied to the
+transaction that caused it, so a save that rolled back never fires it. See "Durable dispatch" in
+[`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md).
+
+For people who configure workflows rather than write code, the companion
+[Workflows for Business Users](WORKFLOWS_FOR_BUSINESS_USERS.md) guide explains the same ideas without
+the internals.
 
 ---
 
@@ -558,6 +720,22 @@ See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkth
 
 ## Troubleshooting
 
+### The workflow never fires on its trigger
+
+| Check | Why |
+|---|---|
+| Does the workflow have a trigger at all? | Workflows created in the Workflows app are on demand until a trigger is saved through `Workflow.Save` |
+| Was `unreconciled` empty when it was saved? | A trigger that could not be wired is reported there, not dropped |
+| Is a schedule's workflow `Active`? | A `Draft` or `Paused` workflow's Scheduled Job is `Disabled` |
+| Is the filter about a change? | `DidFieldChange` is false on every field of a create; a `Create` trigger must test `NewValues` |
+| Is there an `ActionExecutionLog` row whose message says a filter prevented it? | The filter ran and said no, or threw: filters fail closed |
+| Did the change go through `BaseEntity.Save()`? | Direct SQL fires no entity action |
+
+### The workflow fires too often
+
+The filter describes a state, not a transition. `NewValues.Status === 'Approved'` is true on every
+save after approval; use `DidFieldChangeToValue('Status', 'Approved')`.
+
 ### The workflow finished but did nothing
 
 Look for **every branch `Skipped`**. That means no condition at a fork evaluated true — and the
@@ -629,6 +807,8 @@ The type system makes most of this a compile error rather than a runtime surpris
 
 ## Related reading
 
+- [Workflows for Business Users](WORKFLOWS_FOR_BUSINESS_USERS.md) — the same concepts for people who
+  configure workflows rather than write code
 - [`packages/AI/Agents/README.md`](../packages/AI/Agents/README.md) — the agent framework, agent
   types, and where `FlowAgentType` fits
 - [`packages/TaskGraph/README.md`](../packages/TaskGraph/README.md) — the durable execution package:

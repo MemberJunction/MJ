@@ -28,6 +28,9 @@
  *  - **Widget input bridge** (`whiteboard-widget-bridge.ts`) — the `MJWhiteboard.submit`
  *    postMessage contract that lets STRICTLY SANDBOXED HTML widgets send user input back
  *    to the host.
+ *  - **Widget protocol + broker** (`whiteboard-widget-protocol.ts`,
+ *    `whiteboard-widget-broker.ts`) — the return path: the host inspects, operates and
+ *    calls actions in a live widget, and restores its saved state.
  *
  * See the package README for a quickstart, the agent-integration recipe, the event
  * surface, security notes, and theming/extension points.
@@ -45,6 +48,11 @@ export * from './lib/whiteboard-export';
 
 // Sandboxed HTML-widget input bridge (MJWhiteboard.submit contract + host validation).
 export * from './lib/whiteboard-widget-bridge';
+
+// Two-way widget protocol (host → widget commands: markers, wire shapes, validators, caps,
+// deadlines, error codes) and the Angular-free request/reply broker built on it.
+export * from './lib/whiteboard-widget-protocol';
+export * from './lib/whiteboard-widget-broker';
 
 // View-scoped srcdoc builder pipe for sandboxed HTML widgets (rebuilt per mount,
 // identity-stable while mounted — see the pipe's TSDoc for the lifecycle contract).

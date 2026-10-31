@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 
 vi.mock('type-graphql', () => {
     const noopDecorator = () => () => undefined;
@@ -38,7 +37,10 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
     AIPromptParams: class {},
 }));
 
-import { RemoteBrowserActionResolver } from '../resolvers/RemoteBrowserActionResolver.js';
+// The resolver reads its conversation-browser settings from the server config; off, as by default.
+vi.mock('../config.js', () => ({ configInfo: { realtime: { conversationBrowser: { enabled: false } } } }));
+
+import { RemoteBrowserActionResolver, type OwnedBrowserScope } from '../resolvers/RemoteBrowserActionResolver.js';
 
 const uuid = (a: string, b: string) =>
     [a.repeat(8), b.repeat(4), '4' + b.repeat(3), '8' + b.repeat(3), b.repeat(12)].join('-');
@@ -59,7 +61,7 @@ function makeProvider(sessionFound = true, externalId = 'visitor-1'): IMetadataP
         GetEntityObject: vi.fn(async (entityName: string) =>
             entityName === 'MJ: AI Agent Sessions'
                 ? { ID: SESSION, UserID: ANON, ConversationID: CONVERSATION, Load: vi.fn(async () => sessionFound) }
-                : { ExternalID: externalId, Load: vi.fn(async () => true) },
+                : { ExternalID: externalId, Load: vi.fn(async (id: string) => id === CONVERSATION) },
         ),
     } as unknown as IMetadataProvider;
 }
@@ -69,7 +71,7 @@ class TestableRemoteBrowserResolver extends RemoteBrowserActionResolver {
         agentSessionID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<MJAIAgentSessionEntity> {
+    ): Promise<OwnedBrowserScope> {
         return this.loadOwnedSession(agentSessionID, contextUser, provider);
     }
 }

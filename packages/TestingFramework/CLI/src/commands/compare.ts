@@ -513,6 +513,7 @@ export class CompareCommand {
             ExtraFilter: extraFilter,
             OrderBy: 'StartedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
         return result.Success && result.Results.length > 0 ? result.Results[0] : null;

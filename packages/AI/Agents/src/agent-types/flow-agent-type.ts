@@ -34,7 +34,8 @@ import {
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
 import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation, type LoopBodyActionStep } from '@memberjunction/ai-core-plus';
+import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -2146,7 +2147,7 @@ export class FlowAgentType extends BaseAgentType {
         // Build universal ForEachOperation
         const forEach: ForEachOperation = {
             collectionPath: baseConfig.collectionPath,
-            itemVariable: baseConfig.itemVariable,
+            itemVariable: baseConfig.itemVariable || 'item',
             indexVariable: baseConfig.indexVariable,
             maxIterations: baseConfig.maxIterations,
             continueOnError: baseConfig.continueOnError,
@@ -2155,8 +2156,19 @@ export class FlowAgentType extends BaseAgentType {
             maxConcurrency: baseConfig.maxConcurrency
         };
 
-        // Add action or subAgent based on LoopBodyType (using cached engine data - no await needed)
-        if (node.LoopBodyType === 'Action') {
+        // Multi-step loop bodies (`steps[]`, e.g. from graduated TaskGraphSpec workflows) take precedence
+        // over single-action `node.ActionID` (which only holds steps[0]'s ID on AIAgentStep).
+        if (Array.isArray(baseConfig.steps) && baseConfig.steps.length > 0) {
+            const resolvedSteps = this.resolveFlowLoopBodySteps(baseConfig.steps as LoopBodyActionStep[]);
+            if (resolvedSteps.errorMessage || !resolvedSteps.steps) {
+                return this.createNextStep('Failed', {
+                    errorMessage: resolvedSteps.errorMessage ?? `Failed to resolve steps[] for ForEach step '${node.Name}'`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+            forEach.steps = resolvedSteps.steps;
+        } else if (node.LoopBodyType === 'Action') {
             // Use the regular Action registry (ActionEngineServer), NOT AIEngine.Instance.Actions —
             // the latter is the legacy AI Actions collection (MJAIActionEntity) and never contains
             // standard Actions like Web Search, so a loop body over a normal Action would always miss.
@@ -2237,14 +2249,25 @@ export class FlowAgentType extends BaseAgentType {
         // Build universal WhileOperation
         const whileOp: WhileOperation = {
             condition: baseConfig.condition,
-            itemVariable: baseConfig.itemVariable,
+            itemVariable: baseConfig.itemVariable || 'attempt',
             maxIterations: baseConfig.maxIterations,
             continueOnError: baseConfig.continueOnError,
             delayBetweenIterationsMs: baseConfig.delayBetweenIterationsMs
         };
 
-        // Add action or subAgent based on LoopBodyType
-        if (node.LoopBodyType === 'Action') {
+        // Multi-step loop bodies (`steps[]`, e.g. from graduated TaskGraphSpec workflows) take precedence
+        // over single-action `node.ActionID` (which only holds steps[0]'s ID on AIAgentStep).
+        if (Array.isArray(baseConfig.steps) && baseConfig.steps.length > 0) {
+            const resolvedSteps = this.resolveFlowLoopBodySteps(baseConfig.steps as LoopBodyActionStep[]);
+            if (resolvedSteps.errorMessage || !resolvedSteps.steps) {
+                return this.createNextStep('Failed', {
+                    errorMessage: resolvedSteps.errorMessage ?? `Failed to resolve steps[] for While step '${node.Name}'`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+            whileOp.steps = resolvedSteps.steps;
+        } else if (node.LoopBodyType === 'Action') {
             // Use the regular Action registry (ActionEngineServer), NOT AIEngine.Instance.Actions —
             // the latter is the legacy AI Actions collection (MJAIActionEntity) and never contains
             // standard Actions like Web Search, so a loop body over a normal Action would always miss.
@@ -2299,6 +2322,47 @@ export class FlowAgentType extends BaseAgentType {
             previousPayload: payload,
             agentTypeData: { stepId: node.ID }
         } as BaseAgentNextStep<P> & { agentTypeData?: any };
+    }
+
+    /**
+     * Resolves and canonicalizes a `LoopBodyActionStep[]` from a Flow step's `Configuration.steps`,
+     * verifying that every step's action exists in `ActionEngineServer.Instance.Actions` (matching
+     * either canonical `Name` case-insensitively or unambiguous `SanitizeToolName`).
+     */
+    private resolveFlowLoopBodySteps(
+        rawSteps: readonly LoopBodyActionStep[]
+    ): { steps?: LoopBodyActionStep[]; errorMessage?: string } {
+        const actions = ActionEngineServer.Instance.Actions;
+        const resolvedSteps: LoopBodyActionStep[] = [];
+        for (const step of rawSteps) {
+            const rawName = step?.name?.trim() ?? '';
+            if (!rawName) {
+                return { errorMessage: 'Loop body step in steps[] is missing an action name' };
+            }
+            const lower = rawName.toLowerCase();
+            let action = actions.find((a) => a.Name.trim().toLowerCase() === lower);
+            if (!action) {
+                const targetSanitized = SanitizeToolName(rawName);
+                if (targetSanitized) {
+                    const matches = actions.filter((a) => SanitizeToolName(a.Name) === targetSanitized);
+                    if (matches.length === 1) {
+                        action = matches[0];
+                    } else if (matches.length > 1) {
+                        return {
+                            errorMessage: `Ambiguous action tool name '${step.name}' in loop steps[]: matches ${matches.map((m) => m.Name).join(', ')}`,
+                        };
+                    }
+                }
+            }
+            if (!action) {
+                return { errorMessage: `Action not found for loop body step '${step.id || step.name}': ${step.name}` };
+            }
+            resolvedSteps.push({
+                ...step,
+                name: action.Name,
+            });
+        }
+        return { steps: resolvedSteps };
     }
 
     /**

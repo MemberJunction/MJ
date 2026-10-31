@@ -34,7 +34,7 @@
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, DatabaseProviderBase, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
-import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSessionEntity,
@@ -2060,9 +2060,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const existing = await rv.RunView<MJAIAgentSessionChannelEntity>(
             {
                 EntityName: SESSION_CHANNEL_ENTITY,
-                ExtraFilter: `AgentSessionID='${agentSessionID}' AND ChannelID='${channelID}'`,
+                ExtraFilter: `AgentSessionID='${EscapeSQLString(agentSessionID)}' AND ChannelID='${EscapeSQLString(channelID)}'`,
                 ResultType: 'entity_object',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2451,6 +2452,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 Fields: ['ID', 'IsEnabled'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2613,6 +2615,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 OrderBy: '__mj_CreatedAt DESC',
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2701,9 +2704,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             const existing = await rv.RunView<MJAIAgentSessionChannelEntity>(
                 {
                     EntityName: SESSION_CHANNEL_ENTITY,
-                    ExtraFilter: `AgentSessionID='${agentSessionID}' AND ChannelID='${channelID}'`,
+                    ExtraFilter: `AgentSessionID='${EscapeSQLString(agentSessionID)}' AND ChannelID='${EscapeSQLString(channelID)}'`,
                     ResultType: 'entity_object',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 },
                 contextUser,
             );
@@ -3042,6 +3046,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ExtraFilter: `AgentSessionID='${session.ID}' AND Role='${mappedRole}'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             },
             writeUser,

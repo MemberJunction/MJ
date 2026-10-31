@@ -1,11 +1,38 @@
 # MemberJunction Memory & Resource Leak Audit
 
-**Generated:** 2026-10-17 (Round 19)
-**Prior Runs:** Round 18 (2026-10-10), Round 17 (2026-10-03) and Rounds 1–16 retained below as history.
+**Generated:** 2026-10-24 (Round 20)
+**Prior Runs:** Round 19 (2026-10-17), Round 18 (2026-10-10) and Rounds 1–17 retained below as history.
 **Scope:** Full monorepo `packages/` tree, 10 parallel `Explore` subagents in two waves (5 broad + 5 deep-subtree) plus repo-wide static cross-check greps. This round concentrated on the **885 commits / 583 changed non-test source files** since Round 16, and re-verified every Round 16 finding at its cited location.
 **Re-run command:** `/audit-memory-leaks`
 
-This document is organised as: Round 19 (this round) first, then Round 18 and earlier unchanged as history. Raw output lives in `plans/.memory-leak-snapshots/2026-10-17/` (git-ignored).
+This document is organised as: Round 20 (this round) first, then Round 19, Round 18 and earlier unchanged as history. Raw output lives in `plans/.memory-leak-snapshots/2026-10-17/` (git-ignored).
+
+## Round 20 Executive Summary (2026-10-24)
+
+Scope: 3 parallel `Explore` subagents (Angular; server/core/engines; AI/tooling) over the 743 changed non-test source files (752 commits) since Round 19, plus repo-wide static cross-check greps (46 `MJGlobal…GetEventListener`, 161 `setInterval`, 275 `.addEventListener(`, 420 private `Map` fields, 129 `BaseSingleton` subclasses, 348 `package.json`). Agents were read-only; the orchestrator verified the High findings by reading the code. Per-run notes: `plans/.memory-leak-snapshots/2026-10-24/` (git-ignored).
+
+| Status | Critical | High | Medium | Low |
+|---|---:|---:|---:|---:|
+| **New in Round 20** | 0 | 2 | 4 | ~13 |
+| **Fixed in this round's PR** | 0 | 2 | 0 | 0 |
+
+### Fixed in this round's PR
+| # | Package | Finding | Fix | Tests |
+|---|---|---|---|---|
+| 1 | `@memberjunction/ng-conversations` | **High.** `ConversationChatAreaComponent.messageInputMetadataCache` gained one entry per conversation visited, and each entry keeps a hidden `mj-message-input` mounted (`conversation-chat-area.component.html` `@for (… getCachedInputs())`). Never trimmed, so DOM and component memory grew with every conversation opened in a session. | `touchMessageInputCache` keeps the 10 most-recently-used idle composers (revisit refreshes recency, case-insensitive UUIDs deduplicated), skips composers with active agent work / unsent attachments / live voice sessions until idle, scopes `MessageInputComponent.ngOnDestroy` voice teardown to the owning conversation, and drops the evicted composer's frozen `initialDraftSnapshots` entry so a remount re-reads the latest draft from the draft store. | New `chat-area-composer-cache.test.ts` (14). Package suite 213 files / 2971 tests pass; `ngc` clean. |
+| 2 | `@memberjunction/ng-base-forms` | **High.** Static `MjRecordPreviewPopoverComponent.summaryCache` and `MjRecordLinksComponent.depCache`: one entry per previewed/opened record for the whole session; the `LoadedAt` TTL was checked only on read, so expired entries were never evicted. | Both are now `MJLruCache` (500 / 200 entries, 60 s / 30 s TTL) with `IMetadataProvider`-scoped (`WeakMap`-tagged), case-normalized keys. | New `record-caches.dom.test.ts` (4) + existing record-links/preview DOM tests; suite 78 files / 1525 tests pass; `ngc` clean. |
+
+Not run: the deterministic integration tier (`pnpm run test:integration`) needs a provisioned database unavailable in this sandbox; no change touches schema, migrations or metadata.
+
+### New findings, deferred
+- **Medium — `TaskGraphDispatcher`** (`TaskGraph/src/TaskGraphDispatcher.ts:512,4414`; `:470,3437`; `:541,696,4455`): `reportedUndeliverable`, `reportedUnevaluableConditions` (keyed by `depID:errorMessage`, not purged by `forgetGraphObservability`) and `ownerByParentID` (deliberately kept, per the comment at `:2655`) grow per graph for the life of the worker. Strings only; proposal is `MJLruCache` (e.g. 10 000) or purge `reportedUnevaluableConditions` by graph in `forgetGraphObservability`. Low: `announcedSettlements` is deleted only on the retry path.
+- **Medium (re-rated from the Round 19 list, still open):** `user-notifications.component.ts:153` `vmCache` is keyed by notification ID with no pruning (component-scoped); `shell.component.ts:870` discarded `GetEventListener(true)` subscription (shell lives for the session).
+- **Low:** `GenericDatabaseProvider._lastDatasetStatusByName` (`:301,7109`) keyed by dataset+filter, no eviction; `WriteBackProcessor._lookupCache` (`:64,173`) never cleared (confirm processors are per-run); `ScheduledJobEngine.Stop` race timer (`:420`) not cleared; `ResolverBase.ListenForEntityMessages` (`:1654`) pins first caller's pubSub (correctness); `BaseEntity` `TransactionNotifications$` subscriptions (`:5372,6657`); `TemplateEngine._referencedVariablesCache` (`:236`) uncapped; `PayloadManager._parsedPathSpecCache` (`:975`) uncapped; `Gemini._thinkingReplacements/_warnedThinking`; `WatchService.ownWrites` not cleared in `stop()`; `notifications.service.ts:152` discarded subscription; `realtime-session.service.ts:77` `pagehide`/`visibilitychange` listeners (root singleton, documented); a handful of unstored one-shot `setTimeout`s in `ai-prompt-form`, `record-process-form`, `entity-cards`, `workspace-initializer.service`.
+
+### Resolved since Round 19
+`join-grid` and `search-suggest` discarded `GetEventListener` subscriptions now use `takeUntil`; the 8 DevTools components' `super.*` calls and `EventMonitorComponent`'s timer cleanup re-verified; all abort-listener/timer pairings re-checked in `base-agent`, `AIPromptRunner`, `BaseModelRunner`, `ActionEngine`, `ElevenLabs`, `Ollama` and the realtime session services are balanced.
+
+---
 
 ## Round 19 Executive Summary (2026-10-17)
 

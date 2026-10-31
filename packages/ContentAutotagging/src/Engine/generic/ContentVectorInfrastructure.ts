@@ -114,6 +114,50 @@ export class ContentVectorInfrastructure {
     }
 
     /**
+     * Resolve the target `MJ: Vector Indexes` row ID for a content source using the pipeline's
+     * vector-index resolution cascade (`groupKeyFor`):
+     * 1. `ContentSource.VectorIndexID`
+     * 2. `ContentType.VectorIndexID`
+     * 3. `ContentPipeline.DefaultVectorIndexID` on the active default `MJ: AI Configurations` row,
+     *    or the sole vector index when `VectorIndexes.length === 1`.
+     *
+     * Returns `null` (and logs) when no default index can be unambiguously resolved; the caller
+     * decides what that means (creating an Entity Record Document treats it as a configuration error).
+     */
+    public async ResolveVectorIndexID(source: {
+        ID: string;
+        ContentTypeID?: string | null;
+        VectorIndexID?: string | null;
+    }): Promise<string | null> {
+        if (source.VectorIndexID) {
+            return source.VectorIndexID;
+        }
+        const kh = KnowledgeHubMetadataEngine.Instance;
+        await kh.Config(false, this.contextUser, this.provider);
+        const cachedSource = kh.GetContentSourceByID(source.ID);
+        if (cachedSource?.VectorIndexID) {
+            return cachedSource.VectorIndexID;
+        }
+        const contentTypeID = source.ContentTypeID ?? cachedSource?.ContentTypeID;
+        if (contentTypeID) {
+            const contentType = kh.GetContentTypeByID(contentTypeID);
+            if (contentType?.VectorIndexID) {
+                return contentType.VectorIndexID;
+            }
+        }
+        try {
+            await AIEngine.Instance.Config(false, this.contextUser, this.provider);
+            const defaultIndex = await this.resolveDefaultVectorIndex();
+            return defaultIndex.ID;
+        } catch (error) {
+            LogError(
+                `ContentVectorInfrastructure.ResolveVectorIndexID: could not resolve default vector index for source '${source.ID}': ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return null;
+        }
+    }
+
+    /**
      * Each item's provider directives. A provider may refuse an item (a mandatory routing value is
      * missing); that item is reported, never written to a default namespace, and the rest proceed.
      */

@@ -16,6 +16,7 @@ export * from './bootstrap-client';
 export * from './ai-verify';
 export * from './check';
 export * from './check-registry';
+export * from './skip-gate';
 import './checks/self-test.check'; // side effect: register the permanent Phase-0 smoke check
 export * from './rls-fixture';
 export * from './fls-fixture';

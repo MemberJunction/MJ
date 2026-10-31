@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { NamedQueryParameter, TypedQueryParameter } from '@memberjunction/generic-database-provider';
 import { PGQueryParameterProcessor } from '../queryParameterProcessor.js';
 
 describe('PGQueryParameterProcessor', () => {
@@ -46,6 +47,11 @@ describe('PGQueryParameterProcessor', () => {
             const params = [1, 'hello', true, null];
             const result = PGQueryParameterProcessor.ProcessParameters(params);
             expect(result).toEqual([1, 'hello', true, null]);
+        });
+
+        it('binds named and typed parameter objects by position, unwrapping their values', () => {
+            const params = [new NamedQueryParameter('$1', true), new TypedQueryParameter('$2', 'character varying(20)', 'Open')];
+            expect(PGQueryParameterProcessor.ProcessParameters(params)).toEqual([true, 'Open']);
         });
     });
 

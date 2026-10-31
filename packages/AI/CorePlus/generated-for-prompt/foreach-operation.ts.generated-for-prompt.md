@@ -1,4 +1,12 @@
 ```ts
+interface LoopBodyActionStep {
+    id?: string;  // Optional handle for referencing outputs from later steps in the same iteration (`steps.<id>.*`).
+    name: string;  // Action name (canonical MJ Action name or sanitized native tool name).
+    params: Record<string, unknown>;  // Parameters passed to the action (`item.field`, `steps.<id>.field`, `payload.*`, `static:*`, or...
+    condition?: string;  // Optional boolean expression evaluated before this step runs; falsy skips the step cleanly.
+    outputMapping?: string;  // Optional JSON mapping string (`{"ActionOutputField": "payloadPath"}` or `"target[]"`) folding...
+}
+
 interface ForEachOperation {
     collectionPath: string;  // Path in payload to array to iterate over
     itemVariable?: string;  // Variable name for current item (default: "item")
@@ -13,6 +21,7 @@ interface ForEachOperation {
         params: Record<string, unknown>;
         outputMapping?: string;
     };  // Execute action per iteration
+    steps?: LoopBodyActionStep[];  // Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
     subAgent?: {
         name: string;
         message: string;

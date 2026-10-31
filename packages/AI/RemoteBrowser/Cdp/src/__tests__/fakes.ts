@@ -57,6 +57,18 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
     public SelectionTextValue = 'SELECTED TEXT';
     /** When set, {@link GetSelectionText} rejects with this error. */
     public GetSelectionTextError: Error | null = null;
+    /** Text returned from {@link GetVisibleText}; defaults to `'Visible page text'`. */
+    public VisibleTextValue = 'Visible page text';
+    /**
+     * What {@link EvaluateInPage} returns under the node environment, where there is no DOM to run the
+     * in-page script against. Under jsdom the script runs against the test's own document instead.
+     */
+    public EvaluateFallback: object | null = null;
+    /**
+     * What a Type action's selector resolves to, standing in for Playwright's locator (DOM tests): the
+     * fake focuses it, as the real adapter does before typing.
+     */
+    public FocusBySelector: ((selector: string) => { focus(): void } | null) | null = null;
     /** Captured `onFrame` callback from {@link StartScreencast}, so a test can drive frames. */
     public LastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
     /** Count of {@link StartAudioCapture} calls. */
@@ -79,6 +91,9 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
 
     public override async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
         this.ExecutedActions.push(action);
+        if (action.Type === 'Type' && action.Selector) {
+            this.FocusBySelector?.(action.Selector)?.focus();
+        }
         if (this.ExecuteError) {
             throw this.ExecuteError;
         }
@@ -92,6 +107,14 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
 
     public override async CaptureScreenshot(): Promise<string> {
         return 'BASE64SCREENSHOT';
+    }
+
+    public override async GetVisibleText(): Promise<string> {
+        return this.VisibleTextValue;
+    }
+
+    public override async EvaluateInPage<R, A>(fn: (arg: A) => R, arg: A): Promise<R | null> {
+        return typeof document === 'undefined' ? (this.EvaluateFallback as R | null) : fn(arg);
     }
 
     public override async GetSelectionText(): Promise<string> {
