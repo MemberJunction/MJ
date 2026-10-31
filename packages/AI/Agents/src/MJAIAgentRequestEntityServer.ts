@@ -11,10 +11,17 @@
  *
  * Conversation-originated responses are handled by the chat resolver's
  * `syncFeedbackRequestFromConversation()` and never reach this code path.
+ *
+ * Ownership: a request is private to the user it is for. The UI role may create and update
+ * requests (granted in `metadata/entity-permissions`), so `Validate()` keeps the rows per-user:
+ * a non-Owner-type user may create a request only for themselves and may update only a request
+ * that was already theirs (the PRE-save `RequestForUserID`). Owner-type users, the scheduler's
+ * system user among them, are exempt, which is what cross-user paths such as Send Inter-Agent
+ * Request run under.
  */
 
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
@@ -26,6 +33,34 @@ const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
 
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
 export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.validateOwnership(result);
+        result.Success = result.Success && result.Errors.length === 0;
+        return result;
+    }
+
+    /**
+     * A non-Owner-type user may only save a request that is for them: on create, the one they
+     * are creating; on update, the one it was for before this save (so reassigning
+     * RequestForUserID cannot bypass the gate).
+     */
+    private validateOwnership(result: ValidationResult): void {
+        const user = this.ContextCurrentUser;
+        if (!user || user.Type?.trim().toLowerCase() === 'owner') {
+            return;
+        }
+        const preSaveOwner = (this.GetFieldByName('RequestForUserID')?.OldValue as string | null | undefined) ?? this.RequestForUserID;
+        if (preSaveOwner && !UUIDsEqual(preSaveOwner, user.ID)) {
+            result.Errors.push(new ValidationErrorInfo(
+                'RequestForUserID',
+                'An agent request is private to the user it is for — you can only create or modify your own requests.',
+                this.RequestForUserID,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // Capture pre-save state to detect status transitions
         const statusField = this.GetFieldByName('Status');

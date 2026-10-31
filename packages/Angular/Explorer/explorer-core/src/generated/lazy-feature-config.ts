@@ -23,7 +23,7 @@ const loadNgDashboardsActionsDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (19 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (22 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -172,7 +172,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffApprovals': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffDashboard': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffGovernance': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffOverview': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadNgDashboardsAiDashboardsModule,
@@ -332,4 +335,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 132;
+export const LAZY_FEATURE_CONFIG_COUNT = 135;

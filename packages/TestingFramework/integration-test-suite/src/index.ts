@@ -170,6 +170,7 @@ export * from './checks/video-studio-handoff.checks';
 export * from './checks/video-studio-production.checks';
 export * from './checks/video-studio-live-smoke.checks';
 export * from './checks/performance-benchmark.checks';
+export * from './checks/chief-of-staff.checks';
 export * from './checks/query-extraction.checks';
 export * from './checks/query-refresh.checks';
 export * from './checks/metadata-sync-queries.checks';

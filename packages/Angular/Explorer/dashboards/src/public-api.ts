@@ -260,10 +260,10 @@ export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserR
 export * from './video-studio-dashboards.module';
 export * from './VideoStudio';
 
-// Chief of Staff Executive Cockpit
-export {
-    ChiefOfStaffDashboardComponent,
-    LoadChiefOfStaffDashboard,
-} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+// Chief of Staff app: one resource component per nav item
+export { BaseChiefOfStaffPage, type ChiefOfStaffClientTool } from './ChiefOfStaff/chief-of-staff-page-base';
+export { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
+export { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+export { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 export * from './ChiefOfStaff/chief-of-staff-agent-context';
-
+export * from './ChiefOfStaff/chief-of-staff-live-refresh';
