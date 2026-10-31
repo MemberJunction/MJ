@@ -45,7 +45,8 @@ export class DecisionDateAdvance {
   /**
    * Advances the pipeline's bound unit when due and returns the unit ID to train under (null when the pipeline has
    * none). Only the newest version of a lineage advances: a pipeline bound to an older version keeps it (that binding
-   * is deliberate). A missing or unparsable unit is left to the engine's own refusal.
+   * is deliberate). A missing or unparsable unit is left to the engine's own refusal. When binding the pipeline to the
+   * new version fails, the new version is deleted and the pipeline's columns are put back, so nothing is left orphaned.
    */
   public static async AdvanceFixedDecisionDate(pipeline: MJMLTrainingPipelineEntity, deps: DecisionDateAdvanceDeps): Promise<string | null> {
     const unitId = pipeline.PredictionUnitID;
@@ -60,8 +61,12 @@ export class DecisionDateAdvance {
     const next = await PredictionUnitVersioning.CreateNextPredictionUnitVersion(row, changes, DECISION_DATE_ADVANCE_ACTOR, deps.EntityFactory, deps.ContextUser);
     const nextSpec = PredictionUnit.ParsePredictionUnitRow(next);
     if (nextSpec.Ok === false) throw new Error(`Advanced unit ${next.ID} does not parse: ${nextSpec.Errors.join('; ')}`);
+    const prior = { PredictionUnitID: pipeline.PredictionUnitID, TargetEntityID: pipeline.TargetEntityID, TargetVariable: pipeline.TargetVariable, ProblemType: pipeline.ProblemType };
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, next.ID, nextSpec.Value, deps.Metadata);
-    if (!(await pipeline.Save())) throw new Error(`Binding pipeline ${pipeline.ID} to unit ${next.ID} failed: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`);
-    return next.ID;
+    if (await pipeline.Save()) return next.ID;
+    const why = `Binding pipeline ${pipeline.ID} to unit ${next.ID} failed: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`;
+    Object.assign(pipeline, prior);
+    if (await next.Delete()) throw new Error(why);
+    throw new Error(`${why}; deleting the unbound unit version ${next.ID} also failed: ${next.LatestResult?.CompleteMessage || 'delete failed'}`);
   }
 }

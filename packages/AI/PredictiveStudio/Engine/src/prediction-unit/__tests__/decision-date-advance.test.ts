@@ -44,10 +44,12 @@ class AdvancePipeline {
   public TargetVariable = '';
   public ProblemType: 'classification' | 'regression' = 'regression';
   public Saves = 0;
+  public SaveOk = true;
   public LatestResult: { CompleteMessage: string } | null = null;
   public async Save(): Promise<boolean> {
     this.Saves++;
-    return true;
+    if (!this.SaveOk) this.LatestResult = { CompleteMessage: 'pipeline save refused' };
+    return this.SaveOk;
   }
   public get Entity(): MJMLTrainingPipelineEntity {
     return this as unknown as MJMLTrainingPipelineEntity;
@@ -72,6 +74,16 @@ describe('AdvanceFixedDecisionDate', () => {
     expect([pipeline.PredictionUnitID, pipeline.Saves]).toEqual([id, 1]);
     expect(await DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline.Entity, deps)).toBe(id);
     expect([units.Rows.length, pipeline.Saves]).toEqual([2, 1]);
+  });
+  it('deletes the new version and puts the pipeline back when binding the pipeline to it fails', async () => {
+    const units = new InMemoryUnitVersions();
+    units.Seed(v1Columns('2026-10-20', true));
+    const pipeline = new AdvancePipeline();
+    pipeline.SaveOk = false;
+    pipeline.TargetVariable = 'Renewed';
+    const deps = { Store: units, RunDay: '2026-11-02', Metadata: UnitYearsWorld.Metadata(), EntityFactory: new UnitVersionFactory(units) };
+    await expect(DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline.Entity, deps)).rejects.toThrow(/Binding pipeline P-1 to unit .* failed: pipeline save refused$/);
+    expect([units.Rows.map((r) => r.ID), pipeline.PredictionUnitID, pipeline.TargetEntityID, pipeline.TargetVariable]).toEqual([['V1'], 'V1', '', 'Renewed']);
   });
   it('keeps a pipeline bound to an older version of the lineage, and a date that does not advance', async () => {
     const units = new InMemoryUnitVersions();

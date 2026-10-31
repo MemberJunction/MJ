@@ -415,6 +415,23 @@ describe('TrainingEngine — an advancing fixed decision date', () => {
     await harness.engine.trainModel({ pipelineId: pipeline.ID }, harness.deps);
     expect([units.Rows.length, saves]).toEqual([2, 1]);
   });
+
+  it('saves no new version for a pipeline refused before its run (a time index under a seeded-random holdout)', async () => {
+    const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const units = new InMemoryUnitVersions();
+    units.Seed({
+      ...UnitYearsWorld.UnitColumns(), LabelWindowDays: 1,
+      UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: '2026-10-20', advance: 'each-run' }, filter: [] }),
+      Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-10-21' } }),
+    });
+    harness.deps.predictionUnits = units;
+    harness.deps.entityFactory = new UnitVersionFactory(units, harness.deps.entityFactory);
+    harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ MinMinorityClassRows: 1, Holdout: JSON.stringify({ kind: 'seeded-random', fraction: 0.25 }) })]);
+    harness.deps.now = () => new Date('2026-11-02T09:00:00Z');
+    harness.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'Year' });
+    await expect(harness.engine.trainModel({ pipelineId: harness.pipeline.ID }, harness.deps)).rejects.toMatchObject({ Refusal: { reason: { kind: 'time-index-needs-time-holdout' } } });
+    expect([units.Rows.length, harness.runs.length]).toEqual([1, 0]);
+  });
 });
 
 describe('TrainingEngine — no unit pipeline trains without the protocol version it is bound to', () => {

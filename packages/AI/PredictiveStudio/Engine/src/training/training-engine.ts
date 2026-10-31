@@ -9,7 +9,9 @@
  *
  * A pipeline is trained only under the Evaluation Protocol version its `EvaluationProtocolID` names: a pipeline without one, a missing
  * protocol row, a row that does not parse, or more candidates than the protocol's budget allows are
- * refused before any run row is written. The protocol row must predate the run row, and a protocol
+ * refused before any run row is written, and so is a pipeline that declares a time index
+ * (`ValidationStrategy.TimeIndexColumn`) under a protocol whose holdout does not respect time (seeded-random:
+ * `time-index-needs-time-holdout`). The protocol row must predate the run row, and a protocol
  * that does not fit the unit is refused on the run. The unit row reader then reads every unit row
  * (censored and label-known rows excluded and counted), the target is validated, and the matrix is
  * assembled as of each row's decision date by {@link TrainingEngine.AssembleForTraining} — the same
@@ -23,8 +25,8 @@
  * refuses the run (`sidecar-gate-mismatch`). Every returned artifact is stored in `MJ: Files`, and the model row is
  * created from the artifact the decision ships only: the finalist's for `model` (with the trainer's held-out
  * permutation importance), the kept simple baseline member's for `keep-simple-baseline`, and none for `no-signal` or
- * a kept heuristic rule. A single feature dominating the finalist's importance flags the run (the same LEAKAGE WARNING
- * note as above) and the model stays `Draft`. The run stores the trainer's result with its artifacts
+ * a kept heuristic rule. A single feature dominating the finalist's importance flags the run (a LEAKAGE WARNING note on the
+ * run) and the model stays `Draft`. The run stores the trainer's result with its artifacts
  * as file references, never their bytes, the unit resolution counts, the holdout carve's summary, the gate record and
  * the request settings a retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
  * categorical levels scoring reuses, the snapshot's ID and content hash, and the protocol. A refusal
@@ -226,14 +228,13 @@ export class TrainingEngine {
     const usdPerSecond = ComputePricing.ReadComputeRate();
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
     if (!resolved.pipeline.PredictionUnitID) throw TrainingEngine.UnitRequired(resolved.pipeline.ID);
-    const unitId = await this.advanceDecisionDate(resolved.pipeline, deps);
-    return this.trainUnitPipeline(resolved, unitId || resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond);
+    return this.trainUnitPipeline(resolved, input, deps, usdPerSecond);
   }
 
   /**
-   * Moves an advancing fixed decision date to the run's UTC day before anything is written for the run (a new unit
-   * version, the pipeline bound to it), so the run reads features as they stand on its own day and its lineage names
-   * that version. Returns the unit to train under.
+   * Moves an advancing fixed decision date to the run's UTC day after the pipeline-stage refusals and before the run
+   * row (a new unit version, the pipeline bound to it), so the run reads features as they stand on its own day and its
+   * lineage names that version, and a refused pipeline gets no new version. Returns the unit to train under.
    */
   private async advanceDecisionDate(pipeline: MJMLTrainingPipelineEntity, deps: TrainingDeps): Promise<string | null> {
     return DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline, {
@@ -279,12 +280,14 @@ export class TrainingEngine {
    * is recorded on it as a `refused` envelope. Deps without a snapshot file store or a trainer are incomplete and the
    * run fails before anything is read.
    */
-  private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
+  private async trainUnitPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const protocol = await this.requireBoundProtocol(resolved, input, deps);
     // A time-indexed pipeline under a holdout that does not respect time is refused before any run row exists.
     const timeIndex = ProtocolSearchGuard.CheckTimeIndexHoldout(protocol, resolved.pipeline.ID, resolved.validation.TimeIndexColumn);
     if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
+    // The refusals above write nothing; only a pipeline that passes them advances its decision date.
+    const unitId = (await this.advanceDecisionDate(resolved.pipeline, deps)) || resolved.pipeline.PredictionUnitID;
     const run = await this.createRunRow(resolved, input, deps);
     try {
       TrainingEngine.refuseProtocolNewerThanRun(protocol, run);
