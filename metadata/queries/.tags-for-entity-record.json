@@ -14,12 +14,149 @@
       "UsesTemplate": true
     },
     "relatedEntities": {},
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "entityName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "Accounts",
+            "Description": "The display name of the entity to filter tags for (e.g., 'Accounts', 'Contacts').",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "14206102-5C66-408B-A5DB-68C4616213B8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "recordID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "550e8400-e29b-41d4-a716-446655440000",
+            "Description": "The primary key identifier of the specific record for which to retrieve tags.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A597CF1A-5272-4241-AD48-EB890CAF3DDB"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "TagID",
+            "Description": "Unique identifier for the tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BC44047A-8031-40B6-A8B6-73F5AB71D58E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagName",
+            "Description": "Internal name of the tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1855AAE8-6922-4744-9646-EC3394F2DC8B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagDisplayName",
+            "Description": "User-friendly display name of the tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C2456755-FF4B-416F-A708-6F7F79400320"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagDescription",
+            "Description": "Description of the tag's purpose",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "687512A0-2E0C-42B0-8A3F-73348B42073B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TagParentID",
+            "Description": "ID of the parent tag if this is part of a hierarchy",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8579BD74-7E42-47A1-AFD9-001BFDA14A8C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentTagDisplayName",
+            "Description": "Display name of the parent tag",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "2750B4EE-FC54-414C-9998-AF3DD21B602D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Weight",
+            "Description": "Numerical weight or priority assigned to this tag instance",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3FF3DB78-D126-4351-92ED-32F2AC936875"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecordID",
+            "Description": "The ID of the record that was tagged",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5B5F7301-EB3C-4E53-946B-F05A7FED1291"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TaggedAt",
+            "Description": "Timestamp when the tag was applied to the record",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "087B804E-DD17-40C9-9FDC-965E84432BA2"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "A9EB7B0C-20D6-46BF-8215-49FF6863841D"
     },
     "sync": {
-      "lastModified": "2026-04-12T21:47:41.576Z",
-      "checksum": "75bce1f7b6be16492322e2b597580dfdadfc2b97fecf2cb7a87c3f83d4f08d76"
+      "lastModified": "2026-10-28T22:14:02.307Z",
+      "checksum": "f6d6f115c996663d9d6e756c66229fb84a961a53fca6ce69eafb84bb75501b1d"
     }
   }
 ]

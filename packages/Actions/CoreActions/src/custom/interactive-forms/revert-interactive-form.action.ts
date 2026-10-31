@@ -111,6 +111,7 @@ export class RevertInteractiveFormAction extends BaseAction {
                     Fields: ['ID', 'Version', 'VersionSequence'],
                     ResultType: 'simple',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 }, user);
                 if (!r.Success || (r.Results ?? []).length === 0) {
                     return Failure("COMPONENT_NOT_FOUND",

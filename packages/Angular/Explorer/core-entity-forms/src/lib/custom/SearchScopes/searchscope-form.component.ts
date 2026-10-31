@@ -61,7 +61,7 @@ interface RerankerOption {
  */
 const BUILT_IN_RERANKERS: RerankerOption[] = [
     { DriverClass: 'NoopReRanker', Name: 'NoopReRanker (pass-through)', HasCost: false },
-    { DriverClass: 'CohereReRanker', Name: 'Cohere (rerank-v3.5)', HasCost: true },
+    { DriverClass: 'CohereReRanker', Name: 'Cohere (rerank-v5.0-fast)', HasCost: true },
     { DriverClass: 'VoyageReRanker', Name: 'Voyage (rerank-2)', HasCost: true },
     { DriverClass: 'OpenAIReRanker', Name: 'OpenAI (gpt-4o-mini judge)', HasCost: true },
     { DriverClass: 'BGEReRanker', Name: 'BGE (local, free)', HasCost: false },

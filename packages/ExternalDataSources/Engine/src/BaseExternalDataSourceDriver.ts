@@ -80,6 +80,15 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
   ): Promise<ExternalQueryResult<TRow>>;
 
   /**
+   * The key of the SQL dialect this driver's native queries are written in (see
+   * `@memberjunction/sql-dialect`), so MJ renders a query's template values with that dialect's
+   * literal rules. Null for a driver with no SQL dialect, such as a document store.
+   */
+  public get QueryDialectKey(): string | null {
+    return null;
+  }
+
+  /**
    * Resolve the remote object identifier for an external entity into the `objectName` string this
    * driver's read methods ({@link RunView} / {@link LoadSingle}) expect. Base implementation returns
    * the name verbatim — `ExternalObjectName || BaseTable || Name` — which is correct for stores where

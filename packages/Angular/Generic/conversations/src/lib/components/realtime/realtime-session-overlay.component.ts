@@ -277,10 +277,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   set Compact(value: boolean | undefined) { this.setUiInput('compact', value); }
   get Compact(): boolean | undefined { return this._uiInputs.compact; }
 
-  /** Fade non-essential controls when the session is idle (orb chrome only). Default `true`. */
+  /**
+   * @deprecated No-op since 6.2: the idle fade was never implemented. Kept so existing bindings compile.
+   */
   @Input()
-  set AutoHideControls(value: boolean | undefined) { this.setUiInput('autoHideControls', value); }
-  get AutoHideControls(): boolean | undefined { return this._uiInputs.autoHideControls; }
+  set AutoHideControls(value: boolean | undefined) { void value; }
+  get AutoHideControls(): boolean | undefined { return undefined; }
 
   /**
    * May the user reveal the transcript at all? `false` makes the widget a pure voice orb
@@ -289,6 +291,18 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   @Input()
   set AllowTextReveal(value: boolean | undefined) { this.setUiInput('allowTextReveal', value); }
   get AllowTextReveal(): boolean | undefined { return this._uiInputs.allowTextReveal; }
+
+  /**
+   * May the user type into the live session? Default `true`. Mirrors {@link RealtimeUiInputs.allowTyping}.
+   *
+   * Invariant: `false` removes every road to the composer (the strip's Type button, the lean sheet's Type
+   * button, the type-to-compose hotkey, and a programmatic open) and nothing else. It does not touch the
+   * transcript, captions, the surface panel or the channel strip. `AllowTextReveal=false` implies
+   * `AllowTyping=false`. Turning it off while the dock is open closes the dock; the draft is kept.
+   */
+  @Input()
+  set AllowTyping(value: boolean | undefined) { this.setUiInput('allowTyping', value); }
+  get AllowTyping(): boolean | undefined { return this._uiInputs.allowTyping; }
 
   /** Show the captions toggle. Default `true`. */
   @Input()
@@ -434,7 +448,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * A generic hook fired when ANY control is invoked — even one the host hid via inputs
    * and re-rendered itself. Lets a host observe/react to the full control surface from a
-   * single binding.
+   * single binding. An open of the typing box that first reveals the conversation reports
+   * `'captions'` and `'reveal-text'` before `'type'`.
    */
   @Output() ControlInvoked = new EventEmitter<RealtimeControlId>();
 
@@ -707,7 +722,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** Whether captions run over the agent's video: they are on, and the video presents in the hero. */
   public get ShowAvatarCaptions(): boolean {
-    return this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
+    return this._ui.allowTextReveal && this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
   }
 
   /**
@@ -1206,7 +1221,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // only asking for the conversation opens the thread.
       TextRevealed: this.ShowCaptions && (this.conversationShown || !this.PresenterOnStage),
       DisclosureShowThread: disclosure.ShowThread,
-      DisclosureShowComposer: disclosure.ShowComposer,
       DisclosureShowPanel: disclosure.ShowPanel,
       DisclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
@@ -1230,6 +1244,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const next = ResolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
     const prevChrome = this._ui.chrome;
     this._ui = next;
+    // The host just took typing away: close an open dock (the composer keeps its draft).
+    if (!next.allowTyping && this.ComposerOpen) {
+      this.ComposerOpen = false;
+    }
     if (next.chrome !== prevChrome) {
       this.ChromeChanged.emit(next.chrome);
     }
@@ -1339,14 +1357,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Resizing is meaningless while collapsed or when the surface fills (focus mode), and a
-   * host may hard-disable it via `[AllowResize]="false"` — in review the resolver's
-   * `allowResize` is false (no live surface to resize), so this also reads the host flag
-   * directly (defaulting to the historical `true`) rather than the resolved value, keeping
-   * drag available in review exactly as before.
+   * host may hard-disable it via `[AllowResize]="false"`. The resolver has no resize output,
+   * so this reads the host flag directly (defaulting to the historical `true`), which keeps
+   * drag available in review too.
    */
   public get PanelResizeDisabled(): boolean {
     const hostAllows = this.mergedUiInputs.allowResize ?? DEFAULT_REALTIME_UI_INPUTS.allowResize;
     return this.PanelCollapsed || this.ChannelFocusMode || !hostAllows;
+  }
+
+  /**
+   * The host's ceiling on developer links (`[ShowDevLinks]` / the bag), for the banner's gear toggle. Not the
+   * resolved `Ui.showDevLinks`: that one is already ANDed with {@link DevMode}, which the toggle itself sets, so
+   * binding it would hide the toggle until it was on.
+   */
+  public get AllowDevLinks(): boolean {
+    return this.mergedUiInputs.showDevLinks ?? DEFAULT_REALTIME_UI_INPUTS.showDevLinks;
   }
 
   public OnPanelCollapsedChange(collapsed: boolean): void {
@@ -1517,17 +1543,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._ui.showSurfacePanel || this.IsReviewing;
   }
 
-  /** The Details (tabs) toggle is offered while live — it's the panel's one door. */
+  /**
+   * The Details (tabs) toggle is offered while live — it's the panel's one door — unless the host turned the surface
+   * panel off. Reads the host ceiling, not the resolved {@link Ui.showSurfacePanel}: that one also needs the panel to be
+   * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
+   */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing;
+    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
-   * Whether the active-channels strip renders. Preserves the historical disclosure gate
-   * (level 2+, {@link RealtimeDisclosureModel.ShowComposer}) AND honours the host's
-   * `[ShowChannels]` input + the resolver's focus rule: a host that sets `[ShowChannels]`
-   * false hard-disables the strip, and channel-focus mode hides it. The strip component
-   * itself self-hides when no channels are active, so this stays decluttered.
+   * Whether the active-channels strip renders: the resolved {@link Ui.showChannelStrip}, which
+   * honours the host's `[ShowChannels]` input (false hard-disables the strip), needs an active
+   * channel and console chrome, and hides it in channel-focus mode. The strip component itself
+   * self-hides when no channels are active, so this stays decluttered.
    */
   public get ChannelStripVisible(): boolean {
     // Reads the RESOLVED Ui.showChannelStrip flag — which already ANDs the host's
@@ -1776,6 +1805,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The hero's "Show the conversation" affordance — turns the text preference on, and opens the thread even over the agent's video. */
   public OnTextReveal(): void {
+    if (!this._ui.allowTextReveal) {
+      return;
+    }
     this.conversationShown = true;
     this.OnCaptionsToggled(true);
     this.TextRevealed.emit();
@@ -1834,7 +1866,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @HostListener('document:keydown', ['$event'])
   public OnDocumentKeydown(event: KeyboardEvent): void {
-    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive) {
+    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive || !this._ui.allowTyping) {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -1883,10 +1915,30 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The composer dock opened (strip Type control / type-to-compose keystroke) or closed (the
    * dock's hide control). Opening raises the 'engaged' milestone for the cross-session ratchet —
    * but the dock itself stays a per-session, user-owned toggle either way.
+   *
+   * Invariant: the typing box is open only while the conversation is readable — a participant must
+   * see what they type (Caliber). Readable = the thread is shown AND captions are on: a console keeps
+   * the thread with captions off, but the thread then hides every caption turn. (While the agent's
+   * video presents in the hero, captions run over the video instead, and the thread waits for an
+   * explicit reveal.) So an open while the conversation is unreadable reveals it first, through the
+   * same path as the hero's "Show the conversation" ({@link OnTextReveal}: captions on and persisted,
+   * {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a programmatic
+   * open) funnels through here; {@link OnCaptionsToggled} holds the other half.
    */
   public OnComposerOpenChanged(open: boolean): void {
+    // The host disallows typing: refuse any open (closing is always allowed). Checked before the reveal,
+    // so a refused open reveals nothing.
+    if (open && !this._ui.allowTyping) {
+      return;
+    }
+    if (open && !(this._ui.showThread && this.ShowCaptions)) {
+      this.OnTextReveal();
+    }
     this.ComposerOpen = open;
     if (open) {
+      // Opening the box asks for the conversation, like "Show the conversation": pin the thread, so the agent's video
+      // arriving later (which keeps the hero for captions alone) does not hide it under an open box.
+      this.conversationShown = true;
       this.Disclosure.Raise('engaged'); // emits Changed$ → recomputeUi()
       this.ControlInvoked.emit('type');
       setTimeout(() => this.composer?.FocusInput());
@@ -2070,13 +2122,25 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The captions toggle = the persisted text-vs-orb switch: on → the thread renders
    * (raising the text disclosure milestone); off → the orb hero owns the screen again,
    * at any level. Persisted per-user so the choice survives refresh and devices.
+   *
+   * Invariant: the typing box is open only while the conversation is readable (thread shown AND
+   * captions on) — a participant must see what they type (Caliber). So turning captions off closes an
+   * open box, in a console too, where the thread stays but hides its caption turns; the composer instance
+   * is kept, so its draft survives and comes back with the next open. Every captions road (the CC
+   * buttons, {@link SetCaptions}, {@link ToggleCaptions}) funnels through here;
+   * {@link OnComposerOpenChanged} holds the other half.
    */
   public OnCaptionsToggled(on: boolean): void {
+    // The host disallows text: refuse turning captions on (nothing persisted or emitted). Off is always allowed.
+    if (on && !this._ui.allowTextReveal) {
+      return;
+    }
     this.ShowCaptions = on;
     if (on) {
       this.Disclosure.Raise('text'); // emits Changed$ → recomputeUi()
     } else {
       this.conversationShown = false;
+      this.ComposerOpen = false;
     }
     this.persistCaptionsPref();
     this.ControlInvoked.emit('captions');
@@ -2410,7 +2474,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * Reveal the transcript programmatically — the imperative twin of the orb's "Show the
    * conversation" affordance. Raises the text disclosure level, turns captions on, and
-   * emits {@link TextRevealed}.
+   * emits {@link TextRevealed}. Does nothing when the host disallows text (`AllowTextReveal=false`).
    */
   public RevealText(): void {
     this.OnTextReveal();
@@ -2444,7 +2508,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Set captions (the text-vs-orb preference) to an explicit state. Persisted per-user;
-   * turning them on also raises the text disclosure level.
+   * turning them on also raises the text disclosure level. Turning them on does nothing when
+   * the host disallows text (`AllowTextReveal=false`); turning them off is always allowed.
    *
    * @param on whether captions/text should be shown.
    */

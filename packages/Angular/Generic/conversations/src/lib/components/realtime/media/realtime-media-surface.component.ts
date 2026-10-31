@@ -50,6 +50,28 @@ export function IsPlayerMediaType(item: MediaItem): boolean {
 }
 
 /**
+ * Returns true only when `url` resolves (against `baseOrigin`) to an `http:` or `https:` URL and
+ * is not a scheme-relative `//host/...` reference. Used across all surface sinks (`RenderUrl`,
+ * `TracksFor`, `SafeUrl`, `OpenInNew`, `Download`) so neither model-supplied URLs nor rehydrated
+ * session URLs can inject `javascript:`, `data:`, `blob:`, or scheme-relative targets.
+ */
+export function IsEmbeddableSurfaceUrl(url: string | null | undefined, baseOrigin: string): boolean {
+  if (typeof url !== 'string') {
+    return false;
+  }
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('//')) {
+    return false;
+  }
+  try {
+    const parsed = new URL(trimmed, baseOrigin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Decides which render path an item uses based ONLY on its source + type — the single source of truth
  * the surface methods delegate to (kept pure so it's unit-testable without an Angular context):
  *  - audio/video + FileID → `'storage-player'` (`mj-storage-media-player`, secure streaming)
@@ -181,25 +203,33 @@ export class RealtimeMediaSurfaceComponent extends BaseAngularComponent implemen
 
   /** The single-track payload for the URL-backed `mj-media-player` (audio/video). */
   public TracksFor(item: MediaItem): MediaTrack[] {
-    if (!item.Url) {
+    if (!item.Url || !this.isEmbeddableUrl(item.Url)) {
       return [];
     }
-    return [{ Id: item.Id, Kind: item.Type === 'video' ? 'video' : 'audio', Url: item.Url }];
+    return [{ Id: item.Id, Kind: item.Type === 'video' ? 'video' : 'audio', Url: item.Url.trim() }];
   }
 
   /**
    * The render URL for an IMG/IFRAME (image/pdf/web) item: its public {@link MediaItem.Url}, or — for a
-   * FileID-backed item — the resolved streaming URL once minted (`null` while loading / on no-access).
+   * FileID-backed item — the resolved streaming URL once minted (`null` while loading / on no-access /
+   * if the URL fails http(s) scheme screening).
    */
   public RenderUrl(item: MediaItem): string | null {
+    let candidate: string | null = null;
     if (item.Url) {
-      return item.Url;
-    }
-    if (item.FileID) {
+      candidate = item.Url;
+    } else if (item.FileID) {
       const state = this.fileResolveByItem.get(item.Id);
-      return state?.Status === 'ready' ? state.Url : null;
+      candidate = state?.Status === 'ready' ? state.Url : null;
     }
-    return null;
+    if (!candidate) {
+      return null;
+    }
+    if (!this.isEmbeddableUrl(candidate)) {
+      LogError('RealtimeMediaSurface: refused media URL with a non-http(s) or scheme-relative target.');
+      return null;
+    }
+    return candidate.trim();
   }
 
   /** Whether a FileID-backed image/pdf/web item is still resolving its streaming URL. */
@@ -294,14 +324,34 @@ export class RealtimeMediaSurfaceComponent extends BaseAngularComponent implemen
     }
   }
 
-  /** A memoized sanitized resource URL for iframe-rendered media (web / pdf). */
+  /**
+   * A memoized sanitized resource URL for iframe-rendered media (web / pdf).
+   *
+   * SECURITY: `bypassSecurityTrustResourceUrl` disables Angular's sanitizer, and the URL here can
+   * originate from an agent tool call (`Media_ShowMedia`), so only http(s) URLs — absolute, or
+   * relative to this origin (the minted `/media/<fileId>?token=` streaming URLs) — are ever
+   * trusted. Anything else (javascript:, data:, blob:, …) renders about:blank instead.
+   */
   public SafeUrl(url: string): SafeResourceUrl {
     let cached = this.safeUrlCache.get(url);
     if (!cached) {
-      cached = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+      const target = this.isEmbeddableUrl(url) ? url : 'about:blank';
+      if (target !== url) {
+        LogError(`RealtimeMediaSurface: refused to embed media URL with a non-http(s) scheme.`);
+      }
+      cached = this.sanitizer.bypassSecurityTrustResourceUrl(target);
       this.safeUrlCache.set(url, cached);
     }
     return cached;
+  }
+
+  /** True when the URL parses (relative to this origin, excluding scheme-relative `//`) to http or https. */
+  private isEmbeddableUrl(url: string): boolean {
+    const origin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://localhost';
+    return IsEmbeddableSurfaceUrl(url, origin);
   }
 
   /** Inline style for the fractional highlight rectangle (percentages of the pane box). */

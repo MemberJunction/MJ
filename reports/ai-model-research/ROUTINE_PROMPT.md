@@ -17,6 +17,7 @@ Report` to the end of the file and paste it in as the whole prompt.
 | Date | Change |
 |---|---|
 | 2026-09-05 | Added §0, the rules that keep the PR green: per-entity `Status` values and the vendor-deprecation recipe, after [#4030](https://github.com/MemberJunction/MJ/pull/4030) and [#4110](https://github.com/MemberJunction/MJ/pull/4110) each merged green and then reddened `next` by setting a cost row to `Inactive`. Also added the offline pre-flight check, the `minor` changeset requirement, and the note that [#4254](https://github.com/MemberJunction/MJ/pull/4254) makes the Integration Tier run on metadata PRs. |
+| 2026-10-20 | Added §0.6, the `SupportsNativeToolCalling` guard test that [#5882](https://github.com/MemberJunction/MJ/pull/5882) tripped, and §0.7, the standing decisions on the report's long-running open items: limited-availability models at `Preview`, pinned versions over aliases, pricing in the vendor's own unit, no OpenRouter cost tracking, and the duplicate-UUID pairs being harmless. Former §0.6 is now §0.8. |
 
 ---
 
@@ -189,7 +190,58 @@ Anything under `metadata/` is a database change, so the PR needs a changeset at 
 packages (`@memberjunction/ai`, `@memberjunction/aiengine`, `@memberjunction/core-entities`) with a
 summary of the week's edits. `patch` is wrong for a metadata branch.
 
-### 0.6 Further reading
+### 0.6 Every LLM states `SupportsNativeToolCalling`
+
+`packages/AI/Core/src/__tests__/modelConfiguration.test.ts` reads `.ai-models.json` and fails the
+build when an LLM record leaves `ModelConfiguration.LLM.SupportsNativeToolCalling` unset, or when an
+`Active` vendor row resolves `true` on a driver that cannot send tools (the test's
+`DRIVERS_WITHOUT_TOOLS` list). On every new LLM, set it on the model:
+
+```json
+"ModelConfiguration": { "LLM": { "SupportsNativeToolCalling": true } }
+```
+
+Use `true` only when a source shows the model takes tools (for an OpenRouter route,
+`supported_parameters` includes `tools`). Where one vendor's driver cannot send tools, set `false` on
+that vendor row's own `ModelConfiguration`. `.claude/commands/add-ai-model.md` has the driver table.
+
+### 0.7 Standing decisions — apply them, do not flag them again
+
+These were open items in the weekly reports for weeks. They are decided (2026-10-20). Apply them,
+and stop listing them under "needs a human decision".
+
+1. **Limited-availability models are added, with the route at `Preview`.** A model that is real and
+   priced but only open to invited or vetted customers (Claude Mythos 5.1, Gemini 3.8 Flash Cyber)
+   gets a full record: model `IsActive: true`, its Inference Provider row(s) `"Status": "Preview"`,
+   and an `Active` cost row with the published price. Model selection only routes to `Active`
+   vendor rows, so a `Preview` route is never picked automatically; a customer with access switches
+   it to `Active`. When the vendor opens the model to everyone, set the route `Active`. The Grok 4.6
+   route on Microsoft Foundry is the existing example.
+2. **Pin versions; do not add alias records.** When a vendor publishes a dated or versioned API id,
+   use it as `APIName`. Do not add a new model record for a floating alias (`-latest`, a bare
+   undated id) that points at a model MJ already carries. A snapshot refresh of a model MJ carries
+   (DeepSeek V4.1 Flash `-1017`) is an `APIName` update on the existing record, with the old id
+   noted in the description, not a new model. The existing alias duplicates (`Mistral Large` /
+   `Mistral Medium`) are a one-time cleanup tracked outside this routine.
+3. **Price in the vendor's own unit.** When a vendor bills image, audio or video models per token,
+   use `Tokens` / `Per 1M Tokens`: input price = the text-input rate, output price = the media-output
+   rate, and every other rate (image input, cached image) goes in `Comments`. Use a per-image,
+   per-minute or per-character unit only when the vendor bills that way. Do not compute a
+   representative per-image figure from token prices. This unblocks GPT Image 2.5 Sunburst / Flare.
+4. **Do not track OpenRouter prices.** OpenRouter's price is the cheapest underlying provider at the
+   moment and moves without notice. Do not add cost rows to OpenRouter routes, and do not flag
+   OpenRouter routes for missing cost rows. Leave existing OpenRouter cost rows alone unless the
+   route itself is retired (then §0.2).
+5. **Ranks:** a one-time recalibration of `PowerRank` / `SpeedRank` / `CostRank` is tracked outside
+   this routine. Until it lands, rank new models against their nearest existing neighbours and do not
+   re-flag the scale.
+6. **Request-size and long-context price tiers, and the Anthropic tokenizer change,** need schema
+   work, tracked as an issue. Record a new tier in the cost row's `Comments` and do not re-flag the
+   general problem.
+7. **The 8 duplicate `primaryKey` UUIDs are harmless.** Each pairs an `MJ: AI Models` record with an
+   `MJ: AI Vendors` record — different tables. Only flag a duplicate *within* one entity.
+
+### 0.8 Further reading
 
 `metadata/CLAUDE.md` carries the repo-side statement of the deprecation rule. If the two ever
 disagree, `metadata/CLAUDE.md` and the CHECK constraints in `migrations/` win — they are what the
@@ -515,7 +567,8 @@ Then **watch the checks**. If the Integration Tier goes red, fix it on the branc
 5. **Ranking consistency** — PowerRank, SpeedRank, and CostRank should be relative to existing
    models. Study the current rankings to calibrate.
 6. **Focus on production-ready models** — Skip preview/alpha models unless they're from major vendors
-   and widely available.
+   and widely available. A priced model from a major vendor that is limited to invited customers is
+   not a preview in this sense: add it with its route at `Preview` (§0.7 item 1).
 7. **Include sources** — Every claim in the report should reference where you found the information.
 8. **The report directory** — Create `reports/ai-model-research/` if it doesn't exist.
 9. **Cohere reranker models** — If there are new Cohere reranker models, add them to

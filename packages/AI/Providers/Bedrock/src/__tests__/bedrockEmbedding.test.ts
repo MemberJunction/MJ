@@ -50,6 +50,15 @@ describe('BedrockEmbedding.EmbedTexts (Bedrock keeps its own EmbedTexts — unmo
         expect(r.vectors).toEqual([[1, 0], [0, 1]]);
         expect(mockSend).toHaveBeenCalledTimes(1); // Cohere-on-Bedrock embeds the array in one call
     });
+
+    it('Cohere path sends input_type search_query for a query and search_document otherwise', async () => {
+        mockSend.mockResolvedValue({ body: encode({ embeddings: [[1, 0]], tokens: 1 }) });
+        const e = new BedrockEmbedding('id:secret');
+        await e.EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3', inputType: 'query' });
+        await e.EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3' });
+        const bodies = mockSend.mock.calls.map((c) => JSON.parse(c[0].input.body));
+        expect(bodies.map((b) => b.input_type)).toEqual(['search_query', 'search_document']);
+    });
 });
 
 /** Builds the error `fetch` and the SDKs reject an aborted request with. */

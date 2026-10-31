@@ -37,7 +37,7 @@ export class BaseParams {
     responseFormat?: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
-     * The standard response formats may not be sufficient for all models. This field allows for a model-specific response format to be specified. For this field to be used, responseFormat must be set to 'ModelSpecific'. 
+     * The standard response formats may not be sufficient for all models. This field allows for a model-specific response format to be specified. For this field to be used, responseFormat must be set to 'ModelSpecific' (the Gemini driver also merges it alongside 'JSON', e.g. a thinkingConfig on a JSON prompt). 
      */
     modelSpecificResponseFormat?: any  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 

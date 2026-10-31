@@ -40,7 +40,7 @@ import { BaseAgent, BaseAgentType } from '@memberjunction/ai-agents';
 import { BaseHarnessAdapter } from '@memberjunction/ai-agent-harness';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 
 /** Entity names used throughout, kept in one place so a rename fails loudly in one spot. */
 const HARNESS_ENTITY = 'MJ: AI Agent Harnesses';
@@ -304,8 +304,7 @@ export const AgentExternalHarnessChecks: NamedCheck[] = [
             Assert(agentResult.Success, `Failed to read MJ: AI Agents: ${agentResult.ErrorMessage}`);
             const agent = agentResult.Results?.[0];
             if (!agent) {
-                console.log(`      → SKIP: '${DEMO_AGENT_NAME}' not present; demo metadata has not been synced`);
-                return;
+                SkipCheck(`'${DEMO_AGENT_NAME}' not present; demo metadata has not been synced`);
             }
 
             const harnessType = await loadHarnessAgentType(ctx);

@@ -16,6 +16,8 @@ import {
     type JSONValue,
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
+    type RealtimeDriverFacts,
+    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -175,6 +177,9 @@ type FetchLike = (
  */
 @RegisterClass(BaseRealtimeModel, 'AssemblyAIRealtime')
 export class AssemblyAIRealtime extends BaseRealtimeModel {
+    /** Provider ceiling unconfirmed; unknown until an in-repo source states it. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     /**
      * The voices the AssemblyAI Voice Agent API can speak with — used to populate the voice picker.
      */
@@ -233,6 +238,7 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
                 session: AssemblyAIRealtime.BuildSessionObject(params),
                 config: params.Config ?? {},
             },
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

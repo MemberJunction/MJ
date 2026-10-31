@@ -68,7 +68,7 @@ export interface RealtimeSessionTimelineMeta {
   /** Denormalized agent display name from the session view (usually the co-agent). */
   AgentName: string | null;
   Status: 'Active' | 'Closed' | 'Idle' | null;
-  /** Why the session closed (`Error` | `Explicit` | `Janitor` | `Shutdown`), when closed. */
+  /** Why the session closed (`Error` | `Explicit` | `Idle` | `Janitor` | `Shutdown` | `TimeLimit`), when closed. */
   CloseReason: string | null;
   ClosedAt: Date | null;
   /**
@@ -379,6 +379,10 @@ function closeReasonChip(reason: string | null): RealtimeSessionStatusChip {
       return { Label: 'Error', Tone: 'error' };
     case 'Janitor':
       return { Label: 'Timed out', Tone: 'neutral' };
+    case 'TimeLimit':
+      return { Label: 'Time limit', Tone: 'neutral' };
+    case 'Idle':
+      return { Label: 'Idle — no activity', Tone: 'neutral' };
     case 'Shutdown':
       // The server restarted under the call. Worded for the person on it, who never saw a server.
       return { Label: 'Interrupted', Tone: 'neutral' };

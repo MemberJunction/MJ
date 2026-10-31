@@ -44,7 +44,9 @@ describe('spUpdateExistingEntitiesFromSchema — planner statistics for its own 
     const body = section('-- 4. spUpdateExistingEntitiesFromSchema');
 
     it('materialises vwSQLTablesAndEntities into an ANALYZEd temp table', () => {
-        expect(body).toContain('CREATE TEMP TABLE _ues_tables AS SELECT * FROM __mj."vwSQLTablesAndEntities"');
+        // Created once per session and refilled (see the temp-table lifecycle note in the DDL).
+        expect(body).toContain('CREATE TEMP TABLE IF NOT EXISTS _ues_tables AS SELECT * FROM __mj."vwSQLTablesAndEntities" WITH NO DATA');
+        expect(body).toContain('INSERT INTO _ues_tables SELECT * FROM __mj."vwSQLTablesAndEntities";');
         expect(body).toContain('ANALYZE _ues_tables;');
     });
 
@@ -58,9 +60,10 @@ describe('spUpdateExistingEntitiesFromSchema — planner statistics for its own 
         expect(body.indexOf('ANALYZE _ues_filtered;')).toBeLessThan(body.indexOf('UPDATE __mj."Entity" tgt SET'));
     });
 
-    it('drops every temp table it created', () => {
+    it('empties every temp table it uses, and never drops one (a dropped table strands the cached plan)', () => {
         for (const t of ['_ues_filtered', '_ues_tables', '_ues_included']) {
-            expect(body).toContain(`DROP TABLE IF EXISTS ${t};`);
+            expect(body).toContain(`TRUNCATE ${t};`);
+            expect(body).not.toContain(`DROP TABLE IF EXISTS ${t};`);
         }
     });
 });
@@ -75,7 +78,8 @@ describe('spDeleteUnneededEntityFields — the base-view exclusion interlock', (
     });
 
     it('splits the list case-insensitively and trims each entry', () => {
-        expect(body).toContain('SELECT LOWER(TRIM(s)) AS field_name');
+        expect(body).toContain('INSERT INTO _del_protected (field_name)');
+        expect(body).toContain('SELECT LOWER(TRIM(s))');
         expect(body).toContain("unnest(string_to_array(COALESCE(p_ProtectedFieldNames, ''), ','))");
     });
 
@@ -83,7 +87,7 @@ describe('spDeleteUnneededEntityFields — the base-view exclusion interlock', (
         expect(body).toContain('NOT IN (SELECT pr.field_name FROM _del_protected pr)');
         // The filter belongs on the CANDIDATE build (_del_ef), not on the delete — anything that
         // reaches _del_deleted is also returned to the caller as "deleted".
-        const candidateBuild = body.slice(body.indexOf('CREATE TEMP TABLE _del_ef AS'), body.indexOf('ANALYZE _del_ef;'));
+        const candidateBuild = body.slice(body.indexOf('INSERT INTO _del_ef ('), body.indexOf('ANALYZE _del_ef;'));
         expect(candidateBuild).toContain('_del_protected');
     });
 });

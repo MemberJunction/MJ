@@ -3076,7 +3076,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             ExtraFilter: filter,
             Fields: entity.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
-            MaxRows: recordIDs.length
+            MaxRows: recordIDs.length,
+            SkipTotalRowCount: true
         };
     }
 
@@ -3371,7 +3372,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Fields: fields,
             ExtraFilter: `${keyField} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
             ResultType: 'simple',
-            MaxRows: ids.length
+            MaxRows: ids.length,
+            SkipTotalRowCount: true
         }, contextUser);
         if (!result.Success) {
             LogError(`SearchEngine: origin lookup of "${entityName}" failed for user ${contextUser.ID}: ${result.ErrorMessage ?? 'unknown error'}`);

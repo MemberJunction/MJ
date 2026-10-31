@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { UserInfo } from '@memberjunction/core';
+import { BaseEntity, UserInfo } from '@memberjunction/core';
+import { MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -396,5 +397,50 @@ describe('AgentUserPolicyEngine', () => {
             expect(engine.EvaluateCalendarOperation(autonomousCal, true).verdict).toBe('Allow');
             expect(engine.EvaluateEmailOperation(autonomousCal, 'Send').verdict).toBe('RequireApproval');
         });
+    });
+});
+
+describe('AgentUserPolicyEngine — the cache follows entity saves', () => {
+    const POLICY_ENTITY = 'MJ: AI Agent User Policies';
+
+    /** A saved policy as the entity layer announces it: the entity instance plus its EntityInfo name. */
+    function asSavedEntity(policy: MJAIAgentUserPolicyEntity): BaseEntity {
+        return Object.assign(policy, { EntityInfo: { Name: POLICY_ENTITY } }) as unknown as BaseEntity;
+    }
+
+    function raise(type: 'save' | 'delete' | 'remote-invalidate', baseEntity: BaseEntity | null, entityName?: string): void {
+        MJGlobal.Instance.RaiseEvent({
+            event: MJEventType.ComponentEvent,
+            eventCode: BaseEntity.BaseEventCode,
+            component: {},
+            args: { type, baseEntity, entityName, payload: null },
+        });
+    }
+
+    beforeEach(() => {
+        AgentUserPolicyEngine.Instance.ClearCache();
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' }));
+    });
+
+    it('a save of the same (agent, user) policy replaces the cached copy, so a Governance-tab edit reaches the agent without a restart', () => {
+        raise('save', asSavedEntity(buildPolicy({ EmailChannelMode: 'SendAsUser' })));
+        expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos', 'user-alice-1')?.EmailChannelMode).toBe('SendAsUser');
+    });
+
+    it('a delete evicts the cached policy', () => {
+        raise('delete', asSavedEntity(buildPolicy()));
+        expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos', 'user-alice-1')).toBeNull();
+    });
+
+    it('a remote invalidation for the policy entity clears the cache, since another server saved the row', () => {
+        raise('remote-invalidate', null, POLICY_ENTITY);
+        expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos', 'user-alice-1')).toBeNull();
+    });
+
+    it('events for other entities leave the cache alone', () => {
+        const other = Object.assign({ ID: 'x' }, { EntityInfo: { Name: 'MJ: Conversations' } }) as unknown as BaseEntity;
+        raise('save', other);
+        raise('remote-invalidate', null, 'MJ: AI Agent Requests');
+        expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos', 'user-alice-1')?.EmailChannelMode).toBe('DraftOnly');
     });
 });

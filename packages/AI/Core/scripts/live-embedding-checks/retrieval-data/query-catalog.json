@@ -1,0 +1,284 @@
+{
+ "description": "Query-catalog task. Documents are the 30 queries in metadata/queries/** embedded as 'Name | UserQuestion | Description' (the MJQueryEntityServer composite). Questions and labels written 2026-10-12 by an AI assistant.",
+ "documents": [
+  {
+   "id": "AIUsageByModel",
+   "text": "AIUsageByModel | What is the efficiency, cost, token distribution, and latency for each AI model and vendor? | Per vendor and model (and currency): model-call count, priced/unpriced run counts, own cost, prompt/completion tokens, median and 95th-percentile latency, and cache efficiency percentage."
+  },
+  {
+   "id": "AIUsageByScope",
+   "text": "AIUsageByScope | What is our AI usage, tokens, and spend broken down by primary scope entity and record? | Aggregates AI usage facts by PrimaryScopeEntityID and PrimaryScopeRecordID. Supports optional filtering by scope entity, scope record, and date range."
+  },
+  {
+   "id": "AIUsageByUser",
+   "text": "AIUsageByUser | What is our AI usage, spend, and token volume per user for chargeback attribution? | Aggregates AI usage facts by UserID to support user-level chargeback, attribution, and consumption monitoring."
+  },
+  {
+   "id": "AIUsageCacheEfficiency",
+   "text": "AIUsageCacheEfficiency | What is our prompt caching hit rate and estimated cost savings across models and prompts? | Prompt cache efficiency per model and prompt (and currency): cache read volume, cache read share, and estimated savings priced at the token rate in effect when each run executed, with a count of runs that could not be rated."
+  },
+  {
+   "id": "AIUsageDaily",
+   "text": "AIUsageDaily | What is our daily AI usage and cost broken down by model, agent, user, and scope? | Primary daily aggregation of AI usage facts. Computes model-call counts, token volumes, latencies (P50/P95), cache reads, and spend (by currency) across all dimensional attributes."
+  },
+  {
+   "id": "AIUsageErrorRateByModel",
+   "text": "AIUsageErrorRateByModel | What is the error rate and failure frequency for each AI model and vendor? | Per vendor and model: succeeded, failed and abandoned model calls and the resulting error rate, with cancelled and in-flight runs reported separately."
+  },
+  {
+   "id": "AIUsageHourly",
+   "text": "AIUsageHourly | What is our hourly AI usage and cost broken down by model, agent, user, and scope? | Primary hourly aggregation of AI usage facts. Computes model-call counts, token volumes, latencies (P50/P95), cache reads, and spend (by currency) across all dimensional attributes."
+  },
+  {
+   "id": "AIUsageUnpricedAudit",
+   "text": "AIUsageUnpricedAudit | Which completed AI runs have not been priced and need pricing tiers or investigation? | Surfaces completed AI prompt runs where IsPriced = 0 (parallel parents excluded), newest first, with a diagnostic explanation for why each run was unpriced (unmeasured, or missing pricing tier)."
+  },
+  {
+   "id": "Active Users",
+   "text": "Active Users | Returns all active users with basic profile info. Designed as a reusable building block for composed queries."
+  },
+  {
+   "id": "Recent Entity Changes",
+   "text": "Recent Entity Changes | Returns recent record changes grouped by entity name. Accepts a lookbackDays parameter to control the time window."
+  },
+  {
+   "id": "User Activity Summary",
+   "text": "User Activity Summary | Composed query that joins Active Users with Recent Entity Changes to show each user's recent activity level. Demonstrates the {{query:\"...\"}} composition syntax."
+  },
+  {
+   "id": "Entity Records By Tag",
+   "text": "Entity Records By Tag | Which records of a given entity have a specific tag? | Returns record IDs for a given entity that have a specific tag assigned, with relevance weight. Composable — join on RecordID to the target entity's primary key to enrich with full record data for tag-based filtering and drill-downs."
+  },
+  {
+   "id": "ExternalChangeDetection_DetectCreations",
+   "text": "ExternalChangeDetection_DetectCreations | Detects new records created in an external system by comparing base view rows to existing MJ record changes."
+  },
+  {
+   "id": "ExternalChangeDetection_DetectUpdates",
+   "text": "ExternalChangeDetection_DetectUpdates | Detects updated records in an external system by comparing UpdatedAt timestamps."
+  },
+  {
+   "id": "ExternalChangeDetection_DetectDeletions",
+   "text": "ExternalChangeDetection_DetectDeletions | Detects deleted records in an external system by identifying MJ record changes with no matching rows in the base view."
+  },
+  {
+   "id": "GeoBulkLookup_RecordGeoCodesByEntity",
+   "text": "GeoBulkLookup_RecordGeoCodesByEntity | Bulk lookup of all RecordGeoCode rows for a given entity. Returns lightweight fields (ID, RecordID, LocationType, SourceFieldHash, Status) for in-memory staleness checking and existence filtering. Used by ScheduledGeocodingAction to eliminate per-record SQL queries during batch geocoding."
+  },
+  {
+   "id": "GetAgentRunTree",
+   "text": "GetAgentRunTree | What is the full structure of everything an agent run caused — its steps, any workflows it started, and the runs those workflows spawned? | Returns one row per node of an agent run's complete execution tree: the run, its steps, task graphs those steps submitted, the tasks inside them, and the agent runs those tasks spawned, recursively to a supplied depth cap. Each row carries ParentNodeID/Depth/Sequence so a caller can assemble the tree in memory, plus per-node status, timing, own-cost and own-tokens."
+  },
+  {
+   "id": "GetArtifactVersionsByID",
+   "text": "GetArtifactVersionsByID | What are the full artifact version records for a given set of artifact version IDs? | Returns artifact version fields (name, content mode, file ref, content, mime) joined with the parent artifact and artifact type (including ToolLibraryClass) for a supplied list of ArtifactVersionIDs."
+  },
+  {
+   "id": "GetConversationArtifactsForAgent",
+   "text": "GetConversationArtifactsForAgent | What are all the artifacts with their full configurations that were created by a specific agent in this conversation? | Returns all OUTPUT artifacts with their complete version history and configuration data for a conversation, optionally filtered by the agent that created them. Optimized for AI agent API requests that need to build artifact context."
+  },
+  {
+   "id": "GetConversationArtifactsMap",
+   "text": "GetConversationArtifactsMap | What artifacts are linked to messages in this conversation? | Returns a lightweight map of all artifacts linked to conversation messages, without loading full content. Optimized for quick display with lazy-loading support."
+  },
+  {
+   "id": "GetConversationComplete",
+   "text": "GetConversationComplete | What are all the messages, agent runs, and artifacts for this conversation? | Returns complete conversation data in a single query: all messages with their related agent runs and artifacts aggregated as JSON. Optimized for fast conversation loading."
+  },
+  {
+   "id": "GetConversationsForMemoryManager",
+   "text": "GetConversationsForMemoryManager | What conversations have new activity that need to be analyzed for memory extraction? | Returns all conversation data needed for memory extraction in a single query: conversations with new activity, their details with ratings, and linked agent runs for scope inheritance. Optimized to replace 4 separate sequential queries."
+  },
+  {
+   "id": "ListConversationDetailFeedbackStats",
+   "text": "ListConversationDetailFeedbackStats | What are the aggregate counts and average for conversation feedback ratings (matching the same filters as the row-level query)? | Aggregate companion for ListConversationDetailFeedback. Returns Total, AvgRating, PositiveCount (>=8), and NegativeCount (<=3) over the same filtered universe (StartDate, EndDate, MinRating, MaxRating, AgentID, SearchText). Used by the Agent Feedback admin page to populate the four stat cards."
+  },
+  {
+   "id": "ListConversationDetailFeedback",
+   "text": "ListConversationDetailFeedback | What user ratings and feedback have been left on AI messages? | Lists 1-10 user ratings and free-form feedback on conversation messages, joined with the rater (User), conversation, and agent name. Supports time-range, rating-band, and agent filters."
+  },
+  {
+   "id": "CalculateRunCost",
+   "text": "CalculateRunCost | What is the total cost, token usage, and number of prompts for an AI Agent Run including all its sub-agent runs? | Calculates comprehensive cost metrics for an AI Agent Run, including all nested sub-agent runs. Returns total cost, token usage (input/output), and prompt count by recursively traversing the agent run hierarchy."
+  },
+  {
+   "id": "Server Installed Version History",
+   "text": "Server Installed Version History | Show me a list of versions installed on the server in order of most recent version first"
+  },
+  {
+   "id": "RubricDriftPeriodMeans",
+   "text": "RubricDriftPeriodMeans | How did each agent's rubric criterion mean change between the last two periods? | Mean normalized score per agent, rubric, and criterion for two time windows. Counts only Submitted evaluations that are not self-checks, and only the evaluator's own scores."
+  },
+  {
+   "id": "Tag Aggregates",
+   "text": "Tag Aggregates | What are the aggregate statistics for all tags? | Returns per-tag item count and average relevance weight across all tagged items. Used by the Classify dashboard for taxonomy health metrics without loading individual records."
+  },
+  {
+   "id": "Tag Distribution For Entity",
+   "text": "Tag Distribution For Entity | What tags are most common on records of a given entity? | Aggregates tag counts across all records of a given entity, showing how many records have each tag along with average relevance weight and date range. Composable — use as a subquery or join to analyze topic distribution, category breakdowns, and tag popularity."
+  },
+  {
+   "id": "Tags For Entity Record",
+   "text": "Tags For Entity Record | What tags are assigned to a given record? | Returns all active tags assigned to a specific entity record, including tag hierarchy (parent tag) and relevance weight. Composable — join via RecordID to enrich any entity with its tag metadata."
+  }
+ ],
+ "queries": [
+  {
+   "q": "which AI model is costing us the most per call and how slow is it",
+   "relevant": [
+    "AIUsageByModel"
+   ]
+  },
+  {
+   "q": "charge AI spend back to each department or customer record",
+   "relevant": [
+    "AIUsageByScope"
+   ]
+  },
+  {
+   "q": "how much AI did each person on the team use this month",
+   "relevant": [
+    "AIUsageByUser"
+   ]
+  },
+  {
+   "q": "are we actually getting savings from prompt caching",
+   "relevant": [
+    "AIUsageCacheEfficiency"
+   ]
+  },
+  {
+   "q": "day by day AI cost trend",
+   "relevant": [
+    "AIUsageDaily"
+   ]
+  },
+  {
+   "q": "which model fails or errors out most often",
+   "relevant": [
+    "AIUsageErrorRateByModel"
+   ]
+  },
+  {
+   "q": "AI usage spikes by hour of the day",
+   "relevant": [
+    "AIUsageHourly"
+   ]
+  },
+  {
+   "q": "find model runs that never got a price attached",
+   "relevant": [
+    "AIUsageUnpricedAudit"
+   ]
+  },
+  {
+   "q": "list everyone who currently has an enabled account",
+   "relevant": [
+    "Active Users"
+   ]
+  },
+  {
+   "q": "what changed in the data recently",
+   "relevant": [
+    "Recent Entity Changes"
+   ]
+  },
+  {
+   "q": "summary of what a given user has been doing in the system",
+   "relevant": [
+    "User Activity Summary"
+   ]
+  },
+  {
+   "q": "show me every member record labeled 'volunteer'",
+   "relevant": [
+    "Entity Records By Tag"
+   ]
+  },
+  {
+   "q": "records that were added in the source system outside of MJ",
+   "relevant": [
+    "ExternalChangeDetection_DetectCreations"
+   ]
+  },
+  {
+   "q": "rows that were removed externally since the last sync",
+   "relevant": [
+    "ExternalChangeDetection_DetectDeletions"
+   ]
+  },
+  {
+   "q": "stored latitude and longitude for all records of an entity",
+   "relevant": [
+    "GeoBulkLookup_RecordGeoCodesByEntity"
+   ]
+  },
+  {
+   "q": "show the whole tree of steps and sub agents an agent run kicked off",
+   "relevant": [
+    "GetAgentRunTree"
+   ]
+  },
+  {
+   "q": "everything in this chat: messages, agent runs and generated artifacts",
+   "relevant": [
+    "GetConversationComplete"
+   ]
+  },
+  {
+   "q": "which chats have new messages the memory process hasn't looked at yet",
+   "relevant": [
+    "GetConversationsForMemoryManager"
+   ]
+  },
+  {
+   "q": "thumbs up and thumbs down that users gave to AI replies",
+   "relevant": [
+    "ListConversationDetailFeedback",
+    "ListConversationDetailFeedbackStats"
+   ]
+  },
+  {
+   "q": "average rating of AI answers",
+   "relevant": [
+    "ListConversationDetailFeedbackStats"
+   ]
+  },
+  {
+   "q": "what did one agent run cost in total, counting the agents it called",
+   "relevant": [
+    "CalculateRunCost"
+   ]
+  },
+  {
+   "q": "history of MJ version upgrades on this server",
+   "relevant": [
+    "Server Installed Version History"
+   ]
+  },
+  {
+   "q": "did the agent's evaluation scores get worse compared with last period",
+   "relevant": [
+    "RubricDriftPeriodMeans"
+   ]
+  },
+  {
+   "q": "most frequently used labels on our event records",
+   "relevant": [
+    "Tag Distribution For Entity"
+   ]
+  },
+  {
+   "q": "how many items use each tag overall",
+   "relevant": [
+    "Tag Aggregates"
+   ]
+  },
+  {
+   "q": "which tags are on this one record",
+   "relevant": [
+    "Tags For Entity Record"
+   ]
+  }
+ ]
+}

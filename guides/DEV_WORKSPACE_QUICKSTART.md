@@ -44,8 +44,10 @@ commands as plain `mj dev workspace ...`.
    ```
 
    It detects members (anything with `mj-app.json`, `@mj-biz-apps/*` packages, or the MJ monorepo
-   itself), writes four files at the parent (`pnpm-workspace.yaml`, `package.json`, `.npmrc`,
-   `turbo.json`) plus a `.mj-dev-workspace.json` sentinel, then runs the install.
+   itself), writes three files at the parent (`pnpm-workspace.yaml`, `package.json`, `.npmrc`)
+   plus a `.mj-dev-workspace.json` sentinel, then runs the install. There is no parent
+   `turbo.json`: each member keeps its own, and a regenerate moves one an earlier version wrote
+   to `turbo.json.bak`.
 
    When it offers to **remove members' own standalone installs, say yes** — the MJ clone's
    `node_modules` from step 2 must be replaced by the workspace install, or MJ's code resolves
@@ -55,7 +57,7 @@ commands as plain `mj dev workspace ...`.
 4. **Build everything from the parent** and check health:
 
    ```bash
-   pnpm run build          # turbo across all members
+   pnpm run build          # every member package, in dependency order, one at a time
    node MJ/packages/MJCLI/bin/run.js dev workspace status
    ```
 

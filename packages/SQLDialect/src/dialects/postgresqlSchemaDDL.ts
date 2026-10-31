@@ -1,0 +1,654 @@
+import { DataTypeMap, MappedType } from '../dataTypeMap.js';
+import { BaseSchemaDDL } from './baseSchemaDDL.js';
+import type {
+    SchemaIntrospectionSQL,
+    TriggerOptions,
+    IndexOptions,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    ResolveTypeOptions,
+} from '../facets/dialectSchemaDDL.js';
+
+/**
+ * PostgreSQL data type mapping.
+ * Maps SQL Server types to their PostgreSQL equivalents.
+ */
+class PostgreSQLDataTypeMap implements DataTypeMap {
+    MapType(sourceType: string, sourceLength?: number, sourcePrecision?: number, sourceScale?: number): MappedType {
+        const normalized = sourceType.toUpperCase().trim();
+
+        switch (normalized) {
+            case 'UNIQUEIDENTIFIER':
+                return { typeName: 'UUID', supportsLength: false, supportsPrecisionScale: false };
+            case 'NVARCHAR':
+                return this.mapNVarchar(sourceLength);
+            case 'VARCHAR':
+                return this.mapVarchar(sourceLength);
+            case 'NCHAR':
+            case 'CHAR':
+                return { typeName: 'CHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: sourceLength ?? 1 };
+            case 'INT':
+            case 'INTEGER':
+                return { typeName: 'INTEGER', supportsLength: false, supportsPrecisionScale: false };
+            case 'BIGINT':
+                return { typeName: 'BIGINT', supportsLength: false, supportsPrecisionScale: false };
+            case 'SMALLINT':
+                return { typeName: 'SMALLINT', supportsLength: false, supportsPrecisionScale: false };
+            case 'TINYINT':
+                return { typeName: 'SMALLINT', supportsLength: false, supportsPrecisionScale: false };
+            case 'BIT':
+                return { typeName: 'BOOLEAN', supportsLength: false, supportsPrecisionScale: false };
+            case 'DECIMAL':
+            case 'NUMERIC':
+                return { typeName: 'NUMERIC', supportsLength: false, supportsPrecisionScale: true };
+            case 'FLOAT':
+                return this.mapFloat(sourcePrecision);
+            case 'REAL':
+                return { typeName: 'REAL', supportsLength: false, supportsPrecisionScale: false };
+            case 'MONEY':
+                return { typeName: 'NUMERIC(19,4)', supportsLength: false, supportsPrecisionScale: false };
+            case 'SMALLMONEY':
+                return { typeName: 'NUMERIC(10,4)', supportsLength: false, supportsPrecisionScale: false };
+            case 'DATE':
+                return { typeName: 'DATE', supportsLength: false, supportsPrecisionScale: false };
+            case 'DATETIME':
+            case 'DATETIME2':
+                return { typeName: 'TIMESTAMP', supportsLength: false, supportsPrecisionScale: false };
+            case 'DATETIMEOFFSET':
+                return { typeName: 'TIMESTAMPTZ', supportsLength: false, supportsPrecisionScale: false };
+            case 'SMALLDATETIME':
+                return { typeName: 'TIMESTAMP(0)', supportsLength: false, supportsPrecisionScale: false };
+            case 'TIME':
+                return { typeName: 'TIME', supportsLength: false, supportsPrecisionScale: false };
+            case 'TEXT':
+            case 'NTEXT':
+                return { typeName: 'TEXT', supportsLength: false, supportsPrecisionScale: false };
+            case 'IMAGE':
+                return { typeName: 'BYTEA', supportsLength: false, supportsPrecisionScale: false };
+            case 'VARBINARY':
+                return { typeName: 'BYTEA', supportsLength: false, supportsPrecisionScale: false };
+            case 'BINARY':
+                return { typeName: 'BYTEA', supportsLength: false, supportsPrecisionScale: false };
+            case 'XML':
+                return { typeName: 'XML', supportsLength: false, supportsPrecisionScale: false };
+            // PostgreSQL native types (pass through)
+            case 'UUID':
+                return { typeName: 'UUID', supportsLength: false, supportsPrecisionScale: false };
+            case 'BOOLEAN':
+                return { typeName: 'BOOLEAN', supportsLength: false, supportsPrecisionScale: false };
+            case 'TIMESTAMPTZ':
+                return { typeName: 'TIMESTAMPTZ', supportsLength: false, supportsPrecisionScale: false };
+            case 'TIMESTAMP':
+                return { typeName: 'TIMESTAMP', supportsLength: false, supportsPrecisionScale: false };
+            case 'BYTEA':
+                return { typeName: 'BYTEA', supportsLength: false, supportsPrecisionScale: false };
+            case 'JSONB':
+                return { typeName: 'JSONB', supportsLength: false, supportsPrecisionScale: false };
+            case 'JSON':
+                return { typeName: 'JSON', supportsLength: false, supportsPrecisionScale: false };
+            case 'SERIAL':
+                return { typeName: 'SERIAL', supportsLength: false, supportsPrecisionScale: false };
+            case 'BIGSERIAL':
+                return { typeName: 'BIGSERIAL', supportsLength: false, supportsPrecisionScale: false };
+            case 'DOUBLE PRECISION':
+                return { typeName: 'DOUBLE PRECISION', supportsLength: false, supportsPrecisionScale: false };
+            default:
+                return { typeName: normalized, supportsLength: false, supportsPrecisionScale: false };
+        }
+    }
+
+    MapTypeToString(sourceType: string, sourceLength?: number, sourcePrecision?: number, sourceScale?: number): string {
+        const mapped = this.MapType(sourceType, sourceLength, sourcePrecision, sourceScale);
+        return formatTypeString(mapped, sourceLength, sourcePrecision, sourceScale);
+    }
+
+    private mapNVarchar(length?: number): MappedType {
+        if (length === -1 || length === undefined) {
+            return { typeName: 'TEXT', supportsLength: false, supportsPrecisionScale: false };
+        }
+        return { typeName: 'VARCHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: length };
+    }
+
+    private mapVarchar(length?: number): MappedType {
+        if (length === -1 || length === undefined) {
+            return { typeName: 'TEXT', supportsLength: false, supportsPrecisionScale: false };
+        }
+        return { typeName: 'VARCHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: length };
+    }
+
+    private mapFloat(precision?: number): MappedType {
+        // SQL Server FLOAT(1-24) = REAL, FLOAT(25-53) = DOUBLE PRECISION
+        if (precision != null && precision <= 24) {
+            return { typeName: 'REAL', supportsLength: false, supportsPrecisionScale: false };
+        }
+        return { typeName: 'DOUBLE PRECISION', supportsLength: false, supportsPrecisionScale: false };
+    }
+}
+
+/**
+ * Helper to format a MappedType into a full SQL type string.
+ */
+function formatTypeString(mapped: MappedType, length?: number, precision?: number, scale?: number): string {
+    if (mapped.supportsPrecisionScale && precision != null) {
+        return scale != null
+            ? `${mapped.typeName}(${precision},${scale})`
+            : `${mapped.typeName}(${precision})`;
+    }
+    if (mapped.supportsLength) {
+        const len = length ?? mapped.defaultLength;
+        if (len != null) {
+            return len === -1 ? 'TEXT' : `${mapped.typeName}(${len})`;
+        }
+    }
+    return mapped.typeName;
+}
+
+/**
+ * PostgreSQL DDL, function, migration, introspection and transaction SQL.
+ */
+export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
+    /**
+     * PostgreSQL has no in-row row-size limit (TOAST stores oversized variable-length values
+     * out-of-line), so {@link MaxInRowSizeBytes} stays `null` (inherited). It does enforce a
+     * hard 1600-column-per-table cap.
+     */
+    override get MaxColumnCount(): number { return 1600; }
+
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, so the physical schema an
+     * unquoted `CREATE SCHEMA __mj_BizAppsCommon` produces is `__mj_bizappscommon`.
+     * Canonicalize to that lowercase form so the engine's quoted operations target the
+     * same physical schema as the app's (typically unquoted) migration DDL.
+     */
+    CanonicalSchemaName(name: string): string {
+        return name.toLowerCase();
+    }
+
+    BooleanParameterType(): string {
+        return 'boolean';
+    }
+
+    /**
+     * PostgreSQL function parameters use a `p_<flat lowercase>` convention
+     * (no `@`-prefix syntax in PG). This matches the baseline-ported SP names
+     * (which lowercased SQL Server's PascalCase parameter names without
+     * separators — e.g. `@CompanyID` → `p_companyid`) and the runtime
+     * PostgreSQLDataProvider, which calls procs with `p_${field.Name.toLowerCase()}`.
+     *
+     * Earlier this used a snake_case transform (`p_company_id`), which
+     * produced functions the runtime could never invoke. Underscores already
+     * in the input (e.g. the `_Clear` companion suffix) are preserved.
+     */
+    ParameterRef(name: string): string {
+        return `p_${name.toLowerCase()}`;
+    }
+
+    /**
+     * PostgreSQL functions use the `DEFAULT <value>` clause for parameter defaults.
+     */
+    ParameterDefault(value: string): string {
+        return ` DEFAULT ${value}`;
+    }
+
+    AffectedRowCountSQL(dmlStatement: string, alias: string): string {
+        // A data-modifying CTE is PostgreSQL's equivalent of @@ROWCOUNT: the statement runs once,
+        // RETURNING emits one row per affected row, and the outer SELECT counts them.
+        return `WITH ${this.Writer.QuoteIdentifier('__mj_affected')} AS (\n${dmlStatement}\nRETURNING 1\n)\n`
+            + `SELECT COUNT(*)::int AS ${this.Writer.QuoteColumnAlias(alias)} FROM ${this.Writer.QuoteIdentifier('__mj_affected')}`;
+    }
+
+    NewUUID(): string {
+        return 'gen_random_uuid()';
+    }
+
+    /**
+     * PostgreSQL-specific Flyway escape. PostgreSQL string concatenation uses
+     * `||` (not `+`), and TEXT has no length cap — so a simple split with `||`
+     * suffices and no cast-to-MAX dance is needed (unlike SQL Server, which
+     * silently truncates `NVARCHAR(N) + NVARCHAR(M)` past 4,000 chars).
+     * PostgreSQL string literals don't take an `N` prefix either; everything
+     * is already Unicode.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'||'{");
+    }
+
+    CastToUUID(expr: string): string {
+        return `CAST(${expr} AS UUID)`;
+    }
+
+    /**
+     * PostgreSQL strict typing requires an explicit `::UUID` cast when
+     * comparing the empty-GUID sentinel against a UUID-typed column.
+     * Without it, PG raises "operator does not exist: uuid = text".
+     */
+    EmptyUUIDLiteral(): string {
+        return `${super.EmptyUUIDLiteral()}::UUID`;
+    }
+
+    ReturnInsertedClause(columns?: string[]): string {
+        if (columns && columns.length > 0) {
+            const cols = columns.map(c => `"${c}"`).join(', ');
+            return `RETURNING ${cols}`;
+        }
+        return 'RETURNING *';
+    }
+
+    AutoIncrementPKExpression(): string {
+        return 'GENERATED ALWAYS AS IDENTITY';
+    }
+
+    UUIDPKDefault(): string {
+        return 'gen_random_uuid()';
+    }
+
+    ScopeIdentityExpression(): string {
+        return 'lastval()';
+    }
+
+    RowCountExpression(): string {
+        // In PL/pgSQL, use GET DIAGNOSTICS row_count = ROW_COUNT
+        return 'ROW_COUNT';
+    }
+
+    BatchSeparator(): string {
+        return ''; // PostgreSQL does not need batch separators
+    }
+
+    CreateSavepointSQL(name: string): string {
+        return `SAVEPOINT ${name}`;
+    }
+
+    ReleaseSavepointSQL(name: string): string {
+        return `RELEASE SAVEPOINT ${name}`;
+    }
+
+    RollbackToSavepointSQL(name: string): string {
+        return `ROLLBACK TO SAVEPOINT ${name}`;
+    }
+
+    /**
+     * Splits an oversized SQL batch into individual statements on `;`+EOL
+     * boundaries — but NEVER inside a PostgreSQL dollar-quoted block
+     * (`$$ … $$` or `$tag$ … $tag$`), whose body legitimately contains
+     * `;`+newline (DO blocks, PL/pgSQL function bodies, the integration
+     * view-drop guard `$mj_dropviews$`). A naive `split(/;\s*\n/g)` tears
+     * those apart. Outside dollar blocks the boundary semantics mirror the
+     * base `split(/;\s*\n/g)` (a `;` then optional inline whitespace then a
+     * newline). Each returned statement ends with `;`.
+     */
+    SplitStatements(batch: string): string[] {
+        const statements: string[] = [];
+        let current = '';
+        let dollarTag: string | null = null;   // active dollar-quote tag (e.g. '$$' or '$fn$'), or null
+        const isTagChar = (c: string) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c === '_';
+        for (let i = 0; i < batch.length; i++) {
+            const ch = batch[i];
+            if (ch === '$') {
+                // Scan a dollar-quote tag: `$` [A-Za-z0-9_]* `$`.
+                let j = i + 1;
+                while (j < batch.length && isTagChar(batch[j])) j++;
+                if (batch[j] === '$') {
+                    const tag = batch.slice(i, j + 1);
+                    if (dollarTag === null) dollarTag = tag;          // entering a dollar-quoted block
+                    else if (dollarTag === tag) dollarTag = null;     // matching close → exiting
+                    current += tag;
+                    i = j;
+                    continue;
+                }
+            }
+            if (ch === ';' && dollarTag === null) {
+                // Boundary = `;` then optional spaces/tabs/CR then a newline — only OUTSIDE a dollar block.
+                let j = i + 1;
+                while (j < batch.length && (batch[j] === ' ' || batch[j] === '\t' || batch[j] === '\r')) j++;
+                if (j < batch.length && batch[j] === '\n') {
+                    current += ';';
+                    const trimmed = current.trim();
+                    if (trimmed.length > 0) statements.push(trimmed);
+                    current = '';
+                    i = j;   // skip the inline whitespace; the loop's i++ steps past the newline
+                    continue;
+                }
+            }
+            current += ch;
+        }
+        const tail = current.trim();
+        if (tail.length > 0) statements.push(tail);
+        return statements.map((s) => (s.endsWith(';') ? s : s + ';'));
+    }
+
+    ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
+        const normalizedType = objectType.toUpperCase();
+        switch (normalizedType) {
+            case 'TABLE':
+                return `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname = '${schema}' AND tablename = '${name}')`;
+            case 'VIEW':
+                return `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_views WHERE schemaname = '${schema}' AND viewname = '${name}')`;
+            case 'FUNCTION':
+                return `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = '${schema}' AND p.proname = '${name}')`;
+            case 'PROCEDURE':
+                return `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = '${schema}' AND p.proname = '${name}' AND p.prokind = 'p')`;
+            case 'TRIGGER':
+                return `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname = '${name}')`;
+            default:
+                return `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname = '${schema}' AND c.relname = '${name}')`;
+        }
+    }
+
+    CreateOrReplaceSupported(objectType: string): boolean {
+        const normalized = objectType.toUpperCase();
+        return normalized === 'FUNCTION' || normalized === 'VIEW' || normalized === 'PROCEDURE';
+    }
+
+    FullTextSearchPredicate(column: string, searchTerm: string): string {
+        return `${column} @@ plainto_tsquery('english', ${searchTerm})`;
+    }
+
+    FullTextIndexDDL(table: string, columns: string[], _catalog?: string): string {
+        const colList = columns.map(c => `"${c}"`).join(', ');
+        const cleanTable = table.replace(/"/g, '');
+        const triggerCols = columns.map(c => `"${c}"`).join(', ');
+        const lines: string[] = [];
+
+        // Add tsvector column
+        lines.push(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS __mj_fts_vector TSVECTOR;`);
+        lines.push('');
+
+        // Create GIN index on the tsvector column
+        lines.push(`CREATE INDEX IF NOT EXISTS idx_fts_${cleanTable.replace(/\./g, '_')} ON ${table} USING GIN(__mj_fts_vector);`);
+        lines.push('');
+
+        // Create update trigger
+        lines.push(`CREATE OR REPLACE FUNCTION ${this.extractSchema(table)}.fn_trg_fts_${this.extractName(table)}()`);
+        lines.push('RETURNS TRIGGER AS $$');
+        lines.push('BEGIN');
+        lines.push(`    NEW.__mj_fts_vector := to_tsvector('english', ${columns.map(c => `COALESCE(NEW."${c}", '')`).join(" || ' ' || ")});`);
+        lines.push('    RETURN NEW;');
+        lines.push('END;');
+        lines.push('$$ LANGUAGE plpgsql;');
+        lines.push('');
+
+        lines.push(`DROP TRIGGER IF EXISTS trg_fts_${this.extractName(table)} ON ${table};`);
+        lines.push(`CREATE TRIGGER trg_fts_${this.extractName(table)}`);
+        lines.push(`    BEFORE INSERT OR UPDATE ON ${table}`);
+        lines.push(`    FOR EACH ROW EXECUTE FUNCTION ${this.extractSchema(table)}.fn_trg_fts_${this.extractName(table)}();`);
+
+        return lines.join('\n');
+    }
+
+    get TypeMap(): DataTypeMap {
+        return new PostgreSQLDataTypeMap();
+    }
+
+    StringSplitFunction(value: string, delimiter: string): string {
+        return `unnest(string_to_array(${value}, ${delimiter}))`;
+    }
+
+    ProcedureCallSyntax(schema: string, name: string, params: string[]): string {
+        const paramList = params.join(', ');
+        return `SELECT * FROM ${schema}."${name}"(${paramList})`;
+    }
+
+    CreateSchemaDDL(schemaName: string): string {
+        return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
+    }
+
+    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
+        const quotedTable = this.Writer.QuoteSchema(schema, tableName);
+        return [
+            `CREATE TABLE IF NOT EXISTS ${quotedTable} (`,
+            columnsDDL,
+            `);`,
+        ].join('\n');
+    }
+
+    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
+        const lines = [
+            `DO $$`,
+            `BEGIN`,
+            `  IF ${condition} THEN`,
+            `    ${thenSQL};`,
+        ];
+        if (elseSQL) {
+            lines.push(`  ELSE`);
+            lines.push(`    ${elseSQL};`);
+        }
+        lines.push(`  END IF;`);
+        lines.push(`END $$;`);
+        return lines.join('\n');
+    }
+
+    RaiseSignalSQL(message: string): string {
+        return `RAISE NOTICE '${message}'`;
+    }
+
+    AddColumnClause(col: ColumnDDLOptions): string {
+        const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+        const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';
+        return `ADD COLUMN "${col.name}" ${col.sqlType} ${nullable}${defaultExpr}`;
+    }
+
+    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        const col = `"${options.columnName}"`;
+        // PostgreSQL refuses to change a column's type when the old type cannot be
+        // *implicitly* cast to the new one (e.g. text → boolean, text → integer):
+        //   "column ... cannot be cast automatically to type boolean".
+        // A `USING <col>::<newtype>` expression makes the conversion explicit. It is
+        // valid for every type change (a no-op cast when the types already match), so
+        // we always emit it. SQL Server has no such requirement (handled in its own
+        // dialect), so this is PG-only.
+        return (
+            `ALTER TABLE ${quotedTable}\n` +
+            `    ALTER COLUMN ${col} TYPE ${options.newType} USING ${col}::${options.newType},\n` +
+            `    ALTER COLUMN ${col} ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
+        );
+    }
+
+    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
+        const escaped = comment.replace(/'/g, "''");
+        return `COMMENT ON COLUMN "${schema}"."${table}"."${column}" IS '${escaped}';`;
+    }
+
+    FallbackType(): string {
+        return 'TEXT';
+    }
+
+    TriggerDDL(options: TriggerOptions): string {
+        const events = options.events.join(' OR ');
+        const forEach = options.forEach ?? 'ROW';
+        const funcName = options.functionName ?? `fn_${options.triggerName}`;
+        const lines: string[] = [];
+
+        // PostgreSQL triggers require a companion function
+        lines.push(`CREATE OR REPLACE FUNCTION ${options.schema}."${funcName}"()`);
+        lines.push('RETURNS TRIGGER AS $$');
+        lines.push('BEGIN');
+        lines.push(`    ${options.body}`);
+        lines.push('END;');
+        lines.push('$$ LANGUAGE plpgsql;');
+        lines.push('');
+
+        lines.push(`DROP TRIGGER IF EXISTS "${options.triggerName}" ON ${options.schema}."${options.tableName}";`);
+        lines.push(`CREATE TRIGGER "${options.triggerName}"`);
+        lines.push(`    ${options.timing} ${events} ON ${options.schema}."${options.tableName}"`);
+        lines.push(`    FOR EACH ${forEach}`);
+        lines.push(`    EXECUTE FUNCTION ${options.schema}."${funcName}"();`);
+
+        return lines.join('\n');
+    }
+
+    IndexDDL(options: IndexOptions): string {
+        const unique = options.unique ? 'UNIQUE ' : '';
+        const method = options.method ? ` USING ${options.method}` : '';
+        const cols = options.columns.map(c => `"${c}"`).join(', ');
+        let ddl = `CREATE ${unique}INDEX IF NOT EXISTS "${options.indexName}" ON ${options.schema}."${options.tableName}"${method}(${cols})`;
+        if (options.where) {
+            ddl += ` WHERE ${options.where}`;
+        }
+        return ddl;
+    }
+
+    GrantPermission(permission: string, _objectType: string, schema: string, object: string, role: string): string {
+        return `GRANT ${permission} ON ${schema}."${object}" TO "${role}"`;
+    }
+
+    CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
+        const escapedComment = comment.replace(/'/g, "''");
+        const normalizedType = objectType.toUpperCase();
+        return `COMMENT ON ${normalizedType} ${schema}."${name}" IS '${escapedComment}'`;
+    }
+
+    SchemaIntrospectionQueries(): SchemaIntrospectionSQL {
+        return {
+            listTables: `
+                SELECT schemaname AS schema_name, tablename AS table_name
+                FROM pg_catalog.pg_tables
+                WHERE schemaname = $1
+                ORDER BY tablename`,
+            listColumns: `
+                SELECT c.column_name, c.data_type, c.character_maximum_length AS max_length,
+                       c.numeric_precision AS precision, c.numeric_scale AS scale,
+                       c.is_nullable, c.column_default AS default_value,
+                       CASE WHEN c.column_default LIKE '%nextval%' THEN true ELSE false END AS is_identity
+                FROM information_schema.columns c
+                WHERE c.table_schema = $1 AND c.table_name = $2
+                ORDER BY c.ordinal_position`,
+            listConstraints: `
+                SELECT tc.constraint_name, tc.constraint_type, kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                WHERE tc.table_schema = $1 AND tc.table_name = $2
+                ORDER BY tc.constraint_type, kcu.ordinal_position`,
+            listForeignKeys: `
+                SELECT
+                    tc.constraint_name AS fk_name,
+                    tc.table_schema AS source_schema,
+                    tc.table_name AS source_table,
+                    kcu.column_name AS source_column,
+                    ccu.table_schema AS target_schema,
+                    ccu.table_name AS target_table,
+                    ccu.column_name AS target_column
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1
+                ORDER BY tc.constraint_name`,
+            listIndexes: `
+                SELECT
+                    i.relname AS index_name,
+                    ix.indisunique AS is_unique,
+                    am.amname AS type_desc,
+                    a.attname AS column_name,
+                    false AS is_included_column
+                FROM pg_catalog.pg_index ix
+                JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
+                JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_catalog.pg_am am ON am.oid = i.relam
+                JOIN pg_catalog.pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+                WHERE n.nspname = $1 AND t.relname = $2
+                ORDER BY i.relname`,
+            objectExists: `
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_class c
+                    JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+                    WHERE n.nspname = $1 AND c.relname = $2
+                ) AS exists`,
+        };
+    }
+
+    /**
+     * PostgreSQL FK-graph query for cascade planning — reads `pg_catalog.pg_constraint`
+     * (`contype = 'f'`). Returns one row per FK column (via `unnest(conkey, confkey)`, which
+     * preserves column pairing/order), with `childNullable` (`NOT attnotnull`) and `colCount`
+     * (`array_length(conkey, 1)`, for composite exclusion). Column aliases and semantics MATCH
+     * the SQL Server variant so a single caller parses both. `relname`/`attname` preserve the
+     * quoted mixed-case identifiers MJ creates on PG, so they feed straight into QuoteIdentifier.
+     * Both parent + child are filtered to `schema`; the schema is embedded as a literal.
+     */
+    ForeignKeyGraphSQL(schema: string): string {
+        const s = this.Writer.QuoteStringLiteral(schema);
+        // NOTE: deliberately avoids `unnest(...) WITH ORDINALITY` / `LATERAL`. This query is executed
+        // through PostgreSQLDataProvider.ExecuteSQL, whose autoQuoteIdentifiers tokenizer quotes the
+        // bare uppercase word `ORDINALITY` (not in its keyword set) → `WITH "ORDINALITY"` → a syntax
+        // error. Using `= any(con.conkey)` (all-lowercase, autoQuote-safe) resolves the FK column via
+        // array membership instead. For SINGLE-column FKs (the only ones the planner keeps, colCount=1)
+        // this yields exactly one correctly-paired row; composite FKs (colCount>1) produce a cross
+        // product of rows that the caller skips wholesale by fkName — so the mispairing is irrelevant.
+        return (
+            'SELECT pt.relname AS "parentTable", pa.attname AS "parentRefCol", ct.relname AS "childTable", ' +
+            'ca.attname AS "childCol", (NOT ca.attnotnull) AS "childNullable", con.conname AS "fkName", ' +
+            'array_length(con.conkey, 1) AS "colCount" ' +
+            'FROM pg_catalog.pg_constraint con ' +
+            'JOIN pg_catalog.pg_class ct ON ct.oid = con.conrelid ' +
+            'JOIN pg_catalog.pg_namespace cn ON cn.oid = ct.relnamespace ' +
+            'JOIN pg_catalog.pg_class pt ON pt.oid = con.confrelid ' +
+            'JOIN pg_catalog.pg_namespace pn ON pn.oid = pt.relnamespace ' +
+            'JOIN pg_catalog.pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = any(con.conkey) ' +
+            'JOIN pg_catalog.pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = any(con.confkey) ' +
+            `WHERE con.contype = 'f' AND cn.nspname = ${s} AND pn.nspname = ${s} ` +
+            'ORDER BY con.conname'
+        );
+    }
+
+    AtomicBatchScript(statements: string[]): string {
+        if (!statements || !statements.length) return '';
+        const body = statements.join(';\n');
+        // No session pragmas (QUOTED_IDENTIFIER/ANSI_NULLS are SQL-Server concepts) and PostgreSQL
+        // already aborts the whole transaction on any error, so plain BEGIN … COMMIT is all-or-nothing.
+        return `BEGIN;\n${body};\nCOMMIT;`;
+    }
+
+    ResolveAbstractType(options: ResolveTypeOptions): string {
+        switch (options.type) {
+            case 'string':
+                return this.resolveStringType(options.maxLength);
+            case 'text':
+                return 'TEXT';
+            case 'integer':
+                return 'INTEGER';
+            case 'bigint':
+                return 'BIGINT';
+            case 'decimal':
+                return `NUMERIC(${options.precision ?? 18},${options.scale ?? 2})`;
+            case 'boolean':
+                return 'BOOLEAN';
+            case 'datetime':
+                return 'TIMESTAMPTZ';
+            case 'date':
+                return 'DATE';
+            case 'uuid':
+                return 'UUID';
+            case 'json':
+                return 'JSONB';
+            case 'float':
+                return 'DOUBLE PRECISION';
+            case 'time':
+                return 'TIME';
+            default:
+                return this.FallbackType();
+        }
+    }
+
+    private resolveStringType(maxLength?: number): string {
+        if (maxLength != null && maxLength > 0) {
+            return `VARCHAR(${maxLength})`;
+        }
+        return 'VARCHAR(255)';
+    }
+
+    private extractSchema(qualifiedName: string): string {
+        const dotIndex = qualifiedName.indexOf('.');
+        if (dotIndex === -1) return 'public';
+        return qualifiedName.substring(0, dotIndex).replace(/"/g, '');
+    }
+
+    private extractName(qualifiedName: string): string {
+        const dotIndex = qualifiedName.indexOf('.');
+        if (dotIndex === -1) return qualifiedName.replace(/"/g, '');
+        return qualifiedName.substring(dotIndex + 1).replace(/"/g, '');
+    }
+}

@@ -23,10 +23,10 @@ graph TD
 ## Features
 
 - **Semantic Reranking**: Reorder documents by relevance to a query using neural models
-- **Multiple Models**: Support for `rerank-v3.5` (English) and `rerank-multilingual-v3.0` (100+ languages)
+- **Multiple Models**: `rerank-v5.0-fast` (default) and `rerank-v5.0-pro`, `rerank-v4.0-fast` and `rerank-v4.0-pro`, and the legacy `rerank-v3.5` and `rerank-multilingual-v3.0`
 - **Relevance Scoring**: Documents scored 0-1 with fine-grained relevance ranking
 - **RAG Pipeline Integration**: Designed for use in retrieval-augmented generation workflows
-- **Context-Aware**: Enhanced query processing for better relevance evaluation
+- **Context Focus**: with Rerank 5, optional passage spans per document (the `RelevantSpans` option)
 
 ### Embeddings (CohereEmbedding)
 - **Multimodal Embeddings**: Embed text and images into a shared vector space (Cohere Embed v4)
@@ -44,7 +44,7 @@ npm install @memberjunction/ai-cohere
 ```typescript
 import { CohereReranker } from '@memberjunction/ai-cohere';
 
-const reranker = new CohereReranker('your-cohere-api-key', 'rerank-v3.5');
+const reranker = new CohereReranker('your-cohere-api-key', 'rerank-v5.0-fast');
 
 const results = await reranker.Rerank({
     query: 'What is the capital of France?',
@@ -86,8 +86,12 @@ console.log(multimodal.vector.length); // 1536
 
 | Model | Description |
 |-------|-------------|
-| `rerank-v3.5` | Latest English reranker with best accuracy (default) |
-| `rerank-multilingual-v3.0` | Supports 100+ languages |
+| `rerank-v5.0-fast` | Rerank 5, high throughput, 32K context, Context Focus (default) |
+| `rerank-v5.0-pro` | Rerank 5 flagship, 32K context, Context Focus |
+| `rerank-v4.0-fast` | Previous generation, fast, 32K context |
+| `rerank-v4.0-pro` | Previous generation flagship, 32K context |
+| `rerank-v3.5` | Legacy English reranker, 4K context (deprecated upstream) |
+| `rerank-multilingual-v3.0` | Legacy multilingual reranker, 4K context |
 
 ## Class Registration
 
