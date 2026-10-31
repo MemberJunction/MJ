@@ -315,6 +315,7 @@ export class ComponentVersionService {
       ExtraFilter: `UserID='${currentUser.ID}' AND Name='Component Studio'`,
       Fields: ['ID'],
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple'
     });
 
@@ -354,6 +355,7 @@ export class ComponentVersionService {
       Fields: ['Version'],
       OrderBy: 'Version DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple'
     });
 
@@ -415,6 +417,7 @@ export class ComponentVersionService {
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
       OrderBy: 'Version DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'entity_object'
     });
 

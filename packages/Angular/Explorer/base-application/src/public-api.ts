@@ -7,6 +7,7 @@
 
 // Core classes
 export * from './lib/base-application';
+export * from './lib/nav-item-extensions';
 export * from './lib/application-manager';
 export * from './lib/workspace-state-manager';
 export * from './lib/workspace-journal';

@@ -108,6 +108,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
             Fields: ['ID', 'ProviderConfig'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, contextUser);
         if (!r.Success) {
             LogError(`SimpleVectorDatabase.loadIndexConfig: RunView failed for "${indexName}": ${r.ErrorMessage}`);

@@ -26,6 +26,15 @@ vi.mock('@memberjunction/ai', async () => {
         public get SupportsClientDirect(): boolean {
             return false;
         }
+        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
+        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+            let smallest: number | undefined;
+            for (const c of candidates) {
+                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+                if (smallest === undefined || c < smallest) smallest = c;
+            }
+            return smallest;
+        }
         public async CreateClientSession(): Promise<never> {
             throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
         }
@@ -47,8 +56,14 @@ vi.mock('@memberjunction/ai', async () => {
     // Pure, dependency-free helpers — the REAL implementations, so this spec asserts shipped behavior.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
+    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
+    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
+    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
+    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // The SDK socket: never touches the network; records what it was opened with.
@@ -297,6 +312,73 @@ describe('ElevenRealtime', () => {
             await driver.StartSession(makeParams({ Config: { max_duration_seconds: 600 } }));
             driver.Fake.Fire(SESSION_CREATED);
             expect((driver.Fake.SessionUpdate as Record<string, unknown>)['max_duration_seconds']).toBe(600);
+        });
+
+        describe('max_duration_seconds is min(provider cap, MaxSessionSeconds, bag)', () => {
+            const sentOnBridge = async (params: Partial<RealtimeSessionParams>): Promise<Record<string, unknown>> => {
+                const driver = new TestableElevenRealtime('xi-key');
+                await driver.StartSession(makeParams(params));
+                driver.Fake.Fire(SESSION_CREATED);
+                return driver.Fake.SessionUpdate as Record<string, unknown>;
+            };
+            const minted = async (params: Partial<RealtimeSessionParams>): Promise<Record<string, unknown>> => {
+                const driver = new TestableElevenRealtime('xi-key');
+                await driver.CreateClientSession(makeParams(params));
+                return driver.MintBodies[0].session as Record<string, unknown>;
+            };
+
+            it('MaxSessionSeconds 900, no bag -> 900 on both paths', async () => {
+                expect((await sentOnBridge({ MaxSessionSeconds: 900 }))['max_duration_seconds']).toBe(900);
+                expect((await minted({ MaxSessionSeconds: 900 }))['max_duration_seconds']).toBe(900);
+            });
+
+            it('bag 600 wins when smaller', async () => {
+                const params = { MaxSessionSeconds: 900, Config: { max_duration_seconds: 600 } };
+                expect((await sentOnBridge(params))['max_duration_seconds']).toBe(600);
+                expect((await minted(params))['max_duration_seconds']).toBe(600);
+            });
+
+            it('bag 1200 loses to MaxSessionSeconds 900', async () => {
+                const params = { MaxSessionSeconds: 900, Config: { max_duration_seconds: 1200 } };
+                expect((await sentOnBridge(params))['max_duration_seconds']).toBe(900);
+                expect((await minted(params))['max_duration_seconds']).toBe(900);
+            });
+
+            it('ignores a non-number bag value and never sends it as-is', async () => {
+                const params = { MaxSessionSeconds: 900, Config: { max_duration_seconds: '600' } };
+                expect((await sentOnBridge(params))['max_duration_seconds']).toBe(900);
+                expect((await minted(params))['max_duration_seconds']).toBe(900);
+                const bagOnly = { Config: { max_duration_seconds: '600' } };
+                expect('max_duration_seconds' in (await sentOnBridge(bagOnly))).toBe(false);
+                expect('max_duration_seconds' in (await minted(bagOnly))).toBe(false);
+            });
+
+            it('ClientConfig MaxSessionSeconds equals the wire max_duration_seconds, bag clamp included', async () => {
+                const cases: Array<[Partial<RealtimeSessionParams>, number | undefined]> = [
+                    [{ MaxSessionSeconds: 900 }, 900],
+                    [{ MaxSessionSeconds: 900, Config: { max_duration_seconds: 600 } }, 600],
+                    [{ MaxSessionSeconds: 900, Config: { max_duration_seconds: 1200 } }, 900],
+                    [{ Config: { max_duration_seconds: 600 } }, 600],
+                    [{}, undefined],
+                ];
+                for (const [params, expected] of cases) {
+                    const driver = new TestableElevenRealtime('xi-key');
+                    const cfg = await driver.CreateClientSession(makeParams(params));
+                    expect(cfg.MaxSessionSeconds).toBe(expected);
+                    expect((driver.MintBodies[0].session as Record<string, unknown>)['max_duration_seconds']).toBe(expected);
+                }
+            });
+
+            it('no MaxSessionSeconds and no bag -> field absent', async () => {
+                expect('max_duration_seconds' in (await sentOnBridge({}))).toBe(false);
+                expect('max_duration_seconds' in (await minted({}))).toBe(false);
+            });
+
+            it('does not mutate the caller Config bag', async () => {
+                const config = { max_duration_seconds: 1200 };
+                await sentOnBridge({ MaxSessionSeconds: 900, Config: config });
+                expect(config.max_duration_seconds).toBe(1200);
+            });
         });
 
         it('does not open a socket when minting fails', async () => {

@@ -109,6 +109,7 @@ export class NumberPoolSelector extends BaseSingleton<NumberPoolSelector> {
                     EntityName: NUMBER_POOL_ENTITY,
                     ExtraFilter: `ID='${EscapeSQLString(poolId)}'`,
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                 },
                 user,

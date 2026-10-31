@@ -1142,7 +1142,7 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1153,10 +1153,11 @@ import {
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (67 classes)
+// @memberjunction/core-entities-server (68 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1165,6 +1166,7 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2310,6 +2312,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2318,6 +2321,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2468,12 +2472,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     HTTPRequestAction,
     IPGeolocationAction,
     IntegrationActionExecutor,
-    InviteToListAction,
-    JSONTransformAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    InviteToListAction,
+    JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
@@ -2592,7 +2596,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1102;
+export const CLASS_REGISTRATIONS_COUNT = 1104;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

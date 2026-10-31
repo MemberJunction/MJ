@@ -159,6 +159,11 @@ export type RunViewGenericParams = {
    */
   includeBinaryFields?: boolean;
   /**
+   * When true, no count runs to populate `TotalRowCount`, which comes back undefined.
+   * Propagated to `RunViewParams.SkipTotalRowCount`.
+   */
+  skipTotalRowCount?: boolean;
+  /**
    * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
    * for this entity. Propagated to `RunViewParams.AlternateBaseView`.
    */

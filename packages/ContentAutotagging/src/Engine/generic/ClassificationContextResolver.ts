@@ -159,6 +159,7 @@ export class ClassificationContextResolver {
                 ExtraFilter: `Name = '${KNOWLEDGE_HUB_APPLICATION_NAME.replace(/'/g, "''")}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             contextUser,

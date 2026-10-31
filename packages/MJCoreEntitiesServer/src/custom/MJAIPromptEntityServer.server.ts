@@ -179,7 +179,8 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
                 OrderBy: "__mj_CreatedAt ASC", // first one
                 ResultType: 'entity_object',
-                MaxRows: 1 // should only be one row
+                MaxRows: 1, // should only be one row
+                SkipTotalRowCount: true
             }, this.ContextCurrentUser);
             let tc: MJTemplateContentEntity | undefined = undefined;
             if (result && result.Success && result.Results.length > 0) {

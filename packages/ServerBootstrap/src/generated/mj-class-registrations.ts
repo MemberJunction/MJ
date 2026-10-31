@@ -1199,13 +1199,14 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/content-autotagging (6 classes)
+// @memberjunction/content-autotagging (7 classes)
 import {
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
@@ -1397,7 +1398,7 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1408,10 +1409,11 @@ import {
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (67 classes)
+// @memberjunction/core-entities-server (68 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1420,6 +1422,7 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2569,13 +2572,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
     AgentRubricEvaluator,
-    CreateRubricDraftAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CreateRubricDraftAction,
     DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
@@ -2715,6 +2719,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2723,6 +2728,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2773,13 +2779,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
     MJSearchScopeEntityServer,
-    MJTagEntityServer,
-    MJTagScopeEntityServer,
-    MJTemplateContentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJTagEntityServer,
+    MJTagScopeEntityServer,
+    MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
@@ -2977,13 +2983,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
-    WebSearchAction,
-    WriteEntityFieldsAction,
-    XMLParserAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    WebSearchAction,
+    WriteEntityFieldsAction,
+    XMLParserAction,
     AutotagAndVectorizeContentAction,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
@@ -3025,7 +3031,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1224;
+export const CLASS_REGISTRATIONS_COUNT = 1227;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

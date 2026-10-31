@@ -2374,6 +2374,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         EntityName: this._entityInfo.Name,
         ExtraFilter: ck.ToWhereClause(),
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
         Fields: ComputeFieldsList(this._entityInfo, this._gridState, this.hostColumnFieldNames()),
       });
