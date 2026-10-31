@@ -1,11 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import {
-    RenderDiagram,
-    MJ_DIAGRAM_KINDS,
-    type MJDiagramKind,
-} from "@memberjunction/ai-diagrams";
+import { RenderDiagram } from "@memberjunction/ai-diagrams";
 import { SVGUtils } from './shared/svg-utils';
 
 /** Upper bound on a spec, so a runaway generation cannot tie up a render worker. */
@@ -54,19 +50,16 @@ export class RenderArchitectureDiagramAction extends BaseAction {
         };
     }
 
+    /** DiagramType is passed through as is: the validator owns the kind, so an empty, unknown or conflicting one is refused there. */
     private readInput(params: RunActionParams):
-        | { DiagramType: MJDiagramKind; Spec: Record<string, unknown> }
+        | { DiagramType: string; Spec: Record<string, unknown> }
         | { Failure: ActionResultSimple } {
         const spec = this.readSpec(this.paramValue(params, 'SpecJSON'));
         if (typeof spec === 'string') {
             return this.invalid(spec);
         }
-        const rawDiagramType = String(this.paramValue(params, 'DiagramType') ?? spec.kind ?? spec.diagram_type ?? '').trim().toLowerCase();
-        if (!MJ_DIAGRAM_KINDS.includes(rawDiagramType as MJDiagramKind)) {
-            return this.invalid(`DiagramType must be one of: ${MJ_DIAGRAM_KINDS.join(', ')}.`);
-        }
         return {
-            DiagramType: rawDiagramType as MJDiagramKind,
+            DiagramType: String(this.paramValue(params, 'DiagramType') ?? ''),
             Spec: spec,
         };
     }

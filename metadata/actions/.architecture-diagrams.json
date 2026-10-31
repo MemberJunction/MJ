@@ -21,7 +21,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Diagram kind to render: workflow (actor swimlanes, tasks, decisions, exception paths), lifecycle (state groups, status transitions, step badges), sequence (participants, chronological messages, phase bands), or dataflow (left-to-right processing stages and data-labeled flows). Optional if SpecJSON includes a top-level kind field.",
+            "Description": "Diagram kind to render: workflow (actor swimlanes, tasks, decisions, exception paths), lifecycle (state groups, status transitions, step badges), sequence (participants, chronological messages, phase bands), or dataflow (left-to-right processing stages and data-labeled flows). Optional if SpecJSON includes a top-level kind field; when both are given they must match.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -85,7 +85,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_INPUT",
             "IsSuccess": false,
-            "Description": "DiagramType or SpecJSON is missing or not a valid JSON object."
+            "Description": "SpecJSON is missing or not a valid JSON object, or the diagram kind is missing, unknown, or conflicts with DiagramType."
           },
           "primaryKey": {
             "ID": "E3479E8F-8908-4ABB-A94B-269EB6877ED7"

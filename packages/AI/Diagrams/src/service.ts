@@ -23,7 +23,7 @@ export function RenderDiagram(rawSpec: unknown, fallbackKind?: string): MJDiagra
     if (validation.Valid === false) {
         return {
             Success: false,
-            ErrorCode: validation.Diagnostics.some((d) => d.Code === 'INVALID_KIND' || d.Code === 'INVALID_ROOT' || d.Code === 'INVALID_JSON')
+            ErrorCode: validation.Diagnostics.some((d) => ['INVALID_KIND', 'KIND_CONFLICT', 'INVALID_ROOT', 'INVALID_JSON'].includes(d.Code))
                 ? 'INVALID_INPUT'
                 : 'VALIDATION_FAILED',
             Message: validation.Diagnostics.map((d) => `[${d.Code}] ${d.Path}: ${d.Message} Fix: ${d.Fix}`).join('\n'),

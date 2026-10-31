@@ -55,7 +55,7 @@ describe('RenderArchitectureDiagramAction', () => {
 
         const { result, outputs } = await run({ DiagramType: 'Workflow', SpecJSON: JSON.stringify(SPEC) });
 
-        expect(renderMock).toHaveBeenCalledWith(SPEC, 'workflow');
+        expect(renderMock).toHaveBeenCalledWith(SPEC, 'Workflow');
         expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS', Message: RENDERED.Svg });
         expect(result.Message).toContain('data-mj-diagram="1"');
         expect(result.Message).toContain('<desc>Step details</desc>');
@@ -63,12 +63,14 @@ describe('RenderArchitectureDiagramAction', () => {
         expect(svgOutput).toBe(RENDERED.Svg);
     });
 
-    it('accepts the spec as an object and infers DiagramType from spec.kind when DiagramType param is omitted', async () => {
+    it('accepts the spec as an object and leaves the kind to spec.kind when DiagramType is omitted or empty', async () => {
         renderMock.mockReturnValue(RENDERED);
 
-        await run({ SpecJSON: SPEC });
+        const omitted = await run({ SpecJSON: SPEC });
+        const empty = await run({ DiagramType: '', SpecJSON: SPEC });
 
-        expect(renderMock).toHaveBeenCalledWith(SPEC, 'workflow');
+        expect(renderMock.mock.calls).toEqual([[SPEC, ''], [SPEC, '']]);
+        expect(omitted.result.Success && empty.result.Success).toBe(true);
     });
 
     it('hands @memberjunction/ai-diagrams diagnostics back as JSON so the agent can repair the spec', async () => {
@@ -90,8 +92,6 @@ describe('RenderArchitectureDiagramAction', () => {
     });
 
     it.each([
-        [{ SpecJSON: { title: 'No kind' } }],
-        [{ DiagramType: 'mindmap', SpecJSON: SPEC }],
         [{ DiagramType: 'workflow' }],
         [{ DiagramType: 'workflow', SpecJSON: '{not json' }],
         [{ DiagramType: 'workflow', SpecJSON: '[1,2]' }],

@@ -375,7 +375,9 @@ function layoutStageColumns(spec: MJDiagramSpec): LayoutOutput {
 function layoutSequence(spec: MJDiagramSpec): LayoutOutput {
     const hasPhases = Boolean(spec.phases && spec.phases.length > 0);
     const phaseLabelW = hasPhases ? Math.max(116, ...(spec.phases ?? []).map((p) => MeasureTextWidth(p.label.toUpperCase(), 11.5) + 28)) : 0;
-    const COL_W = 210;
+    const boxW = (n: MJDiagramNode) => Math.max(nodeSize(n).w, 156);
+    // Columns fit the widest participant box, so long labels never overlap their neighbours.
+    const COL_W = Math.max(210, ...spec.nodes.map((n) => boxW(n) + 40));
     const PART_H = 56;
     const MSG_START_Y = TOP + PART_H + 44;
     const MSG_STEP_Y = 52;
@@ -383,8 +385,7 @@ function layoutSequence(spec: MJDiagramSpec): LayoutOutput {
     const startX = LEFT + phaseLabelW + (hasPhases ? 20 : 0);
 
     spec.nodes.forEach((n, idx) => {
-        const s = nodeSize(n);
-        pos[n.id] = { id: n.id, w: Math.max(s.w, 156), h: PART_H, x: startX + idx * COL_W + Math.round(COL_W / 2), y: TOP + PART_H / 2, laneId: n.id };
+        pos[n.id] = { id: n.id, w: boxW(n), h: PART_H, x: startX + idx * COL_W + Math.round(COL_W / 2), y: TOP + PART_H / 2, laneId: n.id };
     });
 
     const right = startX + spec.nodes.length * COL_W;
@@ -545,25 +546,32 @@ function renderNodesSvg(
     });
 }
 
-function renderSummaryCardsSvg(cards: MJDiagramCard[], y: number): { markup: string[]; nextY: number } {
+/** Summary cards wrap into rows that fit the diagram's width, so many cards never widen the diagram. */
+function renderSummaryCardsSvg(cards: MJDiagramCard[], y: number, width: number): { markup: string[]; nextY: number } {
     if (cards.length === 0) return { markup: [], nextY: y };
     const cw = 310;
     const ch = 74;
+    const perRow = Math.max(1, Math.floor((width - LEFT * 2 + 16) / (cw + 16)));
     const markup = cards.map((c, i) => {
-        const x = LEFT + i * (cw + 16);
-        const bodyLines = wrapText(c.body ?? '', 46)
+        const x = LEFT + (i % perRow) * (cw + 16);
+        const cy = y + Math.floor(i / perRow) * (ch + 16);
+        const lines = wrapText(c.body ?? '', 46);
+        // Two lines fit on the card; the full text is in <desc> for the details panel.
+        if (lines.length > 2) lines[1] = `${lines[1].slice(0, 45)}…`;
+        const bodyLines = lines
             .slice(0, 2)
-            .map((ln, j) => `<text class="cb" x="${x + 18}" y="${y + 44 + j * 16}">${esc(ln)}</text>`)
+            .map((ln, j) => `<text class="cb" x="${x + 18}" y="${cy + 44 + j * 16}">${esc(ln)}</text>`)
             .join('');
         const toneAttr = c.tone ? ` data-card-tone="${esc(c.tone)}"` : '';
         return (
             `<g class="card" data-card-id="${esc(c.id)}" data-card-nodes="${esc((c.nodes ?? []).join(' '))}"${toneAttr} tabindex="0" role="button" aria-label="${esc(c.title)}">` +
-            `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="8"/>` +
-            `<rect class="bar" x="${x}" y="${y}" width="4" height="${ch}" rx="2"/>` +
-            `<text class="ct" x="${x + 18}" y="${y + 24}">${esc(c.title)}</text>${bodyLines}</g>`
+            (c.body ? `<desc>${esc(c.body)}</desc>` : '') +
+            `<rect x="${x}" y="${cy}" width="${cw}" height="${ch}" rx="8"/>` +
+            `<rect class="bar" x="${x}" y="${cy}" width="4" height="${ch}" rx="2"/>` +
+            `<text class="ct" x="${x + 18}" y="${cy + 24}">${esc(c.title)}</text>${bodyLines}</g>`
         );
     });
-    return { markup, nextY: y + ch };
+    return { markup, nextY: y + Math.ceil(cards.length / perRow) * (ch + 16) - 16 };
 }
 
 function renderLegendSvg(kind: MJDiagramSpec['kind'], y: number): string {
@@ -606,12 +614,12 @@ export function RenderDiagramSvg(spec: MJDiagramSpec, prefix = 'mjd'): string {
     ];
 
     const cards = spec.cards ?? [];
-    const { markup: cardMarkup, nextY } = renderSummaryCardsSvg(cards, layout.bottom + 28);
+    const W = Math.max(layout.width, LEFT * 2 + (cards.length > 0 ? 310 : 0));
+    const { markup: cardMarkup, nextY } = renderSummaryCardsSvg(cards, layout.bottom + 28, W);
     out.push(...cardMarkup);
     const legendY = nextY + 30;
     out.push(renderLegendSvg(spec.kind, legendY));
 
-    const W = Math.max(layout.width, LEFT * 2 + cards.length * 326);
     const H = legendY + 24;
     const mk = (name: string) =>
         `<marker id="${esc(prefix)}-mk-${name}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="mk-${name}" d="M0 0L10 5L0 10z"/></marker>`;

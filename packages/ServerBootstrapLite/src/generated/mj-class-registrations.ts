@@ -1156,7 +1156,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (66 classes)
+// @memberjunction/core-entities-server (67 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2472,12 +2472,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IPGeolocationAction,
     IntegrationActionExecutor,
     InviteToListAction,
-    JSONTransformAction,
-    ListMCPToolsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    JSONTransformAction,
+    ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
     LoadAgentSpecAction,
@@ -2596,7 +2596,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1102;
+export const CLASS_REGISTRATIONS_COUNT = 1104;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -31,6 +31,12 @@ const MAX_LANES = MAX_NODES;
 const MAX_CARDS = 8;
 /** A phase spans at least one message, so there are never more phases than messages. */
 const MAX_PHASES = MAX_EDGES;
+/** IDs are compared with editDistance, which costs a.length × b.length, so they stay short. */
+const MAX_ID_CHARS = 128;
+/** Labels are drawn in boxes; longer text belongs in a node's "detail" or a card's "body". */
+const MAX_LABEL_CHARS = 300;
+const ID_KEYS = new Set(['id', 'from', 'to', 'lane', 'group', 'phase', 'nodes', 'mainPath']);
+const LABEL_KEYS = new Set(['title', 'subtitle', 'label', 'sublabel', 'data', 'stage']);
 
 const VALID_NODE_KINDS = new Set<MJDiagramNodeKind>([
     'start', 'end', 'task', 'decision', 'state', 'waiting',
@@ -73,6 +79,23 @@ function suggestId(bad: string, candidates: string[]): string {
     }
     const hint = bestScore <= Math.max(3, Math.ceil(bad.length / 2)) ? ` Did you mean "${best}"?` : '';
     return `${hint} Valid IDs: ${candidates.map((c) => `"${c}"`).join(', ')}.`;
+}
+
+/**
+ * Refuses over-long IDs and labels, and IDs with whitespace (card node lists are space-separated), before
+ * anything compares, measures or splits them. Walks with an explicit stack so deep nesting cannot overflow.
+ */
+function checkStrings(raw: Record<string, unknown>, diagnostics: MJDiagramDiagnostic[]): void {
+    const stack: Array<[unknown, string, string]> = Object.entries(raw).map(([k, v]) => [v, k, k]);
+    while (stack.length > 0) {
+        const [v, path, key] = stack.pop()!;
+        if (Array.isArray(v)) v.forEach((x, i) => stack.push([x, `${path}[${i}]`, key]));
+        else if (isRecord(v)) Object.entries(v).forEach(([k, x]) => stack.push([x, `${path}.${k}`, k]));
+        else if (typeof v !== 'string') continue;
+        else if (ID_KEYS.has(key) && v.length > MAX_ID_CHARS) pushError(diagnostics, 'ID_TOO_LONG', path, `${path} is ${v.length} characters; IDs can be at most ${MAX_ID_CHARS}.`, 'Use a short slug such as "submit-form".');
+        else if (key === 'id' && /\s/.test(v.trim())) pushError(diagnostics, 'ID_HAS_WHITESPACE', path, `${path} "${v}" contains whitespace.`, `Use an id without spaces, such as "${slugify(v, 'id')}".`);
+        else if (LABEL_KEYS.has(key) && v.length > MAX_LABEL_CHARS) pushError(diagnostics, 'TEXT_TOO_LONG', path, `${path} is ${v.length} characters; labels and titles can be at most ${MAX_LABEL_CHARS}.`, 'Shorten it and move the rest into a node\'s "detail" or a card\'s "body".');
+    }
 }
 
 function mapNodeKind(rawKind: unknown, rawType: unknown, diagramKind: MJDiagramKind): MJDiagramNodeKind {
@@ -500,7 +523,9 @@ function validateExplicitMainPath(
     return mp;
 }
 
-function inferDataflowMainPath(edges: MJDiagramEdge[]): string[] | undefined {
+function inferDataflowMainPath(allEdges: MJDiagramEdge[]): string[] | undefined {
+    // The main path never runs through error, branch, return or conditional edges.
+    const edges = allEdges.filter((e) => e.role === 'default' || e.role === 'emphasis');
     const emphasisEdges = edges.filter((e) => e.role === 'emphasis');
     if (emphasisEdges.length === 0) return undefined;
     const chain = [emphasisEdges[0].from];
@@ -542,7 +567,7 @@ function resolveMainPath(
         return validateExplicitMainPath(raw.mainPath, nodeIds, edges, edgeKey, diagnostics, warnings);
     }
     if (kind === 'lifecycle') {
-        const stepped = nodes.filter((n) => n.step).sort((a, b) => String(a.step).localeCompare(String(b.step)));
+        const stepped = nodes.filter((n) => n.step).sort((a, b) => String(a.step).localeCompare(String(b.step), undefined, { numeric: true }));
         if (stepped.length >= 2) return stepped.map((n) => n.id);
         if (lanes[0]) {
             const primary = nodes.filter((n) => n.lane === lanes[0].id).map((n) => n.id);
@@ -592,7 +617,8 @@ function validateSingleCard(
 }
 
 /**
- * Validates and normalizes an input diagram specification.
+ * Validates and normalizes an input diagram specification. `fallbackKind` fills in a missing `kind`; when both
+ * are set they must match.
  */
 export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): MJDiagramValidationResult {
     const parsed = parseRawSpecObject(rawInput);
@@ -601,8 +627,17 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
 
     const diagnostics: MJDiagramDiagnostic[] = [];
     const warnings: MJDiagramDiagnostic[] = [];
+    checkStrings(raw, diagnostics);
+    if (diagnostics.length > 0) return { Valid: false, Diagnostics: diagnostics };
 
-    const rawKind = asString(raw.kind ?? raw.diagram_type ?? fallbackKind).toLowerCase();
+    // The spec's own kind wins; a requested kind (the action's DiagramType) only fills in a missing one.
+    const specKind = (asString(raw.kind) || asString(raw.diagram_type)).toLowerCase();
+    const requestedKind = asString(fallbackKind).toLowerCase();
+    if (specKind && requestedKind && specKind !== requestedKind) {
+        pushError(diagnostics, 'KIND_CONFLICT', 'kind', `The spec's kind is "${specKind}" but "${requestedKind}" was requested.`, 'Make them match, or leave one of them out.');
+        return { Valid: false, Diagnostics: diagnostics };
+    }
+    const rawKind = specKind || requestedKind;
     if (!MJ_DIAGRAM_KINDS.includes(rawKind as MJDiagramKind)) {
         pushError(diagnostics, 'INVALID_KIND', 'kind', rawKind ? `Unknown diagram kind "${rawKind}".` : 'Missing required "kind" field.', `Set "kind" to one of: ${MJ_DIAGRAM_KINDS.map((k) => `"${k}"`).join(', ')}.`);
         return { Valid: false, Diagnostics: diagnostics };

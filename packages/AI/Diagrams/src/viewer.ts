@@ -52,8 +52,13 @@ interface IndexedDiagram {
 }
 
 const SHELL_STYLE_ID = 'mj-diagram-viewer-styles';
-/** Fits a static SVG to its host inside MountInteractiveDiagram's shadow root. */
-const FRAME_CSS = ':host>svg{display:block;max-width:100%;height:auto;margin:0 auto}';
+/**
+ * Fits a static (non-MJ) SVG to its host inside MountInteractiveDiagram's shadow root, on a white canvas in both
+ * themes, since such SVGs usually assume a light page. MJ diagrams sit inside the shell, so this never matches them.
+ */
+const FRAME_CSS = ':host>svg{display:block;max-width:100%;height:auto;margin:0 auto;background:var(--mj-color-neutral-0,#fff)}';
+/** Diagrams shrink to fit, but not below this scale (13.5px labels stay above 10px); the stage scrolls instead. */
+const MIN_SCALE = 0.75;
 
 const SHELL_CSS = `
 .mjd-shell {
@@ -77,13 +82,14 @@ const SHELL_CSS = `
   position: relative;
   overflow-x: auto;
   display: flex;
-  justify-content: center;
   align-items: flex-start;
   padding: 6px;
 }
 .mjd-stage svg.mjd {
   display: block;
+  margin: 0 auto;
   max-width: 100%;
+  min-width: var(--mjd-min-w, 0);
   height: auto;
   user-select: none;
 }
@@ -424,7 +430,7 @@ function buildEdgePanelDom(edge: EdgeRecord, index: IndexedDiagram): Node[] {
 function buildCardPanelDom(card: SVGGElement, nodeIds: string[], index: IndexedDiagram): Node[] {
     const doc = card.ownerDocument;
     const title = card.querySelector('.ct')?.textContent || card.getAttribute('aria-label') || 'Summary rule';
-    const body = [...card.querySelectorAll('.cb')].map((t) => t.textContent).join(' ');
+    const body = card.querySelector('desc')?.textContent || '';
     const nodes: Node[] = [
         createCloseButton(doc),
         createTextEl(doc, 'h3', title),
@@ -462,6 +468,8 @@ class DiagramViewer implements DiagramViewerInstance {
         this.panel = dom.panel;
         this.live = dom.live;
         this.index = indexDiagramElements(Svg);
+        const viewBoxWidth = Number(Svg.getAttribute('viewBox')?.split(/[\s,]+/)[2]);
+        if (viewBoxWidth > 0) this.shell.style.setProperty('--mjd-min-w', `${Math.round(viewBoxWidth * MIN_SCALE)}px`);
         this.bindEvents();
     }
 
@@ -593,7 +601,7 @@ class DiagramViewer implements DiagramViewerInstance {
             const t = e.target as Element;
             if (t === this.stage || t === this.Svg || t.classList?.contains('bg')) this.Clear();
         }, { signal });
-        this.shell.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.Clear(); }, { signal });
+        this.shell.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.close(); }, { signal });
         this.panel.addEventListener('click', (e) => this.onPanelClick(e), { signal });
     }
 
@@ -601,9 +609,23 @@ class DiagramViewer implements DiagramViewerInstance {
     private onPanelClick(e: Event): void {
         const target = (e.target as Element).closest<HTMLElement>('[data-act], [data-jump], [data-trace]');
         if (!target) return;
-        if (target.dataset.act === 'close-panel') this.Clear();
-        else if (target.dataset.jump) this.Select(target.dataset.jump);
+        if (target.dataset.act === 'close-panel') return this.close();
+        if (target.dataset.jump) this.Select(target.dataset.jump);
         else if (target.dataset.trace && this.selected) this.Trace(this.selected, target.dataset.trace as 'up' | 'down');
+        // The clicked button was replaced by the new panel content; keep keyboard focus in the panel.
+        const heading = this.panel.querySelector<HTMLElement>('h3');
+        if (heading) {
+            heading.tabIndex = -1;
+            heading.focus();
+        }
+    }
+
+    /** Clears, then puts focus back on what the panel was about, so keyboard users keep their place. */
+    private close(): void {
+        const edge = this.selectedEdge ? this.index.edgeById.get(this.selectedEdge) : undefined;
+        const origin = this.index.nodes.get(this.selected ?? edge?.from ?? '') ?? this.index.cards.find((c) => c.dataset.cardId === this.activeCard);
+        this.Clear();
+        origin?.focus();
     }
 }
 

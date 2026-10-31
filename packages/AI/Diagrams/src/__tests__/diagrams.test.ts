@@ -275,3 +275,102 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
         expect(states).toEqual([]);
     });
 });
+
+describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
+    const lane = [{ id: 'l', label: 'L' }];
+
+    it('refuses very long IDs and labels quickly instead of comparing them', () => {
+        const long = 'a'.repeat(8000);
+        const start = performance.now();
+        const res = ValidateDiagramSpec({ kind: 'workflow', title: 'T', lanes: lane, nodes: [{ id: long, lane: 'l', label: 'x'.repeat(301) }], edges: [{ from: 'b'.repeat(8000), to: long }] });
+        expect(performance.now() - start).toBeLessThan(250);
+        expect(res.Valid ? [] : res.Diagnostics.map((d) => d.Code)).toEqual(expect.arrayContaining(['ID_TOO_LONG', 'TEXT_TOO_LONG']));
+    });
+
+    it('refuses IDs with whitespace, since card node lists are space-separated', () => {
+        const res = ValidateDiagramSpec({ kind: 'workflow', title: 'T', lanes: lane, nodes: [{ id: 'a b', lane: 'l', label: 'A' }, { id: 'c', lane: 'l', label: 'C' }], edges: [{ from: 'a b', to: 'c' }] });
+        expect(res.Valid ? [] : res.Diagnostics.map((d) => d.Code)).toContain('ID_HAS_WHITESPACE');
+    });
+
+    it('orders lifecycle steps numerically', () => {
+        const nodes = Array.from({ length: 11 }, (_, i) => ({ id: `n${i + 1}`, lane: 'l', label: `S${i + 1}`, step: String(i + 1) }));
+        const res = ValidateDiagramSpec({ kind: 'lifecycle', title: 'T', lanes: lane, nodes, edges: [{ from: 'n1', to: 'n2' }] });
+        expect(res.Valid && res.Spec.mainPath).toEqual(nodes.map((n) => n.id));
+    });
+
+    it('never extends an inferred dataflow main path across error edges', () => {
+        const nodes = ['x', 'a', 'b', 'c', 'err'].map((id) => ({ id, stage: 'l', label: id }));
+        const flows = [{ from: 'x', to: 'a', role: 'error' }, { from: 'a', to: 'b', role: 'emphasis' }, { from: 'b', to: 'c' }, { from: 'c', to: 'err', role: 'error' }];
+        const res = ValidateDiagramSpec({ kind: 'dataflow', title: 'T', stages: lane, nodes, flows });
+        expect(res.Valid && res.Spec.mainPath).toEqual(['a', 'b', 'c']);
+    });
+
+    it("lets the spec's kind decide, treats an empty requested kind as missing, and refuses a conflicting one", () => {
+        const spec = loadFixture('renewal.workflow.json') as Record<string, unknown>;
+        expect(ValidateDiagramSpec({ ...spec, kind: '' }, 'workflow').Valid).toBe(true);
+        expect(ValidateDiagramSpec(spec, '').Valid).toBe(true);
+        const clash = RenderDiagram(spec, 'sequence');
+        expect(clash.Success ? '' : `${clash.ErrorCode} ${clash.Message}`).toMatch(/^INVALID_INPUT \[KIND_CONFLICT\]/);
+    });
+
+    it('sizes sequence columns to the widest participant box', () => {
+        const participants = [{ id: 'a', label: 'Association membership services desk' }, { id: 'b', label: 'Regional chapter volunteer coordinator' }];
+        const res = ValidateDiagramSpec({ kind: 'sequence', title: 'T', participants, messages: [{ from: 'a', to: 'b' }] });
+        if (!res.Valid) throw new Error('sequence spec should validate');
+        const doc = new JSDOM(RenderDiagramSvg(res.Spec)).window.document;
+        const box = (id: string) => doc.querySelector(`[data-node-id="${id}"] rect`)!;
+        const aRight = Number(box('a').getAttribute('x')) + Number(box('a').getAttribute('width'));
+        expect(aRight).toBeLessThan(Number(box('b').getAttribute('x')));
+    });
+
+    it('ellipsizes long card text and gives the full text to the details panel', () => {
+        const body = 'Members must log continuing education credits before the renewal window closes or the renewal is held. '.repeat(2).trim();
+        const spec = validSpec('renewal.workflow.json');
+        spec.cards = [{ ...spec.cards![0], body }];
+        const svg = RenderDiagramSvg(spec);
+        expect(svg).toContain('…</text>');
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, svg, sanitize)!;
+        viewer.Svg.querySelector('.card')!.dispatchEvent(new doc.defaultView!.Event('click', { bubbles: true }));
+        expect(shadow(host).querySelector('.mjd-desc')?.textContent).toBe(body);
+    });
+
+    it('wraps many cards instead of widening the diagram, and never shrinks below the scale floor', () => {
+        const plain = validSpec('renewal.workflow.json');
+        const width = (svg: string) => Number(/viewBox="0 0 (\d+)/.exec(svg)![1]);
+        const many = { ...plain, cards: Array.from({ length: 8 }, (_, i) => ({ id: `c${i}`, title: `Card ${i}`, nodes: [] })) };
+        const svg = RenderDiagramSvg(many);
+        expect(width(svg)).toBe(width(RenderDiagramSvg({ ...plain, cards: [] })));
+        const cardRects = [...new JSDOM(svg).window.document.querySelectorAll('.card > rect:not(.bar)')];
+        expect(Math.max(...cardRects.map((r) => Number(r.getAttribute('x')) + Number(r.getAttribute('width'))))).toBeLessThanOrEqual(width(svg));
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        MountInteractiveDiagram(host, svg, sanitize);
+        const shell = shadow(host).querySelector<HTMLElement>('.mjd-shell')!;
+        expect(shell.style.getPropertyValue('--mjd-min-w')).toBe(`${Math.round(width(svg) * 0.75)}px`);
+    });
+
+    it('keeps keyboard focus in the panel after a panel action, and returns it to the node on Escape', () => {
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, RenderDiagramSvg(validSpec('renewal.workflow.json')), sanitize)!;
+        const root = shadow(host);
+        viewer.Select('review');
+        const row = root.querySelector<HTMLButtonElement>('.mjd-panel button.mjd-conn')!;
+        const target = row.dataset.jump!;
+        row.focus();
+        row.click();
+        expect(root.activeElement?.tagName).toBe('H3');
+        root.activeElement!.dispatchEvent(new doc.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(root.querySelector('.mjd-panel')?.getAttribute('data-empty')).toBe('true');
+        expect(root.activeElement).toBe(viewer.Svg.querySelector(`[data-node-id="${target}"]`));
+    });
+
+    it('shows a non-diagram SVG on a white canvas in both themes', () => {
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        MountInteractiveDiagram(host, '<svg xmlns="http://www.w3.org/2000/svg"><text>plain</text></svg>', sanitize);
+        expect(shadow(host).querySelector('style')?.textContent).toContain('background:var(--mj-color-neutral-0');
+    });
+});
