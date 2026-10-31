@@ -8250,7 +8250,7 @@ export class MJAIAgentSession_ {
     @Field({nullable: true, description: "When the session was closed (terminal). NULL while the session is Active or Idle."}) 
     ClosedAt?: Date;
         
-    @Field({nullable: true, description: "Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle."}) 
+    @Field({nullable: true, description: "Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle."}) 
     @MaxLength(20)
     CloseReason?: string;
         

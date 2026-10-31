@@ -168,6 +168,7 @@ export class IntegrationActionExecutor extends BaseAction {
             EntityName: 'MJ: Integrations',
             ExtraFilter: `Name='${integrationName.replace(/'/g, "''")}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, params.ContextUser);
 
@@ -196,6 +197,7 @@ export class IntegrationActionExecutor extends BaseAction {
             EntityName: 'MJ: Company Integrations',
             ExtraFilter: `Integration='${integrationName.replace(/'/g, "''")}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, params.ContextUser);
 

@@ -9,7 +9,6 @@ import {
     ArraySource,
     FilterSource,
     ListSource,
-    ReadSizeForBatch,
     RecordRef,
     ViewSource,
     canUseKeyset,
@@ -229,25 +228,14 @@ describe('ListSource', () => {
     });
 });
 
-// --- batch of one (#6000) ----------------------------------------------------------------------
-// A `MaxRows: 1` RunView skips the total count, so a batch of one reads two rows and keeps the first.
-
-describe('ReadSizeForBatch', () => {
-    it('reads two rows for a batch of one and the batch size otherwise', () => {
-        expect(ReadSizeForBatch(1)).toBe(2);
-        expect(ReadSizeForBatch(2)).toBe(2);
-        expect(ReadSizeForBatch(50)).toBe(50);
-    });
-});
-
 describe('batch size 1', () => {
     it('FilterSource returns one record, the real total, and a cursor at that record', async () => {
         fake.entities.set('Widgets', fakeEntity([{ Name: 'ID', Type: 'uniqueidentifier' }]));
-        fake.handler = () => ({ Success: true, Results: [{ ID: 'k1' }, { ID: 'k2' }], TotalRowCount: 42 });
+        fake.handler = () => ({ Success: true, Results: [{ ID: 'k1' }], TotalRowCount: 42 });
 
         const batch = await new FilterSource('Widgets').NextBatch(undefined, 1, USER, asProvider(fake));
 
-        expect(fake.calls[0].MaxRows).toBe(2);
+        expect(fake.calls[0].MaxRows).toBe(1);
         expect(batch.Records.map((r) => r.RecordID)).toEqual(['k1']);
         expect(batch.NextCursor.Key).toBe('k1');
         expect(batch.Exhausted).toBe(false);
@@ -259,13 +247,13 @@ describe('batch size 1', () => {
             if (params.EntityName === 'MJ: Lists') {
                 return { Success: true, Results: [{ EntityID: 'ENT-9' }], TotalRowCount: 1 };
             }
-            return { Success: true, Results: [{ ID: 'ld-1', RecordID: 'a' }, { ID: 'ld-2', RecordID: 'b' }], TotalRowCount: 7 };
+            return { Success: true, Results: [{ ID: 'ld-1', RecordID: 'a' }], TotalRowCount: 7 };
         };
 
         const batch = await new ListSource('LIST-1').NextBatch(undefined, 1, USER, asProvider(fake));
 
         const detailCall = fake.calls.find((c) => c.EntityName === 'MJ: List Details');
-        expect(detailCall?.MaxRows).toBe(2);
+        expect(detailCall?.MaxRows).toBe(1);
         expect(batch.Records).toEqual([{ EntityID: 'ENT-9', RecordID: 'a' }]);
         expect(batch.NextCursor.Key).toBe('ld-1');
         expect(batch.Exhausted).toBe(false);
@@ -277,11 +265,11 @@ describe('batch size 1', () => {
         fake.entities.set(entity.Name, entity);
         vi.spyOn(RunView, 'GetEntityNameFromRunViewParams').mockResolvedValue(entity.Name);
         const src = new ViewSource('VIEW-1');
-        fake.handler = () => ({ Success: true, Results: [{ ID: 'v1' }, { ID: 'v2' }], TotalRowCount: 9 });
+        fake.handler = () => ({ Success: true, Results: [{ ID: 'v1' }], TotalRowCount: 9 });
 
         const batch = await src.NextBatch({ Offset: 3 }, 1, USER, asProvider(fake));
 
-        expect(fake.calls[0].MaxRows).toBe(2);
+        expect(fake.calls[0].MaxRows).toBe(1);
         expect(batch.Records.map((r) => r.RecordID)).toEqual(['v1']);
         expect(batch.NextCursor.Offset).toBe(4);
         expect(batch.Exhausted).toBe(false);

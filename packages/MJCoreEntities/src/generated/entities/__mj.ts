@@ -3497,7 +3497,7 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Closed At
         * * SQL Data Type: datetimeoffset
         * * Description: When the session was closed (terminal). NULL while the session is Active or Idle.`),
-    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Janitor'), z.literal('Shutdown')]).nullable().describe(`
+    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Idle'), z.literal('Janitor'), z.literal('Shutdown'), z.literal('TimeLimit')]).nullable().describe(`
         * * Field Name: CloseReason
         * * Display Name: Close Reason
         * * SQL Data Type: nvarchar(20)
@@ -3505,9 +3505,11 @@ export const MJAIAgentSessionSchema = z.object({
     * * Possible Values 
     *   * Error
     *   * Explicit
+    *   * Idle
     *   * Janitor
     *   * Shutdown
-        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.`),
+    *   * TimeLimit
+        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -49926,14 +49928,16 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     * * Possible Values 
     *   * Error
     *   * Explicit
+    *   * Idle
     *   * Janitor
     *   * Shutdown
-    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.
+    *   * TimeLimit
+    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.
     */
-    get CloseReason(): 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null {
+    get CloseReason(): 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null {
         return this.Get('CloseReason');
     }
-    set CloseReason(value: 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null) {
+    set CloseReason(value: 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null) {
         this.Set('CloseReason', value);
     }
 
@@ -57074,11 +57078,22 @@ export type MJAIModelTypeEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'au
 export interface MJAIModelTypeEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelTypeEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -57760,11 +57775,22 @@ export type MJAIModelVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | '
 export interface MJAIModelVendorEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelVendorEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -58638,11 +58664,22 @@ export type MJAIModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioA
 export interface MJAIModelEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -60239,11 +60276,22 @@ export type MJAIPromptModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | '
 export interface MJAIPromptModelEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIPromptModelEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -63063,11 +63111,22 @@ export type MJAIPromptEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audio
 export interface MJAIPromptEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIPromptEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -66471,11 +66530,22 @@ export type MJAIVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audio
 export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIVendorEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -139718,6 +139788,8 @@ export interface MJTaskEntity_ITaskForEachConfiguration {
     maxConcurrency?: number;
     /** Run this action once per iteration. */
     action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: MJTaskEntity_ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -139743,6 +139815,8 @@ export interface MJTaskEntity_ITaskWhileConfiguration {
     delayBetweenIterationsMs?: number;
     /** Run this action once per iteration. */
     action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: MJTaskEntity_ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -139772,6 +139846,20 @@ export interface MJTaskEntity_ITaskLoopActionBody {
     /** Parameters passed to the action. */
     params: Record<string, unknown>;
     /** JSON mapping from the action's outputs back into the payload. */
+    outputMapping?: string;
+}
+
+/** One action step inside a multi-step loop body (`steps[]`). */
+export interface MJTaskEntity_ITaskLoopBodyActionStep {
+    /** Optional handle used by later steps in the same pass via `steps.<id>.<OutputField>`. */
+    id?: string;
+    /** Action name. */
+    name: string;
+    /** Parameters passed to the action. */
+    params: Record<string, unknown>;
+    /** Optional boolean expression deciding whether this step runs on the current pass. */
+    condition?: string;
+    /** Optional JSON mapping from this step's outputs into the running payload. */
     outputMapping?: string;
 }
 

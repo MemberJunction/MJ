@@ -658,6 +658,7 @@ export class MemoryManagerAgent extends BaseAgent {
             ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
             OrderBy: 'StartedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['StartedAt'],
             ResultType: 'simple'
         }, contextUser);
@@ -688,6 +689,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ID='${sourceAgentRunId}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 Fields: [...SOURCE_RUN_SCOPE_FIELDS],
                 ResultType: 'simple'
             }, contextUser);

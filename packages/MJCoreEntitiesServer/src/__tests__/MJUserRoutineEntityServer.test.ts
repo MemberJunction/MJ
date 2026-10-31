@@ -215,8 +215,9 @@ describe('MJUserRoutineEntityServer.Save', () => {
         expect(e.NextRunAt!.getTime()).toBeGreaterThan(before);
     });
 
-    it('recomputes NextRunAt when a schedule field is dirty', async () => {
+    it('recomputes NextRunAt when a schedule field of a SAVED routine is dirty', async () => {
         const e = makeEntity();
+        e.IsSaved = true; // editing an existing routine's cron; on an unsaved record a set NextRunAt is explicit
         const stale = new Date('2020-01-01T00:00:00.000Z');
         e.NextRunAt = stale;
         e.SetFieldState('CronExpression', { Dirty: true, OldValue: '0 0 0 * * *' });
@@ -251,6 +252,24 @@ describe('MJUserRoutineEntityServer.Save', () => {
         await e.Save();
         expect(e.NextRunAt).not.toBeNull();
         expect(e.NextRunAt!.getTime()).toBeGreaterThan(before);
+    });
+
+    it('keeps an explicit NextRunAt on a NEW record whose schedule fields were changed before the first save', async () => {
+        // After NewRecord(), a field's FIRST write also becomes its OldValue, so a later write makes it
+        // Dirty while a single write does not. A one-shot built with a default cron that is then cleared
+        // reads as "schedule changed, NextRunAt not explicit"; recomputing yields null (no cron, no
+        // StartAt) and the dispatcher's roll-up then disables the routine. On an unsaved record a
+        // non-null NextRunAt is the caller's explicit time.
+        const e = makeEntity();
+        e.IsSaved = false;
+        const when = new Date('2030-01-01T15:00:00Z');
+        (e as unknown as { ScheduleMode: string }).ScheduleMode = 'OneShot';
+        e.CronExpression = null as unknown as string;
+        e.NextRunAt = when;
+        e.SetFieldState('NextRunAt', { Dirty: false, OldValue: when });
+        e.SetFieldState('CronExpression', { Dirty: true, OldValue: '0 0 * * * *' });
+        await e.Save();
+        expect(e.NextRunAt).toBe(when);
     });
 
     it('leaves NextRunAt untouched when nothing schedule-related changed', async () => {
