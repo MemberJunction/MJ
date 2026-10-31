@@ -227,6 +227,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   ngOnDestroy(): void {
     super.ngOnDestroy();
+    // Destroyed mid-drag: onResizeEnd would never fire, so detach the document listeners here
+    if (this.IsResizing) {
+      this.onResizeEnd();
+    }
     this.destroy$.next();
     this.destroy$.complete();
   }

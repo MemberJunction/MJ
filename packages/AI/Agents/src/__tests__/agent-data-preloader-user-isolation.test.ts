@@ -83,4 +83,20 @@ describe('AgentDataPreloader PerAgent cache', () => {
 
         expect(runViewCalls).toHaveLength(2);
     });
+
+    it('bounds the PerAgent cache: least-recently-used entries are evicted past the cap', async () => {
+        const cap = AgentDataPreloader.MAX_PER_AGENT_CACHE_ENTRIES;
+        const users = Array.from({ length: cap + 5 }, (_, i) => ({ ID: `user-${i}`, Name: `U${i}` }) as UserInfo);
+        for (const u of users) {
+            await AgentDataPreloader.Instance.PreloadAgentData(AGENT_ID, u);
+        }
+        expect(runViewCalls).toHaveLength(cap + 5);
+
+        // Oldest user was evicted -> reloads from the source; newest is still a cache hit.
+        runViewCalls.length = 0;
+        await AgentDataPreloader.Instance.PreloadAgentData(AGENT_ID, users[users.length - 1]);
+        expect(runViewCalls).toHaveLength(0);
+        await AgentDataPreloader.Instance.PreloadAgentData(AGENT_ID, users[0]);
+        expect(runViewCalls).toEqual(['user-0']);
+    });
 });
