@@ -8,3 +8,4 @@ export * from './unit-row-reader';
 export * from './target-validation';
 export * from './unit-store';
 export * from './unit-versioning';
+export * from './decision-date-advance';

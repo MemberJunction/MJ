@@ -81,6 +81,7 @@ import {
   LABEL_COLUMN,
   PredictionUnit,
   TaskTypeRules,
+  UtcDay,
   TRAINING_RUN_RESULTS_SCHEMA,
   type PredictionUnitSpec,
   type TrainingRunResults,
@@ -117,6 +118,7 @@ import { SeriesFeatures, type SeriesHistory, type SeriesPoint } from '../feature
 import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '../prediction-unit/unit-row-reader';
 import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+import { DecisionDateAdvance } from '../prediction-unit/decision-date-advance';
 import { TrainingRefusedError } from './training-refusal';
 import { HoldoutCarvers } from '../snapshot/holdout-carver';
 import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapshot-builder';
@@ -259,9 +261,24 @@ export class TrainingEngine {
     // The compute rate is read before anything is written or trained, so a misconfigured rate fails fast.
     const usdPerSecond = ComputePricing.ReadComputeRate();
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
-    return resolved.pipeline.PredictionUnitID
-      ? this.trainUnitPipeline(resolved, resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond)
-      : this.trainLegacyPipeline(resolved, input, deps, usdPerSecond);
+    if (!resolved.pipeline.PredictionUnitID) return this.trainLegacyPipeline(resolved, input, deps, usdPerSecond);
+    const unitId = await this.advanceDecisionDate(resolved.pipeline, deps);
+    return this.trainUnitPipeline(resolved, unitId || resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond);
+  }
+
+  /**
+   * Moves an advancing fixed decision date to the run's UTC day before anything is written for the run (a new unit
+   * version, the pipeline bound to it), so the run reads features as they stand on its own day and its lineage names
+   * that version. Returns the unit to train under.
+   */
+  private async advanceDecisionDate(pipeline: MJMLTrainingPipelineEntity, deps: TrainingDeps): Promise<string | null> {
+    return DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline, {
+      Store: deps.predictionUnits || new RunViewPredictionUnitStore(this.requireProvider(deps), deps.contextUser),
+      RunDay: UtcDay.UtcDayIso(deps.now?.() || new Date()),
+      Metadata: deps.assemblyMetadata || new ProviderAssemblyMetadata(this.requireProvider(deps)),
+      EntityFactory: deps.entityFactory,
+      ContextUser: deps.contextUser,
+    });
   }
 
   /**

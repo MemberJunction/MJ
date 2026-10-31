@@ -45,6 +45,7 @@ import type { MLInferenceDeps } from '../../scoring/types';
 import type { RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
+import { InMemoryUnitVersions, UnitVersionFactory } from '../../prediction-unit/__tests__/unit-version-fakes';
 import {
   FakeEntityFactory,
   FakeEvaluationProtocolStore,
@@ -670,6 +671,30 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
     const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     await expect(engine.trainModel({ pipelineId: pipeline.ID, labelEventDates: { p0: new Date('2024-01-01T00:00:00Z') } }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
+  });
+});
+
+describe('TrainingEngine — an advancing fixed decision date', () => {
+  it('saves the unit version dated the run day before the run, trains under it, and saves no third version the same day', async () => {
+    const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const units = new InMemoryUnitVersions();
+    units.Seed({
+      ...UnitYearsWorld.UnitColumns(), LabelWindowDays: 1,
+      UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: '2026-10-20', advance: 'each-run' }, filter: [] }),
+      Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-10-21' } }),
+    });
+    harness.deps.predictionUnits = units;
+    harness.deps.entityFactory = new UnitVersionFactory(units, harness.deps.entityFactory);
+    harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ MinMinorityClassRows: 1, Holdout: JSON.stringify({ kind: 'seeded-random', fraction: 0.25 }) })]);
+    harness.deps.now = () => new Date('2026-11-02T09:00:00Z');
+    let saves = 0;
+    const pipeline = Object.assign(harness.pipeline, { TargetEntityID: '', Save: async (): Promise<boolean> => { saves++; return true; } });
+    const trained = await harness.engine.trainModel({ pipelineId: pipeline.ID }, harness.deps);
+    const v2 = units.Rows.find((r) => r.Version === 2);
+    expect(v2 && [JSON.parse(v2.UnitRows).decisionDate.date, JSON.parse(v2.AuthoredBy).component, pipeline.PredictionUnitID]).toEqual(['2026-11-02', 'decision-date-advance', v2?.ID]);
+    expect(JSON.parse(TrainingHarness.ModelOf(trained).Lineage || '{}')).toMatchObject({ predictionUnitId: v2?.ID, predictionUnitVersion: 2 });
+    await harness.engine.trainModel({ pipelineId: pipeline.ID }, harness.deps);
+    expect([units.Rows.length, saves]).toEqual([2, 1]);
   });
 });
 
