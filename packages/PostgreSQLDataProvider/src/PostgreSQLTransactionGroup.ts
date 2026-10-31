@@ -5,25 +5,148 @@ import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 
 /**
  * PostgreSQL implementation of the TransactionGroupBase.
- * Uses a dedicated pg.PoolClient with BEGIN/COMMIT/ROLLBACK
- * to wrap all transaction items in a single database transaction.
+ *
+ * When created via {@link PostgreSQLDataProvider.CreateTransactionGroup}, participates directly in
+ * the owning provider's transaction lifecycle (`BeginTransaction` / `CommitTransaction` /
+ * `RollbackTransaction`), supporting nested savepoints, `TransactionAffinity`, `RunAfterCommit`,
+ * and per-request provider isolation.
  */
 export class PostgreSQLTransactionGroup extends TransactionGroupBase {
+    private readonly _provider?: PostgreSQLDataProvider;
+    private _activeClient: pg.PoolClient | null = null;
+    private _activeProvider: PostgreSQLDataProvider | null = null;
+    private _managedByProvider = false;
+    private _groupTxOpen = false;
+
+    public constructor(provider?: PostgreSQLDataProvider) {
+        super();
+        this._provider = provider;
+    }
+
+    private resolveProvider(items: TransactionItem[]): PostgreSQLDataProvider {
+        if (this._provider) {
+            return this._provider;
+        }
+        const entityProvider = items[0]?.BaseEntity?.ProviderToUse as PostgreSQLDataProvider | undefined;
+        if (
+            entityProvider &&
+            typeof entityProvider.BeginTransaction === 'function' &&
+            typeof entityProvider.ProcessEntityRows === 'function'
+        ) {
+            return entityProvider;
+        }
+        return Metadata.Provider as PostgreSQLDataProvider; // global-provider-ok: legacy 0-arg fallback when no owning provider was supplied
+    }
+
+    private hasProviderTransactionLifecycle(provider: PostgreSQLDataProvider | null | undefined): provider is PostgreSQLDataProvider {
+        return Boolean(
+            provider &&
+            typeof provider.BeginTransaction === 'function' &&
+            typeof provider.CommitTransaction === 'function' &&
+            typeof provider.RollbackTransaction === 'function'
+        );
+    }
+
+    protected override BeginGroupTransaction(): Promise<void> {
+        const items = this.PendingTransactions;
+        if (items.length === 0) {
+            return Promise.resolve();
+        }
+        const pgProvider = this.resolveProvider(items);
+        this._activeProvider = pgProvider;
+        if (this.hasProviderTransactionLifecycle(pgProvider)) {
+            this._managedByProvider = true;
+            // Synchronous call in prefix so TransactionAffinity.Claim() binds Submit()'s async scope
+            return pgProvider.BeginTransaction().then(() => {
+                const client = pgProvider.ActiveTransactionClient;
+                if (!client) {
+                    throw new Error('PostgreSQLTransactionGroup: provider.BeginTransaction() completed without an active transaction client');
+                }
+                this._activeClient = client;
+                this._groupTxOpen = true;
+            });
+        }
+
+        // Legacy standalone fallback (e.g. unit tests constructing PostgreSQLTransactionGroup() with a stub provider)
+        this._managedByProvider = false;
+        const pool: pg.Pool = items[0].ExtraData.dataSource;
+        return pool.connect().then(async (client) => {
+            try {
+                await client.query('BEGIN');
+                this._activeClient = client;
+                this._groupTxOpen = true;
+            } catch (e) {
+                try {
+                    client.release();
+                } catch {
+                    // swallow release failure while surfacing BEGIN failure
+                }
+                throw e;
+            }
+        });
+    }
+
+    protected override async CommitGroupTransaction(): Promise<void> {
+        if (!this._groupTxOpen) {
+            return;
+        }
+        this._groupTxOpen = false;
+        const client = this._activeClient;
+        const provider = this._activeProvider;
+        this._activeClient = null;
+        this._activeProvider = null;
+        if (this._managedByProvider && provider) {
+            await provider.CommitTransaction();
+        } else if (client) {
+            try {
+                await client.query('COMMIT');
+            } finally {
+                client.release();
+            }
+        }
+    }
+
+    protected override async RollbackGroupTransaction(): Promise<void> {
+        if (!this._groupTxOpen) {
+            return;
+        }
+        this._groupTxOpen = false;
+        const client = this._activeClient;
+        const provider = this._activeProvider;
+        this._activeClient = null;
+        this._activeProvider = null;
+        if (this._managedByProvider && provider) {
+            try {
+                await provider.RollbackTransaction();
+            } catch (rollbackError) {
+                LogError(`Failed to rollback: ${rollbackError}`);
+            }
+        } else if (client) {
+            try {
+                await this.safeRollback(client);
+            } finally {
+                client.release();
+            }
+        }
+    }
+
     protected async HandleSubmit(): Promise<TransactionResult[]> {
         const returnResults: TransactionResult[] = [];
         const items = this.PendingTransactions;
-        const pgProvider = Metadata.Provider as PostgreSQLDataProvider; // global-provider-ok: data provider implementation, owns its provider context
 
         if (items.length === 0) {
             return returnResults;
         }
 
-        const pool: pg.Pool = items[0].ExtraData.dataSource;
-        const client = await pool.connect();
+        const openedLocally = !this._groupTxOpen;
+        if (openedLocally) {
+            await this.BeginGroupTransaction();
+        }
+
+        const pgProvider = this._activeProvider ?? this.resolveProvider(items);
+        const client = this._activeClient!;
 
         try {
-            await client.query('BEGIN');
-
             if (this.Variables.length > 0) {
                 await this.executeWithVariables(items, client, pgProvider, returnResults);
             } else if (this.BatchedSubmit) {
@@ -32,15 +155,15 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                 await this.executeWithoutVariables(items, client, pgProvider, returnResults);
             }
 
-            await client.query('COMMIT');
+            if (openedLocally) {
+                await this.CommitGroupTransaction();
+            }
         } catch (error) {
-            await this.safeRollback(client);
+            await this.RollbackGroupTransaction();
             if (error instanceof Error) {
                 throw error;
             }
             throw new Error(`Transaction failed: ${String(error)}. All changes have been rolled back.`);
-        } finally {
-            client.release();
         }
 
         return returnResults;

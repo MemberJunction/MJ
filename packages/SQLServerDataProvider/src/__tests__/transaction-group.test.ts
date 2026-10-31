@@ -163,7 +163,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     }
   });
 
-  it('treats an empty recordset as a failed item but still commits (no-exception path) and Submit returns false', async () => {
+  it('treats an empty recordset as a failed item, rolls back the atomic group, and passes success=false to all callbacks', async () => {
     const entityInfo = makeWidgetEntityInfo();
     const group = new SQLServerTransactionGroup();
     const a = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'STATEMENT 1', pool);
@@ -177,12 +177,10 @@ describe('SQLServerTransactionGroup.Submit', () => {
 
     expect(success).toBe(false);
     expect(group.Status).toBe('Failed');
-    // No exception was thrown, so the transaction still commits — only the group
-    // RESULT reflects the failed item. This is load-bearing current behavior.
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
-    expect(a.callback).toHaveBeenCalledWith({ ID: 'w-1' }, true);
-    // The empty-recordset item reports a falsy success flag to its callback
-    expect(b.callback.mock.calls[0][1]).toBeFalsy();
+    // Partial failure without an exception still rolls back the atomic group so Item 0 is never committed.
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'rollback']);
+    expect(a.callback).toHaveBeenCalledWith({ ID: 'w-1' }, false);
+    expect(b.callback.mock.calls[0][1]).toBe(false);
   });
 
   it('variables: a Define result flows into a later Use item and its instruction is regenerated through the provider', async () => {
