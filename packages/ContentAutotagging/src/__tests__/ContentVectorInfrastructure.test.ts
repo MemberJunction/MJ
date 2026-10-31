@@ -14,6 +14,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         ...actual,
         KnowledgeHubMetadataEngine: {
             Instance: {
+                Config: vi.fn().mockResolvedValue(undefined),
                 GetContentSourceByID: (id: string) => sources.get(id),
                 GetContentTypeByID: (id: string) => types.get(id),
             },
@@ -152,4 +153,50 @@ describe('vector infrastructure cascade', () => {
             /ContentSource\.VectorIndexID.*ContentType\.VectorIndexID.*ContentPipeline\.DefaultVectorIndexID/,
         );
     });
+
+    it('ResolveVectorIndexID resolves from ContentSource, then ContentType, then default vector index, and returns null without throwing on a multi-index system with no default', async () => {
+        const infra = new ContentVectorInfrastructure({} as never, {} as never);
+        types.set('T-WITH-IDX', { EmbeddingModelID: null, VectorIndexID: 'VIDX-TYPE' });
+        types.set('T-NO-IDX', { EmbeddingModelID: null, VectorIndexID: null });
+        aiState.VectorIndexes = [
+            { ID: 'VIDX-DEFAULT', Name: 'DefaultIdx', EmbeddingModelID: 'M1', VectorDatabaseID: 'DB1' },
+        ];
+
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-1',
+                VectorIndexID: 'VIDX-SOURCE',
+                ContentTypeID: 'T-WITH-IDX',
+            }),
+        ).toBe('VIDX-SOURCE');
+
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-2',
+                VectorIndexID: null,
+                ContentTypeID: 'T-WITH-IDX',
+            }),
+        ).toBe('VIDX-TYPE');
+
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-3',
+                VectorIndexID: null,
+                ContentTypeID: 'T-NO-IDX',
+            }),
+        ).toBe('VIDX-DEFAULT');
+
+        aiState.VectorIndexes = [
+            { ID: 'VIDX-1', Name: 'Idx1', EmbeddingModelID: 'M1', VectorDatabaseID: 'DB1' },
+            { ID: 'VIDX-2', Name: 'Idx2', EmbeddingModelID: 'M2', VectorDatabaseID: 'DB1' },
+        ];
+        expect(
+            await infra.ResolveVectorIndexID({
+                ID: 'S-MULTI',
+                VectorIndexID: null,
+                ContentTypeID: 'T-NO-IDX',
+            }),
+        ).toBeNull();
+    });
 });
+

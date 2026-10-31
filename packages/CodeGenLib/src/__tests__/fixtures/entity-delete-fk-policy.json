@@ -810,6 +810,14 @@
       "reason": "NOT NULL reference to a EntityField row this proc deletes; deleted first."
     },
     {
+      "table": "QueryField",
+      "column": "SourceEntityFieldID",
+      "references": "EntityField",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a EntityField row this proc deletes; cleared (the FK is also ON DELETE SET NULL)."
+    },
+    {
       "table": "EntityOrganicKeyRelatedEntity",
       "column": "EntityOrganicKeyID",
       "references": "EntityOrganicKey",

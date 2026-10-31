@@ -1912,6 +1912,79 @@ describe('ConversationEngine', () => {
                 expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
             });
         });
+
+        describe('speaker attribution (multi-user / multi-agent)', () => {
+            const ALICE_ID = 'AAAAAAAA-0000-0000-0000-000000000001';
+            const BOB_ID = 'BBBBBBBB-0000-0000-0000-000000000002';
+            const RESEARCH_ID = 'CCCCCCCC-0000-0000-0000-000000000001';
+            const WRITER_ID = 'DDDDDDDD-0000-0000-0000-000000000002';
+
+            it('single-user rows stay unprefixed by default (auto), even when multiple agents reply', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    { ...row(1, 'User', 'Hello'), UserID: ALICE_ID, User: 'Alice Chen' },
+                    { ...row(2, 'AI', 'Hi there'), AgentID: RESEARCH_ID, Agent: 'Research', ParentID: 'detail-1' },
+                    { ...row(3, 'AI', 'Draft ready'), AgentID: WRITER_ID, Agent: 'Writer', ParentID: 'detail-1' },
+                ]);
+                expect(window.map(m => m.content)).toEqual(['Hello', 'Hi there', 'Draft ready']);
+                expect(window[0].metadata).toEqual({
+                    sequence: 1,
+                    conversationDetailId: 'detail-1',
+                    userId: ALICE_ID,
+                    userName: 'Alice Chen',
+                });
+                expect(window[1].metadata).toEqual({
+                    sequence: 2,
+                    conversationDetailId: 'detail-2',
+                    agentId: RESEARCH_ID,
+                    agentName: 'Research',
+                    parentId: 'detail-1',
+                });
+            });
+
+            it('prefixes speakers, reply targets, and preserves metadata.rawContent when multiple users participate (auto)', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    { ...row(1, 'User', 'Can someone check Q3?'), UserID: ALICE_ID, User: 'Alice Chen' },
+                    { ...row(2, 'User', 'I have the spreadsheet'), UserID: BOB_ID, User: 'Bob Rivera', ParentID: 'detail-1' },
+                    { ...row(3, 'AI', 'Found 3 variances'), AgentID: RESEARCH_ID, Agent: 'Research', ParentID: 'detail-1' },
+                    { ...row(4, 'AI', 'Drafted executive summary'), AgentID: WRITER_ID, Agent: 'Writer', ParentID: 'detail-3' },
+                ]);
+                expect(window.map(m => m.content)).toEqual([
+                    '[Alice Chen]: Can someone check Q3?',
+                    '[Bob Rivera -> replying to Alice Chen]: I have the spreadsheet',
+                    '[Research -> replying to Alice Chen]: Found 3 variances',
+                    '[Writer -> replying to Research]: Drafted executive summary',
+                ]);
+                expect(window.map(m => m.metadata?.rawContent)).toEqual([
+                    'Can someone check Q3?',
+                    'I have the spreadsheet',
+                    'Found 3 variances',
+                    'Drafted executive summary',
+                ]);
+            });
+
+            it('uses speakerLabels (case-insensitive UUID match) and respects speakerAttribution off/always', () => {
+                const rows = [
+                    { ...row(1, 'User', 'Check the renewal clause'), UserID: ALICE_ID.toLowerCase(), User: 'Alice' },
+                    { ...row(2, 'AI', 'Clause 4.2 applies'), AgentID: RESEARCH_ID, Agent: 'Space Agent', ParentID: 'detail-1' },
+                ];
+                const labels = new Map<string, string>([[ALICE_ID, 'Alice Chen (Team)']]);
+
+                const withAlways = ConversationEngine.AssembleContextWindow(rows, {
+                    speakerAttribution: 'always',
+                    speakerLabels: labels,
+                });
+                expect(withAlways.map(m => m.content)).toEqual([
+                    '[Alice Chen (Team)]: Check the renewal clause',
+                    '[Space Agent -> replying to Alice Chen (Team)]: Clause 4.2 applies',
+                ]);
+
+                const withOff = ConversationEngine.AssembleContextWindow(rows, {
+                    speakerAttribution: 'off',
+                    speakerLabels: labels,
+                });
+                expect(withOff.map(m => m.content)).toEqual(['Check the renewal clause', 'Clause 4.2 applies']);
+            });
+        });
     });
 
     describe('LiveRowsFilter and IsReplacedRow', () => {
@@ -1927,8 +2000,11 @@ describe('ConversationEngine', () => {
             expect(ConversationEngine.IsReplacedRow({})).toBe(false);
         });
 
-        it('lists ReplacedAt among the window fields', () => {
+        it('lists ReplacedAt and speaker identity columns among the window fields', () => {
             expect(ConversationWindowFields).toContain('ReplacedAt');
+            expect(ConversationWindowFields).toEqual(
+                expect.arrayContaining(['UserID', 'User', 'AgentID', 'Agent', 'ParentID'])
+            );
         });
     });
 

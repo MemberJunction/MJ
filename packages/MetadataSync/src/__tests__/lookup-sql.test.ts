@@ -75,12 +75,12 @@ const permissionLookup = source('MJ: Entity Permissions', [
   { FieldName: 'Type', Value: 'Allow' },
 ]);
 
-const ENTITY_SUBQUERY = "(SELECT [ID] FROM [__mj].[Entity] WHERE [Name] = N'Conversation''s Branches')";
-const ROLE_SUBQUERY = "(SELECT [ID] FROM [__mj].[Role] WHERE [Name] = N'UI')";
-const PERMISSION_SUBQUERY = `(SELECT [ID] FROM [__mj].[EntityPermission] WHERE [EntityID] = ${ENTITY_SUBQUERY} AND [RoleID] = ${ROLE_SUBQUERY} AND [Type] = N'Allow')`;
+const ENTITY_SUBQUERY = "(SELECT [ID] FROM [__mj].[Entity] WHERE LOWER([Name]) = LOWER(N'Conversation''s Branches'))";
+const ROLE_SUBQUERY = "(SELECT [ID] FROM [__mj].[Role] WHERE LOWER([Name]) = LOWER(N'UI'))";
+const PERMISSION_SUBQUERY = `(SELECT [ID] FROM [__mj].[EntityPermission] WHERE [EntityID] = ${ENTITY_SUBQUERY} AND [RoleID] = ${ROLE_SUBQUERY} AND LOWER([Type]) = LOWER(N'Allow'))`;
 
 describe('LookupSubqueryBuilder', () => {
-  it('builds a subquery on the base table, escaping quotes', () => {
+  it('builds a subquery on the base table, comparing string criteria lower-cased and escaping quotes', () => {
     expect(builder.Build(entityLookup)).toEqual({ Sql: ENTITY_SUBQUERY });
   });
 
@@ -88,7 +88,7 @@ describe('LookupSubqueryBuilder', () => {
     expect(builder.Build(permissionLookup)).toEqual({ Sql: PERMISSION_SUBQUERY });
   });
 
-  it('writes literals by field type, and null as IS NULL', () => {
+  it('writes literals by field type, folds no bit, int, uuid or date criterion, and writes null as IS NULL', () => {
     const result = builder.Build(
       source('MJ: Entity Permissions', [
         { FieldName: 'canread', Value: 'true' },
@@ -268,7 +268,7 @@ describe('SyncEngine records the @lookup a field value came from', () => {
     expect(recorded?.EntityName).toBe('MJ: Entity Permissions');
     expect(recorded?.EnvSourced).toBe(false);
     expect(builder.Build(recorded as LookupSqlSource).Sql).toBe(
-      "(SELECT [ID] FROM [__mj].[EntityPermission] WHERE [EntityID] = (SELECT [ID] FROM [__mj].[Entity] WHERE [Name] = N'Widgets') AND [RoleID] = (SELECT [ID] FROM [__mj].[Role] WHERE [Name] = N'UI') AND [Type] = N'Allow')"
+      "(SELECT [ID] FROM [__mj].[EntityPermission] WHERE [EntityID] = (SELECT [ID] FROM [__mj].[Entity] WHERE LOWER([Name]) = LOWER(N'Widgets')) AND [RoleID] = (SELECT [ID] FROM [__mj].[Role] WHERE LOWER([Name]) = LOWER(N'UI')) AND LOWER([Type]) = LOWER(N'Allow'))"
     );
     // The lookup passes its source on, so a ?create can register the row it makes
     expect(resolve.mock.calls.at(-1)?.[9]).toBe(recorded);

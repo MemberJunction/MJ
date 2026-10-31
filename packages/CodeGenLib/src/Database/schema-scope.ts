@@ -53,6 +53,22 @@ export function computeSchemasToExcludeForIncludeList(
   return ComputeSchemasToExcludeForIncludeList(allSchemas, includeSchemas, existingExcludeSchemas);
 }
 
+/**
+ * Returns the `includeSchemas` entries that match no schema in `allSchemas` (case-insensitive,
+ * trimmed), in their authored spelling (#3384). A non-empty include list whose entries match nothing
+ * excludes every schema, so a typo, or a schema that was dropped, silently empties the run.
+ *
+ * Only meaningful against the DATABASE's schema list: a metadata-derived universe lacks a schema whose
+ * tables have no entities yet, which is every app's first run.
+ *
+ * @param allSchemas     the database's schema list
+ * @param includeSchemas the authored positive scope
+ */
+export function FindUnmatchedIncludeSchemas(allSchemas: string[], includeSchemas: string[]): string[] {
+  const known = new Set(allSchemas.map((s) => s.trim().toLowerCase()));
+  return includeSchemas.filter((s) => !known.has(s.trim().toLowerCase()));
+}
+
 /** The subset of the CodeGen config this module reads and mutates. */
 export interface SchemaScopeConfig {
   includeSchemas?: string[];

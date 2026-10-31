@@ -1,0 +1,112 @@
+[
+  {
+    "fields": {
+      "Name": "Re-embed Local Vectors",
+      "Description": "Re-embeds persisted local vectors (agent notes and examples, tags, queries, components) that were produced by a model other than the platform's default local embedding model (the MJ_DEFAULT_LOCAL_EMBEDDING_MODEL environment variable, else the highest-PowerRank active local model). Run it after changing the default local embedding model, and with Force=true after an upgrade that changed what a local model produces. Each row is saved through its entity, which re-embeds it. It first checks that the model can embed, so a model that fails to load changes nothing. Safe to re-run: without Force, rows already on the default model are skipped. Restart the MJ server processes afterwards so their in-memory indexes reload. Entity search vectors are not covered; run entity vector sync for those.",
+      "DriverClass": "Re-embed Local Vectors",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrows-rotate"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityNames",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional comma-separated list of entities to re-embed: MJ: AI Agent Notes, MJ: AI Agent Examples, MJ: Tags, MJ: Queries, MJ: Components. Default: all of them.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DEB04233-BA62-4A79-B1AC-1C5F288FDDCF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, only count the rows per entity (stale rows, or every embedded row with Force); nothing is saved. Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "9AFC4636-6506-4474-8237-0B83C8A84391"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Force",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, re-embed every stored local vector, including rows already recorded as the default model. Use after an upgrade that changed what a model produces under the same model ID. Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "C88B225C-F715-48C3-A31C-13E08EC920A6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Report",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Per-entity counts: the target model's name, and for each entity the rows found to re-embed (Found), rows re-embedded (Reembedded), rows that failed (Failed), and why a run stopped early (Error).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "018F279F-8C24-4DC0-A1DD-FA9D427D3EAE"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Every stale row was re-embedded (or, on a dry run, counted)."
+          },
+          "primaryKey": {
+            "ID": "F01FFDF2-7E9D-4BE2-A4A5-0DA8803EF22B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_FAILURE",
+            "IsSuccess": false,
+            "Description": "Some rows could not be re-embedded; see the Report output and the server log. Re-run to retry them."
+          },
+          "primaryKey": {
+            "ID": "50E26DEA-4CC3-4AF4-9C81-35DA072E1356"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The run could not start or a view failed, e.g. no active local embedding model or an unknown entity name."
+          },
+          "primaryKey": {
+            "ID": "659623E5-923F-4611-8440-024DC40E93F4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DABE9FCA-68F8-444C-AD6F-08AEEC4260CB"
+    }
+  }
+]

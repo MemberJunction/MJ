@@ -41,6 +41,7 @@ export type {
 export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
 export type {
     ManifestFetcher,
+    DependencyVersionResolver,
     FetchedManifest,
     RootApp,
     GraphResolutionResult

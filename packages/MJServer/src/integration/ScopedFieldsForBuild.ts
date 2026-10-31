@@ -27,11 +27,15 @@ import {
 } from '@memberjunction/integration-engine-base';
 import { CurrentCatalogCI } from '@memberjunction/integration-engine';
 
-/** What a schema build reads off a field row. The shared entity and the per-connection row both satisfy it. */
+/**
+ * What a schema build — and a refresh's re-key check — reads off a field row. The shared entity and
+ * the per-connection row both satisfy it.
+ */
 export type BuildFieldRow = Pick<
     MJIntegrationObjectFieldEntity,
     'Name' | 'DisplayName' | 'Description' | 'Type' | 'IsRequired' | 'AllowsNull' | 'Length' | 'Precision'
     | 'Scale' | 'DefaultValue' | 'IsPrimaryKey' | 'IsUniqueKey' | 'IsReadOnly' | 'RelatedIntegrationObjectID' | 'Status'
+    | 'Sequence'
 >;
 
 /** A connection's field rows, keyed by lower-cased per-connection object id. */
