@@ -26,36 +26,36 @@ const stored = (outcome: 'model' | 'keep-simple-baseline' | 'no-signal'): string
 
 describe('business catalog from stored gate decisions', () => {
   it('opens only what the gate shipped, and says why the rest is blocked', () => {
-    const shipped = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm1', name: 'Renewal', ValidationResults: stored('model') });
+    const shipped = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm1', name: 'Renewal', ValidationResults: stored('model'), Lineage: null });
     expect(shipped.canOpen).toBe(true);
     expect(shipped.blockedReason).toBeNull();
     expect(shipped.trust.Headline).toBe('Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).');
-    const none = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm2', name: 'Noise', ValidationResults: stored('no-signal') });
+    const none = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm2', name: 'Noise', ValidationResults: stored('no-signal'), Lineage: null });
     expect(none.canOpen).toBe(false);
     expect(none.blockedReason).toBe('stored reason');
-    const legacy = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm3', name: 'Old', ValidationResults: null });
+    const legacy = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm3', name: 'Old', ValidationResults: null, Lineage: null });
     expect(legacy.canOpen).toBe(false);
     expect(legacy.blockedReason).toMatch(/not evaluated under an Evaluation Protocol/i);
   });
 
   it('a kept simple baseline opens', () => {
-    const kept = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm4', name: 'Renewal', ValidationResults: stored('keep-simple-baseline') });
+    const kept = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm4', name: 'Renewal', ValidationResults: stored('keep-simple-baseline'), Lineage: null });
     expect(kept.canOpen).toBe(true);
     expect(kept.trust.Headline).toBe('A simple baseline (glm) beats the flat guess by 0.0150 [0.0050, 0.0250] (log-loss); the trained model did not beat it.');
   });
 
   it('falls back to a placeholder title when the name is blank, and carries the update time', () => {
     const at = new Date('2026-10-01T00:00:00Z');
-    const c = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm', name: '  ', ValidationResults: null, UpdatedAt: at });
+    const c = BusinessPredictions.ToBusinessPredictionCard({ modelId: 'm', name: '  ', ValidationResults: null, UpdatedAt: at, Lineage: null });
     expect([c.title, c.updatedAt]).toEqual(['Untitled prediction', at]);
   });
 
   it('orders model, keep-simple-baseline, no-signal, not evaluated', () => {
     const cards = BusinessPredictions.BuildBusinessCatalog([
-      { modelId: 'a', name: 'A', ValidationResults: null },
-      { modelId: 'b', name: 'B', ValidationResults: stored('no-signal') },
-      { modelId: 'c', name: 'C', ValidationResults: stored('keep-simple-baseline') },
-      { modelId: 'd', name: 'D', ValidationResults: stored('model') },
+      { modelId: 'a', name: 'A', ValidationResults: null, Lineage: null },
+      { modelId: 'b', name: 'B', ValidationResults: stored('no-signal'), Lineage: null },
+      { modelId: 'c', name: 'C', ValidationResults: stored('keep-simple-baseline'), Lineage: null },
+      { modelId: 'd', name: 'D', ValidationResults: stored('model'), Lineage: null },
     ]);
     expect(cards.map((c) => c.modelId)).toEqual(['d', 'c', 'b', 'a']);
   });

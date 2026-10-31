@@ -118,7 +118,8 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
   const untrained = untrainedExperimentsNote(o.untrainedExperiments);
   const untrainedText = untrained ? ` ${untrained}` : '';
-  if (o.published) return `Done — I built and published your prediction (${o.TrustTitle || 'trust not evaluated'}). It's now in your Predictions.${untrainedText}${warningText}`;
+  // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
+  if (o.published) return `Done — I built and published your prediction (${o.TrustTitle}). It's now in your Predictions.${untrainedText}${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';

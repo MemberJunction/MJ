@@ -5,7 +5,7 @@
  * (no Auth0 callback for the Explorer's port), pass a one-time magic-link redemption URL as PS_SIGN_IN_URL: the spec
  * redeems it in its own tab first (the session lives in that tab's sessionStorage).
  *
- * RUN:
+ * RUN (add PS_SIGN_IN_URL='<redemption URL from POST /magic-link/create>' when signing in by magic link):
  *   PW_BASE_URL=http://localhost:4201 PW_API_URL=http://localhost:4001 \
  *   PS_C1_CARD_NAME='<a published model whose run kept a simple baseline (glm)>' \
  *   PS_W7_CARD_NAME='<a published model whose run stored no-signal>' \

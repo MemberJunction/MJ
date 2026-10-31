@@ -70,7 +70,7 @@ export class HarnessModels {
       Metrics: HarnessModels.parseMetrics(m.Metrics),
       HoldoutMetrics: HarnessModels.parseMetrics(m.HoldoutMetrics),
       // The verdict renders the run's stored gate decision; an empty column is not a record.
-      Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run?.ValidationResults || null }),
+      Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run?.ValidationResults || null, Lineage: m.Lineage || null }),
       TrainingRunStatus: run?.Status ?? null,
       TrainingRunNotes: run?.Notes ?? null,
       LineageJSON: m.Lineage ?? null,

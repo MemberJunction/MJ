@@ -68,7 +68,7 @@ export class HarnessAgent {
    * renders the stored gate decision of the model's training run (`validationResults`, its `ValidationResults`).
    */
   public static StoryRequest(model: MJMLModelEntity, validationResults: string | null): string {
-    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: validationResults });
+    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: validationResults, Lineage: model.Lineage || null });
     const weights = Object.entries(SafeJSONParse<Record<string, number>>(model.FeatureImportance || '{}') || {})
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)

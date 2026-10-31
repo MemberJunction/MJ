@@ -75,7 +75,8 @@ export class ContainmentProbe {
 
   /**
    * The majority-baseline finding of a stored classifier: null unless its stored holdout accuracy is at or below the
-   * always-majority rate, or it predicted one class. The rule comes from the model's own lineage.
+   * always-majority rate, or it predicted one class. The rule comes from the model's own lineage. Only classifiers store
+   * accuracy, the majority rate and the predicted-class count, so a regression model finds nothing without a task check.
    */
   public static ReadMajorityBaselineFinding(m: CandidateModel): MajorityBaselineFinding | null {
     const accuracy = ContainmentProbe.holdoutMetric(m, ['accuracy', 'acc']);
@@ -85,7 +86,7 @@ export class ContainmentProbe {
     const atOrBelow = accuracy !== null && baseline !== null && accuracy <= baseline;
     if (!singleClass && !atOrBelow) return null;
     const rule = EvaluationLineage.Read(m.LineageJSON)?.MajorityBaselineRule || EvaluationLineage.DefaultMajorityBaselineRule;
-    const accuracyOnly = ContainmentProbe.holdoutMetric(m, ['auc', 'roc_auc']) === null;
+    const accuracyOnly = ContainmentProbe.holdoutMetric(m, ['auc', 'roc_auc', 'rocauc']) === null;
     return { Rule: rule, Enforced: rule === 'enforce' || accuracyOnly, Accuracy: accuracy, BaselineAccuracy: baseline, PredictedClasses: predicted };
   }
 
@@ -136,10 +137,12 @@ export class ContainmentProbe {
     return AtRiskRules.SelectAtRiskListMembers(ContainmentProbe.resourceRows(details, model), 200).map((r) => r.RecordID);
   }
 
-  /** A stored holdout metric under the first of `keys` (case-insensitive) the model has; null when it has none. */
+  /** A stored holdout metric under the first of `keys` (in `keys` order, case-insensitive) the model has; null when it has none. */
   private static holdoutMetric(m: CandidateModel, keys: readonly string[]): number | null {
-    for (const [key, value] of Object.entries(m.HoldoutMetrics)) {
-      if (keys.includes(key.trim().toLowerCase())) return value;
+    const entries = Object.entries(m.HoldoutMetrics);
+    for (const key of keys) {
+      const hit = entries.find(([k]) => k.trim().toLowerCase() === key);
+      if (hit !== undefined) return hit[1];
     }
     return null;
   }

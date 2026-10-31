@@ -3,7 +3,8 @@
  * a new prediction through the agent framework**. Where ps-inproc-agent-builder.ts calls the builder
  * SERVICE directly, this runs the registered **Pipeline Builder** code sub-agent end-to-end via the real
  * `AgentRunner` with an approved `ModelingPlanSpec` payload — exercising the full metadata → DriverClass
- * → `executeAgentInternal` → build → train → publish-gated-on-trust path that the conversational flow hits
+ * → `executeAgentInternal` → build → train → publish-gated-on-trust path (the trust verdict renders the training run's
+ * stored gate decision; this plan has no Prediction Unit, so it is not evaluated and is held) that the conversational flow hits
  * once the user approves a plan. No LLM is involved (the builder is a code agent), so it's deterministic.
  *
  * Requires the `Pipeline Builder` sub-agent to be synced (DriverClass PredictiveStudioPipelineBuilderAgent).
@@ -17,7 +18,7 @@ import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core'
 import '@memberjunction/core-entities';
 import { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
-import { LoadMLModelInferenceProcessor } from '@memberjunction/predictive-studio';
+import { LoadMLModelInferenceProcessor, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from '@memberjunction/ai-agents';
 
@@ -96,24 +97,24 @@ async function main(): Promise<void> {
     await ensureAlgorithm(provider, user);
     banner('RUN: AgentRunner.RunAgent(Pipeline Builder, payload=approved ModelingPlanSpec)');
     const t0 = Date.now();
-    const result = await new AgentRunner().RunAgent({
+    const result = await new AgentRunner().RunAgent<ModelingPlanSpec, PredictiveStudioBuilderPayload>({
       agent,
       conversationMessages: [{ role: 'user', content: 'build it' }],
       contextUser: user,
       payload: approvedPlan(),
     });
     console.log(`  Ran in ${Date.now() - t0}ms — agentRun=${result.agentRun?.ID} success=${result.success}`);
-    const built = (result.payload ?? {}) as { BuildResult?: { success?: boolean; pipelineId?: string; modelId?: string; trustGrade?: string; published?: boolean; heldReason?: string | null } };
-    const br = built.BuildResult;
-    console.log(`  BuildResult: ${br ? JSON.stringify({ success: br.success, grade: br.trustGrade, published: br.published }) : '(missing)'}`);
+    const br = result.payload?.BuildResult;
+    console.log(`  BuildResult: ${br ? JSON.stringify({ success: br.success, trust: br.TrustTitle, headline: br.Headline, published: br.published, held: br.heldReason }) : '(missing)'}`);
 
     check(!!result.agentRun?.ID, 'AgentRunner created an AI Agent Run (the framework ran the sub-agent)');
     check(!!br, 'the sub-agent wrote BuildResult back to the payload');
     check(br?.success === true, 'the build succeeded (pipeline created + model trained) through the agent');
     check(!!br?.pipelineId && !!br?.modelId, 'BuildResult carries the created pipeline + model ids');
-    check(typeof br?.trustGrade === 'string', 'a plain-language trust grade was produced');
-    // The near-chance renewal model is held, not published — the publish gate fires through the agent too.
-    check(br?.published === (br?.trustGrade !== 'Poor'), 'the publish gate fired through the agent (Poor → held)');
+    check(typeof br?.TrustTitle === 'string' && typeof br?.Headline === 'string', 'a trust verdict (outcome title + headline) was produced');
+    // Only a stored decision that ships can publish; this unit-less plan stores none, so it is not evaluated and held.
+    check(br?.published !== true || (br?.TrustTitle ?? '').startsWith('Ships'), 'nothing is published without a shipping verdict');
+    check(br?.TrustTitle === 'Not evaluated yet' && br?.published === false && !!br?.heldReason, 'the unit-less build is held as not evaluated, with its reason');
 
     // Confirm a real pipeline actually landed in the DB.
     const pipes = await new RunView().RunView<{ ID: string }>(

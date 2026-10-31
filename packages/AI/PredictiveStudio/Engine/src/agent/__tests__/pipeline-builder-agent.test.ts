@@ -40,8 +40,8 @@ function storedRun(decision: GateDecision, reason: string): string {
     legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate,
   });
 }
-const shippedTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null }, 'The model beats the flat guess.') });
-const noSignalTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null }, 'Nothing beats the flat guess, so nothing ships.') });
+const shippedTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null }, 'The model beats the flat guess.'), Lineage: null });
+const noSignalTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null }, 'Nothing beats the flat guess, so nothing ships.'), Lineage: null });
 const published: BuildPredictionResult = {
   success: true, pipelineId: 'p1', modelId: 'm1', published: true, leakageFlagged: false, heldReason: null, errorMessage: null, trust: shippedTrust,
 };
@@ -312,7 +312,7 @@ function unmeasuredModel(id: string): MJMLModelEntity {
 class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const model = unmeasuredModel('model-unmeasured');
-    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null });
+    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null });
     const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard('run-1', model, trust.Comparison, 'XGBoost');
     return {
       success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, leakageFlagged: false,

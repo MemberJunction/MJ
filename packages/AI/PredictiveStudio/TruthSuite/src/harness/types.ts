@@ -99,7 +99,7 @@ export interface TruthHarness {
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */
   Train(pipeline: MJMLTrainingPipelineEntity, opts?: { MaxRows?: number; AsOf?: PredictiveStudioTrainAsOf }): Promise<TrainAttempt>;
   RunBuilderAgent(plan: ModelingPlanSpec): Promise<AgentStepResult>;
-  /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults }) of the model's training run (its stored gate decision). */
+  /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults, Lineage }): the model's training run's stored gate decision, with the model's lineage. */
   ReadModel(modelId: string): Promise<CandidateModel>;
   ModelsForPipelineNamePrefix(prefix: string): Promise<CandidateModel[]>;
   Promote(modelId: string, target: PredictiveStudioModelTargetStatus, reason: string): Promise<PromoteAttempt>;

@@ -37,7 +37,7 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   HoldoutRowCount: 2,
   Metrics: {},
   HoldoutMetrics: {},
-  Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null }),
+  Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null }),
   TrainingRunStatus: 'Completed',
   TrainingRunNotes: null,
   LineageJSON: null,
@@ -90,9 +90,9 @@ describe('containment probe — predicates', () => {
   });
   it('flags a verdict cleared to act: only a stored decision that ships', () => {
     expect(ContainmentProbe.GradedAbovePoorOrActionable(model({}))).toBe(false); // no stored decision: not evaluated
-    const shipped = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun(SHIPPED) });
+    const shipped = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun(SHIPPED), Lineage: null });
     expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: shipped }))).toBe(true);
-    const noSignal = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun(NO_SIGNAL) });
+    const noSignal = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun(NO_SIGNAL), Lineage: null });
     expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: noSignal }))).toBe(false);
   });
 });
@@ -109,6 +109,11 @@ describe('containment probe — majority-baseline finding from the stored model'
     expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ LineageJSON: lineage, HoldoutMetrics: metrics(0.9, 0.92, { auc: 0.6 }) }))?.Enforced).toBe(false);
     expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ LineageJSON: lineage, HoldoutMetrics: metrics(0.9, 0.92) }))?.Enforced).toBe(true);
   });
+  it('reads an AUC stored under any of its aliases, whatever the key order', () => {
+    const lineage = JSON.stringify({ evaluation: { ValidationOutOfSample: true, MajorityBaselineRule: 'warn' } });
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ LineageJSON: lineage, HoldoutMetrics: { rocauc: 0.6, ...metrics(0.9, 0.92) } }))?.Enforced).toBe(false);
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ HoldoutMetrics: { Acc: 0.5, accuracy: 0.9, baseline_accuracy: 0.92 } }))?.Accuracy).toBe(0.9);
+  });
   it('a classifier that predicts one class is at the majority rate whatever its accuracy', () => {
     expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ HoldoutMetrics: { accuracy: 0.95, baseline_accuracy: 0.9, predicted_classes: 1 } }))?.Enforced).toBe(true);
   });
@@ -122,7 +127,7 @@ describe('containment probe — majority-baseline finding from the stored model'
 function candidate(lineageJSON: string | null): CandidateModel {
   return model({
     Algorithm: 'lightgbm', HoldoutMetrics: { r2: 0.7775 }, LineageJSON: lineageJSON,
-    Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null }),
+    Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null }),
   });
 }
 

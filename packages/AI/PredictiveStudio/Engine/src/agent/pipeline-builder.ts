@@ -206,7 +206,7 @@ export class PredictiveStudioPipelineBuilder {
         : await this.trainWithoutUnit(pipeline, approved, sidecarVersion, provider, user);
       const model = training.Train.model;
       if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, collectedWarnings);
-      const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults });
+      const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults, Lineage: model.Lineage });
       const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
       const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
       return {
@@ -335,7 +335,7 @@ export class PredictiveStudioPipelineBuilder {
     if (train.model === null) throw new Error(`Training run ${train.run.ID} of pipeline ${pipeline.ID} (no Prediction Unit) completed without a model.`);
     // The pipeline was built from the first approved experiment (ModelingPlanToPipelineConfig refuses a plan without one).
     const [trained, ...untrained] = approved;
-    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: train.run.ValidationResults });
+    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: train.run.ValidationResults, Lineage: train.model.Lineage });
     const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, trust.Comparison, trained.Label);
     return { Train: train, Leaderboard: leaderboard, Untrained: untrained.map((e) => e.Label) };
   }

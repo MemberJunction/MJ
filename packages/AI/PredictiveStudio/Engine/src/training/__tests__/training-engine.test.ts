@@ -354,7 +354,7 @@ describe('TrainingEngine — evaluation record and the time-index containment', 
     expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
     expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
     // A legacy run stores no gate decision, so its verdict is not evaluated and cannot be acted on.
-    expect(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults })).toMatchObject({ Kind: 'not-evaluated', CanAct: false });
+    expect(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults, Lineage: null })).toMatchObject({ Kind: 'not-evaluated', CanAct: false });
   });
 
   it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {

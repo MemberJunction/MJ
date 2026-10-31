@@ -217,7 +217,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: null } as unknown as MJMLTrainingRunEntity });
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
     expect([result.success, result.published, result.trust?.CanAct, model.Saves]).toEqual([true, false, false, 0]);
-    expect(result.heldReason).toBe(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null }).Reason);
+    expect(result.heldReason).toBe(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null }).Reason);
   });
 
   it("publishes a model whose run's stored gate decision ships it, and renders the verdict from that run", async () => {
@@ -230,7 +230,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
     const gate = storedGate(run);
     expect([result.published, result.heldReason, model.Saves, model.Entity.Status]).toEqual([true, null, 1, 'Published']);
-    expect(result.trust).toEqual(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults }));
+    expect(result.trust).toEqual(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults, Lineage: null }));
     expect(result.trust?.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'B', Value: gate.intervals.modelVsDummy.value, Lower: gate.intervals.modelVsDummy.lower, Upper: gate.intervals.modelVsDummy.upper, Metric: gate.primaryMetric });
   });
 

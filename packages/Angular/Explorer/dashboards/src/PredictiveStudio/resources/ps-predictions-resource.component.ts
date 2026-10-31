@@ -20,8 +20,8 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
 /**
  * **Predictions** — the business-user home for Predictive Studio (`option-b-refined` mockup). Reframes
  * published ML models as plain-language "predictions" in a catalog, each with a trust badge; opening one
- * goes to a workspace whose trust verdict GATES the actions (a Poor/unmeasured prediction can't be acted
- * on). "+ New prediction" opens the Model Development Agent (the deterministic builder) as a docked
+ * goes to a workspace whose trust verdict GATES the actions (a prediction the gate did not ship, or one never
+ * evaluated under an Evaluation Protocol, can't be acted on). "+ New prediction" opens the Model Development Agent (the deterministic builder) as a docked
  * co-pilot. Zero ML jargon — the analyst surfaces stay under the other nav items as "Advanced".
  */
 @RegisterClass(BaseResourceComponent, 'PredictiveStudioPredictionsResource')
@@ -404,6 +404,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         name: this.engine.ModelDisplayName(m),
         // an empty column is not a stored record
         ValidationResults: runByModel.Get(m.ID)?.ValidationResults || null,
+        Lineage: m.Lineage || null,
         UpdatedAt: m.__mj_UpdatedAt || null,
       })),
     );

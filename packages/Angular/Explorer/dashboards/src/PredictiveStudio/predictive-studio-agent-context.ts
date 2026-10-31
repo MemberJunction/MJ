@@ -31,7 +31,6 @@ export function CapPSNames(names: readonly string[]): string[] {
   return BoundNameList(names, PS_AGENT_CONTEXT_NAME_LIST_CAP);
 }
 
-
 /** Minimal id+name descriptor the doors hand the resolver so it can match an agent reference. */
 export interface PSNamedRecord {
   ID: string;
@@ -57,7 +56,6 @@ export function ResolvePSRecord<T extends PSNamedRecord>(input: string, candidat
   return contains.length === 1 ? contains[0] : null;
 }
 
-
 /**
  * Tolerant "not found" message so the agent can self-correct: when the input partially matches SEVERAL
  * candidates it becomes a "did you mean…" listing exactly those; otherwise it samples available names. Pure.
@@ -71,7 +69,6 @@ export function BuildPSNotFoundError(input: string, candidates: readonly PSNamed
   const sample = candidates.slice(0, 6).map((c) => c.Name).join(', ');
   return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
 }
-
 
 // ============================================================================
 // PREDICTIONS door context (catalog ↔ trust-gated workspace)
@@ -150,7 +147,6 @@ export function BuildPredictionsAgentContext(input: PredictionsAgentContextInput
   return context;
 }
 
-
 // ============================================================================
 // STUDIO door context (build/run workbench)
 // ============================================================================
@@ -189,7 +185,6 @@ export function BuildStudioAgentContext(input: StudioAgentContextInput): Record<
   };
 }
 
-
 // ============================================================================
 // MODELS door context (registry + production)
 // ============================================================================
@@ -221,4 +216,3 @@ export function BuildModelsAgentContext(input: ModelsAgentContextInput): Record<
     ProductionModelCount: input.ProductionModelCount,
   };
 }
-

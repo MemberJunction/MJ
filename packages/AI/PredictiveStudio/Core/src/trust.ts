@@ -12,12 +12,26 @@
  */
 import type { GateOutcome, MetricKey } from './evaluation-protocol';
 import { GateRules, type StoredInterval } from './gate';
-import { GateRecords, type StoredGateRecord } from './run-evaluation';
+import type { StoredGateRecord } from './run-evaluation';
+import type { TrainerRequestConfig } from './trainer-contract';
+import { TrainingRunResultsParser } from './training-run-results';
 
-/** What the verdict reads: the model's training run's stored results. */
+/** What the verdict reads: the model's training run's stored results, and the model's Lineage. */
 export interface TrustInput {
   /** The model's training run's `ValidationResults` (the `ps-run-results/v2` envelope); null when there is none. */
   readonly ValidationResults: string | null;
+  /**
+   * The model's `Lineage` JSON (its `shippedMember` / `shippedDriver` name what shipped and its driver); null when there
+   * is none. Required, so a caller that drops it fails to compile instead of silently losing the shared-driver copy rule.
+   */
+  readonly Lineage: string | null;
+}
+
+/** The stored members the verdict reads: the gate record and the trainer request that named the candidates' drivers. */
+interface StoredDecision {
+  readonly Gate: StoredGateRecord;
+  readonly Request: TrainerRequestConfig | null;
+  readonly Lineage: string | null;
 }
 
 /** The stored paired comparison a shipped verdict quotes: the shipped artifact against the flat guess. */
@@ -83,13 +97,11 @@ export class TrustVerdicts {
     HoldoutRows: null,
   };
 
-  /** How a stored member name marks an existing heuristic rule (the gate's member naming). */
-  private static readonly heuristicPrefix = 'heuristic:';
-
   /** The verdict of a model: the stored gate decision of its training run rendered as plain copy. */
   public static DeriveTrustVerdict(input: TrustInput): TrustVerdict {
-    const record = GateRecords.ParseStoredGateRecord(input.ValidationResults);
-    if (record === null) return TrustVerdicts.notEvaluated;
+    const stored = TrustVerdicts.readStored(input);
+    if (stored === null) return TrustVerdicts.notEvaluated;
+    const record = stored.Gate;
     const d = record.decision;
     switch (d.outcome) {
       case 'no-signal':
@@ -103,12 +115,12 @@ export class TrustVerdicts {
           HoldoutRows: record.holdoutRows,
         };
       case 'model':
-        return TrustVerdicts.shippedVerdict(record, 'model', d.shipped, record.intervals.modelVsDummy);
+        return TrustVerdicts.shippedVerdict(stored, 'model', d.shipped, record.intervals.modelVsDummy);
       case 'keep-simple-baseline': {
         const iv = record.intervals.memberVsDummy[d.shipped];
         // a kept member without its own stored interval has no number to quote: never invent one
         if (iv === undefined) return TrustVerdicts.notEvaluated;
-        return TrustVerdicts.shippedVerdict(record, 'keep-simple-baseline', d.shipped, iv);
+        return TrustVerdicts.shippedVerdict(stored, 'keep-simple-baseline', d.shipped, iv);
       }
     }
   }
@@ -129,7 +141,7 @@ export class TrustVerdicts {
 
   /** How a shipped member is named in copy: an existing heuristic rule by its own name, any other member as stored. */
   public static MemberLabel(member: string): string {
-    return member.startsWith(TrustVerdicts.heuristicPrefix) ? `the existing rule "${member.slice(TrustVerdicts.heuristicPrefix.length)}"` : member;
+    return member.startsWith(GateRules.HeuristicPrefix) ? `the existing rule "${member.slice(GateRules.HeuristicPrefix.length)}"` : member;
   }
 
   /** "Checked against N past members it had never seen." — never fabricates a number. */
@@ -142,15 +154,24 @@ export class TrustVerdicts {
     return `Checked against past ${noun} it had never seen.`;
   }
 
+  /** The completed envelope's gate record and trainer request, or null when the run stores no decision. */
+  private static readStored(input: TrustInput): StoredDecision | null {
+    if (input.ValidationResults === null || input.ValidationResults.trim().length === 0) return null;
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(input.ValidationResults);
+    if (!parsed.Ok || parsed.Value.status !== 'completed' || parsed.Value.gate === null) return null;
+    return { Gate: parsed.Value.gate, Request: parsed.Value.trainerRequest, Lineage: input.Lineage };
+  }
+
   /** The verdict of a shipped artifact (the model or a kept simple baseline), quoting its comparison with the flat guess. */
-  private static shippedVerdict(record: StoredGateRecord, outcome: 'model' | 'keep-simple-baseline', shipped: string, iv: StoredInterval): TrustVerdict {
+  private static shippedVerdict(stored: StoredDecision, outcome: 'model' | 'keep-simple-baseline', shipped: string, iv: StoredInterval): TrustVerdict {
+    const record = stored.Gate;
     const metric = record.primaryMetric;
     const by = GateRules.FormatInterval(iv);
     return {
       Kind: 'evaluated',
       Outcome: outcome,
       CanAct: true,
-      Headline: outcome === 'model' ? `Beats the flat guess by ${by} (${metric}).` : TrustVerdicts.keptHeadline(record, shipped, by, metric),
+      Headline: outcome === 'model' ? `Beats the flat guess by ${by} (${metric}).` : TrustVerdicts.keptHeadline(stored, shipped, by, metric),
       Reason: record.reason.text,
       Comparison: { Against: 'the flat guess', Shipped: shipped, Value: iv.value, Lower: iv.lower, Upper: iv.upper, Metric: metric },
       HoldoutRows: record.holdoutRows,
@@ -161,23 +182,47 @@ export class TrustVerdicts {
    * The headline of a kept simple baseline. When the trained model is that same baseline, no comparison between them
    * happened, so the copy does not claim the trained model lost to it.
    */
-  private static keptHeadline(record: StoredGateRecord, shipped: string, by: string, metric: MetricKey): string {
+  private static keptHeadline(stored: StoredDecision, shipped: string, by: string, metric: MetricKey): string {
     const kept = `A simple baseline (${TrustVerdicts.MemberLabel(shipped)}) beats the flat guess by ${by} (${metric})`;
-    return TrustVerdicts.modelIsKeptMember(record, shipped) ? `${kept}.` : `${kept}; the trained model did not beat it.`;
+    return TrustVerdicts.modelIsKeptMember(stored, shipped) ? `${kept}.` : `${kept}; the trained model did not beat it.`;
   }
 
   /**
-   * Whether the trained model is the kept member itself: the stored intervals name it as the delivered member, or the
-   * model's comparison with the best simple member is exactly 0 [0, 0] and that best member (lowest holdout score) is
-   * the kept one.
+   * Whether the trained model is the kept member itself: the stored intervals name it as the delivered member; or the
+   * trained finalist and the kept member share a driver (the finalist's from the stored trainer request, the member's
+   * from the model's lineage); or the model's comparison with the best simple member is exactly 0 [0, 0] and that member
+   * is the kept one.
    */
-  private static modelIsKeptMember(record: StoredGateRecord, shipped: string): boolean {
-    const iv = record.intervals;
+  private static modelIsKeptMember(stored: StoredDecision, shipped: string): boolean {
+    const iv = stored.Gate.intervals;
     if (iv.deliveredMember === shipped) return true;
+    if (TrustVerdicts.sharesDriver(stored, shipped)) return true;
     const vsBest = iv.modelVsBestSimple;
     if (vsBest === null || vsBest.value !== 0 || vsBest.lower !== 0 || vsBest.upper !== 0) return false;
-    const shippedScore = iv.memberScores[shipped];
-    if (shippedScore === undefined) return false;
-    return Object.values(iv.memberScores).every((score) => shippedScore <= score);
+    return GateRules.BestSimpleMember(iv.memberScores) === shipped;
+  }
+
+  /**
+   * Whether the finalist candidate and the kept member are fitted with the same driver. False when either driver is not
+   * stored: a finalist that is not a named candidate, a request not stored, or a lineage that names another member.
+   */
+  private static sharesDriver(stored: StoredDecision, shipped: string): boolean {
+    const finalist = stored.Gate.intervals.modelName;
+    const finalistDriver = stored.Request === null ? undefined : stored.Request.candidates.find((c) => c.name === finalist)?.driverKey;
+    if (finalistDriver === undefined) return false;
+    return TrustVerdicts.shippedDriverOf(stored.Lineage, shipped) === finalistDriver;
+  }
+
+  /** The `shippedDriver` a model lineage records for `member`; null when the lineage is absent, unreadable or names another member. */
+  private static shippedDriverOf(lineageJson: string | null, member: string): string | null {
+    if (lineageJson === null) return null;
+    let parsed: unknown; // JSON.parse output is untyped until the object checks below narrow it
+    try {
+      parsed = JSON.parse(lineageJson);
+    } catch {
+      return null;
+    }
+    if (typeof parsed !== 'object' || parsed === null || !('shippedMember' in parsed) || !('shippedDriver' in parsed)) return null;
+    return parsed.shippedMember === member && typeof parsed.shippedDriver === 'string' ? parsed.shippedDriver : null;
   }
 }

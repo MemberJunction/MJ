@@ -91,6 +91,7 @@ const model = {
 
 const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
 const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
+const KEEP_GLM: GateDecision = { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null };
 
 /** The `ValidationResults` a unit training run stores, with this gate decision measured on 1,205 holdout rows. */
 function storedResults(decision: GateDecision): string {
@@ -109,13 +110,31 @@ function storedResults(decision: GateDecision): string {
   });
 }
 
+/**
+ * A run that kept the GLM while its finalist `lr-tuned` was a logistic-regression candidate (the request names its
+ * driver); the comparison between them is not 0 [0, 0].
+ */
+function keptGlmResults(): string {
+  const parsed: { gate: StoredGateRecord } & Record<string, unknown> = JSON.parse(storedResults(KEEP_GLM));
+  parsed.gate = {
+    ...parsed.gate,
+    intervals: { ...parsed.gate.intervals, modelName: 'lr-tuned', modelVsBestSimple: { value: 0.004, lower: -0.001, upper: 0.009 }, memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } }, memberScores: { glm: 0.3652 } },
+  };
+  parsed['trainerRequest'] = {
+    evaluationProtocolId: 'EP-1', seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
+    candidates: [{ name: 'lr-tuned', algorithmId: 'A-1', driverKey: 'logistic_regression', hyperparameters: {} }],
+  };
+  return JSON.stringify(parsed);
+}
+
 /** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
-function fakeEngine(validationResults: string | null = storedResults(SHIPPED)) {
+function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
+  const published = { ...model, Lineage: lineage } as MJMLModelEntity;
   return {
     Config: vi.fn(async () => undefined),
-    Models: [model],
+    Models: [published],
     Sessions: [],
-    PublishedModels: [model],
+    PublishedModels: [published],
     // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
     TrainingRuns: [
       { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
@@ -149,8 +168,8 @@ const settle = async (fixture: ComponentFixture<PSPredictionsResourceComponent>)
   fixture.detectChanges();
 };
 
-async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null) {
-  const engine = fakeEngine(validationResults);
+async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null) {
+  const engine = fakeEngine(validationResults, lineage);
   vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as PredictiveStudioEngine);
   const fixture = RenderComponentFixture(PSPredictionsResourceComponent, {
     imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, GridStub],
@@ -202,6 +221,18 @@ describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate
     expect(banner?.querySelector('.ps-trust-explain')?.textContent?.trim()).toBe('The model beats the flat guess.');
     expect(banner?.querySelector('.ps-trust-evidence')?.textContent?.trim()).toBe('Checked against 1,205 past records it had never seen.');
     expect(banner?.querySelector('.fa-star')).toBeNull();
+  });
+
+  it("reads the model's lineage: a kept GLM fitted with the finalist's driver makes no lost-comparison claim", async () => {
+    const { fixture } = await renderCatalog(defaultProvider(), keptGlmResults(), JSON.stringify({ shippedMember: 'glm', shippedDriver: 'logistic_regression' }));
+    expect(Query(fixture, '[data-testid="ps-prediction-card"] .ps-biz-card-line')?.textContent?.trim())
+      .toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss).');
+  });
+
+  it('without the shipped driver in the lineage, the same kept GLM keeps the lost-comparison claim', async () => {
+    const { fixture } = await renderCatalog(defaultProvider(), keptGlmResults(), null);
+    expect(Query(fixture, '[data-testid="ps-prediction-card"] .ps-biz-card-line')?.textContent?.trim())
+      .toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss); the trained model did not beat it.');
   });
 
   it('a published model whose run stores no-signal does not open, and says why', async () => {

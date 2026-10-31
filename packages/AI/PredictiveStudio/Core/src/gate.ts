@@ -154,7 +154,8 @@ export interface GateReason {
  */
 export class GateRules {
   private static readonly noSignal: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
-  private static readonly heuristicPrefix = 'heuristic:';
+  /** How a member name marks the unit's existing heuristic rule (`heuristic:<name>`). */
+  public static readonly HeuristicPrefix = 'heuristic:';
 
   /** "Beats" = the comparison's lower bound is strictly above the margin (a bound equal to the margin does not beat). */
   public static BeatsByMargin(iv: StoredInterval, margin: NonNegative): boolean {
@@ -267,7 +268,7 @@ export class GateRules {
       case 'seasonal-naive':
         return 'seasonalNaive';
       case 'incumbent-heuristic':
-        return `${GateRules.heuristicPrefix}${spec.name}`;
+        return `${GateRules.HeuristicPrefix}${spec.name}`;
     }
   }
 
@@ -293,7 +294,7 @@ export class GateRules {
     }
     const modelVsDummy = result.comparisons['modelVsDummy'];
     if (modelVsDummy === undefined) return { Ok: false, MissingComparison: 'modelVsDummy' };
-    const best = GateRules.bestSimpleMember(memberScores);
+    const best = GateRules.BestSimpleMember(memberScores);
     let modelVsBestSimple: StoredInterval | null = null;
     if (best !== null) {
       const vsBest = result.comparisons[`modelVs:${best}`];
@@ -326,8 +327,8 @@ export class GateRules {
       case 'b:keep-simple-baseline': {
         const shipped = d.shipped;
         const vsDummy = GateRules.formatOrUnreported(iv.memberVsDummy[shipped]);
-        if (shipped.startsWith(GateRules.heuristicPrefix)) {
-          return { code: 'heuristic-carries-signal', text: `The existing rule "${shipped.slice(GateRules.heuristicPrefix.length)}" beats the flat guess by ${vsDummy} (${metric}) and the model does not beat it by the margin: keep the rule.` };
+        if (shipped.startsWith(GateRules.HeuristicPrefix)) {
+          return { code: 'heuristic-carries-signal', text: `The existing rule "${shipped.slice(GateRules.HeuristicPrefix.length)}" beats the flat guess by ${vsDummy} (${metric}) and the model does not beat it by the margin: keep the rule.` };
         }
         return { code: 'simple-baseline-carries-signal', text: `The simple baseline ${shipped} beats the flat guess by ${vsDummy} (${metric}); the trained model does not beat it, so the simple baseline is kept.` };
       }
@@ -361,8 +362,11 @@ export class GateRules {
     return { value: c.value, lower: c.ci[0], upper: c.ci[1] };
   }
 
-  /** The lowest score, first in name order on a tie (the sidecar picks the best simple member the same way). */
-  private static bestSimpleMember(scores: Readonly<Record<string, number>>): string | null {
+  /**
+   * The best simple member: the lowest holdout score, first in name order on a tie (the sidecar picks it the same way).
+   * `modelVsBestSimple` is the model's comparison with this member.
+   */
+  public static BestSimpleMember(scores: Readonly<Record<string, number>>): string | null {
     const best = GateRules.minByKeyOrder(scores);
     return best === null ? null : best.key;
   }
