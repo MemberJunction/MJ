@@ -39,6 +39,19 @@ describe('TextChunker offsets', () => {
         expect(text.slice(last.StartOffset, last.EndOffset)).not.toContain('Alpha');
     });
 
+    it('resolves offsets to the right occurrence when repeated sentences contain mid-sentence periods', () => {
+        const text =
+            'Gain was 3.48 dB, i.e., high. Alpha notes follow here. ' +
+            'Gain was 3.48 dB, i.e., high. Gamma notes follow here.';
+
+        const chunks = TextChunker.ChunkText({ Text: text, MaxChunkTokens: 10, OverlapTokens: 0, Strategy: 'sentence' });
+        expect(chunks.length).toBeGreaterThan(1);
+        for (const chunk of chunks) {
+            expect(text.slice(chunk.StartOffset, chunk.EndOffset)).toBe(chunk.Text);
+        }
+        expect(chunks[chunks.length - 1].Text).toContain('Gamma');
+    });
+
     it('produces monotonically non-decreasing offsets across chunks', () => {
         const text = Array.from({ length: 20 }, () => 'Repeated identical sentence.').join(' ');
         const chunks = TextChunker.ChunkText({ Text: text, MaxChunkTokens: 10, OverlapTokens: 0, Strategy: 'sentence' });

@@ -46,6 +46,27 @@ describe('TextChunker', () => {
                 expect(trimmed.endsWith('.') || trimmed === text.trim()).toBe(true);
             }
         });
+
+        // A "." not followed by whitespace (decimal, abbreviation, DOI) used to make the splitter
+        // silently drop every character from the sentence start up to that point.
+        const words = (s: string) => s.split(/\s+/).filter(Boolean);
+        it.each([
+            'Light carries momentum. This was observed near the sun, i.e., the tail points away. Next sentence.',
+            'The efficiency rose to 21.6% at 3.48 V in total. Second sentence here.',
+            'See doi 10.1177/0003702819859940 for details. Done.',
+        ])('should keep every word of %j', (text) => {
+            const result = TextChunker.ChunkText({ Text: text, MaxChunkTokens: 1500, OverlapTokens: 0, Strategy: 'sentence' });
+            expect(words(result.map((c) => c.Text).join(' '))).toEqual(words(text));
+        });
+
+        it('should lose no words across many chunks of mixed prose', () => {
+            const text = Array.from({ length: 60 }, (_, i) =>
+                `Run ${i} measured 3.${i} V at sagepub.com/x${i}, i.e., about ${i}.5% gain! Was it e.g. stable? Yes.`
+            ).join(' ');
+            const result = TextChunker.ChunkText({ Text: text, MaxChunkTokens: 40, OverlapTokens: 0, Strategy: 'sentence' });
+            expect(result.length).toBeGreaterThan(1);
+            expect(words(result.map((c) => c.Text).join(' '))).toEqual(words(text));
+        });
     });
 
     describe('paragraph strategy', () => {
