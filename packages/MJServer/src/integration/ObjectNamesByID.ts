@@ -18,6 +18,7 @@
  * caller decides whether an empty resolution is fatal (an apply refuses it).
  */
 import { RunView, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
     IntegrationEngineBase,
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
@@ -31,7 +32,7 @@ export const OBJECT_ID_LOOKUP_CHUNK = 200;
 /** What the lookup reads off a per-connection object. */
 type CatalogIdentity = Pick<CompanyIntegrationObjectRow, 'ID' | 'Name' | 'IntegrationObjectID'>;
 
-const quote = (value: string): string => `'${value.replace(/'/g, "''")}'`;
+const quote = (value: string): string => `'${EscapeSQLString(value)}'`;
 
 /**
  * Resolves object ids to names for the connection in catalog scope (or the shared catalog when

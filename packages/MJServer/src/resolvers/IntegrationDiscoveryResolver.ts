@@ -6150,8 +6150,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         MaxRows: 1,
                         ResultType: 'simple',
                         BypassCache: true,
+                        SkipTotalRowCount: true,
                     }, user);
                     const hadPriorMaps = priorMapsResult.Success && priorMapsResult.Results.length > 0;
+                    // One value for both ways the sync starts: the restart path queues it below, and
+                    // the skipRestart branch starts the sync itself from the build it is handed.
+                    const fullSync = input.FullSync ?? !hadPriorMaps;
 
                     const pendingPayload: RSUPendingWork = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
@@ -6161,7 +6165,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         CronExpression: connInput.CronExpression,
                         ScheduleTimezone: connInput.ScheduleTimezone,
                         StartSync: input.StartSync,
-                        FullSync: input.FullSync ?? !hadPriorMaps,
+                        FullSync: fullSync,
                         SyncScope: input.SyncScope === 'all' ? 'all' : 'created',
                         // Unrecognized directions fall back to undefined = "use the entity map's own SyncDirection"
                         SyncDirection: input.SyncDirection && isValidSyncDirection(input.SyncDirection) ? input.SyncDirection : undefined,
@@ -6182,6 +6186,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         rsuInput,
                         // carried so the skipRestart branch can apply remove-as-disable
                         resolvedNames,
+                        // carried so the skipRestart branch starts the sync the restart path queues
+                        fullSync,
                     };
                 }))
             );
@@ -6192,6 +6198,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 connector: BaseIntegrationConnector;
                 companyIntegration: MJCompanyIntegrationEntity;
                 resolvedNames: string[];
+                fullSync: boolean;
                 schemaName: string;
                 objects: SchemaPreviewObjectInput[];
                 schemaOutput: SchemaBuilderOutput;
@@ -6298,7 +6305,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     const shouldStartSync = input.StartSync !== false &&
                         (input.SyncScope === 'all' || createdMapIDs.length > 0);
                     const syncRunID = shouldStartSync
-                        ? await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
+                        ? await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user, scopedMapIDs, build.fullSync)
                         : null;
                     if (syncRunID) connResult.SyncRunID = syncRunID;
 
@@ -6697,7 +6704,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
-            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true });
+            const md = provider as unknown as IMetadataProvider;
             const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, md);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
             const rv = new RunView();
@@ -6978,7 +6986,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
             const rekeyedObjects = await ClearRekeyedObjectData(
-                rekeyTargets, companyIntegrationID, user, md
+                rekeyTargets, companyIntegrationID, user, provider
             );
 
             // ── Phase 7 — U10: reset the Pull watermark of every CHANGED object so the next sync
