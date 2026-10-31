@@ -38,6 +38,7 @@
     "packages/ExternalDataSources/*",
     "packages/ExternalDataSources/Providers/*",
     "packages/APIKeys/*",
+    "packages/OfficeAddins/*",
     "packages/OpenApp/*",
     "packages/Integration/*",
     "packages/Archiving/*",

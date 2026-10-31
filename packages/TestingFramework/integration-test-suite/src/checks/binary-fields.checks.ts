@@ -39,7 +39,7 @@ import {
     Base64ToBytes, Base64ToFloat32Vector, BytesToBase64, Float32VectorToBase64, IsValidBase64,
 } from '@memberjunction/global';
 import type { MJEntityRecordDocumentEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -65,11 +65,6 @@ const VECTOR_SURFACES: readonly VectorSurface[] = [
     { Entity: 'MJ: Components', JsonField: 'FunctionalRequirementsVector', BinaryField: 'FunctionalRequirementsVectorBinary' },
     { Entity: 'MJ: Components', JsonField: 'TechnicalDesignVector', BinaryField: 'TechnicalDesignVectorBinary' },
 ];
-
-/** Loud, uniform skip-as-pass note. */
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ binary-fields.${checkId} SKIPPED — ${reason}`);
-}
 
 function rv(ctx: IntegrationCheckContext): RunView {
     return RunView.FromMetadataProvider(ctx.Provider);
@@ -213,8 +208,7 @@ export const BinaryFieldsChecks: NamedCheck[] = [
             const named = await runSimple<Record<string, unknown>>(ctx, { EntityName: entityName, MaxRows: 3, Fields: ['ID', 'VectorBinary'] });
 
             if (before.length === 0) {
-                skipNote('BF2', `'${entityName}' has no rows — key presence cannot be observed (empty result shape trivially agrees)`);
-                return;
+                SkipCheck(`'${entityName}' has no rows, so key presence cannot be observed (an empty result shape trivially agrees)`);
             }
             for (const [label, rows] of [['default', before], ['default after a flagged read', after]] as const) {
                 Assert(rows.every(r => !('VectorBinary' in r)), `${label}: a binary field was returned without being asked for`);
@@ -248,8 +242,7 @@ export const BinaryFieldsChecks: NamedCheck[] = [
                 }
             }
             if (checked === 0) {
-                skipNote('BF3', 'no row holds a binary vector yet — nothing has been embedded since the binary columns were added');
-                return;
+                SkipCheck('no row holds a binary vector yet: nothing has been embedded since the binary columns were added');
             }
             Assert(problems.length === 0, `stored binary vectors: ${problems.slice(0, 10).join('; ')}${problems.length > 10 ? ` … (+${problems.length - 10})` : ''}`);
             console.log(`      → ${checked} stored binary vector(s) decode cleanly and match their JSON companion`);
@@ -261,7 +254,7 @@ export const BinaryFieldsChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const refs = await findErdReferences(ctx);
-            if (!refs) { skipNote('BF4', 'no Entity Document or Vector Index to hang a fixture row off'); return; }
+            if (!refs) { SkipCheck('no Entity Document or Vector Index to hang a fixture row off'); }
             const original = allByteValues();
             const replacement = original.slice().reverse().map(b => b ^ 0x5a);
             let row: MJEntityRecordDocumentEntity | null = null;
@@ -293,7 +286,7 @@ export const BinaryFieldsChecks: NamedCheck[] = [
         Name: 'BF5: a non-base64 value in a binary field is refused before any INSERT, naming base64',
         Fn: async (ctx): Promise<void> => {
             const refs = await findErdReferences(ctx);
-            if (!refs) { skipNote('BF5', 'no Entity Document or Vector Index to hang a fixture row off'); return; }
+            if (!refs) { SkipCheck('no Entity Document or Vector Index to hang a fixture row off'); }
             const row = await newErdRow(ctx, refs, 'bf5', 'this is not base64!');
             try {
                 const saved = await row.Save();
@@ -312,7 +305,7 @@ export const BinaryFieldsChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const refs = await findErdReferences(ctx);
-            if (!refs) { skipNote('BF6', 'no Entity Document or Vector Index to hang a fixture row off'); return; }
+            if (!refs) { SkipCheck('no Entity Document or Vector Index to hang a fixture row off'); }
             const source = Array.from({ length: 1536 }, (_, i) => Math.sin(i * 0.37) / (1 + (i % 7)));
             const expected = Float32Array.from(source);
             let row: MJEntityRecordDocumentEntity | null = null;

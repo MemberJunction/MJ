@@ -28,10 +28,21 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
   SQLServerProviderConfigData: class {},
 }));
 
-vi.mock('@memberjunction/generic-database-provider', () => ({
-  resolveDbPlatformFromEnv: () => 'sqlserver',
-  UserCache: { Instance: {} },
+vi.mock('@memberjunction/postgresql-dataprovider', () => ({
+  PostgreSQLDataProvider: class {
+    Config = mockProviderConfig;
+  },
+  PostgreSQLProviderConfigData: class {},
 }));
+
+vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/generic-database-provider')>();
+  return {
+    ...actual,
+    resolveDbPlatformFromEnv: () => 'sqlserver' as const,
+    UserCache: { Instance: {} } as typeof actual.UserCache,
+  };
+});
 
 vi.mock('@memberjunction/api-keys', () => ({
   GetAPIKeyEngine: vi.fn(),

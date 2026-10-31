@@ -210,13 +210,33 @@ gate is honored identically everywhere. Gating exists at two granularities:
 - **Whole-test**: a metadata Test's `Configuration.tier` (or an explicit `requiresEnv` env-var
   override). When gated off, the driver reports a real **`Skipped`** status with one `gate`
   oracle whose message reads `Skipped: <VAR> not set (tier '<tier>')`. A skipped test is
-  visible in every summary (`X passed / Y failed / Z skipped`) and never counts as passed —
-  but it doesn't fail the suite either.
+  visible in every summary (`X passed / Y failed / Z skipped`) and never counts as passed.
+  A tier gate (`mutation`, `live-model`) is an allowed skip; an explicit `requiresEnv` gate is
+  not, so it fails the suite run (see *Skips fail the run* below).
 - **Per-check**: `RequiresMutation` / `RequiresLiveModel` flags on individual `NamedCheck`s
   inside an otherwise-deterministic bundle (e.g. the save/delete invalidation checks in the
   server-cache bundle). Gated-off checks are recorded as skipped oracle entries (never
   silently dropped). A bundle selector can also opt mutation checks in declaratively via
   `config.runMutationTests: true`, independent of env.
+
+**Skips fail the run.** A skipped check verified nothing, so `mj test suite` exits `1` when an
+integration run has a skip that is not allowed, a bundle whose checks all skipped without an
+allowance, or a registered check of a selected bundle that produced no result. Allowed skips are:
+
+- checks flagged `RequiresMutation` (the PR lane leaves `RUN_MUTATION_TESTS` unset on purpose) and
+  `RequiresLiveModel` (no model credentials on the deterministic lane), and the matching whole-test
+  tier gates — the driver allows these without a list entry;
+- checks on the allowlist in
+  [`integration-test-suite/src/skip-allowlist.ts`](../packages/TestingFramework/integration-test-suite/src/skip-allowlist.ts),
+  each with a gate and a one-line reason: `mutation`, `credentials`, `fixture` (data CI deliberately
+  does not seed), `not-applicable` (nothing on the stock schema or catalog to examine, or a leg for
+  another database platform) or `pending-ruling` (waiting on someone else's decision). A bare
+  bundle name allows a Test parked by `requiresEnv` when every bundle it selects is listed.
+
+A check that cannot run ends with `SkipCheck('<what is missing>')` from
+`@memberjunction/testing-integration`, never with a log line and `return` — a return scores as a
+pass. The run's output lists every allowed skip with its reason under **Skip gate**, then every
+unexpected skip, skipped bundle and missing check that failed it.
 
 Adjacent gates outside the tier enum: the Predictive Studio *flow* rigs
 (`integration-test-suite/rigs/ps-*.ts`) run only under `PS_INTEGRATION=1` (they also need the
@@ -349,7 +369,7 @@ strategies together:
 ## 3. Running the tier
 
 Everything runs **from the repo root** (`.env` / `mj.config.cjs` resolution is cwd-relative).
-Exit codes are uniform across every entry point: **`0` passed (or cleanly skipped) · `1`
+Exit codes are uniform across every entry point: **`0` passed (allowed skips only) · `1`
 failures · `2` bootstrap/connectivity error**.
 
 ### 3.1 One-time setup — seed the metadata (load-bearing)
@@ -729,8 +749,9 @@ TypeScript:
   `Integration Tests` parent) with any membership/ordering; `Status: "Skip"` on a membership
   row parks a test without deleting it.
 
-- **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then skip-passes unless
-  `MY_FLAG=1`, overriding the tier-derived gate.
+- **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then reports `Skipped` unless
+  `MY_FLAG=1`, overriding the tier-derived gate. That skip fails a suite run that includes the
+  test unless every bundle it selects has a bundle-level allowlist entry saying why it is parked.
 
 Push with `pnpm mj sync push --dir=metadata-optional/integration-test` and run via `mj test`.
 
@@ -810,7 +831,8 @@ coverage loss):
 | `remote-op-ai-authoring` | RO4-1→RO4-3 (3) | server | AI-generated Remote Operation | IT19 (live-model) | The AI-authored operation loop (save → approve → emit) |
 | `lists` | LS1–LS3 (3) | server | List fixture | IT20 | Lists substrate + the ListSource keyset-pagination change |
 | `open-app-teardown` | OAT1–OAT2 (2) | server | seeded Open-App metadata | IT21 | Open-App metadata teardown seam |
-| `user-routines` | UR1–UR16 (16) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end |
+| `user-routines` | UR1–UR18 (18) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end; UR17–UR18 the manual-run path (`RunRoutineNow`) keeps a one-shot's schedule |
+| `chief-of-staff` | COS1–COS8 (8) | server | own policy (skips COS6–COS8 if one exists) + routine fixtures | IT138 | Chief of Staff MJ-core layers, no Open App: policy and request ownership guards, Run User Routine Now, the policy cache following a save, email approval before transport |
 | `metadata-consistency` | 7 | server | — | IT24 | Read-only audit: entity metadata vs the physical DB catalog |
 | `view-execution` | 9 | client | — | IT25 | Viewing-system deterministic tier, over the wire |
 | `app-wiring` | AW1–AW10 (10) | client | — | IT26 | Every shipped app wired correctly (parameterized over all apps) |

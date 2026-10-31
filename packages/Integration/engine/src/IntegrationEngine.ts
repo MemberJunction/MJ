@@ -757,6 +757,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             OrderBy: 'StartedAt DESC',
             Fields: ['ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // live liveness/progress read — must see the current row
         }, contextUser);
@@ -1671,6 +1672,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ID='${companyIntegrationID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
@@ -3797,6 +3799,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.ID}'`,
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // write-back targets the committed external-id mapping
         }, contextUser);
@@ -6051,6 +6054,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
             Fields: ['ID', 'EntityRecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // upsert-by-identity: a stale miss here re-creates a duplicate record map
         }, contextUser);
@@ -6300,8 +6304,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!detailInfo?.SchemaName || !detailInfo.BaseTable || !ciId) return;
 
             // Cutoff = StartedAt of the Nth-most-recent run for this CI. If there aren't MORE than
-            // `keep` runs, there's nothing to prune. Reads `keep + 1` rows and counts them rather than
-            // reading TotalRowCount, which a `MaxRows: 1` read (keep = 1) no longer fills (#6000).
+            // `keep` runs, there's nothing to prune. Reads `keep + 1` rows and counts them.
             const recent = await new RunView().RunView<{ StartedAt: Date | string }>({
                 EntityName: runInfo.Name,
                 ExtraFilter: `CompanyIntegrationID='${String(ciId).replace(/'/g, "''")}'`,

@@ -572,6 +572,7 @@ export class OutputMappingWriter {
             ExtraFilter: `[${matchField}] = '${EscapeSQLString(text)}'`,
             Fields: [keyName],
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, this.Options.ContextUser);
         if (!res.Success) {
             throw new Error(`applyOutputMapping: RunView failed for lookup on '${related}': ${res.ErrorMessage || 'unknown error'}`);
