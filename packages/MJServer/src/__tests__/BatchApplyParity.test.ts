@@ -45,8 +45,9 @@ function methodBody(name: string): string {
 describe('MJ-APPLY-12 first-apply full sync', () => {
   it('the batch resolves FullSync from prior maps, not from a bare false', () => {
     const body = methodBody('IntegrationApplyAllBatch');
-    expect(body).toMatch(/FullSync:\s*input\.FullSync\s*\?\?\s*!hadPriorMaps/);
-    expect(body).not.toMatch(/FullSync:\s*input\.FullSync\s*\?\?\s*false/);
+    expect(body).toMatch(/const fullSync = input\.FullSync\s*\?\?\s*!hadPriorMaps;/);
+    expect(body).toMatch(/FullSync:\s*fullSync,/);
+    expect(body).not.toMatch(/input\.FullSync\s*\?\?\s*false/);
   });
 
   it('ApplyAllBatchInput.FullSync has NO defaultValue, or the coalesce is dead again', () => {
@@ -68,6 +69,27 @@ describe('MJ-APPLY-12 first-apply full sync', () => {
     const body = methodBody('IntegrationApplyAllBatch');
     expect(body).toMatch(/CompanyIntegrationID='\$\{sqlUuid\(connInput\.CompanyIntegrationID, 'CompanyIntegrationID'\)\}'/);
     expect(body).not.toMatch(/connInput\.CompanyIntegrationID\.replace\(/);
+  });
+
+  it('the skipRestart branch starts its sync with the RESOLVED FullSync, as the restart path queues it', () => {
+    // The restart path carries the coalesced value in its PendingWork; the skipRestart branch starts
+    // the sync itself. Passing the raw input there means an omitted FullSync is undefined, which
+    // startSyncAfterApply reads as incremental — against tables the apply just created.
+    const body = methodBody('IntegrationApplyAllBatch');
+    const call = body.match(/this\.startSyncAfterApply\(build\.connInput\.CompanyIntegrationID,[^)]*\)/);
+    expect(call, 'skipRestart sync start not found').not.toBeNull();
+    expect(call![0]).not.toMatch(/input\.FullSync/);
+    expect(call![0]).toMatch(/build\.fullSync\)$/);
+    expect(body).toMatch(/^\s*fullSync,$/m);
+  });
+
+  it('the prior-maps probe skips the row count, as the single path does', () => {
+    // MaxRows: 1 is an existence probe; without SkipTotalRowCount the provider follows every hit
+    // with a COUNT(*) over the connection's maps.
+    const body = methodBody('IntegrationApplyAllBatch');
+    const probe = body.slice(body.indexOf('const priorMapsResult'), body.indexOf('const hadPriorMaps'));
+    expect(probe).toMatch(/MaxRows:\s*1,/);
+    expect(probe).toMatch(/SkipTotalRowCount:\s*true/);
   });
 });
 
