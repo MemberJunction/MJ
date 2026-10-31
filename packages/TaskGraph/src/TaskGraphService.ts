@@ -28,6 +28,7 @@ import {
     MJTaskEntity,
     MJTaskDependencyEntity,
     MJTaskTypeEntity,
+    MJAIAgentEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
 import {
@@ -44,8 +45,9 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
-import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
@@ -80,6 +82,12 @@ export type TaskGraphSubmitContext = {
     Provider: IMetadataProvider;
     /** The agent run that emitted this graph, for provenance and `reinvoke` routing. */
     AgentRunID?: string | null;
+    /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * run that emitted this graph, persisted on the parent row so dispatched tasks inherit the
+     * hierarchy directly without walking ancestor runs in a loop.
+     */
+    ParentAgentHierarchy?: string[];
     /**
      * How many continuation hops produced this graph. A graph submitted by an agent that was itself
      * re-invoked by a finished graph carries its parent's depth + 1.
@@ -116,6 +124,12 @@ export type TaskGraphParentMetadata = {
      */
     failureSemantics?: 'block' | 'edges';
     submittedByAgentRunID: string | null;
+    /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * submitting run, persisted so dispatched tasks inherit the hierarchy directly without walking
+     * ancestor runs in a loop.
+     */
+    parentAgentHierarchy?: string[];
     /**
      * Who the graph belongs to.
      *
@@ -199,6 +213,12 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
     try {
         const parsed = JSON.parse(raw) as Partial<TaskGraphParentMetadata>;
         if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_PARENT_METADATA };
+        const parentAgentHierarchy = Array.isArray(parsed.parentAgentHierarchy)
+            ? parsed.parentAgentHierarchy
+                .filter((name): name is string => typeof name === 'string')
+                .map((name) => name.trim())
+                .filter((name) => name.length > 0)
+            : undefined;
         return {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
@@ -214,6 +234,9 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
             continuationDeliveredAs: DELIVERY_OUTCOMES.has(parsed.continuationDeliveredAs as string)
                 ? parsed.continuationDeliveredAs
+                : undefined,
+            parentAgentHierarchy: parentAgentHierarchy && parentAgentHierarchy.length > 0
+                ? parentAgentHierarchy
                 : undefined,
         };
     } catch {
@@ -232,15 +255,23 @@ export function BuildTaskGraphParentInputPayload(args: {
     failureSemantics: NonNullable<TaskGraphParentMetadata['failureSemantics']>;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
+    parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
 }): Record<string, unknown> {
+    const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
+        ? args.parentAgentHierarchy
+            .filter((name): name is string => typeof name === 'string')
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+        : [];
     return {
         continuation: args.continuation,
         reinvokeDepth: args.reinvokeDepth,
         failureSemantics: args.failureSemantics,
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
@@ -344,8 +375,12 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     const config: TaskStepConfiguration = {};
 
     const agent = ConfigOf(node, 'Agent');
-    if (agent?.message || agent?.templateParameters) {
-        config.agent = { message: agent.message, templateParameters: agent.templateParameters };
+    if (agent?.message || agent?.templateParameters || agent?.presetName) {
+        config.agent = {
+            message: agent.message,
+            templateParameters: agent.templateParameters,
+            ...(agent.presetName ? { presetName: agent.presetName } : {}),
+        };
     }
 
     const prompt = ConfigOf(node, 'Prompt');
@@ -660,6 +695,10 @@ export class TaskGraphService {
             ]);
             if (!agentIDsByName.Success) {
                 return { Success: false, ErrorMessage: agentIDsByName.ErrorMessage };
+            }
+            const presetCheck = this.validateAgentPresets(spec, agentIDsByName.Map!);
+            if (!presetCheck.Success) {
+                return { Success: false, ErrorMessage: presetCheck.ErrorMessage };
             }
             if (!actionIDsByName.Success) {
                 return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
@@ -1359,7 +1398,12 @@ export class TaskGraphService {
     // internals
     // ────────────────────────────────────────────────────────────────────────
 
-    /** Maps every referenced agent name to its ID, or reports all unresolvable names at once. */
+    /**
+     * Maps every referenced agent name to its ID, resolving only `Status = 'Active'` agents that
+     * `context.ContextUser` has permission to run (`AIAgentPermissionHelper.FilterRunnableAgents`).
+     * Reports all refused names at once, split into "unknown or inactive" (including agents the user
+     * cannot `'view'`) and "not runnable by you" (agents the user can `'view'` but cannot `'run'`).
+     */
     private async resolveAgents(
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
@@ -1376,7 +1420,13 @@ export class TaskGraphService {
             Names: names,
             Provider: context.Provider,
             ContextUser: context.ContextUser,
+            ActiveOnly: true,
             StripSubAgentPrefix: true,
+            FilterCandidates: (rows) =>
+                AIAgentPermissionHelper.FilterRunnableAgents(
+                    rows as Array<Pick<MJAIAgentEntity, 'ID' | 'Name' | 'Status'>>,
+                    context.ContextUser,
+                ),
             AllowCandidate: async (r) => {
                 if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
                     return AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
@@ -1389,14 +1439,88 @@ export class TaskGraphService {
         }
         const missing = resolved.Missing ?? [];
         if (missing.length > 0) {
+            const rejected = resolved.Rejected ?? new Map();
+            const unknownOrInactive: string[] = [];
+            const notRunnable: string[] = [];
+            for (const name of missing) {
+                const row = rejected.get(name);
+                if (!row) {
+                    unknownOrInactive.push(name);
+                    continue;
+                }
+                let canView = false;
+                try {
+                    canView = await AIAgentPermissionHelper.HasPermission(row.ID, context.ContextUser, 'view');
+                } catch (error) {
+                    LogError(
+                        `TaskGraphService.resolveAgents: view permission check failed for agent '${row.ID}': ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                }
+                if (!canView) {
+                    unknownOrInactive.push(name);
+                } else {
+                    notRunnable.push(name);
+                }
+            }
+            const parts: string[] = [];
+            if (unknownOrInactive.length > 0) {
+                parts.push(
+                    `${unknownOrInactive.length} unknown or inactive agent(s): ${unknownOrInactive.join(', ')}`,
+                );
+            }
+            if (notRunnable.length > 0) {
+                parts.push(
+                    `${notRunnable.length} agent(s) not runnable by you: ${notRunnable.join(', ')}`,
+                );
+            }
             return {
                 Success: false,
                 ErrorMessage:
-                    `Task graph "${spec.workflowName}" references ${missing.length} unknown agent(s): ${missing.join(', ')}. ` +
+                    `Task graph "${spec.workflowName}" references ${parts.join('; ')}. ` +
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
         return { Success: true, Map: resolved.Map };
+    }
+
+    /**
+     * Validates that every Agent node specifying a `presetName` references an Active preset of its
+     * resolved agent (`Name` then `DisplayName`, trimmed and case-insensitive), reporting all invalid
+     * `(node, preset)` pairs in a single error message.
+     */
+    private validateAgentPresets(
+        spec: TaskGraphSpec,
+        agentIDsByName: Map<string, string>,
+    ): { Success: boolean; ErrorMessage?: string } {
+        const invalid: Array<{ nodeLabel: string; agentName: string; presetName: string }> = [];
+        for (const node of spec.tasks) {
+            const agent = ConfigOf(node, 'Agent');
+            const presetName = agent?.presetName?.trim();
+            if (!presetName) continue;
+            const agentID = agentIDsByName.get(agent!.agentName);
+            if (!agentID) continue;
+
+            const matched = AIEngine.Instance.FindActiveAgentConfigurationPreset(agentID, presetName);
+            if (!matched) {
+                invalid.push({
+                    nodeLabel: node.name || node.tempId,
+                    agentName: agent!.agentName,
+                    presetName,
+                });
+            }
+        }
+
+        if (invalid.length > 0) {
+            const pairs = invalid
+                .map((item) => `"${item.nodeLabel}" (agent "${item.agentName}", preset "${item.presetName}")`)
+                .join(', ');
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" references ${invalid.length} unknown agent preset(s): ${pairs}.`,
+            };
+        }
+        return { Success: true };
     }
 
     /**
@@ -1573,6 +1697,7 @@ export class TaskGraphService {
             failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
+            parentAgentHierarchy: context.ParentAgentHierarchy,
             invocation: sanitized.Envelope
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,

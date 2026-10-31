@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import type { ActionParam } from '@memberjunction/actions-base';
+import type { MediaOutput } from '@memberjunction/ai-core-plus';
+import type { MJActionEntityExtended } from '@memberjunction/core-entities';
+import { BaseAgent } from '../base-agent';
 
 /**
  * Regression test confirming that `MediaOutput.persist` has been fully removed
@@ -11,6 +15,12 @@ import { describe, it, expect } from 'vitest';
  * `MediaOutput` interface shape and the `AgentRunner` save path don't filter
  * on `persist`.
  */
+
+type InterceptAgent = {
+    MediaOutputs: MediaOutput[];
+    interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: MJActionEntityExtended): ActionParam[];
+    resolveMediaPlaceholdersInPayload<T>(payload: T): T;
+};
 
 describe('MediaOutput persist field removal', () => {
     it('MediaOutput items without persist pass through unfiltered (regression guard)', () => {
@@ -28,3 +38,88 @@ describe('MediaOutput persist field removal', () => {
         expect(mediaToSave.map(m => m.data)).toEqual(['a', 'b', 'c']);
     });
 });
+
+describe('BaseAgent.interceptLargeBinaryContent — stored-only MediaOutput items', () => {
+    it('promotes a MediaOutput item that carries fileId without inline data and replaces the param value with the placeholder', () => {
+        const agent = new BaseAgent() as unknown as InterceptAgent;
+        const actionEntity = {
+            Params: {
+                Items: [{ Name: 'Videos', ValueType: 'MediaOutput' }],
+            },
+        } as unknown as MJActionEntityExtended;
+
+        const actionParams: ActionParam[] = [
+            {
+                Name: 'Videos',
+                Type: 'Output',
+                Value: [
+                    {
+                        modality: 'Video',
+                        mimeType: 'video/mp4',
+                        fileId: 'file-video-1',
+                        label: 'generated-video-1.mp4',
+                        durationSeconds: 8,
+                    } satisfies MediaOutput,
+                ],
+            },
+        ];
+
+        const sanitized = agent.interceptLargeBinaryContent(actionParams, actionEntity);
+
+        expect(agent.MediaOutputs).toHaveLength(1);
+        const promoted = agent.MediaOutputs[0];
+        expect(promoted.modality).toBe('Video');
+        expect(promoted.mimeType).toBe('video/mp4');
+        expect(promoted.fileId).toBe('file-video-1');
+        expect(promoted.data).toBeUndefined();
+        expect(promoted.refId).toMatch(/^media-/);
+
+        expect(sanitized).toHaveLength(1);
+        expect(sanitized[0].Value).toEqual({
+            mediaReferences: [`\${media:${promoted.refId}}`],
+            count: 1,
+            note: '1 media item(s) extracted and will be displayed to the user automatically.',
+        });
+    });
+
+    it('resolves ${media:refId} placeholders for fileId-only MediaOutput items to media.fileId without leaving literal placeholders', () => {
+        const agent = new BaseAgent() as unknown as InterceptAgent;
+        const actionEntity = {
+            Params: {
+                Items: [{ Name: 'Videos', ValueType: 'MediaOutput' }],
+            },
+        } as unknown as MJActionEntityExtended;
+
+        agent.interceptLargeBinaryContent(
+            [
+                {
+                    Name: 'Videos',
+                    Type: 'Output',
+                    Value: [
+                        {
+                            modality: 'Video',
+                            mimeType: 'video/mp4',
+                            fileId: 'file-video-42',
+                            label: 'clip.mp4',
+                        } satisfies MediaOutput,
+                    ],
+                },
+            ],
+            actionEntity,
+        );
+
+        const refId = agent.MediaOutputs[0].refId!;
+        const resolved = agent.resolveMediaPlaceholdersInPayload({
+            clipFileId: `\${media:${refId}}`,
+            nested: [`Video stored at \${media:${refId}}`],
+        });
+
+        expect(resolved).toEqual({
+            clipFileId: 'file-video-42',
+            nested: ['Video stored at file-video-42'],
+        });
+        expect(JSON.stringify(resolved)).not.toContain('${media:');
+    });
+});
+
+

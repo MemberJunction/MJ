@@ -816,6 +816,13 @@ export interface ActionRunScope {
    PrimaryScopeRecordID: string | null;
    /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
    SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+   /**
+    * The search scopes the run's host assigned (`ExecuteAgentParams.SearchScopeIDs`), or `null` when it assigned none.
+    * When set, Scoped Search searches only these, and the host's assignment stands in for the calling agent's own
+    * `SearchScopeAccess` and assigned-scope list, and the plain Search action refuses. The user's own permission on the
+    * scope still applies.
+    */
+   SearchScopeIDs?: string[] | null;
 }
 
 /**

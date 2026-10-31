@@ -5,6 +5,7 @@
       "Description": "Audio content (MP3, WAV, OGG, etc.). Delivered inline as audio_url where the model supports the modality.",
       "ParentID": null,
       "ContentType": "audio/*",
+      "DriverClass": "AudioArtifactViewerPlugin",
       "ToolLibraryClass": null,
       "IsEnabled": true,
       "Priority": 0,
