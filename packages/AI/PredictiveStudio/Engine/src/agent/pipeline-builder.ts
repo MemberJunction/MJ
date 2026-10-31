@@ -5,8 +5,9 @@
  * of Database Designer's schema builder and Agent Manager's `AgentSpecSync`. It takes an approved,
  * strongly-typed {@link ModelingPlanSpec} and, in pure code (NO LLM), crafts the actual metadata:
  * creates the `MJ: ML Training Pipelines` row, kicks off training, then **publishes the model only
- * if the trust verdict clears the bar** — the same `TrustVerdicts.DeriveTrustVerdict` gate the business UI uses, so
- * a coin-flip / unmeasured / leakage-flagged model is never silently published into the catalog.
+ * if the trust verdict clears the bar** — the same `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's
+ * stored gate decision the business UI uses, so a model the gate did not ship, a model trained without an Evaluation
+ * Protocol (not evaluated) or a leakage-flagged model is never silently published into the catalog.
  *
  * Every approved experiment is a candidate of ONE search on ONE pipeline. A pipeline with a Prediction Unit is bound
  * to an Evaluation Protocol before it trains, and the trainer picks the finalist on inner-fold scores (the simplest
@@ -31,6 +32,7 @@ import {
   type FeatureStepWarning,
   type HyperparameterValue,
   type ModelingPlanSpec,
+  type TrustComparison,
   type TrustVerdict,
 } from '@memberjunction/predictive-studio-core';
 
@@ -93,8 +95,8 @@ export interface BuildPredictionInput {
 /**
  * Leaderboard entry matching MLExperimentResultsSpec (its keys are the artifact's JSON keys). For a search, a row is a
  * candidate's inner-fold mean with its interval, labelled optimistic, and the trainer's finalist is the winner even
- * when it is not rank 1. For a pipeline trained without a search, the one row is the model's trust-verdict headline
- * metric, or null when it was not measured — never a stand-in number.
+ * when it is not rank 1. For a pipeline trained without a search, the one row is the stored comparison with the flat
+ * guess its trust verdict quotes, or null when the run stores none (not evaluated) — never a stand-in number.
  */
 export interface MLLeaderboardEntryPayload {
   /** The experiment iteration (or training run) the row came from. */
@@ -111,7 +113,7 @@ export interface MLLeaderboardEntryPayload {
   featureSet?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** The score in `metricName`; null when not measured. */
   score?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
-  /** Which metric `score` is (an inner-fold score such as `log-loss`, or a headline metric such as `AUC`); null when not measured. */
+  /** Which metric `score` is (an inner-fold score such as `log-loss`, or the gain over the flat guess in a metric); null when not measured. */
   metricName?: string | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** The lower bound of the inner-fold mean's interval; null when the row is not an inner-fold score. */
   innerLower?: number | null;  // case-violation-ok-legacy-back-compat: artifact JSON key
@@ -133,7 +135,7 @@ export interface BuildPredictionResult {
   pipelineId?: string;
   /** The trained `MJ: ML Models` id (present once training completes). */
   modelId?: string;
-  /** The plain-language trust verdict for the trained model. */
+  /** The plain-language trust verdict: the training run's stored gate decision rendered as copy. */
   trust?: TrustVerdict;
   /** Whether the model was published into the business catalog. */
   published: boolean;
@@ -204,7 +206,7 @@ export class PredictiveStudioPipelineBuilder {
         : await this.trainWithoutUnit(pipeline, approved, sidecarVersion, provider, user);
       const model = training.Train.model;
       if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, collectedWarnings);
-      const trust = TrustVerdicts.DeriveTrustVerdict(model);
+      const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults });
       const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
       const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
       return {
@@ -310,14 +312,15 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
-   * The one leaderboard row of a pipeline trained without a search: the model's trust-verdict headline metric (the
-   * number the headline shows), the winner only when it was measured.
+   * The one leaderboard row of a pipeline trained without a search: the stored comparison with the flat guess its trust
+   * verdict quotes (`TrustVerdict.Comparison`), the winner only when there is one. A run that stores no gate decision
+   * passes null: score null, never an invented number.
    */
-  public static SingleModelLeaderboard(runId: string, model: MJMLModelEntity, trust: TrustVerdict, algorithm: string): MLLeaderboardEntryPayload[] {
-    const score = trust.headlineMetric ? trust.headlineMetric.value : null;
+  public static SingleModelLeaderboard(runId: string, model: MJMLModelEntity, comparison: TrustComparison | null, algorithm: string): MLLeaderboardEntryPayload[] {
+    const score = comparison === null ? null : comparison.Value;
     return [{
       IterationID: runId, Metric: score, ModelID: model.ID, rank: 1, algorithm, featureSet: 'Pipeline feature set', score,
-      metricName: trust.headlineMetric ? trust.headlineMetric.key : null, innerLower: null, innerUpper: null, optimistic: false,
+      metricName: comparison === null ? null : comparison.Metric, innerLower: null, innerUpper: null, optimistic: false,
       modelId: model.ID, isWinner: score !== null,
     }];
   }
@@ -332,7 +335,8 @@ export class PredictiveStudioPipelineBuilder {
     if (train.model === null) throw new Error(`Training run ${train.run.ID} of pipeline ${pipeline.ID} (no Prediction Unit) completed without a model.`);
     // The pipeline was built from the first approved experiment (ModelingPlanToPipelineConfig refuses a plan without one).
     const [trained, ...untrained] = approved;
-    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, TrustVerdicts.DeriveTrustVerdict(train.model), trained.Label);
+    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: train.run.ValidationResults });
+    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, trust.Comparison, trained.Label);
     return { Train: train, Leaderboard: leaderboard, Untrained: untrained.map((e) => e.Label) };
   }
 
@@ -551,8 +555,8 @@ export class PredictiveStudioPipelineBuilder {
     if (leakageFlagged) {
       return { published: false, heldReason: 'Held for analyst review — training flagged a possible data-leakage issue.' };
     }
-    if (!trust.canAct) {
-      return { published: false, heldReason: trust.gateReason ?? 'Held — this prediction is not reliable enough to publish yet.' };
+    if (!trust.CanAct) {
+      return { published: false, heldReason: trust.Reason };
     }
     model.Status = 'Published';
     if (!(await model.Save())) {

@@ -140,6 +140,13 @@ function measuredModel(): MJMLModelEntity {
   return { ID: 'M-1', Version: 1, Metrics: null, HoldoutMetrics: JSON.stringify({ auc: 0.8 }), ProblemType: 'classification', FeatureImportance: null, Lineage: null } as unknown as MJMLModelEntity;
 }
 
+/** A model the builder may publish: it records how many times it was saved. */
+function publishableModel(): { readonly Entity: MJMLModelEntity; readonly Saves: number } {
+  const state = { Saves: 0 };
+  const entity = { ID: 'M-1', Version: 1, Status: 'Draft', HoldoutMetrics: JSON.stringify({ auc: 0.95 }), FeatureImportance: null, Lineage: null, LatestResult: null, Save: async () => { state.Saves += 1; return true; } };
+  return { Entity: entity as unknown as MJMLModelEntity, get Saves() { return state.Saves; } };
+}
+
 /**
  * A completed search run whose stored trainer result has these inner scores and finalist, and whose stored gate record
  * ships the finalist (`model`) or keeps the GLM (`keep-simple-baseline`).
@@ -196,11 +203,47 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(calls).toEqual([{ pipelineId: 'P-1', sidecarVersion: 'predictive-studio-agent' }]);
     expect(world.Saves.map((s) => s.Entity)).toEqual(['pipeline']);
     expect(result.untrainedExperiments).toEqual(['B', 'C']);
-    const headline = TrustVerdicts.DeriveTrustVerdict(measuredModel()).headlineMetric;
+    // The run stores no gate decision, so the one row has no number, whatever the model's own holdout metrics say.
+    expect(result.trust?.Kind).toBe('not-evaluated');
     expect(result.leaderboard).toEqual([{
-      IterationID: RUN_ID, Metric: headline?.value, ModelID: 'M-1', rank: 1, algorithm: 'A', featureSet: 'Pipeline feature set', score: headline?.value,
-      metricName: headline?.key, innerLower: null, innerUpper: null, optimistic: false, modelId: 'M-1', isWinner: true,
+      IterationID: RUN_ID, Metric: null, ModelID: 'M-1', rank: 1, algorithm: 'A', featureSet: 'Pipeline feature set', score: null,
+      metricName: null, innerLower: null, innerUpper: null, optimistic: false, modelId: 'M-1', isWinner: false,
     }]);
+  });
+
+  it('holds a model whose run stores no gate decision, with the not-evaluated reason, even when its own holdout metrics look good', async () => {
+    const world = new BuildWorld();
+    const model = publishableModel();
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: null } as unknown as MJMLTrainingRunEntity });
+    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
+    expect([result.success, result.published, result.trust?.CanAct, model.Saves]).toEqual([true, false, false, 0]);
+    expect(result.heldReason).toBe(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null }).Reason);
+  });
+
+  it("publishes a model whose run's stored gate decision ships it, and renders the verdict from that run", async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const run = completedRun([inner('A', 0.42), inner('B', 0.40)], 'B');
+    const model = publishableModel();
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run });
+    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    const gate = storedGate(run);
+    expect([result.published, result.heldReason, model.Saves, model.Entity.Status]).toEqual([true, null, 1, 'Published']);
+    expect(result.trust).toEqual(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults }));
+    expect(result.trust?.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'B', Value: gate.intervals.modelVsDummy.value, Lower: gate.intervals.modelVsDummy.lower, Upper: gate.intervals.modelVsDummy.upper, Metric: gate.primaryMetric });
+  });
+
+  it("holds a model whose run's stored gate decision is no-signal, with the stored reason", async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const run = completedRun([inner('A', 0.42)], 'A');
+    const noSignal = { ...storedEnvelope(run), gate: { ...storedGate(run), decision: { outcome: 'no-signal' as const, branch: 'c:no-signal' as const, shipped: null, shippedRole: null, note: null }, reason: { code: 'nothing-beats-dummy' as const, text: 'Neither the model nor any simple baseline beats the flat guess.' } } };
+    const model = publishableModel();
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: JSON.stringify(noSignal) } as unknown as MJMLTrainingRunEntity });
+    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
+    expect([result.published, result.heldReason, model.Saves]).toEqual([false, 'Neither the model nor any simple baseline beats the flat guess.', 0]);
   });
 
   it('refuses a plan with a bad experiment before any row is written, whichever branch it would take', async () => {

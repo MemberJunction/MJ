@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { ImportanceDisplay, EvaluationLineage, type ModelingPlanSpec, type TrustGrade, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
@@ -27,10 +27,12 @@ export interface PredictiveStudioBuildOutcome {
   success: boolean;
   pipelineId?: string;
   modelId?: string;
-  trustGrade?: TrustGrade;
-  trustOneLiner?: string;
+  /** The trust verdict's title (`TrustVerdicts.OutcomeTitle`); absent when the build trained no model. */
+  TrustTitle?: OutcomeTitleText;
+  /** The trust verdict's headline ("Beats the flat guess by X [lo, hi] …"); absent when the build trained no model. */
+  Headline?: string;
   published: boolean;
-  /** When not published, the plain reason (trust gate / leakage); else null. */
+  /** When not published, the plain reason (the stored gate decision's reason / leakage); else null. */
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
@@ -88,8 +90,8 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
     success: result.success,
     pipelineId: result.pipelineId,
     modelId: result.modelId,
-    trustGrade: result.trust?.grade,
-    trustOneLiner: result.trust?.oneLiner,
+    TrustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
+    Headline: result.trust?.Headline,
     published: result.published,
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
@@ -116,7 +118,7 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
   const untrained = untrainedExperimentsNote(o.untrainedExperiments);
   const untrainedText = untrained ? ` ${untrained}` : '';
-  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${untrainedText}${warningText}`;
+  if (o.published) return `Done — I built and published your prediction (${o.TrustTitle || 'trust not evaluated'}). It's now in your Predictions.${untrainedText}${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
@@ -164,8 +166,9 @@ export function HiddenImportanceNote(lineageJSON: string | null | undefined): st
 }
 
 /**
- * Generate a clean markdown results report for the ML Experiment Results artifact. A `null` score or
- * trust grade means the model was not measured; the report says so rather than standing in a number.
+ * Generate a clean markdown results report for the ML Experiment Results artifact. `trustTitle` and `headline` come
+ * from the trust verdict (`TrustVerdicts.OutcomeTitle`, `TrustVerdict.Headline`). A `null` score means the model was
+ * not measured; the report says so rather than standing in a number.
  * `hiddenImportanceNote` is the note printed when `importanceHidden` (see {@link HiddenImportanceNote});
  * it defaults to the split/impurity note. `untrainedExperiments` are named in the measurement note.
  */
@@ -175,8 +178,8 @@ export function GenerateMarkdownReport(
   targetVar: string,
   targetMetric: string,
   score: number | null,
-  trustGrade: TrustGrade | null,
-  oneLiner: string,
+  trustTitle: string,
+  headline: string,
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
@@ -184,19 +187,17 @@ export function GenerateMarkdownReport(
   hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
   untrainedExperiments: readonly string[] = [],
 ): string {
-  // An unmeasured model's verdict grade is 'Poor' by construction; say "Not measured" rather than calling it a measured Poor result.
-  const trustGradeLabel = trustGrade && score !== null ? trustGrade : 'Not measured';
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGradeLabel, oneLiner, published, features, leaderboard, importanceHidden, hiddenImportanceNote, untrainedExperiments);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, published, features, leaderboard, importanceHidden, hiddenImportanceNote, untrainedExperiments);
 }
 
-/** The report body, with the trust grade already rendered as its display label. */
+/** The report body. */
 function renderMarkdownReport(
   name: string,
   targetVar: string,
   targetMetric: string,
   score: number | null,
-  trustGradeLabel: string,
-  oneLiner: string,
+  trustTitle: string,
+  headline: string,
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
@@ -215,19 +216,19 @@ function renderMarkdownReport(
   return `# Model Development Results: ${name}
 
 ## Executive Summary
-${oneLiner}
+${headline}
 
 ## ${isTournament ? (hasWinner ? 'Winning Model Performance' : 'Selected Model Performance') : 'Model Performance'}
 - **Target Variable**: \`${targetVar}\`
 - **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
-- **Trust Grade**: **${trustGradeLabel}** (${published ? 'Published to Catalog' : 'Held for Review'})
+- **Outcome**: **${trustTitle}** (${published ? 'Published to Catalog' : 'Held for Review'})
 ${renderLeaderboardSection(leaderboard, targetMetric, hasWinner)}
 ## Features the model weighted most (associations, not causes)
 ${topFeatures}
 
 ## How this was measured
 - ${measurementNote(isSearchLeaderboard(leaderboard), untrainedExperiments)}
-- Registered in the Predictive Studio Models catalog; the Trust Grade line above says whether it was published.
+- Registered in the Predictive Studio Models catalog; the Outcome line above says whether it was published.
 `;
 }
 
@@ -331,8 +332,10 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const name = payload.Name || `${targetVar} Prediction`;
       const isReg = payload.TargetDefinition?.ProblemType === 'regression';
       const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
-      // No measured headline means no number: never stand in a made-up score for an unmeasured model.
-      const scoreVal = result.trust?.headlineMetric?.value ?? null;
+      // The report's number is the stored comparison the verdict quotes; no stored comparison means no number.
+      const comparison = result.trust?.Comparison || null;
+      const scoreVal = comparison === null ? null : comparison.Value;
+      const reportMetric = comparison === null ? targetMetric : `${comparison.Metric} gain over the flat guess`;
 
       const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
       const showable = ImportanceDisplay.GlobalDriversShowable(result.model?.Lineage);
@@ -341,14 +344,14 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
       const leaderboard: MLLeaderboardEntryPayload[] = result.leaderboard ?? [];
 
-      const summaryText = result.trust?.oneLiner ?? BuildOutcomeMessage(outcome);
+      const summaryText = result.trust?.Headline || BuildOutcomeMessage(outcome);
       const reportMarkdown = GenerateMarkdownReport(
         name,
         payload.Goal || `Predict ${targetVar}`,
         targetVar,
-        targetMetric,
+        reportMetric,
         scoreVal,
-        result.trust?.grade ?? null,
+        result.trust === undefined ? 'No model shipped' : TrustVerdicts.OutcomeTitle(result.trust),
         summaryText,
         result.published,
         featureBars,
