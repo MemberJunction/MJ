@@ -13,7 +13,7 @@
  * @module @memberjunction/ai-core-plus
  */
 
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -21,11 +21,18 @@ import {
 } from '@memberjunction/core-entities';
 import {
     BaseSingleton,
+    MJEvent,
+    MJEventType,
+    MJGlobal,
     SafeExpressionEvaluator,
     SafeJSONParse,
     SQLExpressionValidator,
     UUIDsEqual,
 } from '@memberjunction/global';
+import { Subscription } from 'rxjs';
+
+/** The entity whose rows this engine caches. */
+const POLICY_ENTITY_NAME = 'MJ: AI Agent User Policies';
 
 /**
  * Type of a time window rule derived from `MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule`.
@@ -138,9 +145,58 @@ const DAY_NAMES: ReadonlyArray<'Sun' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | '
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
     private readonly policyCache = new Map<string, MJAIAgentUserPolicyEntity>();
+    private entityEventSubscription: Subscription | null = null;
 
     public constructor() {
         super();
+        this.subscribeToPolicyEntityEvents();
+    }
+
+    /**
+     * Keeps the cache in step with the entity layer. A policy saved anywhere in this process (the
+     * Chief of Staff app's Governance page through GraphQL, the Configure Agent User Policy action, a script)
+     * replaces the cached copy; a delete evicts it; a remote invalidation from another server clears
+     * the cache so the next read reloads. Without this the agent kept running on the policy it first
+     * loaded until the API restarted, whatever the Governance tab showed.
+     */
+    private subscribeToPolicyEntityEvents(): void {
+        if (this.entityEventSubscription) {
+            return;
+        }
+        try {
+            this.entityEventSubscription = MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+                this.HandleEntityEvent(event);
+            });
+        } catch (error) {
+            LogError(`AgentUserPolicyEngine could not subscribe to entity events: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /** Applies one MJGlobal event to the cache. Public so the behaviour can be driven directly in tests. */
+    public HandleEntityEvent(event: MJEvent): void {
+        if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode || !event.args) {
+            return;
+        }
+        const entityEvent = event.args as BaseEntityEvent;
+        const entityName = entityEvent.type === 'remote-invalidate'
+            ? entityEvent.entityName
+            : entityEvent.baseEntity?.EntityInfo?.Name;
+        if (!entityName || entityName.trim().toLowerCase() !== POLICY_ENTITY_NAME.toLowerCase()) {
+            return;
+        }
+        if (entityEvent.type === 'remote-invalidate') {
+            this.ClearCache();
+            return;
+        }
+        const policy = entityEvent.baseEntity as unknown as MJAIAgentUserPolicyEntity | null;
+        if (!policy?.AgentID || !policy.UserID) {
+            return;
+        }
+        if (entityEvent.type === 'save') {
+            this.SetCachedPolicy(policy);
+        } else if (entityEvent.type === 'delete') {
+            this.ClearCache(policy.AgentID, policy.UserID);
+        }
     }
 
     public static get Instance(): AgentUserPolicyEngine {

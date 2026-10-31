@@ -26,6 +26,8 @@ import {
     type RealtimeToolDefinition,
     type RealtimeVoiceOption,
     type JSONObject,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -121,6 +123,9 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
  */
 @RegisterClass(BaseRealtimeModel, 'HuggingFaceRealtime')
 export class HuggingFaceRealtime extends OpenAIRealtime {
+    /** Provider ceiling unconfirmed (self-hosted speech-to-speech stacks set their own); unknown. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     public static override readonly SupportsDynamicToolSet = HUGGINGFACE_REALTIME_PROFILE.supportsDynamicToolSet;
     /**
      * @param apiKey The upstream key, or a keyless sentinel (`none` / `self-hosted` / `local` / `n/a`)
@@ -152,7 +157,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
      */
     public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const connection = this.createRawConnection(this.resolveUpstreamUrl(params));
-        const session = new HuggingFaceRealtimeSession(connection);
+        const session = new HuggingFaceRealtimeSession(connection, RealtimeDriverFactsOf(this));
         session.SetConnectTimeTools(params.Tools ?? []);
         // Declare the PCM rate the HF pipeline actually runs at (native 16 kHz, or the deployment's
         // Config.sampleRate override) so the SERVER-BRIDGED audio plane resamples correctly. Without
@@ -211,6 +216,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
                 session: HuggingFaceRealtime.BuildSessionObject(params),
                 sampleRate: HuggingFaceRealtime.ResolveSampleRate(params),
             },
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 
@@ -399,9 +405,10 @@ export class HuggingFaceRealtimeSession extends OpenAIRealtimeSession {
 
     /**
      * @param connection The raw-WS adapter (or an in-memory fake in tests) speaking OpenAI frames.
+     * @param driverFacts The creating driver's static facts; defaults to HuggingFace's for direct construction.
      */
-    constructor(connection: IOpenAIRealtimeConnection) {
-        super(connection, HUGGINGFACE_REALTIME_PROFILE);
+    constructor(connection: IOpenAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = HuggingFaceRealtime.DriverFacts) {
+        super(connection, HUGGINGFACE_REALTIME_PROFILE, driverFacts);
     }
 
     /** Records the tool set declared at connect time. Called by {@link HuggingFaceRealtime.StartSession}. */

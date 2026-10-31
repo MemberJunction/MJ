@@ -27,6 +27,7 @@ import {
 } from '@memberjunction/content-pipeline-base';
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
 import { WhereEqual } from '../Filters.js';
+import { IsCallerOwnedUploadURL } from '../UploadLocator.js';
 
 /** The registered name for the chunk-level stage. */
 export const DELETE_STAGE = 'Delete';
@@ -110,6 +111,8 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
 
     /**
      * Remove the bytes this record was kept as, if any: the stored object and its `MJ: Files` row.
+     * For a caller-owned upload root (`upload://<fileId>` with matching `FileID`), clears `FileID`
+     * on the Content Item without deleting the storage object or `MJ: Files` row.
      *
      * @returns Whether a copy was removed, or null when there is one and it could not be reached.
      */
@@ -118,9 +121,31 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         if (!fileID) {
             return false;
         }
+        // A file belongs to the caller only when the locator is exactly `upload://<fileId>` with that FileID;
+        // everything else with a FileID is a durable copy made by ExtractStage (archive members included).
+        const isCallerFile = IsCallerOwnedUploadURL(record.Identity.EphemeralID, fileID);
         if (context.IsTest) {
-            return true;
+            return !isCallerFile;
         }
+        return isCallerFile ? this.detachCallerFile(record, context) : this.deleteKeptCopy(record, fileID, context);
+    }
+
+    /** The caller's file is never deleted: only `FileID` is cleared, so the caller can delete its own row. */
+    private async detachCallerFile(record: WorkingRecord, context: StageContext): Promise<false> {
+        try {
+            await this.detachFileFromRecord(record, context);
+            return false;
+        } catch (error) {
+            throw new TransientStageError(
+                `Detaching caller file for '${record.Identity.Key}' failed: ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
+            );
+        }
+    }
+
+    /** Delete a pipeline-made copy: the stored object, then its `MJ: Files` row. */
+    private async deleteKeptCopy(record: WorkingRecord, fileID: string, context: StageContext): Promise<boolean | null> {
         try {
             const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
             if (!(await file.InnerLoad(CompositeKey.FromID(fileID)))) { // first-pk-ok: MJ core entity, single-column ID

@@ -1621,6 +1621,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT138 - Chief of Staff Core Layers",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "11AB8052-68A5-4D56-AC6B-CD0A4C29E82A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT134 - FLS Close-out Over-The-Wire (client transport)",
             "Sequence": 77,
             "Status": "Active"
