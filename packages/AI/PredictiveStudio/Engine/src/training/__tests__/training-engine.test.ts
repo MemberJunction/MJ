@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
@@ -1091,6 +1093,8 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
     expect([model?.AlgorithmID, model?.Metrics, model?.FeatureImportance, runs[0].Hyperparameters]).toEqual(['algo-logreg', '{}', '{}', '{}']);
     expect(JSON.parse(model?.HoldoutMetrics || 'null')).toEqual({ 'log-loss': 0.455 });
     expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ shippedMember: 'glm', shippedDriver: 'logistic_regression' });
+    // The finalist's importance was measured, but the row is the GLM's: its evaluation record names no importance kind.
+    expect(EvaluationLineage.Read(model?.Lineage)?.ImportanceKind).toBe('none');
     expect([results.gate?.decision.outcome, results.gate?.reason.code, results.gate?.holdoutRows]).toEqual(['keep-simple-baseline', 'simple-baseline-carries-signal', 1205]);
   });
 
@@ -1137,6 +1141,16 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
     expect(stored.status === 'refused' ? [stored.refusal.stage, stored.refusal.reason.kind] : null).toEqual(['gate', 'sidecar-gate-mismatch']);
   });
 
+  it('says no model was created, and promises no Draft model, when a no-signal run has a dominant feature', async () => {
+    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedNoSignalFor(r), importance: [importanceOf('EventsAttended', 0.95), importanceOf('Region', 0.01)] }));
+    const result = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(result.model).toBeNull();
+    expect(result.run.Notes).toContain(`No model was created: ${TrainerResultFixtures.NoSignalReason}`);
+    expect(result.run.Notes).toContain('LEAKAGE WARNING: one field ("EventsAttended")');
+    expect(result.run.Notes).toContain('No model was created from this run, so there is nothing to promote.');
+    expect(result.run.Notes).not.toContain('kept in Draft');
+  });
+
   it("stores no-signal with the guard's reason when the holdout's minority class is below the protocol minimum, and creates no model row", async () => {
     const { engine, deps, pipeline, models } = protocolHarness(cannedFor, ProtocolRowFixture.Row());
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
@@ -1161,6 +1175,29 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
     const { engine, deps, pipeline, runs, models, artifacts } = protocolHarness(noGlm);
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow("the trainer returned no artifact for the shipped 'glm' (returned: xgb, oneFeature)");
     expect([runs[0].Status, models.length, artifacts.Saved.size]).toEqual(['Failed', 0, 0]);
+  });
+
+  it("maps the GLM and one-feature members of each task family to the sidecar's GLM_DRIVER (Sidecar/src/python/app/baselines.py), and the series members to forecast.py's", () => {
+    const sidecar = (file: string): string => readFileSync(fileURLToPath(new URL(`../../../../Sidecar/src/python/app/${file}`, import.meta.url)), 'utf8');
+    const table = /^GLM_DRIVER: Dict\[TabularFamily, str\] = \{([^}]*)\}/m.exec(sidecar('baselines.py'));
+    if (table === null) throw new Error('baselines.py no longer declares GLM_DRIVER as this test reads it');
+    const python = Object.fromEntries([...table[1].matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]));
+    const tasks: Record<string, TaskType> = {
+      binary: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 },
+      multiclass: { kind: 'multiclass', classOrder: ['a', 'b', 'c'], adverseIndices: [0] },
+      continuous: { kind: 'continuous' }, count: { kind: 'count' }, 'non-negative': { kind: 'non-negative', tweediePower: 1.5 },
+    };
+    const glm = { kind: 'glm', family: 'logistic', penalty: 'l2' } as const;
+    const oneFeature = { kind: 'one-feature', selection: 'best-single-feature-inner-cv' } as const;
+    expect(Object.keys(python).sort()).toEqual(Object.keys(tasks).sort());
+    for (const [family, task] of Object.entries(tasks)) {
+      expect([family, TrainingEngine.MemberDriverKey(glm, task), TrainingEngine.MemberDriverKey(oneFeature, task)]).toEqual([family, python[family], python[family]]);
+    }
+    const forecast = sidecar('forecast.py');
+    for (const [kind, driver] of [['naive', 'naive'], ['seasonal-naive', 'seasonal-naive']] as const) {
+      expect(forecast).toContain(`T.SeriesBaseline("${driver}"`);
+      expect(TrainingEngine.MemberDriverKey(kind === 'naive' ? { kind } : { kind, season: 12 }, { kind: 'forecast', valueKind: 'continuous' })).toBe(driver);
+    }
   });
 
   it("maps a shippable member to the driver the trainer fits it with, and refuses a yardstick", () => {

@@ -341,7 +341,6 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
       const leaderboard: MLLeaderboardEntryPayload[] = result.leaderboard ?? [];
 
-      const bestModelName = `${name} (v${result.model?.Version ?? 1})`;
       const summaryText = result.trust?.oneLiner ?? BuildOutcomeMessage(outcome);
       const reportMarkdown = GenerateMarkdownReport(
         name,
@@ -366,12 +365,9 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         TargetMetric: targetMetric,
         Leaderboard: leaderboard,
         FeatureImportance: featureBars,
-        BestModel: {
-          ID: result.modelId,
-          Name: bestModelName,
-          Version: result.model?.Version ?? 1,
-        },
-        BestModelID: result.modelId,
+        // A build whose training run shipped no model names no best model; the summary carries the stored reason.
+        BestModel: result.model ? { ID: result.model.ID, Name: `${name} (v${result.model.Version})`, Version: result.model.Version } : undefined,
+        BestModelID: result.model ? result.model.ID : undefined,
         Summary: summaryText,
         Markdown: reportMarkdown,
       };

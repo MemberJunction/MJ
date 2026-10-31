@@ -351,7 +351,15 @@ class NoModelBuilder extends PredictiveStudioPipelineBuilder {
   }
 }
 
-describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — the plan it builds from', () => {
+describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — a build that shipped no model', () => {
+  it('names no best model and no version, and says why nothing shipped', async () => {
+    const step = await new TestableBuilderAgent(new NoModelBuilder()).Run({ ...plan });
+    const payload = step.newPayload as PredictiveStudioBuilderPayload;
+    expect([payload.BestModel, payload.BestModelID]).toEqual([undefined, undefined]);
+    expect(payload.Summary).toBe("I built and trained the prediction, but I'm holding it back: Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.");
+    expect(step.reasoning).toBe(payload.Summary);
+  });
+
   it("builds from the plan without a previous build's results leaderboard", async () => {
     const builder = new NoModelBuilder();
     const previous: MLLeaderboardEntryPayload = { IterationID: 'run-0', Metric: null, score: null, isWinner: false };

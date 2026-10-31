@@ -503,8 +503,8 @@ export class TrainingEngine {
   /**
    * Complete a trainer run: the envelope (the stored result with artifacts as file references, the carve, the gate
    * record and the request settings), the resulting model (null when nothing ships), the features, the hyperparameters
-   * of what ships (a kept baseline member has none of its own) and the notes: the trainer's, the gate's reason and the
-   * leakage note every run carries.
+   * (the finalist's, except `{}` when a baseline member is kept: a member has none of its own) and the notes: the
+   * trainer's, the gate's reason (saying no model was created when nothing ships) and the leakage note every run carries.
    */
   private async completeTrainerRun(
     x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, fileIds: ReadonlyMap<string, string>, model: MJMLModelEntity | null,
@@ -521,7 +521,8 @@ export class TrainingEngine {
     run.Hyperparameters = JSON.stringify(gate.decision.outcome !== 'keep-simple-baseline' && outcome.Finalist ? outcome.Finalist.hyperparameters : {});
     run.ValidationResults = JSON.stringify(results);
     // The trainer's note, the gate's reason, then the same leakage note every run carries (a dominant feature is a LEAKAGE WARNING).
-    const notes = `${run.Notes || ''} ${gate.reason.text} ${this.buildRunNotes(outcome.Dominance, outcome.Evaluation)}`.trim();
+    const gateNote = model === null ? `No model was created: ${gate.reason.text}` : gate.reason.text;
+    const notes = `${run.Notes || ''} ${gateNote} ${this.buildRunNotes(outcome.Dominance, outcome.Evaluation, model !== null)}`.trim();
     run.Notes = TrainingEngine.withUncoveredNote(notes, x.Uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
@@ -715,12 +716,14 @@ export class TrainingEngine {
   /**
    * The Lineage of a trainer run's model: the keys every model carries (the trainer's sidecar version, the snapshot's
    * split), the unit's, and the protocol it was judged under with its artifact format. Its evaluation record states
-   * out-of-sample scoring (the holdout rows are scored once by the finalist that never trained on them) and the kind of
-   * the stored importance. It names what shipped and that artifact's driver.
+   * out-of-sample scoring (the holdout rows are scored once by the shipped artifact, which never trained on them) and the
+   * kind of the importance the row stores: the finalist's held-out importance, or none for a kept baseline member (its
+   * row stores `{}`). It names what shipped and that artifact's driver.
    */
   private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit, shipped: ShippedArtifact): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
+    const evaluation: EvaluationRecord = shipped.Member === null ? outcome.Evaluation : { ...outcome.Evaluation, ImportanceKind: 'none' };
     return {
-      ...this.buildLineage(x.Resolved, x.Input, split, outcome.Evaluation, x.UnitLineage),
+      ...this.buildLineage(x.Resolved, x.Input, split, evaluation, x.UnitLineage),
       sidecarVersion: outcome.Result.codeVersion.sidecarVersion,
       evaluationProtocolId: x.Training.Protocol.RowID,
       artifactFormat: PREDICTOR_ARTIFACT_FORMAT,
@@ -995,7 +998,7 @@ export class TrainingEngine {
     });
     run.Status = 'Completed';
     run.CompletedAt = new Date();
-    run.Notes = this.buildRunNotes(dominance, evaluation);
+    run.Notes = this.buildRunNotes(dominance, evaluation, true);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
 
@@ -1022,12 +1025,14 @@ export class TrainingEngine {
   }
 
   /** Compose the plain-language run note, surfacing leakage suspicion loudly (§6.4). */
-  private buildRunNotes(dominance: DominanceResult, evaluation: EvaluationRecord): string {
+  private buildRunNotes(dominance: DominanceResult, evaluation: EvaluationRecord, modelCreated: boolean): string {
+    const consequence = modelCreated
+      ? 'The model is kept in Draft and will NOT be auto-promoted: the promotion gate refuses it unless a promote request records a sign-off with a reason.'
+      : 'No model was created from this run, so there is nothing to promote.';
     const base = dominance.Dominant
       ? `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
         `(${((dominance.TopShare ?? 0) * 100).toFixed(1)}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
-        `This often means we are accidentally peeking at the answer. The model is kept in Draft and will NOT be ` +
-        `auto-promoted: the promotion gate refuses it unless a promote request records a sign-off with a reason.`
+        `This often means we are accidentally peeking at the answer. ${consequence}`
       : 'Training completed. No single-feature dominance detected.';
     if (!evaluation.WithheldReason) {
       return base;
