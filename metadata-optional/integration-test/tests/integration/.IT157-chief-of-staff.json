@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT138 - Chief of Staff Core Layers",
+    "Name": "IT157 - Chief of Staff Core Layers",
     "Description": "Deterministic proof of the Chief of Staff's MJ-core layers, with no LLM calls and no Open App dependency: ownership guards on agent policies and agent requests, Run User Routine Now (refuses another user's routine, runs an owned one-shot without spending its schedule), the AgentUserPolicyEngine cache following an entity save, and Manage My Email Inbox and Drafts queueing a Send's approval before any mail provider is consulted while DraftOnly refuses it.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

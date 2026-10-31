@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migration = readFileSync(
-    path.join(here, '../../../../migrations/v6/V202610291610__v6.2.x__Backfill_Legacy_Project_OwnerUserID.sql'),
+    path.join(here, '../../../../migrations/v6/V202610310943__v6.2.x__Backfill_Legacy_Project_OwnerUserID.sql'),
     'utf8',
 );
 
@@ -20,7 +20,7 @@ function rlsFilterText(): string {
     return match[1].replace(/''/g, "'");
 }
 
-describe('V202610291610 conversation-folder migration', () => {
+describe('V202610310943 conversation-folder migration', () => {
     it('matches folder grants against the OUTER folder ID, never an unqualified [ID] inside the grant subquery', () => {
         const filter = rlsFilterText();
         expect(filter).toContain('CAST([ID] AS NVARCHAR(36)) IN (SELECT [rp].[ResourceRecordID]');
