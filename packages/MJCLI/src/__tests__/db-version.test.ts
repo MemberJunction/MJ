@@ -4,7 +4,7 @@
  * the current version). The Skyway provider is stubbed; no real database is touched.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { readCurrentDbVersion, type MigrationHistoryProvider } from '../lib/db-version';
+import { BuildAppliedMigrationState, ReadAppliedMigrationState, readCurrentDbVersion, type MigrationHistoryProvider } from '../lib/db-version';
 
 interface TestRecord {
   Version: string | null;
@@ -77,5 +77,52 @@ describe('readCurrentDbVersion', () => {
     };
     await expect(readCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).rejects.toThrow('boom');
     expect(disconnect).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ReadAppliedMigrationState', () => {
+  it('returns null for a fresh DB (no history table) and still disconnects', async () => {
+    const { provider, disconnect } = makeProvider(false);
+    expect(await ReadAppliedMigrationState(provider, '__mj', 'flyway_schema_history')).toBeNull();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('returns every applied version, not only the highest', async () => {
+    const { provider } = makeProvider(true, [
+      { Version: '202608200000', Type: 'SQL', Success: true },
+      { Version: '202610061630', Type: 'SQL', Success: true },
+      { Version: '202610011200', Type: 'SQL', Success: true },
+    ]);
+    const state = await ReadAppliedMigrationState(provider, '__mj', 'flyway_schema_history');
+    expect(state && [...state.AppliedVersions].sort()).toEqual(['202608200000', '202610011200', '202610061630']);
+    expect(state?.HighestVersion).toBe('202610061630');
+    expect(state?.BaselineFloor).toBeNull();
+  });
+});
+
+describe('BuildAppliedMigrationState', () => {
+  it('takes the highest successful baseline row as the floor', () => {
+    const state = BuildAppliedMigrationState([
+      { Version: '202602151200', Type: 'SQL_BASELINE', Success: true },
+      { Version: '202605241137', Type: 'SQL_BASELINE', Success: true },
+      { Version: '202605250000', Type: 'SQL', Success: true },
+    ]);
+    expect(state.BaselineFloor).toBe('202605241137');
+    expect(state.HighestVersion).toBe('202605250000');
+  });
+
+  it('counts a BASELINE marker as a floor', () => {
+    expect(BuildAppliedMigrationState([{ Version: '202605241137', Type: 'BASELINE', Success: true }]).BaselineFloor).toBe('202605241137');
+  });
+
+  it('ignores a failed baseline row as a floor and leaves failed rows out of the applied set', () => {
+    const state = BuildAppliedMigrationState([
+      { Version: '202699999999', Type: 'SQL_BASELINE', Success: false },
+      { Version: '202605250000', Type: 'SQL', Success: false },
+      { Version: '202605200000', Type: 'SQL', Success: true },
+      { Version: null, Type: 'SCHEMA', Success: true },
+    ]);
+    expect(state.BaselineFloor).toBeNull();
+    expect([...state.AppliedVersions]).toEqual(['202605200000']);
   });
 });
