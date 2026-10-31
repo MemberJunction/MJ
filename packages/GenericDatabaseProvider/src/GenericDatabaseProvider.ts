@@ -943,6 +943,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     /**
+     * Tracks pre-decryption normalized row arrays (binary -> base64, datetime adjusted, ciphertext
+     * preserved) keyed by the post-decryption array returned from {@link PostProcessRows}.
+     * Used by {@link PrepareRowsForCacheStorage} so local/Redis caches store ciphertext at rest.
+     */
+    private static readonly _preDecryptionRowsByResult = new WeakMap<readonly unknown[], Record<string, unknown>[]>();
+
+    /**
      * Post-processes rows: first applies platform-specific datetime adjustments
      * via the virtual `AdjustDatetimeFields` hook, then handles field-level
      * decryption for encrypted fields.
@@ -950,13 +957,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * Subclasses should NOT override this method. Instead, override
      * `AdjustDatetimeFields` for platform-specific datetime corrections.
      */
-    /**
-     * Tracks pre-decryption normalized row arrays (binary -> base64, datetime adjusted, ciphertext
-     * preserved) keyed by the post-decryption array returned from {@link PostProcessRows}.
-     * Used by {@link PrepareRowsForCacheStorage} so local/Redis caches store ciphertext at rest.
-     */
-    private static readonly _preDecryptionRowsByResult = new WeakMap<readonly unknown[], Record<string, unknown>[]>();
-
     protected override async PostProcessRows(
         rows: Record<string, unknown>[],
         entityInfo: EntityInfo,
@@ -4808,7 +4808,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * them: the entity resolved here is named explicitly.
      */
     protected projectExternalRowsForCaller<T>(rows: T[], entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): T[] {
-        return this.ApplyFieldSecurityProjection(rows, { ...params, EntityName: entityInfo.Name }, user);
+        const entityParams: RunViewParams = { ...params, EntityName: entityInfo.Name };
+        const projected = this.ApplyFieldSecurityProjection(rows, entityParams, user);
+        this.carryCiphertextRowsForCache(rows, projected, entityParams, user);
+        return projected;
+    }
+
+    /**
+     * Keys the ciphertext copy that {@link PostProcessRows} kept for `rows` to their projection,
+     * narrowed the same way, so {@link PrepareRowsForCacheStorage} stores ciphertext at the
+     * caller's width instead of finding no copy and falling back to the decrypted rows.
+     */
+    private carryCiphertextRowsForCache<T>(rows: T[], projected: T[], params: RunViewParams, user: UserInfo): void {
+        if (projected === rows) return;
+        const ciphertextRows = GenericDatabaseProvider._preDecryptionRowsByResult.get(rows);
+        if (ciphertextRows) {
+            GenericDatabaseProvider._preDecryptionRowsByResult.set(projected, this.ApplyFieldSecurityProjection(ciphertextRows, params, user));
+        }
     }
 
     /**

@@ -77,6 +77,14 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: ai agent runs',
 ]);
 
+/** One field's values in a concurrency-conflict diagnostic. */
+interface ConflictDiagnosticEntry<TValue> {
+  FieldName: string;
+  ClientOldValue?: TValue;
+  ClientNewValue?: TValue;
+  DBValue?: TValue;
+}
+
 interface ActiveEntitySessionListener {
   pubSub: PubSubEngine;
   userPayload: UserPayload;
@@ -2315,6 +2323,57 @@ export class ResolverBase {
   }
 
   /**
+   * Whether the API never gives a client this field's stored value: an encrypted field that is not
+   * decrypted for the API reaches the client only as the sentinel or as fresh ciphertext, so the
+   * client's old value for it can never be compared with the database value.
+   */
+  private isFieldOpaqueToClient(field: EntityFieldInfo | undefined): boolean {
+    return Boolean(field?.Encrypt && !field.AllowDecryptInAPI);
+  }
+
+  /**
+   * The client's new values without the opaque fields it only echoed back: the sentinel, or the same
+   * value it received as the old value. Writing either would replace the stored secret.
+   */
+  private withoutEchoedOpaqueValues<TOldVal, TNewVal>(
+    entityInfo: EntityInfo,
+    clientNewValues: Record<string, TNewVal>,
+    clientOldValues: Record<string, TOldVal>,
+  ): Record<string, TNewVal> {
+    const kept: Record<string, TNewVal> = {};
+    for (const key of Object.keys(clientNewValues)) {
+      const f = this.findEntityFieldByCodeNameOrName(entityInfo, key);
+      const newValue = clientNewValues[key];
+      const unchanged = key in clientOldValues && !this.areEntityFieldValuesDifferent(f, clientOldValues[key], newValue, false);
+      const echoed = this.isFieldOpaqueToClient(f) && (newValue === ENCRYPTED_SENTINEL || unchanged);
+      if (!echoed) {
+        kept[key] = newValue;
+      }
+    }
+    return kept;
+  }
+
+  /**
+   * Copies concurrency-conflict diagnostic entries with every encrypted field's values replaced by
+   * the sentinel, so the console, the error log and `MJ: Error Logs` never hold a secret.
+   */
+  private redactEncryptedConflictValues<TValue>(
+    entityInfo: EntityInfo,
+    entries: ReadonlyArray<ConflictDiagnosticEntry<TValue>>,
+  ): ConflictDiagnosticEntry<TValue | string>[] {
+    return entries.map((entry) => {
+      if (!this.findEntityFieldByCodeNameOrName(entityInfo, entry.FieldName)?.Encrypt) {
+        return entry;
+      }
+      const redacted: ConflictDiagnosticEntry<TValue | string> = { FieldName: entry.FieldName };
+      if ('ClientOldValue' in entry) redacted.ClientOldValue = ENCRYPTED_SENTINEL;
+      if ('ClientNewValue' in entry) redacted.ClientNewValue = ENCRYPTED_SENTINEL;
+      if ('DBValue' in entry) redacted.DBValue = ENCRYPTED_SENTINEL;
+      return redacted;
+    });
+  }
+
+  /**
    * Compares two typed entity field values for semantic inequality, handling `Date` epoch equality
    * (plus optional non-`datetimeoffset` timezone-hour-shift tolerance) and `null`/`undefined` normalization.
    */
@@ -2417,7 +2476,7 @@ export class ResolverBase {
     TInput extends { OldValues___?: ReadonlyArray<{ Key: string; Value: TOldVal }> | null }
   >(
     input: TInput,
-    clientNewValues: Record<string, TNewVal>,
+    rawClientNewValues: Record<string, TNewVal>,
     entityObject: BaseEntity,
     contextUser: UserInfo
   ): Promise<void> {
@@ -2428,6 +2487,7 @@ export class ResolverBase {
       const field = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, item.Key);
       clientOldValues[item.Key] = this.ClientOldValueToFieldValue(field, item.Value);
     }
+    const clientNewValues = this.withoutEchoedOpaqueValues(entityObject.EntityInfo, rawClientNewValues, clientOldValues);
 
     // fls-guard: compared on the server only, never returned
     const dbValues = entityObject.GetAll();
@@ -2448,6 +2508,9 @@ export class ResolverBase {
 
     for (const key of Object.keys(clientOldValues)) {
       const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
+      if (this.isFieldOpaqueToClient(f)) {
+        continue;
+      }
       const dbVal: ConvertedFieldValue = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
       const different = this.areEntityFieldValuesDifferent(f, clientOldValues[key], dbVal, true, key);
       if (different && f && !f.ReadOnly) {
@@ -2498,12 +2561,16 @@ export class ResolverBase {
 
       if (overlap.length > 0) {
         const conflictingFields = overlap.map((o) => o.FieldName);
+        const entityInfo = entityObject.EntityInfo;
+        const shownClientDifferences = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, clientDifferences);
+        const shownDBDifferences = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, dbDifferences);
+        const shownOverlap = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, overlap);
         const msg = {
           Message:
             'Concurrent modification conflict: one or more fields modified by the client were updated in the database since the record was loaded. Save rejected to prevent overwriting concurrent changes.',
-          ClientDifferences: clientDifferences,
-          DBDifferences: dbDifferences,
-          Overlap: overlap,
+          ClientDifferences: shownClientDifferences,
+          DBDifferences: shownDBDifferences,
+          Overlap: shownOverlap,
         };
 
         console.warn('Entity save concurrency conflict detected — rejecting conflicting update:', JSON.stringify(msg));
@@ -2513,9 +2580,9 @@ export class ResolverBase {
           category: 'ResolverBase.TestAndSetClientOldValuesToDBValues',
           metadata: {
             entityName: entityObject.EntityInfo.Name,
-            clientDifferences: clientDifferences,
-            dbDifferences: dbDifferences,
-            overlap: overlap,
+            clientDifferences: shownClientDifferences,
+            dbDifferences: shownDBDifferences,
+            overlap: shownOverlap,
           },
         });
 

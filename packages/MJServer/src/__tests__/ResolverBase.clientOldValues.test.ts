@@ -2,6 +2,7 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi } from 'vitest';
 import { BaseEntity, EntityFieldTSType, EntityInfo, UserInfo, type EntityFieldInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ENCRYPTED_SENTINEL } from '@memberjunction/global';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
@@ -479,5 +480,109 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — representation dr
             )
         ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['CompletedAt'] } });
         expect(errorLogSaves).toHaveLength(1);
+    });
+});
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — encrypted fields', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000003';
+    const credentialEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Probe Credentials',
+        BaseTable: 'ProbeCredential',
+        BaseView: 'vwProbeCredentials',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'C-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'C-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'C-3', EntityID: entityId, Name: 'Secret', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active', Encrypt: true, AllowDecryptInAPI: false, SendEncryptedValue: false },
+            { ID: 'C-4', EntityID: entityId, Name: 'Token', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active', Encrypt: true, AllowDecryptInAPI: true, SendEncryptedValue: false },
+        ],
+    });
+    const credentialId = '33333333-4444-5555-6666-777777777777';
+    const dbSecret = 'decrypted-plaintext-secret';
+    const dbToken = 'decrypted-plaintext-token';
+
+    function createLoadedCredential(errorLogSaves: Array<Record<string, unknown>>): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [credentialEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(credentialEntityInfo, fakeProvider);
+        entity.LoadFromData({ ID: credentialId, Name: 'Vendor key', Secret: dbSecret, Token: dbToken });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it.each([
+        ['the sentinel', ENCRYPTED_SENTINEL],
+        ['re-encrypted ciphertext', '$ENC$11111111-2222-3333-4444-555555555555$AES-256-GCM$iv$cipher$tag'],
+    ])('saves a rotated value for a field the API never decrypts, when the old value is %s', async (_label, oldValue) => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: credentialId,
+                Secret: 'rotated-secret',
+                OldValues___: [
+                    { Key: 'ID', Value: credentialId },
+                    { Key: 'Secret', Value: oldValue },
+                ],
+            },
+            user
+        );
+
+        expect(entity.Get('Secret')).toBe('rotated-secret');
+        expect(errorLogSaves).toHaveLength(0);
+    });
+
+    it('keeps encrypted values out of the conflict diagnostics', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        try {
+            await expect(
+                probe.TestAndSet(
+                    entity,
+                    {
+                        ID: credentialId,
+                        Token: 'client-new-token',
+                        OldValues___: [
+                            { Key: 'ID', Value: credentialId },
+                            { Key: 'Token', Value: 'client-stale-token' },
+                        ],
+                    },
+                    user
+                )
+            ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['Token'] } });
+
+            const written = [
+                ...errorLogSaves.map((s) => String(s.Message)),
+                ...[...warn.mock.calls, ...error.mock.calls, ...log.mock.calls].map((args) => args.map(String).join(' ')),
+            ].join('\n');
+            expect(errorLogSaves).toHaveLength(1);
+            expect(String(errorLogSaves[0].Message)).toContain('Token');
+            for (const secret of [dbToken, 'client-stale-token', 'client-new-token']) {
+                expect(written).not.toContain(secret);
+            }
+        } finally {
+            warn.mockRestore();
+            error.mockRestore();
+            log.mockRestore();
+        }
     });
 });

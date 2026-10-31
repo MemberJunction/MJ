@@ -421,3 +421,77 @@ describe('Ciphertext-preserving LocalCacheManager & PreserveRestrictedApiCiphert
         ).toBe(true);
     });
 });
+
+class ExternalProjectionTestProvider extends CiphertextCacheTestProvider {
+    public async DecryptForCaller(rows: EntityRow[], entityInfo: EntityInfo, caller: UserInfo): Promise<EntityRow[]> {
+        return (await this.PostProcessRows(rows, entityInfo, caller)) as EntityRow[];
+    }
+    public ProjectExternalForCaller(rows: EntityRow[], entityInfo: EntityInfo, caller: UserInfo): EntityRow[] {
+        return this.projectExternalRowsForCaller(rows, entityInfo, { EntityName: entityInfo.Name, ResultType: 'simple' }, caller);
+    }
+    public RowsForCache(rows: EntityRow[], entityInfo: EntityInfo): EntityRow[] {
+        return this.PrepareRowsForCacheStorage(rows, entityInfo) as EntityRow[];
+    }
+}
+
+function fieldReadableBy(fieldId: string, roleId: string): Record<string, string>[] {
+    return [{ ID: `${fieldId}-allow`, EntityFieldID: fieldId, RoleID: roleId, ReadAccess: 'Allow', UpdateAccess: 'Allow', CreateAccess: 'Allow' }];
+}
+
+function buildFieldSecuredExternalEntity(): EntityInfo {
+    const entityId = 'ent-external-secrets-001';
+    const field = (seq: number, name: string, readerRole: string, extra: Record<string, string | number | boolean> = {}) => ({
+        ID: `x-${name}`, EntityID: entityId, Sequence: seq, Name: name, Type: 'nvarchar', Length: -1, AllowsNull: true,
+        IsPrimaryKey: name === 'ID', Status: 'Active', EntityFieldPermissions: fieldReadableBy(`x-${name}`, readerRole), ...extra,
+    });
+    return new EntityInfo({
+        ID: entityId,
+        Name: 'External API Credentials',
+        SchemaName: 'ext',
+        BaseTable: 'APICredential',
+        BaseView: 'vwAPICredentials',
+        AllowCaching: true,
+        EnableFieldLevelSecurity: true,
+        ExternalDataSourceID: 'eds-001',
+        Status: 'Active',
+        EntityPermissions: [{ ID: 'perm-x', EntityID: entityId, RoleID: 'role-admin', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }],
+        EntityFields: [
+            field(1, 'ID', 'role-admin', { Type: 'uniqueidentifier', AllowsNull: false }),
+            field(2, 'SecretKey', 'role-admin', { Encrypt: true, EncryptionKeyID: KEY_ID, AllowDecryptInAPI: false, SendEncryptedValue: true }),
+            field(3, 'ReadableToken', 'role-admin', { Encrypt: true, EncryptionKeyID: KEY_ID, AllowDecryptInAPI: true }),
+            field(4, 'InternalNote', 'role-other'),
+        ],
+    });
+}
+
+describe('Ciphertext at rest for an external entity projected for its caller', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        decryptMock.mockImplementation(async (val: string) => {
+            if (val === CIPHERTEXT_RESTRICTED) return PLAINTEXT_RESTRICTED;
+            if (val === CIPHERTEXT_ALLOWED) return PLAINTEXT_ALLOWED;
+            return val;
+        });
+    });
+
+    it('stores ciphertext, at the caller width, when field security narrows the rows', async () => {
+        const external = buildFieldSecuredExternalEntity();
+        const provider = new ExternalProjectionTestProvider();
+        provider.SeedEntities([external]);
+        const caller = buildTestUser();
+
+        const decrypted = await provider.DecryptForCaller(
+            [{ ID: 'row-1', SecretKey: CIPHERTEXT_RESTRICTED, ReadableToken: CIPHERTEXT_ALLOWED, InternalNote: 'internal only' }],
+            external,
+            caller,
+        );
+        const projected = provider.ProjectExternalForCaller(decrypted, external, caller);
+        expect(projected[0]).not.toHaveProperty('InternalNote');
+        expect(projected[0].ReadableToken).toBe(PLAINTEXT_ALLOWED);
+
+        const stored = provider.RowsForCache(projected, external);
+        expect(stored[0].SecretKey).toBe(CIPHERTEXT_RESTRICTED);
+        expect(stored[0].ReadableToken).toBe(CIPHERTEXT_ALLOWED);
+        expect(stored[0]).not.toHaveProperty('InternalNote');
+    });
+});

@@ -254,10 +254,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['sqlpipe-matrix-cross', SqlPipeMatrixCrossChecks, 4], // SPM2-SPM4 full cross products, SPM5 extraction properties (IT146)
         ['agent-execution-primitives', AgentExecutionPrimitivesChecks, 6], // AEP1-AEP6 native tool-calling JSON bridge, multi-step loop steps[], durable TaskGraph settlement, Flow graduation round-trip (IT147)
         ['agent-execution-primitives-live', AgentExecutionPrimitivesLiveChecks, 4], // AEPL1-AEPL4 live native-tool-calling providers running Pipeline, multi-step ForEach, and durable Tasks (IT148)
-        ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT149)
-        ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT150)
-        ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT151)
-        ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT152)
+        ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT158)
+        ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
+        ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
+        ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
