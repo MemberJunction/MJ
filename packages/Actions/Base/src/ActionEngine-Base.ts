@@ -819,7 +819,8 @@ export interface ActionRunScope {
    /**
     * The search scopes the run's host assigned (`ExecuteAgentParams.SearchScopeIDs`), or `null` when it assigned none.
     * When set, Scoped Search searches only these, and the host's assignment stands in for the calling agent's own
-    * `SearchScopeAccess` and assigned-scope list. The user's own permission on the scope still applies.
+    * `SearchScopeAccess` and assigned-scope list, and the plain Search action refuses. The user's own permission on the
+    * scope still applies.
     */
    SearchScopeIDs?: string[] | null;
 }

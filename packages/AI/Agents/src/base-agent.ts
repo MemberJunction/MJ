@@ -3031,13 +3031,18 @@ export class BaseAgent {
      * (`TaskGraphAgentRunner`) that carries neither the audience nor the scope. So graphs are withheld when the
      * audience adds a reader, and when the run's validated scope carries a tenant or a secondary dimension
      * (`ActionRunScopeIsBounded`): a model-written Scoped Search node would search outside the run's tenant, and an
-     * agent node would drop it.
+     * agent node would drop it. Likewise when the host assigned the run's search scopes (`SearchScopeIDs`): a graph's
+     * Scoped Search node would fall back to the agent's own search access.
      */
     private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
         if (this.runAudienceAddsReader(params)) {
             return 'a run with an audience';
         }
-        return ActionRunScopeIsBounded(this._runScope ?? this.validatedRunScope(params)) ? 'a tenant-scoped run' : null;
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        if (scope?.SearchScopeIDs?.length) {
+            return 'a run with host-assigned search scopes';
+        }
+        return ActionRunScopeIsBounded(scope) ? 'a tenant-scoped run' : null;
     }
 
     /** Whether this run withholds task graphs ({@link taskGraphWithholdingReason}). */
@@ -3848,6 +3853,7 @@ export class BaseAgent {
                 apiKeys: params.apiKeys,
                 CredentialScope: params.CredentialScope,
                 Audience: params.Audience, // the target answers the same people, so it is bounded the same way
+                SearchScopeIDs: params.SearchScopeIDs, // and searches what the host assigned (never read from data)
                 data: params.data,
                 TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,

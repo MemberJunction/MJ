@@ -350,6 +350,15 @@ describe('SearchScopePermissionResolver', () => {
             expect(result.Allowed).toBe(false);
             expect(result.Source).toBe('NoGrant');
         });
+
+        it("still applies the skill rules: a skill at 'None' refuses a host-assigned scope the user holds a grant on", async () => {
+            setRows([{ ID: 'p1', SearchScopeID: SCOPE_ID, UserID: USER_ID, RoleID: null, PermissionLevel: 'Search' }]);
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('None'), Skill: makeSkill('None'), HostAssigned: true,
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Source).toBe('SkillNone');
+        });
     });
 
     describe('PM-07: explicit user-direct None denies even with role grant', () => {

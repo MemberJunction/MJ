@@ -180,6 +180,7 @@ export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolv
  *
  *   1.  Agent.SearchScopeAccess === 'None' → reject (explicit agent-side deny).
  *   1b. Agent.SearchScopeAccess === 'Assigned' and this scope is not in its list → reject.
+ *       `HostAssigned: true` (the run's host assigned this scope) skips 1 and 1b, and nothing else.
  *   1c/1d. The SAME two rules for a SKILL principal, deliberately identical in shape.
  *   1e. A supplied SKILL must be ACTIVATABLE by the caller → otherwise reject.
  *       This one surprises people, so it is worth stating here rather than only at the code.

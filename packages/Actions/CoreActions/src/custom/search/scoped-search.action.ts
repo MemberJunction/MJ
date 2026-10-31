@@ -80,6 +80,9 @@ const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
  *   - `SearchScopeAccess='All'`:
  *       - If `ScopeID` supplied: used as-is.
  *       - If omitted: uses the Global scope.
+ *   - Host-assigned scopes (`RunActionParams.RunScope.SearchScopeIDs`) replace all three rules: only those scopes are
+ *     searchable (the first when `ScopeID` is omitted, any other is `ACCESS_DENIED`), and the permission check runs
+ *     with `HostAssigned: true`, so the user's own grant is still required.
  *
  * Multi-tenant `SearchContext`:
  *   A tenant and secondary dimensions assemble a `SearchContext` that is threaded into

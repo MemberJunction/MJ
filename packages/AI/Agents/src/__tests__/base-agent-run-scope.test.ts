@@ -220,6 +220,15 @@ describe('BaseAgent — task graphs in a tenant-scoped run', () => {
         expect(next.errorMessage).toMatch(/tenant-scoped run/);
     });
 
+    it('refuses a graph in a run whose host assigned its search scopes (a graph node would search without them)', async () => {
+        internals._runScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, SearchScopeIDs: [TENANT] };
+        const next = await internals.executeTasksStep(paramsWith(), graph);
+        expect(next.errorMessage).toMatch(/not available in a run with host-assigned search scopes/);
+        expect(createStep).not.toHaveBeenCalled();
+        internals._runScope = undefined;
+        expect((await internals.executeTasksStep(paramsWith({ SearchScopeIDs: [TENANT] }), graph)).errorMessage).toMatch(/host-assigned search scopes/);
+    });
+
     it('lets an unscoped run submit (control: it reaches the submitter, absent in this host)', async () => {
         internals._runScope = { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: null, SecondaryScopes: null };
         const next = await internals.executeTasksStep(paramsWith(), graph);
