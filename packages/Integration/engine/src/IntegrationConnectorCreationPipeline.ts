@@ -1203,7 +1203,7 @@ export class IntegrationConnectorCreationPipeline {
      * would turn a transient DB blip into a failed discovery, so only a definitive empty result stops
      * the write.
      */
-    private async ConnectionStillExists(opts: ConnectorCreationPipelineOptions): Promise<boolean> {
+    private async connectionStillExists(opts: ConnectorCreationPipelineOptions): Promise<boolean> {
         // The run's own provider, as every other read in this run uses.
         const rv = new RunView(opts.Provider as DatabaseProviderBase | undefined);
         const result = await rv.RunView<{ ID: string }>({
@@ -1280,9 +1280,9 @@ export class IntegrationConnectorCreationPipeline {
         const startMs = Date.now();
 
         // Liveness, re-checked at the WRITE — not only at the start of the run. See
-        // ConnectionStillExists: the whole harm of a detached run outliving its connection lands in
+        // connectionStillExists: the whole harm of a detached run outliving its connection lands in
         // this stage, and on a shared catalog it lands as a SUCCESS.
-        if (!await this.ConnectionStillExists(opts)) {
+        if (!await this.connectionStillExists(opts)) {
             const msg =
                 `Connection ${opts.CompanyIntegration.ID} was deleted while this discovery was running, so ` +
                 `nothing was persisted. The objects introspected by this run describe a connection that no ` +
