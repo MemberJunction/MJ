@@ -570,8 +570,8 @@ jobs:
           # shape/templating/composition variant on every client run path, ~22% of the points.
           # The content-only pairs it drops run in full on every PR in the server bundles
           # IT143/IT146. The nightly cron, merges to next/lts and manual dispatch run 'full'.
-          # At full scope 900 s was too tight to be a hang guard: 7 of 10 merges to next on
-          # 2026-10-30 ran into it, with SPC1 passing and SPC2 either still running at the limit
+          # At full scope 900 s was too tight to be a hang guard: 7 of the 10 merges to next
+          # measured on 2026-10-30 ran into it, with SPC1 passing and SPC2 either still running at the limit
           # or passing with no time left for teardown. IT145's MaxExecutionTimeMS is therefore
           # 1,500 s (the worst full run above plus ~35%).
           SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
