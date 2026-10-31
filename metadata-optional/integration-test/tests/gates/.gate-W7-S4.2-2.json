@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W7 -> S4.2 #2",
+    "Description": "Gate G2.5 (phase 2, dataset W7, criterion S4.2 #2): on W7-small-imbalanced s42–s44, the gate returns `model` for 0 of 3 seeds whose holdout AUC interval contains 0.5 or whose minority class has < 20 rows (T7; 2 of 3 published today). Each seed trains through MJAPI and the check reads the gate record stored on the run: no seed may ship anything while its stored minority count is below the protocol minimum, nor a model whose AUC interval contains 0.5; every seed must store its guard inputs (on W7 a minority count below 20) and both bounds on every stored number. Measured on seeds 42–61: every seed's minority class has 2–9 rows and every transcribed decision is already no-signal, so no W7 seed reaches the guards with a shipping outcome and the runtime gate cannot exercise the demotion; the guard demotion is Core's gate.test.ts (GateRules.ApplyGateGuards). The mutation is therefore a substitute: it fails when GateRules.ApplyGateGuards drops the minority-class guard (model on a seed with < 20 minority rows), measured on Core's gate.test.ts guard cases.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.5\",\"owner:PR3\",\"phase:2\",\"dataset:W7\",\"criterion:S4.2#2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "3 of 3 W7 seeds store a gate record with a minority below 20 and no shipped outcome, 0 guard violations, 0 stored numbers without bounds."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w7-s4-2-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "F63A718F-EDDE-4B66-80C5-95E1079F2B84"
+  }
+}

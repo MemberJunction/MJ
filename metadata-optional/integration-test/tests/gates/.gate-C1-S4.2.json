@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S4.2",
+    "Description": "Gate G2.7 (phase 2, dataset C1, criterion S4.2): the gate decision on C1 is `keep-simple-baseline`, the reference-grade outcome (the reference's GLM beats the one-feature baseline by 0.0130 [0.0015, 0.0229] log loss and ships the GLM). C1 trains through MJAPI on its reference split (date-carved at 2024-01-01, holdout end 2025-01-01) and the check reads the gate record stored on the run; the stored GLM-versus-dummy interval is recorded, not asserted (the reference's 0.0130 is GLM versus one-feature, a different comparison). It fails when GateRules.DecideGate drops the best-baseline comparison (outcome model): the TypeScript decision then differs from the sidecar's, the run is refused as sidecar-gate-mismatch, and no gate record is stored.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.7\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S4.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "C1 on its reference split stores the gate decision keep-simple-baseline (the GLM kept)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s4-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "67DD2CF5-B0B4-4B87-97EC-8A693E41DB2B"
+  }
+}

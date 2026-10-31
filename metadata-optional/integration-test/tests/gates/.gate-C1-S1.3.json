@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S1.3",
+    "Description": "Gate G2.22 (phase 2, dataset C1, criterion S1.3): the declared last-year-renewed heuristic is scored on the same holdout as a named comparator, 1 of 1, and a model that does not beat it by the margin ends in a stored keep-the-heuristic outcome with its reason. C1 trains through MJAPI on the year-cutoff holdout and on its reference split; on each the check requires the heuristic's baseline row with both bounds and the stored heuristic:renewed last yearVsDummy and modelVs:heuristic:renewed last year comparisons, and a stored decision that agrees with the model-versus-rule comparison (a model that beats the rule never ships it; one that does not ships no model, carries its reason, and keeps the rule only as heuristic-carries-signal). On both holdouts the model beats the rule (measured), so the runtime gate exercises the beats-it side; the keep-the-heuristic branch is Core's gate.test.ts (treats the unit incumbent heuristic as a simple member, heuristic-carries-signal). It fails when the snapshot omits the incumbent-score column (no comparator stored).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.22\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S1.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "On both C1 holdouts the heuristic is stored as a named comparator with both bounds and the stored decision agrees with the model-versus-rule comparison."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s1-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "03A5640C-838C-4F05-8084-168F55A94A6A"
+  }
+}

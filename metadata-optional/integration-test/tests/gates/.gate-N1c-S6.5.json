@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "N1c -> S6.5",
+    "Description": "Gate G2.1 (phase 2, dataset N1c, criterion S6.5): over 400 N1c seeds, the gate returns outcome `model` in ≤ 28 publications of 400 (lower end of the two-sided 95% Wilson interval, z = 1.96, ≤ 0.05; P(pass) 0.969 at a 5% true rate, 0.023 at 10%); the reference's outcome is no-signal. A statistical gate: the pytest node tests/gates/test_seeds400.py::test_N1c_S6_5_noise_publish trains one run per seed through the trainer and counts the sidecar's gate outcomes; the stored outcome is the engine's decision over the same intervals plus guards that only demote model, and a run whose sidecar decision differs is refused, so the sidecar's model count bounds the stored count. PS_SEED_LIMIT=<k> runs the first k seeds with the cap scaled to k (floor of 28k/400); the full count runs once, on the final head. The node is Python, so the mutation is a substitute: it fails when the sidecar gate (app/gate.py run_gate) tests the point estimate instead of the interval's lower bound on the model's comparisons (modelVsDummy and modelVs:<member>; publications above the bound, run at 40 seeds). Applied to every comparison, the point estimate also makes the simple members eligible and the gate keeps a baseline instead of publishing (measured at 40 seeds: 0, 0 and 1 model outcomes on N1c, N1r and W2-noise, within the cap of 2), so it cannot fail a noise-publication gate; the TypeScript GateRules.BeatsByMargin mutation is caught by the gate parity tests (test_gate_inputs_from_intervals_matches_reference).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.1\",\"owner:PR3\",\"phase:2\",\"dataset:N1c\",\"criterion:S6.5\"]",
+    "MaxExecutionTimeMS": 1200000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Over N1c's n400 set (400 seeds) the gate returns model in at most 28 (1 of 1 pytest case)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-n1c-s6-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "8EB22388-7AEA-4145-AAC2-2D85E0D97628"
+  }
+}

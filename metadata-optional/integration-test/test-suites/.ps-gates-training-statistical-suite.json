@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Training (statistical)",
-      "Description": "The three statistical training gates (G2.35 and G2.13 at 400 seeds; G2.4 over W2-noise s100–s159, 60 seeds); each member row's MaxExecutionTimeMS is set from a measured run, and the suite runs and passes once on the final head before merge. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training (statistical)\"",
+      "Description": "The six statistical training gates (G2.35 and G2.13 at 400 seeds; G2.4 over W2-noise s100–s159, 60 seeds; G2.1, G2.2 and G2.3, the noise-publication gates over the n400 sets of N1c, N1r and W2-noise); each member row's MaxExecutionTimeMS is set from a measured run, and the suite runs and passes once on the final head before merge. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training (statistical)\"",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -38,6 +38,39 @@
           },
           "primaryKey": {
             "ID": "DD4C5223-0CE2-424E-B2DC-31676ABA993D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=N1c -> S6.5",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "416EA016-76C5-43AA-BCEC-31A23A1B2735"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=N1r -> S6.5",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "52738F0C-363A-456A-9C17-4ACC99FF59BE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W2 -> S6.5",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6A6F4A4B-AB2C-4303-98A0-013ED2B3EE71"
           }
         }
       ]

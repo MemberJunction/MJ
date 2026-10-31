@@ -217,6 +217,13 @@ export * from './checks/ps-gate-t2p-s2-6.checks';
 export * from './checks/ps-gate-c1-s2-6.checks';
 export * from './checks/ps-gate-w1-s5-3.checks';
 export * from './checks/ps-gate-w2-s5-2.checks';
+export * from './checks/ps-gate-n1c-s6-5.checks';
+export * from './checks/ps-gate-n1r-s6-5.checks';
+export * from './checks/ps-gate-w2-s6-5.checks';
+export * from './checks/ps-gate-w7-s4-2-2.checks';
+export * from './checks/ps-gate-c1-s4-2.checks';
+export * from './checks/ps-gate-c2-s4-5.checks';
+export * from './checks/ps-gate-c1-s1-3.checks';
 export * from './checks/agent-execution-primitives.checks';
 export * from './checks/agent-execution-primitives-live.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
