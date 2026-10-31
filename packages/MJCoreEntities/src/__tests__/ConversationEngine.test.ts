@@ -3292,6 +3292,19 @@ describe('ConversationEngine', () => {
 
                 expect(engine.GetSharedByInfo('c-new')?.Level).toBe('Edit');
             });
+
+            it('answers with the Role grant\'s level when no contextUser is passed after a load', async () => {
+                (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                    grant('proj-role', { Type: 'Role', RoleID: 'role-1', PermissionLevel: 'Edit' }),
+                ];
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [createSharedOrPersonalProject({ ID: 'proj-role', OwnerUserID: 'user-3' })],
+                });
+                await engine.LoadProjects('env-1', viewerWithRole());
+
+                expect(engine.GetEffectiveProjectPermission('proj-role')?.Level).toBe('Edit');
+            });
         });
 
         it('classifies folders into Private, Shared (ACL), and Public tiers from each folder\'s own grants, as the server does', async () => {

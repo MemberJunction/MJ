@@ -1516,15 +1516,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * - Public folders (`OwnerUserID == null`) grant at least `'View'` to everyone in the environment.
      * - Shared folders grant the user's highest direct/role `MJ: Resource Permissions` level (`View`/`Edit`/`Owner`).
      * - Folder owners also receive at least `'View'` on other users' inherited conversations placed in their Shared folder.
+     *
+     * Without a `contextUser`, it answers for the user the last folder or conversation load ran for, Role grants included.
      */
     public GetEffectiveProjectPermission(
         projectId: string | null | undefined,
         contextUser?: UserInfo | null
     ): { Level: 'View' | 'Edit' | 'Owner'; SharedByUserID: string | null; SharedByUser: string | null } | null {
         if (!projectId) return null;
-        const userId = contextUser?.ID ?? this._lastConversationsUserId ?? this._lastProjectsUserId;
+        const viewer = contextUser ?? this._lastViewer;
+        const userId = viewer?.ID ?? this._lastConversationsUserId ?? this._lastProjectsUserId;
         const normUserId = userId ? NormalizeUUID(userId) : null;
-        const userProjectPerms = contextUser ? this.getUserSharedProjectPermissions(contextUser) : [];
+        const userProjectPerms = this.getUserSharedProjectPermissions(viewer);
         const userPermByProjectId = new Map<string, MJResourcePermissionEntity>(
             userProjectPerms.map((p) => [NormalizeUUID(p.ResourceRecordID), p])
         );
