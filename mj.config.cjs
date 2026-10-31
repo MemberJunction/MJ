@@ -309,7 +309,10 @@ module.exports = {
   mcpServerSettings: {
     port: 3100,
     enableMCPServer: true,
-    systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
+    // SECURITY: never commit a literal key here — a request presenting this value authenticates
+    // as the SYSTEM USER. Set MCP_SYSTEM_API_KEY in the environment; when unset, system-key auth
+    // is disabled and only API Key Engine keys (or OAuth) are accepted.
+    systemApiKey: process.env.MCP_SYSTEM_API_KEY,
 
     // Authentication configuration
     // Supports: 'apiKey' (default), 'oauth', 'both', 'none'
