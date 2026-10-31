@@ -484,6 +484,20 @@ export interface IntrospectSchemaOptions {
      */
     ObjectNames?: string[];
     /**
+     * When set, introspects these source schemas (namespaces) instead of the data source's default
+     * one, and returns every object name schema-qualified (`schema.object`) so objects of the same
+     * name in different schemas stay distinct. Connectors whose source has no schemas ignore it.
+     */
+    Schemas?: string[];
+    /**
+     * When true, returns base tables only: every discovered object whose type is not a table (a view,
+     * and also a document collection) is dropped, and the result is not authoritative. A view can read
+     * other databases with the connecting login's rights, so a caller that loads whatever is discovered
+     * from a source it does not trust (the archive seed's restored backup) passes this. Connectors that
+     * cannot tell a table from a view ignore it.
+     */
+    BaseTablesOnly?: boolean;
+    /**
      * U11 — optional live progress callback: invoked after each object's describe completes
      * (or is skipped) with (scanned, total). Lets a caller drive a DETERMINATE discovery bar
      * ("scanned N of M objects") instead of an indeterminate spinner. Best-effort — the

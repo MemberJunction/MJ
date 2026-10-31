@@ -1,0 +1,218 @@
+@if (IsOpen) {
+  <mj-dialog [Visible]="IsOpen" Width="780px" AriaLabel="Bootstrap from SQL Server Backup" (Close)="Close()">
+    <mj-dialog-titlebar>
+      <div class="wizard-heading">
+        <i class="fa-solid fa-cloud-arrow-down wizard-heading-icon" aria-hidden="true"></i>
+        <div>
+          <h2 class="wizard-title">Bootstrap from SQL Server Backup</h2>
+          <p class="wizard-subtitle">
+            High-speed initial integration for 2–3 TB databases via staged Azure Blob restore & local ETL
+          </p>
+        </div>
+      </div>
+    </mj-dialog-titlebar>
+
+    <!-- Stepper Strip -->
+    <div class="stepper-bar">
+      @for (step of Steps; track step.Number; let last = $last) {
+        <div class="step-item" [class.active]="CurrentStep === step.Number" [class.completed]="CurrentStep > step.Number">
+          <div class="step-circle">
+            @if (CurrentStep > step.Number) { <i class="fa-solid fa-check"></i> } @else { {{ step.Number }} }
+          </div>
+          <span class="step-label">{{ step.Label }}</span>
+        </div>
+        @if (!last) {
+          <div class="step-line" [class.completed]="CurrentStep > step.Number"></div>
+        }
+      }
+    </div>
+
+    <!-- STEP 1: Backup Configuration -->
+    @if (CurrentStep === 1) {
+      <div class="step-content">
+        <app-backup-source-picker
+          [CompanyIntegrationID]="CompanyIntegration?.ID ?? null"
+          [(Value)]="Source"
+          (Verified)="OnVerified($event)"
+          [Provider]="Provider"
+        ></app-backup-source-picker>
+
+        <div class="form-row">
+          <div class="form-section">
+            <label class="form-label required" for="bootstrap-staging">Staging Database Name</label>
+            <input id="bootstrap-staging" type="text" class="mj-input" [(ngModel)]="StagingDatabaseName" />
+            <span class="form-hint">Temporary database created on local instance.</span>
+          </div>
+          <div class="form-section">
+            <label class="form-label" for="bootstrap-batch">Batch Size</label>
+            <mj-numeric-input InputId="bootstrap-batch" [(ngModel)]="BatchSize" [Min]="50000" [Step]="50000" [Decimals]="0"></mj-numeric-input>
+            <span class="form-hint">Chunk threshold for massive tables (default: 500,000).</span>
+          </div>
+        </div>
+
+        <div class="option-row">
+          <mj-switch [(ngModel)]="DropStagingDbOnComplete" AriaLabelledBy="bootstrap-drop-label" AriaDescribedBy="bootstrap-drop-hint"></mj-switch>
+          <div>
+            <span class="form-label" id="bootstrap-drop-label">Automatically drop staging database upon completion</span>
+            <p class="form-hint" id="bootstrap-drop-hint">
+              Reclaims 2–3 TB of disk space immediately after row counts are verified. Recommended.
+            </p>
+          </div>
+        </div>
+
+        <div class="option-row">
+          <mj-switch [(ngModel)]="TruncateTargetBeforeLoad" AriaLabelledBy="bootstrap-truncate-label" AriaDescribedBy="bootstrap-truncate-hint"></mj-switch>
+          <div>
+            <span class="form-label" id="bootstrap-truncate-label">Truncate target tables before loading data</span>
+            <p class="form-hint warning-hint" id="bootstrap-truncate-hint">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              Caution: Permanently removes all existing data in target MemberJunction tables for mapped entities before loading. Use only for clean initial loads.
+            </p>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- STEP 2: Inspection & Mapping Preview -->
+    @if (CurrentStep === 2) {
+      <div class="step-content">
+        <mj-alert Variant="info" Title="Staging Architecture">
+          Data will be restored directly from {{ Source.SourceType === 'azure' ? 'Azure Blob URL(s)' : 'local disk file(s)' }} into local database
+          <code>[{{ StagingDatabaseName }}]</code>, then transferred to MemberJunction target tables using
+          set-based minimally-logged <code>INSERT INTO WITH (TABLOCK)</code>.
+        </mj-alert>
+
+        <div class="list-card">
+          <div class="list-card-header">Mapped Entity Tables ({{ EntityMaps.length }})</div>
+          <div class="list-card-body">
+            @if (IsLoadingPreview) {
+              <mj-loading Text="Loading entity maps…" Size="small"></mj-loading>
+            } @else if (EntityMaps.length === 0) {
+              <mj-empty-state Size="compact" Icon="fa-solid fa-circle-info"
+                Title="No active entity maps found for this integration."
+                Message="Ensure entity maps are configured." />
+            }
+            @for (map of EntityMaps; track map.ID) {
+              <div class="list-row">
+                <span class="status-chip">Source</span>
+                <code class="map-name">{{ map.ExternalObjectName }}</code>
+                <i class="fa-solid fa-arrow-right map-arrow" aria-hidden="true"></i>
+                <span class="status-chip" data-color="success">Target Entity</span>
+                <strong class="map-name">{{ map.Entity }}</strong>
+              </div>
+            }
+          </div>
+        </div>
+
+        <mj-alert Variant="warning" Title="Disk Space Pre-check">
+          Ensure the local SQL Server data drive has at least <strong>2x the backup size</strong> in free space
+          to accommodate both the staging database and target tables before drop.
+        </mj-alert>
+      </div>
+    }
+
+    <!-- STEP 3: Execution -->
+    @if (CurrentStep === 3) {
+      <div class="step-content">
+        @if (!ExecutionError) {
+          <mj-loading [Text]="ExecutionStage" Size="medium"></mj-loading>
+          <p class="run-note">
+            <i class="fa-regular fa-clock"></i> Elapsed Time: {{ FormatSeconds(ElapsedSeconds) }}
+          </p>
+
+          @if (ProgressLog.length > 0) {
+            <ul class="progress-log" aria-live="polite">
+              @for (line of ProgressLog; track line.Seq) {
+                <li class="progress-log-line" [class.is-error]="line.Level === 'error'" [class.is-warn]="line.Level === 'warn'">
+                  <span class="progress-log-stage">{{ line.Stage }}</span>
+                  <span class="progress-log-message">{{ line.Message }}</span>
+                </li>
+              }
+            </ul>
+          }
+
+          @if (RunID) {
+            <p class="run-note"><i class="fa-solid fa-satellite-dish"></i> Running on the server as run <code>{{ RunID }}</code>. The wizard follows it; closing this window does not stop it.</p>
+          }
+          @if (Source.SourceType === 'azure') {
+            <p class="run-note"><i class="fa-solid fa-shield-halved"></i> Azure Blob blocks stream directly to local storage at NVMe speeds.</p>
+          } @else {
+            <p class="run-note"><i class="fa-solid fa-hard-drive"></i> Restoring directly from host disk storage at high-speed NVMe/SSD transfer rates.</p>
+          }
+          <p class="run-note"><i class="fa-solid fa-bolt"></i> Local set-based ETL bypasses the network and minimizes transaction log growth.</p>
+        } @else {
+          <mj-alert Variant="error" Title="Bootstrap Failed" [Message]="ExecutionError">
+            <p class="form-hint">Automated fail-safe cleanup attempted to drop any temporary staging database.</p>
+          </mj-alert>
+        }
+      </div>
+    }
+
+    <!-- STEP 4: Completion Summary -->
+    @if (CurrentStep === 4 && ResultSummary) {
+      <div class="step-content">
+        <mj-alert Variant="success" Title="Bootstrap Successfully Completed!" [Message]="ResultSummary.Message"></mj-alert>
+
+        <div class="metrics-grid">
+          <div class="metric">
+            <span class="metric-label">Tables Processed</span>
+            <span class="metric-value">{{ ResultSummary.TablesProcessed ?? EntityMaps.length }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Total Records Ingested</span>
+            <span class="metric-value">{{ ResultSummary.TotalRowsTransferred?.toLocaleString() ?? '—' }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Duration</span>
+            <span class="metric-value">{{ FormatSeconds(ResultSummary.DurationSeconds ?? ElapsedSeconds) }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Staging Database</span>
+            <span class="metric-value">{{ ResultSummary.StagingDatabaseDropped ? 'Dropped (Space Reclaimed)' : 'Retained' }}</span>
+          </div>
+        </div>
+
+        <mj-alert Variant="info" Icon="fa-solid fa-water" Title="Watermark Initialized (Zero-Gap Handoff)">
+          Sync watermarks seeded to: <code>{{ ResultSummary.BackupStartDate }}</code>.
+          Subsequent scheduled incremental syncs will seamlessly pull delta changes occurring after this timestamp without gap or duplicate insertion.
+        </mj-alert>
+      </div>
+    }
+
+    <!-- Footer: confirm on the left, cancel on the right -->
+    <mj-dialog-actions>
+      @if (CurrentStep === 1) {
+        <button mjButton variant="primary" [disabled]="!IsStep1Valid" (click)="GoToStep(2)">
+          Next: Preview & Inspect <i class="fa-solid fa-arrow-right"></i>
+        </button>
+        <button mjButton variant="secondary" (click)="Close()">Cancel</button>
+      }
+
+      @if (CurrentStep === 2) {
+        <button mjButton variant="primary" [disabled]="EntityMaps.length === 0" (click)="StartBootstrap()">
+          <i class="fa-solid fa-rocket"></i> Launch Bootstrap
+        </button>
+        <button mjButton variant="secondary" (click)="GoToStep(1)">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+      }
+
+      @if (CurrentStep === 3) {
+        @if (ExecutionError) {
+          <button mjButton variant="primary" (click)="GoToStep(1)">
+            <i class="fa-solid fa-arrow-left"></i> Back to Config
+          </button>
+        } @else {
+          <span class="footer-note">Running on the server. You may close this window; the run continues.</span>
+        }
+        <button mjButton variant="secondary" (click)="Close()">Close</button>
+      }
+
+      @if (CurrentStep === 4) {
+        <button mjButton variant="primary" (click)="Finish()">
+          <i class="fa-solid fa-check"></i> Done
+        </button>
+      }
+    </mj-dialog-actions>
+  </mj-dialog>
+}

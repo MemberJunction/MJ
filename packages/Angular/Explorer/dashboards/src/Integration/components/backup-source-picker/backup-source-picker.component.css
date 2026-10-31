@@ -1,0 +1,39 @@
+/* Backup source picker: browser card internals. Shared wizard layout lives in ../shared/backup-wizard.css. */
+
+.browser-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3);
+}
+
+.browser-controls,
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mj-space-2);
+}
+
+.browser-controls .mj-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  cursor: pointer;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mj-text-primary);
+}

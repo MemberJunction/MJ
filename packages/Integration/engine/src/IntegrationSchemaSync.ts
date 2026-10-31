@@ -185,6 +185,23 @@ export function DecidePKPromotion(args: {
   return { value: existingIsPrimaryKey, winner: 'Declared' };
 }
 
+/**
+ * Whether an object carries a DECLARED primary key, the condition that gates {@link DecidePKPromotion}.
+ * Only a field whose `MetadataSource` is not `Discovered` counts, on both the per-connection rows and the
+ * declared rows they overlay. The declared rows must be filtered too: when the shared catalog is itself
+ * the write target, the "declared" rows are the very rows discovery wrote, so a key discovery set on one
+ * pass would otherwise read as a declared key on the next pass and demote itself — the flags flipped on
+ * every discovery of the same source (observed with the archive seed's shared-catalog persist).
+ */
+export function HasDeclaredPrimaryKey(
+  existingFields: ReadonlyArray<Pick<MJIntegrationObjectFieldEntity, 'IsPrimaryKey' | 'MetadataSource'>>,
+  declaredFields: ReadonlyArray<Pick<MJIntegrationObjectFieldEntity, 'IsPrimaryKey' | 'MetadataSource'>>,
+): boolean {
+  const isDeclaredKey = (f: Pick<MJIntegrationObjectFieldEntity, 'IsPrimaryKey' | 'MetadataSource'>): boolean =>
+    f.IsPrimaryKey === true && f.MetadataSource !== 'Discovered';
+  return existingFields.some(isDeclaredKey) || declaredFields.some(isDeclaredKey);
+}
+
 /** @deprecated Use {@link DecidePKPromotion}. */
 export function decidePKPromotion(args: {
   objectHasDeclaredPK: boolean;
@@ -756,8 +773,7 @@ export class IntegrationSchemaSync {
         // PK does not count as the authoritative declared key (excluded so a re-run can't self-perpetuate).
         // MJ-CAT-17: on a first discovery the per-connection field list is empty, so the declared key
         // must be read from the declaration itself or a streamed field would be promoted over it.
-        const objectHasDeclaredPK = existingFields.some(f => f.IsPrimaryKey === true && f.MetadataSource !== 'Discovered')
-          || [...declaredFieldRowByName.values()].some(f => f.IsPrimaryKey === true);
+        const objectHasDeclaredPK = HasDeclaredPrimaryKey(existingFields, [...declaredFieldRowByName.values()]);
         const perObjectLogs: FieldMergeLog[] = [];
         const perObjectStats = { created: 0, updated: 0 };
         for (const srcField of r.srcObj.Fields) {

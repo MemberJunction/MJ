@@ -7,5 +7,11 @@
 // connector that used to live here now ships from MemberJunction/Integrations as its own Open App —
 // see the README for the removal rationale.
 export { BaseExternalDataSourceConnector } from './datasource/BaseExternalDataSourceConnector.js';
+export type {
+    ParsedKeysetMarker,
+    KeysetMarkerOptions,
+    KeysetWalk,
+    ExternalObjectMeta,
+} from './datasource/BaseExternalDataSourceConnector.js';
 export { BaseSqlExternalDataSourceConnector } from './datasource/BaseSqlExternalDataSourceConnector.js';
 export { BaseDocumentDataSourceConnector } from './datasource/BaseDocumentDataSourceConnector.js';

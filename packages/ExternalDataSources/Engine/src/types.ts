@@ -58,6 +58,55 @@ export interface ExternalViewParams {
    * skipping a row whose sub-second timestamp truncates to the saved value.
    */
   incrementalSince?: { Field: string; Value: string };
+  /**
+   * Structured keyset ("seek") resume point for deep pagination. The driver renders it into its own
+   * dialect — identifier quoting, literal formatting and NULL ordering — so a caller never writes dialect
+   * SQL. ANDed with {@link filter} and {@link incrementalSince}. A caller that supplies it is seeking
+   * instead of offsetting, so it passes `offset: 0` (or no offset). Ordering contract: {@link ExternalSeekAfter}.
+   */
+  seekAfter?: ExternalSeekAfter;
+}
+
+/**
+ * The last row a keyset walk consumed, over rows ordered by `Watermark.Field` ASC (when present) and then
+ * each `Keys[i].Field` ASC. A driver renders "every row strictly after this one in that order". The part
+ * no caller can know is where the dialect sorts a NULL watermark: SQL Server, MySQL, Databricks and MongoDB
+ * put NULL first in an ascending sort; PostgreSQL, Oracle and Snowflake put it last. The driver owns that.
+ */
+export interface ExternalSeekAfter {
+  /** The watermark component of the ordering. Omitted when the walk is keyed on the primary key alone. */
+  Watermark?: {
+    Field: string;
+    /** The last consumed watermark value, or `null` when the last consumed row's watermark was NULL. */
+    Value: string | null;
+    /**
+     * Present when `Value` is a temporal value truncated by the driver (JavaScript `Date` holds whole
+     * milliseconds, so a `datetime2(7)` / `timestamp(6)` value comes back without its sub-millisecond part):
+     * every consumed row's watermark lies in `[Value, ExclusiveUpper)`. With `Keys` empty that whole range
+     * has been consumed and the seek is "after the range"; with `Keys` the seek is
+     * "after the range OR (in the range AND keys after)".
+     *
+     * A column coarser than a millisecond (SQL Server `datetime` holds 1/300 s, `smalldatetime` whole
+     * minutes) rounds the `ExclusiveUpper` literal back down into the consumed range, so a driver must
+     * not render "after the range" as `Field >= ExclusiveUpper` alone: SQL drivers render
+     * `Field >= ExclusiveUpper AND Field > Value` and "in the range" as
+     * `Field >= Value AND (Field < ExclusiveUpper OR Field = Value)`, which are exact for every precision.
+     */
+    ExclusiveUpper?: string;
+    /**
+     * Only with `ExclusiveUpper` and a non-NULL `Value`: restrict the read to rows INSIDE
+     * `[Value, ExclusiveUpper)` with keys after `Keys` (every row of the range when `Keys` is empty).
+     * The caller then orders by the key columns alone. Used to walk one truncated range that holds more
+     * rows than a batch, where the full-precision watermark order inside the range cannot be resumed.
+     */
+    WithinRange?: boolean;
+  };
+  /**
+   * The primary-key components in ordering position, each holding the last consumed value. May be empty
+   * only together with `Watermark.ExclusiveUpper` (the whole truncation range was consumed, or — with
+   * `WithinRange` — none of it has been read yet).
+   */
+  Keys: Array<{ Field: string; Value: string | number }>;
 }
 
 /** Result of a driver RunView call. */

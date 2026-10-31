@@ -2629,3 +2629,68 @@ button.direction-toggle:hover {
   color: var(--mj-brand-primary);
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
+
+/* Seeded from a backup, live source not connected yet */
+.status-badge-seeded {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning);
+}
+
+.status-badge-failed {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
+/* Step 2 (SQL Server): connect with credentials or seed from an archive */
+.connect-mode-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--mj-space-3);
+  margin-top: var(--mj-space-1);
+}
+
+.connect-mode-card {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  cursor: pointer;
+  transition: var(--mj-transition-colors);
+}
+
+.connect-mode-card:hover {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+.connect-mode-card:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.connect-mode-icon {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: var(--mj-brand-primary);
+}
+
+.connect-mode-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.connect-mode-title {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.connect-mode-desc {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}

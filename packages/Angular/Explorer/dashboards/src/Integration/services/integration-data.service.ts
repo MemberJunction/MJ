@@ -1,7 +1,10 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
+import type { MJExternalDataSourceEntity, MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
 import { DateCellDayKey } from '../../shared/date-cell';
+import { FormatBytes, IsActionOutputEntryList, IsPlainRecord, ReadExternalDataSourceID } from './backup-source.helpers';
 import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
@@ -25,6 +28,10 @@ import {
   GraphQLDataProvider,
   GraphQLIntegrationClient,
   GraphQLActionClient,
+  IntegrationRunEvent,
+  IntegrationRunSummary,
+  IntegrationArchiveSeedStartInput,
+  IntegrationArchiveSeedState,
   DiscoveredObjectResult,
   DiscoveredFieldResult,
   DiscoveryResult,
@@ -143,10 +150,28 @@ export interface IntegrationDefinitionRow {
   SourceTypeID: string | null;
 }
 
+/** What a connection's summary reads from its external data source: the type's dialect and the source's status. */
+interface DataSourceLink {
+  Dialect: MJExternalDataSourceTypeEntity['FilterDialect'] | null;
+  Status: MJExternalDataSourceEntity['Status'] | null;
+}
+
 /** Aggregated summary for a single integration, used by the Control Tower UI */
 export interface IntegrationSummary {
   Integration: MJCompanyIntegrationEntity;
   SourceType: MJIntegrationSourceTypeEntity | null;
+  /**
+   * The query dialect of the external data source this connection reads (its `MJ: External Data Source
+   * Types.FilterDialect`), resolved through `Configuration.externalDataSourceID`; null for a connection
+   * that is not backed by an external data source. `tsql` identifies a SQL Server (or Fabric SQL) source.
+   */
+  DataSourceDialect: MJExternalDataSourceTypeEntity['FilterDialect'] | null;
+  /**
+   * The `Status` of the external data source this connection reads, resolved the same way as
+   * `DataSourceDialect`; null for a connection not backed by an external data source. A connection
+   * seeded from a backup keeps its data source `Disabled` until a live source is connected.
+   */
+  DataSourceStatus: MJExternalDataSourceEntity['Status'] | null;
   /** Icon from the Integration entity — FA class, URL, or base64 */
   Icon: string | null;
   LatestRun: IntegrationRunRow | null;
@@ -211,6 +236,34 @@ export interface WatermarkRow {
   WatermarkValue: string | null;
   Direction: 'Pull' | 'Push';
   EntityMap: string;
+}
+
+/** Backup header inspection result from 'Inspect SQL Server Backup' action */
+export interface InspectBackupResult {
+  Success: boolean;
+  Message: string;
+  DatabaseName?: string;
+  /** ISO UTC timestamp the backup began; the watermark a bootstrap seeds. */
+  BackupStartDate?: string;
+  SizeBytes?: number;
+  /** Number of media-set files the backup spans. */
+  Stripes?: number;
+}
+
+/** Azure blob metadata item returned when browsing backup blobs */
+export interface AzureBlobItem {
+  Name: string;
+  SizeBytes: number;
+  SizeFormatted: string;
+  LastModified?: Date;
+  IsBak: boolean;
+}
+
+/** List of backup blobs returned from 'List Azure Backup Blobs' action */
+export interface ListAzureBackupBlobsResult {
+  Success: boolean;
+  Message: string;
+  Blobs: AzureBlobItem[];
 }
 
 /** Shared icon resolution map for integration names to Font Awesome icon classes */
@@ -279,8 +332,9 @@ export class IntegrationDataService {
     const engine = IntegrationEngineBase.Instance;
     const rv = this.createRunView(provider);
 
-    // Engine provides cached metadata; only runs are dynamic and need a RunView call
-    const [, runsResult] = await Promise.all([
+    // Engine provides cached metadata; runs are dynamic, and the external-data-source link (which
+    // decides the source dialect) is not cached by the integration engine, so both are read here.
+    const [, runsResult, linkByDataSourceID] = await Promise.all([
       engine.Config(false),
       rv.RunView<IntegrationRunRow>({
         EntityName: 'MJ: Company Integration Runs',
@@ -289,7 +343,8 @@ export class IntegrationDataService {
         Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords',
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
-      })
+      }),
+      this.loadDataSourceLinks(rv)
     ]);
 
     const integrations = engine.CompanyIntegrations;
@@ -297,7 +352,29 @@ export class IntegrationDataService {
     const sourceTypes = engine.SourceTypes;
 
     const integrationDefs = engine.Integrations;
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs));
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs, linkByDataSourceID));
+  }
+
+  /** `MJ: External Data Sources` ID → its type's `FilterDialect` and its own `Status`, read in one batched round trip. */
+  private async loadDataSourceLinks(rv: RunView): Promise<UUIDMap<DataSourceLink>> {
+    type DataSourceRow = { ID: string; TypeID?: string | null; Status?: MJExternalDataSourceEntity['Status'] | null; FilterDialect?: MJExternalDataSourceTypeEntity['FilterDialect'] | null };
+    const [sourcesResult, typesResult] = await rv.RunViews<DataSourceRow>([
+      { EntityName: 'MJ: External Data Sources', Fields: ['ID', 'TypeID', 'Status'], ResultType: 'simple' },
+      { EntityName: 'MJ: External Data Source Types', Fields: ['ID', 'FilterDialect'], ResultType: 'simple' },
+    ]);
+
+    const dialectByTypeID = new UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>();
+    for (const type of typesResult?.Results ?? []) {
+      if (type.FilterDialect) {
+        dialectByTypeID.Set(type.ID, type.FilterDialect);
+      }
+    }
+    const linkByDataSourceID = new UUIDMap<DataSourceLink>();
+    for (const source of sourcesResult?.Results ?? []) {
+      const dialect = source.TypeID ? dialectByTypeID.Get(source.TypeID) ?? null : null;
+      linkByDataSourceID.Set(source.ID, { Dialect: dialect, Status: source.Status ?? null });
+    }
+    return linkByDataSourceID;
   }
 
   async LoadEntityMaps(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntityMapEntity[]> {
@@ -870,6 +947,243 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 
+  /**
+   * Run a named MJ action through the GraphQL action client on `provider` (the service's provider when
+   * omitted); undefined when the action is not registered.
+   */
+  private async runNamedAction(actionName: string, params: ActionParam[], provider?: IMetadataProvider | null): Promise<ActionResult | undefined> {
+    const actionID = await this.lookupActionID(actionName, provider);
+    if (!actionID) {
+      return undefined;
+    }
+    const actionClient = new GraphQLActionClient(this.requireGraphQLProvider(provider));
+    return actionClient.RunAction(actionID, params);
+  }
+
+  /**
+   * `provider` (the service's provider when omitted) as the GraphQL provider the action and
+   * integration clients need; the browser always runs on one.
+   */
+  private requireGraphQLProvider(provider?: IMetadataProvider | null): GraphQLDataProvider {
+    const resolved = provider ?? this.Provider;
+    if (!(resolved instanceof GraphQLDataProvider)) {
+      throw new Error('Integration actions need a GraphQLDataProvider; the current provider is not one.');
+    }
+    return resolved;
+  }
+
+  /** An integration client on `provider` (the service's provider when omitted). */
+  private integrationClientFor(provider?: IMetadataProvider | null): GraphQLIntegrationClient {
+    return provider ? new GraphQLIntegrationClient(this.requireGraphQLProvider(provider)) : this.getIntegrationClient();
+  }
+
+  /** Input params from a name → value map; undefined values are omitted, booleans become 'true'/'false'. */
+  private buildActionParams(values: Record<string, string | number | boolean | undefined>): ActionParam[] {
+    return Object.entries(values)
+      .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined && entry[1] !== '')
+      .map(([Name, value]) => ({ Name, Value: typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value), Type: 'Input' as const }));
+  }
+
+  /**
+   * The raw value of an action output. The server returns outputs in `Result` as an array of
+   * `{ Name, Value }` params (or, for some callers, a keyed object); `Params` holds the inputs.
+   */
+  private readOutputValue(result: ActionResult, name: string): unknown {
+    const lower = name.toLowerCase();
+    // Declared as a result-code entity, but the GraphQL action client puts the parsed ResultData here.
+    const resultData: unknown = result.Result;
+    if (IsActionOutputEntryList(resultData)) {
+      return resultData.find(item => item.Name.toLowerCase() === lower)?.Value;
+    }
+    if (IsPlainRecord(resultData)) {
+      const key = Object.keys(resultData).find(k => k.toLowerCase() === lower);
+      if (key !== undefined && resultData[key] != null) {
+        return resultData[key];
+      }
+    }
+    const param = result.Params?.find(p => p.Name?.toLowerCase() === lower);
+    return param?.Value ?? undefined;
+  }
+
+  private readOutputParam(result: ActionResult, name: string): string | undefined {
+    const value = this.readOutputValue(result, name);
+    return value != null ? String(value) : undefined;
+  }
+
+  private readOutputNumber(result: ActionResult, name: string): number | undefined {
+    const text = this.readOutputParam(result, name);
+    if (text === undefined || text.trim() === '') {
+      return undefined;
+    }
+    const value = Number(text);
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  /**
+   * Launch the SQL Server backup bootstrap as a detached server run. The restore and loads take hours,
+   * so the mutation returns at once with a run ID; follow it with {@link TailBootstrapRun} and read the
+   * outcome with {@link GetBootstrapRun}.
+   */
+  async StartBootstrapFromBackup(
+    companyIntegrationID: string,
+    options: {
+      BackupUrls: string;
+      SasToken?: string;
+      StorageCredentialID?: string;
+      StagingDatabaseName?: string;
+      DropStagingDbOnComplete?: boolean;
+      TruncateTargetBeforeLoad?: boolean;
+      BatchSize?: number;
+    },
+    provider?: IMetadataProvider | null
+  ): Promise<{ Success: boolean; Message: string; RunID?: string }> {
+    const result = await this.integrationClientFor(provider).StartBootstrap({ CompanyIntegrationID: companyIntegrationID, ...options });
+    return { Success: result.Success, Message: result.Message ?? '', RunID: result.RunID };
+  }
+
+  /** The run's events after `sinceSeq`; `IsInFlight === false` means the run is terminal and polling can stop. */
+  async TailBootstrapRun(runID: string, sinceSeq: number, provider?: IMetadataProvider | null): Promise<{ Success: boolean; Message: string; Events: IntegrationRunEvent[]; LatestSeq: number; IsInFlight: boolean }> {
+    const result = await this.integrationClientFor(provider).TailRunEvents(runID, sinceSeq);
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      Events: result.Events ?? [],
+      LatestSeq: result.LatestSeq ?? sinceSeq,
+      IsInFlight: result.IsInFlight ?? false,
+    };
+  }
+
+  /** The run's summary and errors once it is terminal (or at any point, for its latest state). */
+  async GetBootstrapRun(runID: string, provider?: IMetadataProvider | null): Promise<{ Success: boolean; Message: string; Run?: IntegrationRunSummary; Errors: string[] }> {
+    const result = await this.integrationClientFor(provider).GetRun(runID);
+    return { Success: result.Success, Message: result.Message ?? '', Run: result.Run, Errors: result.Errors ?? [] };
+  }
+
+  /** Launches a detached archive seed job (restore, discover, then wait for a table selection). */
+  async StartArchiveSeed(input: IntegrationArchiveSeedStartInput, provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['StartArchiveSeed']>>> {
+    return this.integrationClientFor(provider).StartArchiveSeed(input);
+  }
+
+  /** Records the tables to seed and resumes the job. */
+  async SelectArchiveSeedTables(jobID: string, tableNames: string[], provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['SelectArchiveSeedTables']>>> {
+    return this.integrationClientFor(provider).SelectArchiveSeedTables(jobID, tableNames);
+  }
+
+  /** Completes the job, optionally dropping the staging database. */
+  async FinishArchiveSeed(jobID: string, dropStaging: boolean, provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['FinishArchiveSeed']>>> {
+    return this.integrationClientFor(provider).FinishArchiveSeed(jobID, dropStaging);
+  }
+
+  /** Abandons a job waiting for a selection or a cleanup decision; the server drops its staging database. */
+  async CancelArchiveSeed(jobID: string, provider?: IMetadataProvider | null): Promise<Awaited<ReturnType<GraphQLIntegrationClient['CancelArchiveSeed']>>> {
+    return this.integrationClientFor(provider).CancelArchiveSeed(jobID);
+  }
+
+  /** The archive seed job's current state. */
+  async GetArchiveSeedState(jobID: string, provider?: IMetadataProvider | null): Promise<{ Success: boolean; Message?: string; State?: IntegrationArchiveSeedState }> {
+    return this.integrationClientFor(provider).GetArchiveSeedState(jobID);
+  }
+
+  /**
+   * Inspects SQL Server backup headers (via 'Inspect SQL Server Backup' server action)
+   * to verify backup availability, database name, temporal start timestamp, and stripe count.
+   */
+  async InspectSQLServerBackup(
+    companyIntegrationID: string | null,
+    options: {
+      BackupUrls: string;
+      SasToken?: string;
+      StorageCredentialID?: string;
+    },
+    provider?: IMetadataProvider | null
+  ): Promise<InspectBackupResult> {
+    const result = await this.runNamedAction('Inspect SQL Server Backup', this.buildActionParams({
+      CompanyIntegrationID: companyIntegrationID ?? undefined,
+      BackupUrls: options.BackupUrls,
+      SasToken: options.SasToken,
+      StorageCredentialID: options.StorageCredentialID,
+    }), provider);
+    if (!result) {
+      return {
+        Success: false,
+        Message: 'Action "Inspect SQL Server Backup" not found. Ensure the action is registered.'
+      };
+    }
+
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      DatabaseName: this.readOutputParam(result, 'DatabaseName'),
+      BackupStartDate: this.readOutputParam(result, 'BackupStartDate'),
+      SizeBytes: this.readOutputNumber(result, 'BackupSizeBytes'),
+      Stripes: this.readOutputNumber(result, 'Stripes'),
+    };
+  }
+
+  /**
+   * Lists backup blobs from an Azure Blob container via server action 'List Azure Backup Blobs',
+   * avoiding browser CORS restrictions and SAS token exposure.
+   */
+  async ListAzureBackupBlobs(
+    companyIntegrationID: string | null,
+    options: {
+      ContainerUrl: string;
+      SasToken?: string;
+      StorageCredentialID?: string;
+      Prefix?: string;
+    },
+    provider?: IMetadataProvider | null
+  ): Promise<ListAzureBackupBlobsResult> {
+    const result = await this.runNamedAction('List Azure Backup Blobs', this.buildActionParams({
+      CompanyIntegrationID: companyIntegrationID ?? undefined,
+      ContainerUrl: options.ContainerUrl,
+      SasToken: options.SasToken,
+      StorageCredentialID: options.StorageCredentialID,
+      Prefix: options.Prefix,
+    }), provider);
+    if (!result) {
+      return {
+        Success: false,
+        Message: 'Action "List Azure Backup Blobs" not found. Ensure the action is registered.',
+        Blobs: []
+      };
+    }
+
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      Blobs: this.parseBlobList(this.readOutputValue(result, 'Blobs'))
+    };
+  }
+
+  /** The action's `Blobs` output: a JSON string of `{ Name, SizeBytes, LastModified }` items, or that array already parsed. */
+  private parseBlobList(raw: unknown): AzureBlobItem[] {
+    let items: unknown[] = [];
+    if (typeof raw === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        items = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        items = [];
+      }
+    } else if (Array.isArray(raw)) {
+      items = raw;
+    }
+
+    return items.filter(IsPlainRecord).map(item => {
+      const name = String(item['Name'] ?? '');
+      const sizeBytes = Number(item['SizeBytes'] ?? 0);
+      const lastModifiedRaw = item['LastModified'];
+      return {
+        Name: name,
+        SizeBytes: sizeBytes,
+        SizeFormatted: FormatBytes(sizeBytes),
+        LastModified: lastModifiedRaw ? new Date(String(lastModifiedRaw)) : undefined,
+        IsBak: name.toLowerCase().endsWith('.bak')
+      };
+    });
+  }
+
   /** Load schedule data for all company integrations (includes new scheduling fields) */
   async LoadSchedules(_provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntity[]> {
     await IntegrationEngineBase.Instance.Config(false);
@@ -995,8 +1309,8 @@ export class IntegrationDataService {
     return counts;
   }
 
-  private async lookupActionID(actionName: string): Promise<string | null> {
-    const rv = RunView.FromMetadataProvider(this.Provider);
+  private async lookupActionID(actionName: string, provider?: IMetadataProvider | null): Promise<string | null> {
+    const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
     const result = await rv.RunView<{ ID: string }>({
       EntityName: 'MJ: Actions',
       ExtraFilter: `Name='${actionName}'`,
@@ -1021,8 +1335,11 @@ export class IntegrationDataService {
     integration: MJCompanyIntegrationEntity,
     allRuns: IntegrationRunRow[],
     sourceTypes: MJIntegrationSourceTypeEntity[],
-    integrationDefs: MJIntegrationEntity[]
+    integrationDefs: MJIntegrationEntity[],
+    linkByDataSourceID: UUIDMap<DataSourceLink>
   ): IntegrationSummary {
+    const dataSourceID = ReadExternalDataSourceID(integration.Configuration);
+    const dataSourceLink = dataSourceID ? linkByDataSourceID.Get(dataSourceID) : undefined;
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
     const recentRuns = integrationRuns.slice(0, 5);
@@ -1039,6 +1356,8 @@ export class IntegrationDataService {
     return {
       Integration: integration,
       SourceType: sourceType,
+      DataSourceDialect: dataSourceLink?.Dialect ?? null,
+      DataSourceStatus: dataSourceLink?.Status ?? null,
       Icon: icon,
       LatestRun: latestRun,
       RecentRuns: recentRuns,

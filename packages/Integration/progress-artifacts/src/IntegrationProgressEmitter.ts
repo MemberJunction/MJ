@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CountsContributeToAggregate } from './types.js';
 import { DefaultRunArtifactRoot } from './RunArtifactRoot.js';
@@ -85,11 +85,18 @@ export class IntegrationRunResumeError extends Error {
 
 /**
  * Writes structured progress artifacts to `<rootDir>/<runID>/`:
- * - manifest.json (written once at start)
+ * - manifest.json (written once, by the emitter that opens the run)
  * - progress.jsonl (append-only event stream; checkpoint events carry resumableState)
  * - result.json (written once at terminate)
  *
- * Sequence numbers monotonic per emitter instance. Disk I/O is async and serialized
+ * Sequence numbers are monotonic per run. When the run directory already holds a manifest at
+ * construction, the emitter RESUMES that run: it continues `seq` after the last event on disk,
+ * leaves manifest.json untouched, skips retention pruning, and inherits the run's counts, errors
+ * and warnings (see {@link IsResumed} and {@link Resume}). This lets
+ * several writers (a server job, then actions it invokes, then the job again) share one sequence,
+ * provided each writer flushes before the next one is constructed.
+ *
+ * Disk I/O is async and serialized
  * via an internal promise chain — callers don't await; the emitter guarantees ordered
  * writes. A flush() method awaits the queue when needed (test teardown, run completion).
  */
@@ -148,6 +155,11 @@ export class IntegrationProgressEmitter {
         this.resultPath = join(this.runDir, 'result.json');
         this.consoleMirror = opts.consoleMirror ?? false;
         this.maxRunDirs = opts.maxRunDirs ?? DEFAULT_MAX_RUN_DIRS;
+        // Resume state comes from Resume() or, when the run's manifest is already on disk, from a
+        // synchronous replay here: several writers (a server job, then actions it invokes, then the
+        // job again) share one run by each constructing an emitter for its runID after the previous
+        // writer flushed.
+        resumeState ??= IntegrationProgressEmitter.replayExistingRun(this.manifestPath, this.progressPath, this.manifest);
         this.resumed = resumeState !== undefined;
         this.startMs = resumeState?.startMs ?? Date.now();
         if (resumeState) {
@@ -239,6 +251,12 @@ export class IntegrationProgressEmitter {
      * run's terminal result covers the WHOLE run rather than only the post-restart tail.
      */
     private static async replayJournal(path: string, manifest: IntegrationRunManifest): Promise<ResumedRunState> {
+        const raw = await fs.readFile(path, 'utf-8').catch(() => undefined);
+        return IntegrationProgressEmitter.replayJournalText(raw, manifest);
+    }
+
+    /** {@link replayJournal} over journal text already read; `undefined` means no journal yet. */
+    private static replayJournalText(raw: string | undefined, manifest: IntegrationRunManifest): ResumedRunState {
         const parsedStart = Date.parse(manifest.startedAt);
         const state: ResumedRunState = {
             lastSeq: 0,
@@ -248,7 +266,6 @@ export class IntegrationProgressEmitter {
             startMs: Number.isFinite(parsedStart) ? parsedStart : Date.now(),
             eventCount: 0,
         };
-        const raw = await fs.readFile(path, 'utf-8').catch(() => undefined);
         if (raw === undefined) return state;
 
         for (const line of raw.split('\n')) {
@@ -679,6 +696,29 @@ export class IntegrationProgressEmitter {
             if (Number.isFinite(parsed)) return parsed;
         } catch { /* fall through to mtime */ }
         try { return (await fs.stat(runDir)).mtimeMs; } catch { return 0; }
+    }
+
+    /**
+     * Resume state for a run whose manifest is already on disk; undefined when the run is new. The
+     * on-disk manifest is authoritative for the run's start, not the one this writer was handed.
+     */
+    private static replayExistingRun(manifestPath: string, progressPath: string, fallback: IntegrationRunManifest): ResumedRunState | undefined {
+        const manifestRaw = IntegrationProgressEmitter.readFileOrUndefined(manifestPath);
+        if (manifestRaw === undefined) return undefined;
+        let onDisk = fallback;
+        try {
+            onDisk = JSON.parse(manifestRaw) as IntegrationRunManifest;
+        } catch { /* unparseable manifest — keep the caller's */ }
+        return IntegrationProgressEmitter.replayJournalText(IntegrationProgressEmitter.readFileOrUndefined(progressPath), onDisk);
+    }
+
+    /** A file's text, or undefined when it does not exist or cannot be read. */
+    private static readFileOrUndefined(path: string): string | undefined {
+        try {
+            return readFileSync(path, 'utf-8');
+        } catch {
+            return undefined;
+        }
     }
 
     /** Whether a run dir holds a terminal record — i.e. the run finished and said so. */

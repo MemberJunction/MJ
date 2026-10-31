@@ -17,6 +17,10 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  HostSqlConnectionInfo,
+  HOST_MODE_DATABASE_PREFIX,
+  IsHostModeDatabaseAllowed,
+  ResolveHostConnection,
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
@@ -49,8 +53,13 @@ export interface SQLServerConnectionConfig {
    * credential) — required for Microsoft Fabric SQL endpoints, which speak TDS but refuse SQL auth.
    * When unset, the driver infers `'entra-service-principal'` if the credential carries a clientId,
    * otherwise `'sql'` (so a correctly-shaped credential Just Works without setting this).
+   * `'host'` connects with the SQL Server login the host process (MJAPI) uses for its own database,
+   * resolved through `ResolveHostConnection()` — no credential record. It is honored only when this
+   * config names no `server`/`host` and the data source has no `CredentialID`; the target database
+   * comes from `DefaultDatabase` only (required — `database` is ignored, so a misconfigured row can
+   * never fall through to the host login's default database).
    */
-  authMode?: 'sql' | 'entra-service-principal';
+  authMode?: 'sql' | 'entra-service-principal' | 'host';
 }
 
 /** Decrypted credential values from the Credential Engine — SQL auth or Entra service principal. */
@@ -70,6 +79,9 @@ interface SqlColumnMeta {
   /** True for DECIMAL/NUMERIC/MONEY/SMALLMONEY — tedious returns these as a lossy JS number. */
   isLossyNumeric: boolean;
 }
+
+/** System databases a `host` auth-mode data source may never target (lower-cased). */
+const HOST_MODE_SYSTEM_DATABASES: ReadonlySet<string> = new Set(['master', 'model', 'msdb', 'tempdb']);
 
 /**
  * SQL Server driver for External Data Sources. Read-only, live-proxied access
@@ -111,10 +123,11 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   /** Build a fresh pool for the data source — invoked once per source by the race-safe cache. */
   private async createPool(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const config = this.parseConnectionConfig<SQLServerConnectionConfig>(dataSource);
-    const cred = await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
-    const poolConfig = this.buildPoolConfig(dataSource, config, cred);
+    const host = config.authMode === 'host' ? this.resolveHostConnectionInfo(dataSource, config) : undefined;
+    const cred = host ? null : await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
+    const poolConfig = this.buildPoolConfig(dataSource, config, cred, host);
     // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
-    this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!poolConfig.options?.encrypt, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+    this.assertSecureTransport({ host: host ? host.Server : (config.server ?? config.host), tlsEnabled: !!poolConfig.options?.encrypt, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
     const pool = new sql.ConnectionPool(poolConfig);
     try {
       await pool.connect();
@@ -128,18 +141,90 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   }
 
   /**
+   * Refuses `host` auth mode unless the data source is shaped for it: the config must not name a
+   * `server`/`host` (the target is always the host's own server) and the row must carry no
+   * `CredentialID` (host mode never mixes with a stored credential), and the row must name its
+   * target in `DefaultDatabase` (otherwise the host login would land in its own default database —
+   * the MJ database). A system database (`master`, `model`, `msdb`, `tempdb`) is refused, and so is any
+   * database that is not an archive-seed staging database (`MJ_Staging_*`, case-insensitive): host
+   * mode reads with MJAPI's own login, and any user who can edit an External Data Source can set it.
+   * Throws a configuration error.
+   */
+  protected assertHostModeAllowed(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): void {
+    if (config.server || config.host) {
+      throw new Error(
+        `host auth mode requires a ConnectionConfig without "server"/"host" (external data source '${dataSource.Name}'); the host's own server is used.`,
+      );
+    }
+    if (dataSource.CredentialID) {
+      throw new Error(`host auth mode requires an external data source with no CredentialID (external data source '${dataSource.Name}').`);
+    }
+    const database = this.requireHostDatabase(dataSource);
+    if (HOST_MODE_SYSTEM_DATABASES.has(database.toLowerCase())) {
+      throw new Error(`host auth mode refuses DefaultDatabase '${database}': it is a system database (external data source '${dataSource.Name}').`);
+    }
+    if (!IsHostModeDatabaseAllowed(database)) {
+      throw new Error(
+        `host auth mode refuses DefaultDatabase '${database}': only an archive-seed staging database (a name starting with ` +
+        `'${HOST_MODE_DATABASE_PREFIX}') may be opened with the host's login (external data source '${dataSource.Name}').`,
+      );
+    }
+  }
+
+  /** Refuses a `DefaultDatabase` that names the host's own database (compared case-insensitively). */
+  private assertNotHostDatabase(dataSource: MJExternalDataSourceEntity, host: HostSqlConnectionInfo): void {
+    const database = this.requireHostDatabase(dataSource);
+    const hostDatabase = host.Database?.trim();
+    if (hostDatabase && hostDatabase.toLowerCase() === database.toLowerCase()) {
+      throw new Error(`host auth mode refuses DefaultDatabase '${database}': it is the host's own database (external data source '${dataSource.Name}').`);
+    }
+  }
+
+  /** The `DefaultDatabase` a `host` auth-mode data source targets; throws when it is missing or blank. */
+  private requireHostDatabase(dataSource: MJExternalDataSourceEntity): string {
+    const database = dataSource.DefaultDatabase?.trim();
+    if (!database) {
+      throw new Error(`host auth mode requires a DefaultDatabase on the external data source '${dataSource.Name}'.`);
+    }
+    return database;
+  }
+
+  /**
+   * Validates a `host` auth-mode data source and resolves the host's SQL Server connection info.
+   * Throws when the data source is not shaped for host mode, when no host connection resolver is
+   * registered, or when the resolved info lacks a user or password.
+   */
+  protected resolveHostConnectionInfo(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): HostSqlConnectionInfo {
+    this.assertHostModeAllowed(dataSource, config);
+    const host = ResolveHostConnection();
+    if (!host) {
+      throw new Error(`host auth mode requires a registered host connection resolver (external data source '${dataSource.Name}').`);
+    }
+    if (!host.User || !host.Password) {
+      throw new Error(`host auth mode requires a host connection with a SQL login user and password (external data source '${dataSource.Name}').`);
+    }
+    this.assertNotHostDatabase(dataSource, host);
+    return host;
+  }
+
+  /**
    * Builds the mssql pool config for either SQL auth or Microsoft Entra service-principal auth.
    * Pure (no I/O) so the auth-mode selection, forced encryption, and the Entra `authentication`
    * block are unit-testable without opening a connection. Entra mode is used when `authMode` says
    * so, or is inferred when the credential carries a `clientId` (so a correctly-shaped credential
    * works without extra config). Entra endpoints (Microsoft Fabric) are TLS-only, so encryption is
-   * forced on for them regardless of the `ssl` flag.
+   * forced on for them regardless of the `ssl` flag. In `host` auth mode the server, login and
+   * transport options come from `host` (the host's own connection) and `cred` is ignored.
    */
   protected buildPoolConfig(
     dataSource: MJExternalDataSourceEntity,
     config: SQLServerConnectionConfig,
     cred: { values: SQLServerCredentialValues } | null,
+    host?: HostSqlConnectionInfo,
   ): sql.config {
+    if (config.authMode === 'host') {
+      return this.buildHostPoolConfig(dataSource, config, host);
+    }
     const useEntra = (config.authMode ?? (cred?.values.clientId ? 'entra-service-principal' : 'sql')) === 'entra-service-principal';
     const encrypt = useEntra ? true : !!config.ssl;
     const options: NonNullable<sql.config['options']> = {
@@ -179,6 +264,30 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
       poolConfig.password = cred?.values.password;
     }
     return poolConfig;
+  }
+
+  /** SQL-auth pool config for `host` auth mode: the host's server, login and TLS options, the data source's DefaultDatabase. */
+  private buildHostPoolConfig(
+    dataSource: MJExternalDataSourceEntity,
+    config: SQLServerConnectionConfig,
+    host: HostSqlConnectionInfo | undefined,
+  ): sql.config {
+    if (!host) {
+      throw new Error(`host auth mode requires resolved host connection info (external data source '${dataSource.Name}').`);
+    }
+    return {
+      server: host.Server,
+      port: host.Port,
+      database: this.requireHostDatabase(dataSource),
+      user: host.User,
+      password: host.Password,
+      options: {
+        encrypt: !!host.Encrypt,
+        trustServerCertificate: !!host.TrustServerCertificate,
+        ...(host.InstanceName ? { instanceName: host.InstanceName } : {}),
+      },
+      pool: { max: config.maxPoolSize ?? 5 },
+    };
   }
 
   /**
@@ -309,6 +418,14 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }
+  }
+
+  /** Every schema of the database that holds a table or view, in name order. */
+  public override async ListSchemas(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<string[]> {
+    const pool = await this.getConnection(dataSource, contextUser);
+    const result = await pool.request().query<{ TABLE_SCHEMA: string }>(
+      `SELECT DISTINCT TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA`);
+    return result.recordset.map((r) => r.TABLE_SCHEMA);
   }
 
   public async IntrospectSchema(

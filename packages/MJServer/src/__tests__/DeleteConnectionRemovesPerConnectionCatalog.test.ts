@@ -45,7 +45,7 @@ describe('IntegrationDeleteConnection removes the per-connection catalog before 
   });
 
   it('selects the fields by the objects of THIS connection only', () => {
-    expect(BODY).toMatch(/ExtraFilter: `CompanyIntegrationID='\$\{companyIntegrationID\}'`,\s*ResultType: 'entity_object',\s*\}, sysUser\);\s*const perConnectionObjects/);
+    expect(BODY).toMatch(/ExtraFilter: `CompanyIntegrationID='\$\{companyIntegrationID\}'`,\s*ResultType: 'entity_object',\s*\}, actingUser\);\s*const perConnectionObjects/);
     expect(BODY).toMatch(/ExtraFilter: `CompanyIntegrationObjectID IN \(\$\{objectIDs\}\)`/);
   });
 });

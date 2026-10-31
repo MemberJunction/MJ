@@ -2,7 +2,7 @@
  * Tests for IntegrationDataService
  * Covers pure logic methods (KPI computation, formatting, status calculation)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { IntegrationDataService, IntegrationSummary, IntegrationRunRow } from '../Integration/services/integration-data.service';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 
@@ -18,6 +18,8 @@ function createSummary(overrides: Partial<IntegrationSummary> = {}): Integration
       Integration: 'Test', DriverClassName: null
     } as unknown as MJCompanyIntegrationEntity,
     SourceType: null,
+    DataSourceDialect: null,
+    DataSourceStatus: null,
     LatestRun: null,
     RecentRuns: [],
     StatusColor: 'gray',
@@ -146,6 +148,89 @@ describe('IntegrationDataService', () => {
     it('should return days for days ago', () => {
       const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
       expect(createService().ComputeRelativeTime(twoDaysAgo)).toBe('2d ago');
+    });
+  });
+
+  describe('archive seed', () => {
+    it('InspectSQLServerBackup(null, ...) omits CompanyIntegrationID', async () => {
+      const svc = new IntegrationDataService();
+      const run = vi.spyOn(svc as unknown as { runNamedAction: (n: string, p: unknown[]) => Promise<unknown> }, 'runNamedAction')
+        .mockResolvedValue({ Success: true, Message: '', Result: [], Params: [] });
+      await svc.InspectSQLServerBackup(null, { BackupUrls: '/b/a.bak' });
+      const params = run.mock.calls[0][1] as { Name: string }[];
+      expect(params.map(p => p.Name)).not.toContain('CompanyIntegrationID');
+      expect(params.map(p => p.Name)).toContain('BackupUrls');
+    });
+
+    it('runs the archive seed and bootstrap calls on the provider the caller passes', async () => {
+      const svc = new IntegrationDataService();
+      const mod = await import('@memberjunction/graphql-dataprovider');
+      const callerProvider = Object.create(mod.GraphQLDataProvider.prototype) as InstanceType<typeof mod.GraphQLDataProvider>;
+      svc.Provider = Object.create(mod.GraphQLDataProvider.prototype) as InstanceType<typeof mod.GraphQLDataProvider>;
+      const seen: unknown[] = [];
+      const getState = vi.fn().mockResolvedValue({ Success: true });
+      const cancel = vi.fn().mockResolvedValue({ Success: true });
+      vi.spyOn(mod, 'GraphQLIntegrationClient').mockImplementation(class {
+        GetArchiveSeedState = getState;
+        CancelArchiveSeed = cancel;
+        constructor(provider: unknown) { seen.push(provider); }
+      } as unknown as typeof mod.GraphQLIntegrationClient);
+      const defaultClient = vi.spyOn(svc as unknown as { getIntegrationClient: () => unknown }, 'getIntegrationClient');
+
+      await svc.GetArchiveSeedState('j', callerProvider);
+      await svc.CancelArchiveSeed('j', callerProvider);
+
+      expect(seen).toEqual([callerProvider, callerProvider]);
+      expect(defaultClient).not.toHaveBeenCalled();
+      expect(cancel).toHaveBeenCalledWith('j');
+      vi.restoreAllMocks();
+    });
+
+    it('refuses a non-GraphQL provider passed by the caller', async () => {
+      const svc = new IntegrationDataService();
+      await expect(svc.GetArchiveSeedState('j', {} as unknown as IntegrationDataService['Provider'])).rejects.toThrow(/GraphQLDataProvider/);
+    });
+
+    it('reads action outputs only from well-formed output lists', async () => {
+      const svc = new IntegrationDataService();
+      const run = vi.spyOn(svc as unknown as { runNamedAction: (n: string, p: unknown[]) => Promise<unknown> }, 'runNamedAction');
+      run.mockResolvedValueOnce({ Success: true, Message: '', Result: [{ Name: 'DatabaseName', Value: 'AW' }, 'junk'], Params: [] });
+      expect((await svc.InspectSQLServerBackup(null, { BackupUrls: '/b/a.bak' })).DatabaseName).toBeUndefined();
+
+      run.mockResolvedValueOnce({ Success: true, Message: '', Result: [{ Name: 'DatabaseName', Value: 'AW' }], Params: [] });
+      expect((await svc.InspectSQLServerBackup(null, { BackupUrls: '/b/a.bak' })).DatabaseName).toBe('AW');
+
+      run.mockResolvedValueOnce({ Success: true, Message: '', Result: 'not an object', Params: [{ Name: 'DatabaseName', Value: 'FromParams', Type: 'Output' }] });
+      expect((await svc.InspectSQLServerBackup(null, { BackupUrls: '/b/a.bak' })).DatabaseName).toBe('FromParams');
+    });
+
+    it('drops malformed blob entries instead of inventing blobs', async () => {
+      const svc = new IntegrationDataService();
+      vi.spyOn(svc as unknown as { runNamedAction: (n: string, p: unknown[]) => Promise<unknown> }, 'runNamedAction')
+        .mockResolvedValue({ Success: true, Message: '', Result: { Blobs: JSON.stringify([null, 'x', 7, { Name: 'a.bak', SizeBytes: 2048 }]) }, Params: [] });
+      const res = await svc.ListAzureBackupBlobs(null, { ContainerUrl: 'https://acct/backups', SasToken: 's' });
+      expect(res.Blobs.map(b => b.Name)).toEqual(['a.bak']);
+      expect(res.Blobs[0].IsBak).toBe(true);
+    });
+
+    it('passes the archive seed calls through to the client', async () => {
+      const svc = new IntegrationDataService();
+      const client = {
+        StartArchiveSeed: vi.fn().mockResolvedValue({ Success: true, JobID: 'j' }),
+        SelectArchiveSeedTables: vi.fn().mockResolvedValue({ Success: true }),
+        FinishArchiveSeed: vi.fn().mockResolvedValue({ Success: true }),
+        GetArchiveSeedState: vi.fn().mockResolvedValue({ Success: true }),
+      };
+      vi.spyOn(svc as unknown as { getIntegrationClient: () => unknown }, 'getIntegrationClient').mockReturnValue(client);
+      const input = { CompanyID: 'c', ConnectionName: 'n', BackupUrls: 'u' };
+      expect((await svc.StartArchiveSeed(input)).JobID).toBe('j');
+      await svc.SelectArchiveSeedTables('j', ['dbo.A']);
+      await svc.FinishArchiveSeed('j', true);
+      await svc.GetArchiveSeedState('j');
+      expect(client.StartArchiveSeed).toHaveBeenCalledWith(input);
+      expect(client.SelectArchiveSeedTables).toHaveBeenCalledWith('j', ['dbo.A']);
+      expect(client.FinishArchiveSeed).toHaveBeenCalledWith('j', true);
+      expect(client.GetArchiveSeedState).toHaveBeenCalledWith('j');
     });
   });
 });

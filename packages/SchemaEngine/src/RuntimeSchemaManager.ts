@@ -8,7 +8,7 @@
  * Hard-blocks CREATE/ALTER/DROP in __mj schema.
  * In-memory concurrency mutex (one operation at a time).
  */
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
 import {
   LogError,
   Metadata,
@@ -427,6 +427,11 @@ export interface RSUPipelineBatchResult {
   TotalCount: number;
 }
 
+/** The pending-work columns {@link RuntimeSchemaManager.ReadPendingWorkForCompanyIntegration} reads, as a plain row. */
+type PendingWorkSummaryRow = Pick<MJRSUPendingWorkEntity, 'ID' | 'PayloadJSON' | 'Status' | 'ErrorMessage'> & {
+  __mj_CreatedAt: Date | string | null;
+};
+
 /** Per-item result from the migration execution phase. */
 interface MigrationItemResult {
   Input: RSUPipelineInput;
@@ -484,7 +489,74 @@ interface PostMigrationResult {
  */
 export const MAX_RSU_PENDING_ATTEMPTS = 3;
 
+/** Lifecycle state of an archive-seed job; persisted in {@link ArchiveSeedWork.State}. */
+export type ArchiveSeedState =
+  | 'Created'
+  | 'Restoring'
+  | 'Discovering'
+  | 'AwaitingSelection'
+  | 'Building'
+  | 'Mapping'
+  | 'Loading'
+  | 'Seeding'
+  | 'AwaitingCleanupDecision'
+  | 'CleaningUp'
+  | 'Done'
+  | 'Failed';
+
+/** A table found in the restored archive during discovery. */
+export interface ArchiveSeedDiscoveredTable {
+  Name: string;
+  ColumnCount: number;
+  HasPrimaryKey: boolean;
+  WatermarkField?: string;
+}
+
+/** Totals reported once an archive-seed job finishes. */
+export interface ArchiveSeedSummary {
+  TablesProcessed: number;
+  TotalRowsTransferred: number;
+  DurationSeconds: number;
+  StagingDatabaseDropped: boolean;
+}
+
+/** Durable state of an archive-seed job, carried as the `ArchiveSeed` field of a pending-work payload. */
+export interface ArchiveSeedWork {
+  State: ArchiveSeedState;
+  StateChangedAt: string;
+  UserID: string;
+  CompanyID: string;
+  IntegrationID: string;
+  ConnectionName: string;
+  BackupUrls: string;
+  StorageCredentialID?: string;
+  StagingDatabaseName: string;
+  BatchSize: number;
+  TargetDataFileDirectory?: string;
+  TargetLogFileDirectory?: string;
+  BackupDatabaseName?: string;
+  BackupStartDate?: string;
+  ContainerUrl?: string;
+  /**
+   * When the job entered `Restoring` (ISO UTC). Every staging drop the job issues passes it as the
+   * drop action's `CreatedAfter`, so a database that already carried the staging name is never dropped.
+   */
+  RestoreStartedAt?: string;
+  DeferredDataSourceID?: string;
+  ArchiveDataSourceID?: string;
+  CurrentRunID?: string;
+  /** The current progress run has been terminated by the job; nothing more may be emitted on it. */
+  RunClosed?: boolean;
+  Tables?: ArchiveSeedDiscoveredTable[];
+  SelectedTables?: string[];
+  Summary?: ArchiveSeedSummary;
+  Error?: string;
+}
+
 export interface RSUPendingWork {
+  /** Archive-seed job state; present only when `WorkType` is `'archive-seed'`. */
+  ArchiveSeed?: ArchiveSeedWork;
+
   /**
    * What the post-restart consumer should do with this row.
    *
@@ -496,7 +568,7 @@ export interface RSUPendingWork {
    * including any collision suffix, and re-deriving those names after the restart could produce
    * different ones.
    */
-  WorkType?: 'apply-objects' | 'promote-columns';
+  WorkType?: 'apply-objects' | 'promote-columns' | 'archive-seed';
 
   /**
    * How many times a consumer has already tried and failed to finish this work.
@@ -927,6 +999,92 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     provider?: IMetadataProvider,
   ): Promise<boolean> {
     return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser, provider);
+  }
+
+  /** Reads one pending-work row by ID in any status. Returns undefined when missing or its payload is corrupt. */
+  public async ReadPendingWorkByID(
+    id: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<{ ID: string; Work: RSUPendingWork; Status: MJRSUPendingWorkEntity['Status']; CreatedAt: Date } | undefined> {
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    if (!(await row.Load(id))) return undefined;
+    try {
+      const work = JSON.parse(row.PayloadJSON) as RSUPendingWork;
+      return { ID: row.ID, Work: work, Status: row.Status, CreatedAt: row.__mj_CreatedAt ?? new Date() };
+    } catch (err) {
+      LogError(`[RSU] Pending work ${id} has a corrupt payload: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    }
+  }
+
+  /** Rewrites a pending-work row's payload, leaving its Status untouched. */
+  public async UpdatePendingWorkPayload(
+    id: string,
+    work: RSUPendingWork,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    if (!(await row.Load(id))) {
+      LogError(`[RSU] Pending work ${id} not found when updating its payload`);
+      return false;
+    }
+    row.PayloadJSON = JSON.stringify(work);
+    if (!(await row.Save())) {
+      LogError(`[RSU] Failed to update payload of pending work ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Reads every pending-work row of one WorkType for a company integration, in all statuses,
+   * newest first. An absent WorkType on a stored payload counts as `'apply-objects'`.
+   */
+  public async ReadPendingWorkForCompanyIntegration(
+    companyIntegrationID: string,
+    workType: RSUPendingWork['WorkType'],
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<
+    Array<{ ID: string; Work: RSUPendingWork; Status: MJRSUPendingWorkEntity['Status']; ErrorMessage: string | null; CreatedAt: Date }>
+  > {
+    // Read-only: the rows are parsed, never saved, so plain rows with only the columns read.
+    const rv = new RunView(provider as DatabaseProviderBase | undefined);
+    const result = await rv.RunView<PendingWorkSummaryRow>(
+      {
+        EntityName: 'MJ: RSU Pending Works',
+        ExtraFilter: `CompanyIntegrationID = '${EscapeSQLString(companyIntegrationID)}'`,
+        OrderBy: '__mj_CreatedAt DESC',
+        Fields: ['ID', 'PayloadJSON', 'Status', 'ErrorMessage', '__mj_CreatedAt'],
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      contextUser,
+    );
+    if (!result.Success) {
+      LogError(`[RSU] Failed to read pending work for company integration ${companyIntegrationID}: ${result.ErrorMessage}`);
+      return [];
+    }
+    const wanted = workType ?? 'apply-objects';
+    const items: Array<{ ID: string; Work: RSUPendingWork; Status: MJRSUPendingWorkEntity['Status']; ErrorMessage: string | null; CreatedAt: Date }> = [];
+    for (const row of result.Results) {
+      const work = this.tryParsePayload(row.PayloadJSON);
+      if (!work || (work.WorkType ?? 'apply-objects') !== wanted) continue;
+      items.push({ ID: row.ID, Work: work, Status: row.Status, ErrorMessage: row.ErrorMessage, CreatedAt: row.__mj_CreatedAt ? new Date(row.__mj_CreatedAt) : new Date() });
+    }
+    return items;
+  }
+
+  private tryParsePayload(payloadJSON: string): RSUPendingWork | undefined {
+    try {
+      return JSON.parse(payloadJSON) as RSUPendingWork;
+    } catch {
+      return undefined;
+    }
   }
 
   /**

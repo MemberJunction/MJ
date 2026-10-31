@@ -1,8 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
+import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { IntegrationEngine, SyncResult, SyncTriggerType, IntegrationSyncOptions } from '@memberjunction/integration-engine';
+import { BaseIntegrationAction } from './BaseIntegrationAction.js';
 
 /**
  * MJ Action that triggers a sync for a CompanyIntegration.
@@ -23,11 +24,11 @@ import { IntegrationEngine, SyncResult, SyncTriggerType, IntegrationSyncOptions 
  *   - ErrorSummary: JSON string of error details (first 10 errors)
  */
 @RegisterClass(BaseAction, 'Run Integration Sync')
-export class RunSyncAction extends BaseAction {
+export class RunSyncAction extends BaseIntegrationAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
+            const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
             if (!companyIntegrationID) {
                 return {
                     Success: false,
@@ -36,7 +37,7 @@ export class RunSyncAction extends BaseAction {
                 };
             }
 
-            const triggerType = this.parseTriggerType(this.getStringParam(params, 'TriggerType'));
+            const triggerType = this.parseTriggerType(this.GetStringParam(params, 'TriggerType'));
             const options = this.buildSyncOptions(params);
             const result = await IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
@@ -69,12 +70,12 @@ export class RunSyncAction extends BaseAction {
     private buildSyncOptions(params: RunActionParams): IntegrationSyncOptions {
         const options: IntegrationSyncOptions = {};
 
-        const fullSyncRaw = this.getStringParam(params, 'FullSync');
+        const fullSyncRaw = this.GetStringParam(params, 'FullSync');
         if (fullSyncRaw?.toLowerCase() === 'true') {
             options.FullSync = true;
         }
 
-        const entityMapIDsRaw = this.getStringParam(params, 'EntityMapIDs');
+        const entityMapIDsRaw = this.GetStringParam(params, 'EntityMapIDs');
         if (entityMapIDsRaw) {
             options.EntityMapIDs = entityMapIDsRaw.split(',').map(id => id.trim()).filter(id => id.length > 0);
         }
@@ -109,30 +110,14 @@ export class RunSyncAction extends BaseAction {
             { name: 'RecordsSkipped', value: result.RecordsSkipped },
         ];
         for (const { name, value } of outputs) {
-            this.addOutputParam(params, name, value);
+            this.AddOutputParam(params, name, value);
         }
         if (result.Errors.length > 0) {
-            this.addOutputParam(
+            this.AddOutputParam(
                 params,
                 'ErrorSummary',
                 JSON.stringify(result.Errors.slice(0, 10))
             );
         }
-    }
-
-    private getStringParam(params: RunActionParams, name: string): string | undefined {
-        const nameLower = name.toLowerCase();
-        const param = params.Params?.find(p => p.Name.trim().toLowerCase() === nameLower);
-        if (!param || param.Value == null) return undefined;
-        const value = String(param.Value).trim();
-        return value.length > 0 ? value : undefined;
-    }
-
-    private addOutputParam(params: RunActionParams, name: string, value: number | string): void {
-        const outputParam = new ActionParam();
-        outputParam.Name = name;
-        outputParam.Type = 'Output';
-        outputParam.Value = value;
-        params.Params.push(outputParam);
     }
 }

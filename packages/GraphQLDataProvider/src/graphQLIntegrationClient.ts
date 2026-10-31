@@ -121,6 +121,92 @@ export interface MutationResult {
     Message: string;
 }
 
+/** Inputs of the detached SQL Server backup bootstrap launch (mirrors the server's IntegrationBootstrapInput). */
+export interface IntegrationBootstrapStartInput {
+    CompanyIntegrationID: string;
+    BackupUrls: string;
+    SasToken?: string;
+    StorageCredentialID?: string;
+    StagingDatabaseName?: string;
+    DropStagingDbOnComplete?: boolean;
+    TruncateTargetBeforeLoad?: boolean;
+    BatchSize?: number;
+    EntityMapIDs?: string;
+    TargetDataFileDirectory?: string;
+    TargetLogFileDirectory?: string;
+}
+
+/** Inputs of the SQL Server archive seed launch (mirrors the server's IntegrationArchiveSeedStartInput). */
+export interface IntegrationArchiveSeedStartInput {
+    CompanyID: string;
+    ConnectionName: string;
+    BackupUrls: string;
+    SasToken?: string;
+    StorageCredentialID?: string;
+    StagingDatabaseName?: string;
+    BatchSize?: number;
+    TargetDataFileDirectory?: string;
+    TargetLogFileDirectory?: string;
+}
+
+/** One table discovered in a restored archive. */
+export interface IntegrationArchiveSeedTable {
+    Name: string;
+    ColumnCount: number;
+    HasPrimaryKey: boolean;
+    WatermarkField?: string;
+}
+
+/** Outcome totals of a finished archive seed job. */
+export interface IntegrationArchiveSeedSummary {
+    TablesProcessed: number;
+    TotalRowsTransferred: number;
+    DurationSeconds: number;
+    StagingDatabaseDropped: boolean;
+}
+
+/** The state of an archive seed job. */
+export interface IntegrationArchiveSeedState {
+    JobID: string;
+    CompanyIntegrationID: string;
+    State: string;
+    CurrentRunID?: string;
+    StagingDatabaseName?: string;
+    BackupDatabaseName?: string;
+    Tables?: IntegrationArchiveSeedTable[];
+    Summary?: IntegrationArchiveSeedSummary;
+    Error?: string;
+}
+
+/** Summary of an integration run artifact, as IntegrationGetRun returns it. */
+export interface IntegrationRunSummary {
+    RunID: string;
+    RunKind: string;
+    CompanyIntegrationID?: string;
+    StartedAt: string;
+    IsInFlight: boolean;
+    EventCount: number;
+    Success?: boolean;
+    ExitReason?: string;
+    CompletedAt?: string;
+    DurationMs?: number;
+    LatestEventType?: string;
+    LatestMessage?: string;
+}
+
+/** One event of an integration run's progress stream, as IntegrationTailRunEvents returns it. */
+export interface IntegrationRunEvent {
+    Ts: string;
+    Seq: number;
+    EventType: string;
+    Level?: string;
+    Stage?: string;
+    Message?: string;
+    /** Subsystem-specific payload, JSON-serialized. */
+    DataJSON?: string;
+    Counts?: { Processed?: number; Succeeded?: number; Failed?: number; Skipped?: number; TotalKnown?: number };
+}
+
 /** A single entity map created during Apply All */
 export interface ApplyAllEntityMapCreated {
     SourceObjectName: string;
@@ -795,6 +881,114 @@ export class GraphQLIntegrationClient {
             }`;
             const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, webhookURL, fullSync, syncDirection });
             return result?.IntegrationStartSync ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * Launch the SQL Server backup bootstrap as a detached run. Returns at once with the run ID;
+     * follow the run with {@link TailRunEvents} and read its outcome with {@link GetRun}.
+     */
+    public async StartBootstrap(input: IntegrationBootstrapStartInput): Promise<MutationResult & { RunID?: string; InProgress?: boolean }> {
+        try {
+            const query = gql`mutation IntegrationStartBootstrap($input: IntegrationBootstrapInput!) {
+                IntegrationStartBootstrap(input: $input) { Success Message RunID InProgress }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { input });
+            return result?.IntegrationStartBootstrap ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /** The summary of one integration run artifact (manifest, terminal result, latest event). */
+    public async GetRun(runID: string): Promise<MutationResult & { Run?: IntegrationRunSummary; Errors?: string[] }> {
+        try {
+            const query = gql`query IntegrationGetRun($runID: String!) {
+                IntegrationGetRun(runID: $runID) {
+                    Success Message Errors
+                    Run { RunID RunKind CompanyIntegrationID StartedAt IsInFlight EventCount Success ExitReason CompletedAt DurationMs LatestEventType LatestMessage }
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { runID });
+            return result?.IntegrationGetRun ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * The run's events after `sinceSeq`. Poll with the last `LatestSeq` seen to receive only new
+     * events; `IsInFlight === false` means the run is terminal and polling can stop.
+     */
+    public async TailRunEvents(runID: string, sinceSeq = 0): Promise<MutationResult & { Events?: IntegrationRunEvent[]; LatestSeq: number; IsInFlight: boolean }> {
+        try {
+            const query = gql`query IntegrationTailRunEvents($runID: String!, $sinceSeq: Float) {
+                IntegrationTailRunEvents(runID: $runID, sinceSeq: $sinceSeq) {
+                    Success Message LatestSeq IsInFlight
+                    Events { Ts Seq EventType Level Stage Message DataJSON Counts { Processed Succeeded Failed Skipped TotalKnown } }
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { runID, sinceSeq });
+            return result?.IntegrationTailRunEvents ?? { Success: false, Message: 'No response', LatestSeq: sinceSeq, IsInFlight: false };
+        } catch (e) { return { Success: false, Message: (e as Error).message, LatestSeq: sinceSeq, IsInFlight: false }; }
+    }
+
+    /** Start an archive seed job: restore the backup to staging and discover its tables. */
+    public async StartArchiveSeed(input: IntegrationArchiveSeedStartInput): Promise<MutationResult & { JobID?: string; RunID?: string; CompanyIntegrationID?: string }> {
+        try {
+            const query = gql`mutation IntegrationArchiveSeedStart($input: IntegrationArchiveSeedStartInput!) {
+                IntegrationArchiveSeedStart(input: $input) { Success Message JobID RunID CompanyIntegrationID }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { input });
+            return result?.IntegrationArchiveSeedStart ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /** Choose the tables an archive seed job transfers; the transfer runs detached. */
+    public async SelectArchiveSeedTables(jobID: string, tableNames: string[]): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationArchiveSeedSelectTables($jobID: String!, $tableNames: [String!]!) {
+                IntegrationArchiveSeedSelectTables(jobID: $jobID, tableNames: $tableNames) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { jobID, tableNames });
+            return result?.IntegrationArchiveSeedSelectTables ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /** Finish an archive seed job, optionally dropping the staging database. */
+    public async FinishArchiveSeed(jobID: string, dropStaging: boolean): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationArchiveSeedFinish($jobID: String!, $dropStaging: Boolean!) {
+                IntegrationArchiveSeedFinish(jobID: $jobID, dropStaging: $dropStaging) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { jobID, dropStaging });
+            return result?.IntegrationArchiveSeedFinish ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /** Abandons a job that waits for a selection or a cleanup decision; the server drops its staging database. */
+    public async CancelArchiveSeed(jobID: string): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationArchiveSeedCancel($jobID: String!) {
+                IntegrationArchiveSeedCancel(jobID: $jobID) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { jobID });
+            return result?.IntegrationArchiveSeedCancel ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /** The current state of an archive seed job. `State` is present only when the server found the job. */
+    public async GetArchiveSeedState(jobID: string): Promise<MutationResult & { State?: IntegrationArchiveSeedState }> {
+        try {
+            const query = gql`query IntegrationArchiveSeedState($jobID: String!) {
+                IntegrationArchiveSeedState(jobID: $jobID) {
+                    Success Message JobID CompanyIntegrationID State CurrentRunID StagingDatabaseName BackupDatabaseName Error
+                    Tables { Name ColumnCount HasPrimaryKey WatermarkField }
+                    Summary { TablesProcessed TotalRowsTransferred DurationSeconds StagingDatabaseDropped }
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { jobID });
+            const flat = result?.IntegrationArchiveSeedState;
+            if (!flat) return { Success: false, Message: 'No response' };
+            if (!flat.Success || !flat.JobID) return { Success: flat.Success, Message: flat.Message };
+            const { Success, Message, ...state } = flat;
+            return { Success, Message, State: state as IntegrationArchiveSeedState };
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 

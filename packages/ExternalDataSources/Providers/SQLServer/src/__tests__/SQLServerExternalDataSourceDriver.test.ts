@@ -144,6 +144,60 @@ describe('SQLServerExternalDataSourceDriver — SQL building', () => {
     });
   });
 
+  // Exercises the shared BaseSqlExternalDataSourceDriver.buildSeekPredicate through the T-SQL dialect,
+  // whose ascending sort puts NULL first (the base default).
+  describe('seekAfter (structured keyset resume → effectiveWhere)', () => {
+    it('single key, no watermark → [k] > v (numbers bare, strings quoted)', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Keys: [{ Field: 'id', Value: 101 }] } }))
+        .toBe('SELECT * FROM [s].[t] WHERE [id] > 101');
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Keys: [{ Field: 'code', Value: "O'Reilly" }] } }))
+        .toBe("SELECT * FROM [s].[t] WHERE [code] > 'O''Reilly'");
+    });
+    it('composite key → (k1 > v1) OR (k1 = v1 AND k2 > v2)', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Keys: [{ Field: 'tenant_id', Value: 'T1' }, { Field: 'id', Value: 100 }] } }))
+        .toBe("SELECT * FROM [s].[t] WHERE (([tenant_id] > 'T1') OR ([tenant_id] = 'T1' AND [id] > 100))");
+    });
+    it('exact watermark + key → W > w OR (W = w AND k > v)', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.000Z' }, Keys: [{ Field: 'id', Value: 100 }] } }))
+        .toBe("SELECT * FROM [s].[t] WHERE [modified_at] > '2026-10-26T01:00:00.000Z' OR ([modified_at] = '2026-10-26T01:00:00.000Z' AND [id] > 100)");
+    });
+    // A datetime column (1/300 s) rounds the '.124' upper literal back to '.123' (verified on SQL Server:
+    // a datetime of .003 satisfies `>= '.004Z'`), so "after the range" also requires W > lower, and "in the
+    // range" also admits W = lower.
+    it('truncated watermark range with keys → after the range, or in it with a later key (precision-safe)', () => {
+      const seek = { Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z' }, Keys: [{ Field: 'id', Value: 7 }] };
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: seek }))
+        .toBe("SELECT * FROM [s].[t] WHERE ([modified_at] >= '2026-10-26T01:00:00.124Z' AND [modified_at] > '2026-10-26T01:00:00.123Z') OR ([modified_at] >= '2026-10-26T01:00:00.123Z' AND ([modified_at] < '2026-10-26T01:00:00.124Z' OR [modified_at] = '2026-10-26T01:00:00.123Z') AND [id] > 7)");
+    });
+    it('fully consumed watermark range (no keys) → W >= upper AND W > lower, so a datetime column cannot re-read it', () => {
+      const seek = { Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z' }, Keys: [] };
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: seek }))
+        .toBe("SELECT * FROM [s].[t] WHERE ([modified_at] >= '2026-10-26T01:00:00.124Z' AND [modified_at] > '2026-10-26T01:00:00.123Z')");
+    });
+    it('within-range seek → only rows inside the range, after the key when one is given', () => {
+      const wm = { Field: 'modified_at', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z', WithinRange: true };
+      const inRange = "[modified_at] >= '2026-10-26T01:00:00.123Z' AND ([modified_at] < '2026-10-26T01:00:00.124Z' OR [modified_at] = '2026-10-26T01:00:00.123Z')";
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Watermark: wm, Keys: [] } })).toBe(`SELECT * FROM [s].[t] WHERE ${inRange}`);
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Watermark: wm, Keys: [{ Field: 'id', Value: 7 }] } }))
+        .toBe(`SELECT * FROM [s].[t] WHERE ${inRange} AND [id] > 7`);
+      expect(() => d.sel('[s].[t]', { objectName: 't', seekAfter: { Watermark: { Field: 'w', Value: 'x', WithinRange: true }, Keys: [] } }))
+        .toThrow(/WithinRange requires ExclusiveUpper/);
+    });
+    it('NULL watermark (NULLS FIRST) → finish the NULL run by key, then every non-NULL row', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', seekAfter: { Watermark: { Field: 'modified_at', Value: null }, Keys: [{ Field: 'id', Value: 5 }] } }))
+        .toBe('SELECT * FROM [s].[t] WHERE ([modified_at] IS NULL AND [id] > 5) OR [modified_at] IS NOT NULL');
+    });
+    it('is ANDed with filter and incremental bound, parenthesized', () => {
+      const params = { objectName: 't', filter: "status = 'a'", incrementalSince: { Field: 'modified_at', Value: '2026-01-01T00:00:00.000Z' }, seekAfter: { Keys: [{ Field: 'id', Value: 1 }] } } as ExternalViewParams;
+      expect(d.sel('[s].[t]', params)).toBe("SELECT * FROM [s].[t] WHERE (status = 'a') AND [modified_at] >= '2026-01-01T00:00:00.000Z' AND ([id] > 1)");
+      expect(d.buildCount('[s].[t]', params)).toBe("SELECT COUNT(*) AS cnt FROM [s].[t] WHERE (status = 'a') AND [modified_at] >= '2026-01-01T00:00:00.000Z' AND ([id] > 1)");
+    });
+    it('refuses a seek that cannot resume instead of silently restarting the walk', () => {
+      expect(() => d.sel('[s].[t]', { objectName: 't', seekAfter: { Keys: [] } })).toThrow(/at least one key/);
+      expect(() => d.sel('[s].[t]', { objectName: 't', seekAfter: { Watermark: { Field: 'w', Value: null }, Keys: [] } })).toThrow(/at least one key/);
+    });
+  });
+
   describe('mapObjectType', () => {
     it('maps VIEW -> view and BASE TABLE -> table', () => {
       expect(d.mapType('VIEW')).toBe('view');

@@ -17,7 +17,13 @@ import {
   MJRefreshButtonComponent,
   MJEmptyStateComponent,
   MJAlertComponent,
-  MJAccordionModule
+  MJAccordionModule,
+  MJDialogComponent,
+  MJDialogTitlebarComponent,
+  MJDialogActionsComponent,
+  MJNumericInputComponent,
+  MJViewToggleComponent,
+  MJClickableDirective
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
@@ -33,6 +39,9 @@ import { SchedulesComponent } from './components/schedules/schedules.component';
 import { IntegrationCardComponent } from './components/widgets/integration-card.component';
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
 import { VisualFieldEditorComponent } from './components/visual-editor/visual-editor.component';
+import { BootstrapWizardComponent } from './components/bootstrap-wizard/bootstrap-wizard.component';
+import { BackupSourcePickerComponent } from './components/backup-source-picker/backup-source-picker.component';
+import { ArchiveSeedWizardComponent } from './components/archive-seed-wizard/archive-seed-wizard.component';
 import { IntegrationDataService } from './services/integration-data.service';
 
 @NgModule({
@@ -45,7 +54,10 @@ import { IntegrationDataService } from './services/integration-data.service';
     SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent,
-    VisualFieldEditorComponent
+    VisualFieldEditorComponent,
+    BootstrapWizardComponent,
+    BackupSourcePickerComponent,
+    ArchiveSeedWizardComponent
   ],
   imports: [
     CommonModule,
@@ -66,6 +78,12 @@ import { IntegrationDataService } from './services/integration-data.service';
     MJEmptyStateComponent,
     MJAlertComponent,
     MJAccordionModule,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent,
+    MJNumericInputComponent,
+    MJViewToggleComponent,
+    MJClickableDirective,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,
@@ -83,7 +101,10 @@ import { IntegrationDataService } from './services/integration-data.service';
     SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent,
-    VisualFieldEditorComponent
+    VisualFieldEditorComponent,
+    BootstrapWizardComponent,
+    BackupSourcePickerComponent,
+    ArchiveSeedWizardComponent
   ]
 })
 export class IntegrationModule { }

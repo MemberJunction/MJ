@@ -305,4 +305,9 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
   protected sqlDialectKey(): SqlDialectKey {
     return 'postgresql';
   }
+
+  /** PostgreSQL sorts NULL last in an ascending ORDER BY, so a keyset seek reaches the NULL run at the end. */
+  protected override nullsSortFirst(): boolean {
+    return false;
+  }
 }

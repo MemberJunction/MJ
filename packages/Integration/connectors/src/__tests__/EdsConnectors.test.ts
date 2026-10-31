@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { UserInfo, ExternalSchemaDescriptor } from '@memberjunction/core';
+import type { UserInfo, ExternalSchemaDescriptor, ExternalSchemaObject } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJExternalDataSourceEntity, MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
 import {
     BaseExternalDataSourceDriver,
@@ -108,6 +108,11 @@ class TestSqlConnector extends BaseSqlExternalDataSourceConnector {
     }
 }
 
+class ExposedConnector extends TestSqlConnector {
+    constructor() { super(resolvedFor(new MockDriver())); }
+    public Detect(obj: ExternalSchemaObject): string | undefined { return this.DetectWatermarkField(obj); }
+}
+
 class TestDocConnector extends BaseDocumentDataSourceConnector {
     public override get IntegrationName(): string { return 'Test Doc'; }
     constructor(private readonly Resolved: ResolvedExternalDataSource) { super(); }
@@ -133,6 +138,76 @@ describe('BaseExternalDataSourceConnector — descriptor → SourceSchemaInfo ma
         const fkField = orders?.Fields.find(f => f.Name === 'customer_id');
         expect(fkField?.IsForeignKey).toBe(true);
         expect(fkField?.ForeignKeyTarget).toBe('customers');
+    });
+
+    it('introspects the requested schemas and qualifies the object names with them', async () => {
+        class SchemaDriver extends MockDriver {
+            public Asked: Array<string | undefined> = [];
+            public override async IntrospectSchema(_ds: MJExternalDataSourceEntity, schemaName: string | undefined): Promise<ExternalSchemaDescriptor> {
+                this.Asked.push(schemaName);
+                const object = DESCRIPTOR.Objects[0];
+                return { Database: 'db', Objects: [{ ...object, Schema: undefined, Name: schemaName === 'sales' ? 'customers' : 'regions' }] };
+            }
+            public override async ListSchemas(): Promise<string[]> { return ['dbo', 'sales', 'sys']; }
+        }
+        const driver = new SchemaDriver();
+        const c = new TestSqlConnector(resolvedFor(driver));
+        expect(await c.ListSchemas(CI, USER)).toEqual(['dbo', 'sales', 'sys']);
+        const schema = await c.IntrospectSchema(CI, USER, { Schemas: ['sales', 'geo'] });
+        expect(driver.Asked).toEqual(['sales', 'geo']);
+        expect(schema.Objects.map(o => o.ExternalName)).toEqual(['sales.customers', 'geo.regions']);
+        expect(schema.IsAuthoritative).toBe(true);
+    });
+
+    it('introspects several schemas concurrently (bounded) and keeps the schema order in the result', async () => {
+        class SlowSchemaDriver extends MockDriver {
+            public InFlight = 0;
+            public MaxInFlight = 0;
+            public override async IntrospectSchema(_ds: MJExternalDataSourceEntity, schemaName: string | undefined): Promise<ExternalSchemaDescriptor> {
+                this.InFlight++;
+                this.MaxInFlight = Math.max(this.MaxInFlight, this.InFlight);
+                // Later schemas answer first, so an order-preserving merge is actually exercised.
+                await new Promise(resolve => setTimeout(resolve, 30 - Number(schemaName?.slice(1)) * 3));
+                this.InFlight--;
+                return { Database: 'db', Objects: [{ ...DESCRIPTOR.Objects[0], Schema: undefined, Name: 'customers' }] };
+            }
+        }
+        const driver = new SlowSchemaDriver();
+        const c = new TestSqlConnector(resolvedFor(driver));
+        const schemas = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'];
+        const schema = await c.IntrospectSchema(CI, USER, { Schemas: schemas });
+        expect(driver.MaxInFlight).toBeGreaterThan(1);
+        expect(driver.MaxInFlight).toBeLessThanOrEqual(4);
+        expect(schema.Objects.map(o => o.ExternalName)).toEqual(schemas.map(s => `${s}.customers`));
+    });
+
+    it('BaseTablesOnly drops views (and every non-table object) and is then not authoritative', async () => {
+        class ViewDriver extends MockDriver {
+            public override async IntrospectSchema(): Promise<ExternalSchemaDescriptor> {
+                return {
+                    Database: 'db',
+                    Objects: [
+                        DESCRIPTOR.Objects[0],
+                        { ...DESCRIPTOR.Objects[1], Name: 'payload', ObjectType: 'view' },
+                        { ...DESCRIPTOR.Objects[1], Name: 'docs', ObjectType: 'collection' },
+                    ],
+                };
+            }
+        }
+        const c = new TestSqlConnector(resolvedFor(new ViewDriver()));
+        const all = await c.IntrospectSchema(CI, USER);
+        expect(all.Objects.map(o => o.ExternalName)).toEqual(['customers', 'payload', 'docs']);
+        const tablesOnly = await c.IntrospectSchema(CI, USER, { BaseTablesOnly: true });
+        expect(tablesOnly.Objects.map(o => o.ExternalName)).toEqual(['customers']);
+        expect(tablesOnly.IsAuthoritative).toBe(false);
+        const scoped = await c.IntrospectSchema(CI, USER, { BaseTablesOnly: true, Schemas: ['dbo'] });
+        expect(scoped.Objects.map(o => o.ExternalName)).toEqual(['dbo.customers']);
+    });
+
+    it('without Schemas, introspects the data source default schema with bare names', async () => {
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
+        const schema = await c.IntrospectSchema(CI, USER, { Schemas: [] });
+        expect(schema.Objects.map(o => o.ExternalName)).toEqual(['customers', 'orders']);
     });
 
     it('document (sampled) discovery is NOT authoritative', async () => {
@@ -282,5 +357,15 @@ describe('ContentKey — excludes the watermark column so a PK-less row updates 
         const before = c.buildRecord({ email: 'a@x.com', updated_at: '2026-01-01T00:00:00.000Z' }, 'events', [], 'updated_at');
         const after = c.buildRecord({ email: 'a@x.com', updated_at: '2026-02-01T00:00:00.000Z' }, 'events', [], 'updated_at');
         expect(after.ExternalID).toBe(before.ExternalID);
+    });
+});
+
+describe('DetectWatermarkField name hints', () => {
+    const col = (Name: string) => ({ Name, NativeType: 'datetime', Nullable: true, IsPrimaryKey: false });
+    it('detects ModifiedDate and UpdatedDate', () => {
+        const c = new ExposedConnector();
+        expect(c.Detect({ Name: 't', ObjectType: 'table', Columns: [col('ID'), col('ModifiedDate')] })).toBe('ModifiedDate');
+        expect(c.Detect({ Name: 't', ObjectType: 'table', Columns: [col('UpdatedDate')] })).toBe('UpdatedDate');
+        expect(c.Detect({ Name: 't', ObjectType: 'table', Columns: [col('CreatedDate')] })).toBeUndefined();
     });
 });

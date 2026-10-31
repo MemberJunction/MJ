@@ -52,6 +52,7 @@ import {
     ExistingTableInfo,
     SchemaEvolution
 } from "@memberjunction/integration-schema-builder";
+import { DeriveIntegrationSchemaName } from '../integration/IntegrationSchemaName.js';
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput, type RSUPendingWork } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
 import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
@@ -122,7 +123,7 @@ class ApplySchemaBatchItemInput {
 // ─── Apply All Input/Output Types ───────────────────────────────────────────
 
 @InputType()
-class SourceObjectInput {
+export class SourceObjectInput {
     @Field({ nullable: true, description: 'Existing IntegrationObject.ID. Either SourceObjectID or SourceObjectName must be provided; if both, ID wins.' }) SourceObjectID?: string;
     @Field({ nullable: true, description: 'External object name (e.g. "Account"). Use when the object has no IntegrationObject row yet — the server will create one via describe+persist.' }) SourceObjectName?: string;
     @Field(() => [String], { nullable: true, description: 'Optional field selection. Empty/null = all fields (including any new ones). Only specified fields get field maps.' }) Fields?: string[];
@@ -183,7 +184,7 @@ class ApplySchemaBatchOutput {
 // ─── Apply All Batch Input/Output Types ──────────────────────────────────────
 
 @InputType()
-class ApplyAllBatchConnectorInput {
+export class ApplyAllBatchConnectorInput {
     @Field() CompanyIntegrationID: string;
     @Field(() => [SourceObjectInput]) SourceObjects: SourceObjectInput[];
     /** Optional per-connector schedule. Applied on success. */
@@ -193,7 +194,7 @@ class ApplyAllBatchConnectorInput {
 }
 
 @InputType()
-class ApplyAllBatchInput {
+export class ApplyAllBatchInput {
     @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
     @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
@@ -216,7 +217,7 @@ class ApplyAllBatchConnectorResult {
 }
 
 @ObjectType()
-class ApplyAllBatchOutput {
+export class ApplyAllBatchOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [ApplyAllBatchConnectorResult]) ConnectorResults: ApplyAllBatchConnectorResult[];
@@ -230,7 +231,7 @@ class ApplyAllBatchOutput {
 // ─── Delete Connection Output ────────────────────────────────────────────────
 
 @ObjectType()
-class DeleteConnectionOutput {
+export class DeleteConnectionOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field({ nullable: true }) EntityMapsDeleted?: number;
@@ -3889,7 +3890,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     /** Derives a SQL-safe schema name from the integration name (e.g., "HubSpot" → "hubspot"). */
     private deriveSchemaName(integrationName: string): string {
-        return (integrationName || 'integration').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        return DeriveIntegrationSchemaName(integrationName);
     }
 
     /** Builds SchemaPreviewObjectInput[] from source object name strings, using auto-derived schema/table names. */
@@ -5505,9 +5506,34 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
     ): Promise<ApplyAllBatchOutput> {
+        let user: UserInfo;
+        let provider: IMetadataProvider;
         try {
-            const user = this.getAuthenticatedUser(ctx);
-            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            user = this.getAuthenticatedUser(ctx);
+            provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+        } catch (e) {
+            LogError(`IntegrationApplyAllBatch error: ${e}`);
+            return {
+                Success: false, Message: this.formatError(e),
+                ConnectorResults: [], SuccessCount: 0, FailureCount: 0,
+            };
+        }
+        return this.ApplyAllBatchCore(input, platform, skipGitCommit, skipRestart, user, provider);
+    }
+
+    /**
+     * Body of the apply-all-batch mutation, callable from server code that already holds a
+     * user and a read-write provider (no GraphQL context required).
+     */
+    public async ApplyAllBatchCore(
+        input: ApplyAllBatchInput,
+        platform: string,
+        skipGitCommit: boolean,
+        skipRestart: boolean,
+        user: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<ApplyAllBatchOutput> {
+        try {
             const validatedPlatform = this.validatePlatform(platform);
 
             // Bust RunView caches for integration metadata BEFORE Config(true).
@@ -5936,10 +5962,31 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             this.getAuthenticatedUser(ctx); // verify caller is authenticated
             const sysUser = this.getSystemUser(); // use system user for cascade delete
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            return await this.DeleteConnectionCore(companyIntegrationID, deleteData, md, sysUser);
+        } catch (e) {
+            LogError(`IntegrationDeleteConnection error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * The cascade behind {@link IntegrationDeleteConnection}, for server-side callers (the archive seed
+     * replaces a failed seed's connection with it): deletes the connection's runs, scheduled jobs, entity
+     * maps with their field maps, watermarks and record maps, employee links, the connection itself and
+     * its unshared credential, in one transaction group as `actingUser` (the GraphQL
+     * mutation passes the system user; the archive seed passes the job's owner). Throws on an unexpected error;
+     * returns `Success: false` when the connection is missing or the transaction fails.
+     */
+    public async DeleteConnectionCore(
+        companyIntegrationID: string,
+        deleteData: boolean,
+        md: IMetadataProvider,
+        actingUser: UserInfo
+    ): Promise<DeleteConnectionOutput> {
             const rv = new RunView();
 
             // Step 1: Load CompanyIntegration
-            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', sysUser);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', actingUser);
             const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!ciLoaded) return { Success: false, Message: 'CompanyIntegration not found' };
 
@@ -5954,7 +6001,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Company Integration Runs',
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             if (ciRunsResult.Success) {
                 for (const ciRun of ciRunsResult.Results) {
                     if (ciRun.ScheduledJobRunID) {
@@ -5969,7 +6016,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Scheduled Jobs',
                 ExtraFilter: `Configuration LIKE '%${sqlUuid(companyIntegrationID, 'companyIntegrationID')}%'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             if (jobsResult.Success) {
                 for (const job of jobsResult.Results) {
                     try {
@@ -5979,7 +6026,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                                 EntityName: 'MJ: Scheduled Job Runs',
                                 ExtraFilter: `ScheduledJobID='${job.ID}'`,
                                 ResultType: 'entity_object'
-                            }, sysUser);
+                            }, actingUser);
                             if (jobRunsResult.Success) {
                                 for (const jr of jobRunsResult.Results) {
                                     jr.TransactionGroup = tg;
@@ -6002,7 +6049,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         EntityName: 'MJ: Company Integration Run Details',
                         ExtraFilter: `CompanyIntegrationRunID='${run.ID}'`,
                         ResultType: 'entity_object'
-                    }, sysUser);
+                    }, actingUser);
                     if (detailsResult.Success) {
                         for (const detail of detailsResult.Results) {
                             detail.TransactionGroup = tg;
@@ -6019,7 +6066,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Company Integration Entity Maps',
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
 
             for (const em of entityMaps) {
@@ -6027,7 +6074,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Field Maps',
                     ExtraFilter: `EntityMapID='${em.ID}'`,
                     ResultType: 'entity_object'
-                }, sysUser);
+                }, actingUser);
                 if (fmResult.Success) {
                     for (const fm of fmResult.Results) {
                         fm.TransactionGroup = tg;
@@ -6039,7 +6086,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Sync Watermarks',
                     ExtraFilter: `EntityMapID='${em.ID}'`,
                     ResultType: 'entity_object'
-                }, sysUser);
+                }, actingUser);
                 if (wmResult.Success) {
                     for (const wm of wmResult.Results) {
                         wm.TransactionGroup = tg;
@@ -6051,7 +6098,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Record Maps',
                     ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                     ResultType: 'entity_object'
-                }, sysUser);
+                }, actingUser);
                 if (rmResult.Success) {
                     for (const rm of rmResult.Results) {
                         rm.TransactionGroup = tg;
@@ -6071,7 +6118,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Employee Company Integrations',
                 ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
-            }, sysUser);
+            }, actingUser);
             if (empResult.Success) {
                 for (const emp of empResult.Results) {
                     emp.TransactionGroup = tg;
@@ -6092,7 +6139,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     EntityName: 'MJ: Company Integration Objects',
                     ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                     ResultType: 'entity_object',
-                }, sysUser);
+                }, actingUser);
                 const perConnectionObjects = cioResult.Success ? cioResult.Results : [];
                 if (perConnectionObjects.length > 0) {
                     const objectIDs = perConnectionObjects.map(o => `'${String(o.Get('ID')).replace(/'/g, "''")}'`).join(',');
@@ -6100,7 +6147,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         EntityName: 'MJ: Company Integration Object Fields',
                         ExtraFilter: `CompanyIntegrationObjectID IN (${objectIDs})`,
                         ResultType: 'entity_object',
-                    }, sysUser);
+                    }, actingUser);
                     for (const field of (ciofResult.Success ? ciofResult.Results : [])) {
                         field.TransactionGroup = tg;
                         await field.Delete();
@@ -6119,7 +6166,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // before Delete() since we still need it for Step 8.
             const linkedCredentialID = ci.CredentialID;
             ci.TransactionGroup = tg;
-            await ci.Delete();
+            if (!(await ci.Delete())) {
+                // Refused (e.g. an archive seed still running): nothing queued so far may be submitted.
+                return { Success: false, Message: ci.LatestResult?.CompleteMessage ?? 'The connection could not be deleted' };
+            }
 
             // Step 8: Delete the linked Credential (encrypted-credential row) in the SAME
             // transaction group so it commits/rolls back atomically with the cascade — now safe
@@ -6127,7 +6177,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // silently when there is no CredentialID, and refuses to delete a credential still
             // referenced by ANOTHER CompanyIntegration (shared credential).
             const credentialDeleted = await this.cascadeDeleteCredential(
-                linkedCredentialID, companyIntegrationID, tg, rv, md, sysUser
+                linkedCredentialID, companyIntegrationID, tg, rv, md, actingUser
             );
 
             // Submit the transaction
@@ -6154,10 +6204,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SchedulesDeleted: schedulesDeleted,
                 CredentialDeleted: credentialDeleted,
             };
-        } catch (e) {
-            LogError(`IntegrationDeleteConnection error: ${e}`);
-            return { Success: false, Message: this.formatError(e) };
-        }
     }
 
     // ── SCHEMA EVOLUTION ────────────────────────────────────────────────

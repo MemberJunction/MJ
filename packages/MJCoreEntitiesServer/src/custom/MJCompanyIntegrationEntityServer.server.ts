@@ -1,20 +1,37 @@
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import {
     BaseEntity,
+    BaseEntityResult,
+    EntityDeleteOptions,
     LogError,
     LogStatus,
     Metadata,
+    RunInEntityTransaction,
     RunView,
+    type TransactionGroupBase,
     type UserInfo,
     type IMetadataProvider,
 } from '@memberjunction/core';
-import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
+import {
+    MJCompanyIntegrationEntity,
+    MJExternalDataSourceEntity,
+    MJIntegrationEntity,
+    MJRSUPendingWorkEntity,
+} from '@memberjunction/core-entities';
 import {
     IntegrationConnectorCreationPipeline,
     IntegrationEngine,
     ConnectorFactory,
 } from '@memberjunction/integration-engine';
 import { BuildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
+import { ArchiveSeedConfiguration, PlanArchiveSeedRowCleanup, ReadArchiveSeedConfiguration } from './CompanyIntegrationArchiveSeed';
+
+/** Aborts the connection-delete transaction; `Reason` is the refusal, or undefined when the connection's own delete failed. */
+class ConnectionDeleteAborted extends Error {
+    constructor(public readonly Reason: string | undefined) {
+        super(Reason ?? 'The connection could not be deleted');
+    }
+}
 
 /**
  * Server-side extension of MJCompanyIntegrationEntity that exposes
@@ -113,6 +130,174 @@ import { BuildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integrations')
 export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity {
+    /**
+     * Deletes the connection. A connection seeded from a backup archive (`seededFromBackup.jobID` in
+     * its `Configuration`) owns an archive-seed job row in `MJ: RSU Pending Works`, whose foreign key
+     * would otherwise block the delete, and the deferred External Data Source the seed created.
+     *
+     * The pending-work rows are planned by {@link PlanArchiveSeedRowCleanup}: a seed that is still
+     * running, or other work of the connection that is still Pending, refuses the delete. Otherwise
+     * the rows and the connection are deleted as one unit, so a connection delete that fails puts the
+     * rows back:
+     * - on its own, in one transaction on this record's provider;
+     * - in a TransactionGroup (the connection-delete cascade), by queueing the rows in that group ahead
+     *   of the connection, so they commit or roll back with the group's `Submit()`.
+     *
+     * The data source goes last, only once the connection's delete has committed (it is referenced only
+     * from the configuration JSON, so nothing holds it in the unit); a failure there is logged. In a
+     * group that is after the group commits, and never when it rolls back. On refusal the result is
+     * recorded (`LatestResult.CompleteMessage`) and `false` returned, per the Save/Delete contract; a
+     * group whose connection delete returned false must not be submitted.
+     */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const seed = ReadArchiveSeedConfiguration(this.Configuration);
+        if (!seed) {
+            return super.Delete(options);
+        }
+        const user = this.ContextCurrentUser;
+        if (!user) {
+            return this.refuseDelete('No user set - the context user for the entity object must be set');
+        }
+        const rows = await this.loadPendingWorkRows(user);
+        if (typeof rows === 'string') {
+            return this.refuseDelete(rows);
+        }
+        const plan = PlanArchiveSeedRowCleanup(rows);
+        if (plan.Refusal) {
+            return this.refuseDelete(plan.Refusal);
+        }
+        if (this.TransactionGroup) {
+            return this.queueWithPendingWorkRows(this.TransactionGroup, plan.Delete, seed, user, options);
+        }
+        const outcome = await this.deleteWithPendingWorkRows(plan.Delete, options);
+        if (outcome !== true) {
+            return outcome === false ? false : this.refuseDelete(outcome);
+        }
+        await this.deleteArchiveSeedDataSource(seed, this.ID, user);
+        return true;
+    }
+
+    /**
+     * The TransactionGroup form of {@link deleteWithPendingWorkRows}: a delete in a group only queues, so
+     * the rows are queued in the same group ahead of the connection (their foreign key needs them gone
+     * first) and the data source delete waits for the group to commit.
+     */
+    private async queueWithPendingWorkRows(
+        group: TransactionGroupBase,
+        rows: MJRSUPendingWorkEntity[],
+        seed: ArchiveSeedConfiguration,
+        user: UserInfo,
+        options?: EntityDeleteOptions,
+    ): Promise<boolean> {
+        for (const row of rows) {
+            row.TransactionGroup = group;
+            if (!(await row.Delete())) {
+                return this.refuseDelete(`Could not delete the pending work of this connection: ${row.LatestResult?.CompleteMessage ?? 'delete failed'}`);
+            }
+        }
+        const connectionID = this.ID;
+        if (!(await super.Delete(options))) {
+            return false;
+        }
+        this.deleteDataSourceAfterCommit(group, seed, connectionID, user);
+        return true;
+    }
+
+    /**
+     * Deletes the seed's data source once `group` commits; a rolled-back group leaves it (the connection
+     * still points at it). Runs off the group's notification, as `BaseEntity` finalizes a grouped delete,
+     * so it is detached from `Submit()`; its failures are logged.
+     */
+    private deleteDataSourceAfterCommit(group: TransactionGroupBase, seed: ArchiveSeedConfiguration, connectionID: string, user: UserInfo): void {
+        if (!seed.ExternalDataSourceID) {
+            return;
+        }
+        const subscription = group.TransactionNotifications$.subscribe(({ success }) => {
+            if (!success) {
+                return; // a retried Submit() may still commit the queued delete
+            }
+            subscription.unsubscribe();
+            this.deleteArchiveSeedDataSource(seed, connectionID, user).catch((err: unknown) =>
+                LogError(`[MJCompanyIntegrationEntityServer] Connection ${connectionID} deleted, but deleting its archive seed data source ${seed.ExternalDataSourceID} threw: ${err instanceof Error ? err.message : String(err)}`));
+        });
+    }
+
+    /** This connection's pending-work rows, or the reason they could not be read. */
+    private async loadPendingWorkRows(user: UserInfo): Promise<MJRSUPendingWorkEntity[] | string> {
+        const rows = await new RunView(this.RunViewProviderToUse).RunView<MJRSUPendingWorkEntity>({
+            EntityName: 'MJ: RSU Pending Works',
+            ExtraFilter: `CompanyIntegrationID='${EscapeSQLString(this.ID)}'`,
+            ResultType: 'entity_object',
+        }, user);
+        if (!rows.Success) {
+            return `Could not read the pending work of this connection: ${rows.ErrorMessage}`;
+        }
+        return rows.Results;
+    }
+
+    /**
+     * Deletes the rows, then the connection, in one transaction. `true` once committed; `false` when
+     * the connection's own delete failed (its result is already recorded); otherwise the reason a
+     * row could not be deleted. Either failure rolls the whole unit back.
+     */
+    private async deleteWithPendingWorkRows(rows: MJRSUPendingWorkEntity[], options?: EntityDeleteOptions): Promise<boolean | string> {
+        try {
+            await RunInEntityTransaction(this.ProviderToUse, async () => {
+                for (const row of rows) {
+                    if (!(await row.Delete())) {
+                        throw new ConnectionDeleteAborted(`Could not delete the pending work of this connection: ${row.LatestResult?.CompleteMessage ?? 'delete failed'}`);
+                    }
+                }
+                if (!(await super.Delete(options))) {
+                    throw new ConnectionDeleteAborted(undefined);
+                }
+            });
+            return true;
+        } catch (err) {
+            if (err instanceof ConnectionDeleteAborted) {
+                return err.Reason ?? false;
+            }
+            throw err;
+        }
+    }
+
+    /**
+     * Deletes the data source the seed created, when it still exists. A failure is logged; the connection
+     * (`connectionID`, passed in because a grouped delete has reset this record by the time this runs) is
+     * already gone. Loaded as an entity object because it is deleted.
+     */
+    private async deleteArchiveSeedDataSource(seed: ArchiveSeedConfiguration, connectionID: string, user: UserInfo): Promise<void> {
+        if (!seed.ExternalDataSourceID) {
+            return;
+        }
+        const result = await new RunView(this.RunViewProviderToUse).RunView<MJExternalDataSourceEntity>({
+            EntityName: 'MJ: External Data Sources',
+            ExtraFilter: `ID='${EscapeSQLString(seed.ExternalDataSourceID)}'`,
+            ResultType: 'entity_object',
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+        }, user);
+        if (!result.Success) {
+            LogError(`[MJCompanyIntegrationEntityServer] Connection ${connectionID} deleted, but its archive seed data source ${seed.ExternalDataSourceID} could not be read: ${result.ErrorMessage}`);
+            return;
+        }
+        const ds = result.Results[0];
+        if (ds && !(await ds.Delete())) {
+            LogError(`[MJCompanyIntegrationEntityServer] Connection ${connectionID} deleted, but its archive seed data source ${seed.ExternalDataSourceID} was not: ${ds.LatestResult?.CompleteMessage ?? 'delete failed'}`);
+        }
+    }
+
+    private refuseDelete(message: string): false {
+        const result = new BaseEntityResult();
+        result.StartedAt = new Date();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message = message;
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
+        return false;
+    }
+
     /**
      * Resolves the registered connector for this CompanyIntegration, runs the
      * Phase 0 v5.39.x pipeline, and refreshes the in-memory caches so the next

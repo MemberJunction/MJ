@@ -11968,13 +11968,34 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.6
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.6
+        version: link:../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.2.0-edge.6
         version: link:../../MJGlobal
       '@memberjunction/integration-engine':
         specifier: 6.2.0-edge.6
         version: link:../engine
+      '@memberjunction/integration-engine-base':
+        specifier: 6.2.0-edge.6
+        version: link:../engine-base
+      '@memberjunction/integration-progress-artifacts':
+        specifier: 6.2.0-edge.6
+        version: link:../progress-artifacts
+      '@memberjunction/schema-engine':
+        specifier: 6.2.0-edge.6
+        version: link:../../SchemaEngine
+      '@memberjunction/sqlserver-dataprovider':
+        specifier: 6.2.0-edge.6
+        version: link:../../SQLServerDataProvider
+      mssql:
+        specifier: ^12.2.0
+        version: 12.7.0
     devDependencies:
+      '@types/mssql':
+        specifier: ^9.1.9
+        version: 9.1.9
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16
@@ -13496,6 +13517,9 @@ importers:
       '@memberjunction/external-change-detection':
         specifier: 6.2.0-edge.6
         version: link:../ExternalChangeDetection
+      '@memberjunction/external-data-sources':
+        specifier: 6.2.0-edge.6
+        version: link:../ExternalDataSources/Engine
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.6
         version: link:../GenericDatabaseProvider
@@ -16587,6 +16611,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.2.0-edge.6
         version: link:../../Encryption
+      '@memberjunction/external-data-source-sqlserver':
+        specifier: 6.2.0-edge.6
+        version: link:../../ExternalDataSources/Providers/SQLServer
       '@memberjunction/external-data-sources':
         specifier: 6.2.0-edge.6
         version: link:../../ExternalDataSources/Engine
@@ -16605,6 +16632,9 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0-edge.6
         version: link:../../GraphQLDataProvider
+      '@memberjunction/integration-actions':
+        specifier: 6.2.0-edge.6
+        version: link:../../Integration/actions
       '@memberjunction/livekit-room-server':
         specifier: 6.2.0-edge.6
         version: link:../../LiveKitRoomServer

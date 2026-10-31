@@ -10,6 +10,7 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  ExternalSeekAfter,
   parseIso8601AsUtc,
 } from '@memberjunction/external-data-sources';
 import { MongoFilterTranslator } from './MongoFilterTranslator';
@@ -175,6 +176,10 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
           const incremental = { [params.incrementalSince.Field]: { $gte: this.coerceIncrementalValue(params.incrementalSince.Value) } };
           filter = Object.keys(filter).length ? { $and: [filter, incremental] } : incremental;
         }
+        if (params.seekAfter) {
+          const seek = this.buildSeekFilter(params.seekAfter);
+          filter = Object.keys(filter).length ? { $and: [filter, seek] } : seek;
+        }
         const options: FindOptions = {};
         if (params.fields?.length) options.projection = this.buildProjection(params.fields);
         if (params.orderBy) {
@@ -326,6 +331,49 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
       if (field) sort[field] = dir && dir.toUpperCase() === 'DESC' ? -1 : 1;
     }
     return sort;
+  }
+
+  /**
+   * Render a structured keyset resume point (`ExternalViewParams.seekAfter`) as a Mongo filter: every
+   * document strictly after the consumed one in (watermark ASC, keys ASC) order. BSON sorts `null` (and a
+   * missing field) before every value, so a NULL watermark run sits at the head of the ordering.
+   */
+  protected buildSeekFilter(seek: ExternalSeekAfter): Document {
+    const keysAfter = this.buildSeekKeysAfter(seek.Keys);
+    if (!seek.Watermark) {
+      if (!keysAfter) throw new Error('seekAfter requires at least one key when no watermark is supplied.');
+      return keysAfter;
+    }
+    const field = seek.Watermark.Field;
+    if (seek.Watermark.Value === null) {
+      if (!keysAfter) throw new Error('seekAfter with a NULL watermark requires at least one key.');
+      return { $or: [{ $and: [{ [field]: null }, keysAfter] }, { [field]: { $ne: null } }] };
+    }
+    const lower = this.coerceIncrementalValue(seek.Watermark.Value);
+    if (seek.Watermark.WithinRange && !seek.Watermark.ExclusiveUpper) {
+      throw new Error('seekAfter.Watermark.WithinRange requires ExclusiveUpper.');
+    }
+    if (seek.Watermark.ExclusiveUpper) {
+      // BSON dates hold whole milliseconds, exactly the precision of the range, so `$gte upper` is exact.
+      const upper = this.coerceIncrementalValue(seek.Watermark.ExclusiveUpper);
+      const inRange = { [field]: { $gte: lower, $lt: upper } };
+      if (seek.Watermark.WithinRange) return keysAfter ? { $and: [inRange, keysAfter] } : inRange;
+      if (!keysAfter) return { [field]: { $gte: upper } };
+      return { $or: [{ [field]: { $gte: upper } }, { $and: [inRange, keysAfter] }] };
+    }
+    if (!keysAfter) return { [field]: { $gt: lower } };
+    return { $or: [{ [field]: { $gt: lower } }, { $and: [{ [field]: lower }, keysAfter] }] };
+  }
+
+  /** `k1 > v1` for one key; `(k1 > v1) OR (k1 = v1 AND k2 > v2) ...` for a composite key. */
+  private buildSeekKeysAfter(keys: ExternalSeekAfter['Keys']): Document | undefined {
+    if (keys.length === 0) return undefined;
+    const coerce = (k: ExternalSeekAfter['Keys'][number]) => MongoFilterTranslator.CoerceObjectId(k.Field, k.Value);
+    if (keys.length === 1) return { [keys[0].Field]: { $gt: coerce(keys[0]) } };
+    const alternatives = keys.map((key, i) => ({
+      $and: [...keys.slice(0, i).map((k) => ({ [k.Field]: coerce(k) })), { [key.Field]: { $gt: coerce(key) } }],
+    }));
+    return { $or: alternatives };
   }
 
   /**

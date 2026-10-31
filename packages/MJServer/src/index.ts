@@ -61,6 +61,7 @@ import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
+import { SetHostConnectionResolver } from '@memberjunction/external-data-sources';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
@@ -83,6 +84,8 @@ import { RoomAuthorizationService, RoomHandoffEngine } from '@memberjunction/liv
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
+import { ArchiveSeedJobInstance, ArchiveSeedRecordsInstance } from './integration/archiveSeed/ArchiveSeedJobInstance.js';
+import { DispatchArchiveSeedWork } from './integration/archiveSeed/ArchiveSeedDispatch.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
@@ -712,6 +715,7 @@ const setupComplete$ = new ReplaySubject(1);
 
     await pool.connect();
     lap('DB Pool Connect', tPhase);
+    registerHostConnectionResolver();
     tPhase = startupLog.BeginPhase('Loading metadata + providers');
 
     dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
@@ -1981,6 +1985,15 @@ async function processRSUPendingWork(): Promise<void> {
       //
       // Absent WorkType means apply-objects: every row written before that field existed is one,
       // and the branch below must keep treating it that way.
+      // An archive-seed row is the job's own state store: it stays Pending for the job's whole life
+      // and the job completes or fails it itself, so this branch never closes the row.
+      if (item.WorkType === 'archive-seed') {
+        // Resumes as the job's own owner; an owner who no longer exists fails the job (as the system
+        // user) instead of handing the job to anyone else. Never throws and never waits.
+        DispatchArchiveSeedWork(item, pendingWorkID, systemUser, Metadata.Provider, ArchiveSeedJobInstance, ArchiveSeedRecordsInstance); // global-provider-ok: server startup recovery — this process's one provider
+        continue;
+      }
+
       if (item.WorkType === 'promote-columns') {
         await ProcessPromoteColumnsPendingWork(item, pendingWorkID, rsm, systemUser);
         continue;
@@ -2324,6 +2337,33 @@ async function processRSUPendingWork(): Promise<void> {
   await progressSession.FinishAll();
 
   console.log(`[RSU] Pending work processing complete`);
+}
+
+/**
+ * Lets External Data Sources with `authMode: "host"` connect with this server's own SQL Server login
+ * (used for local hops such as a staging database restored onto the API's server). Registered only
+ * when the configured connection uses a SQL login with both user and password; otherwise host mode
+ * stays unavailable and drivers refuse it. The MJ database is passed along so drivers refuse a
+ * host-mode source that targets it.
+ */
+function registerHostConnectionResolver(): void {
+  const config = createMSSQLConfig();
+  if (!config.user || !config.password) {
+    return;
+  }
+  SetHostConnectionResolver(() => {
+    const c = createMSSQLConfig();
+    return {
+      Server: c.server,
+      Port: c.port,
+      User: c.user ?? '',
+      Password: c.password ?? '',
+      InstanceName: c.options?.instanceName,
+      Encrypt: c.options?.encrypt,
+      TrustServerCertificate: c.options?.trustServerCertificate,
+      Database: c.database,
+    };
+  });
 }
 
 /**

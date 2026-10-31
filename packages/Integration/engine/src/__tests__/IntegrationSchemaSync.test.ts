@@ -20,7 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DecideTypeOverlay, DecideNullabilityOverlay, DecideBooleanOverlay, DecidePKPromotion, DecideAbsentDeactivations, DecideSchemaLimitViolations, DecideLengthOverlay, DecideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { DecideTypeOverlay, DecideNullabilityOverlay, DecideBooleanOverlay, DecidePKPromotion, HasDeclaredPrimaryKey, DecideAbsentDeactivations, DecideSchemaLimitViolations, DecideLengthOverlay, DecideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
     it('GROWS a persisted width when the rediscovered sample is wider', () => {
@@ -363,6 +363,30 @@ describe('decideSemanticOverlay (external-wins-when-present for semantic attribu
  * stream-discovered, never unioned; and a Discovered field wrongly promoted next to a declared PK
  * is self-healed (demoted). This is the HubSpot id + hs_object_id class of bug.
  */
+describe('HasDeclaredPrimaryKey', () => {
+    const declaredKey = { IsPrimaryKey: true, MetadataSource: 'Declared' };
+    const discoveredKey = { IsPrimaryKey: true, MetadataSource: 'Discovered' };
+    const plain = { IsPrimaryKey: false, MetadataSource: 'Declared' };
+
+    it('counts a declared key on the per-connection rows or on the declared rows', () => {
+        expect(HasDeclaredPrimaryKey([declaredKey, plain], [])).toBe(true);
+        expect(HasDeclaredPrimaryKey([plain], [declaredKey])).toBe(true);
+    });
+
+    it('does not count a discovered key on either side', () => {
+        // The shared catalog is both the write target and the "declared" floor: the key discovery set on
+        // one pass must not read as a declared key on the next, or it demotes itself and the flags flip
+        // on every discovery of the same source.
+        expect(HasDeclaredPrimaryKey([discoveredKey], [discoveredKey])).toBe(false);
+        expect(HasDeclaredPrimaryKey([], [discoveredKey])).toBe(false);
+    });
+
+    it('is false with no key at all', () => {
+        expect(HasDeclaredPrimaryKey([plain], [plain])).toBe(false);
+        expect(HasDeclaredPrimaryKey([], [])).toBe(false);
+    });
+});
+
 describe('decidePKPromotion', () => {
     describe('no declared PK — stream picker is the authority', () => {
         it('discovered=true promotes the field', () => {

@@ -58,6 +58,10 @@ export type {
   RSUPendingWork,
   RSUObserverEvent,
   RSUPipelineObserver,
+  ArchiveSeedState,
+  ArchiveSeedDiscoveredTable,
+  ArchiveSeedSummary,
+  ArchiveSeedWork,
 } from './RuntimeSchemaManager.js';
 
 // ─── Metrics & Observability ────────────────────────────────────────

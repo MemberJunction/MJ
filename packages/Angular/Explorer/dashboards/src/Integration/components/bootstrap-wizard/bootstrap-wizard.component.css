@@ -1,0 +1,23 @@
+/* Bootstrap wizard: load options and the entity-map preview. Shared wizard layout lives in ../shared/backup-wizard.css. */
+
+.option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+}
+
+.warning-hint {
+  color: var(--mj-status-warning-text);
+}
+
+.map-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-arrow {
+  margin: 0 auto;
+  color: var(--mj-text-muted);
+}
