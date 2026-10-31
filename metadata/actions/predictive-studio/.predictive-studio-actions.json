@@ -1096,7 +1096,7 @@
     ],
     "fields": {
       "Name": "Migrate Pipelines to Prediction Units and Evaluation Protocols",
-      "Description": "Gives every ML Training Pipeline that lacks one a version-1 Prediction Unit (from TargetEntity, TargetVariable, ProblemType and AsOfStrategy) and a version-1 Evaluation Protocol (from ValidationStrategy and LeakageGuard: the trailing holdout fraction becomes a date cutoff, k-fold becomes repeated inner folds, the deny lists become exclusions), and binds both. Pipelines that cannot be expressed (offset as-of, a single-valued target, sequence models) are archived with the reason in their description; a binary pipeline whose adverse class its OutcomeConfig, newest model or target name does not declare is held (kept as is, training refused, reason in its description) until a later run migrates it. Dry run by default; skips pipelines already bound. Outputs a per-pipeline report.",
+      "Description": "Gives every ML Training Pipeline that lacks one a version-1 Prediction Unit (from TargetEntity, TargetVariable, ProblemType and AsOfStrategy) and a version-1 Evaluation Protocol (from ValidationStrategy and LeakageGuard: the trailing holdout fraction becomes a date cutoff, k-fold becomes repeated inner folds, the deny lists become exclusions), and binds both. Pipelines that cannot be expressed (offset as-of, a single-valued target, sequence models) are archived with the reason in their description; two kinds of pipeline are held (kept as is, no unit or protocol written, training refused, reason in the description): a binary pipeline whose adverse class its OutcomeConfig, newest model or target name does not declare, until a later run migrates it; and a pipeline that declares a time index (ValidationStrategy.TimeIndexColumn), which needs a forecast unit with a rolling-origin protocol rather than a seeded-random holdout. Dry run by default; skips pipelines already bound. Outputs a per-pipeline report.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioMigratePipelinesAction",
       "Status": "Active",
@@ -1112,7 +1112,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "true (default) reports what would be created or archived without saving."
+            "Description": "true (default) reports what would be created, archived or held without saving."
           },
           "primaryKey": {
             "ID": "DF3F1253-BA20-4224-9B87-A19E05B9FE3A"
@@ -1182,7 +1182,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Pipelines held (or that a dry run would hold) because their adverse class is not declared; training them is refused until a later run migrates them."
+            "Description": "Pipelines held (or that a dry run would hold): an undeclared adverse class (migrated by a later run once declared) or a declared time index (held until a forecast unit with a rolling-origin protocol is bound). Training them is refused."
           },
           "primaryKey": {
             "ID": "7D66347C-E018-431A-8C36-7E7C799B1AEC"
