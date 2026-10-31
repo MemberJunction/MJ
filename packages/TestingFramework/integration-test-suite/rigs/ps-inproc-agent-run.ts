@@ -113,7 +113,7 @@ async function main(): Promise<void> {
     check(!!br?.pipelineId && !!br?.modelId, 'BuildResult carries the created pipeline + model ids');
     check(typeof br?.TrustTitle === 'string' && typeof br?.Headline === 'string', 'a trust verdict (outcome title + headline) was produced');
     // Only a stored decision that ships can publish; this unit-less plan stores none, so it is not evaluated and held.
-    check(br?.published !== true || (br?.TrustTitle ?? '').startsWith('Ships'), 'nothing is published without a shipping verdict');
+    check(br?.published !== true || (br?.TrustTitle || '').startsWith('Ships'), 'nothing is published without a shipping verdict');
     check(br?.TrustTitle === 'Not evaluated yet' && br?.published === false && !!br?.heldReason, 'the unit-less build is held as not evaluated, with its reason');
 
     // Confirm a real pipeline actually landed in the DB.
