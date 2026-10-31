@@ -19,7 +19,7 @@ import {
 } from '@memberjunction/core';
 import type { MJRSUPendingWorkEntity } from '@memberjunction/core-entities';
 import { Octokit } from '@octokit/rest';
-import { mintInstallationToken, readGitHubAppCredentials } from './GitHubAppAuth.js';
+import { MintInstallationToken, ReadGitHubAppCredentials } from './GitHubAppAuth.js';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
 import type { DatabasePlatform } from './interfaces.js';
@@ -2728,7 +2728,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     if (token) {
       return new Octokit({ auth: token });
     }
-    const app = readGitHubAppCredentials();
+    const app = ReadGitHubAppCredentials();
     if (!app) {
       throw new RSUError(
         'GIT',
@@ -2736,8 +2736,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       );
     }
     const { repo } = this.resolveGitHubOwnerRepo();
-    const installationToken = await mintInstallationToken(new Octokit(), app, repo);
-    this.rsuLog(`GitHub App ${app.appId}: minted an installation token scoped to "${repo}"`);
+    const installationToken = await MintInstallationToken(new Octokit(), app, repo);
+    this.rsuLog(`GitHub App ${app.AppId}: minted an installation token scoped to "${repo}"`);
     return new Octokit({ auth: installationToken });
   }
 
