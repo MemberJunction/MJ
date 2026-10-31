@@ -9,10 +9,8 @@ import {
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
-import {
-  GetThreadReplyRoots,
-  type ThreadReplyRevealRequest,
-} from '../lib/utils/thread-replies';
+import { GetThreadReplyRoots } from '../lib/utils/thread-replies';
+import { ThreadReplyRevealRequestedEventArgs } from '../lib/events/chat-events';
 import type { ConversationOpenView } from '../lib/utils/conversation-forks';
 
 type DetailRole = MJConversationDetailEntity['Role'];
@@ -69,7 +67,7 @@ function createChatArea(
   open['Conversation'] = { ID: 'CONV-1', UserID: 'USER-1' };
   open['CurrentUser'] = { ID: 'USER-1' };
   component.CollapseThreadReplies = false;
-  component.ThreadReplyRevealRequested = new EventEmitter<ThreadReplyRevealRequest>();
+  component.ThreadReplyRevealRequested = new EventEmitter<ThreadReplyRevealRequestedEventArgs>();
   return component;
 }
 
@@ -375,7 +373,7 @@ describe('chat area: CollapseThreadReplies', () => {
     };
     open['cdr'] = { detectChanges: vi.fn() };
 
-    const reveals: ThreadReplyRevealRequest[] = [];
+    const reveals: ThreadReplyRevealRequestedEventArgs[] = [];
     component.ThreadReplyRevealRequested.subscribe((req) => reveals.push(req));
     const notifySpy = MJNotificationService.Instance.CreateSimpleNotification;
 
@@ -383,6 +381,7 @@ describe('chat area: CollapseThreadReplies', () => {
 
     expect(scrollToMessage).toHaveBeenCalledWith('root-1');
     expect(reveals).toEqual([{ ReplyID: 'reply-2', RootID: 'root-1' }]);
+    expect(reveals[0]).toBeInstanceOf(ThreadReplyRevealRequestedEventArgs);
     expect(notifySpy).not.toHaveBeenCalled();
 
     scrollToMessage.mockClear();
@@ -423,7 +422,7 @@ describe('chat area: CollapseThreadReplies', () => {
       };
       open['mergePeripheralsForNewRows'] = vi.fn(async () => undefined);
       open['cdr'] = { detectChanges: vi.fn() };
-      const reveals: ThreadReplyRevealRequest[] = [];
+      const reveals: ThreadReplyRevealRequestedEventArgs[] = [];
       component.ThreadReplyRevealRequested.subscribe((req) => reveals.push(req));
       return { component, loadOlder, scrollToMessage, reveals };
     };

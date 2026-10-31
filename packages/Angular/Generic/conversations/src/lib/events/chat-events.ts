@@ -252,3 +252,14 @@ export class SessionEndedEventArgs {
         public readonly Reason: SessionEndReason
     ) {}
 }
+
+/**
+ * A jump targeted a thread reply that `CollapseThreadReplies` keeps out of the main list. Fired after
+ * scrolling to the reply's top-level root, so the host can open that thread and reveal the reply.
+ */
+export class ThreadReplyRevealRequestedEventArgs {
+    constructor(
+        public readonly ReplyID: string,
+        public readonly RootID: string
+    ) {}
+}

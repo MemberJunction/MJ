@@ -145,6 +145,7 @@ Unlike the gates above, these change *how* the surface behaves and default to to
 | Input | Default | Effect when set |
 |---|---|---|
 | `readReplyFromTop` | `false` | A finished turn — the reader's message plus the reply — is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. (Independent of this switch, an in-place message update — progress, status, streamed text — only follows the tail for a reader who is already at the bottom.) |
+| `CollapseThreadReplies` | `false` | Thread replies leave the main message list so the host can show them collapsed under their root message, for example through the `messageExtra` slot. Every row inside a thread leaves, including Error rows and agent response forms (approvals and input requests), and the main flow gives no signal that they exist, so the host must render them in its own thread UI. A jump to a hidden reply scrolls to its root and emits `ThreadReplyRevealRequested`. |
 
 
 ```html
