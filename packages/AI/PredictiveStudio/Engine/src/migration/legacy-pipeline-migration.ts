@@ -11,7 +11,7 @@
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import {
   LegacyPipelines, PredictionUnit,
   type Actor, type CellValue, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type TaskType, type UnitDraft,
@@ -130,8 +130,9 @@ export class PipelineMigration {
       { EntityName: 'MJ: ML Training Pipelines', OrderBy: 'Name', ResultType: 'entity_object' }, deps.User);
     if (!pipelines.Success) throw new Error(`Loading pipelines failed: ${pipelines.ErrorMessage}`);
     const report: MigrationReportRow[] = [];
+    const only = new UUIDSet(onlyIds);
     for (const p of pipelines.Results) {
-      if (onlyIds.length > 0 && !onlyIds.some((id) => UUIDsEqual(id, p.ID))) continue;
+      if (onlyIds.length > 0 && !only.Has(p.ID)) continue;
       report.push(await PipelineMigration.ensureOrReportFailure(p, deps, dryRun));
     }
     return PipelineMigration.RunOf(report);
