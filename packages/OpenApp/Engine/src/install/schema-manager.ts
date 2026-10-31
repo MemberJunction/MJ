@@ -75,7 +75,9 @@ const PG_RESERVED_PREFIX = 'pg_';
  * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox for
  * user-defined tables. It sits inside the `__mj_` app namespace opened up below, so without this
  * entry an app could adopt it and `mj app remove` would CASCADE-drop every user-defined table in
- * the database.
+ * the database. That migration creates the literal `__mj_UDT` whatever the core schema is named,
+ * so a configured core schema (see {@link ValidateSchemaNameOptions.CoreSchema}) reserves its own
+ * name only — not a `<core>_UDT` sibling, which no migration creates.
  */
 const MJ_SCHEMAS = new Set([
   '__mj',
@@ -86,11 +88,11 @@ const MJ_SCHEMAS = new Set([
  * Who owns `normalized`, or `undefined` if it is claimable. One decision in one place, so the
  * error message can name the real owner instead of asserting MJ owns `dbo`.
  */
-function ReservedOwnerOf(normalized: string): 'the database platform' | 'MemberJunction' | undefined {
+function ReservedOwnerOf(normalized: string, coreSchema: string | undefined): 'the database platform' | 'MemberJunction' | undefined {
   if (PLATFORM_SCHEMAS.has(normalized) || normalized.startsWith(PG_RESERVED_PREFIX)) {
     return 'the database platform';
   }
-  if (MJ_SCHEMAS.has(normalized)) {
+  if (MJ_SCHEMAS.has(normalized) || (coreSchema !== undefined && normalized === coreSchema.toLowerCase())) {
     return 'MemberJunction';
   }
   return undefined;
@@ -129,18 +131,20 @@ export interface ValidateSchemaNameOptions {
    * remain blocked regardless of this flag. Dangerous; MJ-internal apps only.
    */
   allowDoubleUnderscore?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-}
-
-/**
- * Options for {@link CreateAppSchema}.
- */
-export interface CreateAppSchemaOptions extends ValidateSchemaNameOptions {
   /**
-   * MJ core schema whose owner the new app schema should share (SQL Server only — see
-   * {@link CreateAppSchema}). Defaults to `__mj`.
+   * The configured MJ core schema (`OrchestratorContext.MJCoreSchema`). When set, it is reserved
+   * for MemberJunction alongside `__mj` — a deployment running core under another name would
+   * otherwise let an app adopt that schema and `mj app remove` drop it. `undefined` reserves
+   * only the built-in names.
    */
   CoreSchema?: string;
 }
+
+/**
+ * Options for {@link CreateAppSchema}. `CoreSchema` is also the schema whose owner the new app
+ * schema shares (SQL Server only — see {@link CreateAppSchema}); that lookup defaults to `__mj`.
+ */
+export type CreateAppSchemaOptions = ValidateSchemaNameOptions;
 
 /**
  * Which of {@link ValidateSchemaName}'s rules refused a name. `Malformed` covers both the
@@ -204,7 +208,7 @@ export function ValidateSchemaName(
 
   const normalized = schemaName.toLowerCase();
 
-  const owner = ReservedOwnerOf(normalized);
+  const owner = ReservedOwnerOf(normalized, options.CoreSchema);
   if (owner) {
     return {
       Success: false,
