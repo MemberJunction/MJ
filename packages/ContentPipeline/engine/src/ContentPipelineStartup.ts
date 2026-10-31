@@ -8,6 +8,7 @@
 
 import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
+import { AutotagUpload } from '@memberjunction/content-autotagging';
 import { CredentialAccessDriver } from './AccessResolver.js';
 import { ManagedPromptClassifier } from './ManagedPromptClassifier.js';
 import { RegisterPipelineWorkType } from './PipelineStageRegistration.js';
@@ -31,6 +32,7 @@ export class ContentPipelineStartup extends BaseSingleton<ContentPipelineStartup
         LoadContentPipelineExtractors();
         void CredentialAccessDriver;
         void ManagedPromptClassifier;
+        void AutotagUpload;
         RegisterPipelineWorkType();
         LogStatusEx({
             message: '[ContentPipelineStartup] Registered the Pipeline Stage work type and the built-in stages.',

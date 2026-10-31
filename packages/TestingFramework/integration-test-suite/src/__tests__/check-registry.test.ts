@@ -37,6 +37,7 @@ import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellati
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
 import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
@@ -174,7 +175,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
-        ['user-routines', UserRoutinesChecks, 16],
+        ['user-routines', UserRoutinesChecks, 18],
+        ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
@@ -230,7 +232,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
-        ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
+        ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
         ['performance-benchmark', PerformanceBenchmarkChecks, 14], // PB1-PB14 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2 regression guards (IT128)
@@ -326,13 +328,14 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
-        'app-wiring': 10,
+        'app-wiring': 11,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
+        'chief-of-staff': 8,
         'class-resolution': 5,
         'client-cache': 14,
         'cloudflare-clef': 6,
@@ -374,7 +377,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
-        'metadata-sync-push': 10,
+        'metadata-sync-push': 12,
         'metadata-sync-queries': 10,
         'native-tool-calling-live': 4,
         'native-tool-loop': 14,
@@ -454,7 +457,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
         'user-elevation': 4,
-        'user-routines': 16,
+        'user-routines': 18,
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
@@ -483,7 +486,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(165);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(166);
     });
 });
 
@@ -688,6 +691,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
+        'metadata-sync-push.MSP11',
+        'metadata-sync-push.MSP12',
         'metadata-sync-push.MSP2',
         'metadata-sync-push.MSP3',
         'metadata-sync-push.MSP4',

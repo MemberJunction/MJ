@@ -346,3 +346,56 @@ describe('GenericDatabaseProvider — a platform rewrite of the ExtraFilter stay
         ]);
     });
 });
+
+/** A provider whose platform rewrite converts SQL Server brackets, as PostgreSQL's TransformExternalSQLClause does. */
+class BracketRewritingTestProvider extends ContainmentTestProvider {
+    protected override TransformExternalSQLClause(clause: string): string {
+        return clause.replace(/\[(\w+)\]/g, '"$1"');
+    }
+}
+
+/** A provider whose platform rewrite would close the wrapper, to pin which text the balance check reads. */
+class UnbalancingRewriteTestProvider extends ContainmentTestProvider {
+    protected override TransformExternalSQLClause(clause: string): string {
+        return `${clause}) OR (1=1`;
+    }
+}
+
+describe('GenericDatabaseProvider — a stored view WhereClause gets the platform rewrite', () => {
+    // The filter builder saves WhereClauses in SQL Server syntax, e.g. `([evt_code] LIKE '%CONF%')`.
+    // Before the rewrite was applied here, PostgreSQL rejected every such view run server-side.
+    beforeEach(() => ClearAllDataHooks());
+    afterEach(() => ClearAllDataHooks());
+
+    it.each([false, true])('rewrites the view WhereClause before it runs (CustomWhereClause=%s)', async (custom) => {
+        const entity = rlsProtectedEntity();
+        const provider = new BracketRewritingTestProvider([entity]);
+
+        const result = await provider.RunViewAs({ ViewEntity: savedView(entity, "([ID] LIKE '%a%')", custom) }, user());
+
+        expect(result.Success).toBe(true);
+        expect(provider.ExecutedSQL).toHaveLength(1);
+        expect(provider.ExecutedSQL[0]).toContain(`WHERE (("ID" LIKE '%a%')) AND (${RLS_CLAUSE})`);
+    });
+
+    it('leaves the view WhereClause as written on a provider with no rewrite', async () => {
+        const entity = rlsProtectedEntity();
+        const provider = new ContainmentTestProvider([entity]);
+
+        const result = await provider.RunViewAs({ ViewEntity: savedView(entity, "([ID] LIKE '%a%')", false) }, user());
+
+        expect(result.Success).toBe(true);
+        expect(provider.ExecutedSQL[0]).toContain(`WHERE (([ID] LIKE '%a%')) AND (${RLS_CLAUSE})`);
+    });
+
+    it('checks the balance of the rewritten clause, the text that actually runs, and runs no SQL', async () => {
+        const entity = rlsProtectedEntity();
+        const provider = new UnbalancingRewriteTestProvider([entity]);
+
+        const result = await provider.RunViewAs({ ViewEntity: savedView(entity, "[ID] = 'a'", false) }, user());
+
+        expect(provider.ExecutedSQL).toEqual([]);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/WhereClause.*parenthesis/);
+    });
+});

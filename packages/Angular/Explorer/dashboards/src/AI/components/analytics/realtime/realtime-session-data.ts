@@ -13,6 +13,7 @@
  */
 
 import { IMetadataProvider, RunView } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -23,7 +24,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
  * (mirrors `AIAgentSessionEntity.CloseReason`). `null` means a legacy row closed
  * before the column existed — rendered as "unknown".
  */
-export type RealtimeSessionCloseReason = 'Error' | 'Explicit' | 'Janitor' | 'Shutdown';
+export type RealtimeSessionCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 export interface RealtimeSessionRecord {
     ID: string;
@@ -97,9 +98,10 @@ export interface RealtimeSessionRollup {
      */
     CloseReason: RealtimeSessionCloseReason | null;
     /**
-     * `CloseReason === 'Janitor'` — the session was force-closed by the
-     * lifecycle janitor (startup orphan recovery or staleness sweep) rather
-     * than ended explicitly. Derived from the real column; the old
+     * The session was closed by the system rather than ended by a person: `Idle` (the janitor's staleness sweep),
+     * `TimeLimit` (the janitor's deadline sweep, or the browser's deadline alarm once the server verified the claim) or
+     * `Janitor` (crash orphan reconciled at startup, and every expiry close recorded before `Idle` and `TimeLimit`
+     * existed). All three count toward the "System closes" KPI. Derived from the real column; the old
      * ClosedAt−LastActiveAt timing heuristic has been retired, so legacy
      * NULL-reason rows report `false` here and "unknown" in the UI.
      */
@@ -273,7 +275,7 @@ function buildRollup(
         DurationMs: durationMs,
         IsResumed: session.LastSessionID != null,
         CloseReason: closeReason,
-        IsJanitorClosed: closeReason === 'Janitor'
+        IsJanitorClosed: closeReason === 'Janitor' || closeReason === 'Idle' || closeReason === 'TimeLimit'
     };
 }
 
@@ -316,7 +318,13 @@ export function BuildSessionStatusDisplay(
         case 'Explicit':
             return { Label: 'Closed', Title: 'Closed explicitly (user hang-up / close mutation)', Icon: 'fa-solid fa-circle-stop' };
         case 'Janitor':
-            return { Label: 'Closed · janitor', Title: 'Force-closed by the lifecycle janitor (staleness sweep / orphan reconciliation)', Icon: 'fa-solid fa-broom' };
+            // Rows closed before TimeLimit and Idle existed keep 'Janitor' for every expiry close, so the title names both meanings.
+            return { Label: 'Closed · janitor', Title: 'Closed by the lifecycle janitor: an orphan from an earlier boot, or (for sessions closed before the idle and time-limit reasons existed) an idle or time limit close', Icon: 'fa-solid fa-broom' };
+        case 'TimeLimit':
+            // The janitor's deadline sweep or the browser's own deadline alarm (a claim the server verified): not always the janitor.
+            return { Label: 'Closed · time limit', Title: 'Closed because the session reached its time limit', Icon: 'fa-solid fa-hourglass-end' };
+        case 'Idle':
+            return { Label: 'Closed · idle — no activity', Title: 'Closed by the janitor staleness sweep after no activity', Icon: 'fa-solid fa-moon' };
         case 'Shutdown':
             return { Label: 'Closed · shutdown', Title: 'Closed by the host’s graceful shutdown drain', Icon: 'fa-solid fa-power-off' };
         case 'Error':
