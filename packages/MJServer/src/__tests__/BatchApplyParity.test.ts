@@ -61,6 +61,14 @@ describe('MJ-APPLY-12 first-apply full sync', () => {
   it('the single-connector path still does the same thing', () => {
     expect(methodBody('IntegrationApplyAll')).toMatch(/input\.FullSync\s*\?\?\s*!hadPriorMaps/);
   });
+
+  it('the prior-maps read UUID-validates the connection id, like every other caller-supplied id', () => {
+    // The batch takes its CompanyIntegrationIDs from the caller. The rest of this resolver refuses a
+    // non-UUID id with sqlUuid before it reaches an ExtraFilter; quote-doubling is not that check.
+    const body = methodBody('IntegrationApplyAllBatch');
+    expect(body).toMatch(/CompanyIntegrationID='\$\{sqlUuid\(connInput\.CompanyIntegrationID, 'CompanyIntegrationID'\)\}'/);
+    expect(body).not.toMatch(/connInput\.CompanyIntegrationID\.replace\(/);
+  });
 });
 
 describe('MJ-APPLY-13 remove-as-disable', () => {
