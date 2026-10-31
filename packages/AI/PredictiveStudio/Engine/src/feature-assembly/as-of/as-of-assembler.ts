@@ -16,7 +16,11 @@
  * tracks Record Changes, its history covers the decision day (else `decision-date-before-change-history`, naming where
  * the history starts) and none of them updated it afterwards (else `select-changes-after-decision-date`); an updatable
  * field of an untracked entity refuses `decision-date-before-change-history`, since its past value cannot be known.
- * Both refusals count distinct unit rows. A record whose history cannot be replayed for another reason (a continuity
+ * Both refusals count distinct unit rows. A row whose decision day is on or after the assembly's own UTC day
+ * (`AssembledAt`, the clock training and scoring are run with) is the exception: nothing after that day exists yet, so
+ * the stored value IS the value on that day, and an updatable field — on a tracked or an untracked entity, read
+ * directly, replayed, as a join key or as a child row's field — reads the stored value for that row as covered (a record
+ * created after the decision day still reads as missing). Rows with a past decision day keep the rule above. A record whose history cannot be replayed for another reason (a continuity
  * mismatch, a deletion, an ineligible external row) makes the rows reading it uncovered, exactly as a replayed field
  * does. Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
  * after a decision day can move between owners, so every child row read passes the rule for its owner key, date, value
@@ -150,6 +154,8 @@ type CoverageByField = Map<string, ChangeHistoryCoverage>;
  * and, per windowed-aggregate column, the late-entered child rows dropped from owner windows.
  */
 interface AssemblyState { readonly Coverage: CoverageByField; readonly Histories: Map<string, EntityHistory>; readonly LateEntered: Map<string, number> }
+/** What a replayed field reads: the history for rows decided before the assembly's day (null when there are none), the stored rows for the others. */
+interface ReplaySources { readonly History: EntityHistory | null; readonly Stored: ReadonlyMap<string, SourceRow> }
 
 /** The level the least frequent categories beyond a column's cardinality cap fold into. */
 export const OTHER_CATEGORY_LEVEL = '__other';
@@ -439,9 +445,19 @@ export class AsOfFeatureAssembler {
     const join = await this.keyResolver(source.keyField, input, (row) => row.RowId, state);
     const keyOf = join.KeyOf;
     if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, state), input);
-    const keys = input.Rows.map((r) => keyOf(r)).filter((k): k is string => k !== null);
-    const history = await AsOfFeatureAssembler.loadHistory(entity, keys, [source.field], input, state);
-    return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, history, input), input);
+    const today = input.Rows.filter((r) => AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
+    const past = input.Rows.filter((r) => !AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
+    const keysOf = (rs: readonly AssemblyRowRef[]): string[] => rs.map((r) => keyOf(r)).filter((k): k is string => k !== null);
+    const history = past.length > 0 ? await AsOfFeatureAssembler.loadHistory(entity, keysOf(past), [source.field], input, state) : null;
+    const stored = today.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keysOf(today), source.field, input) : new Map<string, SourceRow>();
+    return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, { History: history, Stored: stored }, input), input);
+  }
+
+  /** The stored rows of `keys` (key lower-cased), read by key for the rows decided on the assembly's day or later. */
+  private static async storedValues(entity: AssemblyEntityInfo, keys: readonly string[], field: string, input: AsOfAssemblyInput): Promise<ReadonlyMap<string, SourceRow>> {
+    const read = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, keys, [field]);
+    if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
+    return read.Rows;
   }
 
   /**
@@ -486,10 +502,13 @@ export class AsOfFeatureAssembler {
    * The value Record Changes say the field held as of the decision day. A row with no join key has no record to replay,
    * so its value is missing; so is a record created after the decision day. A row the history cannot replay is uncovered.
    */
-  private replayReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, history: EntityHistory, input: AsOfAssemblyInput): FeatureReader {
+  private replayReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, reads: ReplaySources, input: AsOfAssemblyInput): FeatureReader {
     return (row) => {
       const key = keyOf(row);
       if (key === null) return AsOfFeatureAssembler.missingValue(spec, 'none', 'none', input);
+      if (AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
+      const history = reads.History;
+      if (history === null) throw new Error('As-of assembly: no history was loaded for a row decided before the assembly day');
       const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
       const hv = history.ValueAt(key, source.field, asOf);
       if (hv.Status === 'uncovered') {
@@ -501,6 +520,16 @@ export class AsOfFeatureAssembler {
         Provenance: { column: spec.name, source: 'record-changes', sourceRef: AsOfFeatureAssembler.fieldRef(entity, key, source.field), sourceVersion: hv.ChangeId, computedAt: hv.ChangedAt.toISOString() },
       };
     };
+  }
+
+  /** The stored value of a replayed field for a row decided on the assembly's day or later (missing when the record is gone). */
+  private static storedOnDecisionDay(
+    spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, key: string, stored: ReadonlyMap<string, SourceRow>, input: AsOfAssemblyInput,
+  ): RawValue {
+    const rec = stored.get(key.toLowerCase());
+    const sourceRef = AsOfFeatureAssembler.fieldRef(entity, key, source.field);
+    if (rec === undefined) return AsOfFeatureAssembler.missingValue(spec, sourceRef, 'no-record', input);
+    return { Value: rec[source.field], Provenance: { column: spec.name, source: 'record-changes', sourceRef, sourceVersion: 'stored-on-decision-day', computedAt: input.AssembledAt.toISOString() } };
   }
 
   /**
@@ -559,10 +588,14 @@ export class AsOfFeatureAssembler {
     if (reads.length === 0) return unread;
     if (!entity.TrackRecordChanges) {
       if (info.AllowUpdateAPI === false) return unread;
-      throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: entity.Name, field, historyStart: null, rowsAffected: AsOfFeatureAssembler.distinctRows(reads) });
+      // Only rows decided before the assembly's day are refused: the stored value is the value on today or later.
+      const pastRows = AsOfFeatureAssembler.distinctPastRows(reads, input);
+      if (pastRows === 0) return unread;
+      throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: entity.Name, field, historyStart: null, rowsAffected: pastRows });
     }
     const history = await AsOfFeatureAssembler.loadHistory(entity, reads.map((r) => r.Key), [field], input, state);
-    const judge = (key: string, at: Date): StableOutcome => (info.AllowUpdateAPI === false
+    const onDayOrLater = AsOfFeatureAssembler.asOfInstant(input.AssembledAt).getTime();
+    const judge = (key: string, at: Date): StableOutcome => (info.AllowUpdateAPI === false || at.getTime() >= onDayOrLater
       ? (AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable')
       : AsOfFeatureAssembler.judgeStoredValue(history, key, field, at, storedCreatedAt(key)));
     const instants = AsOfFeatureAssembler.instantsOf(reads);
@@ -661,6 +694,20 @@ export class AsOfFeatureAssembler {
     const ids = new Set<string>();
     for (const rows of new Set(reads.map((r) => r.Rows))) for (const row of rows) ids.add(row.RowId);
     return ids.size;
+  }
+
+  /** The number of distinct unit rows the reads stand for whose decision day is before the assembly's day. */
+  private static distinctPastRows(reads: readonly StableRead[], input: AsOfAssemblyInput): number {
+    const ids = new Set<string>();
+    for (const rows of new Set(reads.map((r) => r.Rows))) {
+      for (const row of rows) if (!AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) ids.add(row.RowId);
+    }
+    return ids.size;
+  }
+
+  /** Whether a row's decision day is on or after the assembly's own UTC day: its stored values are the values on that day. */
+  private static onAssemblyDayOrLater(row: AssemblyRowRef, input: AsOfAssemblyInput): boolean {
+    return AsOfFeatureAssembler.decisionDay(row.DecisionDate).getTime() >= AsOfFeatureAssembler.decisionDay(input.AssembledAt).getTime();
   }
 
   /** One read per unit row with a key: the record it reads, standing for that row alone. */

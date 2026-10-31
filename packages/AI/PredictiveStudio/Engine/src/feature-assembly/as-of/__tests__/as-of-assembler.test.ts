@@ -613,3 +613,51 @@ describe('AsOfFeatureAssembler.ToFeatureAssemblyResult', () => {
     expect(score.matrix).toEqual({ columns: ['EventsAttended', 'Region'], rows: [[3, 'EU'], [1, 'R7']] });
   });
 });
+
+describe('AsOfFeatureAssembler — a decision day on or after the assembly day reads stored values', () => {
+  // The fixture assembles on 2026-10-12.
+  const today = new Date('2026-10-12T00:00:00Z');
+  const yesterday = new Date('2026-10-11T00:00:00Z');
+  const tier = (kind: 'immutable-field' | 'record-changes'): FeatureColumnSpec =>
+    ({ name: `Tier-${kind}`, source: { kind, entity: 'Accounts', field: 'Tier', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
+  const accounts = { ...tables, Accounts: [{ ID: 'a1', Tier: 'Gold' }] };
+  const accountRow = (decision: Date): AssemblyRowRef[] => [{ RowId: 'a1', EntityKey: 'a1', DecisionDate: decision, Period: null }];
+
+  it("reads an untracked entity's updatable field as covered for a row decided today, directly and replayed", async () => {
+    const out = await new AsOfFeatureAssembler().Assemble(input([tier('record-changes'), tier('immutable-field')], { Tables: accounts, RowEntity: entities.Accounts, Rows: accountRow(today) }));
+    if (out.Status !== 'assembled') throw new Error(JSON.stringify(out));
+    expect(out.Rows.map((r) => r.Values)).toEqual([['Gold', 'Gold']]);
+    expect([out.UncoveredRowsExcluded, out.Rows[0].Provenance[0].sourceVersion]).toEqual([[], 'stored-on-decision-day']);
+  });
+
+  it('still refuses the same field for a row decided yesterday', async () => {
+    for (const kind of ['record-changes', 'immutable-field'] as const) {
+      expect(await new AsOfFeatureAssembler().Assemble(input([tier(kind)], { Tables: accounts, RowEntity: entities.Accounts, Rows: accountRow(yesterday) })))
+        .toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Accounts', field: 'Tier', historyStart: null, rowsAffected: 1 } });
+    }
+  });
+
+  it('keeps the rule for a tracked entity changed after a past decision day, and reads the stored value for a row decided today', async () => {
+    const status: FeatureColumnSpec = { name: 'Status', source: { kind: 'immutable-field', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+    const past: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null }];
+    expect(await new AsOfFeatureAssembler().Assemble(input([status], { Rows: past }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'People', field: 'Status', changesAfter: 1 } });
+    const now: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: today, Period: null }];
+    const out = await new AsOfFeatureAssembler().Assemble(input([status], { Rows: now }));
+    expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual(['Lapsed']);
+    // A tracked entity with no change history: a past day is refused, today reads the stored value.
+    const tierOf: FeatureColumnSpec = { name: 'Tier', source: { kind: 'immutable-field', entity: 'Tiers', field: 'Tier', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+    const tiers = { ...tables, Tiers: [{ ID: 't1', Tier: 'Gold', __mj_CreatedAt: '2025-01-01T00:00:00Z' }] };
+    const tierRow = (decision: Date): AssemblyRowRef[] => [{ RowId: 't1', EntityKey: 't1', DecisionDate: decision, Period: null }];
+    expect((await new AsOfFeatureAssembler().Assemble(input([tierOf], { Tables: tiers, RowEntity: entities.Tiers, Rows: tierRow(yesterday) }))).Status).toBe('refused');
+    const fresh = await new AsOfFeatureAssembler().Assemble(input([tierOf], { Tables: tiers, RowEntity: entities.Tiers, Rows: tierRow(today) }));
+    expect(fresh.Status === 'assembled' ? fresh.Rows.map((r) => r.Values[0]) : fresh).toEqual(['Gold']);
+  });
+
+  it("covers an untracked child's updatable field in an aggregate for owners decided today", async () => {
+    const pledges = { ...tables, Pledges: [{ ID: 'pl1', PersonID: 'P1', PledgedOn: '2022-06-01', Amount: 5 }, { ID: 'pl2', PersonID: 'P1', PledgedOn: '2026-10-01', Amount: 7 }] };
+    const sum: FeatureColumnSpec = { name: 'Pledged', source: { kind: 'windowed-aggregate', childEntity: 'Pledges', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'PledgedOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };
+    const now: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: today, Period: null }];
+    const out = await new AsOfFeatureAssembler().Assemble(input([sum], { Tables: pledges, Rows: now }));
+    expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual([12]);
+  });
+});
