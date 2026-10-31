@@ -671,7 +671,8 @@
             "PayloadUpstreamPaths": [
               "synthesis.*",
               "report.*",
-              "visualizations.*"
+              "visualizations.*",
+              "video.*"
             ],
             "AgentTypePromptParams": {
               "enableTaskGraphs": true
