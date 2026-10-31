@@ -114,7 +114,7 @@ export class RunFixtures {
     return failures.map((f) => `run ${h.RunID}: ${f}`);
   }
 
-  /** Trains a logistic-regression model on the given dataset (`MaxRows: 1_000_000`) and returns its `ModelID`. */
+  /** Trains a logistic-regression model on the given dataset (every unit row: a unit pipeline refuses a row cap) and returns its `ModelID`. */
   public static async TrainedModel(h: TruthHarness, tag: string, dataset: LoadedDataset): Promise<string> {
     const p = await h.CreatePipeline({
       Name: `PSTruth: ${tag} ${h.RunID}`,
@@ -127,12 +127,12 @@ export class RunFixtures {
       Validation: { Strategy: 'train_test_split', LockedHoldoutFraction: 0.2 },
       DenyFields: [...W_WORLD_DENY_FIELDS],
     });
-    const t = await h.Train(p, { MaxRows: 1_000_000 });
+    const t = await h.Train(p);
     if (!t.ModelID) throw new Error(`${tag} training failed: ${t.ErrorMessage || 'no model id'}`);
     return t.ModelID;
   }
 
-  /** Memoised W1 s42 Draft logistic-regression model (`MaxRows: 1_000_000`). */
+  /** Memoised W1 s42 Draft logistic-regression model. */
   public static W1S42Model(h: TruthHarness): Promise<CandidateModel> {
     RunFixtures.w1Draft ||= (async (): Promise<CandidateModel> => {
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
@@ -142,7 +142,7 @@ export class RunFixtures {
     return RunFixtures.w1Draft;
   }
 
-  /** Memoised W1 s42 Validated logistic-regression model (`MaxRows: 1_000_000`), promoted via `h.Promote`. */
+  /** Memoised W1 s42 Validated logistic-regression model, promoted via `h.Promote`. */
   public static W1S42ValidatedModel(h: TruthHarness): Promise<CandidateModel> {
     RunFixtures.w1Validated ||= (async (): Promise<CandidateModel> => {
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
@@ -186,7 +186,13 @@ export class RunFixtures {
       RunID: ctx.RunID,
       Created: created,
       EnsureLoaded: (ref) => HarnessDatasets.EnsureLoaded(ctx, ref),
-      CreatePipeline: (spec) => HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec),
+      CreatePipeline: async (spec) => {
+        const p = await HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec);
+        // The unit and protocol the migration bound are this run's rows too, so cleanup deletes them.
+        if (p.PredictionUnitID) created.RecordPredictionUnit(p.PredictionUnitID);
+        if (p.EvaluationProtocolID) created.RecordEvaluationProtocol(p.EvaluationProtocolID);
+        return p;
+      },
       Train: (pipeline, opts) => HarnessTraining.Train(ctx, pipeline, opts),
       RunBuilderAgent: (plan) => HarnessAgent.RunBuilderAgent(ctx, plan),
       ReadModel: (modelId) => HarnessModels.ReadModel(ctx, modelId),
