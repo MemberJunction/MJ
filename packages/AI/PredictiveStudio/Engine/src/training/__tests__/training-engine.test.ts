@@ -1100,9 +1100,11 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
   });
 
   it("names the pipeline's algorithm when the kept member's driver has no catalog row, and stores the shipped driver in the lineage", async () => {
+    // The finalist candidate runs on its own algorithm row (`algo-xgb2`), so the row must name the pipeline's, not the finalist's.
     const { engine, deps, pipeline } = protocolHarness(cannedFor);
     deps.recordLoader = new FakeRecordLoader(pipeline, 5, {});
-    const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const candidates = [TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb2', 'xgboost', '{"max_depth":2}')];
+    const { model } = await engine.trainModel({ pipelineId: pipeline.ID, candidates }, deps);
     expect(model?.AlgorithmID).toBe('algo-xgb');
     expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ shippedMember: 'glm', shippedDriver: 'logistic_regression' });
   });
