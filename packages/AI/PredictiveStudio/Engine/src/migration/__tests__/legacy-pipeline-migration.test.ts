@@ -82,6 +82,9 @@ class FixedReads implements IPipelineMigrationReads {
     this.Reads++;
     return this.columns[field] || [];
   }
+  public async LabelValues(entity: AssemblyEntityInfo, field: string): Promise<string[]> {
+    return this.ColumnValues(entity, field);
+  }
   public async NewestModelLineage(): Promise<string | null> {
     return null;
   }
@@ -92,7 +95,7 @@ class FixedReads implements IPipelineMigrationReads {
 
 const DATES = ['2024-01-01', '2024-02-01', '2024-03-01', '2024-04-01'];
 
-function setup(columns: Record<string, string[]> = { Renewed: ['true', 'false', 'true', 'true'], StartDate: DATES }): { deps: MigrationDeps; factory: MigrationFactory } {
+function setup(columns: Record<string, string[]> = { Renewed: ['1', '0', '1', '1'], StartDate: DATES }): { deps: MigrationDeps; factory: MigrationFactory } {
   const factory = new MigrationFactory();
   const deps: MigrationDeps = {
     Provider: fakeProvider, User: fakeUser, EntityFactory: factory, Today: '2026-10-20',
@@ -110,7 +113,7 @@ describe('PipelineMigration.EnsurePipelineUnitAndProtocol', () => {
     const real = await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, false);
     expect([real.Action, real.Cutoff, real.Notes]).toEqual(['migrated', dry.Cutoff, dry.Notes]);
     expect([real.PredictionUnitID, real.EvaluationProtocolID]).toEqual([p.PredictionUnitID, p.EvaluationProtocolID]);
-    expect(JSON.parse(factory.Units.Rows[0].TaskType)).toEqual({ kind: 'binary', classOrder: ['false', 'true'], adverseIndex: 0 });
+    expect(JSON.parse(factory.Units.Rows[0].TaskType)).toEqual({ kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 });
     expect(JSON.parse(factory.Protocols[0].InnerValidation)).toEqual({ kind: 'repeated-stratified-kfold', folds: 4, repeats: 3 });
     expect(JSON.parse(factory.Protocols[0].Exclusions)).toEqual({ denyFields: ['ID'], denySources: [] });
     expect(JSON.parse(factory.Protocols[0].Budgets).maxCandidates).toBe(1);
@@ -120,7 +123,7 @@ describe('PipelineMigration.EnsurePipelineUnitAndProtocol', () => {
   });
 
   it('archives a pipeline whose protocol has no form before anything is written, and never binds a unit to it', async () => {
-    const { deps, factory } = setup({ Renewed: ['true', 'false'], StartDate: ['2024-01-01', '2024-01-01'] });
+    const { deps, factory } = setup({ Renewed: ['1', '0'], StartDate: ['2024-01-01', '2024-01-01'] });
     const p = new LegacyPipeline();
     const r = await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, false);
     expect([r.Action, r.Reason]).toEqual(['archived', 'every row has the same StartDate (2024-01-01): no date cutoff leaves development rows']);

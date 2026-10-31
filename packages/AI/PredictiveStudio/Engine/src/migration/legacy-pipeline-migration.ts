@@ -14,12 +14,13 @@ import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineE
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocolRules, LegacyPipelines, PredictionUnit,
-  type Actor, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type UnitDraft,
+  type Actor, type CellValue, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { CompleteReader } from '../feature-assembly/read-policy';
 import { ProviderAssemblyMetadata, type AssemblyEntityInfo, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+import { PredictionUnitRowReader } from '../prediction-unit/unit-row-reader';
 import { PredictionUnitVersioning } from '../prediction-unit/unit-versioning';
 import { EvaluationProtocolVersioning } from '../protocol/protocol-versioning';
 import type { IEntityFactory } from '../training/types';
@@ -50,6 +51,11 @@ export interface MigrationReportRow {
 export interface IPipelineMigrationReads {
   /** Every non-null value of one column of an entity, as text, read completely (a truncated read throws). */
   ColumnValues(entity: AssemblyEntityInfo, field: string): Promise<string[]>;
+  /**
+   * Every non-empty value of a target column as a class label, in the form the unit row reader labels rows
+   * (`PredictionUnitRowReader.CanonicalLabel`: a bit reads `'1'`/`'0'`), read completely.
+   */
+  LabelValues(entity: AssemblyEntityInfo, field: string): Promise<string[]>;
   /** `Lineage` of the pipeline's newest Published model, else its newest model; null when it has none. */
   NewestModelLineage(pipelineId: string): Promise<string | null>;
   /** The unit version row with this ID, or null. */
@@ -216,7 +222,7 @@ export class PipelineMigration {
   /** Version 1 of the pipeline's unit from its legacy columns, its target's observed classes and its declared outcome semantics. */
   private static async mapNewUnit(p: MJMLTrainingPipelineEntity, entity: AssemblyEntityInfo, deps: MigrationDeps): Promise<ReturnType<typeof LegacyPipelines.LegacyUnitInputs>> {
     const reads = PipelineMigration.readsOf(deps);
-    const [labels, lineage] = await Promise.all([reads.ColumnValues(entity, p.TargetVariable), reads.NewestModelLineage(p.ID)]);
+    const [labels, lineage] = await Promise.all([reads.LabelValues(entity, p.TargetVariable), reads.NewestModelLineage(p.ID)]);
     const outcome = LegacyPipelines.LegacyOutcomeCandidates({
       FeatureSteps: p.FeatureSteps, Hyperparameters: p.Hyperparameters, ModelLineage: lineage, TargetVariable: p.TargetVariable, ProblemType: p.ProblemType,
     });
@@ -306,18 +312,35 @@ export class PipelineMigration {
   }
 }
 
+/**
+ * A classification task to read class labels with: `CanonicalLabel` reads classes the same way for every
+ * classification task, and the migration reads them before the unit's task (binary or multiclass) is known.
+ */
+const CLASS_LABELS: TaskType = { kind: 'multiclass', classOrder: [], adverseIndices: [] };
+
 /** The migration's reads through the request's provider (never the global one). */
 export class ProviderMigrationReads implements IPipelineMigrationReads {
   constructor(private readonly provider: IMetadataProvider, private readonly user: UserInfo) {}
 
   public async ColumnValues(entity: AssemblyEntityInfo, field: string): Promise<string[]> {
-    const read = await CompleteReader.ReadCompletely(new RunViewDataAccess(this.user, this.provider), { EntityName: entity.Name, KeyField: entity.PrimaryKey, Fields: [field] }, { mode: 'paged', pageSize: 50_000 });
-    if (read.Status === 'refused') throw new Error(`Reading ${entity.Name}.${field} was truncated: ${JSON.stringify(read.Refusal)}`);
-    return read.Rows.flatMap((r) => {
-      const v = r[field];
+    return (await this.readColumn(entity, field)).flatMap((v) => {
       if (v === null || v === undefined) return [];
       return [v instanceof Date ? v.toISOString() : String(v)];
     });
+  }
+
+  public async LabelValues(entity: AssemblyEntityInfo, field: string): Promise<string[]> {
+    return (await this.readColumn(entity, field)).flatMap((v) => {
+      const label = PredictionUnitRowReader.CanonicalLabel(v, CLASS_LABELS);
+      return typeof label === 'string' ? [label] : [];
+    });
+  }
+
+  /** One column of every row, read completely (a truncated read throws: the mapping must see every row). */
+  private async readColumn(entity: AssemblyEntityInfo, field: string): Promise<CellValue[]> {
+    const read = await CompleteReader.ReadCompletely(new RunViewDataAccess(this.user, this.provider), { EntityName: entity.Name, KeyField: entity.PrimaryKey, Fields: [field] }, { mode: 'paged', pageSize: 50_000 });
+    if (read.Status === 'refused') throw new Error(`Reading ${entity.Name}.${field} was truncated: ${JSON.stringify(read.Refusal)}`);
+    return read.Rows.map((r) => r[field]);
   }
 
   public async NewestModelLineage(pipelineId: string): Promise<string | null> {
