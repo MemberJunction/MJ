@@ -113,7 +113,7 @@
 
 .ps-step-tab.active .step-num {
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-brand-on-primary);
 }
 
 .ps-step-tab.done .step-num {

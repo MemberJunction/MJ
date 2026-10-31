@@ -1,26 +1,27 @@
 import {
     BaseEntity,
     DatabasePlatform,
+    DatabaseProviderBase,
     EntitySaveOptions,
     LogError,
     LogStatus,
 } from '@memberjunction/core';
 import { MJQuerySQLEntity, QueryEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJQueryEntityServer } from './MJQueryEntityServer.server';
 
 /**
  * Server-side subclass for MJ: Query SQLs.
  *
- * After a QuerySQL record is saved, if its dialect matches the current database
- * platform, triggers re-extraction on the parent Query. This handles the timing
- * issue where metadata sync creates the parent Query first (extraction runs but
- * the dialect variant doesn't exist yet), then creates QuerySQL child records.
+ * After a QuerySQL record is saved, if its dialect matches the platform of the provider it was
+ * saved through, the parent query is re-extracted from this variant's SQL. This handles the
+ * ordering where a metadata push creates the parent query first (its extraction reads the base
+ * SQL) and its dialect variants after.
  *
- * The QueryEngine cache uses BaseEngine's `CacheLocal: true`, so by the time
- * Save() returns the `_querySQLs` array already contains the new record —
- * no force refresh needed.
+ * The parent is read from the database on this record's provider, never from QueryEngine's cache:
+ * inside a transaction (an atomic metadata push) the cache does not yet hold a parent saved earlier
+ * in the same transaction, or holds it with its old SQL. The variant's own SQL is passed to the
+ * re-extraction for the same reason.
  */
 @RegisterClass(BaseEntity, 'MJ: Query SQLs')
 export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
@@ -30,9 +31,6 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
             return false;
         }
 
-        // Only trigger re-extraction if this dialect variant matches the
-        // current environment's database platform. A SQL Server environment
-        // receiving a PostgreSQL variant (or vice versa) should not re-extract.
         try {
             await this.triggerParentExtractionIfDialectMatches(options?.SkipEntityAIActions === true);
         } catch (e) {
@@ -44,61 +42,47 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         return true;
     }
 
-    /**
-     * Ensures QueryEngine is loaded. In CLI/sync contexts, Config() may not
-     * have been called yet. This is a no-op if already loaded (BaseEngine
-     * skips reloading when data is already cached and forceRefresh is false).
-     */
-    private async ensureQueryEngineLoaded(): Promise<void> {
-        if (QueryEngine.Instance.Queries.length === 0) {
-            await QueryEngine.Instance.Config(false, this.ContextCurrentUser);
-        }
+    /** The platform of the provider this record saves through. */
+    private get platform(): DatabasePlatform {
+        const provider = this.ProviderToUse;
+        return provider instanceof DatabaseProviderBase ? provider.PlatformKey : 'sqlserver';
     }
 
     private async triggerParentExtractionIfDialectMatches(skipAIEnrichment: boolean): Promise<void> {
-        const currentPlatform = resolveDbPlatformFromEnv() ?? 'sqlserver';
-
-        await this.ensureQueryEngineLoaded();
-
-        if (!this.isDialectForPlatform(currentPlatform)) {
+        if (!this.SQL || this.SQL.trim().length === 0 || !await this.isDialectForPlatformAsync(this.platform)) {
             return;
         }
-
-        const parentQuery = this.loadParentQuery();
-        if (!parentQuery) {
+        const parentQuery = await this.loadParentQueryAsync();
+        if (!parentQuery?.SQL || parentQuery.SQL.trim().length === 0) {
             return;
         }
-
-        // The parent query has SQL to extract — re-run the pipeline. The
-        // QueryEngine cache already has our QuerySQL record (CacheLocal event
-        // fires synchronously in super.Save()), so resolveExtractionSQL()
-        // will find the dialect variant via GetPlatformSQL().
-        if (parentQuery.SQL && parentQuery.SQL.trim().length > 0) {
-            LogStatus(`[MJQuerySQLEntityServer] Triggering re-extraction on "${parentQuery.Name}" — dialect variant saved for ${currentPlatform}`);
-            await parentQuery.RerunExtraction(skipAIEnrichment);
-        }
+        LogStatus(`[MJQuerySQLEntityServer] Triggering re-extraction on "${parentQuery.Name}" — dialect variant saved for ${this.platform}`);
+        await parentQuery.RerunExtraction(skipAIEnrichment, this.SQL);
     }
 
     /**
-     * Checks whether this QuerySQL record's SQLDialectID corresponds to the
-     * given database platform by looking up the dialect's PlatformKey in
-     * QueryEngine's cached SQLDialects.
+     * Whether this record's dialect is the given platform's. Dialects are seed metadata, so the
+     * cached list is used; QueryEngine is loaded first in a CLI or sync process that has not.
      */
-    private isDialectForPlatform(platform: DatabasePlatform): boolean {
-        const dialect = QueryEngine.Instance.SQLDialects.find(
-            d => UUIDsEqual(d.ID, this.SQLDialectID)
-        );
+    private async isDialectForPlatformAsync(platform: DatabasePlatform): Promise<boolean> {
+        if (!QueryEngine.Instance.Loaded) {
+            await QueryEngine.Instance.Config(false, this.ContextCurrentUser);
+        }
+        const dialect = QueryEngine.Instance.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
         return dialect?.PlatformKey === platform;
     }
 
-    private loadParentQuery(): MJQueryEntityServer | null {
-        const query = QueryEngine.Instance.Queries.find(
-            q => UUIDsEqual(q.ID, this.QueryID)
-        );
-        if (!query) {
-            LogError(`[MJQuerySQLEntityServer] Parent query ${this.QueryID} not found in QueryEngine cache`);
+    /** The parent query as stored now, read on this record's provider (inside its transaction, if any). */
+    private async loadParentQueryAsync(): Promise<MJQueryEntityServer | null> {
+        const provider = this.ProviderToUse;
+        if (!(provider instanceof DatabaseProviderBase)) {
             return null;
         }
-        return query as MJQueryEntityServer;
+        const query = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', this.ContextCurrentUser);
+        if (!(query instanceof MJQueryEntityServer) || !await query.Load(this.QueryID)) {
+            LogError(`[MJQuerySQLEntityServer] Parent query ${this.QueryID} could not be loaded for re-extraction`);
+            return null;
+        }
+        return query;
     }
 }

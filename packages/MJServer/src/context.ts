@@ -7,6 +7,7 @@ import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache } from './cache.js';
@@ -15,12 +16,14 @@ import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgre
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
+import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
 import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -143,6 +146,28 @@ async function writeSessionAudit(args: {
   } catch (e) {
     console.warn('[SessionAudit] failed to write audit row:', e instanceof Error ? e.message : String(e));
   }
+}
+
+/**
+ * Logs a session whose User record is not the identity its token carries, and returns whether that
+ * is the case. Runs once per issued token (inside the session-audit dedup). A `USER_EMAIL_MAP`
+ * rewrite is reported as such; any other difference means the lookup reached another person's
+ * record. Anonymous magic-link sessions run as a synthetic principal by design and are skipped.
+ */
+function reportIdentityMismatch(loginEmail: LoginEmailResolution, sessionUser: UserInfo): boolean {
+  if (sessionUser.IsMagicLinkAnonymous || EmailsMatch(loginEmail.TokenEmail, sessionUser.Email)) {
+    return false;
+  }
+  if (loginEmail.Remapped) {
+    console.warn(
+      `[Auth] USER_EMAIL_MAP remapped login '${loginEmail.TokenEmail}' to '${loginEmail.LookupEmail}'; the session runs as user ${sessionUser.ID} (${sessionUser.Email})`,
+    );
+  } else {
+    console.warn(
+      `[Auth] Login identity '${loginEmail.TokenEmail ?? ''}' resolved to user ${sessionUser.ID} with a different email (${sessionUser.Email}); check the User records for this address`,
+    );
+  }
+  return true;
 }
 
 /** Best-effort failure audit: decodes the attempted identity, dedupes, attributes to the system user. */
@@ -528,7 +553,8 @@ export const GetUserPayload = async (
 
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);
-    const email = userInfo.email ? ((userEmailMap ?? {})[userInfo.email] ?? userInfo.email) : userInfo.preferredUsername;
+    const loginEmail = ResolveUserLookupEmail(userInfo, userEmailMap);
+    const email = loginEmail.LookupEmail;
     
     const userRecord = await VerifyUserRecord(
       email, 
@@ -555,6 +581,7 @@ export const GetUserPayload = async (
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
     if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
+      const identityMismatch = reportIdentityMismatch(loginEmail, sessionUser);
       void writeSessionAudit({
         user: sessionUser,
         auditTypeName: SESSION_AUDIT_TYPE,
@@ -562,7 +589,16 @@ export const GetUserPayload = async (
         payload,
         requestContext,
         requestDomain,
-        description: `Session established via ${payload.iss ?? 'unknown provider'}`,
+        description: identityMismatch
+          ? `Session established via ${payload.iss ?? 'unknown provider'}: token identity '${loginEmail.TokenEmail ?? ''}' runs as user '${sessionUser.Email}'`
+          : `Session established via ${payload.iss ?? 'unknown provider'}`,
+        extraDetails: {
+          tokenEmail: loginEmail.TokenEmail ?? null,
+          lookupEmail: loginEmail.LookupEmail ?? null,
+          resolvedUserEmail: sessionUser.Email ?? null,
+          remappedByUserEmailMap: loginEmail.Remapped,
+          identityMismatch,
+        },
       });
     }
 
@@ -806,6 +842,7 @@ export const ContextFunction =
       userPayload,
       providers,
       ClientIp: expressReq.ip,
+      RequestOrigin: ReadRequestOrigin(req.headers.origin),
     };
   };
 
@@ -860,8 +897,6 @@ export async function CreateReadOnlyProvider(dataSources: DataSourceInfo[]): Pro
  * from the primary provider to avoid pool exhaustion.
  */
 async function createPostgresProvider(): Promise<DatabaseProviderBase> {
-  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-
   const pgProvider = new PostgreSQLDataProvider();
   const pgConfig = new PostgreSQLProviderConfigData(
     BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
@@ -896,8 +931,6 @@ async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase
   }
 
   try {
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-
     const roProvider = new PostgreSQLDataProvider();
     const roConfig = new PostgreSQLProviderConfigData(
       BuildPostgreSQLConnectionConfig({ ...ResolvePostgreSQLEndpoint(), ...credentials }, configInfo.databaseSettings, 'read-only'),

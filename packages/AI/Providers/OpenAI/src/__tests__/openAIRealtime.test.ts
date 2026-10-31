@@ -14,7 +14,17 @@ vi.mock('@memberjunction/ai', async () => {
             this._apiKey = apiKey;
         }
     }
-    class BaseRealtimeModel extends BaseModel {}
+    class BaseRealtimeModel extends BaseModel {
+        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
+        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+            let smallest: number | undefined;
+            for (const c of candidates) {
+                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+                if (smallest === undefined || c < smallest) smallest = c;
+            }
+            return smallest;
+        }
+    }
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
     // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
@@ -27,9 +37,15 @@ vi.mock('@memberjunction/ai', async () => {
     // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
     // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
+    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
+    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
+    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
+    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -196,6 +212,17 @@ describe('OpenAIRealtime client-direct (CreateClientSession)', () => {
     it('omits tools when none are provided', async () => {
         const cfg = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi' });
         expect((cfg.SessionConfig as Record<string, unknown>).tools).toBeUndefined();
+    });
+});
+
+describe('OpenAIRealtime', () => {
+    it('carries the 3600s provider cap as MaxSessionSeconds when the host sets nothing, and the smaller host cap otherwise', async () => {
+        const unset = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi' });
+        expect(unset.MaxSessionSeconds).toBe(3600);
+        const host = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi', MaxSessionSeconds: 900 });
+        expect(host.MaxSessionSeconds).toBe(900);
+        const over = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi', MaxSessionSeconds: 9000 });
+        expect(over.MaxSessionSeconds).toBe(3600);
     });
 });
 
@@ -1269,7 +1296,8 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(OpenAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             const frame = driver.Fake.Sent.slice(before)[0];
@@ -1286,7 +1314,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);

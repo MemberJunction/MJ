@@ -952,6 +952,65 @@ describe('GeminiLLM — generation config by model version', () => {
       expect(create.mock.calls[0][0].config).toBeUndefined();
     });
 
+    it('merges modelSpecificResponseFormat (e.g. thinkingConfig) alongside responseFormat JSON, not Text', async () => {
+      await run({
+        model: 'gemini-3.6-flash',
+        responseFormat: 'JSON',
+        modelSpecificResponseFormat: { thinkingConfig: { thinkingLevel: 'MINIMAL' } },
+      });
+      expect(requestConfig().responseMimeType).toBe('application/json');
+      expect(thinkingConfig(0)).toEqual({ thinkingLevel: 'MINIMAL' });
+
+      await run({
+        model: 'gemini-3.6-flash',
+        responseFormat: 'Text',
+        modelSpecificResponseFormat: { thinkingConfig: { thinkingLevel: 'MINIMAL' } },
+      });
+      expect(thinkingConfig(1)).toBeUndefined();
+    });
+
+    it('a rejected thinkingConfig carried in modelSpecificResponseFormat is replaced on later calls, not re-sent', async () => {
+      const carried = { responseFormat: 'JSON', modelSpecificResponseFormat: { thinkingConfig: { thinkingLevel: 'MINIMAL' } } };
+      sendMessage.mockRejectedValueOnce(badRequest());
+      await run({ model: 'gemini-3.8-flash', ...carried });
+      expect(thinkingConfig(1)).toEqual({ thinkingLevel: 'LOW' });
+
+      await run({ model: 'gemini-3.8-flash', ...carried });
+      expect(sendMessage).toHaveBeenCalledTimes(3);
+      expect(thinkingConfig(2)).toEqual({ thinkingLevel: 'LOW' });
+    });
+
+    it('keeps the caller\'s own thinkingConfig when the effort-derived setting was rejected with no fallback', async () => {
+      sendMessage.mockRejectedValueOnce(badRequest());
+      await run({ model: 'gemini-3.8-flash', effortLevel: 'high' });
+      expect(thinkingConfig(1)).toBeUndefined();
+
+      await run({
+        model: 'gemini-3.8-flash',
+        effortLevel: 'high',
+        responseFormat: 'JSON',
+        modelSpecificResponseFormat: { thinkingConfig: { thinkingLevel: 'LOW' } },
+      });
+      expect(thinkingConfig(2)).toEqual({ thinkingLevel: 'LOW' });
+    });
+
+    it('remembers a rejected setting whatever order its keys arrive in', async () => {
+      sendMessage.mockRejectedValueOnce(badRequest());
+      await run({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });
+      await run({
+        model: 'gemini-3.8-flash',
+        responseFormat: 'JSON',
+        modelSpecificResponseFormat: { thinkingConfig: { includeThoughts: true, thinkingLevel: 'MINIMAL' } },
+      });
+      expect(sendMessage).toHaveBeenCalledTimes(3);
+      expect(thinkingConfig(2)).toEqual(expect.objectContaining({ thinkingLevel: 'LOW' }));
+    });
+
+    it('responseFormat JSON keeps application/json when modelSpecificResponseFormat names another mime type', async () => {
+      await run({ model: 'gemini-3.6-flash', responseFormat: 'JSON', modelSpecificResponseFormat: { responseMimeType: 'text/plain' } });
+      expect(requestConfig().responseMimeType).toBe('application/json');
+    });
+
     it('retries a rejected MINIMAL with LOW, then sends LOW for MINIMAL and still sends the other levels', async () => {
       sendMessage.mockRejectedValueOnce(badRequest());
       const first = await run({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });

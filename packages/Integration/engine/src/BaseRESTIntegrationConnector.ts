@@ -1273,6 +1273,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             ExtraFilter: `ExternalObjectName='${parentObj.Name}' AND SyncEnabled=1`,
             Fields: ['EntityID', 'Entity'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         }, contextUser);
 

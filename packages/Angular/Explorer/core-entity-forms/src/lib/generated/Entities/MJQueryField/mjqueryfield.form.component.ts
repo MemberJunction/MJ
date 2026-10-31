@@ -17,6 +17,7 @@ export class MJQueryFieldFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'fieldDefinitionPresentation', sectionName: 'Field Definition & Presentation', isExpanded: true },
             { sectionKey: 'dataTypeSourceMapping', sectionName: 'Data Type & Source Mapping', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

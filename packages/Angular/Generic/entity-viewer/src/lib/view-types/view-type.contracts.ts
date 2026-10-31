@@ -148,6 +148,12 @@ export interface IViewRenderer<TConfig = unknown> {
   pageSize?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether the host is currently (re)loading the record set. */
   isLoading?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Optional ID of the persisted `MJ: User Views` record backing the current record set, or `null`
+   * for a dynamic / unsaved view. Generic view context — lets a renderer offer saved-view actions
+   * (such as Open in Excel) without taking ownership of the `UserView` entity record.
+   */
+  SavedViewID?: string | null;
 
   /** Emitted when a record is selected (single click). Payload is the raw record object. */
   recordSelected: EventEmitter<unknown>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub

@@ -1,16 +1,21 @@
 /**
- * Pure, unit-testable helpers for the "My Chief of Staff" Executive Cockpit's
- * agent context + client tools.
+ * Pure, unit-testable helpers for the Chief of Staff application's pages (Overview,
+ * Approvals & Wakes, Governance): their agent context, client tools and policy drafts.
+ *
+ * Core only: everything here reads core entities (`MJ: AI Agent User Policies`,
+ * `MJ: User Routines`, `MJ: AI Agent Requests`). Business data such as priorities, tasks and
+ * to-dos comes from Open Apps that add their own nav items to the Chief of Staff application
+ * through `NavItem.*` application settings; core never names an Open App's entities.
  *
  * 🚨 SAFETY BOUNDARY 🚨
- * The Chief of Staff Cockpit exposes ONLY navigation / tab-switch / filter / search /
+ * The Chief of Staff pages expose ONLY navigation / search /
  * refresh / detail-view tools to the co-agent. DELIBERATELY NOT exposed as client tools
  * (mutations stay human-driven in the UI):
  * - Approving or rejecting `MJ: AI Agent Requests`
  * - Modifying or saving `MJ: AI Agent User Policies` governance toggles / thresholds
  * - Triggering "Wake Now" or pausing/resuming `MJ: User Routines`
  *
- * Published context exposes only aggregate counts, active tab/filter state, governance
+ * Published context exposes only aggregate counts, the current page and search, governance
  * mode summaries, and bounded display names (capped at 25) — never raw request payloads,
  * custom instructions overrides, or private message content.
  */
@@ -20,8 +25,7 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import { CompositeKey, type EntityInfo, type RunViewParams } from '@memberjunction/core';
-import { EscapeSQLString, GroupByUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -31,29 +35,35 @@ import {
 } from '../shared/agent-tool-validation';
 
 /**
- * The cockpit serves one agent, identified by its metadata name. The id is resolved at runtime
+ * The pages serve one agent, identified by its metadata name. The id is resolved at runtime
  * through `AIEngineBase.GetAgentByName`, never hardcoded.
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
-export type ChiefOfStaffTab = 'overview' | 'priorities' | 'approvals-wakes' | 'governance';
-export const VALID_CHIEF_OF_STAFF_TABS: readonly ChiefOfStaffTab[] = [
+/** The name of the Chief of Staff application whose nav items open the pages. */
+export const CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
+
+/** The Chief of Staff application's own pages; each is one nav item. */
+export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'governance';
+export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
     'overview',
-    'priorities',
     'approvals-wakes',
     'governance',
 ] as const;
 
-export type TaskHealthStatus = 'OnTrack' | 'AtRisk' | 'OffTrack' | 'Completed' | 'Paused';
-export type HealthFilter = 'all' | TaskHealthStatus;
-export const VALID_HEALTH_FILTERS: readonly HealthFilter[] = [
-    'all',
-    'OnTrack',
-    'AtRisk',
-    'OffTrack',
-    'Completed',
-    'Paused',
-] as const;
+/** Each page's nav item label; must match the application's `DefaultNavItems`. */
+export const CHIEF_OF_STAFF_PAGE_LABELS: Readonly<Record<ChiefOfStaffPage, string>> = {
+    overview: 'Overview',
+    'approvals-wakes': 'Approvals & Wakes',
+    governance: 'Governance',
+};
+
+/** Each page's Font Awesome icon; matches the application's `DefaultNavItems`. */
+export const CHIEF_OF_STAFF_PAGE_ICONS: Readonly<Record<ChiefOfStaffPage, string>> = {
+    overview: 'fa-solid fa-compass',
+    'approvals-wakes': 'fa-solid fa-bell-concierge',
+    governance: 'fa-solid fa-shield-halved',
+};
 
 export type PolicyStatusValue = MJAIAgentUserPolicyEntity['Status'];
 export type PolicyCoordinationModeValue = MJAIAgentUserPolicyEntity['CoordinationMode'];
@@ -65,48 +75,6 @@ export type PolicyMessagingChannelModeValue = MJAIAgentUserPolicyEntity['Messagi
 export type RoutineStatusValue = MJUserRoutineEntity['Status'];
 export type RequestStatusValue = MJAIAgentRequestEntity['Status'];
 
-/**
- * Projection shape for rows returned from `MJ_BizApps_Tasks: Tasks` (`[__mj_BizAppsTasks].[vwTasks]`).
- */
-export interface BizAppsTaskRecordLike {
-    ID: string;
-    ParentID: string | null;
-    Name: string;
-    Description: string | null;
-    Status: string;
-    Priority: string | null;
-    IsPriority: boolean | number | null;
-    HealthStatus: TaskHealthStatus | null;
-    ConfidenceScore: number | null;
-    PercentComplete: number | null;
-    CheckInCadence: string | null;
-    PlanningPeriod: string | null;
-    BaselineValue: number | null;
-    TargetValue: number | null;
-    CurrentValue: number | null;
-    UnitOfMeasure: string | null;
-    MetricDirection: string | null;
-    DueAt: Date | string | null;
-    LastCheckInAt: Date | string | null;
-    NextCheckInDueAt: Date | string | null;
-    TypeID?: string | null;
-    Type?: string | null;
-    TaskType?: string | null;
-}
-
-/**
- * Grouped priority objective card with its child milestones/tasks and computed progress.
- */
-export interface PriorityObjectiveCardViewModel {
-    Task: BizAppsTaskRecordLike;
-    Subtasks: BizAppsTaskRecordLike[];
-    CompletedSubtaskCount: number;
-    EffectivePercentComplete: number;
-    EffectiveHealth: TaskHealthStatus;
-    MetricProgressLabel: string | null;
-    IsOverdue: boolean;
-}
-
 export interface RoutineSummaryItem {
     ID: string;
     Name: string;
@@ -116,6 +84,110 @@ export interface RoutineSummaryItem {
     NextRunAt: Date | string | null;
     LastRunAt: Date | string | null;
     LastRunStatus: MJUserRoutineEntity['LastRunStatus'];
+}
+
+/** The status label the pages show for a routine: the entity's Status, or 'Fired' for a spent one-shot. */
+export type RoutineDisplayStatusValue = RoutineSummaryItem['Status'] | 'Fired';
+
+/**
+ * True for a one-shot routine that has run and has no next time: the dispatcher disables a one-shot
+ * once it fires, so "Disabled" here means "done", not "broken". A one-shot still waiting for its
+ * time is not spent, whatever it has run before (a manual run keeps the schedule); a one-shot that
+ * was disabled before ever running is just disabled; a recurring routine is never spent.
+ */
+export function IsSpentOneShotRoutine(routine: Pick<RoutineSummaryItem, 'ScheduleMode' | 'NextRunAt' | 'LastRunAt' | 'Status'>): boolean {
+    return routine.ScheduleMode === 'OneShot'
+        && routine.Status === 'Disabled'
+        && routine.NextRunAt == null
+        && routine.LastRunAt != null;
+}
+
+/** 'Fired' for a spent one-shot, otherwise the routine's own Status. */
+export function RoutineDisplayStatus(routine: Pick<RoutineSummaryItem, 'ScheduleMode' | 'NextRunAt' | 'LastRunAt' | 'Status'>): RoutineDisplayStatusValue {
+    return IsSpentOneShotRoutine(routine) ? 'Fired' : routine.Status;
+}
+
+/**
+ * Display order for the wake schedule: routines with a next wake first, soonest first; then the
+ * unscheduled (paused, or disabled before ever running); spent one-shots last, most recent first.
+ * Returns a new array.
+ */
+export function SortRoutinesForDisplay<T extends Pick<RoutineSummaryItem, 'ScheduleMode' | 'NextRunAt' | 'LastRunAt' | 'Status'>>(routines: readonly T[]): T[] {
+    const rank = (r: T): number => (IsSpentOneShotRoutine(r) ? 2 : r.NextRunAt != null ? 0 : 1);
+    const time = (value: Date | string | null): number => {
+        const parsed = ParseOptionalDate(value);
+        return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY;
+    };
+    return [...routines].sort((a, b) => {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        if (ra === 0) return time(a.NextRunAt) - time(b.NextRunAt);
+        if (ra === 2) return time(b.LastRunAt) - time(a.LastRunAt);
+        return 0;
+    });
+}
+
+/**
+ * An outbound email waiting for approval, as the email action records it in the request's
+ * `Comments` (JSON with Operation / From / To / CCRecipients / Subject / Body).
+ */
+export interface EmailApprovalDraft {
+    Operation: 'Send' | 'Reply' | 'Forward';
+    From: string | null;
+    To: string;
+    CC: string[];
+    Subject: string;
+    Body: string;
+}
+
+/**
+ * Reads the email draft out of an approval request's Comments. Returns null when the comments are
+ * empty, not JSON, or not an email (a call brief, say), so callers can show the draft only when
+ * there is one. An older payload without `Operation` counts as a `Send` when To and Subject exist.
+ */
+export function ParseEmailApprovalPayload(comments: string | null | undefined): EmailApprovalDraft | null {
+    const text = comments?.trim();
+    if (!text || !text.startsWith('{')) {
+        return null;
+    }
+    let raw: unknown;
+    try {
+        raw = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+    const record = raw as Record<string, unknown>;
+    const to = stringField(record, 'To');
+    const subject = stringField(record, 'Subject');
+    const body = stringField(record, 'Body');
+    if (to == null || subject == null || body == null) {
+        return null;
+    }
+    const operation = stringField(record, 'Operation');
+    const op: EmailApprovalDraft['Operation'] = operation === 'Reply' || operation === 'Forward' ? operation : 'Send';
+    const cc = Array.isArray(record['CCRecipients'])
+        ? (record['CCRecipients'] as unknown[]).filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+        : [];
+    return { Operation: op, From: stringField(record, 'From'), To: to, CC: cc, Subject: subject, Body: body };
+}
+
+/** The draft as plain text for a mail client: headers, a blank line, then the body. */
+export function FormatEmailDraftForClipboard(draft: EmailApprovalDraft): string {
+    const lines = [`To: ${draft.To}`];
+    if (draft.CC.length > 0) {
+        lines.push(`CC: ${draft.CC.join(', ')}`);
+    }
+    lines.push(`Subject: ${draft.Subject}`, '', draft.Body);
+    return lines.join('\n');
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+    const value = record[key];
+    return typeof value === 'string' ? value : null;
 }
 
 export interface RequestSummaryItem {
@@ -147,27 +219,107 @@ export interface PolicyGovernanceSummary {
     AutoApproveAmountThreshold: number | null;
 }
 
+/** The Governance page's editable copy of the user's policy. */
+export interface GovernancePolicyDraft {
+    DisplayNameOverride: string;
+    Status: PolicyStatusValue;
+    OnboardingStatus: MJAIAgentUserPolicyEntity['OnboardingStatus'];
+    CoordinationMode: PolicyCoordinationModeValue;
+    DefaultDataAccessMode: PolicyDataAccessModeValue;
+    EmailChannelMode: PolicyEmailChannelModeValue;
+    CalendarChannelMode: PolicyCalendarChannelModeValue;
+    PhoneChannelMode: PolicyPhoneChannelModeValue;
+    MessagingChannelMode: PolicyMessagingChannelModeValue;
+    AllowInterAgentCoordination: boolean;
+    RequireApprovalForExternalComms: boolean;
+    RequireApprovalForFinancials: boolean;
+    RequireApprovalForDestructiveActions: boolean;
+    AutoApproveAmountThreshold: number | null;
+    InstructionsOverride: string;
+}
+
+/** The draft shown before the user has a policy record. */
+export function CreateDefaultPolicyDraft(): GovernancePolicyDraft {
+    return {
+        DisplayNameOverride: 'Chief of Staff',
+        Status: 'Active',
+        OnboardingStatus: 'Completed',
+        CoordinationMode: 'Coordinator',
+        DefaultDataAccessMode: 'UserCeiling',
+        EmailChannelMode: 'DraftOnly',
+        CalendarChannelMode: 'ProposeWithApproval',
+        PhoneChannelMode: 'Disabled',
+        MessagingChannelMode: 'Enabled',
+        AllowInterAgentCoordination: true,
+        RequireApprovalForExternalComms: true,
+        RequireApprovalForFinancials: true,
+        RequireApprovalForDestructiveActions: true,
+        AutoApproveAmountThreshold: 0,
+        InstructionsOverride: '',
+    };
+}
+
+/** A draft copied from the user's policy record, or the default draft when there is none. */
+export function BuildPolicyDraftFromEntity(entity: MJAIAgentUserPolicyEntity | null): GovernancePolicyDraft {
+    if (!entity) {
+        return CreateDefaultPolicyDraft();
+    }
+    return {
+        DisplayNameOverride: entity.DisplayNameOverride ?? '',
+        Status: entity.Status,
+        OnboardingStatus: entity.OnboardingStatus,
+        CoordinationMode: entity.CoordinationMode,
+        DefaultDataAccessMode: entity.DefaultDataAccessMode,
+        EmailChannelMode: entity.EmailChannelMode,
+        CalendarChannelMode: entity.CalendarChannelMode,
+        PhoneChannelMode: entity.PhoneChannelMode,
+        MessagingChannelMode: entity.MessagingChannelMode,
+        AllowInterAgentCoordination: entity.AllowInterAgentCoordination,
+        RequireApprovalForExternalComms: entity.RequireApprovalForExternalComms,
+        RequireApprovalForFinancials: entity.RequireApprovalForFinancials,
+        RequireApprovalForDestructiveActions: entity.RequireApprovalForDestructiveActions,
+        AutoApproveAmountThreshold: entity.AutoApproveAmountThreshold,
+        InstructionsOverride: entity.InstructionsOverride ?? '',
+    };
+}
+
+/** The display name: the draft's override, or 'My Chief of Staff'. */
+export function ChiefOfStaffDisplayName(draft: Pick<GovernancePolicyDraft, 'DisplayNameOverride'>): string {
+    const override = draft.DisplayNameOverride.trim();
+    return override.length > 0 ? override : 'My Chief of Staff';
+}
+
+/** The governance summary published in the agent context. */
+export function BuildGovernanceSummary(draft: GovernancePolicyDraft, hasPolicyRecord: boolean): PolicyGovernanceSummary {
+    return {
+        HasPolicyRecord: hasPolicyRecord,
+        DisplayName: ChiefOfStaffDisplayName(draft),
+        Status: draft.Status,
+        OnboardingStatus: draft.OnboardingStatus,
+        CoordinationMode: draft.CoordinationMode,
+        DefaultDataAccessMode: draft.DefaultDataAccessMode,
+        EmailChannelMode: draft.EmailChannelMode,
+        CalendarChannelMode: draft.CalendarChannelMode,
+        PhoneChannelMode: draft.PhoneChannelMode,
+        MessagingChannelMode: draft.MessagingChannelMode,
+        AllowInterAgentCoordination: draft.AllowInterAgentCoordination,
+        RequireApprovalForExternalComms: draft.RequireApprovalForExternalComms,
+        RequireApprovalForFinancials: draft.RequireApprovalForFinancials,
+        RequireApprovalForDestructiveActions: draft.RequireApprovalForDestructiveActions,
+        AutoApproveAmountThreshold: draft.AutoApproveAmountThreshold,
+    };
+}
+
 export interface ChiefOfStaffMetrics {
-    TotalTaskCount: number;
-    PriorityObjectiveCount: number;
-    SubtaskCount: number;
-    OnTrackCount: number;
-    AtRiskCount: number;
-    OffTrackCount: number;
-    CompletedPriorityCount: number;
-    AverageConfidenceScore: number | null;
-    AveragePriorityProgress: number;
     PendingApprovalCount: number;
     HighPriorityPendingCount: number;
     ActiveWakeRoutineCount: number;
     NextScheduledWakeAt: Date | null;
-    PriorityCards: PriorityObjectiveCardViewModel[];
 }
 
 export interface ChiefOfStaffAgentContextInput {
-    ActiveTab: ChiefOfStaffTab;
+    Page: ChiefOfStaffPage;
     SearchText: string;
-    HealthFilter: HealthFilter;
     Metrics: ChiefOfStaffMetrics;
     Governance: PolicyGovernanceSummary;
     Routines: readonly RoutineSummaryItem[];
@@ -182,7 +334,7 @@ export type AgentContextRecord = Record<
 
 /**
  * Returns `true` when an `MJ: AI Agent Requests` row represents an actionable approval or
- * review request for the Executive Cockpit's Pending Approvals queue, and `false` when it
+ * review request for the Chief of Staff's Pending Approvals queue, and `false` when it
  * is a conversational `Information` turn created by `BaseAgent` when ending a chat turn.
  */
 export function IsApprovalRequest(req: {
@@ -205,67 +357,14 @@ export function ParseOptionalDate(val: Date | string | null | undefined): Date |
     return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/**
- * Builds the primary key of a BizApps task from the entity's own primary key column(s) and the
- * in-memory row. Tasks is an OpenApp entity, so neither the column name nor the column count is
- * assumed; the same key feeds `OpenEntityRecord` and the `PrimaryKey` parameter of `Update Record`.
- */
-export function BuildTaskRecordKey(entityInfo: EntityInfo, task: BizAppsTaskRecordLike): CompositeKey {
-    return CompositeKey.FromEntityRecord(entityInfo, { ...task });
-}
-
-export function IsTaskPriorityObjective(task: BizAppsTaskRecordLike): boolean {
-    if (task.IsPriority === true || task.IsPriority === 1) {
-        return true;
-    }
-    const typeLabel = (task.Type ?? task.TaskType ?? '').toLowerCase();
-    if (
-        typeLabel.includes('priority') ||
-        typeLabel.includes('objective') ||
-        typeLabel.includes('okr')
-    ) {
-        return true;
-    }
-    return task.ParentID == null && (task.HealthStatus != null || task.PlanningPeriod != null);
-}
-
-export function NormalizeTaskHealth(task: BizAppsTaskRecordLike): TaskHealthStatus {
-    if (task.Status === 'Completed' || task.Status === 'Done' || task.HealthStatus === 'Completed') {
-        return 'Completed';
-    }
-    if (task.HealthStatus === 'AtRisk' || task.HealthStatus === 'OffTrack' || task.HealthStatus === 'Paused') {
-        return task.HealthStatus;
-    }
-    return 'OnTrack';
-}
-
-/**
- * Percent progress from `BaselineValue` toward `TargetValue`, clamped to 0-100.
- * Honors `MetricDirection` implicitly: a Down target (target < baseline) measures reduction.
- * Returns null when there is no target or the target equals the baseline (no measurable span).
- */
-export function ComputeTaskMetricPercent(task: BizAppsTaskRecordLike): number | null {
-    if (task.TargetValue == null) {
-        return null;
-    }
-    const baseline = task.BaselineValue ?? 0;
-    const span = task.TargetValue - baseline;
-    if (span === 0) {
-        return null;
-    }
-    const current = task.CurrentValue ?? baseline;
-    const raw = ((current - baseline) / span) * 100;
-    return Math.max(0, Math.min(100, Math.round(raw)));
-}
-
-/** ExtraFilters for the cockpit's three core-entity queries. Every clause is bound to the current user: the cockpit never shows another user's Chief of Staff data. */
-export interface CockpitScopeFilters {
+/** ExtraFilters for the pages' three core-entity queries. Every clause is bound to the current user: the pages never show another user's Chief of Staff data. */
+export interface ChiefOfStaffScopeFilters {
     Policy: string;
     Routines: string;
     Requests: string;
 }
 
-export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): CockpitScopeFilters {
+export function BuildChiefOfStaffScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): ChiefOfStaffScopeFilters {
     const user = EscapeSQLString(currentUserId);
     const agent = EscapeSQLString(chiefOfStaffAgentId);
     return {
@@ -275,172 +374,12 @@ export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgen
     };
 }
 
-/** OpenApp entity holding the person linked to the signed-in MJ user (`LinkedUserID`). */
-export const BIZAPPS_PEOPLE_ENTITY_NAME = 'MJ_BizApps_Common: People';
-/** OpenApp entity linking tasks to the people assigned to them. */
-export const BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME = 'MJ_BizApps_Tasks: Task Assignments';
 
-/** CSS modifier for a task priority badge, keyed by the Tasks `Priority` value list (Critical/High/Medium/Low). */
-export function GetTaskPriorityClass(priority: string | null): string {
-    switch ((priority ?? '').toLowerCase()) {
-        case 'critical':
-            return 'priority-critical';
-        case 'high':
-            return 'priority-high';
-        case 'low':
-            return 'priority-low';
-        default:
-            return 'priority-normal';
-    }
-}
-
-/** Minimal RunView surface the task-scope resolver needs; `RunView` from @memberjunction/core satisfies it. */
-export interface TaskScopeQueryRunner {
-    RunView<T>(params: RunViewParams): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }>;
-}
-
-export type PersonTaskScope =
-    | { HasLinkedPerson: false }
-    | { HasLinkedPerson: true; PersonID: string; Filter: string };
-
-/**
- * Resolve the BizApps person linked to `currentUserId` and the filter that limits the Tasks query to work
- * that person created or is assigned to. Throws when either lookup fails so the caller can show the error.
- */
-export async function ResolvePersonTaskScope(
-    runner: TaskScopeQueryRunner,
-    currentUserId: string,
-): Promise<PersonTaskScope> {
-    const people = await runner.RunView<{ ID: string }>({
-        EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
-        ExtraFilter: `LinkedUserID = '${EscapeSQLString(currentUserId)}'`,
-        Fields: ['ID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-    });
-    if (!people.Success) {
-        throw new Error(people.ErrorMessage ?? 'Failed to resolve the linked person.');
-    }
-    const personID = people.Results[0]?.ID;
-    if (!personID) {
-        return { HasLinkedPerson: false };
-    }
-    const assignments = await runner.RunView<{ TaskID: string }>({
-        EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
-        ExtraFilter: `PersonID = '${EscapeSQLString(personID)}'`,
-        Fields: ['TaskID'],
-        ResultType: 'simple',
-    });
-    if (!assignments.Success) {
-        throw new Error(assignments.ErrorMessage ?? 'Failed to load task assignments.');
-    }
-    const assignedTaskIDs = assignments.Results.map((a) => a.TaskID).filter((id) => !!id);
-    return { HasLinkedPerson: true, PersonID: personID, Filter: BuildPersonScopedTaskFilter(personID, assignedTaskIDs) };
-}
-
-/**
- * ExtraFilter for `MJ_BizApps_Tasks: Tasks` limiting rows to work the given person created or is assigned to.
- * `assignedTaskIDs` come from `MJ_BizApps_Tasks: Task Assignments` for the same person.
- */
-export function BuildPersonScopedTaskFilter(personID: string, assignedTaskIDs: readonly string[]): string {
-    const createdClause = `CreatedByPersonID = '${EscapeSQLString(personID)}'`;
-    if (assignedTaskIDs.length === 0) {
-        return createdClause;
-    }
-    const idList = assignedTaskIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
-    return `${createdClause} OR ID IN (${idList})`;
-}
-
-export function FormatTaskMetricProgress(task: BizAppsTaskRecordLike): string | null {
-    if (task.TargetValue == null && task.CurrentValue == null) {
-        return null;
-    }
-    const unit = task.UnitOfMeasure ? ` ${task.UnitOfMeasure}` : '';
-    const current = task.CurrentValue ?? task.BaselineValue ?? 0;
-    if (task.TargetValue != null) {
-        return `${current}${unit} / ${task.TargetValue}${unit}`;
-    }
-    return `${current}${unit}`;
-}
-
+/** The core counts: pending approvals and active wakes. */
 export function CalculateChiefOfStaffMetrics(
-    tasks: readonly BizAppsTaskRecordLike[],
     routines: readonly RoutineSummaryItem[],
     requests: readonly RequestSummaryItem[],
-    now: Date = new Date(),
 ): ChiefOfStaffMetrics {
-    const subtasksByParent = GroupByUUID(
-        tasks.filter((t) => !!t.ParentID),
-        (t) => t.ParentID,
-    );
-    const priorityTasks: BizAppsTaskRecordLike[] = [];
-
-    for (const task of tasks) {
-        const hasChildren = subtasksByParent.Has(task.ID);
-        if (!task.ParentID && (IsTaskPriorityObjective(task) || hasChildren)) {
-            priorityTasks.push(task);
-        }
-    }
-
-    // Only qualifying objectives are shown; an empty list renders the tab's empty state rather than unrelated root tasks.
-    const rootsToDisplay = priorityTasks;
-
-    let onTrackCount = 0;
-    let atRiskCount = 0;
-    let offTrackCount = 0;
-    let completedPriorityCount = 0;
-    let confidenceSum = 0;
-    let confidenceCount = 0;
-    let progressSum = 0;
-
-    const priorityCards: PriorityObjectiveCardViewModel[] = rootsToDisplay.map((root) => {
-        const children = subtasksByParent.Get(root.ID) ?? [];
-        const completedChildren = children.filter(
-            (c) => c.Status === 'Completed' || c.Status === 'Done' || (c.PercentComplete ?? 0) >= 100,
-        ).length;
-
-        const metricPercent = ComputeTaskMetricPercent(root);
-        const rawPercent =
-            metricPercent !== null
-                ? metricPercent
-                : typeof root.PercentComplete === 'number' && root.PercentComplete > 0
-                ? root.PercentComplete
-                : children.length > 0
-                  ? Math.round((completedChildren / children.length) * 100)
-                  : root.Status === 'Completed' || root.Status === 'Done'
-                    ? 100
-                    : 0;
-        const effectivePercent = Math.max(0, Math.min(100, rawPercent));
-        const effectiveHealth = NormalizeTaskHealth(root);
-
-        if (effectiveHealth === 'OnTrack') onTrackCount++;
-        else if (effectiveHealth === 'AtRisk') atRiskCount++;
-        else if (effectiveHealth === 'OffTrack') offTrackCount++;
-        else if (effectiveHealth === 'Completed') completedPriorityCount++;
-
-        if (typeof root.ConfidenceScore === 'number' && Number.isFinite(root.ConfidenceScore)) {
-            confidenceSum += root.ConfidenceScore;
-            confidenceCount++;
-        }
-        progressSum += effectivePercent;
-
-        const dueDate = ParseOptionalDate(root.DueAt);
-        const isOverdue =
-            dueDate !== null &&
-            dueDate.getTime() < now.getTime() &&
-            effectiveHealth !== 'Completed';
-
-        return {
-            Task: root,
-            Subtasks: children,
-            CompletedSubtaskCount: completedChildren,
-            EffectivePercentComplete: effectivePercent,
-            EffectiveHealth: effectiveHealth,
-            MetricProgressLabel: FormatTaskMetricProgress(root),
-            IsOverdue: isOverdue,
-        };
-    });
-
     const pendingRequests = requests.filter(
         (r) => r.Status === 'Requested' && IsApprovalRequest(r),
     );
@@ -455,49 +394,24 @@ export function CalculateChiefOfStaffMetrics(
         }
     }
 
-    const totalSubtasks = tasks.filter((t) => !!t.ParentID).length;
-
     return {
-        TotalTaskCount: tasks.length,
-        PriorityObjectiveCount: priorityCards.length,
-        SubtaskCount: totalSubtasks,
-        OnTrackCount: onTrackCount,
-        AtRiskCount: atRiskCount,
-        OffTrackCount: offTrackCount,
-        CompletedPriorityCount: completedPriorityCount,
-        AverageConfidenceScore:
-            confidenceCount > 0 ? Math.round((confidenceSum / confidenceCount) * 10) / 10 : null,
-        AveragePriorityProgress:
-            priorityCards.length > 0 ? Math.round(progressSum / priorityCards.length) : 0,
         PendingApprovalCount: pendingRequests.length,
         HighPriorityPendingCount: highPriorityPending.length,
         ActiveWakeRoutineCount: activeWakeRoutines.length,
         NextScheduledWakeAt: nextScheduledWakeAt,
-        PriorityCards: priorityCards,
     };
 }
 
 export function BuildChiefOfStaffAgentContext(
     input: ChiefOfStaffAgentContextInput,
 ): AgentContextRecord {
-    const priorityNames = input.Metrics.PriorityCards.map((c) => c.Task.Name).filter((n) => !!n);
-    const boundedPriorityNames = BoundNameList(priorityNames, AGENT_CONTEXT_NAME_LIST_CAP);
-
     const routineNames = input.Routines.map((r) => `${r.Name} (${r.Status})`).filter((n) => !!n);
     const boundedRoutineNames = BoundNameList(routineNames, AGENT_CONTEXT_NAME_LIST_CAP);
 
-    const context: AgentContextRecord = {
-        Surface: 'ChiefOfStaffDashboard',
-        ActiveTab: input.ActiveTab,
+    return {
+        Surface: 'ChiefOfStaff',
+        Page: input.Page,
         SearchText: input.SearchText,
-        HealthFilter: input.HealthFilter,
-        PriorityObjectiveCount: input.Metrics.PriorityObjectiveCount,
-        SubtaskCount: input.Metrics.SubtaskCount,
-        OnTrackCount: input.Metrics.OnTrackCount,
-        AtRiskCount: input.Metrics.AtRiskCount,
-        OffTrackCount: input.Metrics.OffTrackCount,
-        CompletedPriorityCount: input.Metrics.CompletedPriorityCount,
-        AveragePriorityProgressPercent: input.Metrics.AveragePriorityProgress,
         PendingApprovalCount: input.Metrics.PendingApprovalCount,
         HighPriorityPendingCount: input.Metrics.HighPriorityPendingCount,
         ActiveWakeRoutineCount: input.Metrics.ActiveWakeRoutineCount,
@@ -521,80 +435,19 @@ export function BuildChiefOfStaffAgentContext(
                 input.Governance.RequireApprovalForDestructiveActions,
             AutoApproveAmountThreshold: input.Governance.AutoApproveAmountThreshold,
         },
-        VisiblePriorityObjectiveNames: boundedPriorityNames,
         VisibleWakeRoutineNames: boundedRoutineNames,
     };
-
-    if (priorityNames.length > boundedPriorityNames.length) {
-        context['VisiblePriorityObjectiveNamesTruncated'] = true;
-        context['VisiblePriorityObjectiveNamesTotal'] = priorityNames.length;
-    }
-
-    return context;
 }
 
-export function ValidateChiefOfStaffTabParam(
+/** Validates a page parameter against the Chief of Staff application's own pages. */
+export function ValidateChiefOfStaffPageParam(
     raw: string | number | boolean | null | undefined,
-): { ok: true; value: ChiefOfStaffTab } | { ok: false; result: AgentToolResult } {
-    return ValidateEnumParam(raw, VALID_CHIEF_OF_STAFF_TABS, 'tab');
-}
-
-export function ValidateHealthFilterParam(
-    raw: string | number | boolean | null | undefined,
-): { ok: true; value: HealthFilter } | { ok: false; result: AgentToolResult } {
-    return ValidateEnumParam(raw, VALID_HEALTH_FILTERS, 'health');
+): { ok: true; value: ChiefOfStaffPage } | { ok: false; result: AgentToolResult } {
+    return ValidateEnumParam(raw, CHIEF_OF_STAFF_PAGES, 'page');
 }
 
 export function ValidateSearchQueryParam(
     raw: string | number | boolean | null | undefined,
 ): { ok: true; value: string } | { ok: false; result: AgentToolResult } {
     return ValidateStringParam(raw, 'query');
-}
-
-export function ResolvePriorityObjectiveByIDOrName(
-    cards: readonly PriorityObjectiveCardViewModel[],
-    rawRef: string | number | boolean | null | undefined,
-): { ok: true; value: PriorityObjectiveCardViewModel } | { ok: false; error: string } {
-    if (typeof rawRef !== 'string' || rawRef.trim().length === 0) {
-        return {
-            ok: false,
-            error: `Provide a priority objective ID or name. ${availableObjectiveNames(cards)}`,
-        };
-    }
-    const ref = rawRef.trim();
-    const byId = cards.find((c) => UUIDsEqual(c.Task.ID, ref));
-    if (byId) {
-        return { ok: true, value: byId };
-    }
-    const byName = cards.find((c) => c.Task.Name.trim().toLowerCase() === ref.toLowerCase());
-    if (byName) {
-        return { ok: true, value: byName };
-    }
-    const partial = cards.filter((c) => c.Task.Name.toLowerCase().includes(ref.toLowerCase()));
-    if (partial.length === 1) {
-        return { ok: true, value: partial[0] };
-    }
-    if (partial.length > 1) {
-        const names = partial
-            .slice(0, AGENT_CONTEXT_NAME_LIST_CAP)
-            .map((c) => c.Task.Name)
-            .join(', ');
-        return {
-            ok: false,
-            error: `'${ref}' matches multiple priority objectives: ${names}. Be more specific.`,
-        };
-    }
-    return {
-        ok: false,
-        error: `No priority objective matches '${ref}'. ${availableObjectiveNames(cards)}`,
-    };
-}
-
-function availableObjectiveNames(cards: readonly PriorityObjectiveCardViewModel[]): string {
-    if (cards.length === 0) {
-        return 'There are no priority objectives loaded.';
-    }
-    const names = cards.slice(0, AGENT_CONTEXT_NAME_LIST_CAP).map((c) => c.Task.Name);
-    const suffix = cards.length > AGENT_CONTEXT_NAME_LIST_CAP ? ', …' : '';
-    return `Available priority objectives: ${names.join(', ')}${suffix}`;
 }

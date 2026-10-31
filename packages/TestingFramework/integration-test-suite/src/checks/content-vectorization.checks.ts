@@ -23,16 +23,16 @@
  * own configuration; CV10 FieldPathResolver queries a related row its engine cache has never seen.
  *
  * CV9/CV10 create that source with a raw INSERT through `ctx.Pool`, so they are SQL Server only and
- * skip loudly without a pool (see insertSourceBehindEngine for why a BaseEntity save cannot do it).
+ * skip (SkipCheck) without a pool (see insertSourceBehindEngine for why a BaseEntity save cannot do it).
  *
  * ANTI-VACUITY: needs a Vector Index to borrow an embedding model + vector DB from. If the
- * deployment has none, every check SKIPS-AS-PASS LOUDLY. All fixtures are name-prefixed per run
+ * deployment has none, every check is recorded as a skip (SkipCheck). All fixtures are name-prefixed per run
  * and tagged "(mj-integration-test — safe to delete)"; Teardown removes them children-first.
  */
 import { RunView, BaseEntity, BaseEngineRegistry, CompositeKey } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual, uuidv4 } from '@memberjunction/global';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { AutotagBaseEngine, ContentVectorInfrastructure, FieldPathResolver } from '@memberjunction/content-autotagging';
@@ -79,13 +79,9 @@ interface BundleState {
 }
 let S: BundleState;
 
-function skipNote(id: string, reason: string): void {
-    console.warn(`  ⚠ content-vectorization.${id} SKIPPED — ${reason}`);
-}
-/** Returns true (and logs) when the bundle can't run; each check early-returns on it. */
-function guardSkip(id: string): boolean {
-    if (S?.Skip) { skipNote(id, S.SkipReason); return true; }
-    return false;
+/** Skips the running check (SkipCheck) when the bundle can't run. */
+function guardSkip(): void {
+    if (S?.Skip) { SkipCheck(S.SkipReason); }
 }
 
 /** Install the two external-seam stubs (the shared vector-DB factory and AIEmbeddingRunner.RunEmbedding), idempotently, capturing payloads. */
@@ -235,10 +231,9 @@ async function insertSourceBehindEngine(
 }
 
 /** CV9/CV10 need the fixture pool (server transport, SQL Server) to create a row behind the engine cache. */
-function guardNoPool(ctx: IntegrationCheckContext, id: string): boolean {
-    if (ctx.Pool) return false;
-    skipNote(id, 'no SQL fixture pool on this context (SQL Server server transport only) — cannot create a row this process never hears about');
-    return true;
+function guardNoPool(ctx: IntegrationCheckContext): void {
+    if (ctx.Pool) return;
+    SkipCheck('no SQL fixture pool on this context (SQL Server server transport only), so the check cannot create a row this process never hears about');
 }
 
 /** Anti-vacuity for CV9/CV10: a row this process's KnowledgeHub cache already holds proves nothing. */
@@ -284,7 +279,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV1: default (alwaysChunk + recordId) creates a ContentItemChunk row carrying chunk identity; item-level VectorRecordID stays null',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV1')) return;
+            guardSkip();
             await ensureBase(ctx);
             const { sourceID, contentTypeID } = await makeSource(ctx, 'cv1');
             const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv1-short', 'A short piece of content that fits in a single embedding chunk.');
@@ -311,7 +306,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV2: a long item produces ordered multi-chunk rows; re-vectorizing soft-deletes the prior chunks and appends a fresh set',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV2')) return;
+            guardSkip();
             await ensureBase(ctx);
             const { sourceID, contentTypeID } = await makeSource(ctx, 'cv2');
             const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv2-long', LONG_TEXT);
@@ -342,7 +337,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV3: PurgeDeletedChunks removes the superseded chunks’ vectors from the store and tombstones the rows; live chunks untouched',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV3')) return;
+            guardSkip();
             await ensureBase(ctx);
             const { sourceID, contentTypeID } = await makeSource(ctx, 'cv3');
             const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv3-long', LONG_TEXT);
@@ -372,7 +367,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV4: EmbedPendingChunks backfills a ContentItemChunk row created with EmbeddingStatus=Pending (migration/recovery path)',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV4')) return;
+            guardSkip();
             await ensureBase(ctx);
             const { sourceID, contentTypeID } = await makeSource(ctx, 'cv4');
             const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv4-item', 'Parent item for a pending chunk.');
@@ -400,7 +395,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV5: VectorMetadata FieldStrategy="explicit" emits minimal metadata (Entity + configured field only)',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV5')) return;
+            guardSkip();
             await ensureBase(ctx);
             const { sourceID, contentTypeID } = await makeSource(ctx, 'cv5', { VectorMetadata: { FieldStrategy: 'explicit', Fields: { Name: { Included: true } } } });
             const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv5-explicit', 'Explicit-metadata content item.');
@@ -421,7 +416,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV6: VectorIndex.Dimensions flows into the embedding call, and ProviderConfig.namespaceField routes the upsert',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV6')) return;
+            guardSkip();
             await ensureBase(ctx);
             const { sourceID, contentTypeID } = await makeSource(ctx, 'cv6');
             const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv6-item', 'Dimensions + namespace content item.');
@@ -441,7 +436,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV7: a source declaring VectorEntityName under the explicit strategy omits Entity and carries ContentSourceID instead',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV7')) return;
+            guardSkip();
             await ensureBase(ctx);
             // The whole opt-in, against the real cascade: CV5 covers 'explicit' WITHOUT a declaration and
             // asserts Entity survives, so this is its counterpart. ChunkTextStorage/VectorIDStrategy are
@@ -476,7 +471,7 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV8: the Entity key survives a declaration the reader would refuse — an unresolvable name, and one naming the item entity',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV8')) return;
+            guardSkip();
             await ensureBase(ctx);
             // Two configurations that satisfy every gate condition except a usable declaration. Both must
             // keep writing Entity: omitting it against a declaration search will refuse is unrecoverable
@@ -519,7 +514,8 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV9: a content source another process created after the engine cache loaded still routes, stores and namespaces by its own configuration',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV9') || guardNoPool(ctx, 'CV9')) return;
+            guardSkip();
+            guardNoPool(ctx);
             await ensureBase(ctx);
 
             // The production shape: a long-running vectorization worker loaded its KnowledgeHub cache,
@@ -575,7 +571,8 @@ export const ContentVectorizationChecks: NamedCheck[] = [
         Name: 'CV10: FieldPathResolver queries a related row its engine cache has never seen instead of reporting it absent',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV10') || guardNoPool(ctx, 'CV10')) return;
+            guardSkip();
+            guardNoPool(ctx);
             await ensureBase(ctx);
 
             // The resolver seam on its own, against the real registry, engine and database. CV9 cannot

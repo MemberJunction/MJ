@@ -316,6 +316,21 @@ describe('MaterializationRefresher.mapSqlTypeToPostgres (Phase 1.5)', () => {
     });
 });
 
+describe('MaterializationRefresher.BaseTypeName', () => {
+    it('drops the argument list and lower-cases the name', () => {
+        expect(MaterializationRefresher.BaseTypeName(' NVARCHAR(255) ')).toBe('nvarchar');
+        expect(MaterializationRefresher.BaseTypeName('decimal(18,2)')).toBe('decimal');
+        expect(MaterializationRefresher.BaseTypeName('int')).toBe('int');
+        expect(MaterializationRefresher.BaseTypeName('varchar(50')).toBe('varchar(50');
+    });
+    it('reads a type string made of many open parentheses in linear time', () => {
+        const started = Date.now();
+        expect(MaterializationRefresher.BaseTypeName('('.repeat(100_000) + 'x')).toBe('('.repeat(100_000) + 'x');
+        expect(MaterializationRefresher.MapSqlTypeToPostgres('('.repeat(100_000) + 'x')).toBe('text');
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+});
+
 describe('MaterializationRefresher.inferSqlType (Phase 1.5 external query)', () => {
     it('infers integer vs float from numeric values', () => {
         expect(MaterializationRefresher.inferSqlType([1, 2, 3], false)).toBe('int');

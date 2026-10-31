@@ -94,11 +94,11 @@
         <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('fields')" (ExpandedChange)="ToggleSection('fields')">
           <ng-template mjAccordionTitle>
             <span class="section-title">Fields</span>
-            <span class="mj-accordion-badge mj-accordion-badge--muted">({{ QueryInfo.QueryFields.length || 0 }})</span>
+            <span class="mj-accordion-badge mj-accordion-badge--muted">({{ VisibleFields.length }})</span>
           </ng-template>
-              @if (QueryInfo.QueryFields.length) {
+              @if (VisibleFields.length) {
                 <div class="fields-list">
-                  @for (field of QueryInfo.QueryFields; track TrackByField($index, field)) {
+                  @for (field of VisibleFields; track TrackByField($index, field)) {
                     <div class="field-item">
                       <div class="field-header">
                         <span class="field-name">{{ field.Name }}</span>

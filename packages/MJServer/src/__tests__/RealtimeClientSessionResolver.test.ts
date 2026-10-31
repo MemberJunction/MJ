@@ -2695,6 +2695,28 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
         expect(promptRun.Save).not.toHaveBeenCalled();
     });
 
+    it('logs a missing co-agent promptRunID once per session, not once per relay', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const missingRunLines = (): string[] =>
+            (errSpy?.mock.calls ?? []).map((c) => c.map(String).join(' ')).filter((m) => m.includes('has no co-agent promptRunID'));
+        const resolver = makeResolver();
+
+        for (const sessionID of ['session-no-run-a', 'session-no-run-b']) {
+            const { provider } = makeUsageProvider({
+                session: makeSessionEntity({ ID: sessionID, Config_: JSON.stringify({ targetAgentID: 'target-1' }) }),
+            });
+            currentProvider = provider;
+            for (let i = 0; i < 3; i++) {
+                await expect(resolver.RelayRealtimeUsage(sessionID, 10, 5, makeCtx())).resolves.toBe(false);
+            }
+        }
+
+        const lines = missingRunLines();
+        expect(lines).toHaveLength(2);
+        expect(lines[0]).toContain('session-no-run-a');
+        expect(lines[1]).toContain('session-no-run-b');
+    });
+
     it('returns false (tolerant, no throw) when the session config is missing/malformed', async () => {
         const { provider } = makeUsageProvider({ session: makeSessionEntity({ Config_: '{broken json' }) });
         currentProvider = provider;

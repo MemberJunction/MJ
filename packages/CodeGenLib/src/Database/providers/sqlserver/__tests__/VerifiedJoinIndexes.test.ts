@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo } from '@memberjunction/core';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
+import { PostgreSQLCodeGenProvider } from '../../postgresql/PostgreSQLCodeGenProvider';
 
 function field(name: string, sequence: number, extra: Record<string, unknown> = {}): Record<string, unknown> {
     return {
@@ -156,5 +157,77 @@ describe('GenerateForeignKeyIndexes — verified joins, not just declared FKs', 
             relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'x', EntityKeyField: 'OwnerName', Type: 'One To Many' }],
         });
         expect(provider.GenerateForeignKeyIndexes(e)).toEqual([]);
+    });
+});
+
+/**
+ * #5985: SQL Server rejects an unbounded column as an index key (error 1919), so a `CREATE INDEX`
+ * on an `NVARCHAR(MAX)` FK failed on every run. A key over 1,700 bytes is created with a warning and
+ * then fails later writes. Both now get a comment in the generated SQL instead of a statement.
+ */
+describe('GenerateForeignKeyIndexes — columns SQL Server cannot index', () => {
+    const provider = new SQLServerCodeGenProvider();
+
+    it('skips an unbounded declared FK with an FK INDEX SKIPPED comment, and still indexes the others', () => {
+        const e = entity({
+            fields: [
+                BASE_FIELDS[0],
+                field('entity', 2, { RelatedEntityID: 'other', Length: -1 }),
+                field('OwnerID', 3, { RelatedEntityID: 'other' }),
+            ],
+        });
+        const out = provider.GenerateForeignKeyIndexes(e);
+        expect(out).toHaveLength(2);
+        expect(out[0]).toContain('CREATE INDEX');
+        expect(out[0]).toContain('[OwnerID]');
+        expect(out[1]).not.toContain('CREATE');
+        expect(out[1]).toContain('-- FK INDEX SKIPPED for acgi.Customer');
+        expect(out[1]).toContain('--   entity (nvarchar): unbounded');
+        expect(out[1].split('\n').every((line) => line.startsWith('--'))).toBe(true);
+    });
+
+    it('skips a declared FK wider than 1,700 bytes', () => {
+        const e = entity({ fields: [BASE_FIELDS[0], field('AccountRef', 2, { RelatedEntityID: 'other', Length: 3200 })] });
+        const out = provider.GenerateForeignKeyIndexes(e);
+        expect(out).toHaveLength(1);
+        expect(out[0]).toContain('FK INDEX SKIPPED');
+        expect(out[0]).toContain('AccountRef (nvarchar): 3200 bytes, over SQL Server\'s 1700-byte index key limit');
+    });
+
+    it('indexes a bounded FK at exactly 1,700 bytes, unchanged', () => {
+        const e = entity({ fields: [BASE_FIELDS[0], field('AccountRef', 2, { RelatedEntityID: 'other', Length: 1700 })] });
+        const out = provider.GenerateForeignKeyIndexes(e);
+        expect(out).toHaveLength(1);
+        expect(out[0]).toContain('CREATE INDEX IDX_AUTO_MJ_FKEY_Customer_AccountRef');
+    });
+
+    it('skips an unbounded soft FK (declared only in metadata) the same way', () => {
+        const e = entity({ fields: [BASE_FIELDS[0], field('entity', 2, { RelatedEntityID: 'other', IsSoftForeignKey: true, Length: -1 })] });
+        const out = provider.GenerateForeignKeyIndexes(e);
+        expect(out).toHaveLength(1);
+        expect(out[0]).toContain('FK INDEX SKIPPED');
+        expect(out[0]).toContain('entity (nvarchar): unbounded');
+    });
+
+    it('skips an unbounded verified-join column, alongside the organic-key notice', () => {
+        const e = entity({
+            fields: [BASE_FIELDS[0], field('Customer_Key', 2, { Length: -1 }), ...BASE_FIELDS.slice(2)],
+            relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'x', EntityKeyField: 'Customer_Key', Type: 'One To Many' }],
+            organicKeys: [{ ID: 'ok1', EntityID: 'e-1', Name: 'email_address', MatchFieldNames: 'Email', NormalizationStrategy: 'LowerCaseTrim', Status: 'Active' }],
+        });
+        const out = provider.GenerateForeignKeyIndexes(e);
+        expect(out.filter((s) => s.includes('CREATE'))).toEqual([]);
+        expect(out).toHaveLength(2);
+        expect(out[0]).toContain('FK INDEX SKIPPED');
+        expect(out[0]).toContain('Customer_Key (nvarchar): unbounded');
+        expect(out[1]).toContain('ORGANIC KEY INDEXES NOT EMITTED');
+    });
+
+    it('PostgreSQL keeps its btree index on an unbounded FK', () => {
+        const e = entity({ fields: [BASE_FIELDS[0], field('entity', 2, { RelatedEntityID: 'other', Type: 'text', Length: -1 })] });
+        const out = new PostgreSQLCodeGenProvider().GenerateForeignKeyIndexes(e);
+        expect(out).toHaveLength(1);
+        expect(out[0]).toContain('CREATE INDEX IF NOT EXISTS');
+        expect(out[0]).not.toContain('SKIPPED');
     });
 });

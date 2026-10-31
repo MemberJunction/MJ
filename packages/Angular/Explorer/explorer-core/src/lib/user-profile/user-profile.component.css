@@ -134,7 +134,7 @@
   height: 28px;
   padding: 0 0.5rem;
   background: var(--mj-status-success);
-  color: white;
+  color: var(--mj-text-inverse);
   border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 600;
@@ -231,7 +231,7 @@
 }
 
 .channel-toggle.active .toggle-indicator i {
-  color: white;
+  color: var(--mj-brand-on-primary);
 }
 
 .channel-toggle:disabled {

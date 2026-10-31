@@ -372,6 +372,7 @@ async function LoadPrompt(provider: unknown, user: unknown, ref: RubricPromptRef
         ExtraFilter: filter,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
     }, user as never);
     if (!found.Success) throw new Error(found.ErrorMessage || `Could not read the ${ref.ID ?? ref.Name} prompt.`);
     const prompt = found.Results?.[0];

@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT143 - SQL Pipeline Scenario Matrix",
+    "Description": "A declarative scenario matrix over the query pipeline, on SQL Server and PostgreSQL. Dimensions are data: row source (a mock schema mjit_sqlpipe built by the bundle — skewed and uniform data, a self-reference tree, wide types, a second schema with a table named with a space, a view over a view, a table-valued / set-returning function, PascalCase names quoted on PostgreSQL — and the core view __mj.vwEntityFields), query shape (31: plain, CTE, chained and recursive CTE, derived table, VALUES, UNION / EXCEPT, DISTINCT, GROUP BY / HAVING, window functions, own TOP / LIMIT / PERCENT / WITH TIES / OFFSET-FETCH, FOR JSON, OPTION hints, quoted names, comments holding keywords and tags, a leading semicolon, SELECT * and alias.*, TRY_CAST, STRING_AGG, duplicate output names), templating (17: required, optional, if/elif, condition-only, if plus outside, for loops, sqlIn, set, default, the LIKE filters, Context tokens, doc comments, dates with time zones, booleans, .length guards, inline if), composition (16: static, pass-through, arithmetic, nested 2 and 3 levels, the same query twice, inside if and for, a dependency with its own CTE / TOP / OPTION / recursion, and the missing / implicit / unknown argument refusals), values (provided, missing, null, empty array, quotes, unicode, LIKE wildcards, injection probes, boundaries, time zones), MaxRows, StartRow and run path (saved by ID, by name, cached, ad hoc SQL, transient spec). SPM1 runs all pairs of those dimensions (each value pair that can co-occur appears at least once): every run is compared with a plain-SQL oracle (no MJ feature) run directly on the database, the page cut from its rows; refused saves must carry their code and write no row. SPM5 checks every saved query's extracted metadata: parameter rows (required iff a use sits outside every conditional, types from filters, defaults, doc-comment descriptions), dependency rows by full path with argument mappings, Query Entities, and field rows equal to the server's own describe of the oracle (names, order, types, nullability on SQL Server), with pass-through columns of the core view bound to their MJ: Entity Fields fields. Self-cleaning. SQLPIPE_SAMPLE=n (a development aid) runs every n-th point.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every generated scenario returns the rows its plain-SQL oracle returns, and its extracted metadata satisfies the spec rules."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "sqlpipe-matrix"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FD2DF052-E5BB-46E3-BCE2-00C91204418D"
+  },
+  "sync": {
+    "lastModified": "2026-10-28T22:16:26.207Z",
+    "checksum": "5a092e70e30940e8f49a8730c948536e7dcad51bf91ccccb54119160afe34594"
+  }
+}

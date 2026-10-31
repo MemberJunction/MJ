@@ -99,6 +99,8 @@ describe('RealtimeProxyRegistry relay sessions', () => {
         expect(expiresAfter({ MaxSessionSeconds: 7200 })).toBe(1800);
         expect(expiresAfter({ LifetimeSeconds: 120, MaxSessionSeconds: 600 })).toBe(120);
         expect(expiresAfter({ MaxSessionSeconds: 0 })).toBe(1800); // no cap
+        expect(expiresAfter({ MaxSessionSeconds: 900.5 })).toBe(1800); // a fractional cap is invalid, so unset (same rule as ClampSessionSeconds)
+        expect(expiresAfter({ MaxSessionSeconds: Number.NaN })).toBe(1800);
         expect(expiresAfter({ LifetimeSeconds: Number.NaN })).toBe(1800);
         expect(expiresAfter({ LifetimeSeconds: 0 })).toBe(1); // at least a second, never the default
     });

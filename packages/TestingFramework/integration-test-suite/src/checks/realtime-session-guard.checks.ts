@@ -25,7 +25,7 @@ import type { UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal } from '@memberjunction/global';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
     REALTIME_SESSION_FIXTURE_TAG,
@@ -114,13 +114,11 @@ export const RealtimeSessionGuardChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             if (!sessionGuardActive(ctx)) {
-                console.warn('  ⚠ realtime-session-guard.RSG1 SKIPPED — MJAIAgentSessionEntityServer is not registered in this process');
-                return;
+                SkipCheck('MJAIAgentSessionEntityServer is not registered in this process');
             }
             const agentID = await firstAgentID(ctx.User);
             if (!agentID) {
-                console.warn('  ⚠ realtime-session-guard.RSG1 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
             }
             const session = await newSession(ctx, agentID, { purpose: 'realtime-session-guard RSG1' });
             try {
@@ -166,8 +164,7 @@ export const RealtimeSessionGuardChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const agentID = await firstAgentID(ctx.User);
             if (!agentID) {
-                console.warn('  ⚠ realtime-session-guard.RSG2 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
             }
             const swept = await sweepLeftovers(ctx);
             if (swept > 0) {

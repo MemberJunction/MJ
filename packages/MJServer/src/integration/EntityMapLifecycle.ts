@@ -387,6 +387,21 @@ export function IdentityKeyFields(fields: ReadonlyArray<KeyCandidateField>): str
 }
 
 /**
+ * The key the catalog declares for an object, or `null` when its field rows were not read.
+ *
+ * An object with no Active field rows is unread, not keyless: a per-connection object whose fields
+ * were never warmed answers `[]`, and a continuing object with a built table had columns when it
+ * was built. Reporting that as "no key" would make {@link DecideRekeyed} see every keyed object as
+ * re-keyed, and the evolution would delete its record maps and rows.
+ */
+export function CatalogIdentityKey(
+    fields: ReadonlyArray<KeyCandidateField & { Status: string | null }>,
+): string[] | null {
+    const active = fields.filter(f => f.Status === 'Active');
+    return active.length === 0 ? null : IdentityKeyFields(active);
+}
+
+/**
  * Has the identity changed between the key the tables were BUILT with and the key the catalog
  * now declares?
  *
@@ -397,9 +412,13 @@ export function IdentityKeyFields(fields: ReadonlyArray<KeyCandidateField>): str
  * Returns false when the built key is EMPTY. That is "we could not read it", not "it had no key" —
  * an object genuinely without a key never had stable identities to strand, and treating unknown as
  * empty would re-key every table on a workspace whose entity metadata failed to load.
+ *
+ * Returns false when the catalog key is `null` — the catalog side could not be read (see
+ * {@link CatalogIdentityKey}). An empty ARRAY is different: the catalog was read and declares no
+ * key, so the object moves to content-hash identity, and that is a re-key.
  */
-export function DecideRekeyed(builtKey: readonly string[], catalogKey: readonly string[]): boolean {
-    if (builtKey.length === 0) return false;
+export function DecideRekeyed(builtKey: readonly string[], catalogKey: readonly string[] | null): boolean {
+    if (builtKey.length === 0 || catalogKey === null) return false;
     const norm = (s: string) => (s ?? '').trim().toLowerCase();
     if (builtKey.length !== catalogKey.length) return true;
     return builtKey.some((n, i) => norm(n) !== norm(catalogKey[i]));
