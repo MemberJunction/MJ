@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { RSUProgressBridge } from '../integration/RSUProgressBridge.js';
@@ -49,8 +49,35 @@ describe('RSUProgressBridge', () => {
     };
 
     /** The emitter's writes are chained promises; let them drain before reading from disk. */
+    /**
+     * Waits for the emitter's append chain to quiesce.
+     *
+     * This was a flat 50 ms sleep, which is plenty on an idle machine and NOT always enough with
+     * the whole suite running in parallel — the emitter appends through a promise chain the test
+     * cannot await, so a slow write made the assertion read "the event was never emitted" when it
+     * simply had not landed yet. Observed as an intermittent failure of the stage.error test.
+     * Poll for the journal to stop growing instead of guessing how long that takes.
+     */
     async function settle(): Promise<void> {
-        await new Promise(resolve => setTimeout(resolve, 50));
+        const path = join(rootDir, bridge.CurrentRunID ?? '', 'progress.jsonl');
+        const deadline = Date.now() + 5000;
+        let last = -1;
+        let stableReads = 0;
+        while (Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            let size = -1;
+            try { size = statSync(path).size; } catch { /* not written yet */ }
+            if (size === last) {
+                stableReads++;
+                // A journal that exists and has stopped growing is settled. One that does not
+                // exist at all gets a short grace period and then counts as settled too, so a
+                // test asserting that NOTHING was written does not pay the full deadline.
+                if (stableReads >= 3 && (size >= 0 || stableReads >= 20)) return;
+            } else {
+                stableReads = 0;
+                last = size;
+            }
+        }
     }
 
     function runDir(): string {
