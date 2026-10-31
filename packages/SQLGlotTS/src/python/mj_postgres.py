@@ -67,6 +67,11 @@ class MJPostgres(Postgres):
             # PG type at all; match codegen's regenerated schema (DECIMAL with SS scale).
             exp.DataType.Type.MONEY: "DECIMAL(19, 4)",
             exp.DataType.Type.SMALLMONEY: "DECIMAL(10, 4)",
+            # SS TINYINT is unsigned (0..255), so the T-SQL reader parses it as UTINYINT, which
+            # the stock Postgres generator emits verbatim — not a PostgreSQL type. SMALLINT is
+            # the smallest PG integer that holds the full 0..255 range.
+            exp.DataType.Type.UTINYINT: "SMALLINT",
+            exp.DataType.Type.TINYINT: "SMALLINT",
         }
 
         def identifier_sql(self, expression: exp.Identifier) -> str:

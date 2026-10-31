@@ -14,12 +14,13 @@ export type {
   FileRouting,
 } from './MigrationSplitter.js';
 export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL } from './MigrationConverter.js';
-export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError } from './IncrementalBaker.js';
+export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError, SelectBakeableEntities } from './IncrementalBaker.js';
 export type {
   BakerWorkingDB,
   CapturedEntitySQL,
   IncrementalBakerOptions,
   BakedMigrationResult,
+  BakeableEntityCandidate,
 } from './IncrementalBaker.js';
 export type {
   MigrationConversionResult,
@@ -78,6 +79,7 @@ export {
   CONVERSION_GAP_MARKERS,
   GAP_MARKER_UNPARSED,
   GAP_MARKER_BATCH_ERROR,
+  GAP_MARKER_NEEDS_HAND_AUTHORING,
   CreateTableRule,
   ViewRule,
   ProcedureToFunctionRule,

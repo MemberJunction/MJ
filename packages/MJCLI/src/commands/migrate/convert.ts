@@ -10,6 +10,7 @@ import {
   convertMigration,
   IncrementalBaker,
   BakeApplyError,
+  SelectBakeableEntities,
 } from '@memberjunction/sql-converter';
 import type {
   BatchConverterConfig,
@@ -725,17 +726,14 @@ export default class MigrateConvert extends Command {
         }
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
       },
-      // The full CodeGen entity set — mirrors sql_codegen.ts's baseline filter
-      // (`IncludeInAPI`, minus configured excludeSchemas). Per-object guards
-      // (VirtualEntity / AllowCreate|Update|DeleteAPI / spXGenerated) live inside
+      // The CodeGen entity set for the baker's target schema — mirrors sql_codegen.ts's baseline
+      // filter (`IncludeInAPI`, minus configured excludeSchemas), scoped to that schema so an Open
+      // App's baseline does not capture core's or its dependencies' objects (issue #5364).
+      // Per-object guards (VirtualEntity / AllowCreate|Update|DeleteAPI / spXGenerated) live inside
       // generateSingleEntitySQLToSeparateFiles, so this only gates at the entity level.
       // Provider order is name-sorted (PostProcessEntityMetadata), matching a full run.
-      listBakeableEntities: async () => {
-        const excluded = new Set((configInfo.excludeSchemas ?? []).map((s: string) => s.toLowerCase()));
-        return ds.provider.Entities
-          .filter((e) => e.IncludeInAPI && !excluded.has(e.SchemaName.toLowerCase()))
-          .map((e) => e.Name);
-      },
+      listBakeableEntities: async (targetSchema: string) =>
+        SelectBakeableEntities(ds.provider.Entities, targetSchema, configInfo.excludeSchemas ?? []),
     };
     return new IncrementalBaker({ transpiler, db, schema, coreSchema });
   }
