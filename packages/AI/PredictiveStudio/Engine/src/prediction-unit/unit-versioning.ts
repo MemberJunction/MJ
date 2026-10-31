@@ -33,10 +33,7 @@ export interface UnitVersionColumns {
   readonly AuthoredBy: string;
 }
 
-/**
- * Creating unit versions: build, assign and save version rows (static members on one owner class, never free
- * functions).
- */
+/** Creating unit versions: build, assign and save version rows. */
 export class PredictionUnitVersioning {
   /**
    * Whether the outcome definition (rule, window, gap, task) changed, decided the way the server decides it: both drafts
