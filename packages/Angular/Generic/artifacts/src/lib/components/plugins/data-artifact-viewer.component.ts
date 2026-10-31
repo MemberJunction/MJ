@@ -2,7 +2,8 @@ import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@ang
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey } from '@memberjunction/core';
-import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
@@ -642,6 +643,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public async OnUpdateExistingQuery(): Promise<void> {
     this.ShowUpdateDropdown = false;
     if (!this.spec?.savedQueryId || !this.spec.metadata?.sql) return;
+    this.UpdateQueryError = null;
+    this.UpdateQueryDiagnostics = [];
 
     this.IsSaving = true;
     this.SavingMessage = `Updating "${this.SavedQueryDisplayName}"...`;
@@ -654,6 +657,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
       if (!loaded) {
         console.error('Failed to load saved query for update');
+        this.UpdateQueryError = 'The saved query could not be loaded, so it was not updated.';
         return;
       }
 
@@ -675,13 +679,31 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         this.savedQuerySql = this.spec.metadata.sql;
         this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
         this.QuerySyncState = 'synced';
+      } else {
+        this.showUpdateFailure(query.LatestResult?.Message || query.LatestResult?.CompleteMessage);
       }
     } catch (error) {
       console.error('Failed to update saved query:', error);
+      this.UpdateQueryError = error instanceof Error ? error.message : String(error);
     } finally {
       this.IsSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** Why updating the saved query failed; `null` when the last update did not fail. */
+  public UpdateQueryError: string | null = null;
+  /** The server's findings when the query's rules refused the update (rule code, line, column, fix). */
+  public UpdateQueryDiagnostics: QueryDiagnosticLine[] = [];
+
+  /** Records why an update was refused: the findings and their headline, or the server's message. */
+  private showUpdateFailure(message: string | null | undefined): void {
+    const parsed = ParseQuerySaveMessage(message);
+    const isRuleRefusal = parsed.Diagnostics.some(d => d.Code !== null);
+    this.UpdateQueryDiagnostics = isRuleRefusal ? [...parsed.Diagnostics] : [];
+    this.UpdateQueryError = isRuleRefusal
+      ? (parsed.Headline ?? 'The saved query was not updated:')
+      : (message?.trim() || 'The saved query could not be updated.');
   }
 
   /**

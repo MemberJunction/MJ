@@ -17,14 +17,14 @@
  *
  * The materialization only affects reads that explicitly pass `DataSource:'Materialized'` (default Live reads of
  * `MJ: Task Types` are untouched), and the fixture is short-lived + self-cleaning, so it does not perturb other tests.
- * SQL-Server only (raw fabrication via `ctx.Pool`); skips (skip-as-pass) when no mssql pool is present.
+ * SQL-Server only (raw fabrication via `ctx.Pool`); the checks skip when no mssql pool is present.
  */
 import { randomUUID } from 'node:crypto';
 import { RunView, Metadata, LogError } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJMaterializedResultEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -132,7 +132,7 @@ export const MaterializedEntityReadChecks: NamedCheck[] = [
         Id: 'materialized-entity-read.EMR1',
         Name: 'EMR1: RunView(DataSource:Materialized) on an entity is served FROM THE SNAPSHOT — returns the snapshot-only sentinel row',
         Fn: async (ctx): Promise<void> => {
-            if (!fixtures) { console.warn('  ⚠ materialized-entity-read.EMR1 SKIPPED — no fixtures (no mssql pool / entity absent).'); return; }
+            if (!fixtures) { SkipCheck(`no fixtures: no mssql pool on this run path (snapshot fabrication is T-SQL only, SQL Server server transport) or entity '${TARGET_ENTITY}' absent`); }
             const { SentinelID } = requireFixtures();
             const res = await readSentinel(ctx, 'Materialized');
             Assert(res.Success, `materialized RunView must succeed: ${res.ErrorMessage}`);
@@ -147,7 +147,7 @@ export const MaterializedEntityReadChecks: NamedCheck[] = [
         Id: 'materialized-entity-read.EMR2',
         Name: 'EMR2 (negative control): the SAME RunView read Live returns the sentinel nowhere',
         Fn: async (ctx): Promise<void> => {
-            if (!fixtures) { console.warn('  ⚠ materialized-entity-read.EMR2 SKIPPED — no fixtures (no mssql pool / entity absent).'); return; }
+            if (!fixtures) { SkipCheck(`no fixtures: no mssql pool on this run path (snapshot fabrication is T-SQL only, SQL Server server transport) or entity '${TARGET_ENTITY}' absent`); }
             const res = await readSentinel(ctx, 'Live');
             Assert(res.Success, `live RunView must succeed: ${res.ErrorMessage}`);
             AssertEqual(res.Results?.length ?? -1, 0, 'EMR2: the sentinel exists ONLY in the snapshot, so a Live read of the entity must not return it — this attributes EMR1 to the snapshot');

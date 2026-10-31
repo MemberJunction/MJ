@@ -61,7 +61,7 @@ For the full architecture (topologies, co-agent model, capability matrix across 
 ### Configuration
 
 - API key env alias: `AI_VENDOR_API_KEY__ElevenRealtime`
-- `max_duration_seconds` (an ElevenLabs extension) passes through the Config bag; ElevenLabs then closes the session with code 1000 when it is exceeded, which MJ reports as an unexpected close
+- `max_duration_seconds` (an ElevenLabs extension) is `min(provider cap, MaxSessionSeconds, Config bag value)`: a non-number bag value is ignored and never sent, and with nothing set the field is omitted. ElevenLabs then closes the session with code 1000 when it is exceeded, which MJ reports as an unexpected close
 
 ---
 

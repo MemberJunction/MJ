@@ -16,9 +16,9 @@ vi.mock('@memberjunction/global', async () => {
 });
 
 // Replace the transformers.js loader with a mocked module. The implementation
-// dynamically imports '@xenova/transformers'; vitest intercepts that import and
+// dynamically imports '@huggingface/transformers'; vitest intercepts that import and
 // returns our mocks.
-vi.mock('@xenova/transformers', () => ({
+vi.mock('@huggingface/transformers', () => ({
     pipeline: mockPipelineFactory,
     env: { allowLocalModels: true, cacheDir: '/tmp/cache' },
 }));

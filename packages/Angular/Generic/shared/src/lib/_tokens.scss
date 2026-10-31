@@ -150,6 +150,8 @@
   --mj-text-inverse: var(--mj-color-neutral-0);
   --mj-text-link: var(--mj-color-brand-500);
   --mj-text-link-hover: var(--mj-color-brand-600);
+  /* Violet text/accent (special features, role chips); dark mode lifts it to the 300 step. */
+  --mj-text-violet: var(--mj-color-violet-700);
 
   /* Border Colors */
   --mj-border-default: var(--mj-color-neutral-200);
@@ -192,6 +194,9 @@
   --mj-status-warning-bg: var(--mj-color-warning-50);
   --mj-status-warning-text: var(--mj-color-warning-700);
   --mj-status-warning-border: var(--mj-color-warning-500);
+  /* Text on a SOLID --mj-status-warning fill. The amber fill is too light for
+     white text, so this stays dark in both themes. */
+  --mj-status-on-warning: var(--mj-color-neutral-900);
 
   --mj-status-error: var(--mj-color-error-500);
   --mj-status-error-bg: var(--mj-color-error-50);
@@ -536,6 +541,7 @@
   --mj-text-inverse: var(--mj-color-neutral-900);
   --mj-text-link: var(--mj-color-brand-300);
   --mj-text-link-hover: var(--mj-color-brand-200);
+  --mj-text-violet: var(--mj-color-violet-300);
 
   /* Border Colors */
   --mj-border-default: var(--mj-color-neutral-700);
@@ -585,6 +591,8 @@
   --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
   --mj-status-warning-text: var(--mj-color-warning-300);
   --mj-status-warning-border: var(--mj-color-warning-600);
+  /* --mj-status-warning keeps its light-mode amber in dark mode, so the text on it stays dark. */
+  --mj-status-on-warning: var(--mj-color-neutral-900);
 
   /* Slightly stronger search highlight on dark surfaces so it stays visible. */
   --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 30%, transparent);

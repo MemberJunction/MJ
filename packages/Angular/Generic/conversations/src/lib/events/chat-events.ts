@@ -18,6 +18,7 @@
  */
 
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type { SessionEndReason } from '@memberjunction/conversations-runtime';
 import type { AgentTurnInfo, AgentTurnRoute } from '../models/agent-turn.model';
 
 /**
@@ -242,12 +243,12 @@ export class SessionChannelStateChangedEventArgs {
 }
 
 /**
- * Informational. A session ended client-side. Narrowed to
- * `explicit | error | unknown` — see {@link SessionStartedEventArgs} module comment.
+ * Informational. A session ended client-side. `Reason` is the runtime's
+ * `SessionEndReason` — see {@link SessionStartedEventArgs} module comment.
  */
 export class SessionEndedEventArgs {
     constructor(
         public readonly SessionId: string,
-        public readonly Reason: 'explicit' | 'error' | 'unknown'
+        public readonly Reason: SessionEndReason
     ) {}
 }

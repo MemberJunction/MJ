@@ -14,7 +14,8 @@ import type { CleanPlan, CleanResult } from '../../../lib/dev-workspace/types.js
  * CLI command: `mj dev workspace clean`.
  *
  * Removes exactly the residue `mj dev workspace` leaves at a parent directory:
- * the four generated files, the sentinel manifest, `pnpm-lock.yaml`, and the
+ * the three generated files (plus a `turbo.json` an earlier version wrote, when the
+ * sentinel lists it), the sentinel manifest, `pnpm-lock.yaml`, and the
  * `node_modules` tree. Member repo checkouts are never touched.
  *
  * Deletion is gated on proof of ownership — without `--force`, the sentinel the
@@ -23,7 +24,7 @@ import type { CleanPlan, CleanResult } from '../../../lib/dev-workspace/types.js
  */
 export default class DevWorkspaceClean extends Command {
   static description =
-    'Remove exactly the generated cross-repo workspace residue at a parent directory: the four generated files, ' +
+    'Remove exactly the generated cross-repo workspace residue at a parent directory: the three generated files, ' +
     'the .mj-dev-workspace.json sentinel, pnpm-lock.yaml and the node_modules tree. Member repo checkouts and ' +
     '.bak backups are never touched. Without --force a valid sentinel must be present, so a hand-made workspace ' +
     'cannot be torn down by accident. Preview first with --dry-run, which deletes nothing and exits 0.';
@@ -60,7 +61,7 @@ export default class DevWorkspaceClean extends Command {
       if (sentinel.Kind !== 'valid') {
         this.warn(`Cleaning without a valid sentinel (--force): only the files this tool owns will be removed.`);
       }
-      const plan = PlanClean(parentDir);
+      const plan = PlanClean(parentDir, sentinel);
       if (flags['dry-run']) {
         this.reportDryRun(plan);
         return;

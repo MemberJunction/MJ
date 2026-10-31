@@ -320,3 +320,7 @@
   color: var(--mj-text-primary);
   font-weight: 600;
 }
+
+.update-query-failure {
+  padding: var(--mj-space-2) var(--mj-space-3) 0;
+}

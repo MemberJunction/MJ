@@ -26,7 +26,7 @@
  *   VS4 (RV17): COUNT(*) aggregates with an ExtraFilter, run AS the scoped user, reflect the
  *        RLS-scoped row count — never the whole-table/admin count.
  *
- * All checks skip-as-pass LOUDLY when the seeded principals are absent or RLS-exempt (an
+ * All checks skip (SkipCheck) when the seeded principals are absent or RLS-exempt (an
  * all-admin DB can't exercise the invariant — unexercised, not violated; same doctrine as
  * rls-isolation RLS8–RLS10). MUTATION tier: creates throwaway `MJ: User Views` rows owned by
  * the seeded user, deleted in teardown.
@@ -35,7 +35,7 @@ import { RunView, EntityPermissionType } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import {
@@ -60,24 +60,21 @@ interface ViewSecurityPrincipals {
     Admin: UserInfo;
 }
 
-/** Resolves the seeded principals; undefined (with a loud reason) when the seed is absent. */
-function resolvePrincipals(ctx: IntegrationCheckContext, checkId: string): ViewSecurityPrincipals | undefined {
+/** Resolves the seeded principals; ends the check as skipped when the seed is absent or user A is RLS-exempt. */
+function resolvePrincipals(ctx: IntegrationCheckContext): ViewSecurityPrincipals {
     const users = UserCache.Instance.Users;
     const scopedA = findUserByEmail(users, SEEDED_SCOPED_A_EMAIL);
     const userB = findUserByEmail(users, SEEDED_SCOPED_B_EMAIL);
     if (!scopedA || !userB) {
-        console.warn(`  ⚠ ${checkId} SKIPPED — seeded principals (${SEEDED_SCOPED_A_EMAIL} / ${SEEDED_SCOPED_B_EMAIL}) not in the user cache; run \`${SEED_FIXTURES_COMMAND}\`.`);
-        return undefined;
+        SkipCheck(`seeded principals (${SEEDED_SCOPED_A_EMAIL} / ${SEEDED_SCOPED_B_EMAIL}) not in the user cache; run \`${SEED_FIXTURES_COMMAND}\`.`);
     }
     const entity = ctx.Provider.EntityByName(SEEDED_RLS_ENTITY);
     if (!entity) {
-        console.warn(`  ⚠ ${checkId} SKIPPED — RLS entity '${SEEDED_RLS_ENTITY}' not in metadata.`);
-        return undefined;
+        SkipCheck(`RLS entity '${SEEDED_RLS_ENTITY}' not in metadata; run \`${SEED_FIXTURES_COMMAND}\`.`);
     }
     const clauseA = entity.GetUserRowLevelSecurityWhereClause(scopedA, EntityPermissionType.Read, '');
     if (!clauseA || clauseA.trim() === '') {
-        console.warn(`  ⚠ ${checkId} SKIPPED — seeded user A is RLS-exempt on '${SEEDED_RLS_ENTITY}' (all-admin DB?); the invariant is unexercisable.`);
-        return undefined;
+        SkipCheck(`seeded user A is RLS-exempt on '${SEEDED_RLS_ENTITY}' (all-admin DB?); the invariant is unexercisable.`);
     }
     return { ScopedA: scopedA, UserB: userB, Admin: ctx.User };
 }
@@ -124,8 +121,7 @@ export const ViewSecurityChecks: NamedCheck[] = [
         Name: "VS1 (V14): a saved view's WHERE AND-combines with the running user's RLS — scoped rows only, no leak, no over-restriction",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const p = resolvePrincipals(ctx, 'view-security.VS1');
-            if (!p) { return; }
+            const p = resolvePrincipals(ctx);
             const view = await createFixtureView(ctx, p.ScopedA, false);
 
             const viaView = await runRows({ ViewID: view.ID }, p.ScopedA);
@@ -159,8 +155,7 @@ export const ViewSecurityChecks: NamedCheck[] = [
         Name: "VS2 (V15): user B running user A's PRIVATE view — refused, or (if permitted) rows are B-scoped with the looseness surfaced",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const p = resolvePrincipals(ctx, 'view-security.VS2');
-            if (!p) { return; }
+            const p = resolvePrincipals(ctx);
             const view = await createFixtureView(ctx, p.ScopedA, false);
 
             const asB = await runRows({ ViewID: view.ID }, p.UserB);
@@ -187,8 +182,7 @@ export const ViewSecurityChecks: NamedCheck[] = [
         Name: "VS3 (V16): a SHARED view owned by A is executable by B — and returns B's RLS scope, not A's",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const p = resolvePrincipals(ctx, 'view-security.VS3');
-            if (!p) { return; }
+            const p = resolvePrincipals(ctx);
             const view = await createFixtureView(ctx, p.ScopedA, true);
 
             const asB = await runRows({ ViewID: view.ID }, p.UserB);
@@ -207,8 +201,7 @@ export const ViewSecurityChecks: NamedCheck[] = [
         Id: 'view-security.VS4',
         Name: 'VS4 (RV17): COUNT(*) aggregate with ExtraFilter, run AS the scoped user, reflects the RLS-scoped count — never the admin count',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const p = resolvePrincipals(ctx, 'view-security.VS4');
-            if (!p) { return; }
+            const p = resolvePrincipals(ctx);
             const agg = async (user: UserInfo): Promise<number> => {
                 const r = await new RunView().RunView({
                     EntityName: SEEDED_RLS_ENTITY, ExtraFilter: VIEW_FILTER,

@@ -123,7 +123,7 @@ export class CreateFormContributionAction extends BaseAction {
         const dup = await rv.RunView<{ ID: string; Status: string }>({
             EntityName: "MJ: Entity Form Contributions",
             ExtraFilter: `EntityID='${EscapeSQLString(entityID)}' AND Scope='User' AND UserID='${EscapeSQLString(user.ID)}' AND ContributionKey='${EscapeSQLString(writeKey)}' AND Status IN ('Active','Pending')`,
-            Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1,
+            Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true,
         }, user);
         if (!dup.Success) {
             return Failure("QUERY_FAILED", `Duplicate-key lookup failed: ${dup.ErrorMessage ?? 'unknown error'}`);

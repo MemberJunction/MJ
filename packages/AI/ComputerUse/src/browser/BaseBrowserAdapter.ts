@@ -175,6 +175,15 @@ export abstract class BaseBrowserAdapter {
         return [];
     }
 
+    /**
+     * Run a self-contained function (no closure state; it is serialized into the page) against the
+     * live DOM and return its result. Default returns `null` so adapters without a live DOM don't
+     * break; adapters backed by a real page override this. `null` also means the call timed out.
+     */
+    public async EvaluateInPage<R, A>(_fn: (arg: A) => R, _arg: A): Promise<R | null> {
+        return null;
+    }
+
     // ─── Screencast (CDP live viewport feed) ───────────────
 
     /**

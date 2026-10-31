@@ -6,7 +6,7 @@ import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } fro
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs } from '@memberjunction/realtime-runtime';
 import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { MEDIA_TOOL_DEFINITIONS, MEDIA_TOOL_NAMES, MEDIA_TOOL_PREFIX } from './media-channel-tools';
-import { MediaChannelState, MediaHighlight, MediaItemType } from './media-channel-state';
+import { IsAllowedExternalMediaUrl, MediaChannelState, MediaHighlight, MediaItemType } from './media-channel-state';
 import { RealtimeMediaSurfaceComponent } from './realtime-media-surface.component';
 
 /** A JSON-serializable value (the building block of a parsed tool-args object). */
@@ -191,12 +191,17 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     if (!url && !fileId) {
       return this.fail('Media_ShowMedia requires a source — provide a "url" (external/public) OR a "fileId" (an MJ: Files id).');
     }
+    // SECURITY: the url arg is model-supplied and is later rendered in an img/iframe/player, so
+    // only well-formed absolute http(s) URLs are accepted — never javascript:, data:, blob:, or scheme-relative.
+    if (url && !IsAllowedExternalMediaUrl(url)) {
+      return this.fail('Media_ShowMedia "url" must be an absolute http:// or https:// URL.');
+    }
     if (!displayName) {
       return this.fail('Media_ShowMedia requires a "displayName".');
     }
     const item = this.State.AddItem({
       Type: mediaType as MediaItemType,
-      Url: url,
+      Url: url ? url.trim() : undefined,
       FileID: fileId,
       DisplayName: displayName,
       Caption: asString(args['caption']),

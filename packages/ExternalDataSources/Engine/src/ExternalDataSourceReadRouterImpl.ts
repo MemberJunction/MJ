@@ -187,6 +187,20 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
     }
   }
 
+  /** The source's SQL dialect key, from its driver; null for a non-SQL driver or a source that cannot be resolved. */
+  public override async GetQueryDialectKey(
+    externalDataSourceID: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<string | null> {
+    try {
+      const { driver } = await ExternalDataSourceRouter.Instance.Resolve(externalDataSourceID, contextUser, provider);
+      return driver.QueryDialectKey;
+    } catch {
+      return null;
+    }
+  }
+
   public async GetCacheTTLSeconds(
     externalDataSourceID: string,
     contextUser?: UserInfo,

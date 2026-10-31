@@ -640,9 +640,9 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
                 }
             ]);
 
-            if (totalResult.Success) this.Stats.totalSent = totalResult.TotalRowCount;
-            if (failedResult.Success) this.Stats.failed = failedResult.TotalRowCount;
-            if (pendingResult.Success) this.Stats.pending = pendingResult.TotalRowCount;
+            if (totalResult.Success) this.Stats.totalSent = totalResult.TotalRowCount ?? 0;
+            if (failedResult.Success) this.Stats.failed = failedResult.TotalRowCount ?? 0;
+            if (pendingResult.Success) this.Stats.pending = pendingResult.TotalRowCount ?? 0;
 
             this.Stats.deliveryRate = this.Stats.totalSent > 0
                 ? parseFloat(((this.Stats.totalSent - this.Stats.failed) / this.Stats.totalSent * 100).toFixed(1))

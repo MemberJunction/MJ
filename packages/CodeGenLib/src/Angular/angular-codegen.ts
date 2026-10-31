@@ -156,13 +156,23 @@ export class AngularClientGeneratorBase {
     /**
      * Removes orphaned Angular entity form directories that no longer correspond to existing entities.
      * This handles cleanup when entities are renamed or deleted.
+     * Out of scope means untouched, not deleted (#3384): `entities` is this run's scope-narrowed list,
+     * so a directory whose entity sits in an excluded schema is kept. Only directories matching no
+     * in-scope entity of this pass and no out-of-scope entity are removed.
      * @param entityPath The path to the Entities directory containing entity form subdirectories
      * @param entities Array of current EntityInfo objects that should have form directories
+     * @param outOfScopeEntities Known entities outside this run's scope; defaults to the loaded
+     *        metadata's entities in `configInfo.excludeSchemas`. When that cannot be read, nothing is removed.
      */
-    protected cleanupOrphanedEntityDirectories(entityPath: string, entities: EntityInfo[]): void {
+    protected cleanupOrphanedEntityDirectories(entityPath: string, entities: EntityInfo[], outOfScopeEntities?: EntityInfo[]): void {
         try {
             if (!fs.existsSync(entityPath)) {
                 return; // Nothing to clean up if directory doesn't exist
+            }
+            outOfScopeEntities = outOfScopeEntities ?? this.outOfScopeEntities() ?? undefined;
+            if (!outOfScopeEntities) {
+                LogWarning(`   Skipped orphaned entity form cleanup in ${entityPath}: metadata is not loaded, so out-of-scope entities cannot be told apart from deleted ones`);
+                return;
             }
 
             // Get the set of valid entity ClassNames (these should have directories)
@@ -171,6 +181,9 @@ export class AngularClientGeneratorBase {
                     .filter(e => e.PrimaryKeys && e.PrimaryKeys.length > 0 && e.IncludeInAPI)
                     .map(e => e.ClassName)
             );
+            for (const e of outOfScopeEntities) {
+                validClassNames.add(e.ClassName);
+            }
 
             // Read all subdirectories in the Entities folder
             const existingDirs = fs.readdirSync(entityPath, { withFileTypes: true })
@@ -192,6 +205,29 @@ export class AngularClientGeneratorBase {
             }
         } catch (err) {
             logError(`Error cleaning up orphaned entity directories: ${err}`);
+        }
+    }
+
+    /**
+     * Loaded entities whose schema is in `configInfo.excludeSchemas` (case-insensitive), or null when
+     * the metadata cannot be read: no provider loaded, or a provider with no entities yet. An empty
+     * list would read as "nothing is out of scope" and let the caller delete their directories.
+     */
+    protected outOfScopeEntities(): EntityInfo[] | null {
+        const excluded = new Set((configInfo.excludeSchemas ?? []).map(s => s.trim().toLowerCase()));
+        if (excluded.size === 0) {
+            return [];
+        }
+        try {
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+            const entities = md.Entities ?? [];
+            if (entities.length === 0) {
+                return null;
+            }
+            return entities.filter(e => excluded.has((e.SchemaName ?? '').trim().toLowerCase()));
+        }
+        catch {
+            return null;
         }
     }
 

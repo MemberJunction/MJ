@@ -198,6 +198,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
           ExtraFilter: `TemplateID = '${EscapeSQLString(doc.TemplateID)}'`,
           OrderBy: 'Priority ASC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object',
         },
         contextUser
