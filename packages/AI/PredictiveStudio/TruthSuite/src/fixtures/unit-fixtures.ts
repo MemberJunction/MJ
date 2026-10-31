@@ -12,11 +12,11 @@ import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEn
 import {
   EvaluationProtocolRules, PredictionUnit,
   type ColumnEncodingKind, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
-  type PredictionUnitSpec, type SliceSpec, type TaskType,
+  type PredictionUnitSpec, type SliceSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import {
   EvaluationProtocolVersioning, ProtocolDefaults, RunViewDataAccess, RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata,
-  type IEntityFactory, type PredictionUnitDraft,
+  type IEntityFactory,
 } from '@memberjunction/predictive-studio';
 import type { ScenarioID, TruthHarness } from '../harness/types';
 import { DatasetSeeds } from '../data/seeds';
@@ -105,7 +105,7 @@ export class UnitFixtures {
     return e.Name;
   }
 
-  public static C1RenewalUnitDraft(h: TruthHarness): PredictionUnitDraft {
+  public static C1RenewalUnitDraft(h: TruthHarness): UnitDraft {
     return {
       Name: 'C1 renewal (person x dues period)', Description: 'Renewed = the next dues period within 400 days of this one (the reference renewal unit).',
       UnitRows: { kind: 'grain-x-periods', grainEntity: UnitFixtures.TruthEntityName(h, 'C1Person'), childEntity: UnitFixtures.TruthEntityName(h, 'C1DuesPeriod'), foreignKey: 'PersonID', periodDate: 'OrderDate', filter: [] },
@@ -119,7 +119,7 @@ export class UnitFixtures {
   }
 
   /** W1/W4/W5 renewal: one row per membership year, decided on 1 December, outcome observed by 1 January. */
-  public static WorldRenewalUnitDraft(h: TruthHarness, world: string, oneClassVariant: boolean): PredictionUnitDraft {
+  public static WorldRenewalUnitDraft(h: TruthHarness, world: string, oneClassVariant: boolean): UnitDraft {
     const years = UnitFixtures.TruthEntityName(h, `${UnitFixtures.WorldTablePrefix(world)}_MembershipYear`);
     const fullyResolved = world !== 'W5-censor';
     return {
@@ -136,7 +136,7 @@ export class UnitFixtures {
   }
 
   /** T3: one row per month of the planted series, decided on its own month, forecasting `Target` one month ahead. */
-  public static T3UnitDraft(h: TruthHarness): PredictionUnitDraft {
+  public static T3UnitDraft(h: TruthHarness): UnitDraft {
     return {
       Name: 'T3 monthly forecast (series x month)', Description: null,
       UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, 'Scn_T3'), decisionDate: { kind: 'column', column: 'T' }, filter: [] },
@@ -176,7 +176,7 @@ export class UnitFixtures {
   }
 
   /** A cross-sectional planted scenario (no dates): one decision moment for every row. */
-  public static ScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType): PredictionUnitDraft {
+  public static ScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType): UnitDraft {
     return {
       Name: `${scenario} (${task.kind})`, Description: null,
       UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`), decisionDate: { kind: 'fixed', date: '2020-01-01' }, filter: [] },
@@ -246,7 +246,7 @@ export class UnitFixtures {
    * `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. The
    * pipeline is bound to the protocol `protocol` chooses (none for `{ Kind: 'none' }`).
    */
-  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
+  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -321,7 +321,7 @@ export class UnitFixtures {
   }
 
   /** A planted scenario whose rows carry a date column: one row per scenario row, decided at that date. */
-  public static DatedScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType, dateColumn: string, groupKey: string | null): PredictionUnitDraft {
+  public static DatedScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType, dateColumn: string, groupKey: string | null): UnitDraft {
     return {
       Name: `${scenario} (${task.kind}, dated)`, Description: null,
       UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`), decisionDate: { kind: 'column', column: dateColumn }, filter: [] },

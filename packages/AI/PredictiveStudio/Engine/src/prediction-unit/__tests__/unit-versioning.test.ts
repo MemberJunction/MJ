@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { PredictionUnitVersioning, type PredictionUnitDraft } from '../unit-versioning';
+import type { UnitDraft } from '@memberjunction/predictive-studio-core';
+import { PredictionUnitVersioning } from '../unit-versioning';
 
-const draft: PredictionUnitDraft = {
+const draft: UnitDraft = {
   Name: 'Renewal', Description: null,
   UnitRows: { kind: 'grain-x-periods', grainEntity: 'P', childEntity: 'D', foreignKey: 'PersonID', periodDate: 'OrderDate', filter: [] },
   LabelRule: { kind: 'next-period', periodIndexField: 'PeriodIndex', offset: 1 }, LabelWindowDays: 400, LabelGapDays: 0,
