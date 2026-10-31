@@ -40,6 +40,7 @@ export class PredictiveStudioRefusals {
       case 'decision-date-before-change-history':
       case 'select-changes-after-decision-date': return 'AS_OF_SOURCE_UNDATED';
       case 'protocol-required': return 'PROTOCOL_REQUIRED';
+      case 'time-index-needs-time-holdout': return 'TIME_HOLDOUT_REQUIRED';
       // Only a stop at the compute budget has a code; every other trainer stage is reported as a failure.
       case 'trainer-failed': return reason.stage === 'budget-exceeded' ? 'BUDGET_EXCEEDED' : null;
       default: return null;

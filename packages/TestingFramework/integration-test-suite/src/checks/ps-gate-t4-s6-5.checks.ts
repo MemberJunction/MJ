@@ -2,7 +2,7 @@
  * Gate G0.11 "T4 → S6.5": with MonthIndex declared as the time index, none of the 12 rolling origins' lightgbm pipelines
  * is cleared to act, 12 of 12 contained. A time-indexed pipeline is held by the pipeline migration (no Prediction Unit;
  * the held line naming the reason in its Description), so training it is refused `UNIT_REQUIRED`; one bound to a unit
- * under a holdout that does not respect time is refused `time-index-needs-time-holdout`. Each origin must show one of
+ * under a holdout that does not respect time is refused `time-index-needs-time-holdout` (code `TIME_HOLDOUT_REQUIRED`). Each origin must show one of
  * those two stored reasons and no model, so the gate cannot pass by absence.
  */
 import { TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
@@ -16,7 +16,7 @@ class TimeIndexContainment {
     if (t.ModelID !== null) return null;
     const held = (description || '').split('\n').some((l) => l.startsWith('Held by the Prediction Unit migration on ') && l.endsWith(`: ${TIME_INDEX_HOLD_REASON}.`));
     if (held && t.RefusalCode === 'UNIT_REQUIRED') return 'held+unit-required';
-    if ((t.ErrorMessage || '').startsWith('Refused (time-index-needs-time-holdout)')) return 'time-index-needs-time-holdout';
+    if (t.RefusalCode === 'TIME_HOLDOUT_REQUIRED' && (t.ErrorMessage || '').startsWith('Refused (time-index-needs-time-holdout)')) return 'time-index-needs-time-holdout';
     return null;
   }
 }

@@ -105,7 +105,7 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
 
   /**
    * Map the operation's typed input onto the engine's {@link TrainModelInput}. Decision dates come from the pipeline's
-   * Prediction Unit, so a point-in-time `asOf` input and `labelEventDates` are refused by name (`input-not-accepted`)
+   * Prediction Unit, so a point-in-time `asOf` input, `labelEventDates` and `primaryKeyField` are refused by name (`input-not-accepted`)
    * instead of being silently ignored; an `asOf` of `Mode: 'none'` asks for nothing and is accepted.
    */
   protected toEngineInput(input: PredictiveStudioTrainModelInput): TrainModelInput {
@@ -115,15 +115,15 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
     if (input.labelEventDates) {
       throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: "decision dates come from the pipeline's Prediction Unit; labelEventDates are no longer accepted (they were silently ignored before)" } });
     }
+    if (input.primaryKeyField) {
+      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'primaryKeyField', why: "the pipeline's Prediction Unit reads its rows keyed by the row entity's own primary key; primaryKeyField is no longer accepted" } });
+    }
     const engineInput: TrainModelInput = { pipelineId: input.pipelineId };
     if (input.experimentSessionIterationId) {
       engineInput.experimentSessionIterationId = input.experimentSessionIterationId;
     }
     if (input.maxRows != null) {
       engineInput.maxRows = input.maxRows;
-    }
-    if (input.primaryKeyField) {
-      engineInput.primaryKeyField = input.primaryKeyField;
     }
     if (input.sidecarVersion) {
       engineInput.sidecarVersion = input.sidecarVersion;

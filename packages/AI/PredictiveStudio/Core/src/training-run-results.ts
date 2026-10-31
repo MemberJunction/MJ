@@ -30,7 +30,7 @@ export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
 export type PipelineRefusal =
   | { readonly kind: 'unit-required'; readonly pipelineId: string; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'protocol-required'; readonly pipelineId: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'input-not-accepted'; readonly input: 'asOf' | 'labelEventDates' | 'maxRows'; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'input-not-accepted'; readonly input: 'asOf' | 'labelEventDates' | 'maxRows' | 'primaryKeyField'; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'unit-invalid'; readonly unitId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'too-many-candidates'; readonly pipelineId: string; readonly candidates: number; readonly maxCandidates: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'protocol-created-after-run'; readonly protocolId: string; readonly protocolCreatedAt: string; readonly runCreatedAt: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -93,7 +93,7 @@ void holdoutKindsComplete;
 const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unit-required'), pipelineId: z.string(), why: z.string() }),
   z.object({ kind: z.literal('protocol-required'), pipelineId: z.string() }),
-  z.object({ kind: z.literal('input-not-accepted'), input: z.enum(['asOf', 'labelEventDates', 'maxRows']), why: z.string() }),
+  z.object({ kind: z.literal('input-not-accepted'), input: z.enum(['asOf', 'labelEventDates', 'maxRows', 'primaryKeyField']), why: z.string() }),
   z.object({ kind: z.literal('unit-invalid'), unitId: z.string(), errors: z.array(z.string()) }),
   z.object({ kind: z.literal('too-many-candidates'), pipelineId: z.string(), candidates: z.number().int(), maxCandidates: z.number().int() }),
   z.object({ kind: z.literal('protocol-created-after-run'), protocolId: z.string(), protocolCreatedAt: z.string(), runCreatedAt: z.string() }),

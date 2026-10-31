@@ -17,6 +17,7 @@ describe('TrainingRunResultsParser', () => {
       { kind: 'protocol-unit-mismatch', protocolId: 'P1', problems: ['one', 'two'] },
       { kind: 'protocol-invalid', protocolId: 'P1', errors: ['Holdout must be an object'] },
       { kind: 'time-index-needs-time-holdout', pipelineId: 'p1', protocolId: 'P1', timeIndexColumn: 'MonthIndex', holdout: 'seeded-random' },
+      { kind: 'input-not-accepted', input: 'primaryKeyField', why: 'the unit keys rows by the row entity' },
     ];
     for (const reason of reasons) {
       const r = TrainingRunResultsParser.ParseTrainingRunResults(envelope(reason));

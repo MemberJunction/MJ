@@ -136,6 +136,12 @@ describe('PredictiveStudioTrainModelServerOperation — inputs that decision dat
     expect(caught).toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
   });
 
+  it('refuses primaryKeyField by name, as a typed refusal (the unit keys rows by the row entity)', () => {
+    let caught: Error | null = null;
+    try { op.MapInput({ pipelineId: 'p', primaryKeyField: 'MembershipID' }); } catch (e) { caught = e as Error; }
+    expect(caught).toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'primaryKeyField' } } });
+  });
+
   it("accepts an asOf input of Mode 'none' (it asks for nothing)", () => {
     expect(op.MapInput({ pipelineId: 'p', asOf: { Mode: 'none' } })).toEqual({ pipelineId: 'p' });
   });

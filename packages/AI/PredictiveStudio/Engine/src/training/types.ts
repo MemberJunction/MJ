@@ -173,8 +173,6 @@ export interface TrainModelInput {
    * Prediction Unit, so training refuses them (`input-not-accepted`).
    */
   labelEventDates?: Record<string, Date>;
-  /** No longer read: every pipeline reads its rows through its Prediction Unit, keyed by the row entity's primary key. */
-  primaryKeyField?: string;
   /** A cap on training rows; training refuses it (`input-not-accepted`), since a unit run reads every unit row. */
   maxRows?: number;
   /** Sidecar version string recorded in model lineage (provenance). */

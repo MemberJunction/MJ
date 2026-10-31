@@ -22,6 +22,8 @@ const REFUSAL_CODES = [
   'PROTOCOL_REQUIRED',
   /** The trainer stopped because the run reached its protocol's compute budget. */
   'BUDGET_EXCEEDED',
+  /** A pipeline that declares a time index is bound to a protocol whose holdout does not respect time (seeded-random). */
+  'TIME_HOLDOUT_REQUIRED',
 ] as const;
 
 /** Why a Train or Score request was refused. */
