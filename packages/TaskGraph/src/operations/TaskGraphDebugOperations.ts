@@ -148,6 +148,7 @@ async function resolveWorkflowTaskTypeID(provider: IMetadataProvider, user: User
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         },
         user,
     );

@@ -22,6 +22,7 @@
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import type { IRealtimeSession } from '@memberjunction/ai';
 import type { MJAIAgentSessionEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity, MJInteractionEntity } from '@memberjunction/core-entities';
+import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import type { AIBridgeEngine, ActiveBridgeSession, BridgeRealtimeSessionRecoveryRequest } from '@memberjunction/ai-bridge-server';
 import { CreateBridgeRealtimeSession, CreateBridgeSessionTranscriptSink, GetBridgeRealtimeRuntime, ResolveRealtimeCoAgentID } from '@memberjunction/ai-agents';
 import {
@@ -423,7 +424,9 @@ export async function CloseAgentSessionRow(agentSessionID: string, reason: Bridg
         row.Status = 'Closed';
         row.ClosedAt = new Date();
         row.CloseReason = mapCloseReason(reason);
-        if (!(await row.Save())) {
+        // Janitor and Shutdown are server-only close reasons the session entity refuses from an untrusted save; this is
+        // the server's own end-of-call bookkeeping, so it saves inside the trusted session-write scope.
+        if (!(await RunWithTrustedSessionConfigWrites(() => row.Save()))) {
             LogError(`[Telephony] could not close agent session ${agentSessionID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     } catch (e) {

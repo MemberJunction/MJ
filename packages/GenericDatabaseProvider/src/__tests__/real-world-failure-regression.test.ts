@@ -29,6 +29,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryCompositionEngine } from '../queryCompositionEngine';
+import { RenderPipeline } from '../renderPipeline';
 import { Metadata, UserInfo, QueryDependencySpec } from '@memberjunction/core';
 
 const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
@@ -50,6 +51,15 @@ function countOccurrences(haystack: string, needle: string): number {
         pos += needle.length;
     }
     return count;
+}
+
+/**
+ * Composes through the render pipeline, the way a run does. These compositions pass outer values
+ * through, which only a render can supply (compose-only resolution takes static arguments only).
+ */
+function compose(outerSQL: string, deps: QueryDependencySpec[], parameters: Record<string, string>): { HasCompositions: boolean; ResolvedSQL: string; CTEs: unknown[] } {
+    const result = RenderPipeline.Run(outerSQL, { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps, UsesTemplate: true, Parameters: parameters });
+    return { HasCompositions: result.HasCompositions, ResolvedSQL: result.FinalSQL, CTEs: result.CTEs };
 }
 
 function setupNoMetadata(): QueryCompositionEngine {
@@ -129,13 +139,7 @@ LEFT JOIN [MEL_Eng] AS [mel] ON [t].[OrganizationName] = [mel].[EmployerName]
         const outerSQL = `SELECT [qei].[OrganizationID]
 FROM {{query:"Golden-Queries/Engagement and Outreach/QEIPatronEngagementActivitySummary(MemberTypes=MemberTypes, DaysBack=DaysBack)"}} AS [qei]`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { MemberTypes: '["QEI"]', DaysBack: '30' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -212,13 +216,7 @@ WHERE 1 = 1
         const outerSQL = `SELECT ctx.[ExecCompID]
 FROM {{query:"Golden-Queries/Financial Analysis/ExecCompWithMemberContext(Region=Region)"}} ctx`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { Region: 'West' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -420,13 +418,7 @@ LEFT JOIN (
 ) AS [pr]
     ON [pr].[ResolvedMemberID] = [pmas].[MemberID]`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { MemberTypes: '["Pool"]', StartDate: '2024-01-01' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -521,7 +513,9 @@ describe('Skip Regression — Bug D: Nunjucks expression inside SQL string liter
      * token, then the leading `'` in token N+1 re-enters "inside string"
      * mode permanently — the trailing ORDER BY is never detected.
      */
-    it('Skip run B047FD9F — strips ORDER BY when dep SQL has Nunjucks expression inside a SQL string literal', () => {
+    // The dependency writes a value tag inside a SQL string literal: its value would be pasted between
+    // the quotes unescaped, so the composing query's run is refused, naming the dependency and the fix.
+    it('Skip run B047FD9F — refuses the run when a dependency writes a value tag inside a SQL string literal, naming the dependency', () => {
         const engine = setupNoMetadata();
 
         const inlineDeps: QueryDependencySpec[] = [
@@ -555,44 +549,16 @@ ORDER BY TotalActivityCount DESC`,
 FROM {{query:"Golden-Queries/Analytics/MemberActivityCounts(MembershipType=MembershipType)"}} [mac]
 ORDER BY [mac].[TotalActivityCount] DESC`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
+        expect(() => compose(outerSQL, inlineDeps, { MembershipType: 'Gold' })).toThrow(
+            /^Query "Golden-Queries\/Analytics\/MemberActivityCounts" cannot run: .*\(parameter "MembershipType"\) at line 16, column 22: '\{\{ MembershipType \}\}'.*Fix: replace '\{\{ MembershipType \}\}' with \{\{ MembershipType \| sqlString \}\}/,
         );
-
-        expect(result.HasCompositions).toBe(true);
-
-        // The dep's trailing ORDER BY TotalActivityCount DESC must be
-        // STRIPPED (it's illegal inside a CTE without TOP/OFFSET).
-        // The outer query's ORDER BY [mac].[TotalActivityCount] DESC
-        // must be PRESERVED (it's on the outer SELECT).
-        const resolvedUpper = result.ResolvedSQL.toUpperCase();
-
-        // Count top-level ORDER BY occurrences — only the outer one should remain.
-        // The dep's ORDER BY should have been stripped or made legal via OFFSET.
-        const hasDepOrderBy = /ORDER\s+BY\s+TotalActivityCount\s+DESC/i.test(result.ResolvedSQL);
-        const hasOffset = /OFFSET\s+0\s+ROWS/i.test(result.ResolvedSQL);
-
-        // Either the dep ORDER BY was stripped, or OFFSET 0 ROWS was injected
-        expect(hasDepOrderBy === false || hasOffset === true).toBe(true);
-
-        // The CTE body must be intact — the '{{ MembershipType }}' pattern
-        // must NOT have caused truncation or misidentification.
-        expect(result.ResolvedSQL).toContain('MemberActivities');
-        expect(result.ResolvedSQL).toContain('TotalActivityCount');
-
-        // The outer query's ORDER BY must be preserved
-        expect(result.ResolvedSQL).toContain('ORDER BY [mac].[TotalActivityCount] DESC');
     });
 
     /**
-     * Test 7 — Minimal reproduction: simple dep with '{{ StatusFilter }}'
-     * inside a string literal + trailing ORDER BY. No CTEs, no comments.
+     * Test 7 — Minimal reproduction, as now written: the value renders the string literal
+     * (`| sqlString`), with a trailing ORDER BY. No CTEs, no comments.
      */
-    it('strips ORDER BY when dep has template expression inside string literal (minimal case)', () => {
+    it('strips ORDER BY when a dep\'s filtered value renders a string literal (minimal case)', () => {
         const engine = setupNoMetadata();
 
         const inlineDeps: QueryDependencySpec[] = [
@@ -602,20 +568,14 @@ ORDER BY [mac].[TotalActivityCount] DESC`;
                 UsesTemplate: true,
                 SQL: `SELECT [ID], [Name]
 FROM [data].[vwRecords]
-WHERE [Status] = '{{ StatusFilter }}'
+WHERE [Status] = {{ StatusFilter | sqlString }}
 ORDER BY [Name] ASC`,
             },
         ];
 
         const outerSQL = `SELECT [r].[ID] FROM {{query:"Test/FilteredRecords(StatusFilter=StatusFilter)"}} [r]`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { StatusFilter: 'Active' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -626,8 +586,8 @@ ORDER BY [Name] ASC`,
 
         // CTE body must be intact
         expect(result.ResolvedSQL).toContain('[data].[vwRecords]');
-        // The pass-through rename may normalize spacing inside braces
-        expect(result.ResolvedSQL).toMatch(/'[{]{2}\s*StatusFilter\s*[}]{2}'/);
+        // The dependency is rendered with the value passed to it (render-then-compose).
+        expect(result.ResolvedSQL).toContain("[Status] = 'Active'");
 
     });
 

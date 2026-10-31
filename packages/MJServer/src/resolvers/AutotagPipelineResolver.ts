@@ -170,7 +170,8 @@ export class AutotagPipelineResolver extends ResolverBase {
                     EntityName: 'MJ: Content Sources',
                     Fields: ['ID'],
                     ResultType: 'simple',
-                    MaxRows: 1
+                    MaxRows: 1,
+                    SkipTotalRowCount: true
                 }, currentUser);
                 if (result.Success && result.Results.length > 0) {
                     sourceID = result.Results[0].ID;

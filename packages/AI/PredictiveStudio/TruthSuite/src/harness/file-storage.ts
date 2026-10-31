@@ -23,7 +23,7 @@ export class HarnessFileStorage {
   public static async EnsureActive(provider: GraphQLDataProvider, user: UserInfo): Promise<FileStorageActivation | null> {
     const rv = RunView.FromMetadataProvider(provider);
     const active = await rv.RunView<{ ID: string }>(
-      { EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', Fields: ['ID'], MaxRows: 1, BypassCache: true },
+      { EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', Fields: ['ID'], MaxRows: 1, SkipTotalRowCount: true, BypassCache: true },
       user,
     );
     if (!active.Success) {
@@ -66,7 +66,7 @@ export class HarnessFileStorage {
   /** The first `MJ: File Storage Providers` row by priority; throws when there is none. */
   private static async firstByPriority(provider: GraphQLDataProvider, user: UserInfo): Promise<MJFileStorageProviderEntity> {
     const all = await RunView.FromMetadataProvider(provider).RunView<MJFileStorageProviderEntity>(
-      { EntityName: 'MJ: File Storage Providers', OrderBy: 'Priority ASC, ID ASC', MaxRows: 1, ResultType: 'entity_object', BypassCache: true },
+      { EntityName: 'MJ: File Storage Providers', OrderBy: 'Priority ASC, ID ASC', MaxRows: 1, SkipTotalRowCount: true, ResultType: 'entity_object', BypassCache: true },
       user,
     );
     if (!all.Success) {

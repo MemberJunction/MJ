@@ -1,5 +1,6 @@
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { AIEngine } from '@memberjunction/aiengine';
 import { QueryEngine } from '@memberjunction/core-entities';
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { EmbedTextResult } from '@memberjunction/ai';
@@ -172,10 +173,13 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
             // 1. Ensure QueryEngine (the base) is configured first
             await QueryEngine.Instance.Config(forceRefresh, contextUser, provider);
 
-            // 2. Build vector index from already-loaded queries (NO RunView)
+            // 2. AIEngine names the default local embedding model, the only model this index holds
+            await AIEngine.Instance.Config(false, contextUser, provider);
+
+            // 3. Build vector index from already-loaded queries (NO RunView)
             this.RefreshQueryEmbeddings();
 
-            // 3. Subscribe to DataChange$ for ongoing updates (only once)
+            // 4. Subscribe to DataChange$ for ongoing updates (only once)
             this.subscribeToDataChanges();
 
             this._loaded = true;
@@ -195,13 +199,14 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
      *
      * Called automatically on Config() and whenever QueryEngine emits a
      * DataChange$ event for the 'MJ: Queries' entity.
+     *
+     * Only vectors from the default local embedding model (what `MJQueryEntityServer` embeds with)
+     * are loaded: one index can't mix models, and a dimension mismatch would make the load throw.
      */
     public RefreshQueryEmbeddings(): void {
-        const queries = this.Base.Queries;
         const entries: VectorInputEntry<QueryEmbeddingMetadata>[] = [];
 
-        for (const query of queries) {
-            if (!query.EmbeddingVector && !query.EmbeddingVectorBinary) continue; // not embedded yet
+        for (const query of AIEngine.Instance.WithDefaultEmbeddingModel(this.Base.Queries, 'query embedding(s)')) {
             // Binary column first (a copy), JSON as the fallback (a parse) — see ReadStoredVector.
             const vector = ReadStoredVector(query.EmbeddingVectorBinary, query.EmbeddingVector);
             if (!vector) {
@@ -272,7 +277,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
      * filtering by status, reusable flag, etc. at search time.
      *
      * @param searchText - Natural language description of what data is needed
-     * @param embedFunction - Function to generate embeddings (typically from AIEngine.EmbedTextLocal)
+     * @param embedFunction - Function to generate embeddings, typically `text => AIEngine.Instance.EmbedTextLocal(text, { inputType: 'query' })`
      * @param topK - Maximum number of results to return (default: 10)
      * @param minSimilarity - Minimum similarity score 0-1 (default: 0.3)
      * @param filter - Optional filter callback applied to metadata before similarity scoring

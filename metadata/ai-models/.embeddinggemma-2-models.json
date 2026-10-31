@@ -1,0 +1,41 @@
+[
+  {
+    "fields": {
+      "Name": "EmbeddingGemma 2 (Local)",
+      "Description": "Google's EmbeddingGemma 2 text encoder (the 270M-parameter text path of the 740M-parameter multimodal model; the vision and audio encoders are not loaded), run locally via Transformers.js. 768-dimensional vectors that can be truncated to 512, 256 or 128 dimensions, an 8,192-token window, and strong multilingual retrieval.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
+      "PowerRank": 8,
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 0,
+      "ModelSelectionInsights": "Best for: multilingual content and longer documents. MJ truncates inputs at 2,048 tokens: the model accepts 8,192, but one 8,192-token text needs about 8.4 GB of memory. In MJ's retrieval benchmark it roughly tied all-mpnet-base-v2 on English queries and clearly beat every other local model on Spanish, German and French queries. Costs: about 0.9 GB of memory after loading (q8), up to about 4 GB while embedding a full batch, and roughly 30-110 ms per short text on CPU, so saves that embed (agent notes, tags, queries) get slower. PowerRank sits below all-mpnet-base-v2, so it is not the default while that model is active: opt in by setting the MJ_DEFAULT_LOCAL_EMBEDDING_MODEL environment variable to 'EmbeddingGemma 2 (Local)' for every MJ process, then run the Re-embed Local Vectors action.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=LocalEmbeddings",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "LocalEmbedding",
+            "APIName": "onnx-community/embeddinggemma-2-ONNX",
+            "MaxInputTokens": 2048,
+            "MaxOutputTokens": 768,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C67AA503-CA97-442C-8548-890933280B90"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0047B483-2032-4418-8575-0F5E851D40EF"
+    }
+  }
+]

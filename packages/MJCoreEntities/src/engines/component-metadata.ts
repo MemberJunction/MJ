@@ -115,6 +115,7 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
                 sqlserver: `Name=N'${nameLiteral}'${otherFilter}`,
             },
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
 

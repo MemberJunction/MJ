@@ -145,7 +145,7 @@
   width: 24px;
   height: 24px;
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-brand-on-primary);
   border-radius: 50%;
   font-size: 12px;
   font-weight: 600;
@@ -250,12 +250,12 @@
 
 .btn-secondary:hover:not(:disabled) {
   background: var(--mj-text-muted);
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 .btn-primary {
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-brand-on-primary);
   border-color: var(--mj-brand-primary);
 }
 

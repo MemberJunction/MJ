@@ -5,7 +5,7 @@ This document describes the **shipped, running** data-access family of MemberJun
 | Bundle | IT record | Suite seq | Transport | Checks | Fixtures |
 |---|---|---|---|---|---|
 | `runview-matrix` | IT31 - RunView Feature Matrix | 37 | client (GraphQL wire) | 18 (RVM1–RVM18) | none — discovered universe, read-only |
-| `runview-features` | IT32 - RunView Cross-Feature Edges | 38 | client | 6 (RVF1–RVF6) | none — discovered universe, read-only |
+| `runview-features` | IT32 - RunView Cross-Feature Edges | 38 | client | 7 (RVF1–RVF7) | none — discovered universe, read-only |
 | `runquery-catalog` | IT33 - RunQuery Catalog Sweep | 39 | client | 6 (QC1–QC6) | none — executes the shipped catalog |
 | `runquery-params` | IT34 - RunQuery Parameter Permutation | 40 | client | 10 (QP1–QP10) | none — executes the shipped catalog |
 | `runquery-features` | IT35 - RunQuery Feature Surface | 20 | server (in-process) | 10 (QF1–QF10) | self-cleaning Query Category + paging Query |
@@ -80,7 +80,7 @@ All 18 checks are deterministic (no `RequiresMutation`, no `RequiresLiveModel`).
 
 ---
 
-## 2. Bundle `runview-features` (RVF1–RVF6) — cross-feature interactions and edges
+## 2. Bundle `runview-features` (RVF1–RVF7) — cross-feature interactions and edges
 
 **File:** `src/checks/runview-features.checks.ts` · **Catalog ancestor:** [test-catalog.md](./test-catalog.md) Domain 0b
 
@@ -110,6 +110,7 @@ All 6 deterministic.
 | `runview-features.RVF4` | StartRow past the end | Offset universe+100: empty page, no error, `TotalRowCount` still the full matching count | overshoot turning into an error or a corrupted count |
 | `runview-features.RVF5` | Empty entity across ResultTypes | A discovered 0-row entity: clean empties for `simple` / `entity_object` / `count_only`, and `COUNT(*)` aggregate = 0 | empty-set branches erroring or fabricating rows |
 | `runview-features.RVF6` | Literal binding safety | Escaped apostrophes (`O''Brien…`), unicode + emoji, and a 600-char literal are **accepted** (not injection-refused) and match 0 rows literally; a control literal matches exactly 1 | the injection guard over-blocking benign literals — or literals broadening the match |
+| `runview-features.RVF7` | TotalRowCount contract | A full `MaxRows: 1` page reports the real total; `SkipTotalRowCount` reports `undefined` on a hit, a repeat read and an empty page; `count_only` ignores the flag. |
 
 ### Known pinned gaps and skips
 

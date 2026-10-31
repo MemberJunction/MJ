@@ -812,6 +812,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         EntityName: 'MJ: ML Models',
         ExtraFilter: `ID = '${EscapeSQLString(this.modelId)}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       },
       provider.CurrentUser ?? undefined,
@@ -888,6 +889,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           EntityName: 'MJ: ML Training Pipelines',
           ExtraFilter: `ID = '${EscapeSQLString(model.PipelineID)}'`,
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'simple',
           Fields: ['TargetEntityID'],
         },
@@ -1451,6 +1453,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           EntityName: entity.Name,
           ExtraFilter: `${entity.FirstPrimaryKey.Name} = '${EscapeSQLString(recordId)}'`, // first-pk-ok: Single-key entity lookup by recordId
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'simple',
           Fields: [matchedField],
         },

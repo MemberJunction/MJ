@@ -38,6 +38,7 @@ export class ReportCommand {
                 ExtraFilter: `ID='${escaped}'`,
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, contextUser);
             if (!found.Success) throw new Error(found.ErrorMessage || 'Could not read MJ: Test Runs.');
             const row = (found.Results ?? [])[0] as { ResultDetails?: string | null } | undefined;

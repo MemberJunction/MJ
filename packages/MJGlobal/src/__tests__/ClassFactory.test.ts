@@ -738,6 +738,34 @@ describe('ClassFactory', () => {
   // Explicit resolution failure (B35): CreateInstance never returned null for an unknown
   // key, so `if (instance)` was a broken failure test at every call site.
   // ────────────────────────────────────────────────────────────────────────────────────
+  describe('DescribeMissingRegistration', () => {
+    it('names the base class and requested key and lists the registered keys, sorted and de-duplicated', () => {
+      factory.Register(Animal, Dog, 'Dog');
+      factory.Register(Animal, Cat, 'Cat');
+      factory.Register(Animal, GoldenRetriever, 'Dog', 5);
+      const text = factory.DescribeMissingRegistration(Animal, 'Horse');
+      expect(text).toBe(
+        "ClassFactory: no registration found for base class 'Animal' with key 'Horse'. " +
+          "Registered keys for 'Animal': 'Cat', 'Dog'."
+      );
+    });
+
+    it('reports (none) when nothing is registered for the base class and (null) for a missing key', () => {
+      expect(factory.DescribeMissingRegistration(Vehicle, null)).toBe(
+        "ClassFactory: no registration found for base class 'Vehicle' with key '(null)'. " +
+          "Registered keys for 'Vehicle': (none)."
+      );
+    });
+
+    it('is the prefix of the CreateInstance resolution-failure reason', () => {
+      factory.Register(Animal, Dog, 'Dog');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = factory.TryCreateInstance<Animal>(Animal, 'Horse');
+      warn.mockRestore();
+      expect(result.Reason?.startsWith(factory.DescribeMissingRegistration(Animal, 'Horse') + ' RequiresSubclass=false.')).toBe(true);
+    });
+  });
+
   describe('resolution failure reporting', () => {
     /** A base that CAN stand alone — the BaseEntity-style legitimate fallback. */
     class StandaloneBase {

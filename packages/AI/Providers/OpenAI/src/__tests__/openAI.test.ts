@@ -645,6 +645,91 @@ describe('OpenAILLM — native tool calling', () => {
         });
     });
 
+    describe('a model that accepts function tools only with reasoning off', () => {
+        /** The SDK error OpenAI raises for tools with reasoning on such a model (status 400). */
+        const toolsWithReasoningRejection = (model: string): Error & { status: number } =>
+            Object.assign(new Error(
+                `400 Function tools with reasoning_effort are not supported for ${model} in /v1/chat/completions. ` +
+                `To use function tools, use /v1/responses or set reasoning_effort to 'none'.`
+            ), { status: 400 });
+        const ok = {
+            choices: [{ index: 0, finish_reason: 'tool_calls', message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{"city":"NYC"}' } }] } }],
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+            model: 'm'
+        };
+        const sent = (i: number): Record<string, unknown> => mockCreate.mock.calls[i][0];
+        const user = [{ role: ChatMessageRole.user, content: 'weather?' }];
+
+        it("resends a rejected request once with reasoning_effort 'none', keeping the tools, and returns the tool call", async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-a')).mockResolvedValueOnce(ok);
+
+            const result = await run({ model: 'luna-a', messages: user, tools: [WEATHER_TOOL] }) as unknown as ChatResult;
+
+            expect(mockCreate).toHaveBeenCalledTimes(2);
+            expect(sent(0).reasoning_effort).toBeUndefined();
+            expect(sent(1).reasoning_effort).toBe('none');
+            expect(sent(1).tools).toHaveLength(1);
+            expect(result.success).toBe(true);
+            expect(result.data.choices[0].message.toolCalls?.[0]).toMatchObject({ name: 'get_weather', arguments: { city: 'NYC' } });
+        });
+
+        it("sends 'none' on the model's later requests with tools without another rejection, and nothing extra without tools", async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-b')).mockResolvedValue(ok);
+            await run({ model: 'luna-b', messages: user, tools: [WEATHER_TOOL] });
+
+            await run({ model: 'luna-b', messages: user, tools: [WEATHER_TOOL] });
+            await run({ model: 'luna-b', messages: user });
+
+            expect(mockCreate).toHaveBeenCalledTimes(4);
+            expect(sent(2).reasoning_effort).toBe('none');
+            expect(sent(3).reasoning_effort).toBeUndefined();
+            expect(sent(3).tools).toBeUndefined();
+        });
+
+        it('drops a requested effort level with a warning, since the model refuses tools at any level', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-c')).mockResolvedValueOnce(ok);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            await run({ model: 'luna-c', messages: user, tools: [WEATHER_TOOL], effortLevel: 'high' });
+
+            expect(sent(0).reasoning_effort).toBe('high');
+            expect(sent(1).reasoning_effort).toBe('none');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining("instead of the requested 'high'"));
+            warn.mockRestore();
+        });
+
+        it('leaves a model that accepts tools with reasoning unchanged', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockResolvedValue(ok);
+
+            await run({ model: 'gpt-reasoner', messages: user, tools: [WEATHER_TOOL] });
+            await run({ model: 'gpt-reasoner', messages: user, tools: [WEATHER_TOOL], effortLevel: 'high' });
+
+            expect(mockCreate).toHaveBeenCalledTimes(2);
+            expect(sent(0).reasoning_effort).toBeUndefined();
+            expect(sent(1).reasoning_effort).toBe('high');
+        });
+
+        it('rethrows the rejection without a resend when the request declared no tools', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-d'));
+
+            await expect(run({ model: 'luna-d', messages: user })).rejects.toThrow(/Function tools with reasoning_effort/);
+            expect(mockCreate).toHaveBeenCalledTimes(1);
+        });
+
+        it('rethrows any other 400 without a resend', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(Object.assign(new Error("400 Invalid schema for function 'get_weather'"), { status: 400 }));
+
+            await expect(run({ model: 'luna-e', messages: user, tools: [WEATHER_TOOL] })).rejects.toThrow(/Invalid schema/);
+            expect(mockCreate).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe('conversation round-tripping (§5.3)', () => {
         it('replays a prior assistant turn with tool_calls, stringifying the arguments', async () => {
             await run({

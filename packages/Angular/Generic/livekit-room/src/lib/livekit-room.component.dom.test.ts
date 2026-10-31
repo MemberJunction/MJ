@@ -1115,8 +1115,8 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
   });
 
   describe('what the agent sees', () => {
-    const LET = 'button[title="Let the agent see your camera and screen"]';
-    const STOP = 'button[title="Stop letting the agent see your camera and screen"]';
+    const LET = 'button[title="Let the agent, and any agent that joins later, see your camera and screen"]';
+    const STOP = 'button[title="Stop letting the agent, and any agent that joins later, see your camera and screen"]';
     const sage = () => person('sage', { Agent: true });
     const scout = () => person('scout', { Agent: true });
 
@@ -1166,7 +1166,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const chip = (name: string) => tileOf(f, name)?.querySelector('.tile__chip')?.textContent?.trim() ?? null;
       expect(f.componentInstance.AgentCount).toBe(2);
       expect([chip('you'), chip('ada'), chip('bo')]).toEqual(['Agents can see', 'Agents can see', null]);
-      expect(query(f, 'button[title="Let agents in this room see your camera and screen"]')).not.toBeNull();
+      expect(query(f, 'button[title="Let every agent in this room, including any that join later, see your camera and screen"]')).not.toBeNull();
       expect(query(f, LET)).toBeNull();
     });
   });
@@ -1347,11 +1347,11 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const { f, controller } = await renderPreview();
       f.componentInstance.AgentVisionChange.subscribe((on: boolean) => controller.SetAgentVision(on));
       expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')).toBeNull();
-      (query(f, 'button[title="Let the agent see your camera and screen"]') as HTMLButtonElement).click();
+      (query(f, 'button[title="Let the agent, and any agent that joins later, see your camera and screen"]') as HTMLButtonElement).click();
       await settle(f);
       expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agent can see');
       expect(tileOf(f, 'Ada')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agent can see');
-      expect(query(f, 'button[title="Stop letting the agent see your camera and screen"]')).not.toBeNull();
+      expect(query(f, 'button[title="Stop letting the agent, and any agent that joins later, see your camera and screen"]')).not.toBeNull();
     });
   });
 });

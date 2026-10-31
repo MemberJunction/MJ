@@ -218,7 +218,7 @@
 
 ::ng-deep .query-content .mj-accordion-panel--expanded .mj-accordion-header {
     background: var(--mj-brand-primary) !important;
-    color: white !important;
+    color: var(--mj-brand-on-primary) !important;
     border-radius: var(--mj-radius-md) var(--mj-radius-md) 0 0 !important;
     outline-color: var(--mj-text-inverse);
 }
@@ -270,12 +270,12 @@
 
 .panel-badge.defined {
     background: var(--mj-status-success);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .panel-badge.count {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 ::ng-deep .mj-accordion-panel--expanded .panel-badge.count {
@@ -467,7 +467,7 @@
     border-radius: var(--mj-radius-lg);
     font-size: var(--mj-text-xs);
     font-weight: 600;
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .item-badge.required {
@@ -481,7 +481,7 @@
 
 .item-badge.sequence {
     background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: color-mix(in srgb, var(--mj-brand-primary) 80%, purple);
+    color: color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-text-violet));
 }
 
 .item-card-body {
@@ -667,7 +667,7 @@
     align-items: center;
     gap: 4px;
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     padding: 4px 10px;
     border-radius: var(--mj-radius-md);
     font-size: var(--mj-text-xs);
@@ -684,7 +684,7 @@
 
 .add-item-btn {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border: none;
     padding: 8px 16px;
     border-radius: var(--mj-radius-md);
@@ -804,4 +804,49 @@
 .meta-dropdown-row .meta-dropdown {
   flex: 1;
   min-width: 0;
+}
+
+/* ─── Metadata extraction status ─────────────────────────────────────────── */
+
+.extraction-badge {
+  --extraction-accent: var(--mj-text-muted);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--mj-radius-full);
+  padding: 2px var(--mj-space-3);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  color: var(--extraction-accent);
+  background: color-mix(in srgb, var(--extraction-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--extraction-accent) 30%, transparent);
+  white-space: nowrap;
+}
+
+.extraction-badge--ok { --extraction-accent: var(--mj-status-success); }
+.extraction-badge--warning { --extraction-accent: var(--mj-status-warning); }
+.extraction-badge--error { --extraction-accent: var(--mj-status-error); }
+.extraction-badge--skipped,
+.extraction-badge--none { --extraction-accent: var(--mj-text-muted); }
+
+.save-diagnostics {
+  margin-bottom: var(--mj-space-3);
+}
+
+.extraction-diagnostics {
+  margin-top: var(--mj-space-3);
+}
+
+/* The header sits on the brand colour: a light pill and a light outline button stay readable. */
+.query-header .extraction-badge {
+  background: var(--mj-bg-surface);
+}
+
+.query-header button.refresh-metadata-btn {
+  color: var(--mj-text-inverse);
+  border-color: color-mix(in srgb, var(--mj-text-inverse) 60%, transparent);
+  background: transparent;
+}
+
+.query-header button.refresh-metadata-btn:hover {
+  background: color-mix(in srgb, var(--mj-text-inverse) 15%, transparent);
 }

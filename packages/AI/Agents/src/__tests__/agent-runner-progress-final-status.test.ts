@@ -87,6 +87,14 @@ function makeRacyDetail(id: string): RacyDetail {
     return detail;
 }
 
+/** Records the Name each Save() of this entity wrote. */
+function recordSavedNames(entity: RacyDetail): unknown[] {
+    const names: unknown[] = [];
+    const save = entity.Save;
+    entity.Save = () => { names.push(entity.Name); return save(); };
+    return names;
+}
+
 function makeProvider(details: RacyDetail[]): IMetadataProvider {
     const queue = [...details];
     return { GetEntityObject: vi.fn(async () => queue.shift()) } as unknown as IMetadataProvider;
@@ -94,6 +102,8 @@ function makeProvider(details: RacyDetail[]): IMetadataProvider {
 
 interface RunAgentStub {
     RunAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
+    generateConversationName(userMessage: string, contextUser: UserInfo): Promise<{ name: string; description: string } | null>;
+    gatherConversationArtifacts(conversationId: string, contextUser: UserInfo): Promise<unknown[]>;
 }
 
 describe('AgentRunner.RunAgentInConversation — a progress save still committing does not swallow the final status', () => {
@@ -118,5 +128,178 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         await delay(50);
 
         expect(agentDetail.Persisted).toEqual({ Status: 'Complete', Message: 'All done' });
+    });
+
+    it('runs generateConversationName in parallel with RunAgent and skips artifact queries on a brand-new conversation', async () => {
+        const events: string[] = [];
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        const userDetail = makeRacyDetail('user-detail');
+        const agentDetail = makeRacyDetail('agent-detail');
+        const loadSpy = vi.spyOn(agentDetail, 'Load');
+
+        const runner = new AgentRunner(makeProvider([convEntity, userDetail, agentDetail]));
+        const gatherSpy = vi.spyOn(runner as unknown as RunAgentStub, 'gatherConversationArtifacts');
+
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockImplementation(async () => {
+            events.push('rename:start');
+            await delay(80);
+            events.push('rename:done');
+            return { name: 'Smart Title', description: 'Smart Description' };
+        });
+
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockImplementation(async (params: ExecuteAgentParams) => {
+            events.push('runAgent:start');
+            expect(params.inputArtifacts).toEqual([]);
+            await delay(10);
+            events.push('runAgent:done');
+            return { success: true, agentRun: { Message: 'Reply' } } as unknown as ExecuteAgentResult;
+        });
+
+        await runner.RunAgentInConversation({
+            agent: { ID: 'agent-1', Name: 'Betty' },
+            conversationMessages: [],
+            contextUser: USER,
+        } as unknown as ExecuteAgentParams, { userMessage: 'What are the membership tiers?' });
+
+        // RunAgent starts before generateConversationName finishes (parallel execution)
+        expect(events.indexOf('runAgent:start')).toBeLessThan(events.indexOf('rename:done'));
+        // Brand-new conversation skips gatherConversationArtifacts DB queries
+        expect(gatherSpy).not.toHaveBeenCalled();
+        // Conversation name & description are saved before RunAgentInConversation returns
+        expect(savedNames).toEqual(['Chat with Betty', 'Smart Title']);
+        expect(convEntity.Description).toBe('Smart Description');
+        // Newly created agentResponseDetail is not redundantly reloaded before final Save
+        expect(loadSpy).not.toHaveBeenCalled();
+    });
+
+    it('still saves the generated conversation name when the run throws', async () => {
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockRejectedValue(new Error('model down'));
+
+        await expect(runner.RunAgentInConversation({
+            agent: { ID: 'agent-1', Name: 'Betty' },
+            conversationMessages: [],
+            contextUser: USER,
+        } as unknown as ExecuteAgentParams, { userMessage: 'What are the membership tiers?' })).rejects.toThrow('model down');
+
+        expect(savedNames.at(-1)).toBe('Smart Title');
+    });
+
+    const runInConversation = (runner: AgentRunner, options: Record<string, unknown>) => runner.RunAgentInConversation({
+        agent: { ID: 'agent-1', Name: 'Betty' },
+        conversationMessages: [],
+        contextUser: USER,
+    } as unknown as ExecuteAgentParams, { userMessage: 'What are the membership tiers?', ...options });
+    const reply = { success: true, agentRun: { Message: 'Reply' } } as unknown as ExecuteAgentResult;
+
+    it('does not generate a name when the caller supplied one', async () => {
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        const nameSpy = vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName');
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+        await runInConversation(runner, { conversationName: 'Caller Title' });
+
+        expect(nameSpy).not.toHaveBeenCalled();
+        expect(savedNames).toEqual(['Caller Title']);
+    });
+
+    it('keeps the initial name, and does not throw, when no name comes back', async () => {
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue(null);
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+        await expect(runInConversation(runner, {})).resolves.toBeDefined();
+        expect(savedNames).toEqual(['Chat with Betty']);
+    });
+
+    it('returns the run result when naming never finishes, after the naming cap', async () => {
+        const cap = Reflect.get(AgentRunner, 'NAMING_WAIT_MS');
+        Reflect.set(AgentRunner, 'NAMING_WAIT_MS', 20);
+        try {
+            const convEntity = makeRacyDetail('conv-new');
+            const savedNames = recordSavedNames(convEntity);
+            const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+            vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockReturnValue(new Promise<null>(() => undefined));
+            vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+            await expect(runInConversation(runner, {})).resolves.toBeDefined();
+            expect(savedNames).toEqual(['Chat with Betty']);
+        } finally {
+            Reflect.set(AgentRunner, 'NAMING_WAIT_MS', cap);
+        }
+    }, 2000);
+
+    it('keeps a rename made during the run, and an archive made during the run', async () => {
+        const renamed = makeRacyDetail('conv-new');
+        const renamedSaves = recordSavedNames(renamed);
+        renamed.Load = async () => { renamed.Name = 'My Custom Title'; renamed.Status = 'Archived'; return true; };
+        let runner = new AgentRunner(makeProvider([renamed, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+        await runInConversation(runner, {});
+        expect(renamedSaves).toEqual(['Chat with Betty']);
+        expect([renamed.Name, renamed.Status]).toEqual(['My Custom Title', 'Archived']);
+
+        const archived = makeRacyDetail('conv-new');
+        const archivedStatusAtSave: unknown[] = [];
+        const save = archived.Save;
+        archived.Save = () => { archivedStatusAtSave.push(`${archived.Name}/${archived.Status}`); return save(); };
+        archived.Load = async () => { archived.Status = 'Archived'; return true; };
+        runner = new AgentRunner(makeProvider([archived, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+        await runInConversation(runner, {});
+        expect(archivedStatusAtSave.at(-1)).toBe('Smart Title/Archived');
+    });
+
+    it('a reload that throws while saving the name does not replace a successful run\'s result', async () => {
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        convEntity.Load = async () => { throw new Error('connection reset'); };
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+        const result = await runInConversation(runner, {});
+
+        expect(result.agentResult).toBe(reply);
+        expect(savedNames).toEqual(['Chat with Betty']);
+    });
+
+    it('saves the generated name after the run\'s own writes', async () => {
+        const events: string[] = [];
+        const convEntity = makeRacyDetail('conv-new');
+        const agentDetail = makeRacyDetail('agent-detail');
+        const convSave = convEntity.Save;
+        convEntity.Save = () => { events.push(`conv:${convEntity.Name}`); return convSave(); };
+        const agentSave = agentDetail.Save;
+        agentDetail.Save = () => { events.push(`reply:${agentDetail.Status}`); return agentSave(); };
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), agentDetail]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+        await runInConversation(runner, {});
+
+        expect(events.indexOf('conv:Smart Title')).toBeGreaterThan(events.lastIndexOf('reply:Complete'));
+        expect(events.lastIndexOf('reply:Complete')).toBeGreaterThan(-1);
+    });
+
+    it('still gathers artifacts for an existing conversation', async () => {
+        const artifacts = [{ artifactId: 'art-1' }];
+        const runner = new AgentRunner(makeProvider([makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'gatherConversationArtifacts').mockResolvedValue(artifacts);
+        const runSpy = vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+        await runInConversation(runner, { conversationId: 'conv-1' });
+
+        expect(runSpy.mock.calls[0][0].inputArtifacts).toEqual(artifacts);
     });
 });

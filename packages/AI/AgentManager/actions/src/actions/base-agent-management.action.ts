@@ -383,6 +383,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             EntityName: 'MJ: AI Prompt Types',
             ExtraFilter: `Name = '${typeName}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, contextUser);
         

@@ -22,7 +22,7 @@
  * FIXTURES (own rows, tagged "(mj-integration-test — safe to delete)", created by Setup as ctx.User): one non-global
  * Active `MJ: Search Scopes` row (whose save auto-grants its creator a Manage permission row) and one
  * `MJ: Search Scope Entities` lane on `MJ: AI Agents`; SSB2 adds one `MJ: Search Scope Providers` row. Borrowed,
- * read-only: two agents and one search provider record. Missing borrowed rows → every check SKIPS-AS-PASS LOUDLY.
+ * read-only: two agents and one search provider record. Missing borrowed rows → every check is recorded as skipped.
  * Not RequiresMutation-gated, mirroring search-origin-gate: it writes only its own tagged rows and removes them.
  */
 import { BaseEntity, RunView } from '@memberjunction/core';
@@ -37,7 +37,7 @@ import type {
 } from '@memberjunction/core-entities';
 import { BaseSearchProvider, SearchEngine } from '@memberjunction/search-engine';
 import type { LaneKind, ScopeExplanation, SearchResult, SearchResultItem, SearchSource } from '@memberjunction/search-engine';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const MARKER = '(mj-integration-test — safe to delete)';
@@ -145,10 +145,6 @@ class ScopeBoundProbe extends SearchEngine {
     }
 }
 
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ search-scope-bound.${checkId} SKIPPED — ${reason}`);
-}
-
 /** A full-text hit on an agent, as a non-entity provider would return it. */
 function agentHit(agentID: string, label: string): SearchResultItem {
     return {
@@ -217,12 +213,11 @@ async function createFixture(ctx: IntegrationCheckContext): Promise<void> {
     await refreshScopeCache(ctx);
 }
 
-/** The fixture, or undefined after a loud skip note. */
-function usableFixture(checkId: string): UsableFixture | undefined {
+/** The fixture; the running check is skipped ({@link SkipCheck}) when it was not built. */
+function usableFixture(): UsableFixture {
     const fx = fixture;
     if (!fx?.ScopeID || !fx.AgentA || !fx.AgentB || !fx.ProviderRecord) {
-        skipNote(checkId, fx?.SkipReason ?? 'the fixtures were not created');
-        return undefined;
+        SkipCheck(fx?.SkipReason ?? 'the fixtures were not created');
     }
     return { Fx: fx, ScopeID: fx.ScopeID, AgentA: fx.AgentA, AgentB: fx.AgentB, ProviderRecord: fx.ProviderRecord };
 }
@@ -346,8 +341,7 @@ export const SearchScopeBoundChecks: NamedCheck[] = [
         Id: 'search-scope-bound.SSB1',
         Name: 'SSB1: a non-global scope with an entity lane and NO provider rows runs no provider, returns nothing, and is Reachable:false',
         Fn: async (ctx): Promise<void> => {
-            const fx = usableFixture('SSB1');
-            if (!fx) { return; }
+            const fx = usableFixture();
             const stub = new FixedHitsProvider([agentHit(fx.AgentA, 'agent-a'), agentHit(fx.AgentB, 'agent-b')]);
             const probe = ScopeBoundProbe.For(ctx.Provider, stub, fx.ProviderRecord);
             const { Query, Result } = await scopedSearch(ctx, probe, fx, 'SSB1');
@@ -370,8 +364,7 @@ export const SearchScopeBoundChecks: NamedCheck[] = [
         Id: 'search-scope-bound.SSB2',
         Name: "SSB2: a lane ExtraFilter ID='<agent A>' holds a non-entity provider's full-text hits for agents A and B to A",
         Fn: async (ctx): Promise<void> => {
-            const fx = usableFixture('SSB2');
-            if (!fx) { return; }
+            const fx = usableFixture();
             // Anti-vacuity: both agents are rows the run user can read, so only the lane filter can drop B.
             AssertEqual(await readableAgents(ctx.User, [fx.AgentA, fx.AgentB]), 2, 'precondition: both agents are readable by the run user');
             await saveRow<MJSearchScopeProviderEntity>(ctx, fx.Fx, SCOPE_PROVIDERS, r => {
@@ -396,8 +389,7 @@ export const SearchScopeBoundChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = fixture;
             if (!fx?.ScopeID) {
-                skipNote('SSB3', fx?.SkipReason ?? 'no fixture rows were created');
-                return;
+                SkipCheck(fx?.SkipReason ?? 'no fixture rows were created');
             }
             const failures = await deleteFixtures(ctx, fx);
             AssertEqual(failures.join('; '), '', 'every fixture row deletes');

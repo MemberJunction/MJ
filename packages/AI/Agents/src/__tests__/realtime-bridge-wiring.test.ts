@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IRealtimeSession, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import * as coreModule from '@memberjunction/core';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 const { hasPermission } = vi.hoisted(() => ({ hasPermission: vi.fn() }));
@@ -400,6 +401,23 @@ describe('WireBridgeRealtimeSession — usage', () => {
         await svc.WireBridgeRealtimeSession(fake as unknown as IRealtimeSession, input, makePrep([]), contextUser, provider);
 
         expect(fake.UsageHandler).toBeUndefined();
+    });
+
+    it('logs once, naming the co-agent and its missing active prompt, when the co-agent has no prompt', async () => {
+        const errorSpy = vi.spyOn(coreModule, 'LogError').mockImplementation(() => {});
+        try {
+            const svc = new WiringService();
+            await svc.WireBridgeRealtimeSession(new FakeSession() as unknown as IRealtimeSession, input, makePrep([]), contextUser, provider);
+
+            const lines = errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('no co-agent prompt run'));
+            expect(lines).toHaveLength(1);
+            expect(lines[0]).toContain('WireBridgeRealtimeSession');
+            expect(lines[0]).toContain("co-agent 'Co-Agent' (co-1)");
+            expect(lines[0]).toContain("no Active 'MJ: AI Agent Prompts' row");
+            expect(lines[0]).toContain('session sess-1');
+        } finally {
+            errorSpy.mockRestore();
+        }
     });
 
     it('writes the last usage before it finalizes the runs, when the bridge closes the session', async () => {

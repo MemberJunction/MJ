@@ -18,7 +18,7 @@
  */
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { Assert, settle } from '@memberjunction/testing-integration';
+import { Assert, settle, SkipCheck } from '@memberjunction/testing-integration';
 import { verifyAgentRun } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -68,8 +68,7 @@ export const AgentRunnerChecks: NamedCheck[] = [
                 ? AGENTS.filter((s) => `${s.Label ?? ''} ${s.Name}`.toLowerCase().includes(filter))
                 : AGENTS;
             if (selected.length === 0) {
-                console.log(`      → no agent spec matched AGENT_FILTER='${filter}' — nothing to run (pass).`);
-                return;
+                SkipCheck(`no agent spec matched AGENT_FILTER='${filter}' — nothing to run; unset AGENT_FILTER or match a spec name/label`);
             }
 
             for (const spec of selected) {

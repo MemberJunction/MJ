@@ -1,8 +1,8 @@
-import { SQLParser } from '@memberjunction/sql-parser';
+import type { ConditionClause, IdentifierPath, Span, SqlDocument, SqlToken } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import {
-    COMPARISON_OPS, IsObject, NodeType, IsLiteralNode, ColumnName, IsAllLiteralBag,
-    type AstNode, type AstObject,
+    IsReadableCondition, ParseSoleSelect, PathColumn, ReadComparison, ReadConditionTree,
+    type ConditionAnd, type ConditionLeaf, type ConditionNode,
 } from './materializationSqlAst';
 
 /**
@@ -31,7 +31,11 @@ import {
  * sets `ambiguous: true` and the caller refuses (query stays live-only) — the §10 "refuse under
  * uncertainty" bias. So we remove **exactly** the parameter predicates, or we decline.
  *
- * Pure — parses with @memberjunction/sql-parser, mutates the WHERE AST, re-emits. No DB/IO.
+ * The removal is a set of span edits on the author's text: each removed conjunct goes with one
+ * adjacent `AND` (and the whole `WHERE` goes when every conjunct does). Everything else — comments,
+ * casing, identifier quoting, whitespace — stays exactly as written.
+ *
+ * Pure — reads the query with @memberjunction/sql-parser's SqlDocument and edits its text. No DB/IO.
  */
 
 /** Outcome of stripping row-filter predicates from a rendered query. */
@@ -53,56 +57,115 @@ export interface BroadRenderResult {
     Ambiguous: boolean;
 }
 
-/** Flattens a top-level AND-chain into its individual conjuncts (non-AND leaves). */
-function collectConjuncts(node: AstNode): AstNode[] {
-    if (NodeType(node) === 'binary_expr' && IsObject(node) && node.operator === 'AND') {
-        return [...collectConjuncts(node.left), ...collectConjuncts(node.right)];
-    }
-    return [node];
+/** The document and top-level WHERE that broad-render edits. */
+interface BroadTarget {
+    Document: SqlDocument;
+    Where: ConditionClause;
+    /** The condition's significant tokens. */
+    Tokens: readonly SqlToken[];
+    /** The condition's identifier paths (nested subqueries excluded). */
+    Paths: readonly IdentifierPath[];
+}
+
+/** Which conjuncts of a condition subtree go: every one (`All`), or the listed spans of the author's text. */
+interface RemovalPlan {
+    All: boolean;
+    Removed: number;
+    Spans: Span[];
 }
 
 /**
- * True when a conjunct is a removable row-filter predicate: a comparison `column <op> value`
- * (or `column IN/BETWEEN (literals)`) where the column is one of `cols` and the other side is a
- * literal / all-literal bag. Anything else (OR-expr, function, column=column, subquery) is kept.
+ * The top-level WHERE of a rendered query that is one SELECT block (a leading WITH clause allowed);
+ * null when the text could not be read completely, holds several statements, is not a query, is a set
+ * operation, or has no WHERE (or a WHERE that is not one condition) — the cases broad-render leaves
+ * the SQL unchanged.
  */
-function isRemovablePredicate(conjunct: AstNode, cols: Set<string>): boolean {
-    if (NodeType(conjunct) !== 'binary_expr' || !IsObject(conjunct)) {
-        return false;
-    }
-    const op = conjunct.operator;
-    if (typeof op !== 'string' || !COMPARISON_OPS.has(op)) {
-        return false;
-    }
-    const leftCol = ColumnName(conjunct.left);
-    const rightCol = ColumnName(conjunct.right);
-    const leftMatches = leftCol != null && cols.has(leftCol.trim().toLowerCase());
-    const rightMatches = rightCol != null && cols.has(rightCol.trim().toLowerCase());
-    if (leftMatches && !rightMatches) {
-        return IsLiteralNode(conjunct.right) || IsAllLiteralBag(conjunct.right);
-    }
-    if (rightMatches && !leftMatches) {
-        return IsLiteralNode(conjunct.left) || IsAllLiteralBag(conjunct.left);
-    }
-    return false;
-}
-
-/** Rebuilds a left-deep AND-chain from kept conjuncts, or null when none remain. */
-function rebuildWhere(kept: AstNode[]): AstNode {
-    if (kept.length === 0) {
+function broadTargetOf(renderedSQL: string, dialect: SQLParserDialect): BroadTarget | null {
+    const sole = ParseSoleSelect(renderedSQL, dialect);
+    const where = sole?.Select.Where ?? null;
+    const tokens = where?.Condition.Tokens() ?? [];
+    if (sole === null || where === null || !IsReadableCondition(tokens)) {
         return null;
     }
-    let node = kept[0];
-    for (let i = 1; i < kept.length; i++) {
-        node = { type: 'binary_expr', operator: 'AND', left: node, right: kept[i] } as AstObject;
-    }
-    return node;
+    return { Document: sole.Document, Where: where, Tokens: tokens, Paths: where.Condition.Identifiers() };
 }
 
-/** Returns the sole statement of an AST, or null if it is not exactly one statement. */
-function soleStatement(ast: AstNode): AstObject | null {
-    const node = Array.isArray(ast) ? (ast.length === 1 ? ast[0] : null) : ast;
-    return IsObject(node) ? node : null;
+/**
+ * True when a leaf conjunct is a removable row-filter predicate: a comparison `column <op> value`
+ * (or `column IN/BETWEEN` literals) where the column is one of `cols` and the other side is a
+ * literal / all-literal list. Anything else (OR-expr, function, column=column, subquery) is kept.
+ */
+function isRemovablePredicate(target: BroadTarget, leaf: ConditionLeaf, cols: Set<string>): boolean {
+    const predicate = ReadComparison(target.Tokens, leaf.InnerStart, leaf.InnerEnd, target.Paths);
+    return predicate !== null && cols.has(PathColumn(predicate.Column).trim().toLowerCase());
+}
+
+/** The whitespace token just before `offset`, unless a line comment ends right before it (removing its line break would comment out what follows). */
+function whitespaceBefore(document: SqlDocument, offset: number): Span | null {
+    const tokens = document.Tokens.Tokens;
+    const index = document.Tokens.IndexAt(offset);
+    const before = tokens[index - 1];
+    if (index < 1 || before === undefined || before.Kind !== 'Whitespace') {
+        return null;
+    }
+    const beforeThat = tokens[index - 2];
+    const lineComment = beforeThat !== undefined && beforeThat.Kind === 'Comment' && !beforeThat.Text.startsWith('/*');
+    return lineComment ? null : before.Span;
+}
+
+/** The whitespace token just after `offset` (the end of a token), or null. */
+function whitespaceAfter(document: SqlDocument, offset: number): Span | null {
+    const token = document.Tokens.Tokens[document.Tokens.IndexAt(offset)];
+    return token !== undefined && token.Kind === 'Whitespace' ? token.Span : null;
+}
+
+/**
+ * The span that removes child `k` of an AND chain together with one adjacent `AND`. When a kept conjunct
+ * comes before it, the `AND` before it goes (with the whitespace before that `AND`); otherwise the `AND`
+ * after it goes (with the whitespace after that `AND`), so the kept text keeps its own spacing.
+ */
+function childRemovalSpan(target: BroadTarget, node: ConditionAnd, k: number, keptBefore: boolean): Span {
+    const t = target.Tokens;
+    const child = node.Children[k];
+    if (keptBefore) {
+        const separator = t[node.Separators[k - 1]].Span;
+        const start = whitespaceBefore(target.Document, separator.Start)?.Start ?? separator.Start;
+        return { Start: start, End: t[child.End - 1].Span.End };
+    }
+    const separator = t[node.Separators[k]].Span;
+    const end = whitespaceAfter(target.Document, separator.End)?.End ?? separator.End;
+    return { Start: t[child.Start].Span.Start, End: end };
+}
+
+/** Plans the removals for a condition subtree: a removable leaf goes whole; an AND chain goes conjunct by conjunct. */
+function planRemovals(target: BroadTarget, node: ConditionNode, cols: Set<string>): RemovalPlan {
+    if (node.Kind === 'Leaf') {
+        const removable = isRemovablePredicate(target, node, cols);
+        return { All: removable, Removed: removable ? 1 : 0, Spans: [] };
+    }
+    const plans = node.Children.map((child) => planRemovals(target, child, cols));
+    const removed = plans.reduce((sum, p) => sum + p.Removed, 0);
+    if (plans.every((p) => p.All)) {
+        return { All: true, Removed: removed, Spans: [] };
+    }
+    const spans: Span[] = [];
+    let keptBefore = false;
+    plans.forEach((plan, k) => {
+        if (plan.All) {
+            spans.push(childRemovalSpan(target, node, k, keptBefore));
+        } else {
+            spans.push(...plan.Spans);
+            keptBefore = true;
+        }
+    });
+    return { All: false, Removed: removed, Spans: spans };
+}
+
+/** The span that removes the whole WHERE clause, with the whitespace before it. */
+function whereRemovalSpan(target: BroadTarget): Span {
+    const clause = target.Where.Span;
+    const before = whitespaceBefore(target.Document, clause.Start);
+    return { Start: before?.Start ?? clause.Start, End: clause.End };
 }
 
 /**
@@ -111,8 +174,8 @@ function soleStatement(ast: AstNode): AstObject | null {
  * query. Other conjuncts are preserved; if the row-filter predicates were the only ones, the `WHERE`
  * is dropped entirely.
  *
- * Returns the input unchanged with `removedCount: 0` when the SQL cannot be parsed as a single
- * simple SELECT, or when no matching predicate is found — the caller should treat `removedCount: 0`
+ * Returns the input unchanged with `removedCount: 0` when the SQL cannot be read completely as a
+ * single SELECT block (a set operation included), or when no matching predicate is found — the caller should treat `removedCount: 0`
  * on a query it believes is RowFilterBroad as an anomaly worth refusing (a broad materialization
  * that still carries the filter would be wrong).
  *
@@ -138,32 +201,26 @@ export function BuildBroadRowFilterSQL(
     if (!rowFilterColumns || rowFilterColumns.length === 0) {
         return verdict(renderedSQL, 0);
     }
-    const parsed = SQLParser.Astify(renderedSQL, dialect);
-    if (!parsed.astParsed || parsed.ast == null) {
-        return verdict(renderedSQL, 0);
-    }
-    const stmt = soleStatement(parsed.ast);
-    if (stmt == null || NodeType(stmt) !== 'select' || stmt.where == null) {
+    const target = broadTargetOf(renderedSQL, dialect);
+    if (target === null) {
         return verdict(renderedSQL, 0);
     }
 
     const cols = new Set(rowFilterColumns.map((c) => c.trim().toLowerCase()));
-    const conjuncts = collectConjuncts(stmt.where);
-    const kept = conjuncts.filter((c) => !isRemovablePredicate(c, cols));
-    const removedCount = conjuncts.length - kept.length;
-    if (removedCount === 0) {
+    const plan = planRemovals(target, ReadConditionTree(target.Tokens), cols);
+    if (plan.Removed === 0) {
         return verdict(renderedSQL, 0);
     }
     // Fail safe: when the match count doesn't match the expected parameter count, the parameter
     // predicate can't be cleanly isolated — return the ORIGINAL SQL (unstripped) and flag ambiguous
     // so an inattentive caller carries the filter (refused upstream) rather than materializing broad.
-    if (expectedRemovals != null && removedCount !== expectedRemovals) {
-        return verdict(renderedSQL, removedCount);
+    if (expectedRemovals != null && plan.Removed !== expectedRemovals) {
+        return verdict(renderedSQL, plan.Removed);
     }
 
-    stmt.where = rebuildWhere(kept);
-    const sql = SQLParser.SqlifyAST(parsed.ast as Parameters<typeof SQLParser.SqlifyAST>[0], dialect);
-    return verdict(sql, removedCount);
+    const spans = plan.All ? [whereRemovalSpan(target)] : plan.Spans;
+    const edits = spans.reduce((set, span) => set.Remove(span), target.Document.Edit());
+    return verdict(edits.Apply().Text, plan.Removed);
 }
 
 /** @deprecated Use {@link BuildBroadRowFilterSQL}. */
