@@ -244,6 +244,8 @@ export * from './Workflows/components/workflows-resource.component';
 export * from './Workflows/components/workflow-runs-resource.component';
 export * from './Workflows/workflows.types';
 export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
+// The Predictive Studio record-form panels: exported so the class-registration manifests list their registrations.
+export * from './PredictiveStudio/record-panels/ps-protocol-panels';
 export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';

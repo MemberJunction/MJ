@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLAlgorithmEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -10,12 +10,14 @@ import { PSPipelinesComponent } from '../components/ps-pipelines.component';
 import {
   STUDIO_SECTIONS,
   PSSection,
-  sectionGroups,
-  sectionsInGroup,
-  sectionLabel,
-  hasSection,
-  routeHomeNavigate,
+  SectionGroups,
+  SectionsInGroup,
+  SectionLabel,
+  HasSection,
+  RouteHomeNavigate,
 } from '../predictive-studio.nav';
+import type { VersionedEntityName } from '../components/versioned-list/lineage-reads';
+import { PS_RECORD_PANELS } from '../record-panels/ps-protocol-panels';
 import {
   BuildStudioAgentContext,
   ResolvePSRecord,
@@ -30,14 +32,15 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
 
 /**
  * **Studio** — the analyst workbench door (one of Predictive Studio's three consolidated nav items,
- * alongside `Predictions` and `Models`). Hosts the build/run section panels (`ps-home`, `ps-pipelines`,
- * `ps-catalog`, `ps-experiments`, `ps-compare`) behind an internal left-nav grouped by lifecycle
- * (Overview · Build · Run), so the outer app nav stays quiet while analysts get all the depth one click
+ * alongside `Predictions` and `Models`). Hosts the section panels (`ps-home`, the Prediction Unit and Evaluation
+ * Protocol lists, `ps-pipelines`, `ps-catalog`, `ps-experiments`, `ps-compare`) behind an internal left-nav grouped
+ * by lifecycle (Overview · Define · Build · Run), so the outer app nav stays quiet while analysts get all the depth one click
  * in. The active section round-trips through the `section` query param (deep links + back/forward). A
  * single docked **Model Development Agent** copilot is shared by every section's "Ask the agent" CTA —
  * wired with the full conversation lifecycle (`isNewConversation` → `conversationCreated`) so the first
  * message actually creates + sends. Cross-door navigation (to a Models section) routes via the nav
- * service; see {@link routeHomeNavigate}.
+ * service; see {@link RouteHomeNavigate}. A unit or protocol opens on its record form, where the Predictive Studio
+ * record panels ({@link PSStudioResourceComponent.RecordPanels}) show its versions.
  */
 @RegisterClass(BaseResourceComponent, 'PredictiveStudioStudioResource')
 @Component({
@@ -99,6 +102,8 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                     <section class="ps-content" [class.fill]="ActiveSection === 'pipelines'" [attr.data-testid]="'ps-panel-' + ActiveSection">
                       @switch (ActiveSection) {
                         @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="MapNavigate($event)" (askAgent)="OnAskAgent($event)"></ps-home> }
+                        @case ('units') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Prediction Units" (OpenRecord)="OpenVersionedRecord('MJ: Prediction Units', $event)"></mj-ps-versioned-list> }
+                        @case ('protocols') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Evaluation Protocols" (OpenRecord)="OpenVersionedRecord('MJ: Evaluation Protocols', $event)"></mj-ps-versioned-list> }
                         @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="OnAskAgent($event)" (navigate)="MapNavigate($event)"></ps-pipelines> }
                         @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="OnAskAgent($event)" (createPipeline)="OnCreatePipelineFromCatalog($event)"></ps-catalog> }
                         @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
@@ -209,6 +214,9 @@ export class PSStudioResourceComponent extends PSResourceBase {
   protected readonly SectionLabel = 'Studio';
   protected readonly SectionIcon = 'fa-solid fa-flask-vial';
 
+  /** The record-form panels this chunk registers; referencing them keeps their @RegisterClassEx registrations in the bundle. */
+  public static readonly RecordPanels = PS_RECORD_PANELS;
+
   private readonly cdrLocal = inject(ChangeDetectorRef);
 
   /** The active workbench section (which panel renders). Round-trips through the `section` query param. */
@@ -249,7 +257,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
   override ngOnInit(): void {
     super.ngOnInit();
     const initial = this.GetQueryParams()['section'] as PSPanelKey | undefined;
-    if (initial && hasSection(this.sections, initial)) this.ActiveSection = initial;
+    if (initial && HasSection(this.sections, initial)) this.ActiveSection = initial;
     this.loadLayoutPrefs();
   }
 
@@ -306,7 +314,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
   /** React to deep-link / back-forward `section` changes after the initial mount. */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.ActiveSection && hasSection(this.sections, next)) {
+    if (next && next !== this.ActiveSection && HasSection(this.sections, next)) {
       this.ActiveSection = next;
       this.cdrLocal.detectChanges();
     }
@@ -338,7 +346,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
       {
         Name: 'SwitchStudioSection',
         Description:
-          'Switch the Studio workbench to a section. Pass the section key or label (see SectionLabels): Overview, Training Pipelines, Algorithm Catalog, Experiments, or Compare Runs.',
+          'Switch the Studio workbench to a section. Pass the section key or label (see SectionLabels): Overview, Prediction Units, Evaluation Protocols, Training Pipelines, Algorithm Catalog, Experiments, or Compare Runs.',
         ParameterSchema: { type: 'object', properties: { section: { type: 'string', description: 'The section key or label to switch to' } } },
         Handler: async (params: Record<string, unknown>) => {
           const check = validateStringParam(params['section'], 'section');
@@ -364,22 +372,24 @@ export class PSStudioResourceComponent extends PSResourceBase {
   }
 
   // ── left-nav ─────────────────────────────────────────────────────
-  public get Groups(): string[] { return sectionGroups(this.sections); }
+  public get Groups(): string[] { return SectionGroups(this.sections); }
 
-  public ItemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
+  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.sections, group); }
 
-  public get ActiveLabel(): string { return sectionLabel(this.sections, this.ActiveSection); }
+  public get ActiveLabel(): string { return SectionLabel(this.sections, this.ActiveSection); }
 
   /** Section-specific subtitle for the interior header (so every section doesn't repeat one generic line). */
   public get ActiveSubtitle(): string {
     const map: Record<string, string> = {
       home: 'Start a new prediction from your data, a template, or the agent.',
+      units: 'What each prediction is about: the target, when it is decided, and what it is decided on.',
+      protocols: 'How each prediction is measured: the holdout, the scores, and the promotion rule.',
       pipelines: 'Assemble features and train from the algorithm catalog.',
       catalog: 'Browse algorithms with a fit guide for your use case.',
       experiments: 'Review earlier model experiment sessions.',
       compare: 'Compare runs on the honest holdout score.',
     };
-    return map[this.ActiveSection] ?? '';
+    return map[this.ActiveSection] || '';
   }
 
   public selectSection(key: PSPanelKey): void {
@@ -390,9 +400,14 @@ export class PSStudioResourceComponent extends PSResourceBase {
     this.cdrLocal.detectChanges();
   }
 
+  /** Open the latest version row of a unit or protocol lineage on its record form. */
+  public OpenVersionedRecord(entityName: VersionedEntityName, id: string): void {
+    this.navigationService.OpenEntityRecord(entityName, CompositeKey.FromID(id)); // first-pk-ok: VersionedEntityName is two MJ core entities ('MJ: Prediction Units', 'MJ: Evaluation Protocols'), both keyed by ID
+  }
+
   /** The Overview panel's in-app navigation: switch section in-place, or cross to the Models door. */
   public MapNavigate(key: PSPanelKey): void {
-    const target = routeHomeNavigate(key);
+    const target = RouteHomeNavigate(key);
     if (target.Kind === 'section') {
       this.selectSection(target.Key);
     } else if (target.Kind === 'app') {

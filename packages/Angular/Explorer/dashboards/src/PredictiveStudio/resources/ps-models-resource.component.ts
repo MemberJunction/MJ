@@ -4,7 +4,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
-import { MODELS_SECTIONS, PSSection, sectionGroups, sectionsInGroup, sectionLabel, hasSection } from '../predictive-studio.nav';
+import { MODELS_SECTIONS, PSSection, SectionGroups, SectionsInGroup, SectionLabel, HasSection } from '../predictive-studio.nav';
 import { BuildModelsAgentContext, ResolvePSRecord, BuildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 
@@ -144,7 +144,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
     super.ngOnInit();
     const qp = this.GetQueryParams();
     const initial = qp['section'] as PSPanelKey | undefined;
-    if (initial && hasSection(this.sections, initial)) this.ActiveSection = initial;
+    if (initial && HasSection(this.sections, initial)) this.ActiveSection = initial;
     if (qp['modelId']) this.initialModelId = qp['modelId'];
     this.loadLayoutPrefs();
   }
@@ -190,7 +190,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   protected override async OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): Promise<void> {
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.ActiveSection && hasSection(this.sections, next)) {
+    if (next && next !== this.ActiveSection && HasSection(this.sections, next)) {
       this.ActiveSection = next;
     }
     if (params['modelId']) {
@@ -240,11 +240,11 @@ export class PSModelsResourceComponent extends PSResourceBase {
     ]);
   }
 
-  public get Groups(): string[] { return sectionGroups(this.sections); }
+  public get Groups(): string[] { return SectionGroups(this.sections); }
 
-  public ItemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
+  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.sections, group); }
 
-  public get ActiveLabel(): string { return sectionLabel(this.sections, this.ActiveSection); }
+  public get ActiveLabel(): string { return SectionLabel(this.sections, this.ActiveSection); }
 
   /** Section-specific subtitle for the interior header. */
   public get ActiveSubtitle(): string {
