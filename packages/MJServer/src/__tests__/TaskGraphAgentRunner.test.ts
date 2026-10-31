@@ -1,18 +1,53 @@
 /**
- * Tests for `TaskGraphAgentRunner`.
- *
- * Verifies that when a task node in a durable task graph executes a specialist agent
- * (such as Query Builder or Research Report Writer) and finishes with a payload,
- * the runner resolves the originating `ConversationDetailID` and persists artifacts
- * via `AgentRunner.ProcessAgentArtifacts`.
+ * Tests for `TaskGraphAgentRunner`:
+ * - VS-CON-7 preset resolution (`ConfigurationPresetName`)
+ * - VS-INV-2b / VS-QA-3 #9 `parentAgentHierarchy` from submitted task
+ * - Specialist agent artifact persistence (`ProcessAgentArtifacts`), `CanUserRunAgent` permission check,
+ *   task Name/Description prompt formatting, and output normalization.
  */
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { TaskAgentRunParams } from '@memberjunction/task-graph';
 
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    LogStatus: vi.fn(),
+const {
+    runAgent,
+    processAgentArtifacts,
+    canUserRunAgent,
+    mockEngineAgents,
+    mockGetAgentConfigurationPresets,
+    mockEngineConfig,
+    mockRunView,
+    mockLogError,
+} = vi.hoisted(() => ({
+    runAgent: vi.fn(),
+    processAgentArtifacts: vi.fn(),
+    canUserRunAgent: vi.fn().mockResolvedValue(true),
+    mockEngineAgents: [
+        { ID: 'agent-1', Name: 'Storyboard Artist' },
+        { ID: 'qb-agent' },
+        { ID: 'writer-agent' },
+    ] as Array<{ ID: string; Name?: string }>,
+    mockGetAgentConfigurationPresets: vi.fn(),
+    mockEngineConfig: vi.fn(),
+    mockRunView: vi.fn(),
+    mockLogError: vi.fn(),
 }));
+
+const mockRunAgent = runAgent;
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: (...args: unknown[]) => mockLogError(...args),
+        LogStatus: vi.fn(),
+        RunView: class {
+            static FromMetadataProvider = () => ({ RunView: mockRunView });
+            RunView = mockRunView;
+        },
+    };
+});
 
 vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
@@ -31,31 +66,251 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
 
-const { runAgent, processAgentArtifacts, canUserRunAgent, mockEngineAgents } = vi.hoisted(() => ({
-    runAgent: vi.fn(),
-    processAgentArtifacts: vi.fn(),
-    canUserRunAgent: vi.fn().mockResolvedValue(true),
-    mockEngineAgents: [{ ID: 'qb-agent' }, { ID: 'writer-agent' }] as Array<{ ID: string }>,
-}));
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgent = runAgent;
         ProcessAgentArtifacts = processAgentArtifacts;
     },
 }));
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
             return {
+                Config: mockEngineConfig,
                 Agents: mockEngineAgents,
                 CanUserRunAgent: canUserRunAgent,
+                GetAgentConfigurationPresets: mockGetAgentConfigurationPresets,
+                FindActiveAgentConfigurationPreset: (agentId: string, presetName: string) => {
+                    const target = presetName.trim().toLowerCase();
+                    if (!target) return undefined;
+                    const presets = (mockGetAgentConfigurationPresets(agentId, true) ?? []) as Array<{
+                        Name?: string;
+                        DisplayName?: string;
+                    }>;
+                    return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+                        ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+                },
             };
         },
     },
 }));
 
 import { TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+
+interface SubmittingRunOverrides {
+    ID?: string;
+    ConfigurationID?: string | null;
+    Agent?: string | null;
+    AgentID?: string | null;
+    ParentRunID?: string | null;
+    LoadSuccess?: boolean;
+}
+
+function makeParams(
+    overrides: Partial<TaskAgentRunParams> = {},
+    parentConfigurationID: string | null = 'parent-cfg-1',
+    submittingRunOverrides: SubmittingRunOverrides = {},
+): TaskAgentRunParams {
+    const loadSuccess = submittingRunOverrides.LoadSuccess ?? true;
+    const provider = {
+        GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+            if (entityName === 'MJ: AI Agents') {
+                return {
+                    Load: vi.fn().mockResolvedValue(true),
+                    ID: overrides.AgentID ?? 'agent-1',
+                    Name: 'Storyboard Artist',
+                };
+            }
+            if (entityName === 'MJ: Tasks') {
+                return {
+                    Load: vi.fn().mockResolvedValue(false),
+                };
+            }
+            return {
+                Load: vi.fn().mockResolvedValue(loadSuccess),
+                ID: submittingRunOverrides.ID ?? 'submitting-run-1',
+                ConfigurationID:
+                    'ConfigurationID' in submittingRunOverrides
+                        ? submittingRunOverrides.ConfigurationID
+                        : parentConfigurationID,
+                Agent: submittingRunOverrides.Agent ?? null,
+                AgentID: submittingRunOverrides.AgentID ?? null,
+                ParentRunID: submittingRunOverrides.ParentRunID ?? null,
+            };
+        }),
+    } as unknown as IMetadataProvider;
+
+    return {
+        TaskID: 'task-1',
+        AgentID: 'agent-1',
+        InputPayload: 'Draw the opening shot',
+        DependencyOutputs: new Map(),
+        SubmittingAgentRunID: 'submitting-run-1',
+        Provider: provider,
+        ContextUser: { ID: 'user-1' } as unknown as UserInfo,
+        ...overrides,
+    };
+}
+
+describe('VS-CON-7: TaskGraphAgentRunner preset resolution', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('resolves ConfigurationPresetName to the matching preset AIConfigurationID', async () => {
+        mockGetAgentConfigurationPresets.mockReturnValue([
+            {
+                ID: 'preset-draft',
+                Name: 'Draft',
+                DisplayName: 'Draft Mode',
+                AIConfigurationID: 'cfg-draft-1',
+                Status: 'Active',
+            },
+            {
+                ID: 'preset-high',
+                Name: 'High',
+                DisplayName: 'High Fidelity',
+                AIConfigurationID: 'cfg-high-1',
+                Status: 'Active',
+            },
+        ]);
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ ConfigurationPresetName: 'high fidelity' })
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].configurationId).toBe('cfg-high-1');
+    });
+
+    it('passes configurationId: undefined when the matched preset has NULL AIConfigurationID, even if the submitting run has a ConfigurationID', async () => {
+        mockGetAgentConfigurationPresets.mockReturnValue([
+            {
+                ID: 'preset-default',
+                Name: 'SystemDefault',
+                DisplayName: 'System Default',
+                AIConfigurationID: null,
+                Status: 'Active',
+            },
+        ]);
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ ConfigurationPresetName: 'SystemDefault' }, 'parent-cfg-1')
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].configurationId).toBeUndefined();
+    });
+
+    it('falls back to the submitting run ConfigurationID when ConfigurationPresetName is not specified', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(makeParams({}, 'parent-cfg-99'));
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].configurationId).toBe('parent-cfg-99');
+    });
+
+    it('fails the task with a clear message when ConfigurationPresetName does not match any active preset at run time', async () => {
+        mockGetAgentConfigurationPresets.mockReturnValue([
+            {
+                ID: 'preset-draft',
+                Name: 'Draft',
+                DisplayName: 'Draft Mode',
+                AIConfigurationID: 'cfg-draft-1',
+                Status: 'Active',
+            },
+        ]);
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ ConfigurationPresetName: 'DeletedPreset' })
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(
+            "Agent 'Storyboard Artist' has no active preset 'DeletedPreset'. Available: Draft."
+        );
+        expect(mockRunAgent).not.toHaveBeenCalled();
+    });
+});
+
+describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from submitted task', () => {
+    const RUN_B_ID = '22222222-2222-4222-8222-222222222222';
+    const RUN_C_ID = '33333333-3333-4333-8333-333333333333';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('reads root-first ParentAgentHierarchy carried from the submitted task without running RunView in a loop (VS-QA-3 #9)', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams(
+            {
+                SubmittingAgentRunID: RUN_C_ID,
+                ParentAgentHierarchy: ['A', 'B', 'C'],
+            },
+            'parent-cfg-1',
+            { ID: RUN_C_ID, Agent: 'C', ParentRunID: RUN_B_ID },
+        );
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+    });
+
+    it('falls back to the loaded parentRun agent name when ParentAgentHierarchy is omitted, with zero RunView calls', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams(
+            { SubmittingAgentRunID: RUN_C_ID },
+            'parent-cfg-1',
+            { ID: RUN_C_ID, Agent: 'C', ParentRunID: RUN_B_ID },
+        );
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['C']);
+    });
+
+    it('passes undefined parentAgentHierarchy and performs no RunView reads when there is no parentRun and no ParentAgentHierarchy', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ SubmittingAgentRunID: undefined }),
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toBeUndefined();
+    });
+});
 
 describe('TaskGraphAgentRunner', () => {
     beforeEach(() => {
@@ -263,4 +518,5 @@ describe('TaskGraphAgentRunner', () => {
         });
     });
 });
+
 

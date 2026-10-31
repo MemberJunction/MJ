@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT152 - Video Studio Live Smoke",
+    "Description": "Opt-in live-model smoke check (VSLS1) for Video Studio: runs a 15-second Social Short under the Draft preset using the active configured render driver and real credentialed models (no generative video unless VS_LIVE_GENERATION=1). Asserts Status='Delivered', a real MP4 FileID in MJ: Files, and rendered duration within 1 second of the spec. Skips loudly when the render driver Health() is unhealthy or PreviewModelSelection finds no credentialed model.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "VSLS1 either delivers a real 15s Social Short MP4 within 1s of target duration or skips loudly with a diagnostic message when the render worker or model credentials are unavailable."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "video-studio-live-smoke"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "8015722A-924F-4305-B3C3-B065C5318AA7"
+  }
+}

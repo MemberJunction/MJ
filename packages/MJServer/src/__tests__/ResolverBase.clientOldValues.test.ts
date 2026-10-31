@@ -2,6 +2,7 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi } from 'vitest';
 import { BaseEntity, EntityFieldTSType, EntityInfo, UserInfo, type EntityFieldInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ENCRYPTED_SENTINEL } from '@memberjunction/global';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
@@ -212,39 +213,13 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         expect(errorLogSaves).toHaveLength(0);
     });
 
-    it('detects a concurrent modification when the dirty field DB value differs from OldValues___', async () => {
+    it('rejects a conflicting concurrent modification with CONCURRENT_MODIFICATION_CONFLICT while logging SAVE_INCONSISTENCY', async () => {
         const errorLogSaves: Array<Record<string, unknown>> = [];
         const { entity, user } = createLoadedTagEntity(errorLogSaves);
 
-        // Client thinks Display_Name was 'Stale Client Display', but DB currently has 'Original Display'
-        await probe.TestAndSet(
-            entity,
-            {
-                ID: '11111111-2222-3333-4444-555555555555',
-                Display_Name: 'Client New Display',
-                OldValues___: [
-                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
-                    { Key: 'Display_Name', Value: 'Stale Client Display' },
-                ],
-            },
-            user
-        );
-
-        // Warning is logged to ErrorLog, and save still applies the new value
-        expect(errorLogSaves).toHaveLength(1);
-        expect(errorLogSaves[0].Code).toBe('SAVE_INCONSISTENCY');
-        // ErrorLog.Code is NCHAR(20)
-        expect(String(errorLogSaves[0].Code).length).toBeLessThanOrEqual(20);
-        expect(String(errorLogSaves[0].Message)).toContain('Display_Name');
-        expect(entity.Get('Display Name')).toBe('Client New Display');
-        expect(entity.Get('Description')).toBe('Untouched DB Description');
-    });
-
-    it('reports the entity name and the reason when the ErrorLog save fails', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        const { entity, user } = createLoadedTagEntity([], 'value too long for Code');
-        try {
-            await probe.TestAndSet(
+        // Client thinks Display_Name was 'Stale Client Display', DB has 'Original Display', and client tries to write 'Client New Display'
+        await expect(
+            probe.TestAndSet(
                 entity,
                 {
                     ID: '11111111-2222-3333-4444-555555555555',
@@ -255,7 +230,65 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
                     ],
                 },
                 user
-            );
+            )
+        ).rejects.toMatchObject({
+            extensions: {
+                code: 'CONCURRENT_MODIFICATION_CONFLICT',
+                entityName: 'MJ: Tags',
+                conflictingFields: ['Display_Name'],
+            },
+        });
+
+        // Warning is logged to ErrorLog, and the conflicting DB field is NOT overwritten
+        expect(errorLogSaves).toHaveLength(1);
+        expect(errorLogSaves[0].Code).toBe('SAVE_INCONSISTENCY');
+        // ErrorLog.Code is NCHAR(20)
+        expect(String(errorLogSaves[0].Code).length).toBeLessThanOrEqual(20);
+        expect(String(errorLogSaves[0].Message)).toContain('Display_Name');
+        expect(entity.Get('Display Name')).toBe('Original Display');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
+    });
+
+    it('allows idempotent concurrent convergence when ClientNewValue already matches the current DB value', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedTagEntity(errorLogSaves);
+
+        // Client thinks Display_Name was 'Stale Client Display', and wants 'Original Display' — which DB already holds
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: '11111111-2222-3333-4444-555555555555',
+                Display_Name: 'Original Display',
+                OldValues___: [
+                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                    { Key: 'Display_Name', Value: 'Stale Client Display' },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Display Name')).toBe('Original Display');
+    });
+
+    it('reports the entity name and the reason when the ErrorLog save fails before throwing CONCURRENT_MODIFICATION_CONFLICT', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { entity, user } = createLoadedTagEntity([], 'value too long for Code');
+        try {
+            await expect(
+                probe.TestAndSet(
+                    entity,
+                    {
+                        ID: '11111111-2222-3333-4444-555555555555',
+                        Display_Name: 'Client New Display',
+                        OldValues___: [
+                            { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                            { Key: 'Display_Name', Value: 'Stale Client Display' },
+                        ],
+                    },
+                    user
+                )
+            ).rejects.toThrow(/Concurrent modification conflict/);
             const message = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
             expect(message).toContain('Failed to save ErrorLog record');
             expect(message).toContain('value too long for Code');
@@ -265,7 +298,7 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         }
     });
 
-    it('does not false-positive when a non-overlapping field differs in the DB', async () => {
+    it('merges non-overlapping concurrent edits without overwriting fields that changed in the DB', async () => {
         const errorLogSaves: Array<Record<string, unknown>> = [];
         const { entity, user } = createLoadedTagEntity(errorLogSaves);
 
@@ -287,9 +320,273 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         );
 
         // Description had a DB difference ('Untouched DB Description' !== 'Old Desc'),
-        // but client was NOT changing Description ('Old Desc' === 'Old Desc'), so overlap is empty!
+        // and client was NOT changing Description ('Old Desc' === 'Old Desc'): overlap is empty,
+        // Name is updated, AND Description keeps the concurrent DB value instead of being clobbered!
         expect(errorLogSaves).toHaveLength(0);
         expect(entity.Get('Name')).toBe('RenamedTag');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
     });
 });
 
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — representation drift is not a conflict', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000002';
+    const jobEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Probe Jobs',
+        BaseTable: 'ProbeJob',
+        BaseView: 'vwProbeJobs',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'J-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'J-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'J-3', EntityID: entityId, Name: 'Config', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active' },
+            { ID: 'J-4', EntityID: entityId, Name: 'ScheduledAt', Type: 'datetime', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active' },
+            { ID: 'J-5', EntityID: entityId, Name: 'CompletedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 5, Status: 'Active' },
+            { ID: 'J-6', EntityID: entityId, Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 6, Status: 'Active' },
+        ],
+    });
+    const jobId = '22222222-3333-4444-5555-666666666666';
+    const dbScheduledAt = new Date('2026-03-01T00:00:00.000Z');
+    const dbCompletedAt = new Date('2026-03-02T00:00:00.000Z');
+
+    function createLoadedJobEntity(errorLogSaves: Array<Record<string, unknown>>): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [jobEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(jobEntityInfo, fakeProvider);
+        entity.LoadFromData({
+            ID: jobId,
+            Name: 'Nightly',
+            Config: '{"retries":3,"targets":["a","b"]}',
+            ScheduledAt: dbScheduledAt,
+            CompletedAt: dbCompletedAt,
+            __mj_UpdatedAt: new Date('2026-03-01T00:00:00.000Z'),
+        });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it('saves an edited JSON field whose old value differs from the DB only in whitespace and key order', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: jobId,
+                Config: '{"retries":5,"targets":["a","b"]}',
+                OldValues___: [
+                    { Key: 'ID', Value: jobId },
+                    { Key: 'Config', Value: '{ "targets": ["a", "b"],\n  "retries": 3 }' },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Config')).toBe('{"retries":5,"targets":["a","b"]}');
+    });
+
+    it('still rejects an edited JSON field when the DB content really changed', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    Config: '{"retries":5,"targets":["a","b"]}',
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'Config', Value: '{"retries":3,"targets":["a"]}' },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['Config'] } });
+        expect(errorLogSaves).toHaveLength(1);
+        expect(entity.Get('Config')).toBe('{"retries":3,"targets":["a","b"]}');
+    });
+
+    it('saves an edited datetime field whose old value is within the column resolution of the DB value', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+        const newScheduledAt = new Date('2026-04-01T00:00:00.000Z');
+
+        // SQL Server datetime resolves to 1/300 s: a 3 ms drift is below one tick.
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: jobId,
+                ScheduledAt: newScheduledAt,
+                OldValues___: [
+                    { Key: 'ID', Value: jobId },
+                    { Key: 'ScheduledAt', Value: String(dbScheduledAt.getTime() + 3) },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect((entity.Get('ScheduledAt') as Date).getTime()).toBe(newScheduledAt.getTime());
+    });
+
+    it('still rejects an edited datetime field when the DB value moved by a full second', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    ScheduledAt: new Date('2026-04-01T00:00:00.000Z'),
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'ScheduledAt', Value: String(dbScheduledAt.getTime() + 1000) },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['ScheduledAt'] } });
+        expect(errorLogSaves).toHaveLength(1);
+    });
+
+    it('keeps millisecond precision on a datetimeoffset column, so a 1 ms drift there is a real conflict', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    CompletedAt: new Date('2026-04-02T00:00:00.000Z'),
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'CompletedAt', Value: String(dbCompletedAt.getTime() + 1) },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['CompletedAt'] } });
+        expect(errorLogSaves).toHaveLength(1);
+    });
+});
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — encrypted fields', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000003';
+    const credentialEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Probe Credentials',
+        BaseTable: 'ProbeCredential',
+        BaseView: 'vwProbeCredentials',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'C-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'C-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'C-3', EntityID: entityId, Name: 'Secret', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active', Encrypt: true, AllowDecryptInAPI: false, SendEncryptedValue: false },
+            { ID: 'C-4', EntityID: entityId, Name: 'Token', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active', Encrypt: true, AllowDecryptInAPI: true, SendEncryptedValue: false },
+        ],
+    });
+    const credentialId = '33333333-4444-5555-6666-777777777777';
+    const dbSecret = 'decrypted-plaintext-secret';
+    const dbToken = 'decrypted-plaintext-token';
+
+    function createLoadedCredential(errorLogSaves: Array<Record<string, unknown>>): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [credentialEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(credentialEntityInfo, fakeProvider);
+        entity.LoadFromData({ ID: credentialId, Name: 'Vendor key', Secret: dbSecret, Token: dbToken });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it.each([
+        ['the sentinel', ENCRYPTED_SENTINEL],
+        ['re-encrypted ciphertext', '$ENC$11111111-2222-3333-4444-555555555555$AES-256-GCM$iv$cipher$tag'],
+    ])('saves a rotated value for a field the API never decrypts, when the old value is %s', async (_label, oldValue) => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: credentialId,
+                Secret: 'rotated-secret',
+                OldValues___: [
+                    { Key: 'ID', Value: credentialId },
+                    { Key: 'Secret', Value: oldValue },
+                ],
+            },
+            user
+        );
+
+        expect(entity.Get('Secret')).toBe('rotated-secret');
+        expect(errorLogSaves).toHaveLength(0);
+    });
+
+    it('keeps encrypted values out of the conflict diagnostics', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        try {
+            await expect(
+                probe.TestAndSet(
+                    entity,
+                    {
+                        ID: credentialId,
+                        Token: 'client-new-token',
+                        OldValues___: [
+                            { Key: 'ID', Value: credentialId },
+                            { Key: 'Token', Value: 'client-stale-token' },
+                        ],
+                    },
+                    user
+                )
+            ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['Token'] } });
+
+            const written = [
+                ...errorLogSaves.map((s) => String(s.Message)),
+                ...[...warn.mock.calls, ...error.mock.calls, ...log.mock.calls].map((args) => args.map(String).join(' ')),
+            ].join('\n');
+            expect(errorLogSaves).toHaveLength(1);
+            expect(String(errorLogSaves[0].Message)).toContain('Token');
+            for (const secret of [dbToken, 'client-stale-token', 'client-new-token']) {
+                expect(written).not.toContain(secret);
+            }
+        } finally {
+            warn.mockRestore();
+            error.mockRestore();
+            log.mockRestore();
+        }
+    });
+});

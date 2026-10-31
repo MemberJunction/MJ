@@ -1456,6 +1456,72 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT153 - Agent Consult",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7FC15E27-D3EB-476B-8D19-538502A134DA"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT154 - Video Data Snapshot",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F1F0B71F-981F-45A4-9140-F59522C06893"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT155 - Video Generation Cost",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "052F7A8C-023F-445C-9DF4-8211307FFC22"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT125 - Agent Handoff",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "30B0A35E-4A91-4897-9C29-B3B53BFA5EC8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT150 - Video Studio Handoff",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B949FBE1-AD40-4A70-A6E7-9CAAD591573F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT151 - Video Studio Production",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C2B68102-C882-4CD3-99FD-920E19FA980E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
@@ -1743,6 +1809,50 @@
           "sync": {
             "lastModified": "2026-10-28T22:16:26.042Z",
             "checksum": "e1d4b3bd05c7ab504e30d9b24871933560dd0185ed40cc6b0495dfd271429378"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT161 - Ciphertext at Rest in the RunView Cache",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2CAD1D25-0F21-4188-BCDF-290EF3FBBE46"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT158 - Optimistic Concurrency over GraphQL",
+            "Sequence": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0704F026-005E-487A-8558-26BA64228AA1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT159 - Entity Status Push Fan-out over WebSocket",
+            "Sequence": 81,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4F51824A-CAF6-44A8-8D09-7975DB6C5A20"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT160 - Encrypted Field Read over GraphQL",
+            "Sequence": 82,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "221D6079-D7DD-450F-861C-B8505873F32E"
           }
         },
         {
@@ -2054,6 +2164,17 @@
           },
           "primaryKey": {
             "ID": "B3816AC6-B2DA-43DD-A091-34A51B833CF0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT152 - Video Studio Live Smoke",
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2944155-33FC-4CCF-9225-DA59DE5A1A61"
           }
         },
         {

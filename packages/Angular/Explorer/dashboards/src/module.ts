@@ -19,6 +19,7 @@ import { ComponentStudioDashboardsModule } from './component-studio-dashboards.m
 import { ArchivingDashboardsModule } from './archiving-dashboards.module';
 import { WorkQueueDashboardsModule } from './work-queue-dashboards.module';
 import { DatabaseDesignerDashboardsModule } from './DatabaseDesigner/database-designer-dashboards.module';
+import { VideoStudioDashboardsModule } from './video-studio-dashboards.module';
 // Existing standalone modules
 import { MCPModule } from './MCP';
 import { IntegrationModule } from './Integration/integration.module';
@@ -61,6 +62,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     ArchivingDashboardsModule,
     WorkQueueDashboardsModule,
     DatabaseDesignerDashboardsModule,
+    VideoStudioDashboardsModule,
     MCPModule,
     IntegrationModule,
     // External generic modules (re-exported for backward compatibility)
@@ -93,6 +95,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     ArchivingDashboardsModule,
     WorkQueueDashboardsModule,
     DatabaseDesignerDashboardsModule,
+    VideoStudioDashboardsModule,
     MCPModule,
     IntegrationModule,
     // External generic modules (re-exported for backward compatibility)
