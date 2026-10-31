@@ -7322,7 +7322,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // Use effective actions which includes runtime action changes (populated in gatherPromptTemplateData)
-        // Fall back to database-configured actions if _effectiveActions is empty
+        // Falls back to database-configured actions only when the list was never computed for this run
         const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
         // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
@@ -7417,7 +7417,8 @@ export class BaseAgent {
 
     /**
      * Gets the effective actions for validation, using runtime changes if available.
-     * Falls back to database-configured actions if _effectiveActions is empty.
+     * Falls back to database-configured actions only when the list was never computed for this run;
+     * a computed empty list (a host's actionChanges removed every action) is returned as-is.
      *
      * @param agentId - The ID of the agent to get actions for
      * @returns Array of effective actions available to the agent
@@ -7616,7 +7617,8 @@ export class BaseAgent {
 
     /**
      * Gets the effective sub-agents for validation, using runtime subAgentChanges if available.
-     * Falls back to the database-configured relationship set if _effectiveSubAgents is empty.
+     * Falls back to the database-configured relationship set only when the list was never computed
+     * for this run; a computed empty list is returned as-is.
      * Mirrors {@link getEffectiveActionsForValidation}.
      *
      * @param agentId - The ID of the agent to get sub-agents for
@@ -20862,11 +20864,7 @@ The context is now within limits. Please retry your request with the recovered c
             const agentActions = AIEngine.Instance.AgentActions.filter(
                 aa => UUIDsEqual(aa.AgentID, params.agent.ID)
             );
-            const effectiveActions = this._effectiveCatalogComputed || this._effectiveActions.length > 0
-                ? this._effectiveActions
-                : ActionEngineServer.Instance.Actions.filter(a =>
-                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
-                );
+            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
             const matchedAction =
                 effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
                 ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match;
