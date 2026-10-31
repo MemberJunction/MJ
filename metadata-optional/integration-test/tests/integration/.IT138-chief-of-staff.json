@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT138 - Chief of Staff Core Layers",
+    "Description": "Deterministic proof of the Chief of Staff's MJ-core layers, with no LLM calls and no Open App dependency: ownership guards on agent policies and agent requests, Run User Routine Now (refuses another user's routine, runs an owned one-shot without spending its schedule), the AgentUserPolicyEngine cache following an entity save, and Manage My Email Inbox and Drafts queueing a Send's approval before any mail provider is consulted while DraftOnly refuses it.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Non-Owner users cannot write another user's policy or request; run-now refuses foreign routines and keeps an owned one-shot's NextRunAt; a policy save updates the engine cache; a Send under SendAsUser with approval returns APPROVAL_REQUIRED and queues exactly one request carrying the draft; DraftOnly returns POLICY_DENIED and queues nothing."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "chief-of-staff"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9EDD405A-B13A-463B-B566-7ACCD2678979"
+  }
+}

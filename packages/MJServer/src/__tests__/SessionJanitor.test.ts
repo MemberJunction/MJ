@@ -81,6 +81,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string };
     ClosedAt?: Date | null;
     CloseReason?: string | null;
+    Config_?: string | null;
+    LastActiveAt?: Date | string | null;
 }
 
 function makeUser(): UserInfo {
@@ -111,6 +113,10 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
                     if (status == null) return false;
                     entity.ID = id;
                     entity.Status = status;
+                    // CloseSession verifies a TimeLimit against the loaded row's stored deadline, so the
+                    // fake row carries the swept row's Config_ like the real table row does.
+                    entity.Config_ = sweptRows.get(id)?.Config_ ?? null;
+                    entity.LastActiveAt = sweptRows.get(id)?.LastActiveAt ?? null;
                     return true;
                 }),
                 Save: vi.fn(async () => {
@@ -130,6 +136,9 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
     return { provider, closedIds, closedReasons };
 }
 
+/** Config_/LastActiveAt of rows a test swept, by session ID: sessionPages is consumed by the sweep before CloseSession loads the row. */
+const sweptRows = new Map<string, { Config_?: string | null; LastActiveAt?: Date | string | null }>();
+
 /**
  * Queue of result-sets for the *session* sweep pages (entity 'MJ: AI Agent Sessions'). Channel
  * sweeps (entity 'MJ: AI Agent Session Channels', issued by CloseSession) always resolve empty so
@@ -145,6 +154,7 @@ function sessionSweepCalls(): Array<[{ EntityName: string; ExtraFilter: string; 
 }
 
 beforeEach(() => {
+    sweptRows.clear();
     runViewMock.mockReset();
     logErrorMock.mockReset();
     logStatusMock.mockReset();
@@ -292,9 +302,114 @@ describe('SessionJanitor.RunStartupRecovery with two MJAPIs on one host (#5309)'
     });
 });
 
+/** An ISO moment `minutes` before now, for a row's `LastActiveAt` / deadline. */
+function minutesAgo(minutes: number): string {
+    return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+/** Config_ JSON carrying an authored hard deadline `minutes` from now (negative = already passed). */
+function deadlineConfig(minutesFromNow: number): string {
+    return JSON.stringify({ maxSessionDeadlineIso: new Date(Date.now() + minutesFromNow * 60_000).toISOString() });
+}
+
+describe('SessionJanitor close reasons (#6182): sweeps stamp TimeLimit / Idle via ExpiryCloseReason', () => {
+    // Idle threshold is 15 min (the janitor default); each row below is placed relative to it.
+    beforeEach(() => {
+        SessionJanitor.Instance.Configure({ closeThresholdMinutes: 15 });
+    });
+
+    async function runSweep(
+        sweep: 'RunStalenessSweep' | 'RunMaxDurationSweep',
+        row: Record<string, unknown>,
+    ): Promise<{ count: number; reason: string | null | undefined; closed: boolean }> {
+        const id = row.ID as string;
+        sweptRows.set(id, { Config_: row.Config_ as string | null, LastActiveAt: row.LastActiveAt as Date | string | null });
+        sessionPages = [{ Success: true, Results: [row] }];
+        const { provider, closedIds, closedReasons } = makeProvider(new Map([[id, 'Active']]));
+        const count = await SessionJanitor.Instance[sweep](provider, makeUser());
+        return { count, reason: closedReasons.get(id), closed: closedIds.includes(id) };
+    }
+
+    it('the staleness sweep stamps Idle for a quiet row without a deadline', async () => {
+        const r = await runSweep('RunStalenessSweep', { ID: 'q1', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: null });
+        expect(r.reason).toBe('Idle');
+    });
+
+    it('the max-duration sweep stamps TimeLimit for an expired row', async () => {
+        const r = await runSweep('RunMaxDurationSweep', {
+            ID: 'd1', Status: 'Active', LastActiveAt: minutesAgo(1), Config_: deadlineConfig(-5),
+        });
+        expect(r.reason).toBe('TimeLimit');
+    });
+
+    it('the idle sweep stamps TimeLimit when the deadline came first', async () => {
+        // Idle moment = 60-15 = 45 min ago; deadline 50 min ago is earlier.
+        const r = await runSweep('RunStalenessSweep', {
+            ID: 'both1', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: deadlineConfig(-50),
+        });
+        expect(r.reason).toBe('TimeLimit');
+    });
+
+    it('the deadline sweep stamps Idle when the idle moment came first', async () => {
+        // Idle moment = 60-15 = 45 min ago; deadline 5 min ago is later.
+        const r = await runSweep('RunMaxDurationSweep', {
+            ID: 'both2', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: deadlineConfig(-5),
+        });
+        expect(r.reason).toBe('Idle');
+    });
+
+    /*
+     * The SQL already judged this row stale (LastActiveAt < cutoff), so an unparseable LastActiveAt
+     * must not make it immortal: it closes as Idle, and the fallback is logged with the session ID.
+     */
+    it('the staleness sweep closes a stale row with an unparseable LastActiveAt as Idle and LogErrors the fallback', async () => {
+        logErrorMock.mockClear();
+        const r = await runSweep('RunStalenessSweep', { ID: 'garbled1', Status: 'Active', LastActiveAt: 'not-a-date', Config_: null });
+        expect(r.closed).toBe(true);
+        expect(r.reason).toBe('Idle');
+        const messages = logErrorMock.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('garbled1') && m.includes('LastActiveAt unparseable; closing as Idle'))).toBe(true);
+    });
+
+    it('the staleness sweep does not LogError for a row ExpiryCloseReason decides', async () => {
+        logErrorMock.mockClear();
+        await runSweep('RunStalenessSweep', { ID: 'q2', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: null });
+        expect(logErrorMock).not.toHaveBeenCalled();
+    });
+
+    it('skips rows the callback returns null for, without loading their channels', async () => {
+        const row = { ID: 'future1', Status: 'Active', LastActiveAt: minutesAgo(1), Config_: deadlineConfig(30) };
+        sessionPages = [{ Success: true, Results: [row] }];
+        const { provider, closedIds } = makeProvider(new Map([['future1', 'Active']]));
+
+        const count = await SessionJanitor.Instance.RunMaxDurationSweep(provider, makeUser());
+
+        expect(count).toBe(0);
+        expect(closedIds).toEqual([]);
+        const channelReads = runViewMock.mock.calls.filter(
+            (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: AI Agent Session Channels',
+        );
+        expect(channelReads).toHaveLength(0);
+    });
+
+    it('startup recovery still stamps Janitor and the shutdown drain Shutdown', async () => {
+        const ours = GetCurrentHostInstance();
+        const orphan = { ID: 'orphan1', Status: 'Active', HostInstanceID: `${ours.GetInstancePrefix()}31337:boot-before` };
+        sessionPages = [{ Success: true, Results: [orphan] }];
+        const recovery = makeProvider(new Map([['orphan1', 'Active']]));
+        await SessionJanitor.Instance.RunStartupRecovery(recovery.provider, makeUser());
+        expect(recovery.closedReasons.get('orphan1')).toBe('Janitor');
+
+        sessionPages = [{ Success: true, Results: [{ ID: 'live1', Status: 'Active' }] }];
+        const drain = makeProvider(new Map([['live1', 'Active']]));
+        await SessionJanitor.Instance.RunShutdownDrain(drain.provider, makeUser());
+        expect(drain.closedReasons.get('live1')).toBe('Shutdown');
+    });
+});
+
 describe('SessionJanitor.RunStalenessSweep', () => {
     it('closes only past-threshold sessions (filter is staleness-scoped)', async () => {
-        const stale = { ID: 'stale-1', Status: 'Idle' };
+        const stale = { ID: 'stale-1', Status: 'Idle', LastActiveAt: minutesAgo(60) };
         sessionPages = [{ Success: true, Results: [stale] }];
 
         const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['stale-1', 'Idle']]);
@@ -304,8 +419,8 @@ describe('SessionJanitor.RunStalenessSweep', () => {
 
         expect(count).toBe(1);
         expect(closedIds).toContain('stale-1');
-        // Staleness sweep stamps the janitor close cause.
-        expect(closedReasons.get('stale-1')).toBe('Janitor');
+        // A quiet row without a deadline closes as Idle.
+        expect(closedReasons.get('stale-1')).toBe('Idle');
 
         const filter = sessionSweepCalls()[0][0].ExtraFilter as string;
         expect(filter).toContain("Status IN ('Active','Idle')");
@@ -313,7 +428,7 @@ describe('SessionJanitor.RunStalenessSweep', () => {
     });
 
     it('is idempotent — re-closing already-Closed rows is a harmless no-op', async () => {
-        const alreadyClosed = { ID: 'done-1', Status: 'Closed' };
+        const alreadyClosed = { ID: 'done-1', Status: 'Closed', LastActiveAt: minutesAgo(60) };
         sessionPages = [{ Success: true, Results: [alreadyClosed] }];
 
         const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['done-1', 'Closed']]);

@@ -305,9 +305,8 @@ export class IntegrationDataService {
     return IntegrationEngineBase.Instance.GetEntityMapsForCompanyIntegration(companyIntegrationID);
   }
 
-  async LoadFieldMaps(entityMapID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationFieldMapEntity[]> {
-    await IntegrationEngineBase.Instance.Config(false);
-    return IntegrationEngineBase.Instance.GetFieldMapsForEntityMap(entityMapID);
+  async LoadFieldMaps(entityMapID: string, provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+    return IntegrationEngineBase.Instance.LoadFieldMapsForEntityMap(entityMapID, undefined, provider);
   }
 
   async LoadRunHistory(companyIntegrationID: string, limit: number = 10, provider?: IRunViewProvider | null): Promise<IntegrationRunRow[]> {

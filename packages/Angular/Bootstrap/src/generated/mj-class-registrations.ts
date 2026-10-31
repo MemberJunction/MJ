@@ -728,7 +728,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (111 classes)
+// @memberjunction/ng-dashboards (113 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -749,7 +749,9 @@ import {
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
+    ChiefOfStaffOverviewComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -1530,7 +1532,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
+    ChiefOfStaffOverviewComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -1650,7 +1654,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 754;
+export const CLASS_REGISTRATIONS_COUNT = 756;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1202,13 +1202,14 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/content-autotagging (6 classes)
+// @memberjunction/content-autotagging (7 classes)
 import {
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
@@ -1400,7 +1401,7 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1411,10 +1412,11 @@ import {
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (69 classes)
+// @memberjunction/core-entities-server (70 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1423,6 +1425,7 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2581,6 +2584,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AutotagUpload,
     AutotagWebsite,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
@@ -2723,6 +2727,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2731,6 +2736,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2778,13 +2784,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
-    MJRubricScaleEntityServer,
-    MJRubricScaleLevelEntityServer,
-    MJRubricVersionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRubricScaleEntityServer,
+    MJRubricScaleLevelEntityServer,
+    MJRubricVersionEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2982,13 +2988,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
-    ValidateEmailUniqueAction,
-    VectorizeEntityAction,
-    VerifyMyCommunicationCapabilitiesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ValidateEmailUniqueAction,
+    VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -3035,7 +3041,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1229;
+export const CLASS_REGISTRATIONS_COUNT = 1232;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

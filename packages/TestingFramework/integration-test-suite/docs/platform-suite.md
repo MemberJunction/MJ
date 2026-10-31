@@ -27,12 +27,13 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `codegen-determinism` | 6 (CD1–CD6) | IT50 - CodeGen Artifact Consistency | client | deterministic; CD6 source legs skip outside the repo tree |
 | `metadata-sync` | 9 (MS1–MS9) | IT49 - MetadataSync Parsing Contracts | server | deterministic; zero DB writes |
 | `class-resolution` | 5 (CR1–CR5) | IT48 - ClassFactory Resolution Contracts | server | deterministic; read-only |
-| `app-wiring` | 10 (AW1–AW10) | IT26 - Application Wiring (all shipped apps) | client | deterministic; read-only |
+| `app-wiring` | 11 (AW1–AW11) | IT26 - Application Wiring (all shipped apps) | client | deterministic; read-only |
 | `open-app-teardown` | 2 (OAT1–OAT2) | IT21 - Open-App Metadata Teardown | server (raw SQL via dialect) | deterministic; self-seeding lifecycle |
 | `scheduled-jobs` | 2 (SJ1–SJ2) | IT09 - Scheduled Jobs Engine Lifecycle | server | deterministic |
 | `scheduling-concurrency` | 3 (SC1–SC3) | IT41 - Scheduling Concurrency | server | deterministic |
 | `actions-pipeline` | 5 (AP1–AP5) | IT39 - Actions Pipeline | server | deterministic except **AP2 (`RequiresMutation: true`)** |
-| `user-routines` | 16 (UR1–UR16) | IT22 - User Routines Dispatcher | server | deterministic |
+| `user-routines` | 18 (UR1–UR18) | IT22 - User Routines Dispatcher | server | deterministic |
+| `chief-of-staff` | 8 (COS1–COS8) | IT138 - Chief of Staff Core Layers | server | deterministic; self-cleaning; COS6–COS8 skip when the context user already has a Chief of Staff policy (reference-only) |
 | `remote-operations` | 7 (RO1–RO7) | IT11 - Remote Operations (4th Data Primitive) | server (in-process provider dispatch) | deterministic |
 | `remote-op-wire-progress` | 1 (WIRE1) | IT15 - Remote Operations Over-The-Wire Progress | client (needs live MJAPI; parked like IT03 until MJAPI is provisioned in CI) | deterministic |
 | `realtime-deterministic` | 9 (RD1–RD9) | IT51 - Realtime Deterministic Seams | server | deterministic; several checks skip-as-pass loudly on unseeded slices |
@@ -138,7 +139,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 ## 3. Applications and OpenApp lifecycle
 
-### 3.1 `app-wiring` (AW1–AW10) — IT26
+### 3.1 `app-wiring` (AW1–AW11) — IT26
 
 **Machinery under test.** The "every shipped app is wired correctly" contract (Domain 12, catalog rows G1–G9, S1, S2, S7) asserted **over the real GraphQL wire** (client-first transport). Every check parameterizes over *all* applications in metadata rather than naming apps, so new apps inherit the contract automatically. The value is lock-in (all 77 DriverClass refs currently resolve, zero collisions) plus four latent risks flagged in the bug register: DriverClass collision (**B20**, risk #1), DefaultSequence conflicts (**B21**), write-only slug uniqueness (**B22**), and nav-item drift.
 
@@ -158,6 +159,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `app-wiring.AW8` | G9: app-scoped Application Settings point at real apps | every non-null `ApplicationID` on a setting resolves (null = global setting, valid) | orphaned settings silently never applying |
 | `app-wiring.AW9` | S1/S2: AgentSettings DefaultAgentID + RelevantAgents resolve | for every app with parseable `AgentSettings`: `DefaultAgentID` and every `RelevantAgents[].AgentID` exist in `MJ: AI Agents` | the default-agent resolution chain dead-ending — an app whose chat surface cannot resolve its agent |
 | `app-wiring.AW10` | S7: non-Active apps never fan out to new users | no Deprecated/Disabled/Pending app has `DefaultForNewUser === true`; the Active filter returns only Active apps | a retired app still being handed to every new user |
+| `app-wiring.AW11` | Nav items added through `NavItem.*` Application Settings | every `NavItem.*` setting is app-scoped, its `Value` is a JSON object with `Label` and `ResourceType` (+ `DriverClass` when Custom), its Label is not already a nav item of that app, and its DriverClass is not used by any other app's nav item or extension | an Open App's added page that `BaseApplication.GetNavItems()` silently skips, or that renders another app's component |
 
 **Pinned gaps and adjacent guards.**
 
@@ -229,7 +231,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `actions-pipeline.AP4` | KNOWN-GAP PIN (**B14**): base `ValidateInputs`/`RunSingleFilter` are no-op stubs | a zero-param call with a garbage (blank, unsaved) `MJ: Action Filters` entity attached sails through BOTH engine stubs — the engine's own `Input validation failed` sentinel is **absent** — and the refusal that comes back is the ACTION's own `MISSING_PARAMETERS` | drift in either direction on **bug register B14** (verified still present 2026-07-21 against `ActionEngine.ts` ~280/~303, including the unreachable filters-failed fall-through corollary). If the stubs are ever implemented, this check MUST flip together with B14's disposition — the banner in the check body says so |
 | `actions-pipeline.AP5` | an unresolvable DriverClass yields a structured failure, never an escaped throw | an in-memory-only ghost action with DriverClass `__MJIntegrationTestNoSuchDriverClass` (never saved — no FK rows; `SkipActionLog` because a log row would violate the ActionID FK): `Success` false, message contains `Could not find a class for action`, no result-code entity resolves | a ClassFactory miss crashing the pipeline instead of being contained |
 
-### 4.4 `user-routines` (UR1–UR16) — IT22
+### 4.4 `user-routines` (UR1–UR18) — IT22
 
 **Machinery under test.** The User Routines feature (P1.5) end to end against the real DB: the `MJUserRoutineEntity`/`MJUserRoutineRecipientEntity` **entity servers** (NextRunAt computation, activation-window flooring, cron validation, recipient grantee exclusivity), the pure schedule/eligibility functions (`IsRoutineDue`, `BuildDueRoutineFilter` — asserted to *agree* between JS and the SQL prefilter), and the **`UserRoutineDispatcherDriver`** full pass (seed, claim-by-advancing-NextRunAt, execute-as-owner, result-hash/OnChange suppression, in-app notification, cascade delete, routine conversations). Graduated verbatim from `user-routines-tests.ts`. No LLM — the executable target is the `Calculate Expression` core action.
 
@@ -255,11 +257,30 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `user-routines.UR14` | deleting a run-bearing routine cascades bookkeeping in one Delete() | with ≥2 run rows behind an FK: `Delete()` succeeds, run rows gone, routine row gone — while the **linked Action Execution Logs survive** (that is where the real telemetry lives) | the pre-cascade FK failure this entity server was built to fix; or an over-eager cascade destroying execution telemetry |
 | `user-routines.UR15` | EnsureRoutineConversation creates a hidden, Application-scoped conversation | conversation created, `ConversationID` persisted on the routine; conversation is `ApplicationScope='Application'` with a bound ApplicationID (`CK_Conversation_ScopeAppBinding`), `Type='Routine'`, owned by the routine owner, `LinkedRecordID` back to the routine | routine conversations leaking into the default chat list, or losing their record linkage |
 | `user-routines.UR16` | EnsureRoutineConversation is idempotent | the second call returns the SAME conversation ID | duplicate hidden conversations accumulating per dispatcher pass |
+| `user-routines.UR17` | RunRoutineNow on a one-shot with a future wake keeps its schedule | run `Success`; routine still `Active`; `NextRunAt` unchanged; exactly one run row | a manual "Wake Now" spending a one-shot reminder (the claim path nulls NextRunAt and the roll-up disables it) |
+| `user-routines.UR18` | RunRoutineNow on a spent one-shot leaves it spent | run `Success`; still `Disabled`; no `NextRunAt` invented; one run row | a manual run resurrecting or rescheduling a fired one-shot |
 
 ---
 
 ## 5. Remote Operations
 
+
+### 4.4a `chief-of-staff` (COS1–COS8) — IT138
+
+**Machinery under test.** The Chief of Staff's MJ-core layers, with no Open App installed or read: the `MJAIAgentUserPolicyEntityServer` and `MJAIAgentRequestEntityServer` ownership guards, the `Run User Routine Now` action, the `AgentUserPolicyEngine` cache's entity-event subscription, and `Manage My Email Inbox and Drafts` raising a Send's approval before any mail provider is resolved.
+
+**Transport.** Server. **Fixtures/lifecycle.** Setup resolves the `Chief of Staff` agent and the `Calculate Expression` action, finds the seeded `it-nogrant` user (the ownership checks skip loudly when it is absent), and creates the context user's Chief of Staff policy; when one already exists the bundle never touches it and COS6–COS8 skip. Teardown deletes the bundle's requests (also by subject tag), routines with their runs, notifications and action logs, the action logs it produced, and its policy.
+
+| Check | Invariant | Asserts | Regression it catches |
+|---|---|---|---|
+| `chief-of-staff.COS1` | A non-Owner user cannot save another user's policy | `Validate()` reports an error on `UserID` | any user rewriting someone else's governance |
+| `chief-of-staff.COS2` | A non-Owner user may write their own policy | no `UserID` error | the guard blocking self-service onboarding |
+| `chief-of-staff.COS3` | A non-Owner user cannot request for someone else, can for themselves | `RequestForUserID` error only on the foreign request | approvals forged into another user's queue |
+| `chief-of-staff.COS4` | Run User Routine Now refuses a foreign routine | the action's own code returns `NOT_OWNER`/`ROUTINE_NOT_FOUND`; no run row | users triggering other users' agents |
+| `chief-of-staff.COS5` | Run User Routine Now runs an owned one-shot without spending it | one run row, `Success`; routine `Active`; `NextRunAt` unchanged | Wake Now spending a reminder |
+| `chief-of-staff.COS6` | A policy save updates the engine cache | cached `EmailChannelMode` follows the save with no reload | Governance edits ignored until an API restart |
+| `chief-of-staff.COS7` | A Send under SendAsUser with approval queues the approval before transport | `APPROVAL_REQUIRED`; exactly one request for the caller, `Requested`, carrying the draft in `Comments` | a blocked or missing mail provider preventing the approval |
+| `chief-of-staff.COS8` | DraftOnly refuses a Send without queueing | `POLICY_DENIED`; no new request | the approval path bypassing the channel policy |
 ### 5.1 `remote-operations` (RO1–RO7) — IT11
 
 **Machinery under test.** The Remote Operations architecture (`BaseRemotableOperation`, the 4th data primitive) full-stack but headless: each operation is invoked exactly as any caller would — `new Op().Execute(input, { provider, user })` — and routes through the REAL provider dispatch (ClassFactory → `ProviderBase.RouteOperation` → `ExecuteServer` → `Authorize` → `InternalExecute` → the actual engine → SQL Server). Operations covered: `Template.Run`, `RecordProcess.RunNow` (dry and wet), `GetRunStatus`, and the Pause/Resume/Cancel control ops. Graduated verbatim from `remote-operations-tests.ts`.

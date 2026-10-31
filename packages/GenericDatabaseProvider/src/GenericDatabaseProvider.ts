@@ -2753,13 +2753,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
                 }
+                // The filter builder saves WhereClauses in SQL Server syntax (`[Field] LIKE ...`), so the
+                // rendered clause gets the same platform rewrite as ExtraFilter. Without it PostgreSQL
+                // rejects every filtered saved view run here: `syntax error at or near "["`.
+                const viewWhereSQL = this.TransformExternalSQLClause(renderedWhere, entityInfo);
                 // CustomWhereClause views too: an unbalanced clause would take row-level security
                 // out of force for everyone who runs the view. Only their admin-written text may
-                // carry comments.
-                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
+                // carry comments. Checked after the rewrite, since that is the text that runs.
+                this.AssertClauseBalanced(viewWhereSQL, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
                     AllowComments: isCustomWhereClause,
                 });
-                whereSQL = `(${renderedWhere})`;
+                whereSQL = `(${viewWhereSQL})`;
                 bHasWhere = true;
             }
 
@@ -4156,7 +4160,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             serverCached: resolved.serverCached,
                             fingerprint: resolved.fingerprint,
                         });
+                    } else if (entityInfo.TrackRecordChanges) {
+                        // The client's copy is older and the entity tracks record changes: Phase 2 reads
+                        // the DB status and sends only the changed rows, not the full cached copy.
+                        serverCacheMissItems.push({ index, item, entityInfo });
                     } else {
+                        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${resolved.serverCached!.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
                         serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
                     }
                 } else {
@@ -4171,6 +4180,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
+            /** Queues a differential reply: the rows changed since the client's copy, and the deleted IDs. */
+            const queueDifferential = (
+                index: number,
+                item: RunViewWithCacheCheckParams,
+                entityInfo: EntityInfo,
+                whereSQL: string,
+                serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+            ): void => {
+                LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${item.params.EntityName || 'unknown'}" — sending only changed rows (from DB)`, verboseOnly: true });
+                differentialItems.push({
+                    index, params: item.params, entityInfo, whereSQL,
+                    clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+                    clientRowCount: item.cacheStatus!.rowCount,
+                    serverStatus,
+                });
+            };
 
             if (serverCacheMissItems.length > 0) {
                 // Build WHERE clauses and run batched DB status check only for cache misses / TTL-expired slots
@@ -4214,6 +4239,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
+                            } else if (entityInfo.TrackRecordChanges) {
+                                queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
                             } else {
                                 LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-VERIFIED-CACHE] "${entityLabel}" — server cache verified against DB, serving ${serverCached.rowCount} rows without full SQL query`, verboseOnly: true });
                                 serverCacheStaleItems.push({ index, item, entityInfo, serverCached });
@@ -4237,13 +4264,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
                     } else if (entityInfo.TrackRecordChanges) {
-                        LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`, verboseOnly: true });
-                        differentialItems.push({
-                            index, params: item.params, entityInfo, whereSQL,
-                            clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
-                            clientRowCount: item.cacheStatus!.rowCount,
-                            serverStatus,
-                        });
+                        queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
                     } else {
                         LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
@@ -4297,7 +4318,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ...noCacheStatusNeedsDB.map(({ index, item }) =>
                     this.runFullQueryAndCacheResult<T>(item.params, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
-                // Server cache stale — serve from server's cached data (zero DB)
+                // Server cache newer than the client, no change tracking — serve from server's cached data (zero DB)
                 ...serverCacheStaleItems.map(({ index, serverCached }) =>
                     this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
                 ),
@@ -4748,7 +4769,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Checks the server's LocalCacheManager for cached data matching the client's request.
-     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
+     * Returns the resolution if found ('current', 'stale' when the server slot is newer than the client's copy, or
      * 'needs_verification' when the server slot's freshness window has elapsed),
      * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
      */
@@ -4815,8 +4836,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return { status: 'current', result: { viewIndex: index, status: 'current' } };
         }
 
-        // Server has newer data than client — we can serve it directly from cache
-        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+        // Server has newer data than the client; the caller decides between the cached copy and a differential
         return { status: 'stale', serverCached: cached };
     }
 
@@ -4855,7 +4875,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Runs a differential query and returns only changes since the client's cached state.
      * Includes updated/created rows and deleted record IDs.
-     * Falls back to full query if hidden deletes are detected.
+     * Falls back to full query if the client timestamp is not a date or hidden deletes are detected.
      */
     protected async runDifferentialQueryAndReturn<T = unknown>(
         params: RunViewParams,
@@ -4869,16 +4889,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
-            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
-            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
-
-            // Validation: detect hidden deletes not tracked in RecordChanges
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
                 // Unparseable client timestamp — can't trust the differential math; fall
                 // back to a full refresh (cached wide + projected, like every other leg).
                 return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
+            const since = clientMaxUpdatedDate.toISOString();
+            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, since, whereSQL, contextUser);
+            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, since, contextUser);
+
+            // Validation: detect hidden deletes not tracked in RecordChanges
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
                 if (!createdAt) return false;
@@ -4951,8 +4972,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Formats a client timestamp as ISO 8601 for a SQL literal.
+     * Throws when the value is not a date.
+     */
+    private toSQLTimestamp(raw: string): string {
+        const date = this.parseClientTimestamp(raw);
+        if (!date) throw new Error('Client timestamp is not a valid date');
+        return date.toISOString();
+    }
+
+    /**
      * Gets IDs of records deleted since a given timestamp.
-     * Uses dialect-neutral quoting. Subclasses can override for parameterized queries.
+     * Uses dialect-neutral quoting and sends the timestamp in ISO 8601 form.
+     * Subclasses can override for parameterized queries.
      */
     protected async getDeletedRecordIDsSince(
         entityID: string,
@@ -4960,7 +4992,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
     ): Promise<string[]> {
         try {
-            const sql = `SELECT DISTINCT ${this.QuoteIdentifier('RecordID')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('EntityID')} = '${entityID}' AND ${this.QuoteIdentifier('Type')} = 'Delete' AND ${this.QuoteIdentifier('ChangedAt')} > '${sinceTimestamp}'`;
+            const since = this.toSQLTimestamp(sinceTimestamp);
+            const sql = `SELECT DISTINCT ${this.QuoteIdentifier('RecordID')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('EntityID')} = '${entityID}' AND ${this.QuoteIdentifier('Type')} = 'Delete' AND (${this.QuoteIdentifier('ChangedAt')} > '${since}')`;
             const results = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
             return results.map(r => String(r['RecordID']));
         } catch (e) {
@@ -4971,7 +5004,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Gets rows updated/created since a given timestamp.
-     * Uses dialect-neutral quoting and TransformExternalSQLClause for OrderBy.
+     * Uses dialect-neutral quoting and TransformExternalSQLClause for OrderBy, and sends the
+     * timestamp in ISO 8601 form as its own predicate group.
      */
     protected async getUpdatedRowsSince<T = unknown>(
         params: RunViewParams,
@@ -4981,7 +5015,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
     ): Promise<T[]> {
         try {
-            const timestampFilter = `${this.QuoteIdentifier('__mj_UpdatedAt')} > '${sinceTimestamp}'`;
+            const timestampFilter = `(${this.QuoteIdentifier('__mj_UpdatedAt')} > '${this.toSQLTimestamp(sinceTimestamp)}')`;
             const combinedWhere = whereSQL
                 ? `(${whereSQL}) AND ${timestampFilter}`
                 : timestampFilter;

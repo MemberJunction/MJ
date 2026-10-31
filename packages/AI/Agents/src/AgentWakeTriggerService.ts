@@ -137,6 +137,8 @@ export interface AgentWakeTriggerResult {
 interface ImmediateWakeRoutineParams {
     targetUserID: string;
     targetAgentID: string;
+    /** The agent's name (from the user's policy) for the routine name; null falls back to "AgentWake". */
+    targetAgentName: string | null;
     workstreamKey: string;
     wakeReason: string;
     resumeState: AgentWakeResumeState;
@@ -253,6 +255,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return this.upsertImmediateWakeRoutine({
             targetUserID,
             targetAgentID,
+            targetAgentName: policy?.Agent ?? null,
             workstreamKey,
             wakeReason,
             resumeState,
@@ -316,6 +319,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return this.upsertImmediateWakeRoutine({
             targetUserID,
             targetAgentID: request.AgentID,
+            targetAgentName: policy.Agent ?? null,
             workstreamKey,
             wakeReason,
             resumeState,
@@ -448,6 +452,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return this.upsertImmediateWakeRoutine({
             targetUserID: senderUser.ID,
             targetAgentID: identity.AgentID,
+            targetAgentName: policy?.Agent ?? null,
             workstreamKey,
             wakeReason,
             resumeState,
@@ -681,7 +686,10 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 );
                 routine.NewRecord();
                 routine.UserID = params.targetUserID;
-                routine.Name = `AgentWake (${params.workstreamKey})`;
+                // Same name Schedule Next Agent Wake gives a routine, so all of an agent's wakes read alike.
+                routine.Name = params.targetAgentName
+                    ? `${params.targetAgentName} — Wake (${params.workstreamKey})`
+                    : `AgentWake (${params.workstreamKey})`;
                 routine.RoutineType = 'AgentWake';
                 routine.ScheduleMode = 'OneShot';
                 routine.TargetType = 'Agent';
