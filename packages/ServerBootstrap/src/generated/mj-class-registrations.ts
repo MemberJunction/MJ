@@ -1198,13 +1198,14 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/content-autotagging (6 classes)
+// @memberjunction/content-autotagging (7 classes)
 import {
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
@@ -1411,7 +1412,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (66 classes)
+// @memberjunction/core-entities-server (67 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2568,14 +2569,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
-    DecisionRubricEvaluator,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2775,13 +2777,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
-    MJTemplateContentEntityServer,
-    MJUserEntityServer,
-    MJUserRoleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJTemplateContentEntityServer,
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2979,13 +2981,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WebPageContentAction,
     WebSearchAction,
     WriteEntityFieldsAction,
-    XMLParserAction,
-    AutotagAndVectorizeContentAction,
-    DatabaseTransportDriverFactory,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    XMLParserAction,
+    AutotagAndVectorizeContentAction,
+    DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
@@ -3025,7 +3027,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1224;
+export const CLASS_REGISTRATIONS_COUNT = 1225;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

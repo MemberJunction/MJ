@@ -62,6 +62,7 @@ export class ServerBackend implements MatrixBackend {
 
     async SaveQuery(categoryID: string, spec: SaveSpec): Promise<{ Record: SavedRecord | null; Message: string }> {
         const record = await NewFixtureQuery(this.ctx, categoryID, { Name: spec.Name, SQL: spec.SQL, Reusable: spec.Reusable ?? false });
+        record.SkipEmbeddings = true;
         if (spec.Cached) {
             record.CacheEnabled = true;
             record.CacheTTLMinutes = 5;
