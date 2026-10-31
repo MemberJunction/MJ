@@ -25,7 +25,7 @@ import type { BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from '@mem
 import type { MJQueryCategoryEntity, MJQueueTypeEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SyncEngine, SyncMetadataEngine, ValidationService } from '@memberjunction/metadata-sync';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -235,9 +235,8 @@ export const MetadataSyncChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const dir = findIntegrationTestMetadataDir();
             if (!dir) {
-                console.warn('  ⚠ metadata-sync.MS8 SKIPPED — metadata-optional/integration-test not reachable from cwd '
+                SkipCheck('metadata-optional/integration-test not reachable from cwd '
                     + `('${process.cwd()}'); run from inside the MJ repo to exercise validate-only mode`);
-                return;
             }
             const service = new ValidationService({ verbose: false });
             const result = await service.validateDirectory(dir);

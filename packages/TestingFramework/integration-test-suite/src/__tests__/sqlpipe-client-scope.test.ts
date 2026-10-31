@@ -6,7 +6,9 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import type { DatabasePlatform } from '@memberjunction/core';
-import { CLIENT_PATHS, ClientAssignments, ClientDimensions, MatrixScopeOf, PullRequestPairs, TRANSPORT_DIMENSIONS } from '../checks/sqlpipe-dimensions';
+import {
+    CLIENT_PATHS, ClientAssignments, ClientDimensions, MatrixScopeOf, PullRequestPairs, Spm2Assignments, Spm2Dimensions, TRANSPORT_DIMENSIONS,
+} from '../checks/sqlpipe-dimensions';
 import { CoveredPairs } from '../checks/sqlpipe-pairwise';
 import type { Assignment, DimensionValue } from '../checks/sqlpipe-pairwise';
 import { BuildQuery, PointOf, ValidPoint } from '../checks/sqlpipe-scenarios';
@@ -96,5 +98,38 @@ describe.each(PLATFORMS)('IT145 scopes on %s', platform => {
     it('pr scope is deterministic', () => {
         expect(ClientAssignments(platform, 'pr')).toEqual(ClientAssignments(platform, 'pr'));
         expect(hashOf(ClientAssignments(platform, 'pr').Assignments)).toBe(hashOf(pr));
+    });
+});
+
+describe.each(PLATFORMS)('IT146 SPM2 scopes on %s', platform => {
+    const full = Spm2Assignments(platform, 'full');
+    const pr = Spm2Assignments(platform, 'pr');
+    const valid = (a: Assignment): boolean => ValidPoint(platform, a);
+    const triples = (items: readonly Assignment[], d1: string, d2: string, d3: string): Set<string> =>
+        new Set(items.map(a => `${a[d1]}|${a[d2]}|${a[d3]}`));
+
+    it('full scope has the complete 4-way cross product', () => {
+        expect(full.length).toBe(platform === 'sqlserver' ? 2652 : 2448);
+        expect(full.every(valid)).toBe(true);
+    });
+
+    it('pr scope keeps 100% of the distinct queries of full scope in 1/12th the runs', () => {
+        expect(pr.every(valid)).toBe(true);
+        expect(pr.length).toBe(full.length / 12);
+        expect(distinctQueries(platform, pr)).toBe(distinctQueries(platform, full));
+    });
+
+    it('pr scope covers every 2-way pair and every (Composition, MaxRows, StartRow) and (Templating, MaxRows, StartRow) triple of full scope', () => {
+        const dims = Spm2Dimensions();
+        const fullPairs = CoveredPairs(dims, full);
+        const prPairs = CoveredPairs(dims, pr);
+        expect([...fullPairs].filter(p => !prPairs.has(p))).toEqual([]);
+        expect(triples(pr, 'Composition', 'MaxRows', 'StartRow')).toEqual(triples(full, 'Composition', 'MaxRows', 'StartRow'));
+        expect(triples(pr, 'Templating', 'MaxRows', 'StartRow')).toEqual(triples(full, 'Templating', 'MaxRows', 'StartRow'));
+    });
+
+    it('pr scope is deterministic', () => {
+        expect(Spm2Assignments(platform, 'pr')).toEqual(pr);
+        expect(hashOf(Spm2Assignments(platform, 'pr'))).toBe(hashOf(pr));
     });
 });

@@ -3231,6 +3231,65 @@ describe('BaseAgent.Execute — the system prompt or tools change mid-run', () =
         // c2's thinking was made under prefix B, which request 3 still has.
         expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c2')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
     });
+
+    const turnOf = (messages: AgentChatMessage[] | undefined, id: string) => messages?.find((m) => m.toolCalls?.some((c) => c.id === id));
+
+    it('keeps the previous fingerprint across a failed request, so the request after it is still compared', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        // Request 2 fails before the runner records a fingerprint (failover had nowhere to go); request 3
+        // is sent under a new prefix, so its result says prefix B.
+        const runner = new ScriptedPromptRunner([
+            () => thinkingCall('c1', 'prefix-A'),
+            () => llmFailure('Rate limit exceeded — 429'),
+            () => thinkingCall('c2', 'prefix-B'),
+            () => llmEnvelope(successEnvelope())
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(4);
+        // Request 3 is compared with request 1's prefix, not with nothing.
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-A', 'prefix-B']);
+        // Request 3 came back under prefix B, so the history drops c1's thinking, made under prefix A.
+        expect(turnOf(runner.Calls[3].conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+    });
+
+    it('keeps the history\'s reasoning while the prefix is unchanged', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1', 'prefix-A'), () => thinkingCall('c2', 'prefix-A'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-A']);
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+
+    it('starts each run without a previous fingerprint', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        const runner = new ScriptedPromptRunner([
+            () => thinkingCall('c1', 'prefix-A'),
+            () => llmEnvelope(successEnvelope()),
+            () => thinkingCall('c2', 'prefix-B'),
+            () => llmEnvelope(successEnvelope())
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls).toHaveLength(4);
+        // The second run's first request has no earlier request of its own to be compared with.
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', undefined, 'prefix-B']);
+    });
 });
 
 describe('BaseAgent — a native complete_task refused by validation', () => {
@@ -3256,5 +3315,136 @@ describe('BaseAgent — a native complete_task refused by validation', () => {
 
         const answer = (params.conversationMessages[1].content as unknown as Array<{ toolCallId: string; content: string; isError: boolean }>)[0];
         expect(answer).toMatchObject({ toolCallId: 'call_done', isError: true, content: 'The rubric failed: the summary is missing.' });
+    });
+});
+
+describe('BaseAgent.Execute — a payload change sent with a completion is applied only if the completion is accepted', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    /** Refuses the first `refusals` completions for an unmet minimum-execution requirement. */
+    class MinExecAgent extends HarnessAgent {
+        public Refusals = 1;
+        protected override async checkMinimumExecutionRequirements(): Promise<string[]> {
+            return this.Refusals-- > 0 ? ["Action 'Lookup' requires 1 execution(s) but was executed 0 time(s)"] : [];
+        }
+    }
+
+    function makeMinExecAgent(script: Array<(params: AIPromptParams, callIndex: number) => AIPromptRunResult>): { agent: MinExecAgent; runner: ScriptedPromptRunner } {
+        const agent = new MinExecAgent();
+        const runner = new ScriptedPromptRunner(script);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        return { agent, runner };
+    }
+
+    /** An implicit-control-flow turn of native calls, results going back natively. */
+    function llmImplicitCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    const completeTask = (id: string, change?: Record<string, unknown>) =>
+        ({ id, name: 'complete_task', arguments: { message: 'Done.', ...(change ? { payloadChangeRequest: change } : {}) } });
+
+    function answerTo(messages: AgentChatMessage[], callId: string): ToolBlock[] {
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId));
+        const next = messages[at + 1];
+        expect(next?.role).toBe('tool');
+        return next.content as unknown as ToolBlock[];
+    }
+
+    it('native: a complete_task refused for minimum executions leaves its change out of the next request and the final payload, and says so', async () => {
+        const { agent, runner } = makeMinExecAgent([
+            () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
+            () => llmImplicitCalls([completeTask('call_done_2')]),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
+        expect(result.payload).toEqual({ summary: 'draft' });
+        const [answer] = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answer.isError).toBe(true);
+        expect(answer.content).toMatch(/Minimum execution requirements not met/);
+        expect(answer.content).toMatch(/payloadChangeRequest sent with this complete_task call was NOT applied/);
+    });
+
+    it('envelope: a refused completion leaves its change out of the next request and the final payload, and the Retry says to send it again', async () => {
+        const { agent, runner } = makeMinExecAgent([
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
+        expect(result.payload).toEqual({ summary: 'draft' });
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(retry?.content).toMatch(/Minimum execution requirements not met/);
+        expect(retry?.content).toMatch(/NOT applied\. Send it again with your next completion/);
+    });
+
+    it('validates the draft against FinalPayloadValidation, and commits nothing when it fails', async () => {
+        harness.agent = makeAgentRow({ FinalPayloadValidation: JSON.stringify({ 'summary:string': 'x', 'title:string': 'x', 'count:number': 1 }) });
+        const { agent, runner } = makeAgent([
+            // Adds the title but not the count: the draft fails on the count alone.
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report' } } })),
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report', count: 3 } } })),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
+        // The draft was what failed: the title it added is not reported missing, the count is.
+        expect(retry?.content).toMatch(/count/);
+        expect(retry?.content).not.toMatch(/title/i);
+        expect(retry?.content).toMatch(/NOT applied/);
+        // The accepted completion's change is applied.
+        expect(result.success).toBe(true);
+        expect(result.payload).toEqual({ summary: 'draft', title: 'Q3 report', count: 3 });
+    });
+
+    it('applies the change of an accepted completion', async () => {
+        const { agent } = makeMinExecAgent([
+            () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
+        ]);
+        agent.Refusals = 0;
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_done')[0]).toMatchObject({ isError: false, content: 'Task complete.' });
+    });
+
+    it('keeps a payload_change_request made on the same turn as a refused complete_task', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeMinExecAgent([
+            () => llmImplicitCalls([
+                { id: 'call_write', name: 'payload_change_request', arguments: { newElements: { notes: 'kept' } } },
+                completeTask('call_done')
+            ]),
+            () => llmImplicitCalls([completeTask('call_done_2')]),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', notes: 'kept' });
+        expect(result.payload).toEqual({ summary: 'draft', notes: 'kept' });
+        const answers = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answers.find((b) => b.toolCallId === 'call_write')?.isError).toBe(false);
     });
 });

@@ -16,7 +16,7 @@
  *   TRS5  the outgoing request is a copy of the history with the fragment last, prior fragments
  *         replaced or retained per mode, forged tags escaped, the stored history untouched;
  *   TRS6  the Anthropic driver places its cache breakpoint on the last real history message, not
- *         on the fragment (env-aware: skips loudly when the driver is not registered).
+ *         on the fragment (env-aware: records a SKIP when the driver is not registered).
  *
  * TRANSPORT: SERVER-ONLY (BaseAgent / TemplateEngineServer / AIEngine internals). READ-ONLY:
  * nothing is persisted; there is no fixture and no lifecycle.
@@ -43,7 +43,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 // Side-effect import: registers AnthropicLLM with the ClassFactory so TRS6 is deterministic here.
 import '@memberjunction/ai-anthropic';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -71,10 +71,6 @@ interface BedrockFormatterInternals {
     formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): Array<{ role: string; content: Array<{ type?: string; text?: string; cachePoint?: { type: string } }> }>;
 }
 
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ trailing-runtime-state.${checkId} SKIPPED — ${reason}`);
-}
-
 async function configuredEngine(ctx: IntegrationCheckContext): Promise<AIEngine> {
     const engine = AIEngine.Instance;
     await engine.Config(false, ctx.User, ctx.Provider);
@@ -88,17 +84,15 @@ function agentInternals(ctx: IntegrationCheckContext): TrailingStateInternals {
     return internals;
 }
 
-/** The Loop agent type and its system prompt from this database, or undefined (skip) when absent. */
-function loopAgentType(engine: AIEngine, checkId: string): { agentType: MJAIAgentTypeEntity; systemPrompt: MJAIPromptEntityExtended } | undefined {
+/** The Loop agent type and its system prompt from this database; ends the running check as SKIPPED when absent. */
+function loopAgentType(engine: AIEngine): { agentType: MJAIAgentTypeEntity; systemPrompt: MJAIPromptEntityExtended } {
     const agentType = engine.AgentTypes.find(t => t.Name === 'Loop');
     if (!agentType?.SystemPromptID) {
-        skipNote(checkId, "no 'Loop' agent type with a system prompt in metadata");
-        return undefined;
+        SkipCheck("no 'Loop' agent type with a system prompt in metadata");
     }
     const systemPrompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentType.SystemPromptID));
     if (!systemPrompt) {
-        skipNote(checkId, `the Loop agent type's system prompt ${agentType.SystemPromptID} is not in the prompt catalog`);
-        return undefined;
+        SkipCheck(`the Loop agent type's system prompt ${agentType.SystemPromptID} is not in the prompt catalog`);
     }
     return { agentType, systemPrompt };
 }
@@ -162,8 +156,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS1: the synced Loop and Flow system-prompt templates (read by TemplateID) carry the runtime-state pointer and none of the volatile blocks',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS1');
-            if (!loop) { return; }
+            const loop = loopAgentType(engine);
             const internals = agentInternals(ctx);
             const text = await internals.loadPromptTemplateText(loop.systemPrompt, ctx.User);
             Assert(!!text, `the Loop system prompt's template ${loop.systemPrompt.TemplateID} resolved to no text — the by-ID template lookup is broken or the template is missing`);
@@ -187,9 +180,8 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS2: buildVolatileStateMessage against the real system prompt renders date/time from the live placeholders, the scratchpad, and the payload, flagged volatileState',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS2');
-            if (!loop) { return; }
-            if (engine.Agents.length === 0) { skipNote('TRS2', 'no AI Agents in metadata'); return; }
+            const loop = loopAgentType(engine);
+            if (engine.Agents.length === 0) { SkipCheck('no AI Agents in metadata'); }
             const internals = agentInternals(ctx);
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
             const payload = { probe: 'trs2', step: 1 };
@@ -213,13 +205,11 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: "TRS3: trailing-state mode comes from the catalog — a model served by OpenAILLM inherits PrefixPromptCache=true from its vendor row's Configuration.ModelDefaults (append-only); one served by AnthropicLLM resolves false (replace)",
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS3');
-            if (!loop) { return; }
+            const loop = loopAgentType(engine);
             const openai = modelServedBy(engine, 'OpenAILLM');
             const anthropic = modelServedBy(engine, 'AnthropicLLM');
             if (!openai || !anthropic) {
-                skipNote('TRS3', `catalog lacks an Active inference row for ${!openai ? 'OpenAILLM' : 'AnthropicLLM'}`);
-                return;
+                SkipCheck(`catalog lacks an Active inference row for ${!openai ? 'OpenAILLM' : 'AnthropicLLM'}`);
             }
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
 
@@ -246,8 +236,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS4: specialization placement — every Active Loop agent\'s child prompt template resolves by TemplateID, and the volatile/static split is decided from that stored text',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS4');
-            if (!loop) { return; }
+            const loop = loopAgentType(engine);
             const internals = agentInternals(ctx);
             const loopAgents = engine.Agents.filter(a => a.Status === 'Active' && UUIDsEqual(a.TypeID, loop.agentType.ID));
             const sweep: Array<{ agent: string; volatile: boolean }> = [];
@@ -267,7 +256,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
                 AssertEqual(ResolveSpecializationPlacement({ specializationPlacement: 'systemPrompt' }, text), 'systemPrompt', 'an explicit systemPrompt placement wins');
                 sweep.push({ agent: agent.Name ?? agent.ID, volatile });
             }
-            if (sweep.length === 0) { skipNote('TRS4', `no Active Loop agents with a child prompt template (${loopAgents.length} Loop agents)`); return; }
+            if (sweep.length === 0) { SkipCheck(`no Active Loop agents with a child prompt template (${loopAgents.length} Loop agents)`); }
             AssertEqual(unresolved.length, 0, `${unresolved.length} child prompt template(s) did not resolve by TemplateID (the name-vs-ID lookup regression): ${unresolved.slice(0, 5).join('; ')}`);
             const coreMjLoopAgents = new Set([
                 'Sage',
@@ -292,9 +281,8 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS5: the outgoing request is a copy — fragment last, prior fragments replaced or retained per mode, forged tags escaped, stored history byte-identical',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS5');
-            if (!loop) { return; }
-            if (engine.Agents.length === 0) { skipNote('TRS5', 'no AI Agents in metadata'); return; }
+            const loop = loopAgentType(engine);
+            if (engine.Agents.length === 0) { SkipCheck('no AI Agents in metadata'); }
             const internals = agentInternals(ctx);
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
             const turn1 = await internals.buildVolatileStateMessage(executeParamsFor(ctx, engine), promptParams, { turn: 1 }, undefined, loop.agentType, loop.systemPrompt);
@@ -333,8 +321,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             void ctx;
             if (!MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, 'AnthropicLLM')) {
-                skipNote('TRS6', 'AnthropicLLM is not registered in this process (provider package not loaded)');
-                return;
+                SkipCheck('AnthropicLLM is not registered in this process (provider package not loaded)');
             }
             const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'integration-test-no-key');
             Assert(!!driver, 'AnthropicLLM instantiates without contacting the API');

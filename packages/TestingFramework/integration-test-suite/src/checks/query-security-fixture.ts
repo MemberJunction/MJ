@@ -164,7 +164,7 @@ export async function SavedCount(ctx: IntegrationCheckContext, label: string): P
     const result = await RequireQueryDb(ctx.Provider, SECURITY_BUNDLE).RunView({
         EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${f.Category.ID}' AND Name='${name}'`, ResultType: 'count_only', BypassCache: true,
     }, ctx.User);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 /**

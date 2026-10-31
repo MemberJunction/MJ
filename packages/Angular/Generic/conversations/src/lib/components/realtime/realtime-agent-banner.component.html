@@ -141,12 +141,16 @@
             </div>
           </div>
           <div class="gp-note">Simple returns to the pure-audio surface. Auto grows the console as you use it.</div>
+        }
+        @if (ShowDensityPicker && AllowDevLinks) {
           <div class="gp-div"></div>
         }
-        <button type="button" class="gp-link" (click)="ToggleDev()" [attr.aria-pressed]="DevMode">
-          <i class="fa-solid" [ngClass]="DevMode ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
-          Developer links {{ DevMode ? 'on' : 'off' }}
-        </button>
+        @if (AllowDevLinks) {
+          <button type="button" class="gp-link" (click)="ToggleDev()" [attr.aria-pressed]="DevMode">
+            <i class="fa-solid" [ngClass]="DevMode ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
+            Developer links {{ DevMode ? 'on' : 'off' }}
+          </button>
+        }
       </div>
     }
   }

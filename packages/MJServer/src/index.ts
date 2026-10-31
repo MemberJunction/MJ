@@ -13,6 +13,7 @@ import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromote
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
+import { IntrospectInCatalogScope } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -628,10 +629,19 @@ const setupComplete$ = new ReplaySubject(1);
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // so boot does not pay a second full metadata load. The refresh interval stays non-zero on
+        // PostgreSQL on purpose: PostgreSQLDataProvider.AllowRefresh is `CheckRefreshIntervalSeconds > 0`,
+        // so an interval of 0 would make every later codegenPgProvider.Refresh() — the one RSU CodeGen
+        // issues after DDL — return without reloading, leaving this provider frozen at the boot catalog.
+        // (SQL Server's AllowRefresh is independent of the interval, so its codegen provider can use 0.)
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
           codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
+          undefined,
+          undefined,
+          false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
         await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
@@ -779,8 +789,18 @@ const setupComplete$ = new ReplaySubject(1);
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenProvider.Refresh() after DDL still reloads from the DB
+        // (SQLServerDataProvider.AllowRefresh does not depend on the interval; PostgreSQL's does — see above).
+        const codegenConfig = new SQLServerProviderConfigData(
+          codegenPool,
+          mj_core_schema,
+          0,
+          undefined,
+          undefined,
+          false,
+        );
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -1337,7 +1357,7 @@ const setupComplete$ = new ReplaySubject(1);
     },
     // High compression level (good balance between CPU and compression ratio)
     level: 6
-  }));
+  }) as object as express.RequestHandler);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
@@ -2040,10 +2060,25 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object
+      // Introspect schema ONCE for the entire connector, then reuse per object.
+      //
+      // IN THE CONNECTION'S CATALOG SCOPE. This runs at process start, outside any request, so
+      // nothing upstream has entered a scope for it — and an unscoped catalog read falls back to
+      // the SHARED catalog by design. That would build these field maps from the connector's
+      // declared fields alone: every column this connection's own discovery sampled would get a
+      // table column from the RSU (built in scope, from the per-connection rows) but no field map,
+      // and its values would land in the overflow JSON instead of the column. Observed on the
+      // sandbox 2026-09-11: 487 declared fields, 556 per-connection — 69 columns that this read
+      // would have silently left unmapped. Entering the scope is not enough on a fresh process:
+      // IntrospectInCatalogScope loads the catalog and warms each object's fields first.
       const introspect = connector.IntrospectSchema.bind(connector) as
         (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await introspect(companyIntegration, systemUser);
+      const schema = await IntrospectInCatalogScope(
+        item.CompanyIntegrationID,
+        item.SourceObjectNames,
+        () => introspect(companyIntegration, systemUser),
+        systemUser,
+      );
 
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);
@@ -2240,6 +2275,7 @@ async function processRSUPendingWork(): Promise<void> {
               EntityName: 'MJ: Scheduled Job Types',
               ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               ResultType: 'simple',
               Fields: ['ID']
             }, systemUser);
@@ -2333,6 +2369,7 @@ async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: Us
       ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
       Fields: ['ID'],
     }, systemUser);

@@ -14,7 +14,9 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
-import { FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
+import { FormatDateOnly, IsDateOnlySQLType, LogError } from '@memberjunction/core';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -62,9 +64,11 @@ import {
     QueryExportOptions,
     BuildColumnsForResult,
     ResultColumnNames,
-    GetQueryGridStateKey
+    GetQueryGridStateKey,
+    QueryParameterValues
 } from './models/query-grid-types';
 import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
+import { CanOpenQueryInExcel, OPEN_QUERY_IN_EXCEL_TOOLTIP, ToExcelParameterValues } from './open-in-excel';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -223,6 +227,18 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
      * Whether to show export button
      */
     @Input() ShowExport: boolean = true;
+
+    /**
+     * Whether to show the Open in Excel button. It appears only for a saved query, when the
+     * MemberJunction host serves the Excel add-in and every required parameter has a value.
+     */
+    @Input() ShowOpenInExcel: boolean = true;
+
+    /**
+     * The parameter values of the query's last run. Open in Excel carries them into the workbook
+     * (never server-set ones); the host that ran the query supplies them.
+     */
+    @Input() ParameterValues: QueryParameterValues | null = null;
 
     /**
      * Whether to show refresh button
@@ -417,6 +433,7 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
     ngOnDestroy(): void {
         // Flush any pending state changes before destroy
         this.FlushState();
+        document.removeEventListener('click', this.handleExcelMenuOutsideClick);
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -468,6 +485,7 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
         if (!this._columnConfigs) {
             this.syncColumnsToResult();
         }
+        void this.resolveExcelAddinAvailability();
         this.cdr.markForCheck();
     }
 
@@ -1069,6 +1087,129 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
 
     public Refresh(): void {
         this.RefreshRequest.emit();
+    }
+
+    private static _nextExcelMenuInstanceId = 0;
+    private _excelAddinEnabled = false;
+    @ViewChild('excelMenuTrigger') private _excelMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+    /** Unique DOM id pairing the unified Export/Excel disclosure trigger with its action popover. */
+    public readonly ExcelMenuId = `mj-query-grid-excel-menu-${++QueryDataGridComponent._nextExcelMenuInstanceId}`;
+    /** True while the unified Export/Excel toolbar action popover is open. */
+    public ShowExcelMenu = false;
+    /** True while Open in Excel is building the workbook. */
+    public IsOpeningInExcel = false;
+    /** The Open in Excel button's tooltip. */
+    public readonly OpenInExcelTooltip = OPEN_QUERY_IN_EXCEL_TOOLTIP;
+
+    /**
+     * True when the toolbar offers Open in Excel: a saved query is loaded, the host serves the add-in,
+     * and every required parameter the person fills in has a value from the last run.
+     */
+    public get CanOpenInExcel(): boolean {
+        const query = this._queryInfo;
+        if (!query) {
+            return false;
+        }
+        return CanOpenQueryInExcel(this.ShowOpenInExcel, query.ID, this._excelAddinEnabled, this.ParameterValues, query.QueryParameters ?? []);
+    }
+
+    /** Toggles the unified Export/Excel action popover. */
+    public ToggleExcelMenu(): void {
+        this.ShowExcelMenu = !this.ShowExcelMenu;
+        this.cdr.markForCheck();
+
+        if (this.ShowExcelMenu) {
+            setTimeout(() => {
+                document.addEventListener('click', this.handleExcelMenuOutsideClick);
+            }, 0);
+        } else {
+            document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+        }
+    }
+
+    /** Closes the unified Export/Excel action popover, optionally restoring focus to the trigger button. */
+    public CloseExcelMenu(restoreFocus = false): void {
+        if (!this.ShowExcelMenu) {
+            document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+            return;
+        }
+        this.ShowExcelMenu = false;
+        document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+        this.cdr.detectChanges();
+        if (restoreFocus) {
+            this._excelMenuTrigger?.nativeElement?.focus();
+        }
+    }
+
+    /** Handles Escape key dismissal inside the unified Export/Excel dropdown. */
+    public OnExcelMenuEscape(event: Event): void {
+        if (!this.ShowExcelMenu) {
+            return;
+        }
+        event.stopPropagation();
+        this.CloseExcelMenu(true);
+    }
+
+    /** Invokes Open in Excel from the unified toolbar popover. */
+    public OnOpenInExcelFromMenu(): void {
+        this.CloseExcelMenu();
+        void this.OpenInExcel();
+    }
+
+    /** Invokes static snapshot export from the unified toolbar popover. */
+    public OnExportSnapshotFromMenu(): void {
+        this.CloseExcelMenu();
+        void this.OpenExportDialog();
+    }
+
+    private handleExcelMenuOutsideClick = (): void => {
+        this.CloseExcelMenu();
+    };
+
+    /** Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in. */
+    private async resolveExcelAddinAvailability(): Promise<void> {
+        const provider = this.ProviderToUse;
+        if (!this._queryInfo || this._excelAddinEnabled || !provider) {
+            return;
+        }
+        try {
+            this._excelAddinEnabled = await ExcelAddinClient.Instance.IsEnabled(provider);
+            if (this._excelAddinEnabled) {
+                this.cdr.markForCheck();
+            }
+        } catch (e) {
+            // Non-fatal: the button stays hidden. The client already treats an unreadable status as "off".
+            LogError(`QueryDataGrid: Excel add-in status check failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** Builds a workbook that loads this query, with the last run's parameters, in Excel, and downloads it. */
+    public async OpenInExcel(): Promise<void> {
+        const query = this._queryInfo;
+        if (!query || this.IsOpeningInExcel) {
+            return;
+        }
+        this.IsOpeningInExcel = true;
+        this.cdr.markForCheck();
+        try {
+            const parameters = ToExcelParameterValues(this.ParameterValues, query.QueryParameters ?? []);
+            const result = await ExcelAddinClient.Instance.OpenInExcel(
+                [{ Kind: 'Query', ID: query.ID, Parameters: parameters }], this.ProviderToUse);
+            if (result.Success) {
+                MJNotificationService.Instance?.CreateSimpleNotification(
+                    `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
+            } else {
+                MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage || 'The workbook could not be built.', 'error', 6000);
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`QueryDataGrid: Open in Excel failed: ${message}`);
+            MJNotificationService.Instance?.CreateSimpleNotification(`Open in Excel failed: ${message}`, 'error', 6000);
+        } finally {
+            this.IsOpeningInExcel = false;
+            this.cdr.markForCheck();
+        }
     }
 
     /**

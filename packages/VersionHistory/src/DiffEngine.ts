@@ -149,6 +149,7 @@ export class DiffEngine {
             ExtraFilter: filter,
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         }, contextUser);
 
@@ -251,6 +252,7 @@ export class DiffEngine {
             ExtraFilter: filter,
             OrderBy: 'ChangedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple',
         }, contextUser);
@@ -463,6 +465,7 @@ export class DiffEngine {
             ExtraFilter: SqlEquals('ID', recordChangeId),
             Fields: ['ID', 'ChangedAt'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         }, contextUser);
 

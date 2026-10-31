@@ -40,6 +40,13 @@ export interface NavItem {
   isDefault?: boolean;
 
   /**
+   * Position in the nav bar; lower comes first. Optional: an application's own items default to
+   * (position + 1) × 10, and items added through `NavItem.*` application settings default to 1000
+   * (see `MergeNavItemExtensions`).
+   */
+  Sequence?: number;
+
+  /**
    * Status of the nav item. Only 'Active' items are displayed.
    * - 'Active': Displayed and functional (default if not specified)
    * - 'Pending': Hidden, reserved for features in development

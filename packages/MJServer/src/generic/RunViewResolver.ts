@@ -209,6 +209,13 @@ export class RunViewByIDInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
+
   @Field(() => String, {
     nullable: true,
     description:
@@ -351,6 +358,13 @@ export class RunViewByNameInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
+
   @Field(() => String, {
     nullable: true,
     description:
@@ -478,6 +492,13 @@ export class RunDynamicViewInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
 
   @Field(() => String, {
     nullable: true,
@@ -628,6 +649,13 @@ export class RunViewGenericInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
 
   @Field(() => String, {
     nullable: true,
@@ -1328,6 +1356,7 @@ export class RunViewResolver extends ResolverBase {
           DataSource: item.params.DataSource,
           AlternateBaseView: item.params.AlternateBaseView,
           IncludeBinaryFields: item.params.IncludeBinaryFields,
+          SkipTotalRowCount: item.params.SkipTotalRowCount,
           // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
           // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
           // provider free to answer a deliberate database read from the server cache.

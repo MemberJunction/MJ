@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as publicApi from '../public-api';
-import { ExportServiceModule, ExportDialogComponent, ExportService } from '../public-api';
+import { ExportServiceModule, ExportDialogComponent, ExportService, OfficeConnectPanelComponent } from '../public-api';
 
 /**
  * Entry-point smoke test: importing the public entry must succeed (catches
@@ -16,5 +16,6 @@ describe('@memberjunction/ng-export-service', () => {
     expect(ExportServiceModule).toBeTypeOf('function');
     expect(ExportDialogComponent).toBeTypeOf('function');
     expect(ExportService).toBeTypeOf('function');
+    expect(OfficeConnectPanelComponent).toBeTypeOf('function');
   });
 });
