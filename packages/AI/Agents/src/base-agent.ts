@@ -1960,6 +1960,15 @@ export class BaseAgent {
     private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
 
     /**
+     * True once gatherPromptTemplateData() has computed {@link _effectiveActions} and
+     * {@link _effectiveSubAgents} for this run. An empty list is then authoritative: a host's
+     * `actionChanges` that remove every action leave the run with none, instead of falling back to
+     * the agent's database configuration as an uncomputed list does.
+     * @private
+     */
+    private _effectiveCatalogComputed = false;
+
+    /**
      * The merged agent-type prompt params of the current step. Populated during
      * gatherPromptTemplateData() and read by the finishIf gate, which runs in executeActionsStep()
      * and executeNextStep() after the prompt that requested the step.
@@ -2694,6 +2703,8 @@ export class BaseAgent {
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
             this._effectiveActions = [];
+            this._effectiveSubAgents = [];
+            this._effectiveCatalogComputed = false;
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
             this._lastSubAgentArtifactDirective = undefined;
@@ -3020,13 +3031,18 @@ export class BaseAgent {
      * (`TaskGraphAgentRunner`) that carries neither the audience nor the scope. So graphs are withheld when the
      * audience adds a reader, and when the run's validated scope carries a tenant or a secondary dimension
      * (`ActionRunScopeIsBounded`): a model-written Scoped Search node would search outside the run's tenant, and an
-     * agent node would drop it.
+     * agent node would drop it. Likewise when the host assigned the run's search scopes (`SearchScopeIDs`): a graph's
+     * Scoped Search node would fall back to the agent's own search access.
      */
     private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
         if (this.runAudienceAddsReader(params)) {
             return 'a run with an audience';
         }
-        return ActionRunScopeIsBounded(this._runScope ?? this.validatedRunScope(params)) ? 'a tenant-scoped run' : null;
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        if (scope?.SearchScopeIDs?.length) {
+            return 'a run with host-assigned search scopes';
+        }
+        return ActionRunScopeIsBounded(scope) ? 'a tenant-scoped run' : null;
     }
 
     /** Whether this run withholds task graphs ({@link taskGraphWithholdingReason}). */
@@ -3837,6 +3853,7 @@ export class BaseAgent {
                 apiKeys: params.apiKeys,
                 CredentialScope: params.CredentialScope,
                 Audience: params.Audience, // the target answers the same people, so it is bounded the same way
+                SearchScopeIDs: params.SearchScopeIDs, // and searches what the host assigned (never read from data)
                 data: params.data,
                 TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
@@ -7311,7 +7328,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // Use effective actions which includes runtime action changes (populated in gatherPromptTemplateData)
-        // Fall back to database-configured actions if _effectiveActions is empty
+        // Falls back to database-configured actions only when the list was never computed for this run
         const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
         // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
@@ -7406,7 +7423,8 @@ export class BaseAgent {
 
     /**
      * Gets the effective actions for validation, using runtime changes if available.
-     * Falls back to database-configured actions if _effectiveActions is empty.
+     * Falls back to database-configured actions only when the list was never computed for this run;
+     * a computed empty list (a host's actionChanges removed every action) is returned as-is.
      *
      * @param agentId - The ID of the agent to get actions for
      * @returns Array of effective actions available to the agent
@@ -7414,7 +7432,7 @@ export class BaseAgent {
      * @since 2.123.0
      */
     protected getEffectiveActionsForValidation(agentId: string): MJActionEntityExtended[] {
-        if (this._effectiveActions.length > 0) {
+        if (this._effectiveCatalogComputed || this._effectiveActions.length > 0) {
             return this._effectiveActions;
         }
 
@@ -7605,7 +7623,8 @@ export class BaseAgent {
 
     /**
      * Gets the effective sub-agents for validation, using runtime subAgentChanges if available.
-     * Falls back to the database-configured relationship set if _effectiveSubAgents is empty.
+     * Falls back to the database-configured relationship set only when the list was never computed
+     * for this run; a computed empty list is returned as-is.
      * Mirrors {@link getEffectiveActionsForValidation}.
      *
      * @param agentId - The ID of the agent to get sub-agents for
@@ -7613,7 +7632,7 @@ export class BaseAgent {
      * @protected
      */
     protected getEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[] {
-        if (this._effectiveSubAgents.length > 0) {
+        if (this._effectiveCatalogComputed || this._effectiveSubAgents.length > 0) {
             return this._effectiveSubAgents;
         }
 
@@ -11818,6 +11837,7 @@ The context is now within limits. Please retry your request with the recovered c
             this._effectiveActions = activeActions;
             // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
             this._effectiveSubAgents = uniqueActiveSubAgents;
+            this._effectiveCatalogComputed = true;
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -13093,7 +13113,7 @@ The context is now within limits. Please retry your request with the recovered c
         const secondary = scope.SecondaryScopes
             ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
             : null;
-        return { ...scope, SecondaryScopes: secondary };
+        return { ...scope, SecondaryScopes: secondary, ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}) };
     }
 
     /**
@@ -13546,6 +13566,7 @@ The context is now within limits. Please retry your request with the recovered c
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
+                SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -18329,18 +18350,13 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            const actionEngine = ActionEngineServer.Instance;
             // Get the AIAgentAction metadata records for this agent (used for expiration settings)
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, params.agent.ID));
 
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
-            // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
-            const validationEffectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
-            const effectiveActions = validationEffectiveActions.length > 0
-                ? validationEffectiveActions
-                : (actionEngine.Actions || []).filter(a =>
-                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
-                  );
+            // getEffectiveActionsForValidation falls back to the configured actions only when none were computed;
+            // an empty computed list (a host's actionChanges removed every action) is authoritative
+            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
             // Call agent type's pre-processing for actions
             try {
@@ -20855,11 +20871,7 @@ The context is now within limits. Please retry your request with the recovered c
             const agentActions = AIEngine.Instance.AgentActions.filter(
                 aa => UUIDsEqual(aa.AgentID, params.agent.ID)
             );
-            const effectiveActions = this._effectiveActions.length > 0
-                ? this._effectiveActions
-                : ActionEngineServer.Instance.Actions.filter(a =>
-                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
-                );
+            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
             const matchedAction =
                 effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
                 ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match;
@@ -23019,15 +23031,37 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private validatedRunScope(params: ExecuteAgentParams): ActionRunScope {
         const inputs = this.runScopeInputs(params);
+        // Only a run whose host assigned scopes carries the key, so every other run keeps the shape it had
+        const searchScopeIDs = this.hostSearchScopeIDs(params);
+        const hostScopes = searchScopeIDs ? { SearchScopeIDs: searchScopeIDs } : {};
         if (!inputs.EntityName && !inputs.RecordID && !inputs.Secondary) {
-            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, ...hostScopes };
         }
         const secondary = this.validateAndApplySecondaryScopes(inputs.Secondary, this.parseSecondaryScopeConfig(params.agent), params.agent.Name);
         return {
             PrimaryScopeEntityName: inputs.EntityName ?? null,
             PrimaryScopeRecordID: inputs.RecordID ?? null,
             SecondaryScopes: secondary && Object.keys(secondary).length > 0 ? secondary : null,
+            ...hostScopes,
         };
+    }
+
+    /**
+     * The search scopes the host assigned this run ({@link ExecuteAgentParams.SearchScopeIDs}): trimmed, de-duplicated,
+     * in the host's order, or `null` for none. Read from the first-class parameter only — never from `data`, which a
+     * caller could otherwise use to hand an agent a scope its own SearchScopeAccess refuses.
+     */
+    private hostSearchScopeIDs(params: ExecuteAgentParams): string[] | null {
+        const seen = new UUIDSet();
+        const ids: string[] = [];
+        for (const id of params.SearchScopeIDs ?? []) {
+            const trimmed = typeof id === 'string' ? id.trim() : '';
+            if (trimmed && !seen.Has(trimmed)) {
+                seen.Add(trimmed);
+                ids.push(trimmed);
+            }
+        }
+        return ids.length > 0 ? ids : null;
     }
 
     /**
