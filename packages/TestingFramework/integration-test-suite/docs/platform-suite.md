@@ -33,7 +33,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `scheduling-concurrency` | 3 (SC1–SC3) | IT41 - Scheduling Concurrency | server | deterministic |
 | `actions-pipeline` | 5 (AP1–AP5) | IT39 - Actions Pipeline | server | deterministic except **AP2 (`RequiresMutation: true`)** |
 | `user-routines` | 18 (UR1–UR18) | IT22 - User Routines Dispatcher | server | deterministic |
-| `chief-of-staff` | 8 (COS1–COS8) | IT138 - Chief of Staff Core Layers | server | deterministic; self-cleaning; COS6–COS8 skip when the context user already has a Chief of Staff policy (reference-only) |
+| `chief-of-staff` | 8 (COS1–COS8) | IT157 - Chief of Staff Core Layers | server | deterministic; self-cleaning; COS6–COS8 skip when the context user already has a Chief of Staff policy (reference-only) |
 | `remote-operations` | 7 (RO1–RO7) | IT11 - Remote Operations (4th Data Primitive) | server (in-process provider dispatch) | deterministic |
 | `remote-op-wire-progress` | 1 (WIRE1) | IT15 - Remote Operations Over-The-Wire Progress | client (needs live MJAPI; parked like IT03 until MJAPI is provisioned in CI) | deterministic |
 | `realtime-deterministic` | 9 (RD1–RD9) | IT51 - Realtime Deterministic Seams | server | deterministic; several checks skip-as-pass loudly on unseeded slices |
@@ -265,7 +265,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 ## 5. Remote Operations
 
 
-### 4.4a `chief-of-staff` (COS1–COS8) — IT138
+### 4.4a `chief-of-staff` (COS1–COS8) — IT157
 
 **Machinery under test.** The Chief of Staff's MJ-core layers, with no Open App installed or read: the `MJAIAgentUserPolicyEntityServer` and `MJAIAgentRequestEntityServer` ownership guards, the `Run User Routine Now` action, the `AgentUserPolicyEngine` cache's entity-event subscription, and `Manage My Email Inbox and Drafts` raising a Send's approval before any mail provider is resolved.
 
