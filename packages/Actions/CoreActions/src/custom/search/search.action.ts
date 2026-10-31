@@ -50,7 +50,8 @@ export const SEARCH_RUN_SCOPE_UNSUPPORTED = 'RUN_SCOPE_UNSUPPORTED';
  * **Not inside a tenant-scoped agent run.** It searches across every tenant the caller can reach — it takes no
  * tenant — so when `RunActionParams.RunScope` carries a tenant or a secondary dimension (`ActionRunScopeIsBounded`)
  * it refuses with {@link SEARCH_RUN_SCOPE_UNSUPPORTED} and points the model at Scoped Search, which searches the run's
- * tenant. Outside an agent run, or in an unscoped one, it searches as before.
+ * tenant. It refuses the same way when the host assigned the run's search scopes (`RunScope.SearchScopeIDs`), since
+ * it would search past them. Outside an agent run, or in an unscoped one, it searches as before.
  *
  * @example
  * ```typescript
@@ -120,7 +121,8 @@ export class SearchAction extends BaseAction {
 
     /**
      * The query to search for, or the refusal: a tenant-scoped agent run (`RunActionParams.RunScope` carrying a tenant
-     * or a secondary dimension) — this action takes no tenant, so it would search across tenants; a missing query; or
+     * or a secondary dimension) — this action takes no tenant, so it would search across tenants; a run whose host
+     * assigned its search scopes (`RunScope.SearchScopeIDs`) — this action would search past them; a missing query; or
      * no user context.
      */
     private checkInputs(params: RunActionParams): { query: string } | { result: ActionResultSimple } {
@@ -128,6 +130,13 @@ export class SearchAction extends BaseAction {
             return { result: this.createErrorResult(
                 "Search is not available in this agent run: the run is scoped to a tenant, and Search takes none, so it would search " +
                 "across every tenant. Use the Scoped Search action instead — inside an agent run it searches the run's tenant.",
+                SEARCH_RUN_SCOPE_UNSUPPORTED
+            ) };
+        }
+        if (params.RunScope?.SearchScopeIDs?.length) {
+            return { result: this.createErrorResult(
+                "Search is not available in this agent run: the host assigned the scopes this run may search, and Search would " +
+                "search past them. Use the Scoped Search action instead — it searches the host's scopes.",
                 SEARCH_RUN_SCOPE_UNSUPPORTED
             ) };
         }
