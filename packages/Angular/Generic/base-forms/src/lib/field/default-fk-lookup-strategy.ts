@@ -9,11 +9,13 @@
 
 import {
   RunView,
+  type RunViewResult,
   type EntitySearchResult,
   type IMetadataProvider,
   type SearchEntityParams,
 } from '@memberjunction/core';
 import {
+  FKLookupFailedError,
   FKLookupStrategy,
   type FKLookupContext,
   type FKLookupGroup,
@@ -133,7 +135,7 @@ export class DefaultFKLookupStrategy extends FKLookupStrategy {
       ResultType: 'simple',
       Fields: this.fieldsFor(context),
     });
-    return result.Success ? result.Results.map(Values => ({ Values })) : [];
+    return rowsOrThrow(result, 'browse');
   }
 
   /**
@@ -184,7 +186,7 @@ export class DefaultFKLookupStrategy extends FKLookupStrategy {
       ResultType: 'simple',
       Fields: this.fieldsFor(context),
     });
-    return result.Success ? result.Results.map(Values => ({ Values })) : [];
+    return rowsOrThrow(result, 'hydrate');
   }
 
   /** Re-impose the search API's ranking, which the hydrating view does not preserve. */
@@ -211,7 +213,17 @@ export class DefaultFKLookupStrategy extends FKLookupStrategy {
       ResultType: 'simple',
       Fields: this.fieldsFor(context),
     });
-    if (!result.Success) return [];
-    return RankByPrefix(result.Results.map(Values => ({ Values })), context.Query, searchField);
+    return RankByPrefix(rowsOrThrow(result, 'search'), context.Query, searchField);
   }
+}
+
+/**
+ * The rows of a successful view, or an {@link FKLookupFailedError}. A failed query must not come
+ * back as an empty list: the field would show "No matches" for a record that exists.
+ */
+function rowsOrThrow(result: RunViewResult<Record<string, unknown>>, step: string): FKLookupRow[] {
+  if (!result.Success) {
+    throw new FKLookupFailedError(`FK lookup ${step} failed: ${result.ErrorMessage || 'no error message'}`);
+  }
+  return result.Results.map(Values => ({ Values }));
 }

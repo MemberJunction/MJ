@@ -93,6 +93,17 @@ export interface FKLookupContext {
 }
 
 /**
+ * Thrown by a strategy when its query failed, as distinct from finding no rows. Carries the
+ * provider's error message for the log; the user sees a generic error with Retry.
+ */
+export class FKLookupFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FKLookupFailedError';
+  }
+}
+
+/**
  * Base class for a foreign-key lookup strategy. Subclass, implement {@link Lookup}, and register
  * it with `@RegisterClass(FKLookupStrategy, '<key>')` — see the module doc for the key forms.
  *
@@ -112,6 +123,10 @@ export abstract class FKLookupStrategy {
   /**
    * The rows for the current query and scope, in the order they should render. Called for the
    * empty query too — that is the browse list the user sees on focus.
+   *
+   * Return no rows only when nothing matched. When the query itself failed, throw (an
+   * {@link FKLookupFailedError} reads best): the field then shows an error with Retry instead of
+   * "No matches", which would tell the user the record does not exist.
    */
   public abstract Lookup(context: FKLookupContext): Promise<FKLookupGroup[]>;
 
