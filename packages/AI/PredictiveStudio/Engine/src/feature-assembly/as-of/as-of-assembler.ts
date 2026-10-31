@@ -16,11 +16,13 @@
  * tracks Record Changes, its history covers the decision day (else `decision-date-before-change-history`, naming where
  * the history starts) and none of them updated it afterwards (else `select-changes-after-decision-date`); an updatable
  * field of an untracked entity refuses `decision-date-before-change-history`, since its past value cannot be known.
- * Both refusals count distinct unit rows. A row whose decision day is on or after the assembly's own UTC day
- * (`AssembledAt`, the clock training and scoring are run with) is the exception: nothing after that day exists yet, so
- * the stored value IS the value on that day, and an updatable field — on a tracked or an untracked entity, read
- * directly, replayed, as a join key or as a child row's field — reads the stored value for that row as covered (a record
- * created after the decision day still reads as missing). Rows with a past decision day keep the rule above. A record whose history cannot be replayed for another reason (a continuity
+ * Both refusals count distinct unit rows. One rule covers a row whose decision day is on or after the assembly's own
+ * UTC day (`AssembledAt`, the clock training and scoring are run with), for a field read directly, replayed, as a join
+ * key or as a child row's field: on a tracked entity the history is consulted first, and only where it does not reach
+ * that day (no history, or one that starts after it) is the stored value read, as covered; a covering history replays
+ * (or, read directly, refuses an update dated after the day, exactly as for a past day). On an untracked entity
+ * nothing can be consulted, so the stored value is read for such a row. A record created after the decision day still
+ * reads as missing. Rows with a past decision day keep the rule above. A record whose history cannot be replayed for another reason (a continuity
  * mismatch, a deletion, an ineligible external row) makes the rows reading it uncovered, exactly as a replayed field
  * does. Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
  * after a decision day can move between owners, so every child row read passes the rule for its owner key, date, value
@@ -154,7 +156,7 @@ type CoverageByField = Map<string, ChangeHistoryCoverage>;
  * and, per windowed-aggregate column, the late-entered child rows dropped from owner windows.
  */
 interface AssemblyState { readonly Coverage: CoverageByField; readonly Histories: Map<string, EntityHistory>; readonly LateEntered: Map<string, number> }
-/** What a replayed field reads: the history for rows decided before the assembly's day (null when there are none), the stored rows for the others. */
+/** What a replayed field reads: the history of every row's record, and the stored rows of the rows decided on or after the assembly's day (read only where the history does not cover the day). */
 interface ReplaySources { readonly History: EntityHistory; readonly Stored: ReadonlyMap<string, SourceRow> }
 
 /** The level the least frequent categories beyond a column's cardinality cap fold into. */
@@ -594,9 +596,12 @@ export class AsOfFeatureAssembler {
     }
     const history = await AsOfFeatureAssembler.loadHistory(entity, reads.map((r) => r.Key), [field], input, state);
     const onDayOrLater = AsOfFeatureAssembler.asOfInstant(input.AssembledAt).getTime();
-    const judge = (key: string, at: Date): StableOutcome => (info.AllowUpdateAPI === false || at.getTime() >= onDayOrLater
-      ? (AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable')
-      : AsOfFeatureAssembler.judgeStoredValue(history, key, field, at, storedCreatedAt(key)));
+    const judge = (key: string, at: Date): StableOutcome => {
+      if (info.AllowUpdateAPI === false) return AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable';
+      const verdict = AsOfFeatureAssembler.judgeStoredValue(history, key, field, at, storedCreatedAt(key));
+      // The replay rule: only a history that does not reach a day on or after the assembly's reads the stored value.
+      return verdict === 'uncovered' && at.getTime() >= onDayOrLater ? 'stable' : verdict;
+    };
     const instants = AsOfFeatureAssembler.instantsOf(reads);
     const outcomes = reads.map((r) => AsOfFeatureAssembler.outcomeOf(r, AsOfFeatureAssembler.instantsFor(instants, r.Rows), judge));
     const changed = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'changed', judge);

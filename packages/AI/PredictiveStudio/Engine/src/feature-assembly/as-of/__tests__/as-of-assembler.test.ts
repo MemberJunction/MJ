@@ -663,6 +663,18 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     expect([out.Rows[0].Values[0], out.Rows[0].Provenance[0].sourceVersion]).toEqual(['Active', 'rc-create']);
   });
 
+  it('reads a tracked updatable field directly by the same rule as replay: a covering history with a later update refuses, an uncovered one reads the stored value', async () => {
+    const status: FeatureColumnSpec = { name: 'Status', source: { kind: 'immutable-field', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+    // The history covers 2026-12-01 (created 2021) and lapses 2027-01-01, after that decision day: the stored Lapsed is not the value then.
+    const dated = { People: [rc('rc-create', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('rc-lapse', 'P1', 'Update', '2027-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
+    const later: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
+    expect(await new AsOfFeatureAssembler().Assemble(input([status], { Rows: later, Changes: dated })))
+      .toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'People', field: 'Status', changesAfter: 1 } });
+    // No history at all for the record: uncovered, so a row decided after the assembly day reads the stored value.
+    const out = await new AsOfFeatureAssembler().Assemble(input([status], { Rows: later, Changes: { People: [] } }));
+    expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual(['Lapsed']);
+  });
+
   it("covers an untracked child's updatable field in an aggregate for owners decided today", async () => {
     const pledges = { ...tables, Pledges: [{ ID: 'pl1', PersonID: 'P1', PledgedOn: '2022-06-01', Amount: 5 }, { ID: 'pl2', PersonID: 'P1', PledgedOn: '2026-10-01', Amount: 7 }] };
     const sum: FeatureColumnSpec = { name: 'Pledged', source: { kind: 'windowed-aggregate', childEntity: 'Pledges', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'PledgedOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };
