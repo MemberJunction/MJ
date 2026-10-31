@@ -2139,6 +2139,7 @@ export class VideoStudioSetupHealthOperation extends BaseRemotableOperation<Vide
     public readonly OperationKey = "VideoStudio.SetupHealth";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_92bd2b71364dfcae";
 }
 
 // ============================================================
