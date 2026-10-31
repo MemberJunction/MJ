@@ -198,13 +198,13 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(store.Filters).toEqual([]);
   });
 
-  it('deletes recorded Prediction Units after the pipelines, newest Version first', async () => {
+  it('deletes recorded Prediction Units and every version in their lineages after the pipelines, newest Version first', async () => {
     const records = new RunRecords();
     records.RecordPipeline(P1);
     for (const id of [U1, U2, U3]) records.RecordPredictionUnit(id);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters[store.Filters.length - 1]).toBe(`MJ: Prediction Units | ID IN ('${U1}','${U2}','${U3}')`);
+    expect(store.Filters[store.Filters.length - 1]).toBe(`MJ: Prediction Units | ID IN ('${U1}','${U2}','${U3}') OR LineageRootID IN ('${U1}','${U2}','${U3}')`);
     expect(store.Deleted.slice(-4)).toEqual([`MJ: ML Training Pipelines:${AGENT_P}`, `MJ: Prediction Units:${U3}`, `MJ: Prediction Units:${U2}`, `MJ: Prediction Units:${U1}`]);
     expect(records.PredictionUnitIDs.Size).toBe(0);
   });

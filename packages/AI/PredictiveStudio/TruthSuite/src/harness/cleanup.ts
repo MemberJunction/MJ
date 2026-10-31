@@ -276,11 +276,13 @@ export class HarnessCleanup {
   }
 
   /**
-   * Delete the recorded Prediction Unit versions, newest Version first, one Version at a time: every later version
-   * references its lineage root (a self-referential key), so the root goes last. Returns one line per failed delete.
+   * Delete the recorded Prediction Unit versions and every version in their lineages (a decision-date advance saves
+   * version 2 of a harness unit when a run crosses UTC midnight, and nothing records it), newest Version first, one
+   * Version at a time: every later version references its lineage root (a self-referential key), so the root goes
+   * last. Returns one line per failed delete.
    */
   private static async deletePredictionUnits(store: CleanupStore, records: RunRecords): Promise<string[]> {
-    const filter = HarnessCleanup.anyIn([['ID', records.PredictionUnitIDs]]);
+    const filter = HarnessCleanup.anyIn([['ID', records.PredictionUnitIDs], ['LineageRootID', records.PredictionUnitIDs]]);
     const units = filter ? await store.PredictionUnits(filter) : [];
     return HarnessCleanup.deleteNewestVersionFirst('MJ: Prediction Units', units, (id) => records.PredictionUnitIDs.Delete(id));
   }
