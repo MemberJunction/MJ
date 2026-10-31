@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type UserInfo } from '@memberjunction/core';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import { HarnessFileStorage, type FileStorageActivation } from './file-storage';
 import { HarnessDatasets, type DatasetPool } from './datasets';
 import { HarnessPipelines, type AlgorithmRow } from './pipelines';
@@ -95,6 +97,7 @@ export class RunFixtures {
     try {
       const agentPipelines = await HarnessAgent.PipelineIDsNamed(h.Provider, user, h.Created.AgentPipelineNames);
       for (const id of agentPipelines) h.Created.RecordPipeline(id);
+      await RunFixtures.recordPipelineBindings(h, user, agentPipelines);
       failures.push(...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created)));
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
@@ -112,6 +115,23 @@ export class RunFixtures {
       failures.push(`closing the dataset pool: ${e instanceof Error ? e.message : String(e)}`);
     }
     return failures.map((f) => `run ${h.RunID}: ${f}`);
+  }
+
+  /**
+   * The unit and protocol versions the agent runs' pipelines are bound to (the builder binds them), recorded so cleanup
+   * deletes them with their pipelines.
+   */
+  private static async recordPipelineBindings(h: TruthHarness, user: UserInfo, pipelineIds: readonly string[]): Promise<void> {
+    if (pipelineIds.length === 0) return;
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLTrainingPipelineEntity, 'PredictionUnitID' | 'EvaluationProtocolID'>>({
+      EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID IN (${pipelineIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ')})`,
+      Fields: ['PredictionUnitID', 'EvaluationProtocolID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    if (!r.Success) throw new Error(`reading the agent pipelines' bindings failed: ${r.ErrorMessage}`);
+    for (const p of r.Results) {
+      if (p.PredictionUnitID) h.Created.RecordPredictionUnit(p.PredictionUnitID);
+      if (p.EvaluationProtocolID) h.Created.RecordEvaluationProtocol(p.EvaluationProtocolID);
+    }
   }
 
   /** Trains a logistic-regression model on the given dataset (every unit row: a unit pipeline refuses a row cap) and returns its `ModelID`. */
