@@ -8,7 +8,6 @@
 import { CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { IRecordSetSource, SourceDescriptor } from '../interfaces';
 import { ProcessCursor, RecordBatch, RecordRef } from '../types';
-import { ReadSizeForBatch } from './sourceUtil';
 
 /** A source backed by a List (its members, via List Details). */
 export class ListSource implements IRecordSetSource {
@@ -32,6 +31,7 @@ export class ListSource implements IRecordSetSource {
             Fields: ['EntityID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, contextUser);
         if (!result.Success) {
             throw new Error(`ListSource: failed loading list '${this.listID}': ${result.ErrorMessage}`);
@@ -60,7 +60,7 @@ export class ListSource implements IRecordSetSource {
             Fields: ['ID', 'RecordID'],
             OrderBy: 'ID',
             ResultType: 'simple',
-            MaxRows: ReadSizeForBatch(batchSize),
+            MaxRows: batchSize,
             BypassCache: true,
             ...(legacyOffset != null
                 ? { StartRow: legacyOffset }

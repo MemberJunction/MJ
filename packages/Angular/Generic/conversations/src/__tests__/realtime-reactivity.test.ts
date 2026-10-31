@@ -2,6 +2,7 @@
 // (same convention as the other component suites in this node test environment).
 import '@angular/compiler';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
 
 /**
@@ -194,5 +195,28 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
 
     expect(h.windowStore.RefreshLatest).toHaveBeenCalledWith({ ID: 'USER-1' });
     expect(h.realtimeConversationReadyEmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('a call that ends: the failure notice', () => {
+  function notifyFor(reason: 'explicit' | 'error' | 'deadline'): ReturnType<typeof vi.fn> {
+    const h = createHarness();
+    const notify = vi.fn();
+    vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({ CreateSimpleNotification: notify } as unknown as MJNotificationService);
+    (h.component as unknown as Record<string, unknown>)['RealtimeSession'] = { LastStartError: null, LastSessionError: null };
+    invokePrivate(h.component, 'notifyIfCallFailed', reason);
+    return notify;
+  }
+
+  it("says why when the runtime ended the call over an error", () => {
+    expect(notifyFor('error')).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a 'deadline' end as a normal end: no failure notice", () => {
+    expect(notifyFor('deadline')).not.toHaveBeenCalled();
+  });
+
+  it("renders an 'explicit' end as a normal end: no failure notice", () => {
+    expect(notifyFor('explicit')).not.toHaveBeenCalled();
   });
 });

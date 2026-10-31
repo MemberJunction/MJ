@@ -91,6 +91,7 @@ export class RunTemplateResolver extends ResolverBase {
                 ExtraFilter: `TemplateID = '${EscapeSQLString(templateEntity.ID)}'`,
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, currentUser);
 

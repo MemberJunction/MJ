@@ -423,6 +423,7 @@ export class SearchService {
             SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifact.ID}'
           )`,
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         },
         currentUser
