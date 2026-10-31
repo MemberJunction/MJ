@@ -74,13 +74,13 @@ export class UnitModelLineageParser {
   }
 
   /**
-   * True when a stored `Lineage` text is a legacy model's: a JSON object with the `featureSteps` graph the legacy
-   * training wrote and no `predictionUnitId`. Training writes only unit lineages, so such a model was trained before
-   * its pipeline was bound to a unit (the pipeline migration binds pipelines whose published models keep scoring).
+   * True when a stored `Lineage` text is a readable JSON object. With {@link NamesUnit} false it is a model trained
+   * before Prediction Units (every pre-PR-3 shape: provenance only, or with the feature graph): only unit training
+   * writes `predictionUnitId`, so its absence from a readable lineage identifies a legacy model.
    */
-  public static IsLegacyLineage(text: string | null | undefined): boolean {
+  public static IsReadable(text: string | null | undefined): boolean {
     const parsed = JsonParse.ParseJsonText(text, 'Lineage');
-    return parsed.Ok === true && JsonParse.IsJsonObject(parsed.Value) && 'featureSteps' in parsed.Value && !('predictionUnitId' in parsed.Value);
+    return parsed.Ok === true && JsonParse.IsJsonObject(parsed.Value);
   }
 
   private static lineage(v: JsonValue): Checked<UnitModelLineage> {

@@ -369,17 +369,22 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /**
    * The unit a model was trained on, with the feature columns and categorical levels its Lineage stored; null for a
-   * legacy model. The model's own Lineage, frozen at training, decides: one that names a unit takes the unit path (the
-   * unit it stored, even when the pipeline's editable `PredictionUnitID` was later cleared or moved). A legacy Lineage
-   * (the legacy feature graph, no unit) is a legacy model even when its pipeline now points at a unit: the pipeline
-   * migration binds units to pipelines whose published models keep scoring. On a pipeline that points at a unit, any
-   * other Lineage (missing, not JSON, neither shape) fails loudly naming the model, as does a unit Lineage that fails
-   * validation or whose unit cannot be loaded or parsed; it is never scored through the legacy current-value path.
+   * legacy model. The model's own Lineage, frozen at training, decides, by the marker only unit training writes
+   * (`predictionUnitId`): a Lineage that carries it takes the unit path (the unit it stored, even when the pipeline's
+   * editable `PredictionUnitID` was later cleared or moved) and must validate. Every other readable Lineage is a model
+   * trained before Prediction Units (every pre-PR-3 shape, with or without the feature graph, which the pipeline-row
+   * fallback rebuilds): it keeps scoring on the legacy path even after the migration bound its pipeline to a unit. A
+   * Lineage that cannot be read fails loudly on a pipeline that points at a unit (it cannot be told apart); on one that
+   * does not, the model is legacy, as it always was. A unit Lineage that fails validation, or whose unit cannot be
+   * loaded or parsed, fails loudly naming the model; it is never scored through the legacy current-value path.
    */
   private async loadUnitModel(model: MJMLModelEntity, context: RecordProcessorContext): Promise<LoadedUnitModel | null> {
-    const lookup = this.deps.pipelineUnits || new RunViewPipelineUnitLookup();
-    const pipelineUnitId = await lookup.PredictionUnitIDOf(model.PipelineID, context.ContextUser, context.Provider);
-    if (!UnitModelLineageParser.NamesUnit(model.Lineage) && (!pipelineUnitId || UnitModelLineageParser.IsLegacyLineage(model.Lineage))) return null;
+    if (!UnitModelLineageParser.NamesUnit(model.Lineage)) {
+      if (UnitModelLineageParser.IsReadable(model.Lineage)) return null;
+      const lookup = this.deps.pipelineUnits || new RunViewPipelineUnitLookup();
+      if (!(await lookup.PredictionUnitIDOf(model.PipelineID, context.ContextUser, context.Provider))) return null;
+      throw new Error(`MLModelInferenceProcessor: model '${model.ID}' has an unreadable Lineage and its pipeline points at a Prediction Unit, so whether it was trained on a unit cannot be told`);
+    }
     const lineage = UnitModelLineageParser.ParseUnitModelLineage(model.Lineage);
     if (lineage.Ok === false) {
       throw new Error(`MLModelInferenceProcessor: model '${model.ID}' was trained on a Prediction Unit but its Lineage cannot be read: ${lineage.Errors[0]}`);

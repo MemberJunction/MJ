@@ -54,15 +54,13 @@ describe('UnitModelLineageParser.ParseUnitModelLineage', () => {
   });
 });
 
-describe('UnitModelLineageParser.IsLegacyLineage', () => {
-  const steps = { Steps: [{ Id: 'select-raw', Kind: 'select', Columns: ['Plan'] }] };
-  it('reads the legacy feature graph without a unit as a legacy lineage', () => {
-    expect(UnitModelLineageParser.IsLegacyLineage(JSON.stringify({ pipelineId: 'p', targetEntityName: 'Years', featureSteps: steps }))).toBe(true);
+describe('UnitModelLineageParser.IsReadable', () => {
+  it('reads every pre-PR-3 lineage shape and a unit lineage as readable', () => {
+    const preJune = JSON.stringify({ pipelineId: 'p', pipelineVersion: 1, sourceBindings: [], asOfStrategy: { Mode: 'none' }, sidecarVersion: null, lockedHoldoutRowCount: 2, trainingRowCount: 8, assembledAt: '2026-05-01T00:00:00.000Z' });
+    const withGraph = JSON.stringify({ pipelineId: 'p', targetEntityName: 'Years', featureSteps: { Steps: [] } });
+    expect([preJune, withGraph, stored()].map((t) => UnitModelLineageParser.IsReadable(t))).toEqual([true, true, true]);
   });
-  it('never reads a lineage that names a unit as legacy, even beside the feature graph', () => {
-    expect(UnitModelLineageParser.IsLegacyLineage(stored({ featureSteps: steps }))).toBe(false);
-  });
-  it('never reads a lineage without the feature graph, or one that is missing or not JSON, as legacy', () => {
-    expect([JSON.stringify({ pipelineId: 'p' }), '', null, '{not json'].map((t) => UnitModelLineageParser.IsLegacyLineage(t))).toEqual([false, false, false, false]);
+  it('never reads a missing, non-JSON or non-object lineage as readable', () => {
+    expect(['', null, undefined, '{not json', '[1]', '"text"'].map((t) => UnitModelLineageParser.IsReadable(t))).toEqual([false, false, false, false, false, false]);
   });
 });

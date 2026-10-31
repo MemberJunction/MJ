@@ -261,6 +261,40 @@ describe('MatrixToFeatureRows — frozen-schema mapping', () => {
   });
 });
 
+describe('MLModelInferenceProcessor — a model trained before Prediction Units keeps scoring after its pipeline is migrated', () => {
+  it('scores a pre-2026-06-27 Lineage (provenance only, no feature graph) on a unit-bound pipeline through the pipeline-row fallback', async () => {
+    const legacy = new FakeMLModel();
+    // The shape TrainingEngine.buildLineage wrote before 64f92aa3b9 added targetEntityName and featureSteps.
+    legacy.Lineage = JSON.stringify({ pipelineId: 'pipe-members', pipelineVersion: 1, sourceBindings: [], asOfStrategy: { Mode: 'none' }, sidecarVersion: null, lockedHoldoutRowCount: 2, trainingRowCount: 8, assembledAt: '2026-05-01T00:00:00.000Z' });
+    legacy.Pipeline = null;
+    const { deps } = buildDeps(legacy);
+    const bound = { PredictionUnitIDOf: async () => 'U-MIGRATED' };
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits: bound } }, new TestAssembler(new InMemoryDataAccess()));
+    const pipelineQueries: string[] = [];
+    const provider = {
+      EntityByID: () => undefined,
+      RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, string>>> => {
+        pipelineQueries.push(`${params.EntityName}|${params.ExtraFilter}`);
+        const row = { TargetEntity: 'Members', SourceBindings: JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }]), FeatureSteps: JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure', 'events_at_signup', 'city'] }] }), AsOfStrategy: JSON.stringify({ Mode: 'none' }) };
+        return { Success: true, Results: [row], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '' };
+      },
+    } as unknown as IMetadataProvider;
+    const result = await proc.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), { ...CTX, Provider: provider });
+    expect([result.Status, result.ErrorMessage || null]).toEqual(['Succeeded', null]);
+    expect(pipelineQueries).toEqual(["MJ: ML Training Pipelines|ID='pipe-members'"]);
+  });
+
+  it('fails loudly for an unreadable Lineage on a unit-bound pipeline, and loads it as legacy on an unbound one', async () => {
+    const broken = new FakeMLModel();
+    broken.Lineage = '{not json';
+    const { deps } = buildDeps(broken);
+    const bound = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits: { PredictionUnitIDOf: async () => 'U-1' } } }, new TestAssembler(new InMemoryDataAccess()));
+    await expect(bound.Preflight(CTX)).rejects.toThrow(/model 'model-1' has an unreadable Lineage/);
+    const unbound = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
+    await expect(unbound.Preflight(CTX)).resolves.toBeUndefined();
+  });
+});
+
 describe('MLModelInferenceProcessor — empty feature assembly guardrail', () => {
   it('refuses to score and fails the record when feature assembly produces 0 columns for a model with schema features', async () => {
     const emptyLineageModel = new FakeMLModel();
@@ -464,11 +498,6 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*featureSpec\[0\].*encoding/);
   });
 
-  it('refuses to load a unit pipeline\'s model whose Lineage is neither a unit nor a legacy lineage', async () => {
-    const { deps } = await unitModel(JSON.stringify({ targetEntityName: 'Years' }));
-    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*predictionUnitId/);
-  });
-
   it('refuses to load a unit pipeline\'s model that has no Lineage, naming the model', async () => {
     const { deps } = await unitModel('');
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'/);
@@ -493,7 +522,8 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps });
     await expect(processor.Preflight(ctx(UnitYearsWorld.PeopleEntity.ID))).rejects.toMatchObject({ Refusal: { reason: { kind: 'scope-entity-mismatch' } } });
     const scored = await processor.AssembleForScoring([{ ID: 'y2024-2' }], ctx(), 'unit-rule');
-    expect(cleared.calls).toEqual(['pipe-u']);
+    // The Lineage's unit marker decides alone; the pipeline's (cleared) binding is not consulted.
+    expect(cleared.calls).toEqual([]);
     expect(scored.Status === 'assembled' && training.Assembled.Status === 'assembled' && scored.Rows[0].Values).toEqual(
       training.Assembled.Status === 'assembled' ? training.Assembled.Rows.find((r) => r.RowId === 'y2024-2')?.Values : null,
     );
@@ -512,7 +542,8 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const cleared = clearedUnits();
     const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits: cleared.lookup } }, new TestAssembler(new InMemoryDataAccess()));
     await expect(processor.Preflight(CTX)).resolves.toBeUndefined();
-    expect(cleared.calls).toEqual(['pipe-legacy']);
+    // A readable Lineage without the unit marker is legacy on its own: the pipeline's binding is not consulted.
+    expect(cleared.calls).toEqual([]);
     await expect(processor.AssembleForScoring([{ ID: 'm1' }], CTX, 'unit-rule')).rejects.toThrow(/not trained on a Prediction Unit/);
   });
 
