@@ -369,16 +369,17 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /**
    * The unit a model was trained on, with the feature columns and categorical levels its Lineage stored; null for a
-   * legacy model. A model is a unit model when its pipeline points at a unit OR its Lineage names one: the pipeline's
-   * `PredictionUnitID` is an editable column, so a model trained on a unit whose pipeline was later cleared still takes
-   * the unit path (the unit its Lineage stored). A unit model whose Lineage is missing or fails validation, or whose
-   * unit cannot be loaded or parsed, fails loudly naming the model and the first problem; it is never scored through
-   * the legacy current-value path.
+   * legacy model. The model's own Lineage, frozen at training, decides: one that names a unit takes the unit path (the
+   * unit it stored, even when the pipeline's editable `PredictionUnitID` was later cleared or moved). A legacy Lineage
+   * (the legacy feature graph, no unit) is a legacy model even when its pipeline now points at a unit: the pipeline
+   * migration binds units to pipelines whose published models keep scoring. On a pipeline that points at a unit, any
+   * other Lineage (missing, not JSON, neither shape) fails loudly naming the model, as does a unit Lineage that fails
+   * validation or whose unit cannot be loaded or parsed; it is never scored through the legacy current-value path.
    */
   private async loadUnitModel(model: MJMLModelEntity, context: RecordProcessorContext): Promise<LoadedUnitModel | null> {
     const lookup = this.deps.pipelineUnits || new RunViewPipelineUnitLookup();
     const pipelineUnitId = await lookup.PredictionUnitIDOf(model.PipelineID, context.ContextUser, context.Provider);
-    if (!pipelineUnitId && !UnitModelLineageParser.NamesUnit(model.Lineage)) return null;
+    if (!UnitModelLineageParser.NamesUnit(model.Lineage) && (!pipelineUnitId || UnitModelLineageParser.IsLegacyLineage(model.Lineage))) return null;
     const lineage = UnitModelLineageParser.ParseUnitModelLineage(model.Lineage);
     if (lineage.Ok === false) {
       throw new Error(`MLModelInferenceProcessor: model '${model.ID}' was trained on a Prediction Unit but its Lineage cannot be read: ${lineage.Errors[0]}`);

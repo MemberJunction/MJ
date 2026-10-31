@@ -464,9 +464,21 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*featureSpec\[0\].*encoding/);
   });
 
-  it('refuses to load a unit pipeline\'s model whose Lineage has no unit part', async () => {
-    const { deps } = await unitModel(JSON.stringify({ targetEntityName: 'Years', featureSteps: steps }));
+  it('refuses to load a unit pipeline\'s model whose Lineage is neither a unit nor a legacy lineage', async () => {
+    const { deps } = await unitModel(JSON.stringify({ targetEntityName: 'Years' }));
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*predictionUnitId/);
+  });
+
+  it('refuses to load a unit pipeline\'s model that has no Lineage, naming the model', async () => {
+    const { deps } = await unitModel('');
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'/);
+  });
+
+  it('loads a legacy-lineage model of a pipeline the migration bound to a unit as a legacy model (it keeps scoring)', async () => {
+    const { deps } = await unitModel(JSON.stringify({ pipelineId: 'pipe-u', targetEntityName: 'Years', featureSteps: steps, asOfStrategy: { Mode: 'none' } }));
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
+    await expect(processor.Preflight(CTX)).resolves.toBeUndefined();
+    await expect(processor.AssembleForScoring([{ ID: 'm1' }], CTX, 'unit-rule')).rejects.toThrow(/not trained on a Prediction Unit/);
   });
 
   /** A lookup whose pipelines all have no unit (the unit was cleared after training), counting its calls. */

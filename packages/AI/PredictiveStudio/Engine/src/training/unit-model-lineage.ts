@@ -73,6 +73,16 @@ export class UnitModelLineageParser {
     return parsed.Ok === true && JsonParse.IsJsonObject(parsed.Value) && 'predictionUnitId' in parsed.Value;
   }
 
+  /**
+   * True when a stored `Lineage` text is a legacy model's: a JSON object with the `featureSteps` graph the legacy
+   * training wrote and no `predictionUnitId`. Training writes only unit lineages, so such a model was trained before
+   * its pipeline was bound to a unit (the pipeline migration binds pipelines whose published models keep scoring).
+   */
+  public static IsLegacyLineage(text: string | null | undefined): boolean {
+    const parsed = JsonParse.ParseJsonText(text, 'Lineage');
+    return parsed.Ok === true && JsonParse.IsJsonObject(parsed.Value) && 'featureSteps' in parsed.Value && !('predictionUnitId' in parsed.Value);
+  }
+
   private static lineage(v: JsonValue): Checked<UnitModelLineage> {
     if (!JsonParse.IsJsonObject(v)) return UnitModelLineageParser.fail('Lineage', 'is not a JSON object');
     const unitId = JsonParse.JsonString(v, 'predictionUnitId');
