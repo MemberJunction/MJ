@@ -181,10 +181,22 @@ All tasks are tracked in the database with real-time progress updates.
   "nextStep": {
     "type": "Tasks",
     "tasks": {
-      "workflowName": "...",
-      "reasoning": "...",
+      "workflowName": "Research and Analyze AI Market",
+      "reasoning": "User approved the multi-step research and analysis plan",
       "continuation": "reinvoke",
-      "tasks": []
+      "tasks": [
+        {
+          "tempId": "task1",
+          "name": "Research Data",
+          "description": "Query associations database for revenue and location data",
+          "kind": "Agent",
+          "configuration": { "agentName": "Research Agent" },
+          "dependsOn": [],
+          "inputPayload": {
+            "query": "associations with 5-30M revenue in USA"
+          }
+        }
+      ]
     }
   }
 }

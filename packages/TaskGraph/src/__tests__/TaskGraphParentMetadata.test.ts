@@ -12,15 +12,20 @@
  * bad `reinvokeDepth` would either disable the chain cap (`NaN >= 5` is false, forever) or trip it
  * on the first hop.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {
     BuildTaskGraphParentInputPayload,
     ClampReinvokeDepth,
     ParseTaskGraphParentMetadata,
     IsReinvokeCapReached,
     MAX_REINVOKE_DEPTH,
+    TaskGraphService,
     type TaskGraphParentMetadata,
 } from '../TaskGraphService';
+import { DurableTaskGraphSubmitter } from '../TaskGraphSubmitterImpl';
+import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { ParseTaskGraphDebugState } from '../debug-state';
 
 describe('ParseTaskGraphParentMetadata', () => {
@@ -226,4 +231,70 @@ describe('BuildTaskGraphParentInputPayload — start-paused is written with the 
         const bag = BuildTaskGraphParentInputPayload(base);
         expect(bag.invocation).toBeUndefined();
     });
+
+    it('carries parentAgentHierarchy on the parent task payload and round-trips it via ParseTaskGraphParentMetadata (VS-QA-3 #9)', () => {
+        const bag = BuildTaskGraphParentInputPayload({
+            ...base,
+            parentAgentHierarchy: ['A', 'B', 'C'],
+        });
+        expect(bag.parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+        const parsed = ParseTaskGraphParentMetadata(JSON.stringify(bag));
+        expect(parsed.parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+    });
+
+    it('DurableTaskGraphSubmitter.Submit forwards ParentAgentHierarchy to TaskGraphService.Submit context (VS-QA-3 #9)', async () => {
+        const submitSpy = vi.spyOn(TaskGraphService.prototype, 'Submit').mockResolvedValueOnce({
+            Success: true,
+            ParentTaskID: 'parent-task-1',
+        } as never);
+        try {
+            const submitter = new DurableTaskGraphSubmitter();
+            const outcome = await submitter.Submit({
+                Spec: { workflowName: 'Hierarchy Workflow', tasks: [] },
+                EnvironmentID: 'env-1',
+                ContextUser: { ID: 'user-1' } as unknown as UserInfo,
+                Provider: {} as unknown as IMetadataProvider,
+                ParentAgentHierarchy: ['Sage', 'Director'],
+            });
+            expect(outcome.Success).toBe(true);
+            expect(submitSpy).toHaveBeenCalledTimes(1);
+            expect(submitSpy.mock.calls[0][1].ParentAgentHierarchy).toEqual(['Sage', 'Director']);
+        } finally {
+            submitSpy.mockRestore();
+        }
+    });
+
+    it('TaskGraphDispatcher.graphContext reads ParentAgentHierarchy from parent InputPayload when present and undefined when absent (VS-QA-3 #9)', async () => {
+        const callGraphContext = async (inputPayload: string): Promise<{ ParentAgentHierarchy?: string[] }> => {
+            const parentTask = {
+                ID: 'parent-1',
+                AgentRunID: 'run-parent-1',
+                InputPayload: inputPayload,
+                Load: vi.fn(async () => true),
+            };
+            const provider = {
+                GetEntityObject: vi.fn(async () => parentTask),
+            } as unknown as IMetadataProvider;
+            const dispatcher = Object.create(TaskGraphDispatcher.prototype) as {
+                contextUser: UserInfo;
+                graphContext: (p: IMetadataProvider, t: MJTaskEntity) => Promise<{ ParentAgentHierarchy?: string[] }>;
+            };
+            dispatcher.contextUser = { ID: 'user-1' } as unknown as UserInfo;
+            return dispatcher.graphContext(provider, { ID: 'child-1', ParentID: 'parent-1' } as unknown as MJTaskEntity);
+        };
+
+        const withHierarchy = await callGraphContext(
+            JSON.stringify(
+                BuildTaskGraphParentInputPayload({
+                    ...base,
+                    parentAgentHierarchy: ['Sage', 'Director'],
+                }),
+            ),
+        );
+        expect(withHierarchy.ParentAgentHierarchy).toEqual(['Sage', 'Director']);
+
+        const withoutHierarchy = await callGraphContext(JSON.stringify(BuildTaskGraphParentInputPayload(base)));
+        expect(withoutHierarchy.ParentAgentHierarchy).toBeUndefined();
+    });
 });
+

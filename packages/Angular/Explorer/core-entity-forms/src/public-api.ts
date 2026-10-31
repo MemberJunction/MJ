@@ -66,3 +66,7 @@ export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentTy
 
 // Visual Hierarchy & Taxonomy Form Panels
 export * from './lib/custom/HierarchyPanels/hierarchy-form-panels';
+
+// Brand Kit Form Panels
+export { BrandKitAssetsPanelComponent, LoadBrandKitAssetsPanelComponent } from './lib/panels/brand-kits/brand-kit-assets.panel';
+export { BrandKitGenerationPolicyPanelComponent, LoadBrandKitGenerationPolicyPanelComponent } from './lib/panels/brand-kits/brand-kit-generation-policy.panel';

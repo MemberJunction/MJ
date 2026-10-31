@@ -374,6 +374,12 @@ export type TaskAgentRunParams = {
      */
     SubmittingAgentRunID?: string | null;
     /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * submitting run, read from the parent task's metadata so `TaskGraphAgentRunner` can pass it
+     * directly to `AgentRunner.RunAgent` without walking ancestor runs in a loop.
+     */
+    ParentAgentHierarchy?: string[];
+    /**
      * How many continuation hops led to this run, from the graph's own metadata.
      *
      * Carried so the chain is BOUNDED. A flow that dispatches a graph containing itself recurses
@@ -391,6 +397,8 @@ export type TaskAgentRunParams = {
     Provider: IMetadataProvider;
     /** User the work runs as. */
     ContextUser: UserInfo;
+    /** Optional configuration preset name for the target agent, configured on the Agent step. */
+    ConfigurationPresetName?: string;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };

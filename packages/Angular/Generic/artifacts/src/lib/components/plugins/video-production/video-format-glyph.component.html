@@ -1,0 +1,14 @@
+<span class="vp-format-glyph" [attr.data-size]="Size" [attr.data-format]="Format">
+  @if (ParsedDimensions; as dims) {
+    <span
+      class="vp-format-glyph__box"
+      aria-hidden="true"
+      [style.aspect-ratio]="dims.AspectRatioCss"
+      [style.width.px]="dims.WidthPx"
+      [style.height.px]="dims.HeightPx"
+    ></span>
+  }
+  @if (ShouldShowLabel) {
+    <span class="vp-format-glyph__label">{{ Format }}</span>
+  }
+</span>
