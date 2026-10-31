@@ -13107,7 +13107,7 @@ The context is now within limits. Please retry your request with the recovered c
         const secondary = scope.SecondaryScopes
             ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
             : null;
-        return { ...scope, SecondaryScopes: secondary };
+        return { ...scope, SecondaryScopes: secondary, ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}) };
     }
 
     /**
@@ -13560,6 +13560,7 @@ The context is now within limits. Please retry your request with the recovered c
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
+                SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -23024,15 +23025,37 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private validatedRunScope(params: ExecuteAgentParams): ActionRunScope {
         const inputs = this.runScopeInputs(params);
+        // Only a run whose host assigned scopes carries the key, so every other run keeps the shape it had
+        const searchScopeIDs = this.hostSearchScopeIDs(params);
+        const hostScopes = searchScopeIDs ? { SearchScopeIDs: searchScopeIDs } : {};
         if (!inputs.EntityName && !inputs.RecordID && !inputs.Secondary) {
-            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, ...hostScopes };
         }
         const secondary = this.validateAndApplySecondaryScopes(inputs.Secondary, this.parseSecondaryScopeConfig(params.agent), params.agent.Name);
         return {
             PrimaryScopeEntityName: inputs.EntityName ?? null,
             PrimaryScopeRecordID: inputs.RecordID ?? null,
             SecondaryScopes: secondary && Object.keys(secondary).length > 0 ? secondary : null,
+            ...hostScopes,
         };
+    }
+
+    /**
+     * The search scopes the host assigned this run ({@link ExecuteAgentParams.SearchScopeIDs}): trimmed, de-duplicated,
+     * in the host's order, or `null` for none. Read from the first-class parameter only — never from `data`, which a
+     * caller could otherwise use to hand an agent a scope its own SearchScopeAccess refuses.
+     */
+    private hostSearchScopeIDs(params: ExecuteAgentParams): string[] | null {
+        const seen = new UUIDSet();
+        const ids: string[] = [];
+        for (const id of params.SearchScopeIDs ?? []) {
+            const trimmed = typeof id === 'string' ? id.trim() : '';
+            if (trimmed && !seen.Has(trimmed)) {
+                seen.Add(trimmed);
+                ids.push(trimmed);
+            }
+        }
+        return ids.length > 0 ? ids : null;
     }
 
     /**

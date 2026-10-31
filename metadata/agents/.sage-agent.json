@@ -8,7 +8,6 @@
       "Status": "Active",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
-      "SearchScopeAccess": "Assigned",
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",

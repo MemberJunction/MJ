@@ -81,6 +81,13 @@ export interface ResolvePermissionInput {
      */
     PrimaryScopeRecordID?: string | null;
     /**
+     * True when the run's HOST assigned this scope (`RunActionParams.RunScope.SearchScopeIDs`). The host's assignment
+     * then stands in for the agent's own access: its `SearchScopeAccess='None'` and its assigned-scope list do not
+     * refuse. It never grants — the user still needs a direct or role grant (or the agent's existing 'All' fallback),
+     * and a skill's rules apply as always.
+     */
+    HostAssigned?: boolean;
+    /**
      * Optional ContextUser for RunView calls. Server-side code must always
      * pass this to enforce data isolation; it is the same UserInfo as `User`
      * unless the caller is impersonating.
@@ -222,7 +229,9 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         const contextUser = input.ContextUser ?? User;
 
         // Step 1: agent-side explicit deny short-circuits everything.
-        if (Agent && Agent.SearchScopeAccess === 'None') {
+        // A host-assigned scope skips steps 1 and 1b: the host, not the agent, decides what the run may search.
+        const hostAssigned = input.HostAssigned === true;
+        if (Agent && !hostAssigned && Agent.SearchScopeAccess === 'None') {
             return this.buildResult(false, 'None', 'AgentNone',
                 `Agent '${Agent.Name}' has SearchScopeAccess='None'; refused without consulting per-scope grants.`);
         }
@@ -231,7 +240,7 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         // the agent can ONLY use scopes listed in __mj.AIAgentSearchScope for
         // this agent. If the scope isn't in that list, deny early before
         // consulting per-user grants — this is a deny-list, not a grant.
-        if (Agent && Agent.SearchScopeAccess === 'Assigned') {
+        if (Agent && !hostAssigned && Agent.SearchScopeAccess === 'Assigned') {
             const isListed = await this.isScopeAssignedToAgent(Agent.ID, SearchScopeID, contextUser);
             if (!isListed) {
                 return this.buildResult(false, 'None', 'AgentAssignedNotListed',

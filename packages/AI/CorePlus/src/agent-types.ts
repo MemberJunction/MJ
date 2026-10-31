@@ -1245,6 +1245,15 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     SecondaryScopes?: Record<string, SecondaryScopeValue>;
+
+    /**
+     * Search scopes the HOST assigns to this run (for example the space a conversation belongs to). Scoped Search,
+     * called by this agent or any sub-agent it runs, then searches only these (the first when the model names none),
+     * and the host's assignment stands in for the agent's own `SearchScopeAccess` and assigned-scope list, so any agent
+     * the host runs can search what the host allows. It never grants: the acting user's own permission on the scope,
+     * the scope's dimension rules and row-level security still apply. Server code sets it; it is never read from `data`.
+     */
+    SearchScopeIDs?: string[];
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */

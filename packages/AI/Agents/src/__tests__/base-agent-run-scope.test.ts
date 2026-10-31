@@ -110,6 +110,21 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
         expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
     });
 
+    it("stamps the search scopes the host assigned: trimmed, de-duplicated, in the host's order, a copy per dispatch", async () => {
+        const HOST_SCOPE = 'cccccccc-1111-4222-8333-444444444444';
+        const params = paramsWith({ PrimaryScopeRecordID: TENANT, SearchScopeIDs: [` ${HOST_SCOPE} `, HOST_SCOPE.toUpperCase(), ''] });
+        await dispatch(params);
+        expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: null, SearchScopeIDs: [HOST_SCOPE] });
+        lastScope()!.SearchScopeIDs!.push('tampered');
+        await dispatch(params);
+        expect(lastScope()!.SearchScopeIDs).toEqual([HOST_SCOPE]);
+    });
+
+    it('never reads host search scopes from data, even trusted: only server code setting the parameter assigns them', async () => {
+        await dispatch(paramsWith({ data: { SearchScopeIDs: ['cccccccc-1111-4222-8333-444444444444'] }, TrustReservedRunData: true }));
+        expect(lastScope()).not.toHaveProperty('SearchScopeIDs');
+    });
+
     it('reads the scope from data when a trusted host passed it there (TrustReservedRunData, as the run row does)', async () => {
         await dispatch(paramsWith({ data: { PrimaryScopeRecordID: ` ${TENANT} `, SecondaryScopes: { Region: 'US' } }, TrustReservedRunData: true }));
         expect(lastScope()).toMatchObject({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' } });
@@ -263,6 +278,12 @@ describe('BaseAgent.ExecuteSubAgent — template parameters cannot set the child
         await caller().CallSubAgent(paramsWith({ data: { PrimaryScopeRecordID: TENANT }, TrustReservedRunData: true }), request({ topic: 'refunds' }));
         expect(h.childRuns[0].TrustReservedRunData).toBe(true);
         expect(childData()).toEqual({ PrimaryScopeRecordID: TENANT, topic: 'refunds' });
+    });
+
+    it("hands the child the host's search scopes, so a sub-agent searches only what the host assigned", async () => {
+        const hostScopes = ['cccccccc-1111-4222-8333-444444444444'];
+        await caller().CallSubAgent(paramsWith({ PrimaryScopeRecordID: TENANT, SearchScopeIDs: hostScopes }), request({ topic: 'refunds' }));
+        expect(h.childRuns[0].SearchScopeIDs).toEqual(hostScopes);
     });
 
     it('does not mark the child trusted when the parent was not', async () => {

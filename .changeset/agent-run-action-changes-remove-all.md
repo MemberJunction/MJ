@@ -1,6 +1,12 @@
 ---
-"@memberjunction/core": minor
-"@memberjunction/ai-agents": minor
+"@memberjunction/actions-base": patch
+"@memberjunction/ai-core-plus": patch
+"@memberjunction/ai-agents": patch
+"@memberjunction/search-engine": patch
+"@memberjunction/core-actions": patch
 ---
 
-A run's `actionChanges` that remove every action now leave the run with no actions. Before, `BaseAgent` treated an empty effective action list as "not computed yet" and fell back to the agent's configured actions, so a host that limited an agent to zero actions (for example a space that grants none) gave the agent back all of them, including ones the host meant to withhold. The same applies to sub-agents. Sage's `SearchScopeAccess` is now `Assigned` (it shipped with the Scoped Search action but the column default `None`, so every search was refused): it searches only scopes an application assigns to it, and an installation that assigns none sees no change.
+Host-assigned search scopes for agent runs, and `actionChanges` that remove every action are now honored.
+
+- **`ExecuteAgentParams.SearchScopeIDs`:** the search scopes a host (for example a collaboration space) assigns to a run. They are stamped on every action dispatch as `RunActionParams.RunScope.SearchScopeIDs` and passed to sub-agents and `Execute Agent`. Scoped Search then searches only those scopes (the first when the model names none). The host's assignment stands in for the calling agent's own `SearchScopeAccess` and assigned-scope list, so any agent a host runs can search what the host allows. It never grants: the user's own permission on the scope (`SearchScopePermissionResolver`, new `HostAssigned` input), the scope's dimension rules and row-level security still apply. It is read only from the parameter, never from `data`.
+- **Remove-all `actionChanges`:** `BaseAgent` treated an empty effective action (or sub-agent) list as "not computed" and fell back to the agent's configured set, so a host that limited an agent to zero actions gave all of them back. A computed empty list is now authoritative; a non-empty or uncomputed one behaves as before.

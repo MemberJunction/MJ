@@ -325,6 +325,33 @@ describe('SearchScopePermissionResolver', () => {
         });
     });
 
+    describe('PM-06b: a host-assigned scope stands in for the agent, and never grants', () => {
+        it("lets an agent at 'None' search a host-assigned scope the user holds a grant on", async () => {
+            setRows([{ ID: 'p1', SearchScopeID: SCOPE_ID, UserID: USER_ID, RoleID: null, PermissionLevel: 'Search' }]);
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('None'), HostAssigned: true,
+            });
+            expect(result.Allowed).toBe(true);
+            expect(result.Source).toBe('DirectGrant');
+        });
+
+        it("lets an 'Assigned' agent search a host-assigned scope it does not list", async () => {
+            setRows([{ ID: 'p1', SearchScopeID: SCOPE_ID, UserID: USER_ID, RoleID: null, PermissionLevel: 'Search' }]);
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('Assigned'), HostAssigned: true,
+            });
+            expect(result.Allowed).toBe(true);
+        });
+
+        it('still refuses a user with no grant: the host does not grant', async () => {
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(), SearchScopeID: SCOPE_ID, Agent: makeAgent('None'), HostAssigned: true,
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Source).toBe('NoGrant');
+        });
+    });
+
     describe('PM-07: explicit user-direct None denies even with role grant', () => {
         it('rejects with DirectGrant + None', async () => {
             setRows([
