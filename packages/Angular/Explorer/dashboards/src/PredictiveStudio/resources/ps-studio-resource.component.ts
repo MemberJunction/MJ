@@ -231,7 +231,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
   public PendingPrompt: string | null = null;
 
   private _modelDevAgentId: string | null = null;
-  /** Conversation lifecycle (see {@link onChatConversationCreated}) — without it the first send no-ops. */
+  /** Conversation lifecycle (see {@link OnChatConversationCreated}) — without it the first send no-ops. */
   public ChatConversation: MJConversationEntity | null = null;
 
   public ChatConversationId: string | null = null;
