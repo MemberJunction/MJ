@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnInit, Outp
 import { CommonModule } from '@angular/common';
 import { UUIDMap } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { LineageReads, type VersionedEntityName, type VersionRowFields } from './lineage-reads';
 
 /** One lineage as the list shows it: its latest version. */
@@ -19,10 +20,13 @@ export interface LineageItem {
 @Component({
   standalone: true,
   selector: 'mj-ps-versioned-list',
-  imports: [CommonModule],
+  imports: [CommonModule, SharedGenericModule],
   styleUrls: ['../ps-widgets.css'],
   template: `
     @if (Error) { <p class="ps-refusals" data-testid="ps-versioned-list-error">{{ Error }}</p> }
+    @if (IsLoading) {
+      <mj-loading Text="Loading..." Size="small"></mj-loading>
+    } @else if (HasLoaded) {
     <table class="ps-eval-table" data-testid="ps-versioned-list">
       <thead><tr><th>Name</th><th>Latest version</th><th>Saved</th></tr></thead>
       <tbody>
@@ -37,6 +41,7 @@ export interface LineageItem {
         }
       </tbody>
     </table>
+    }
   `,
 })
 export class PSVersionedListComponent extends BaseAngularComponent implements OnInit {
@@ -57,7 +62,12 @@ export class PSVersionedListComponent extends BaseAngularComponent implements On
   @Output() OpenRecord = new EventEmitter<string>();
 
   public Items: readonly LineageItem[] = [];
+  public IsLoading = false;
+  /** True once a read completed (the empty-list copy shows only then). */
+  public HasLoaded = false;
   public Error: string | null = null;
+  /** Increments on every load; a load whose number is no longer current drops its result. */
+  private loadSeq = 0;
 
   public ngOnInit(): void {
     this.isInitialized = true;
@@ -76,11 +86,20 @@ export class PSVersionedListComponent extends BaseAngularComponent implements On
       .map((r) => ({ LatestID: r.ID, Name: r.Name, LatestVersion: r.Version, UpdatedAt: r.__mj_CreatedAt }));
   }
 
+  /** Reads the list; a newer load supersedes it, and a failed read leaves no previous entity's rows on screen. */
   public async Load(): Promise<void> {
+    const seq = ++this.loadSeq;
     this.Error = null;
+    this.Items = [];
+    this.HasLoaded = false;
+    this.IsLoading = true;
+    this.cdr.detectChanges();
     const read = await LineageReads.ReadAllVersionRows(this.ProviderToUse, this._entityName);
+    if (seq !== this.loadSeq) return;
     if (read.Ok) this.Items = PSVersionedListComponent.LatestPerLineage(read.Rows);
     else this.Error = read.Error;
+    this.HasLoaded = read.Ok;
+    this.IsLoading = false;
     this.cdr.detectChanges();
   }
 }

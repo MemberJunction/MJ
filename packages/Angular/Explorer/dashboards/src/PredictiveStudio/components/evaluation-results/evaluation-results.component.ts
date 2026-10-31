@@ -1,11 +1,12 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { EvaluationViews, type EvaluationView, type IntervalCell } from './evaluation-view';
+import { EvaluationViews, type EvaluationRunState, type EvaluationView, type IntervalCell } from './evaluation-view';
 
 /**
  * L1 widget: a training run's protocol results — outcome and reason, test-set scores with intervals, baselines on the
  * same rows, improvement over the flat guess, candidates (the winner's inner score labelled optimistic), calibration
- * and leakage flags. Renders the view model it is given; reads no data.
+ * and leakage flags — or, for a run without protocol results, why: never evaluated under a protocol, not finished,
+ * refused at a stage, or unreadable. Renders the state it is given; reads no data.
  */
 @Component({
   standalone: true,
@@ -13,7 +14,7 @@ import { EvaluationViews, type EvaluationView, type IntervalCell } from './evalu
   imports: [CommonModule],
   styleUrls: ['../ps-widgets.css'],
   template: `
-    @if (View; as v) {
+    @if (EvaluatedView; as v) {
       <section class="ps-eval" data-testid="ps-eval">
         <header [class]="'ps-eval-outcome outcome-' + v.Outcome" data-testid="ps-eval-outcome">
           <strong>{{ v.OutcomeTitle }}</strong>
@@ -82,14 +83,36 @@ import { EvaluationViews, type EvaluationView, type IntervalCell } from './evalu
           </ul>
         }
       </section>
-    } @else {
-      <p class="ps-eval-empty" data-testid="ps-eval-empty">This run was not evaluated under an Evaluation Protocol.</p>
+    } @else if (State; as st) {
+      @switch (st.Kind) {
+        @case ('not-finished') { <p class="ps-eval-empty" data-testid="ps-eval-not-finished">This run has not finished yet ({{ RunStatusText }}).</p> }
+        @case ('refused') { <p class="ps-refusals" data-testid="ps-eval-refused">This run was refused at the {{ RefusedStage }} stage: {{ Detail }}</p> }
+        @case ('unreadable') { <p class="ps-refusals" data-testid="ps-eval-unreadable">This run's stored results cannot be read: {{ Detail }}</p> }
+        @default { <p class="ps-eval-empty" data-testid="ps-eval-empty">This run was not evaluated under an Evaluation Protocol.</p> }
+      }
     }
   `,
 })
 export class PSEvaluationResultsComponent {
-  /** The run's results view (`EvaluationViews.BuildEvaluationView`); null = the run was not evaluated under a protocol. */
-  @Input() View: EvaluationView | null = null;
+  /** The run's results state (`EvaluationViews.DescribeRun`); null renders nothing (no run read yet). */
+  @Input() State: EvaluationRunState | null = null;
+
+  /** The view when the run was evaluated under a protocol; null otherwise. */
+  public get EvaluatedView(): EvaluationView | null {
+    return this.State !== null && this.State.Kind === 'evaluated' ? this.State.View : null;
+  }
+
+  public get RunStatusText(): string {
+    return this.State !== null && this.State.Kind === 'not-finished' ? this.State.RunStatus : '';
+  }
+
+  public get RefusedStage(): string {
+    return this.State !== null && this.State.Kind === 'refused' ? this.State.Stage : '';
+  }
+
+  public get Detail(): string {
+    return this.State !== null && (this.State.Kind === 'refused' || this.State.Kind === 'unreadable') ? this.State.Detail : '';
+  }
 
   /** A value with its interval, as the tables show it. */
   public Cell(c: IntervalCell): string {

@@ -5,9 +5,9 @@ import { EvaluationViews } from './evaluation-view';
 import { WidgetFixtures } from './widget-fixtures';
 
 describe('PSEvaluationResultsComponent (DOM)', () => {
-  function render(json: string | null): HTMLElement {
+  function render(json: string | null, runStatus: 'Completed' | 'Failed' | 'Running' | null = 'Completed'): HTMLElement {
     const fixture = TestBed.createComponent(PSEvaluationResultsComponent);
-    fixture.componentInstance.View = EvaluationViews.BuildEvaluationView({ ValidationResults: json, Lineage: null });
+    fixture.componentInstance.State = EvaluationViews.DescribeRun({ ValidationResults: json, Lineage: null, RunStatus: runStatus });
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -25,7 +25,23 @@ describe('PSEvaluationResultsComponent (DOM)', () => {
   });
 
   it('says plainly when a run was not evaluated under a protocol', () => {
-    const host = render(null);
+    const host = render(JSON.stringify({ metrics: { auc: 0.9 } }));
     expect(host.querySelector('[data-testid="ps-eval-empty"]')?.textContent).toContain('not evaluated under an Evaluation Protocol');
+  });
+
+  it('says a run has not finished, and does not claim it was never evaluated', () => {
+    const host = render(null, 'Running');
+    expect(host.querySelector('[data-testid="ps-eval-not-finished"]')?.textContent).toContain('has not finished yet (Running)');
+    expect(host.querySelector('[data-testid="ps-eval-empty"]')).toBeNull();
+  });
+
+  it('shows the stage and reason of a refused run', () => {
+    const host = render(WidgetFixtures.RefusedRunJson(), 'Failed');
+    expect(host.querySelector('[data-testid="ps-eval-refused"]')?.textContent).toContain('refused at the carve stage: No row is dated on or after the cutoff 2026-01-01');
+  });
+
+  it('says when stored results cannot be read', () => {
+    const host = render(JSON.stringify({ schema: 'ps-run-results/v2', status: 'completed' }));
+    expect(host.querySelector('[data-testid="ps-eval-unreadable"]')?.textContent).toContain('cannot be read');
   });
 });

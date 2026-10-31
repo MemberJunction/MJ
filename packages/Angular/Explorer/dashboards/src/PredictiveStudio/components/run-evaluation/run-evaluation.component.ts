@@ -4,30 +4,36 @@ import { RunView, type RunViewParams } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EvaluationViews, type EvaluationView } from '../evaluation-results/evaluation-view';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { EvaluationViews, type EvaluationRunInput, type EvaluationRunState } from '../evaluation-results/evaluation-view';
 import { PSEvaluationResultsComponent } from '../evaluation-results/evaluation-results.component';
 
-type RunFields = Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ResultingModelID'>;
+type RunFields = Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ResultingModelID' | 'Status'>;
 type ModelFields = Pick<MJMLModelEntity, 'ID' | 'Lineage'>;
 
-/** The stored results and the model lineage the results view is built from. */
-interface RunAndLineage {
-  readonly ValidationResults: string | null;
-  readonly Lineage: string | null;
-}
+/** A read that may fail: the value, or the error to show. */
+type Read<T> = { readonly Ok: true; readonly Value: T } | { readonly Ok: false; readonly Error: string };
+
+/** What the results state is built from when there is no run. */
+const NO_RUN: EvaluationRunInput = { ValidationResults: null, Lineage: null, RunStatus: null };
 
 /**
- * L2 widget: loads a training run — the latest run of a model (`ModelID`) or a run by id (`TrainingRunID`) — with the
- * resulting model's `Lineage`, and shows its protocol results. The lineage is null only when the run produced no model.
+ * L2 widget: loads a training run — the latest run of a model (`ModelID`) or a run by id (`TrainingRunID`) — with its
+ * status and the resulting model's `Lineage`, and shows its protocol results. The lineage is null only when the run
+ * produced no model.
  */
 @Component({
   standalone: true,
   selector: 'mj-ps-run-evaluation',
-  imports: [CommonModule, PSEvaluationResultsComponent],
+  imports: [CommonModule, SharedGenericModule, PSEvaluationResultsComponent],
   styleUrls: ['../ps-widgets.css'],
   template: `
     @if (Error) { <p class="ps-refusals" data-testid="ps-run-evaluation-error">{{ Error }}</p> }
-    <mj-ps-evaluation-results [View]="View"></mj-ps-evaluation-results>
+    @if (IsLoading) {
+      <mj-loading Text="Loading results..." Size="small"></mj-loading>
+    } @else {
+      <mj-ps-evaluation-results [State]="State"></mj-ps-evaluation-results>
+    }
   `,
 })
 export class PSRunEvaluationComponent extends BaseAngularComponent implements OnInit {
@@ -35,6 +41,8 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
   private _modelId: string | null = null;
   private _trainingRunId: string | null = null;
   private isInitialized = false;
+  /** Increments on every load; a load whose number is no longer current drops its result. */
+  private loadSeq = 0;
 
   /** A model: its most recent training run is shown. Ignored when `TrainingRunID` is set. */
   @Input()
@@ -55,7 +63,9 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
     if (this.isInitialized) void this.Load();
   }
 
-  public View: EvaluationView | null = null;
+  /** The results state of the loaded run; null before a read completes. */
+  public State: EvaluationRunState | null = null;
+  public IsLoading = false;
   public Error: string | null = null;
 
   public ngOnInit(): void {
@@ -63,51 +73,53 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
     void this.Load();
   }
 
+  /** Reads the run and the model lineage; a newer load supersedes it. */
   public async Load(): Promise<void> {
+    const seq = ++this.loadSeq;
+    this.State = null;
     this.Error = null;
+    this.IsLoading = this._trainingRunId !== null || this._modelId !== null;
+    this.cdr.detectChanges();
     const read = this._trainingRunId !== null ? await this.readByRun(this._trainingRunId)
       : this._modelId !== null ? await this.readByModel(this._modelId) : null;
-    this.View = read === null ? null : EvaluationViews.BuildEvaluationView(read);
+    if (seq !== this.loadSeq) return;
+    if (read !== null && read.Ok) this.State = EvaluationViews.DescribeRun(read.Value);
+    if (read !== null && !read.Ok) this.Error = read.Error;
+    this.IsLoading = false;
     this.cdr.detectChanges();
   }
 
   /** The model's latest run and the model's lineage: two independent reads in one batch. */
-  private async readByModel(modelId: string): Promise<RunAndLineage | null> {
+  private async readByModel(modelId: string): Promise<Read<EvaluationRunInput>> {
     const id = EscapeSQLString(modelId);
     const [runs, models] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<RunFields | ModelFields>([
       { ...PSRunEvaluationComponent.runParams(`ResultingModelID='${id}'`), OrderBy: '__mj_CreatedAt DESC', MaxRows: 1 },
       PSRunEvaluationComponent.modelParams(id),
     ]);
     if (runs === undefined || models === undefined || !runs.Success || !models.Success) {
-      this.Error = runs?.ErrorMessage || models?.ErrorMessage || 'The training run could not be read.';
-      return null;
+      return { Ok: false, Error: runs?.ErrorMessage || models?.ErrorMessage || 'The training run could not be read.' };
     }
     const run = runs.Results.find(PSRunEvaluationComponent.isRun);
     const model = models.Results.find(PSRunEvaluationComponent.isModel);
-    return { ValidationResults: run?.ValidationResults || null, Lineage: model?.Lineage || null };
+    if (run === undefined) return { Ok: true, Value: NO_RUN };
+    return { Ok: true, Value: { ValidationResults: run.ValidationResults, Lineage: model?.Lineage || null, RunStatus: run.Status } };
   }
 
   /** A run, then the model it produced (the run names it), if any. */
-  private async readByRun(runId: string): Promise<RunAndLineage | null> {
+  private async readByRun(runId: string): Promise<Read<EvaluationRunInput>> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const runs = await rv.RunView<RunFields>(PSRunEvaluationComponent.runParams(`ID='${EscapeSQLString(runId)}'`));
-    if (!runs.Success) {
-      this.Error = runs.ErrorMessage;
-      return null;
-    }
+    if (!runs.Success) return { Ok: false, Error: runs.ErrorMessage };
     const run = runs.Results[0];
-    if (run === undefined) return { ValidationResults: null, Lineage: null };
-    if (!run.ResultingModelID) return { ValidationResults: run.ValidationResults, Lineage: null };
+    if (run === undefined) return { Ok: true, Value: NO_RUN };
+    if (!run.ResultingModelID) return { Ok: true, Value: { ValidationResults: run.ValidationResults, Lineage: null, RunStatus: run.Status } };
     const models = await rv.RunView<ModelFields>(PSRunEvaluationComponent.modelParams(EscapeSQLString(run.ResultingModelID)));
-    if (!models.Success) {
-      this.Error = models.ErrorMessage;
-      return null;
-    }
-    return { ValidationResults: run.ValidationResults, Lineage: models.Results[0]?.Lineage || null };
+    if (!models.Success) return { Ok: false, Error: models.ErrorMessage };
+    return { Ok: true, Value: { ValidationResults: run.ValidationResults, Lineage: models.Results[0]?.Lineage || null, RunStatus: run.Status } };
   }
 
   private static runParams(filter: string): RunViewParams {
-    return { EntityName: 'MJ: ML Training Runs', ExtraFilter: filter, Fields: ['ID', 'ValidationResults', 'ResultingModelID'], ResultType: 'simple' };
+    return { EntityName: 'MJ: ML Training Runs', ExtraFilter: filter, Fields: ['ID', 'ValidationResults', 'ResultingModelID', 'Status'], ResultType: 'simple' };
   }
 
   private static modelParams(escapedModelId: string): RunViewParams {

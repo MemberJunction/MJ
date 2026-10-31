@@ -29,42 +29,42 @@ const TASK_KIND_OPTIONS = ['binary', 'multiclass', 'continuous', 'count', 'non-n
   styleUrls: ['../ps-widgets.css'],
   template: `
     <form class="ps-form" (ngSubmit)="Save()">
-      <label for="ps-unit-name">Name</label><input id="ps-unit-name" type="text" name="name" [(ngModel)]="Form.Name" (ngModelChange)="Recompute()" />
+      <label for="ps-unit-name">Name</label><input class="mj-input" id="ps-unit-name" type="text" name="name" [(ngModel)]="Form.Name" (ngModelChange)="Recompute()" />
       @if (RowsCarried) {
         <span class="ps-note">One row is</span><span class="ps-note" data-testid="ps-unit-rows-carried">{{ CarriedRowsText }} (carried over; edit it as JSON on the record)</span>
       } @else {
-        <label for="ps-unit-entity">Entity whose records are the rows</label><input id="ps-unit-entity" type="text" name="entity" [(ngModel)]="Form.GrainEntity" (ngModelChange)="Recompute()" />
-        <label for="ps-unit-date">Decision-date column</label><input id="ps-unit-date" type="text" name="date" [(ngModel)]="Form.DecisionDateColumn" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-entity">Entity whose records are the rows</label><input class="mj-input" id="ps-unit-entity" type="text" name="entity" [(ngModel)]="Form.GrainEntity" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-date">Decision-date column</label><input class="mj-input" id="ps-unit-date" type="text" name="date" [(ngModel)]="Form.DecisionDateColumn" (ngModelChange)="Recompute()" />
       }
       @if (RuleCarried) {
         <span class="ps-note">Outcome</span><span class="ps-note" data-testid="ps-unit-rule-carried">{{ CarriedRuleText }} (carried over; edit it as JSON on the record)</span>
       } @else {
-        <label for="ps-unit-label">Outcome column</label><input id="ps-unit-label" type="text" name="label" [(ngModel)]="Form.LabelColumn" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-label">Outcome column</label><input class="mj-input" id="ps-unit-label" type="text" name="label" [(ngModel)]="Form.LabelColumn" (ngModelChange)="Recompute()" />
       }
       <label for="ps-unit-window">Outcome window (days)</label>
-      <input id="ps-unit-window" type="number" min="1" name="window" data-testid="ps-unit-window" [(ngModel)]="Form.WindowDays" (ngModelChange)="Recompute()" />
-      <label for="ps-unit-gap">Gap before the window (days)</label><input id="ps-unit-gap" type="number" min="0" name="gap" [(ngModel)]="Form.GapDays" (ngModelChange)="Recompute()" />
+      <input class="mj-input" id="ps-unit-window" type="number" min="1" name="window" data-testid="ps-unit-window" [(ngModel)]="Form.WindowDays" (ngModelChange)="Recompute()" />
+      <label for="ps-unit-gap">Gap before the window (days)</label><input class="mj-input" id="ps-unit-gap" type="number" min="0" name="gap" [(ngModel)]="Form.GapDays" (ngModelChange)="Recompute()" />
       <label for="ps-unit-task">Task</label>
-      <select id="ps-unit-task" name="task" data-testid="ps-unit-task" [disabled]="IsForecast" [(ngModel)]="Form.TaskKind" (ngModelChange)="Recompute()">
+      <select class="mj-input" id="ps-unit-task" name="task" data-testid="ps-unit-task" [disabled]="IsForecast" [(ngModel)]="Form.TaskKind" (ngModelChange)="Recompute()">
         @for (k of TaskKinds; track k) { <option [value]="k">{{ k }}</option> }
       </select>
       @if (IsClassification) {
-        <label for="ps-unit-classes">Classes in artifact order</label><input id="ps-unit-classes" type="text" name="classes" [(ngModel)]="Form.ClassOrder" (ngModelChange)="Recompute()" />
-        <label for="ps-unit-adverse">Adverse class{{ Form.TaskKind === 'multiclass' ? 'es' : '' }}</label><input id="ps-unit-adverse" type="text" name="adverse" [(ngModel)]="Form.AdverseClass" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-classes">Classes in artifact order</label><input class="mj-input" id="ps-unit-classes" type="text" name="classes" [(ngModel)]="Form.ClassOrder" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-adverse">Adverse class{{ Form.TaskKind === 'multiclass' ? 'es' : '' }}</label><input class="mj-input" id="ps-unit-adverse" type="text" name="adverse" [(ngModel)]="Form.AdverseClass" (ngModelChange)="Recompute()" />
       }
       @if (Form.TaskKind === 'non-negative' && !IsForecast) {
-        <label for="ps-unit-tweedie">Tweedie power</label><input id="ps-unit-tweedie" type="number" min="1" max="2" step="0.1" name="tweedie" [(ngModel)]="Form.TweediePower" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-tweedie">Tweedie power</label><input class="mj-input" id="ps-unit-tweedie" type="number" min="1" max="2" step="0.1" name="tweedie" [(ngModel)]="Form.TweediePower" (ngModelChange)="Recompute()" />
       }
       <label for="ps-unit-censoring">Leave out rows unresolved at</label>
-      <select id="ps-unit-censoring" name="censoring" [(ngModel)]="Form.CensoringMode" (ngModelChange)="Recompute()">
+      <select class="mj-input" id="ps-unit-censoring" name="censoring" [(ngModel)]="Form.CensoringMode" (ngModelChange)="Recompute()">
         <option value="now">now</option>
         <option value="fixed">a fixed date</option>
         @if (OffersCorpusEnd) { <option value="corpus-end">the end of the corpus (carried over)</option> }
       </select>
       @if (Form.CensoringMode === 'fixed') {
-        <label for="ps-unit-fixed">Censoring date</label><input id="ps-unit-fixed" type="date" name="fixed" [(ngModel)]="Form.CensoringFixedAt" (ngModelChange)="Recompute()" />
+        <label for="ps-unit-fixed">Censoring date</label><input class="mj-input" id="ps-unit-fixed" type="date" name="fixed" [(ngModel)]="Form.CensoringFixedAt" (ngModelChange)="Recompute()" />
       }
-      <label for="ps-unit-group">Group key (optional)</label><input id="ps-unit-group" type="text" name="group" [(ngModel)]="Form.GroupKey" (ngModelChange)="Recompute()" />
+      <label for="ps-unit-group">Group key (optional)</label><input class="mj-input" id="ps-unit-group" type="text" name="group" [(ngModel)]="Form.GroupKey" (ngModelChange)="Recompute()" />
     </form>
     @if (Error !== null) {
       <p class="ps-refusals" data-testid="ps-unit-error">{{ Error }}</p>

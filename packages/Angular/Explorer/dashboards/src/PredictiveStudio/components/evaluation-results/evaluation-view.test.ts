@@ -40,3 +40,32 @@ describe('BuildEvaluationView', () => {
     expect(EvaluationViews.FormatInterval({ Value: 0.0177, Lower: 0.0098, Upper: 0.0254 })).toBe('0.0177 [0.0098, 0.0254]');
   });
 });
+
+describe('DescribeRun', () => {
+  const run = (ValidationResults: string | null, RunStatus: 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running' | null = 'Completed') =>
+    EvaluationViews.DescribeRun({ ValidationResults, Lineage: null, RunStatus });
+
+  it('is evaluated for a completed run with a trainer result and a gate record', () => {
+    const s = run(WidgetFixtures.StoredRunJson());
+    expect(s.Kind === 'evaluated' && s.View.Outcome).toBe('keep-simple-baseline');
+  });
+  it('is not evaluated for no run, results stored before protocol training, and a completed run without a gate', () => {
+    expect(run(null, null)).toEqual({ Kind: 'not-evaluated' });
+    expect(run(JSON.stringify({ metrics: { auc: 0.9 } }))).toEqual({ Kind: 'not-evaluated' });
+    expect(run(WidgetFixtures.StoredRunJson({ gate: null }))).toEqual({ Kind: 'not-evaluated' });
+  });
+  it('is not finished for a pending or running run without results', () => {
+    expect(run(null, 'Running')).toEqual({ Kind: 'not-finished', RunStatus: 'Running' });
+    expect(run('', 'Pending')).toEqual({ Kind: 'not-finished', RunStatus: 'Pending' });
+  });
+  it('is refused, with the stage and the reason in words, for a refused run', () => {
+    expect(run(WidgetFixtures.RefusedRunJson(), 'Failed')).toEqual({
+      Kind: 'refused', Stage: 'carve',
+      Detail: 'No row is dated on or after the cutoff 2026-01-01; there is nothing to test on. Choose an earlier cutoff.',
+    });
+  });
+  it('is unreadable for a tagged envelope that does not parse', () => {
+    const s = run(JSON.stringify({ schema: 'ps-run-results/v2', status: 'completed' }));
+    expect(s.Kind).toBe('unreadable');
+  });
+});

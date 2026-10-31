@@ -21,23 +21,23 @@ import {
   template: `
     @if (Base !== null) {
       <form class="ps-form" (ngSubmit)="Save()">
-        <label for="ps-name">Name</label><input id="ps-name" type="text" name="name" [(ngModel)]="Form.Name" (ngModelChange)="Recompute()" />
+        <label for="ps-name">Name</label><input class="mj-input" id="ps-name" type="text" name="name" [(ngModel)]="Form.Name" (ngModelChange)="Recompute()" />
         @if (IsDateCarved) {
-          <label for="ps-cutoff">Test set starts</label><input id="ps-cutoff" type="date" name="cutoff" [(ngModel)]="Form.Cutoff" (ngModelChange)="Recompute()" />
-          <label for="ps-end">Test set ends (optional)</label><input id="ps-end" type="date" name="end" [(ngModel)]="Form.HoldoutEnd" (ngModelChange)="Recompute()" />
+          <label for="ps-cutoff">Test set starts</label><input class="mj-input" id="ps-cutoff" type="date" name="cutoff" [(ngModel)]="Form.Cutoff" (ngModelChange)="Recompute()" />
+          <label for="ps-end">Test set ends (optional)</label><input class="mj-input" id="ps-end" type="date" name="end" [(ngModel)]="Form.HoldoutEnd" (ngModelChange)="Recompute()" />
         }
-        <label for="ps-folds">Folds</label><input id="ps-folds" type="number" min="2" name="folds" [(ngModel)]="Form.Folds" (ngModelChange)="Recompute()" />
-        <label for="ps-repeats">Repeats</label><input id="ps-repeats" type="number" min="1" name="repeats" [(ngModel)]="Form.Repeats" (ngModelChange)="Recompute()" />
+        <label for="ps-folds">Folds</label><input class="mj-input" id="ps-folds" type="number" min="2" name="folds" [(ngModel)]="Form.Folds" (ngModelChange)="Recompute()" />
+        <label for="ps-repeats">Repeats</label><input class="mj-input" id="ps-repeats" type="number" min="1" name="repeats" [(ngModel)]="Form.Repeats" (ngModelChange)="Recompute()" />
         <label for="ps-metric">Primary score</label>
-        <select id="ps-metric" name="metric" data-testid="ps-protocol-metric" [(ngModel)]="Form.PrimaryMetric" (ngModelChange)="Recompute()">
+        <select class="mj-input" id="ps-metric" name="metric" data-testid="ps-protocol-metric" [(ngModel)]="Form.PrimaryMetric" (ngModelChange)="Recompute()">
           @for (m of Metrics; track m) { <option [value]="m">{{ m }}</option> }
         </select>
-        <label for="ps-margin">Margin</label><input id="ps-margin" type="number" min="0" step="0.001" name="margin" [(ngModel)]="Form.Margin" (ngModelChange)="Recompute()" />
-        <label for="ps-cands">Max candidates</label><input id="ps-cands" type="number" min="1" name="cands" [(ngModel)]="Form.MaxCandidates" (ngModelChange)="Recompute()" />
-        <label for="ps-secs">Max compute seconds</label><input id="ps-secs" type="number" min="1" name="secs" [(ngModel)]="Form.MaxComputeSeconds" (ngModelChange)="Recompute()" />
-        <label for="ps-seed">Seed</label><input id="ps-seed" type="number" name="seed" [(ngModel)]="Form.Seed" (ngModelChange)="Recompute()" />
+        <label for="ps-margin">Margin</label><input class="mj-input" id="ps-margin" type="number" min="0" step="0.001" name="margin" [(ngModel)]="Form.Margin" (ngModelChange)="Recompute()" />
+        <label for="ps-cands">Max candidates</label><input class="mj-input" id="ps-cands" type="number" min="1" name="cands" [(ngModel)]="Form.MaxCandidates" (ngModelChange)="Recompute()" />
+        <label for="ps-secs">Max compute seconds</label><input class="mj-input" id="ps-secs" type="number" min="1" name="secs" [(ngModel)]="Form.MaxComputeSeconds" (ngModelChange)="Recompute()" />
+        <label for="ps-seed">Seed</label><input class="mj-input" id="ps-seed" type="number" name="seed" [(ngModel)]="Form.Seed" (ngModelChange)="Recompute()" />
         <label for="ps-guard">Guard fields changed by</label>
-        <select id="ps-guard" name="guard" data-testid="ps-protocol-guard-policy" [(ngModel)]="Form.GuardFieldsEditableBy" (ngModelChange)="Recompute()">
+        <select class="mj-input" id="ps-guard" name="guard" data-testid="ps-protocol-guard-policy" [(ngModel)]="Form.GuardFieldsEditableBy" (ngModelChange)="Recompute()">
           <option value="non-agent">protocol configuration (never an agent tool call)</option>
           <option value="human-only">users only</option>
         </select>

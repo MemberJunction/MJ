@@ -11,7 +11,6 @@
 .ps-eval-flags li { color: var(--mj-status-error-text); }
 .ps-eval-empty, .ps-muted { color: var(--mj-text-muted); }
 .ps-form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; }
-.ps-form input, .ps-form select { padding: 4px 8px; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-sm); background: var(--mj-bg-surface); color: var(--mj-text-primary); }
 .ps-form-actions { display: flex; gap: 8px; margin-top: 12px; }
 .ps-refusals { color: var(--mj-status-error-text); background: var(--mj-status-error-bg); border: 1px solid var(--mj-status-error-border); border-radius: var(--mj-radius-sm); padding: 8px 12px; }
 .ps-note { font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }

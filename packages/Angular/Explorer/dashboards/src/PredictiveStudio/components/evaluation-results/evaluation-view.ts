@@ -3,9 +3,10 @@
  * `ps-run-results/v2` envelope, read into the rows the results widget shows, with the trust verdict's title and
  * headline rendered from the same stored decision.
  */
+import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import {
-  TrustVerdicts, TrainingRunResultsParser,
-  type BaselineSpec, type GateOutcome, type LeakageFlag, type MetricWithInterval, type OutcomeTitleText,
+  HoldoutCarve, JsonParse, TrustVerdicts, TrainingRunResultsParser, TRAINING_RUN_RESULTS_SCHEMA,
+  type BaselineSpec, type TrainingRefusal, type GateOutcome, type LeakageFlag, type MetricWithInterval, type OutcomeTitleText,
   type StoredGateIntervals, type StoredGateRecord, type StoredInterval, type StoredTrainerResult, type TrustInput,
 } from '@memberjunction/predictive-studio-core';
 
@@ -40,11 +41,44 @@ export interface EvaluationView {
   readonly OperatingPoint: { readonly Capacity: number; readonly Precision: IntervalCell; readonly BaseRate: number } | null;
 }
 
+/** What the results widget is given for one run: its stored results, the model lineage and the run's status. */
+export interface EvaluationRunInput extends TrustInput {
+  /** The run's `Status`; null when there is no run. */
+  readonly RunStatus: MJMLTrainingRunEntity['Status'] | null;
+}
+
+/**
+ * The state of one run's protocol results: evaluated (the view), never evaluated under a protocol (no run, or results
+ * stored before protocol training), not finished, refused at a stage, or stored results that cannot be read.
+ */
+export type EvaluationRunState =
+  | { readonly Kind: 'evaluated'; readonly View: EvaluationView }
+  | { readonly Kind: 'not-evaluated' }
+  | { readonly Kind: 'not-finished'; readonly RunStatus: MJMLTrainingRunEntity['Status'] }
+  | { readonly Kind: 'refused'; readonly Stage: TrainingRefusal['stage']; readonly Detail: string }
+  | { readonly Kind: 'unreadable'; readonly Detail: string };
+
 /** Building the results view model from a run's stored results. */
 export class EvaluationViews {
   /** `0.0177 [0.0098, 0.0254]`. */
   public static FormatInterval(c: IntervalCell): string {
     return `${c.Value.toFixed(4)} [${c.Lower.toFixed(4)}, ${c.Upper.toFixed(4)}]`;
+  }
+
+  /** The state of a run's protocol results, telling "no protocol results" apart from refused, unfinished and unreadable runs. */
+  public static DescribeRun(input: EvaluationRunInput): EvaluationRunState {
+    const text = input.ValidationResults;
+    if (text === null || text.trim().length === 0) {
+      return input.RunStatus === 'Pending' || input.RunStatus === 'Running' ? { Kind: 'not-finished', RunStatus: input.RunStatus } : { Kind: 'not-evaluated' };
+    }
+    if (!EvaluationViews.isRunResultsEnvelope(text)) return { Kind: 'not-evaluated' };
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(text);
+    if (!parsed.Ok) return { Kind: 'unreadable', Detail: parsed.Errors.join('; ') };
+    if (parsed.Value.status === 'refused') {
+      return { Kind: 'refused', Stage: parsed.Value.refusal.stage, Detail: EvaluationViews.refusalDetail(parsed.Value.refusal) };
+    }
+    const view = EvaluationViews.BuildEvaluationView(input);
+    return view === null ? { Kind: 'not-evaluated' } : { Kind: 'evaluated', View: view };
   }
 
   /**
@@ -99,6 +133,19 @@ export class EvaluationViews {
       Intercept: c.intercept,
       Bins: c.reliability.map((b) => ({ Range: `${b.binLower.toFixed(1)}–${b.binUpper.toFixed(1)}`, Predicted: b.meanPredicted, Observed: b.observedRate, N: b.n })),
     };
+  }
+
+  /** True when the text is JSON tagged `ps-run-results/v2` (results stored before protocol training carry no such tag). */
+  private static isRunResultsEnvelope(text: string): boolean {
+    const json = JsonParse.ParseJsonText(text, 'ValidationResults');
+    return json.Ok === true && JsonParse.IsJsonObject(json.Value) && JsonParse.JsonString(json.Value, 'schema') === TRAINING_RUN_RESULTS_SCHEMA;
+  }
+
+  /** The refusal in words: the carve's own sentence, a trainer failure's message, otherwise the refusal kind. */
+  private static refusalDetail(r: TrainingRefusal): string {
+    if (r.stage === 'carve') return HoldoutCarve.DescribeCarveRefusal(r.reason);
+    if (r.stage === 'trainer' && r.reason.kind === 'trainer-failed') return `trainer-failed (${r.reason.stage}): ${r.reason.message}`;
+    return r.reason.kind;
   }
 
   private static cell(m: MetricWithInterval): IntervalCell {

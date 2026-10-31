@@ -94,8 +94,13 @@ export class WidgetFixtures {
     return JSON.stringify(WidgetFixtures.StoredRunEnvelope(changes));
   }
 
-  /** The stored trainer result, for tests that vary one member. */
-  public static Trainer(): StoredTrainerResult {
-    return trainer;
+  /** A run refused at the carve stage (no row on or after the cutoff), as `ValidationResults` stores it. */
+  public static RefusedRunJson(): string {
+    const envelope: TrainingRunResults = {
+      schema: TRAINING_RUN_RESULTS_SCHEMA,
+      status: 'refused',
+      refusal: { stage: 'carve', reason: { kind: 'no-holdout-rows', cutoff: '2026-01-01', holdoutEnd: null } },
+    };
+    return JSON.stringify(envelope);
   }
 }
