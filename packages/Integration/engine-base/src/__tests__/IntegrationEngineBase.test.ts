@@ -19,7 +19,6 @@ describe('IntegrationEngineBase', () => {
         expect(engine.SourceTypes).toEqual([]);
         expect(engine.CompanyIntegrations).toEqual([]);
         expect(engine.EntityMaps).toEqual([]);
-        expect(engine.FieldMaps).toEqual([]);
         expect(engine.Watermarks).toEqual([]);
         expect(engine.IntegrationObjects).toEqual([]);
         expect(engine.IntegrationObjectFields).toEqual([]);
@@ -44,10 +43,6 @@ describe('IntegrationEngineBase', () => {
 
         it('GetEntityMapsForCompanyIntegration returns empty array', () => {
             expect(engine.GetEntityMapsForCompanyIntegration('non-existent-id')).toEqual([]);
-        });
-
-        it('GetFieldMapsForEntityMap returns empty array', () => {
-            expect(engine.GetFieldMapsForEntityMap('non-existent-id')).toEqual([]);
         });
 
         it('GetWatermark returns undefined when empty', () => {

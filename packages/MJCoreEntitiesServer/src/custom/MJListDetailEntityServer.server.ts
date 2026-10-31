@@ -62,6 +62,7 @@ export class MJListDetailEntityServer extends MJListDetailEntityExtended {
                 ExtraFilter: `ID = '${this.ListID}'`,
                 Fields: ['ID', 'UserID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, this.ContextCurrentUser);
 

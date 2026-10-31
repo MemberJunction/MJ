@@ -401,8 +401,7 @@ export class WakeGateEvaluator {
                         EntityName: rule.entityName,
                         ExtraFilter: baseFilter,
                         OrderBy: '__mj_UpdatedAt DESC',
-                        // 2, not 1: a MaxRows: 1 read skips the total count, and totalMatchingCount needs it
-                        MaxRows: 2,
+                        MaxRows: 1,
                         ResultType: 'simple',
                     },
                 ],
@@ -628,6 +627,7 @@ export class WakeGateEvaluator {
                 EntityName: 'MJ: AI Prompts',
                 ExtraFilter: `Name='${fallbackName.replace(/'/g, "''")}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, contextUser);
             if (res.Success && res.Results.length > 0) {

@@ -1200,8 +1200,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Mic capture and playout carry over untouched. Rejects when the connection can't be opened or
      * its setup fails, so {@link RealtimeSessionResumption} can retry.
      *
-     * The resume reuses the session's ephemeral token, which Google accepts until the token's
-     * `expireTime` (the server driver mints 30 minutes). After that every attempt fails and the
+     * The resume reuses the session's ephemeral token. Google counts a resume as a new session, so
+     * the server driver mints the token to open several connections until its `expireTime`
+     * (30 minutes). After that, or once those connections are spent, every attempt fails and the
      * session ends with a fatal error.
      *
      * @param handle The resumption handle Google issued.

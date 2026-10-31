@@ -1305,6 +1305,7 @@ export class FormBuilderResourceComponent
             const result = await rv.RunView<BaseEntity>({
                 EntityName: this.TargetEntityName,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 OrderBy: orderBy,
                 ResultType: 'entity_object',
             }, user);
@@ -2012,6 +2013,7 @@ export class FormBuilderResourceComponent
                     ExtraFilter: `UserID='${this.CurrentUser.ID}' AND ComponentID='${version.ID}' AND Status='Pending'`,
                     Fields: ['ID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 }, this.CurrentUser);
                 const overrideID = pending.Results?.[0]?.ID;
@@ -2028,6 +2030,7 @@ export class FormBuilderResourceComponent
                     ExtraFilter: `UserID='${this.CurrentUser.ID}' AND ComponentID IN (${this.Versions.map(v => `'${v.ID}'`).join(',')}) AND Status='Active'`,
                     Fields: ['ID'],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 }, this.CurrentUser);
                 const overrideID = active.Results?.[0]?.ID;
@@ -2323,6 +2326,7 @@ export class FormBuilderResourceComponent
             ExtraFilter: `ComponentID='${componentID}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true,
         }, this.CurrentUser ?? undefined);
@@ -3023,6 +3027,7 @@ export class FormBuilderResourceComponent
                 EntityName: 'MJ: Entity Form Overrides',
                 ExtraFilter: `ComponentID='${componentID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, user);
             if (result.Success && result.Results?.[0]) {
