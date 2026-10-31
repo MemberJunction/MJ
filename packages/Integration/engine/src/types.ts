@@ -385,6 +385,13 @@ export interface SyncProgressSnapshot {
     RecordsCreated: number;
     RecordsUpdated: number;
     RecordsErrored: number;
+    /**
+     * Records the sync decided not to write because the content hash matched. plan.md wants this
+     * next to created and updated: "it must show the number of NEW records or update records are
+     * being done ... and also how many are skipped, it must be clear. Synced is different between
+     * created and updated."
+     */
+    RecordsSkipped: number;
     TriggerType: string;
 }
 
