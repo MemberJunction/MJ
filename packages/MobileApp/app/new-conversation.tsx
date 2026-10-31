@@ -13,6 +13,7 @@ import { Icons } from '@/components/Icon';
 import { useAgents } from '@/hooks/useAgents';
 import { CreateConversation } from '@/data/services/agents';
 import { ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { SetPendingChatHandoff } from '@/data/pending-chat-handoff';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 /** A starter-prompt card: display `title`, the full `prompt` it inserts, plus icon/color. */
@@ -88,17 +89,13 @@ export default function NewConversationScreen() {
                 setError('Could not create the conversation.');
                 return;
             }
-            // Navigate into the thread and let it run the send — the thread shows the
-            // "agent working" indicator and polls for the reply. Passing the message via
-            // ?autosend gives the first message the same progress UX as in-thread sends.
+            // Stage the first message + attachment in process memory rather than URL query params
+            // so external deep links can never trigger unconfirmed prompts or file uploads.
+            SetPendingChatHandoff(conv.id, body, attached);
             router.replace({
                 pathname: '/chat/[id]',
                 params: {
                     id: conv.id,
-                    autosend: body,
-                    // Serialized because route params are strings. Only the small descriptor
-                    // travels — the bytes stay on disk at `uri` until the thread uploads them.
-                    ...(attached ? { autosendAttachment: JSON.stringify(attached) } : {}),
                 },
             });
         } catch (e) {

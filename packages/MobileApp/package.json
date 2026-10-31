@@ -15,6 +15,7 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "lint": "expo lint",
+    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

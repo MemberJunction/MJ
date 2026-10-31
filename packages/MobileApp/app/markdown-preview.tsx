@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
@@ -124,6 +125,9 @@ End of preview.
  */
 export default function MarkdownPreviewScreen() {
     const { width } = useWindowDimensions();
+    if (!__DEV__) {
+        return <Redirect href="/" />;
+    }
     const chartWidth = width - Spacing.lg * 2;
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
