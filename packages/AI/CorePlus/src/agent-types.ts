@@ -1257,6 +1257,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * realtime delegation, runtime actions). The plain Search action refuses in such a run, and the run is not offered
      * task graphs (a graph's nodes run without it). Pre-execution RAG still uses only the agent's own `PreExecution`
      * scopes. It is not written to the run row, so a continuation (`lastRunId`) must pass it again, as with `actionChanges`.
+     *
+     * An empty list means not assigned: the agent's own search access applies. To forbid search in a run, remove Scoped
+     * Search (and Search) with `actionChanges`.
      */
     SearchScopeIDs?: string[];
     /** Optional cancellation token to abort the agent execution */
