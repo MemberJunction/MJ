@@ -88,3 +88,5 @@ export class PredictiveStudioDashboardsModule {}
 export { PSPredictionsResourceComponent, LoadPSPredictionsResource } from './PredictiveStudio/resources/ps-predictions-resource.component';
 export { PSStudioResourceComponent, LoadPSStudioResource } from './PredictiveStudio/resources/ps-studio-resource.component';
 export { PSModelsResourceComponent, LoadPSModelsResource } from './PredictiveStudio/resources/ps-models-resource.component';
+// The record-form panels this chunk registers (keyed BaseFormPanel registrations), so the lazy config maps each key to this chunk.
+export { PSProtocolVersionsPanel, PSUnitVersionsPanel, PSPipelineBindingsPanel, PSModelEvaluationPanel, PS_RECORD_PANELS } from './PredictiveStudio/record-panels/ps-protocol-panels';

@@ -29,7 +29,7 @@ function savedId(record: { IsSaved: boolean; ID: string }): string | null {
   standalone: true,
   imports: [BaseFormsModule, PSProtocolVersionsComponent],
   template: `
-    <mj-collapsible-panel SectionKey="ps-protocol-versions" SectionName="Protocol versions" Icon="fa-solid fa-code-branch" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+    <mj-collapsible-panel SectionKey="ps-protocol-versions" SectionName="Protocol versions" Icon="fa-solid fa-code-branch" [Form]="FormComponent" [FormContext]="FormContext" [Order]="DisplayOrder" [DefaultExpanded]="true">
       <mj-ps-protocol-versions [Provider]="FormComponent.ProviderToUse" [EvaluationProtocolID]="RecordID" (AfterVersionSaved)="OnVersionSaved($event)"></mj-ps-protocol-versions>
     </mj-collapsible-panel>
   `,
@@ -56,7 +56,7 @@ export class PSProtocolVersionsPanel extends BaseFormPanel<MJEvaluationProtocolE
   standalone: true,
   imports: [BaseFormsModule, PSUnitVersionsComponent],
   template: `
-    <mj-collapsible-panel SectionKey="ps-unit-versions" SectionName="Unit versions" Icon="fa-solid fa-code-branch" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+    <mj-collapsible-panel SectionKey="ps-unit-versions" SectionName="Unit versions" Icon="fa-solid fa-code-branch" [Form]="FormComponent" [FormContext]="FormContext" [Order]="DisplayOrder" [DefaultExpanded]="true">
       <mj-ps-unit-versions [Provider]="FormComponent.ProviderToUse" [UnitID]="RecordID" (AfterVersionSaved)="OnVersionSaved($event)"></mj-ps-unit-versions>
     </mj-collapsible-panel>
   `,
@@ -83,7 +83,7 @@ export class PSUnitVersionsPanel extends BaseFormPanel<MJPredictionUnitEntity> {
   standalone: true,
   imports: [BaseFormsModule, PSPipelineBindingsComponent],
   template: `
-    <mj-collapsible-panel SectionKey="ps-pipeline-bindings" SectionName="Prediction Unit and Evaluation Protocol" Icon="fa-solid fa-link" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+    <mj-collapsible-panel SectionKey="ps-pipeline-bindings" SectionName="Prediction Unit and Evaluation Protocol" Icon="fa-solid fa-link" [Form]="FormComponent" [FormContext]="FormContext" [Order]="DisplayOrder" [DefaultExpanded]="true">
       <mj-ps-pipeline-bindings [Provider]="FormComponent.ProviderToUse" [PipelineID]="RecordID" (AfterBindingChanged)="OnBindingChanged($event)"></mj-ps-pipeline-bindings>
     </mj-collapsible-panel>
   `,
@@ -117,7 +117,7 @@ export class PSPipelineBindingsPanel extends BaseFormPanel<MJMLTrainingPipelineE
   standalone: true,
   imports: [BaseFormsModule, PSRunEvaluationComponent],
   template: `
-    <mj-collapsible-panel SectionKey="ps-model-evaluation" SectionName="Evaluation (protocol results)" Icon="fa-solid fa-scale-balanced" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+    <mj-collapsible-panel SectionKey="ps-model-evaluation" SectionName="Evaluation (protocol results)" Icon="fa-solid fa-scale-balanced" [Form]="FormComponent" [FormContext]="FormContext" [Order]="DisplayOrder" [DefaultExpanded]="true">
       <mj-ps-run-evaluation [Provider]="FormComponent.ProviderToUse" [ModelID]="RecordID"></mj-ps-run-evaluation>
     </mj-collapsible-panel>
   `,
