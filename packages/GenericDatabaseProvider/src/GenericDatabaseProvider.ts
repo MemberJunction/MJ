@@ -4886,7 +4886,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Runs a differential query and returns only changes since the client's cached state.
      * Includes updated/created rows and deleted record IDs.
-     * Falls back to full query if hidden deletes are detected.
+     * Falls back to full query if the client timestamp is not a date or hidden deletes are detected.
      */
     protected async runDifferentialQueryAndReturn<T = unknown>(
         params: RunViewParams,
@@ -4900,16 +4900,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
-            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
-            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
-
-            // Validation: detect hidden deletes not tracked in RecordChanges
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
                 // Unparseable client timestamp — can't trust the differential math; fall
                 // back to a full refresh (cached wide + projected, like every other leg).
                 return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
+            const since = clientMaxUpdatedDate.toISOString();
+            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, since, whereSQL, contextUser);
+            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, since, contextUser);
+
+            // Validation: detect hidden deletes not tracked in RecordChanges
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
                 if (!createdAt) return false;
@@ -4982,8 +4983,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Formats a client timestamp as ISO 8601 for a SQL literal.
+     * Throws when the value is not a date.
+     */
+    private toSQLTimestamp(raw: string): string {
+        const date = this.parseClientTimestamp(raw);
+        if (!date) throw new Error('Client timestamp is not a valid date');
+        return date.toISOString();
+    }
+
+    /**
      * Gets IDs of records deleted since a given timestamp.
-     * Uses dialect-neutral quoting. Subclasses can override for parameterized queries.
+     * Uses dialect-neutral quoting and sends the timestamp in ISO 8601 form.
+     * Subclasses can override for parameterized queries.
      */
     protected async getDeletedRecordIDsSince(
         entityID: string,
@@ -4991,7 +5003,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
     ): Promise<string[]> {
         try {
-            const sql = `SELECT DISTINCT ${this.QuoteIdentifier('RecordID')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('EntityID')} = '${entityID}' AND ${this.QuoteIdentifier('Type')} = 'Delete' AND ${this.QuoteIdentifier('ChangedAt')} > '${sinceTimestamp}'`;
+            const since = this.toSQLTimestamp(sinceTimestamp);
+            const sql = `SELECT DISTINCT ${this.QuoteIdentifier('RecordID')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('EntityID')} = '${entityID}' AND ${this.QuoteIdentifier('Type')} = 'Delete' AND (${this.QuoteIdentifier('ChangedAt')} > '${since}')`;
             const results = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
             return results.map(r => String(r['RecordID']));
         } catch (e) {
@@ -5002,7 +5015,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Gets rows updated/created since a given timestamp.
-     * Uses dialect-neutral quoting and TransformExternalSQLClause for OrderBy.
+     * Uses dialect-neutral quoting and TransformExternalSQLClause for OrderBy, and sends the
+     * timestamp in ISO 8601 form as its own predicate group.
      */
     protected async getUpdatedRowsSince<T = unknown>(
         params: RunViewParams,
@@ -5012,7 +5026,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
     ): Promise<T[]> {
         try {
-            const timestampFilter = `${this.QuoteIdentifier('__mj_UpdatedAt')} > '${sinceTimestamp}'`;
+            const timestampFilter = `(${this.QuoteIdentifier('__mj_UpdatedAt')} > '${this.toSQLTimestamp(sinceTimestamp)}')`;
             const combinedWhere = whereSQL
                 ? `(${whereSQL}) AND ${timestampFilter}`
                 : timestampFilter;

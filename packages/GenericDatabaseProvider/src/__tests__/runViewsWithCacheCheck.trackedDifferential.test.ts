@@ -170,9 +170,9 @@ describe('RunViewsWithCacheCheck: change-tracked entity with an older client cac
         vi.restoreAllMocks();
     });
 
-    async function runOlderClientCheck() {
+    async function runOlderClientCheck(maxUpdatedAt = '2026-04-20T12:00:00.000Z', checkParams: RunViewParams = params) {
         return provider.RunViewsWithCacheCheck(
-            [{ params, cacheStatus: { maxUpdatedAt: '2026-04-20T12:00:00.000Z', rowCount: 2 } }],
+            [{ params: checkParams, cacheStatus: { maxUpdatedAt, rowCount: 2 } }],
             testUser,
         );
     }
@@ -208,5 +208,31 @@ describe('RunViewsWithCacheCheck: change-tracked entity with an older client cac
         expectChangedRowsOnly(response);
         expect(provider.ExecutedSQLStatements).toHaveLength(3);
         expect(await LocalCacheManager.Instance.GetRunViewResult(fingerprint)).not.toBeNull();
+    });
+
+    it('sends the client timestamp to the changed-rows queries in ISO 8601 form', async () => {
+        const response = await runOlderClientCheck('Mon, 20 Apr 2026 12:00:00 GMT');
+
+        expectChangedRowsOnly(response);
+        expect(provider.ExecutedSQLStatements[1]).toContain('"__mj_UpdatedAt" > \'2026-04-20T12:00:00.000Z\'');
+        expect(provider.ExecutedSQLStatements[2]).toContain('"ChangedAt" > \'2026-04-20T12:00:00.000Z\'');
+    });
+
+    it('does a full refresh without the changed-rows queries when the client timestamp is not a date', async () => {
+        const response = await runOlderClientCheck('not-a-date');
+
+        expect(response.results[0].status).toBe('stale');
+        expect(provider.FullViewReads).toHaveLength(1);
+        expect(provider.ExecutedSQLStatements.some(sql => sql.includes('not-a-date'))).toBe(false);
+    });
+
+    it('groups the view filter and the timestamp condition separately in the changed-rows queries', async () => {
+        const filteredParams: RunViewParams = { ...params, ExtraFilter: `"Name" <> 'Hidden'` };
+
+        const response = await runOlderClientCheck(undefined, filteredParams);
+
+        expectChangedRowsOnly(response);
+        expect(provider.ExecutedSQLStatements[1]).toContain(`("Name" <> 'Hidden') AND ("__mj_UpdatedAt" > '2026-04-20T12:00:00.000Z')`);
+        expect(provider.ExecutedSQLStatements[2]).toContain(`AND ("ChangedAt" > '2026-04-20T12:00:00.000Z')`);
     });
 });
