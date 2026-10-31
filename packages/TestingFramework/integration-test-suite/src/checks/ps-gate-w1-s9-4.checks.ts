@@ -1,7 +1,7 @@
 /**
  * Gate G0.4 "W1 → S9.4": on the W1-signal s42 scoring (NA, 2024), every row whose top per-record driver is Auto Renew
  * shows the direction its own Auto Renew value pushes the risk: "Lowers Risk" for an auto-renewing member, "Raises
- * Risk" for one who is not (717 rows, all of them, with both kinds of member present so neither direction passes
+ * Risk" for one who is not (588 rows, all of them, with both kinds of member present so neither direction passes
  * vacuously). Drivers are measured from the mean training row, so a member without
  * auto-renew is driven up by the absence of what lowers the average member's risk. The drawer's badge reads
  * `RowDriver.Up`, which is `AtRiskRules.DriverRaisesRisk`; `Up === false` is the green "Lowers Risk" badge
@@ -12,8 +12,11 @@ import { ContainmentProbe, HarnessDatasets } from '@memberjunction/predictive-st
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGateSpecs } from './ps-gates/ps-gate-specs';
 
-/** The NA 2024 rows of the seeded W1-signal s42 scoring whose top per-record driver is Auto Renew. */
-const AUTO_RENEW_TOP_DRIVER_ROWS = 717;
+/**
+ * The NA 2024 rows of the seeded W1-signal s42 scoring whose top per-record driver is Auto Renew, under the model the
+ * pipeline's Prediction Unit trains (measured 588; 717 under the earlier model trained without a unit).
+ */
+const AUTO_RENEW_TOP_DRIVER_ROWS = 588;
 
 export const PsGateW1S94Checks: NamedCheck[] = [
   {
