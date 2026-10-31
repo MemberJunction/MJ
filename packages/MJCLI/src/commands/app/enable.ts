@@ -27,6 +27,7 @@ export default class AppEnable extends Command {
   async run(): Promise<void> {
     const { args } = await this.parse(AppEnable);
     const spinner = ora(`Enabling ${args.name}...`).start();
+    let failed = false;
 
     try {
       const context = await BuildOrchestratorContext(this);
@@ -40,12 +41,17 @@ export default class AppEnable extends Command {
         }
       } else {
         spinner.fail(chalk.red(`Failed to enable: ${result.ErrorMessage}`));
-        this.exit(1);
+        failed = true;
       }
     } catch (error) {
       spinner.fail('Enable failed');
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
+    }
+    // Outside the try on purpose: oclif's exit() works by throwing, and the catch above would
+    // swallow it — printing a second failure line and exiting 2 with "EEXIT: 1".
+    if (failed) {
+      this.exit(1);
     }
   }
 }

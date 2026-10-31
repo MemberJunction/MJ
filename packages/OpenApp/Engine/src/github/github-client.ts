@@ -29,7 +29,18 @@ export interface GitHubClientOptions {
      * to the default Token.
      */
     TokenMap?: Record<string, string>;
+    /**
+     * Where {@link Token} came from, so a message about a rejected credential can name the one that
+     * was used. Unset when the caller did not say; the message then refers to "the supplied token".
+     */
+    TokenSource?: GitHubTokenSource;
 }
+
+/**
+ * Where {@link GitHubClientOptions.Token} came from: `openApps.github.token` in mj.config.cjs, or
+ * the `GITHUB_TOKEN` environment variable. The config value wins when both are set.
+ */
+export type GitHubTokenSource = 'Config' | 'Environment';
 
 /**
  * Represents a GitHub release / tag.
@@ -173,20 +184,43 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; 
  * repository, not to a path inside it. An entry keyed by the exact subpath URL still wins.
  */
 function ResolveToken(repoUrl: string, options: GitHubClientOptions): string | undefined {
+    return ResolveCredential(repoUrl, options)?.Token;
+}
+
+/** A resolved token plus a description of where it came from, for messages that name it. */
+type ResolvedCredential = {
+    Token: string;
+    Source: string;
+    /** True for a token from mj.config.cjs, which takes precedence over GITHUB_TOKEN. */
+    FromConfig: boolean;
+};
+
+/**
+ * {@link ResolveToken} with the token's origin: the `openApps.github.tokens` entry that matched, or
+ * {@link GitHubClientOptions.Token} described by {@link GitHubClientOptions.TokenSource}.
+ */
+function ResolveCredential(repoUrl: string, options: GitHubClientOptions): ResolvedCredential | undefined {
     if (options.TokenMap) {
         const entries = Object.entries(options.TokenMap);
         const normalized = normalizeRepoUrl(repoUrl);
-        const exact = entries.find(([mapUrl]) => normalizeRepoUrl(mapUrl) === normalized);
-        if (exact) {
-            return exact[1];
-        }
         const repoKey = repositoryKey(repoUrl);
-        const sameRepo = repoKey ? entries.find(([mapUrl]) => repositoryKey(mapUrl) === repoKey) : undefined;
-        if (sameRepo) {
-            return sameRepo[1];
+        const match = entries.find(([mapUrl]) => normalizeRepoUrl(mapUrl) === normalized)
+            ?? (repoKey ? entries.find(([mapUrl]) => repositoryKey(mapUrl) === repoKey) : undefined);
+        if (match) {
+            return { Token: match[1], Source: `the openApps.github.tokens entry for ${match[0]} in mj.config.cjs`, FromConfig: true };
         }
     }
-    return options.Token;
+    if (!options.Token) {
+        return undefined;
+    }
+    switch (options.TokenSource) {
+        case 'Config':
+            return { Token: options.Token, Source: 'openApps.github.token in mj.config.cjs', FromConfig: true };
+        case 'Environment':
+            return { Token: options.Token, Source: 'the GITHUB_TOKEN environment variable', FromConfig: false };
+        default:
+            return { Token: options.Token, Source: 'the supplied token', FromConfig: false };
+    }
 }
 
 /** `owner/repo`, lowercased, for a GitHub URL with or without a subpath; null if it is not one. */
@@ -382,9 +416,16 @@ function UnreadableRepoMessage(
     options: GitHubClientOptions
 ): string {
     const target = `${parsed.Owner}/${parsed.Repo}`;
-    return ResolveToken(repoUrl, options)
-        ? `Cannot read ${target}. The repository does not exist, or the GitHub credential supplied does not grant access to it — check the token is valid and carries 'repo' scope for ${target}.`
-        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — ${CONFIGURE_CREDENTIAL_REMEDY}, then retry.`;
+    const credential = ResolveCredential(repoUrl, options);
+    if (!credential) {
+        return `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — ${CONFIGURE_CREDENTIAL_REMEDY}, then retry.`;
+    }
+    // Naming the source matters because the sources shadow each other: a stale config token beats a
+    // fresh GITHUB_TOKEN, and a reader who just exported one would otherwise assume it was used.
+    const shadowsEnvironment = credential.FromConfig ? ' (mj.config.cjs tokens take precedence over GITHUB_TOKEN)' : '';
+    return `Cannot read ${target}. The repository does not exist, or the GitHub token from ${credential.Source}${shadowsEnvironment} does not grant access to it. `
+        + `Check the token is valid and: a classic token carries 'repo' scope; a fine-grained token lists ${target} under repository access with Contents: Read; `
+        + `if the organization enforces SAML SSO, the token is authorized for it.`;
 }
 
 /**
@@ -959,6 +1000,15 @@ export async function DownloadMigrations(
     }
     catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
+        if (OctokitStatus(error) === 404) {
+            // `repoUrl` is the manifest's declared repository, which may differ from the install
+            // source that already proved readable — so a 404 here can still be an unreadable repo.
+            return {
+                Success: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `Failed to download migrations: ${message} (${cleanPath} in ${parsed.Owner}/${parsed.Repo} at ref ${ref ?? 'default branch'})`),
+            };
+        }
         return { Success: false, ErrorMessage: `Failed to download migrations: ${message}` };
     }
 }
