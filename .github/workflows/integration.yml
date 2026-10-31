@@ -153,8 +153,14 @@ jobs:
   # now SKIPS them instead of failing them — "could not run" and "ran and found a problem" stop
   # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
   # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
+  #
+  # Deliberately NOT named like lockfile-guard.yml's `Lockfile matches package.json`, although both
+  # run the same `pnpm install --frozen-lockfile --lockfile-only`. That name is the required check in
+  # next-protect, and a ruleset matches checks by name only: two jobs reporting under it would make
+  # the verdict depend on which one reported last, and this one does not run on every PR. The
+  # required check is lockfile-guard.yml's; this job only exists so the jobs below can skip.
   preflight:
-    name: Lockfile resolves
+    name: Lockfile resolves (integration preflight)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1125,6 +1131,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1296,6 +1306,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1333,3 +1347,41 @@ jobs:
               echo '</details>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
+  # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
+  # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.
+  # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
+  # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
+  # by concurrency, so a cancel means a timeout or a manual stop.
+  backstop-alarm:
+    name: Backstop alarm
+    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, codegen-drift-ai]
+    if: always() && github.event_name == 'push' && github.ref_name == 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          filter: blob:none
+
+      - name: Alert on backstop failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "Integration Tier"
+
+      # A cleanup failure must never turn a green run red (that would file an alarm about the
+      # alarm), so this step alone is continue-on-error; the script still logs ::error::.
+      - name: Resolve backstop alarm on green
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "Integration Tier"
