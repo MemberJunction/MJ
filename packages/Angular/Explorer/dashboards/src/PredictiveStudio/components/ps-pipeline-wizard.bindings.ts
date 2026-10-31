@@ -12,6 +12,9 @@ import {
   type Actor, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 
+/** Rows per label page: an explicit page size, since a client view without one returns only the entity's default page. */
+const LABEL_PAGE_ROWS = 50_000;
+
 /** The unit draft and protocol inputs a new pipeline maps to. */
 export interface WizardBindingPlan {
   readonly Kind: 'plan';
@@ -67,7 +70,7 @@ export class PipelineWizardBindings {
     p: WizardPipelineFields, provider: IMetadataProvider, user: UserInfo | undefined, orderBy: string, startRow: number,
   ): Promise<{ readonly Labels: string[]; readonly Rows: number; readonly Total: number }> {
     const r = await RunView.FromMetadataProvider(provider).RunView<Record<string, string | number | boolean | Date | null>>(
-      { EntityName: p.TargetEntity, Fields: [p.TargetVariable], OrderBy: orderBy, StartRow: startRow, ResultType: 'simple' }, user);
+      { EntityName: p.TargetEntity, Fields: [p.TargetVariable], OrderBy: orderBy, StartRow: startRow, MaxRows: LABEL_PAGE_ROWS, ResultType: 'simple' }, user);
     if (!r.Success) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} failed: ${r.ErrorMessage}`);
     const labels = r.Results.flatMap((row) => {
       const label = LegacyPipelines.ClassLabel(row[p.TargetVariable]);
