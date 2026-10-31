@@ -21,6 +21,7 @@
 
 import type { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
+import { JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
 
 /** A plain JSON object map parsed from a JSON-string or object-valued param. */
 export type JsonObject = Record<string, unknown>;
@@ -88,16 +89,12 @@ export abstract class BasePredictiveStudioAction extends BaseAction {
     return items.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter((v) => v.length > 0);
   }
 
-  /** A JSON array's elements, or the comma-separated parts of any other text (`unknown[]`: untrusted JSON, narrowed by the caller's `typeof` filter). */
-  private parseListText(text: string): unknown[] {
+  /** A JSON array's elements (typed JSON, narrowed by the caller's `typeof` filter), or the comma-separated parts of any other text. */
+  private parseListText(text: string): JsonValue[] {
     const trimmed = text.trim();
     if (trimmed.startsWith('[')) {
-      try {
-        const parsed: unknown = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {
-        // not JSON: read as a comma-separated list below
-      }
+      const parsed = JsonParse.ParseJsonText(trimmed, 'list');
+      if (parsed.Ok === true && Array.isArray(parsed.Value)) return parsed.Value;
     }
     return trimmed.split(',');
   }
