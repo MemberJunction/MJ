@@ -1156,7 +1156,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (66 classes)
+// @memberjunction/core-entities-server (67 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2470,12 +2470,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationActionExecutor,
     InviteToListAction,
     JSONTransformAction,
-    ListMCPToolsAction,
-    ListObjectsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ListMCPToolsAction,
+    ListObjectsAction,
     ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
