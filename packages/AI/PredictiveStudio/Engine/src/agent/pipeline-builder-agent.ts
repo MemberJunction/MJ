@@ -284,12 +284,6 @@ function measurementNote(search: boolean, untrainedExperiments: readonly string[
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
 export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
   /**
-   * Run the deterministic build once. Reads the approved plan off `params.payload`, builds the
-   * pipeline + trains + publishes-gated-on-trust, writes the outcome to the payload, and terminates
-   * the sub-agent with Success (build ran — even when the model is held, that's a successful run with
-   * a held outcome) or Failed (the build itself errored).
-   */
-  /**
    * The approved plan a payload carries. The payload's `Leaderboard` is a previous build's results (its scores may be
    * null), not the plan's ranking, so it is left out; nothing in the build reads a plan leaderboard.
    */
@@ -299,6 +293,12 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     return plan;
   }
 
+  /**
+   * Run the deterministic build once. Reads the approved plan off `params.payload`, builds the
+   * pipeline + trains + publishes-gated-on-trust, writes the outcome to the payload, and terminates
+   * the sub-agent with Success (build ran — even when the model is held, that's a successful run with
+   * a held outcome) or Failed (the build itself errored).
+   */
   protected override async executeAgentInternal<P = PredictiveStudioBuilderPayload>(
     params: ExecuteAgentParams,
     _config: AgentConfiguration,

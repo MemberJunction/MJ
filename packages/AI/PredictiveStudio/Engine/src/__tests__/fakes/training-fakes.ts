@@ -6,7 +6,8 @@
  */
 import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { MJMLModelEntity,
+import type {
+  MJMLModelEntity,
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
   MJTrainingSnapshotEntity,
