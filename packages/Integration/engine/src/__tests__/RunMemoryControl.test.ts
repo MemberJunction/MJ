@@ -23,7 +23,7 @@ vi.mock('../ResourcePressure.js', () => ({
   })
 }));
 
-const { RunMemoryControl, MIN_BATCH_SIZE, DECISION_INTERVAL_MS, estimateBytesPerRecord } = await import('../RunMemoryControl.js');
+const { RunMemoryControl, MIN_BATCH_SIZE, DECISION_INTERVAL_MS, EstimateBytesPerRecord } = await import('../RunMemoryControl.js');
 
 const hooks = () => {
   const calls: string[] = [];
@@ -147,17 +147,17 @@ describe('NoteBatch', () => {
   });
 });
 
-describe('estimateBytesPerRecord', () => {
+describe('EstimateBytesPerRecord', () => {
   it('scales with the record, and never stringifies a whole batch', () => {
-    const small = estimateBytesPerRecord({ a: 1 });
-    const big = estimateBytesPerRecord(fat);
+    const small = EstimateBytesPerRecord({ a: 1 });
+    const big = EstimateBytesPerRecord(fat);
     expect(big).toBeGreaterThan(small);
   });
 
   it('returns 0 rather than a wrong number on something unserialisable', () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    expect(estimateBytesPerRecord(circular)).toBe(0);
+    expect(EstimateBytesPerRecord(circular)).toBe(0);
   });
 });
 
