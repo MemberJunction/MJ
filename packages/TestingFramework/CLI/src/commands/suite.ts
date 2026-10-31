@@ -17,6 +17,7 @@ import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst, FormatSkipGateReport } from '@memberjunction/testing-integration';
 import { EvaluateSuiteSkipGate } from './suite-skip-gate';
+import { FlushAndExit } from '../utils/flush-and-exit';
 
 /**
  * Suite command - Execute a test suite
@@ -198,8 +199,9 @@ export class SuiteCommand {
             // Clean up resources
             await CloseMJProvider();
 
-            // Exit with appropriate code (non-zero if any test failed or the skip gate failed)
-            process.exit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
+            // Exit with appropriate code (non-zero if any test failed or the skip gate failed),
+            // after the result above has reached a piped stdout in full
+            await FlushAndExit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
 
         } catch (error) {
             this.spinner.fail();
