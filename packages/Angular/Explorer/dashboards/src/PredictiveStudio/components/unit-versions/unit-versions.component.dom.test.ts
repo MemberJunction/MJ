@@ -6,6 +6,7 @@ import type { AfterVersionSavedEventArgs, BeforeVersionSavedEventArgs } from '..
 import type { UnitVersionRow } from '../versioned-list/lineage-reads';
 import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import { CreateRowDouble, CreateVersionStoreDouble, DOUBLE_USER_ID, RowsMatching, ViewResult, type VersionStoreDouble } from '../versioned-list/version-rows.test-support';
+import { HostElement } from '../ps-dom-queries.test-support';
 
 const ROOT = '11111111-2222-4333-8444-555555555555';
 const draft: UnitDraft = {
@@ -85,7 +86,7 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
     Store.NextRow = CreateRowDouble(Store, emptyRow(''), 'UNUSED', 'LabelVersion must be 2: the outcome definition changed.');
     await Fixture.componentInstance.Save({ Draft: draft, LabelVersion: 1 });
     Fixture.detectChanges();
-    const host = Fixture.nativeElement as HTMLElement;
+    const host = HostElement(Fixture);
     expect(host.querySelector('[data-testid="ps-unit-versions-error"]')?.textContent).toContain('LabelVersion must be 2: the outcome definition changed.');
     expect([After[0]?.Success, After[0]?.ID, After[0]?.ErrorMessage]).toEqual([false, null, 'LabelVersion must be 2: the outcome definition changed.']);
     expect(Store.Rows).toHaveLength(1);
@@ -133,7 +134,7 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
     Fixture.componentInstance.UnitID = ROOT;
     const older = Fixture.componentInstance.Load();
     Fixture.detectChanges();
-    const host = Fixture.nativeElement as HTMLElement;
+    const host = HostElement(Fixture);
     expect(host.querySelector('mj-loading')).not.toBeNull();
     expect(host.querySelector('[data-testid="ps-unit-version-list"]')).toBeNull();
     Fixture.componentInstance.UnitID = 'ANOTHER-MISSING-ID';

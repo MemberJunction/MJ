@@ -4,6 +4,7 @@ import {
   EvaluationProtocolRules, type Actor, type EvaluationProtocolDraft, type EvaluationProtocolSpec, type PredictionUnitSpec,
 } from '@memberjunction/predictive-studio-core';
 import { PSProtocolEditorComponent } from './protocol-editor.component';
+import { HostElement, QueryElement } from '../ps-dom-queries.test-support';
 
 const unit: PredictionUnitSpec = {
   id: '11111111-2222-4333-8444-555555555555', lineageRootId: '11111111-2222-4333-8444-555555555555', version: 1, name: 'Renewal',
@@ -43,43 +44,43 @@ describe('PSProtocolEditorComponent (DOM)', () => {
     fixture.componentInstance.Recompute();
     fixture.detectChanges();
     await fixture.whenStable();
-    return fixture.nativeElement as HTMLElement;
+    return HostElement(fixture);
   }
 
   it('lists only the scores of the protocol family and emits the next version draft on save', async () => {
     const fixture = await render(human, base);
-    const host = fixture.nativeElement as HTMLElement;
+    const host = HostElement(fixture);
     const options = Array.from(host.querySelectorAll('[data-testid="ps-protocol-metric"] option')).map((o) => o.textContent?.trim());
     expect(options).toEqual(['log-loss', 'brier']);
     const saved: EvaluationProtocolDraft[] = [];
     fixture.componentInstance.SaveRequested.subscribe((d) => saved.push(d));
     await changeMargin(fixture, 0.003);
-    (host.querySelector('[data-testid="ps-protocol-save"]') as HTMLButtonElement).click();
+    QueryElement(host, '[data-testid="ps-protocol-save"]', HTMLButtonElement).click();
     expect(saved[0]?.promotion.margin).toBe(0.003);
   });
 
   it('shows the guard-field refusal and disables save when an agent changes the margin', async () => {
     const fixture = await render(agent, base);
     const host = await changeMargin(fixture, 0.003);
-    expect((host.querySelector('[data-testid="ps-protocol-guard-policy"]') as HTMLSelectElement).value).toBe('non-agent');
+    expect(QueryElement(host, '[data-testid="ps-protocol-guard-policy"]', HTMLSelectElement).value).toBe('non-agent');
     expect(host.querySelector('[data-testid="ps-protocol-refusals"]')?.textContent).toContain('An agent tool call cannot change the guard fields promotion');
-    expect((host.querySelector('[data-testid="ps-protocol-save"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(QueryElement(host, '[data-testid="ps-protocol-save"]', HTMLButtonElement).disabled).toBe(true);
   });
 
   it('shows the human-only refusal when the author is not a user and the protocol is human-only', async () => {
     const fixture = await render({ kind: 'system', component: 'dom-test' }, { ...base, guardFieldsEditableBy: 'human-only' });
     const host = await changeMargin(fixture, 0.003);
     expect(host.querySelector('[data-testid="ps-protocol-refusals"]')?.textContent).toContain('only a version authored by a user may change promotion');
-    expect((host.querySelector('[data-testid="ps-protocol-save"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(QueryElement(host, '[data-testid="ps-protocol-save"]', HTMLButtonElement).disabled).toBe(true);
   });
 
   it('shows a form problem and disables save until the form is valid again', async () => {
     const fixture = await render(human, base);
     let host = await changeMargin(fixture, -1);
     expect(host.querySelector('[data-testid="ps-protocol-refusals"]')?.textContent).toContain('The margin must be a number >= 0');
-    expect((host.querySelector('[data-testid="ps-protocol-save"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(QueryElement(host, '[data-testid="ps-protocol-save"]', HTMLButtonElement).disabled).toBe(true);
     host = await changeMargin(fixture, 0.01);
     expect(host.querySelector('[data-testid="ps-protocol-refusals"]')).toBeNull();
-    expect((host.querySelector('[data-testid="ps-protocol-save"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(QueryElement(host, '[data-testid="ps-protocol-save"]', HTMLButtonElement).disabled).toBe(false);
   });
 });
