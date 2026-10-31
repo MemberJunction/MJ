@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { MJGlobal } from '@memberjunction/global';
@@ -149,6 +149,20 @@ describe('CLIPluginRegistry.LoadPluginsFromConfig', () => {
     expect(res.loaded).toContain('./ok-plugin.mjs');
     expect(res.failed.map((f) => f.specifier)).toContain('@definitely/not-installed-xyz');
     expect(res.failed[0].error).toBeTruthy();
+  });
+
+  it('loads a package plugin installed by the project that owns the config (#3741)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mjcli-host-'));
+    const pkgDir = join(dir, 'node_modules', '@probe', 'mj-host-plugin');
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: '@probe/mj-host-plugin', type: 'module', main: 'index.js' }));
+    writeFileSync(join(pkgDir, 'index.js'), 'globalThis.__mjHostPluginLoaded = true;\n');
+    writeFileSync(join(dir, 'mj-cli-plugins.json'), JSON.stringify({ plugins: ['@probe/mj-host-plugin'] }));
+
+    const res = await CLIPluginRegistry.LoadPluginsFromConfig(dir);
+    expect(res.failed).toEqual([]);
+    expect(res.loaded).toEqual(['@probe/mj-host-plugin']);
+    expect((globalThis as { __mjHostPluginLoaded?: boolean }).__mjHostPluginLoaded).toBe(true);
   });
 
   it('returns empty (no throw) when no config is found walking up', async () => {

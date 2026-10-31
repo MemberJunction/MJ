@@ -24,6 +24,7 @@
     "@memberjunction/ai-vectors-memory": "6.2.0-edge.6",
     "@memberjunction/core": "6.2.0-edge.6",
     "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/dynamic-packages": "6.2.0-edge.6",
     "@memberjunction/global": "6.2.0-edge.6",
     "@memberjunction/storage": "6.2.0-edge.6",
     "dotenv": "^17.2.4",
