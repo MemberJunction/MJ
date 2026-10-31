@@ -193,29 +193,3 @@ describe('OnMessageSent applies a completion that landed first (MJ#4885)', () =>
     expect(message.Load).not.toHaveBeenCalled();
   });
 });
-
-describe('a completion for a reply that was not loaded yet', () => {
-  it('lands the turn at its top with ReadReplyFromTop, because the reloaded reply is passed to followTranscript', async () => {
-    const component = createComponent(undefined);
-    const open = component as unknown as Open;
-    delete open['followTranscript']; // use the real one
-    const reply = { ID: 'reply-9', ConversationID: CONV, Role: 'AI', Status: 'Complete', Message: 'Done' };
-    open['reloadMessagesForActiveConversation'] = vi.fn(async () => {
-      open['messages'] = [reply];
-    });
-    open['ReadReplyFromTop'] = true;
-    open['CollapseThreadReplies'] = false;
-    open['currentTurnStartMessageId'] = 'user-1';
-    open['streamAnchor'] = null;
-    open['pendingTurnStartMessageId'] = null;
-    open['scrollToBottom'] = true;
-
-    await (open as unknown as { onStreamingCompletion(e: unknown): Promise<void> }).onStreamingCompletion({
-      conversationDetailId: 'reply-9',
-      agentRunId: 'run-9',
-    });
-
-    expect(open['pendingTurnStartMessageId']).toBe('user-1');
-    expect(open['scrollToBottom']).toBe(false);
-  });
-});

@@ -12,6 +12,15 @@ export interface ThreadReplyRow {
 }
 
 /**
+ * Payload emitted when the chat area scrolls to the top-level root of a
+ * collapsed thread reply so the host can open the thread and reveal the reply.
+ */
+export interface ThreadReplyRevealRequest {
+  readonly ReplyID: string;
+  readonly RootID: string;
+}
+
+/**
  * Maps each thread reply's ID to its top-level root's ID. Rows that belong in
  * the main conversation flow are omitted from the returned {@link UUIDMap}.
  *

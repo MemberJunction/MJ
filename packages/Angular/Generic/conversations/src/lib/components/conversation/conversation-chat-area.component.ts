@@ -38,7 +38,7 @@ import { map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
-import { ConversationsRuntime, type CompletionEvent, type MentionPerson } from '@memberjunction/conversations-runtime';
+import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
 import type { SessionEndReason } from '@memberjunction/realtime-runtime';
 import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
@@ -104,7 +104,7 @@ import {
   type MessageForkChip
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { GetThreadReplyRoots } from '../../utils/thread-replies';
+import { GetThreadReplyRoots, type ThreadReplyRevealRequest } from '../../utils/thread-replies';
 import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID } from '@memberjunction/global';
 
 const EMPTY_THREAD_REPLY_ROOTS = new UUIDMap<string>();
@@ -132,7 +132,6 @@ import {
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
-  ThreadReplyRevealRequestedEventArgs,
 } from '../../events/chat-events';
 
 /**
@@ -3396,7 +3395,41 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Subscribe to completion events from PubSub
     this.streamingService.completionEvents$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((event) => void this.onStreamingCompletion(event));
+      .subscribe(async (event) => {
+        // Find the message in our current conversation
+        const conversationId = this.ConversationId;
+        const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
+        if (message && conversationId) {
+          await this.handleMessageCompletion(message, event.agentRunId, conversationId);
+        } else if (conversationId) {
+          // A completion for an unloaded ConversationDetailID may be a server-created workflow
+          // continuation reply (from TaskGraphContinuationDeliverer) in the active conversation,
+          // or a scrolled-out message. Reload the active window first so new continuation messages
+          // and their artifacts appear immediately in real time without leaving the chat.
+          const artifactBaseline = this.snapshotArtifactPanelBaseline();
+          await this.reloadMessagesForActiveConversation();
+          const newlyLoaded = event.conversationDetailId
+            ? this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId))
+            : undefined;
+          if (newlyLoaded) {
+            await this.reloadArtifactsForMessage(newlyLoaded.ID, conversationId);
+            // Also refresh artifacts on any preceding AI messages that may have received task-step artifacts
+            const aiMessages = this.messages.filter(m => m.Role === 'AI');
+            for (const aiMsg of aiMessages.slice(-3)) {
+              if (!UUIDsEqual(aiMsg.ID, newlyLoaded.ID)) {
+                await this.reloadArtifactsForMessage(aiMsg.ID, conversationId);
+              }
+            }
+            this.resetComponentState(conversationId);
+            await this.decideAndApplyArtifactPanel(artifactBaseline, conversationId);
+            this.messages = [...this.messages];
+            this.followTranscript('new', newlyLoaded);
+            this.cdr.detectChanges();
+          } else {
+            await this.ReconcileNow('completion-for-unloaded-message');
+          }
+        }
+      });
 
     // Reconciliation triggers that do NOT depend on a clean socket close. This is the
     // independent second layer: `retryAttempts`, `_socketStateSubject`,
@@ -5873,9 +5906,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * When true, thread replies in the loaded window are omitted from top-level `DisplayMessages` so
    * they can be rendered inside a collapsed thread under their root message (see
-   * {@link GetThreadReplyRoots}). Every row inside a thread leaves the main list, including Error
-   * rows and agent response forms (approvals and input requests), and the main flow gives no signal
-   * that they exist, so a host that turns this on must render them in its own thread UI.
+   * {@link GetThreadReplyRoots}).
    */
   @Input() CollapseThreadReplies: boolean = false;
 
@@ -5883,7 +5914,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Emits when a jump targets a collapsed thread reply, after scrolling to its top-level root
    * message, so the host can open the thread and reveal the reply.
    */
-  @Output() ThreadReplyRevealRequested = new EventEmitter<ThreadReplyRevealRequestedEventArgs>();
+  @Output() ThreadReplyRevealRequested = new EventEmitter<ThreadReplyRevealRequest>();
 
   /**
    * The rows the message list shows for the window view; the same array until the rows or the view
@@ -6296,46 +6327,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * @param message The message that completed
    * @param agentRunId The ID of the agent run that completed
    */
-  /**
-   * A streaming completion for the active conversation: applies a loaded message's completion, or
-   * reloads the window for one not yet loaded (e.g. a server-created continuation reply) and follows it.
-   */
-  private async onStreamingCompletion(event: CompletionEvent): Promise<void> {
-    // Find the message in our current conversation
-    const conversationId = this.ConversationId;
-    const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
-    if (message && conversationId) {
-      await this.handleMessageCompletion(message, event.agentRunId, conversationId);
-    } else if (conversationId) {
-      // A completion for an unloaded ConversationDetailID may be a server-created workflow
-      // continuation reply (from TaskGraphContinuationDeliverer) in the active conversation,
-      // or a scrolled-out message. Reload the active window first so new continuation messages
-      // and their artifacts appear immediately in real time without leaving the chat.
-      const artifactBaseline = this.snapshotArtifactPanelBaseline();
-      await this.reloadMessagesForActiveConversation();
-      const newlyLoaded = event.conversationDetailId
-        ? this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId))
-        : undefined;
-      if (newlyLoaded) {
-        await this.reloadArtifactsForMessage(newlyLoaded.ID, conversationId);
-        // Also refresh artifacts on any preceding AI messages that may have received task-step artifacts
-        const aiMessages = this.messages.filter(m => m.Role === 'AI');
-        for (const aiMsg of aiMessages.slice(-3)) {
-          if (!UUIDsEqual(aiMsg.ID, newlyLoaded.ID)) {
-            await this.reloadArtifactsForMessage(aiMsg.ID, conversationId);
-          }
-        }
-        this.resetComponentState(conversationId);
-        await this.decideAndApplyArtifactPanel(artifactBaseline, conversationId);
-        this.messages = [...this.messages];
-        this.followTranscript('new', newlyLoaded);
-        this.cdr.detectChanges();
-      } else {
-        await this.ReconcileNow('completion-for-unloaded-message');
-      }
-    }
-  }
-
   private async handleMessageCompletion(
     message: MJConversationDetailEntity,
     _agentRunId: string,
@@ -7342,7 +7333,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private emitThreadReplyReveal(replyId: string, rootId: string): void {
-    this.ThreadReplyRevealRequested.emit(new ThreadReplyRevealRequestedEventArgs(replyId, rootId));
+    const loadedReply = (this.messages ?? []).find(m => UUIDsEqual(m.ID, replyId));
+    const loadedRoot = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
+    this.ThreadReplyRevealRequested.emit({
+      ReplyID: loadedReply?.ID ?? replyId,
+      RootID: loadedRoot?.ID ?? rootId,
+    });
   }
 
   /**
