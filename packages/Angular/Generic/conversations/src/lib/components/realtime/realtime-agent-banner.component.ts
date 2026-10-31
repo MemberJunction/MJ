@@ -90,16 +90,36 @@ export class RealtimeAgentBannerComponent {
   // STATE + WINDOW-CHROME only. Captions & End were removed (they duplicated the bottom dock's
   // controls — one home per control), and "pure audio" was folded into the gear's Density = Simple.
 
-  /** Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). */
-  @Input() ShowGear = false;
+  /**
+   * Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). Taking the
+   * gear away also closes its popover, so no empty popover outlives the button that opened it.
+   */
+  @Input()
+  set ShowGear(value: boolean) {
+    this._showGear = value;
+    if (!value) {
+      this.GearOpen = false;
+    }
+  }
+  get ShowGear(): boolean {
+    return this._showGear;
+  }
+  private _showGear = false;
 
   /**
    * Whether the interface-density segmented control renders inside the gear popover.
    * Default `true` (historical behaviour); a host may hide it via the overlay's
-   * `[ShowDensityPicker]` input. The gear itself (and its developer-links toggle) still
-   * renders when {@link ShowGear} is true even if the density picker is hidden.
+   * `[ShowDensityPicker]` input. The gear itself still renders when {@link ShowGear} is true
+   * even if the density picker is hidden; its developer-links toggle renders only when
+   * {@link AllowDevLinks} is also true.
    */
   @Input() ShowDensityPicker = true;
+
+  /**
+   * Host ceiling for developer links: `false` removes the gear's "Developer links" toggle.
+   * Per-session {@link DevMode} still decides whether links render when allowed.
+   */
+  @Input() AllowDevLinks = true;
 
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
