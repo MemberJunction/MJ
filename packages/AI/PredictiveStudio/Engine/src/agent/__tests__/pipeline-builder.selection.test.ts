@@ -106,7 +106,7 @@ interface Saved { readonly Entity: string; readonly ID: string }
 class BuildWorld {
   public readonly Saves: Saved[] = [];
   public readonly Order: string[] = [];
-  public readonly Pipeline = { ID: 'P-1', Name: '', PredictionUnitID: null as string | null, EvaluationProtocolID: null as string | null, LatestResult: null, NewRecord: () => true, Save: async () => this.save('pipeline', 'P-1') };
+  public readonly Pipeline = { ID: 'P-1', Name: '', PredictionUnitID: null as string | null, EvaluationProtocolID: null as string | null, LatestResult: null, NewRecord: () => true, Save: async () => this.save('pipeline', 'P-1'), Delete: async () => this.save('delete:pipeline', 'P-1') };
   public readonly Protocol = { ID: '', LatestResult: null, Save: async () => this.save('protocol', this.Protocol.ID) };
   public Unit: PredictionUnitColumns & { Load: (id: string) => Promise<boolean> } = { ...UnitYearsWorld.UnitColumns(), Load: async () => true };
   private readonly target = { ID: 'E-1', Name: 'Members', BaseView: 'vwMembers', BaseTable: 'Member', SchemaName: 'dbo', Fields: [{ Name: 'Renewed' }, { Name: 'Age' }] };
@@ -206,19 +206,19 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     });
     const calls = spyTraining(world, completedRun([inner('A', 0.42), inner('B', 0.40), inner('C', 0.41)], 'B'));
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B', 'C']), provider: world.Provider(), user, autoPublish: false });
-    expect([result.success, bind.mock.calls.length, result.untrainedExperiments]).toEqual([true, 1, []]);
+    expect([result.success, bind.mock.calls.length]).toEqual([true, 1]);
     expect(world.Order).toEqual(['save:pipeline', 'bind:unit', 'save:protocol', 'save:pipeline', 'train']);
     expect(calls[0].candidates?.map((c) => c.name)).toEqual(['A', 'B', 'C']);
   });
 
-  it('refuses a plan whose target the unit mapping would hold, before anything trains, naming the reason', async () => {
+  it('refuses a plan whose target the unit mapping would hold, before anything trains, naming the reason, and keeps no pipeline', async () => {
     const errors = ConsoleCapture.Errors();
     const world = new BuildWorld();
     vi.spyOn(PipelineMigration, 'BindMigratedUnit').mockResolvedValue({ Ok: false, Reason: ADVERSE_CLASS_HOLD_REASON });
     const calls = spyTraining(world, { ID: RUN_ID } as unknown as MJMLTrainingRunEntity);
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
-    expect([result.success, calls.length, world.Saves.map((x) => x.Entity)]).toEqual([false, 0, ['pipeline']]);
-    expect(result.errorMessage).toBe(`Pipeline P-1 was saved but gets no Prediction Unit, so it cannot train: ${ADVERSE_CLASS_HOLD_REASON}`);
+    expect([result.success, calls.length, world.Order]).toEqual([false, 0, ['save:pipeline', 'save:delete:pipeline']]);
+    expect(result.errorMessage).toBe(`The pipeline gets no Prediction Unit, so it cannot train and was not kept: ${ADVERSE_CLASS_HOLD_REASON}`);
     expect(ConsoleCapture.Lines(errors)).toHaveLength(1);
   });
 
@@ -268,7 +268,6 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(result.success).toBe(true);
     expect(calls).toHaveLength(1);
     expect(calls[0].candidates?.map((c) => [c.name, c.driverKey])).toEqual([['A', 'xgboost'], ['B', 'logistic_regression'], ['C', 'xgboost'], ['D', 'logistic_regression'], ['E', 'xgboost']]);
-    expect(result.untrainedExperiments).toEqual([]);
     // Only the finalist's row links the model, under both keys (the viewer reads `ModelID` first).
     expect(result.leaderboard?.map((r) => [r.rank, r.algorithm, r.score, r.innerLower, r.innerUpper, r.optimistic, r.isWinner, r.modelId, r.ModelID])).toEqual([
       [1, 'B', 0.40, 0.38, 0.42, true, false, undefined, undefined],

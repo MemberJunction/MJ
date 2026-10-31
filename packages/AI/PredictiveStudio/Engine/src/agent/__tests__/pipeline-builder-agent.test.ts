@@ -252,16 +252,10 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | 🏆 Winner (Selected) |');
     expect(md).toContain('## Winning Model Performance');
   });
-  it('names the proposed experiments a build without a search did not train', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote, ['B', 'C']);
-    expect(md).toContain('- The score comes from the rows held back from training. The other 2 proposed experiments (B, C) were not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
+  it('says a single model was scored on the held-back rows', () => {
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote);
+    expect(md).toContain('- The score comes from the rows held back from training.\n');
     expect(md).toContain('| Rank | Algorithm | Score (AUC) | Status |');
-    expect(BuildOutcomeMessage(SummarizeBuildResult({ ...published, untrainedExperiments: ['B'] }))).toContain('The other proposed experiment (B) was not trained: a search over several candidates needs a Prediction Unit on the pipeline.');
-    const none = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote, []);
-    expect(none).toContain('- The score comes from the rows held back from training.\n');
-    const outcome = SummarizeBuildResult({ ...published, untrainedExperiments: ['B', 'C'] });
-    expect(BuildOutcomeMessage(outcome)).toContain('The other 2 proposed experiments (B, C) were not trained');
-    expect(SummarizeBuildResult(published).untrainedExperiments).toBeUndefined();
   });
   it('says a tournament with no measured candidate has no winner', () => {
     const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Not evaluated yet', 'x', false, [], [row(1, null, false), row(2, null, false)], false);

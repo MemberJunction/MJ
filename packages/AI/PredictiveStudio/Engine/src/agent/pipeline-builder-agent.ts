@@ -38,8 +38,6 @@ export interface PredictiveStudioBuildOutcome {
   errorMessage: string | null;
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
   warnings?: FeatureStepWarning[];
-  /** The labels of the approved experiments the build did not train (no Prediction Unit, so no search). */
-  untrainedExperiments?: string[];
 }
 
 
@@ -96,18 +94,7 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
     warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
-    untrainedExperiments: result.untrainedExperiments && result.untrainedExperiments.length > 0 ? result.untrainedExperiments : undefined,
   };
-}
-
-/**
- * The sentence naming the approved experiments a build did not train, or '' when every one was trained. Without a
- * Prediction Unit on the pipeline there is no search, so only the highest-priority experiment trains.
- */
-function untrainedExperimentsNote(untrained: readonly string[] | undefined): string {
-  if (!untrained || untrained.length === 0) return '';
-  const count = untrained.length === 1 ? 'The other proposed experiment' : `The other ${untrained.length} proposed experiments`;
-  return `${count} (${untrained.join(', ')}) ${untrained.length === 1 ? 'was' : 'were'} not trained: a search over several candidates needs a Prediction Unit on the pipeline.`;
 }
 
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
@@ -116,14 +103,12 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
     ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
     : '';
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
-  const untrained = untrainedExperimentsNote(o.untrainedExperiments);
-  const untrainedText = untrained ? ` ${untrained}` : '';
   // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
-  if (o.published) return `Done — I built and published your prediction (${o.TrustTitle}). It's now in your Predictions.${untrainedText}${warningText}`;
+  if (o.published) return `Done — I built and published your prediction (${o.TrustTitle}). It's now in your Predictions.${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
-  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${untrainedText}${warningText}`;
+  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */
@@ -171,7 +156,7 @@ export function HiddenImportanceNote(lineageJSON: string | null | undefined): st
  * from the trust verdict (`TrustVerdicts.OutcomeTitle`, `TrustVerdict.Headline`). A `null` score means the model was
  * not measured; the report says so rather than standing in a number.
  * `hiddenImportanceNote` is the note printed when `importanceHidden` (see {@link HiddenImportanceNote});
- * it defaults to the split/impurity note. `untrainedExperiments` are named in the measurement note.
+ * it defaults to the split/impurity note.
  */
 export function GenerateMarkdownReport(
   name: string,
@@ -186,9 +171,8 @@ export function GenerateMarkdownReport(
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   importanceHidden: boolean,
   hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
-  untrainedExperiments: readonly string[] = [],
 ): string {
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, published, features, leaderboard, importanceHidden, hiddenImportanceNote, untrainedExperiments);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, published, features, leaderboard, importanceHidden, hiddenImportanceNote);
 }
 
 /** The report body. */
@@ -204,7 +188,6 @@ function renderMarkdownReport(
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   importanceHidden: boolean,
   hiddenImportanceNote: string,
-  untrainedExperiments: readonly string[],
 ): string {
   const topFeatures = features.length > 0
     ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
@@ -228,7 +211,7 @@ ${renderLeaderboardSection(leaderboard, targetMetric, hasWinner)}
 ${topFeatures}
 
 ## How this was measured
-- ${measurementNote(isSearchLeaderboard(leaderboard), untrainedExperiments)}
+- ${measurementNote(isSearchLeaderboard(leaderboard))}
 - Registered in the Predictive Studio Models catalog; the Outcome line above says whether it was published.
 `;
 }
@@ -272,15 +255,13 @@ function leaderboardScoreText(r: MLLeaderboardEntryPayload, score: number, searc
 
 /**
  * How the result was measured. A search picked its winner on inner-fold scores over the training rows and read the
- * held-back rows once, for the winner; a build without a search scored its one model on the held-back rows, and names
- * the proposed experiments it did not train.
+ * held-back rows once, for the winner; a single model was scored on the held-back rows.
  */
-function measurementNote(search: boolean, untrainedExperiments: readonly string[]): string {
+function measurementNote(search: boolean): string {
   if (search) {
     return 'The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.';
   }
-  const untrained = untrainedExperimentsNote(untrainedExperiments);
-  return `The score comes from the rows held back from training.${untrained ? ` ${untrained}` : ''}`;
+  return 'The score comes from the rows held back from training.';
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -359,7 +340,6 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         leaderboard,
         importanceHidden,
         HiddenImportanceNote(result.model?.Lineage),
-        result.untrainedExperiments || [],
       );
 
       newPayloadObj = {

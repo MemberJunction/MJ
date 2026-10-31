@@ -152,11 +152,6 @@ export interface BuildPredictionResult {
   pipeline?: MJMLTrainingPipelineEntity;
   /** The leaderboard of the build's one training run. */
   leaderboard?: MLLeaderboardEntryPayload[];
-  /**
-   * The labels of the approved experiments the build did not train. Every build binds a Prediction Unit and searches
-   * over every approved experiment, so this is always empty; the agent's report still reads the member.
-   */
-  untrainedExperiments?: string[];
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
   warnings?: FeatureStepWarning[];
 }
@@ -165,7 +160,6 @@ export interface BuildPredictionResult {
 interface BuildTraining {
   readonly Train: TrainModelResult;
   readonly Leaderboard: MLLeaderboardEntryPayload[];
-  readonly Untrained: string[];
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
@@ -210,7 +204,7 @@ export class PredictiveStudioPipelineBuilder {
       const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
       return {
         success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, leakageFlagged, heldReason,
-        errorMessage: null, leaderboard: training.Leaderboard, untrainedExperiments: training.Untrained,
+        errorMessage: null, leaderboard: training.Leaderboard,
         warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     } catch (err) {
@@ -235,7 +229,7 @@ export class PredictiveStudioPipelineBuilder {
     return {
       success: true, pipelineId: pipeline.ID, pipeline, published: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
       heldReason: `Not published — the training run shipped no model: ${TrainingEngine.NoModelReason(training.Train)}`,
-      errorMessage: null, leaderboard: training.Leaderboard, untrainedExperiments: training.Untrained,
+      errorMessage: null, leaderboard: training.Leaderboard,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
@@ -313,14 +307,18 @@ export class PredictiveStudioPipelineBuilder {
   /**
    * Bind version 1 of the pipeline's Prediction Unit, mapped from the columns the plan wrote (the pipeline migration's
    * mapping), right after the pipeline is saved; its search protocol is bound later, for every candidate. A pipeline
-   * the mapping would archive or hold is refused with the mapping's reason: no pipeline trains without a unit.
+   * the mapping would archive or hold is refused with the mapping's reason, and the pipeline just saved is deleted: no
+   * pipeline trains without a unit, and the build leaves no unit-less Draft behind.
    *
-   * @throws Error naming why the pipeline gets no unit
+   * @throws Error naming why the pipeline gets no unit (and the pipeline's ID when deleting it failed)
    */
   private static async bindUnit(pipeline: MJMLTrainingPipelineEntity, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     const deps: MigrationDeps = { Provider: provider, User: user, EntityFactory: new MetadataEntityFactory(provider), Today: UtcDay.UtcDayIso(new Date()) };
     const bound = await PipelineMigration.BindMigratedUnit(pipeline, deps);
-    if (bound.Ok === false) throw new Error(`Pipeline ${pipeline.ID} was saved but gets no Prediction Unit, so it cannot train: ${bound.Reason}`);
+    if (bound.Ok === true) return;
+    const id = pipeline.ID;
+    if (await pipeline.Delete()) throw new Error(`The pipeline gets no Prediction Unit, so it cannot train and was not kept: ${bound.Reason}`);
+    throw new Error(`The pipeline gets no Prediction Unit, so it cannot train (${bound.Reason}); deleting pipeline ${id} failed: ${pipeline.LatestResult?.CompleteMessage || 'Delete() returned false'}`);
   }
 
   /**
@@ -330,7 +328,7 @@ export class PredictiveStudioPipelineBuilder {
   private async trainSearch(pipeline: MJMLTrainingPipelineEntity, candidates: readonly CandidateSpec[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
     await this.ensureProtocol(pipeline, candidates.length, provider, user);
     const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, candidates, sidecarVersion }, provider, user);
-    return { Train: train, Leaderboard: PredictiveStudioPipelineBuilder.searchLeaderboard(train), Untrained: [] };
+    return { Train: train, Leaderboard: PredictiveStudioPipelineBuilder.searchLeaderboard(train) };
   }
 
   /**
