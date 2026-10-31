@@ -13,7 +13,7 @@ import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
-  EvaluationProtocolRules, LegacyPipelines, PredictionUnit,
+  LegacyPipelines, PredictionUnit,
   type Actor, type CellValue, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
@@ -27,8 +27,6 @@ import type { IEntityFactory } from '../training/types';
 
 /** The author recorded on every unit and protocol the migration creates. */
 export const MIGRATION_ACTOR: Actor = { kind: 'system', component: 'pipeline-migration' };
-/** The seed of every migrated protocol. */
-export const MIGRATION_PROTOCOL_SEED = 42;
 /** The prefix of the line a held pipeline's description gains. */
 export const HELD_MARKER_PREFIX = 'Held by the Prediction Unit migration on ';
 
@@ -272,9 +270,8 @@ export class PipelineMigration {
   private static async bindProtocol(
     p: MJMLTrainingPipelineEntity, unit: PredictionUnitSpec, proto: MigrationPlan['Protocol'], deps: MigrationDeps,
   ): Promise<{ readonly Ok: true } | { readonly Ok: false; readonly Reason: string }> {
-    const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: proto.Holdout, Candidates: 1, Seed: MIGRATION_PROTOCOL_SEED, Name: `${p.Name} — migrated protocol` });
-    const withLegacy = { ...draft, exclusions: proto.Exclusions, innerValidation: proto.InnerValidation === null ? draft.innerValidation : proto.InnerValidation };
-    const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(withLegacy, MIGRATION_ACTOR, deps.EntityFactory, deps.User);
+    const draft = LegacyPipelines.LegacyProtocolDraft(unit, proto, `${p.Name} — migrated protocol`);
+    const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, MIGRATION_ACTOR, deps.EntityFactory, deps.User);
     p.EvaluationProtocolID = row.ID;
     if (await p.Save()) return { Ok: true };
     const message = `binding the protocol: ${p.LatestResult?.CompleteMessage || 'save failed'}`;

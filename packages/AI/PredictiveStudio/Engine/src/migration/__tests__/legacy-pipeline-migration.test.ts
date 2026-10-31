@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { ADVERSE_CLASS_HOLD_REASON } from '@memberjunction/predictive-studio-core';
+import { ADVERSE_CLASS_HOLD_REASON, LegacyPipelines } from '@memberjunction/predictive-studio-core';
+import { PredictionUnitRowReader } from '../../prediction-unit/unit-row-reader';
 import { PipelineMigration, type IPipelineMigrationReads, type MigrationDeps } from '../legacy-pipeline-migration';
 import type { AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
 import type { IEntityFactory } from '../../training/types';
@@ -197,5 +198,14 @@ describe('PipelineMigration.RunOf', () => {
     const row = { PipelineID: 'P', PipelineName: 'P', Reason: null, PredictionUnitID: null, EvaluationProtocolID: null, Cutoff: null, Notes: [] };
     const run = PipelineMigration.RunOf([{ ...row, Action: 'would-migrate' }, { ...row, Action: 'held' }, { ...row, Action: 'would-archive' }, { ...row, Action: 'skipped' }, { ...row, Action: 'failed' }]);
     expect([run.MigratedCount, run.HeldCount, run.ArchivedCount, run.SkippedCount, run.FailedCount]).toEqual([1, 1, 1, 1, 1]);
+  });
+});
+
+describe('the class label rule', () => {
+  it("is the unit row reader's: Core's LegacyPipelines.ClassLabel gives CanonicalLabel's class for every cell kind", () => {
+    const task = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 } as const;
+    for (const v of [true, false, 0, 1, 2.5, Number.NaN, ' Renewed ', '', null, undefined, new Date('2024-03-05T10:00:00Z')]) {
+      expect(LegacyPipelines.ClassLabel(v)).toBe(PredictionUnitRowReader.CanonicalLabel(v, task));
+    }
   });
 });

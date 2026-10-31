@@ -9,11 +9,12 @@
  */
 import { JsonParse, type JsonObject } from './json-value';
 import type { HoldoutSplit, InnerValidation, ProtocolExclusions } from './evaluation-protocol';
+import { EvaluationProtocolRules, type EvaluationProtocolDraft } from './evaluation-protocol-rules';
 import { ResolveOutcomeConfig } from './outcome-config';
 import type { TaskType } from './task-type';
 import type { UnitDraft } from './protocol-rows';
-import type { CensoringRule, DecisionDateRule } from './prediction-unit';
-import { UtcDay } from './utc-day';
+import type { CensoringRule, DecisionDateRule, PredictionUnitSpec } from './prediction-unit';
+import { UtcDay, type CellValue } from './utc-day';
 
 /** Why a binary pipeline is held; also the report reason. */
 export const ADVERSE_CLASS_HOLD_REASON =
@@ -23,6 +24,9 @@ export const ADVERSE_CLASS_HOLD_REASON =
 export const LEGACY_DEFAULT_HOLDOUT_SHARE = 0.25;
 /** The smallest and largest holdout share a migrated protocol takes (the legacy fraction is clamped to them). */
 export const LEGACY_HOLDOUT_SHARE_RANGE: readonly [number, number] = [0.05, 0.5];
+
+/** The seed of every protocol a migrated or wizard-created pipeline is bound to. */
+export const LEGACY_PROTOCOL_SEED = 42;
 
 /** The legacy pipeline columns the mapping reads (the generated entity satisfies this structurally). */
 export interface LegacyPipelineFields {
@@ -333,6 +337,29 @@ export class LegacyPipelines {
     if (v === null || JsonParse.JsonString(v, 'Strategy') !== 'kfold') return null;
     const k = JsonParse.JsonNumber(v, 'K');
     return { kind: 'repeated-stratified-kfold', folds: Math.max(2, Math.round(k === null ? 5 : k)), repeats: 3 };
+  }
+
+  /**
+   * A target cell as a class label, the way the unit row reader labels rows for a classification task: a bit reads
+   * `'1'`/`'0'`, a number its text, a date its UTC day, text trimmed; null for an empty cell. (The Engine's
+   * `PredictionUnitRowReader.CanonicalLabel` is the reader's own rule; a parity test pins the two together.)
+   */
+  public static ClassLabel(value: CellValue): string | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'boolean') return value ? '1' : '0';
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+    if (value instanceof Date) return UtcDay.UtcDayIso(value);
+    const t = value.trim();
+    return t.length === 0 ? null : t;
+  }
+
+  /**
+   * Version 1 of a migrated pipeline's protocol: the unit's default protocol for one candidate with the legacy holdout,
+   * the legacy k-fold (when it had one) and the legacy deny lists as exclusions.
+   */
+  public static LegacyProtocolDraft(unit: PredictionUnitSpec, inputs: Extract<LegacyProtocolOutcome, { readonly Kind: 'protocol' }>, name: string): EvaluationProtocolDraft {
+    const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: inputs.Holdout, Candidates: 1, Seed: LEGACY_PROTOCOL_SEED, Name: name });
+    return { ...draft, exclusions: inputs.Exclusions, innerValidation: inputs.InnerValidation === null ? draft.innerValidation : inputs.InnerValidation };
   }
 
   /**

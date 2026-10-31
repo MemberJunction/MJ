@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  LegacyPipelines,
+  LegacyPipelines, LEGACY_PROTOCOL_SEED,
   type LegacyOutcomeInputs, type LegacyPipelineFields,
 } from '../legacy-pipeline';
+import { PredictionUnit } from '../prediction-unit';
+import { ProtocolRows } from '../protocol-rows';
+import { EvaluationProtocolRules } from '../evaluation-protocol-rules';
 
 const pipeline = (over: Partial<LegacyPipelineFields> = {}): LegacyPipelineFields => ({
   Name: 'Member Renewal Risk', TargetEntity: 'Membership Years', TargetVariable: 'Renewed', ProblemType: 'classification',
@@ -141,5 +144,27 @@ describe('LegacyProtocolInputs edge rules', () => {
     expect(r.Holdout).toEqual({ kind: 'date-carved', dateColumn: 'StartDate', cutoff: '2024-04-01', holdoutEnd: null, newEntityReport: null });
     expect(r.InnerValidation).toBeNull();
     expect(r.Exclusions).toEqual({ denyFields: [], denySources: ['Payments'] });
+  });
+});
+
+describe('ClassLabel and LegacyProtocolDraft', () => {
+  it('reads a target cell as the unit row reader labels a class', () => {
+    expect([true, false, 1, 0.5, ' A ', '', null, undefined, Number.NaN].map((v) => LegacyPipelines.ClassLabel(v))).toEqual(['1', '0', '1', '0.5', 'A', null, null, null, null]);
+    expect(LegacyPipelines.ClassLabel(new Date('2024-03-05T10:00:00Z'))).toBe('2024-03-05');
+  });
+  it('gives the default protocol one candidate, the legacy seed, holdout, folds and exclusions', () => {
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null }), ['1', '0'], '2026-10-20', LegacyCandidatesFor('Renewed'));
+    if (r.Kind !== 'unit') throw new Error(r.Kind);
+    const parsed = PredictionUnit.ParsePredictionUnitRow({ ID: 'U', LineageRootID: 'U', Version: 1, LabelVersion: 1, AuthoredBy: JSON.stringify({ kind: 'system', component: 'pipeline-migration' }), ...ProtocolRows.UnitDraftColumns(r.Draft) });
+    if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+    const inputs = LegacyPipelines.LegacyProtocolInputs(JSON.stringify({ Strategy: 'kfold', K: 3, LockedHoldoutFraction: 0.15 }), JSON.stringify({ DenyFields: ['ID'] }), null, []);
+    if (inputs.Kind !== 'protocol') throw new Error(inputs.Reason);
+    const d = LegacyPipelines.LegacyProtocolDraft(parsed.Value, inputs, 'P — migrated protocol');
+    expect([d.name, d.seed, d.budgets.maxCandidates, d.holdout, d.innerValidation, d.exclusions]).toEqual([
+      'P — migrated protocol', LEGACY_PROTOCOL_SEED, 1, { kind: 'seeded-random', fraction: 0.15 }, { kind: 'repeated-stratified-kfold', folds: 3, repeats: 3 }, { denyFields: ['ID'], denySources: [] },
+    ]);
+    const plain = LegacyPipelines.LegacyProtocolInputs(null, null, null, []);
+    if (plain.Kind !== 'protocol') throw new Error(plain.Reason);
+    expect(LegacyPipelines.LegacyProtocolDraft(parsed.Value, plain, 'x').innerValidation).toEqual(EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: parsed.Value, Holdout: plain.Holdout, Candidates: 1, Seed: 0, Name: 'x' }).innerValidation);
   });
 });
