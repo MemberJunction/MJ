@@ -9,11 +9,11 @@
  * stored gate decision the business UI uses, so a model the gate did not ship, a model trained without an Evaluation
  * Protocol (not evaluated) or a leakage-flagged model is never silently published into the catalog.
  *
- * Every approved experiment is a candidate of ONE search on ONE pipeline. A pipeline with a Prediction Unit is bound
- * to an Evaluation Protocol before it trains, and the trainer picks the finalist on inner-fold scores (the simplest
- * candidate within one standard error of the best), reading the held-back rows once, for the finalist. A pipeline
- * without a Prediction Unit trains the plan's highest-priority experiment only, and the result names the experiments
- * it did not train.
+ * Every approved experiment is a candidate of ONE search on ONE pipeline. The saved pipeline is bound to version 1 of
+ * a Prediction Unit mapped from the plan's target (the pipeline migration's mapping; a target the mapping would archive
+ * or hold is refused) and to an Evaluation Protocol before it trains, and the trainer picks the finalist on inner-fold
+ * scores (the simplest candidate within one standard error of the best), reading the held-back rows once, for the
+ * finalist.
  *
  * Used by the agent's builder sub-agent AND directly callable from a headless script/test, so the
  * "build a new prediction" path is verifiable without the full LLM loop.
@@ -25,6 +25,7 @@ import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, 
 import {
   EvaluationProtocolRules,
   InnerScoreSelection,
+  UtcDay,
   PredictionUnit,
   TrainingRunResultsParser,
   TrustVerdicts,
@@ -46,6 +47,7 @@ import { EvaluationProtocolVersioning } from '../protocol/protocol-versioning';
 import { ProtocolDefaults } from '../protocol/protocol-defaults';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import { PipelineMigration, type MigrationDeps } from '../migration/legacy-pipeline-migration';
 
 /** Baseline member names a candidate may not take (with the `heuristic:` prefix); the sidecar refuses them too. */
 export const RESERVED_CANDIDATE_NAMES: readonly string[] = ['dummy', 'oneFeature', 'glm', 'naive', 'seasonalNaive'];
@@ -152,8 +154,8 @@ export interface BuildPredictionResult {
   /** The leaderboard of the build's one training run. */
   leaderboard?: MLLeaderboardEntryPayload[];
   /**
-   * The labels of the approved experiments the build did not train: without a Prediction Unit on the pipeline there is
-   * no search, so only the highest-priority experiment trains. Empty when every experiment was a candidate.
+   * The labels of the approved experiments the build did not train. Every build binds a Prediction Unit and searches
+   * over every approved experiment, so this is always empty; the agent's report still reads the member.
    */
   untrainedExperiments?: string[];
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
@@ -170,9 +172,8 @@ interface BuildTraining {
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
 export class PredictiveStudioPipelineBuilder {
   /**
-   * Build a prediction from an approved plan: create one pipeline, train it — one search over every approved
-   * experiment when the pipeline has a Prediction Unit, else the highest-priority experiment — and publish if the
-   * trust verdict clears the bar. Every experiment's name and algorithm are checked before any row is written.
+   * Build a prediction from an approved plan: create one pipeline, bind its Prediction Unit, train it — one search
+   * over every approved experiment — and publish if the trust verdict clears the bar. Every experiment's name and algorithm are checked before any row is written.
    * Never throws — returns a typed result with `success`/`errorMessage`.
    */
   public async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
@@ -201,9 +202,8 @@ export class PredictiveStudioPipelineBuilder {
         LogStatus('PredictiveStudioPipelineBuilder: per-experiment feature sets are not candidates of one search; every candidate uses the pipeline feature schema.');
       }
       const pipeline = await this.savePipeline(config, entity, PredictiveStudioPipelineBuilder.algorithmOf(algorithms, config.algorithmName).ID, provider, user);
-      const training = pipeline.PredictionUnitID
-        ? await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user)
-        : await this.trainWithoutUnit(pipeline, approved, sidecarVersion, provider, user);
+      await PredictiveStudioPipelineBuilder.bindUnit(pipeline, provider, user);
+      const training = await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user);
       const model = training.Train.model;
       if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, collectedWarnings);
       const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults, Lineage: model.Lineage });
@@ -326,18 +326,16 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
-   * Train a pipeline without a Prediction Unit: there is no protocol and no search, so it trains the plan's
-   * highest-priority experiment (the pipeline's own algorithm) and names the rest as untrained.
+   * Bind version 1 of the pipeline's Prediction Unit, mapped from the columns the plan wrote (the pipeline migration's
+   * mapping), right after the pipeline is saved; its search protocol is bound later, for every candidate. A pipeline
+   * the mapping would archive or hold is refused with the mapping's reason: no pipeline trains without a unit.
+   *
+   * @throws Error naming why the pipeline gets no unit
    */
-  private async trainWithoutUnit(pipeline: MJMLTrainingPipelineEntity, approved: readonly ProposedExperiment[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
-    const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
-    // A pipeline without a unit trains on the legacy path, which has no gate and always creates its model row.
-    if (train.model === null) throw new Error(`Training run ${train.run.ID} of pipeline ${pipeline.ID} (no Prediction Unit) completed without a model.`);
-    // The pipeline was built from the first approved experiment (ModelingPlanToPipelineConfig refuses a plan without one).
-    const [trained, ...untrained] = approved;
-    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: train.run.ValidationResults, Lineage: train.model.Lineage });
-    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard(train.run.ID, train.model, trust.Comparison, trained.Label);
-    return { Train: train, Leaderboard: leaderboard, Untrained: untrained.map((e) => e.Label) };
+  private static async bindUnit(pipeline: MJMLTrainingPipelineEntity, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+    const deps: MigrationDeps = { Provider: provider, User: user, EntityFactory: new MetadataEntityFactory(provider), Today: UtcDay.UtcDayIso(new Date()) };
+    const bound = await PipelineMigration.BindMigratedUnit(pipeline, deps);
+    if (bound.Ok === false) throw new Error(`Pipeline ${pipeline.ID} was saved but gets no Prediction Unit, so it cannot train: ${bound.Reason}`);
   }
 
   /**

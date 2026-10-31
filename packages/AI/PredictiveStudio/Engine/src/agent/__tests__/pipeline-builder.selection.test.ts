@@ -4,11 +4,12 @@ import { fileURLToPath } from 'node:url';
 import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import {
-  GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrainingRunResultsParser, TrustVerdicts,
+  ADVERSE_CLASS_HOLD_REASON, GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrainingRunResultsParser, TrustVerdicts,
   type CandidateInnerScore, type StoredGateRecord, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioPipelineBuilder, RESERVED_CANDIDATE_NAMES, RESERVED_CANDIDATE_PREFIX, type AlgorithmRow } from '../pipeline-builder';
 import { TrainingDelegation } from '../../operations/delegation';
+import { PipelineMigration } from '../../migration/legacy-pipeline-migration';
 import type { TrainModelInput, TrainModelResult } from '../../training/types';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
@@ -195,29 +196,30 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     return calls;
   }
 
-  it('trains a pipeline without a Prediction Unit once, without candidates, and names the experiments it did not train', async () => {
+  it('binds a migrated Prediction Unit to the new pipeline right after saving it, then its search protocol, and trains every candidate', async () => {
     const world = new BuildWorld();
-    const calls = spyTraining(world, { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: null } as unknown as MJMLTrainingRunEntity);
+    world.Unit = { ...world.Unit, UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: '2026-10-20', advance: 'each-run' }, filter: [] }) };
+    const bind = vi.spyOn(PipelineMigration, 'BindMigratedUnit').mockImplementation(async () => {
+      world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+      world.Order.push('bind:unit');
+      return { Ok: true, UnitID: UnitYearsWorld.UnitID };
+    });
+    const calls = spyTraining(world, completedRun([inner('A', 0.42), inner('B', 0.40), inner('C', 0.41)], 'B'));
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B', 'C']), provider: world.Provider(), user, autoPublish: false });
-    expect(result.success).toBe(true);
-    expect(calls).toEqual([{ pipelineId: 'P-1', sidecarVersion: 'predictive-studio-agent' }]);
-    expect(world.Saves.map((s) => s.Entity)).toEqual(['pipeline']);
-    expect(result.untrainedExperiments).toEqual(['B', 'C']);
-    // The run stores no gate decision, so the one row has no number, whatever the model's own holdout metrics say.
-    expect(result.trust?.Kind).toBe('not-evaluated');
-    expect(result.leaderboard).toEqual([{
-      IterationID: RUN_ID, Metric: null, ModelID: 'M-1', rank: 1, algorithm: 'A', featureSet: 'Pipeline feature set', score: null,
-      metricName: null, innerLower: null, innerUpper: null, optimistic: false, modelId: 'M-1', isWinner: false,
-    }]);
+    expect([result.success, bind.mock.calls.length, result.untrainedExperiments]).toEqual([true, 1, []]);
+    expect(world.Order).toEqual(['save:pipeline', 'bind:unit', 'save:protocol', 'save:pipeline', 'train']);
+    expect(calls[0].candidates?.map((c) => c.name)).toEqual(['A', 'B', 'C']);
   });
 
-  it('holds a model whose run stores no gate decision, with the not-evaluated reason, even when its own holdout metrics look good', async () => {
+  it('refuses a plan whose target the unit mapping would hold, before anything trains, naming the reason', async () => {
+    const errors = ConsoleCapture.Errors();
     const world = new BuildWorld();
-    const model = publishableModel();
-    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: null } as unknown as MJMLTrainingRunEntity });
+    vi.spyOn(PipelineMigration, 'BindMigratedUnit').mockResolvedValue({ Ok: false, Reason: ADVERSE_CLASS_HOLD_REASON });
+    const calls = spyTraining(world, { ID: RUN_ID } as unknown as MJMLTrainingRunEntity);
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
-    expect([result.success, result.published, result.trust?.CanAct, model.Saves]).toEqual([true, false, false, 0]);
-    expect(result.heldReason).toBe(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null }).Reason);
+    expect([result.success, calls.length, world.Saves.map((x) => x.Entity)]).toEqual([false, 0, ['pipeline']]);
+    expect(result.errorMessage).toBe(`Pipeline P-1 was saved but gets no Prediction Unit, so it cannot train: ${ADVERSE_CLASS_HOLD_REASON}`);
+    expect(ConsoleCapture.Lines(errors)).toHaveLength(1);
   });
 
   it("publishes a model whose run's stored gate decision ships it, and renders the verdict from that run", async () => {
