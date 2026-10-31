@@ -5679,7 +5679,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     // whose watermark had just been reset by the schema change.
                     const priorMapsResult = await new RunView().RunView<{ ID: string }>({
                         EntityName: 'MJ: Company Integration Entity Maps',
-                        ExtraFilter: `CompanyIntegrationID='${connInput.CompanyIntegrationID.replace(/'/g, "''")}'`,
+                        ExtraFilter: `CompanyIntegrationID='${sqlUuid(connInput.CompanyIntegrationID, 'CompanyIntegrationID')}'`,
                         Fields: ['ID'],
                         MaxRows: 1,
                         ResultType: 'simple',
