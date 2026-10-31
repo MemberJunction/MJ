@@ -8,7 +8,6 @@ import {
 import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
 import {
   BrandKitEngine,
-  MJBrandKitAssetEntity,
   MJBrandKitEntity,
   MJEnvironmentEntityExtended,
   ResourceData,
@@ -27,9 +26,9 @@ import {
   BrandKitCardSnapshot,
   BrandKitFilterState,
   BrandKitStatusFilter,
-  BrandKitSwatchView,
   BuildBrandKitsAgentContext,
   FilterBrandKitCards,
+  MapBrandKitToCard,
   ResolveVideoStudioItem,
   StudioBriefClientToolDefinition,
 } from '../video-studio-agent-context';
@@ -276,7 +275,7 @@ export class VideoStudioBrandKitsResourceComponent
   // AI Agent Client Tools
   //
   // SAFETY BOUNDARY: The Brand Kits surface exposes ONLY read, search, filter,
-  // open-for-viewing, and refresh tools to the AI agent. No create, edit, clone,
+  // open-for-viewing, and refresh tools to the AI agent. No create, edit, copy,
   // share, or delete tools are exposed.
   // ============================================================================
 
@@ -376,48 +375,7 @@ export class VideoStudioBrandKitsResourceComponent
   }
 
   private mapKitToCard(kit: MJBrandKitEntity, engine: BrandKitEngine): BrandKitCardSnapshot {
-    const styleObj = kit.StyleObject;
-    const rawPalette = Array.isArray(styleObj?.Palette) ? styleObj.Palette : [];
-    const swatches: BrandKitSwatchView[] = rawPalette
-      .filter((entry) => Boolean(entry && typeof entry.Value === 'string' && entry.Value.trim()))
-      .map((entry) => ({
-        Name: entry.Name || 'Color',
-        Value: entry.Value.trim(),
-      }));
-
-    const assets = engine.GetAssets(kit.ID);
-    const primaryLogoAsset = this.findPrimaryLogoAsset(assets);
-
-    return {
-      ID: kit.ID,
-      Name: kit.Name,
-      Description: kit.Description ?? '',
-      CompanyID: kit.CompanyID ?? null,
-      CompanyName: kit.Company ?? null,
-      IsDefault: Boolean(kit.IsDefault),
-      Status: kit.Status === 'Inactive' ? 'Inactive' : 'Active',
-      Swatches: swatches,
-      PrimaryLogoFileID: primaryLogoAsset?.FileID ?? null,
-      PrimaryLogoUrl: null,
-      AssetCount: assets.length,
-    };
-  }
-
-  private findPrimaryLogoAsset(assets: MJBrandKitAssetEntity[]): MJBrandKitAssetEntity | null {
-    const logoAssets = assets.filter(
-      (a) => a.AssetType === 'Logo' || a.AssetType === 'LogoMark',
-    );
-    if (logoAssets.length === 0) {
-      return null;
-    }
-    const explicitPrimary = logoAssets.find((a) => Boolean(a.IsPrimary));
-    if (explicitPrimary) {
-      return explicitPrimary;
-    }
-    const sorted = [...logoAssets].sort(
-      (a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER),
-    );
-    return sorted[0] ?? null;
+    return MapBrandKitToCard(kit, engine.GetAssets(kit.ID));
   }
 
   private async mintLogoUrls(cards: BrandKitCardSnapshot[]): Promise<void> {

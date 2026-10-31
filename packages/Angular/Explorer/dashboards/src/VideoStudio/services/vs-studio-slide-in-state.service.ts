@@ -11,11 +11,11 @@ import { VideoCaptionMode } from '@memberjunction/video-studio-core';
 import { VSProductionBriefStateSnapshot } from '../components/vs-production-brief.component';
 import {
   ArchetypeCardSnapshot,
-  ArchetypeCategory,
   BrandKitCardSnapshot,
-  BuildArchetypeBeatStripItems,
   BuildStudioAppContext,
   BuildStudioBriefClientTools,
+  MapArchetypeToCard,
+  MapBrandKitToCard,
   StudioAppContextPayload,
   StudioBriefClientToolDefinition,
   StudioBriefComponentHandle,
@@ -282,29 +282,9 @@ export class VSStudioSlideInStateService {
       const archetypes = (engine?.Archetypes ?? []).filter(
         (a: MJVideoArchetypeEntity) => a.Status === 'Active' || !a.Status,
       );
-      return archetypes.map((arch: MJVideoArchetypeEntity) => {
-        const defaultDur = arch.DefaultDurationSeconds ?? 30;
-        const rawBeats = Array.isArray(arch.BeatTemplateObject) ? arch.BeatTemplateObject : [];
-        const beatItems = BuildArchetypeBeatStripItems(rawBeats, defaultDur);
-        const companyId = arch.CompanyID ?? null;
-        return {
-          ID: arch.ID,
-          Name: arch.Name,
-          Description: arch.Description ?? '',
-          Category: (arch.Category ?? 'Explainer') as ArchetypeCategory,
-          Status: arch.Status === 'Inactive' ? 'Inactive' : 'Active',
-          CompanyID: companyId,
-          CompanyName: arch.Company ?? null,
-          IsShipped: companyId === null,
-          DefaultDurationSeconds: defaultDur,
-          MinDurationSeconds: arch.MinDurationSeconds ?? 15,
-          MaxDurationSeconds: arch.MaxDurationSeconds ?? 120,
-          DefaultFormats: arch.DefaultFormats ?? '16:9',
-          BeatCount: beatItems.length,
-          BeatLabels: beatItems.map((b) => b.Label),
-          BeatItems: beatItems,
-        };
-      });
+      return archetypes.map((arch: MJVideoArchetypeEntity) =>
+        MapArchetypeToCard(arch),
+      );
     } catch {
       return [];
     }
@@ -321,19 +301,9 @@ export class VSStudioSlideInStateService {
       const kits = (engine?.BrandKits ?? []).filter(
         (k: MJBrandKitEntity) => k.Status === 'Active' || !k.Status,
       );
-      return kits.map((kit: MJBrandKitEntity) => ({
-        ID: kit.ID,
-        Name: kit.Name,
-        Description: kit.Description ?? '',
-        CompanyID: kit.CompanyID ?? null,
-        CompanyName: kit.Company ?? null,
-        IsDefault: Boolean(kit.IsDefault),
-        Status: kit.Status === 'Inactive' ? 'Inactive' : 'Active',
-        Swatches: [],
-        PrimaryLogoFileID: null,
-        PrimaryLogoUrl: null,
-        AssetCount: 0,
-      }));
+      return kits.map((kit: MJBrandKitEntity) =>
+        MapBrandKitToCard(kit, engine?.GetAssets?.(kit.ID)),
+      );
     } catch {
       return [];
     }

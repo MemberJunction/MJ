@@ -14,7 +14,7 @@
  * 🚨 SAFETY BOUNDARY (READ / NAVIGATE / FILTER / SEARCH / REFRESH + STUDIO BRIEF FORM-FILL):
  * Productions, Brand Kits, and Archetypes expose ONLY read, filter, search,
  * select/open-for-viewing, and refresh operations to the AI agent — never create,
- * edit, clone, share, upload, policy, or delete tools. Productions additionally exposes
+ * edit, copy, share, upload, policy, or delete tools. Productions additionally exposes
  * four reversible in-memory brief form-fill tools (`SelectStudioArchetype`,
  * `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`) while deliberately
  * excluding `StartProduction`:
@@ -27,8 +27,8 @@
  *   `NavigationService.OpenEntityRecord`; no create, save, delete, or asset/policy write
  *   tool is exposed.
  * - Archetypes: `SelectArchetype` / `OpenArchetype` selects or opens a company archetype
- *   record for viewing; cloning a shipped archetype (`CloneArchetype`) creates a new
- *   database record and is gated behind the user-driven Clone dialog only.
+ *   record for viewing; making a copy or editing an archetype (`vs-archetype-editor`) creates
+ *   or updates a database record and is gated behind the user-driven editor dialog only.
  */
 
 import { EscapeSQLString } from '@memberjunction/global';
@@ -412,6 +412,96 @@ export interface BrandKitCardSnapshot extends NamedVideoStudioItem {
 }
 
 /**
+ * Minimal structural shape of an `MJ: Brand Kit Assets` row accepted by {@link MapBrandKitToCard}.
+ */
+export interface BrandKitAssetRowInput {
+    AssetType?: string | null;
+    FileID?: string | null;
+    IsPrimary?: boolean | null;
+    Sequence?: number | null;
+}
+
+/**
+ * Minimal structural shape of an `MJ: Brand Kits` entity row accepted by {@link MapBrandKitToCard}.
+ */
+export interface BrandKitEntityRowInput {
+    ID: string;
+    Name?: string | null;
+    Description?: string | null;
+    CompanyID?: string | null;
+    Company?: string | null;
+    CompanyName?: string | null;
+    IsDefault?: boolean | null;
+    Status?: string | null;
+    StyleObject?: {
+        Palette?: ReadonlyArray<{ Name?: string | null; Value?: string | null }> | null;
+    } | null;
+    Swatches?: readonly BrandKitSwatchView[] | null;
+    PrimaryLogoFileID?: string | null;
+    PrimaryLogoUrl?: string | null;
+    AssetCount?: number | null;
+}
+
+/**
+ * Shared mapper converting an `MJ: Brand Kits` entity row and its optional assets
+ * into a {@link BrandKitCardSnapshot}.
+ */
+export function MapBrandKitToCard(
+    kit: BrandKitEntityRowInput,
+    assets?: readonly BrandKitAssetRowInput[] | null,
+): BrandKitCardSnapshot {
+    const rawPalette = Array.isArray(kit.StyleObject?.Palette) ? kit.StyleObject!.Palette! : [];
+    const swatches: BrandKitSwatchView[] =
+        rawPalette.length > 0
+            ? rawPalette
+                  .filter((entry) => Boolean(entry && typeof entry.Value === 'string' && entry.Value.trim()))
+                  .map((entry) => ({
+                      Name: (entry.Name ?? '').trim() || 'Color',
+                      Value: entry.Value!.trim(),
+                  }))
+            : Array.isArray(kit.Swatches)
+              ? [...kit.Swatches]
+              : [];
+
+    const assetList = Array.isArray(assets) ? assets : [];
+    const logoAssets = assetList.filter(
+        (a) => a.AssetType === 'Logo' || a.AssetType === 'LogoMark',
+    );
+    const primaryLogoAsset =
+        logoAssets.find((a) => Boolean(a.IsPrimary)) ??
+        [...logoAssets].sort(
+            (a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER),
+        )[0] ??
+        null;
+
+    const companyId =
+        typeof kit.CompanyID === 'string' && kit.CompanyID.trim().length > 0
+            ? kit.CompanyID.trim()
+            : null;
+    const companyRaw = kit.Company ?? kit.CompanyName ?? null;
+    const companyName =
+        typeof companyRaw === 'string' && companyRaw.trim().length > 0
+            ? companyRaw.trim()
+            : null;
+
+    return {
+        ID: kit.ID,
+        Name: (kit.Name ?? '').trim() || 'Untitled Brand Kit',
+        Description: kit.Description ?? '',
+        CompanyID: companyId,
+        CompanyName: companyName,
+        IsDefault: Boolean(kit.IsDefault),
+        Status: kit.Status === 'Inactive' ? 'Inactive' : 'Active',
+        Swatches: swatches,
+        PrimaryLogoFileID: primaryLogoAsset?.FileID ?? kit.PrimaryLogoFileID ?? null,
+        PrimaryLogoUrl: kit.PrimaryLogoUrl ?? null,
+        AssetCount: assetList.length > 0 ? assetList.length : (kit.AssetCount ?? 0),
+    };
+}
+
+export const MapBrandKitEntityToCard = MapBrandKitToCard;
+
+/**
  * Active filter state on the Brand Kits surface.
  * `CompanyID` accepts `'all'`, `'org-wide'`, or a specific company ID.
  */
@@ -702,6 +792,153 @@ export interface ArchetypeCardSnapshot extends NamedVideoStudioItem {
     BeatCount: number;
     BeatLabels: readonly string[];
     BeatItems?: readonly ScaledVideoBeatStripItem[];
+}
+
+/**
+ * Minimal structural shape of an `MJ: Video Archetypes` entity row accepted by
+ * {@link MapArchetypeToCard}.
+ */
+export interface ArchetypeEntityRowInput {
+    ID: string;
+    Name?: string | null;
+    Description?: string | null;
+    Category?: string | null;
+    Status?: string | null;
+    CompanyID?: string | null;
+    Company?: string | null;
+    CompanyName?: string | null;
+    DefaultDurationSeconds?: number | null;
+    MinDurationSeconds?: number | null;
+    MaxDurationSeconds?: number | null;
+    DefaultFormats?: string | null;
+    BeatTemplate?: string | null;
+    BeatTemplateObject?: readonly ArchetypeBeatTemplateInput[] | null;
+    BeatItems?: readonly ScaledVideoBeatStripItem[] | null;
+    BeatLabels?: readonly string[] | null;
+}
+
+/**
+ * Shared mapper converting an `MJ: Video Archetypes` entity row into an
+ * {@link ArchetypeCardSnapshot}, scaling its beat template with
+ * {@link BuildArchetypeBeatStripItems} so `BeatItems` always sum to
+ * `DefaultDurationSeconds`.
+ */
+export function MapArchetypeToCard(entity: ArchetypeEntityRowInput): ArchetypeCardSnapshot {
+    const rawCategory = (entity.Category ?? 'Explainer').trim();
+    const category: ArchetypeCategory = (ARCHETYPE_CATEGORIES as readonly string[]).includes(
+        rawCategory,
+    )
+        ? (rawCategory as ArchetypeCategory)
+        : 'Explainer';
+
+    const defaultDur =
+        typeof entity.DefaultDurationSeconds === 'number' &&
+        Number.isFinite(entity.DefaultDurationSeconds) &&
+        entity.DefaultDurationSeconds > 0
+            ? entity.DefaultDurationSeconds
+            : 60;
+    const minDur =
+        typeof entity.MinDurationSeconds === 'number' &&
+        Number.isFinite(entity.MinDurationSeconds) &&
+        entity.MinDurationSeconds > 0
+            ? entity.MinDurationSeconds
+            : 30;
+    const maxDur =
+        typeof entity.MinDurationSeconds === 'number' &&
+        typeof entity.MaxDurationSeconds === 'number' &&
+        Number.isFinite(entity.MaxDurationSeconds) &&
+        entity.MaxDurationSeconds >= minDur
+            ? entity.MaxDurationSeconds
+            : typeof entity.MaxDurationSeconds === 'number' &&
+                Number.isFinite(entity.MaxDurationSeconds) &&
+                entity.MaxDurationSeconds > 0
+              ? entity.MaxDurationSeconds
+              : Math.max(defaultDur, 120);
+
+    let rawBeats: readonly ArchetypeBeatTemplateInput[] = [];
+    if (Array.isArray(entity.BeatTemplateObject)) {
+        rawBeats = entity.BeatTemplateObject;
+    } else if (typeof entity.BeatTemplate === 'string' && entity.BeatTemplate.trim().startsWith('[')) {
+        try {
+            const parsed: unknown = JSON.parse(entity.BeatTemplate);
+            if (Array.isArray(parsed)) {
+                rawBeats = parsed as ArchetypeBeatTemplateInput[];
+            }
+        } catch {
+            rawBeats = [];
+        }
+    }
+
+    const beatItems: ScaledVideoBeatStripItem[] =
+        rawBeats.length > 0
+            ? BuildArchetypeBeatStripItems(rawBeats, defaultDur)
+            : Array.isArray(entity.BeatItems)
+              ? entity.BeatItems.map((item) => ({ ...item }))
+              : [];
+    const beatLabels: string[] =
+        beatItems.length > 0
+            ? beatItems.map((b) => b.Label)
+            : Array.isArray(entity.BeatLabels)
+              ? [...entity.BeatLabels]
+              : [];
+
+    const companyId =
+        typeof entity.CompanyID === 'string' && entity.CompanyID.trim().length > 0
+            ? entity.CompanyID.trim()
+            : null;
+    const companyRaw = entity.Company ?? entity.CompanyName ?? null;
+    const companyName =
+        typeof companyRaw === 'string' && companyRaw.trim().length > 0
+            ? companyRaw.trim()
+            : null;
+
+    return {
+        ID: entity.ID,
+        Name: (entity.Name ?? '').trim() || 'Untitled Archetype',
+        Description: entity.Description ?? '',
+        Category: category,
+        Status: entity.Status === 'Inactive' ? 'Inactive' : 'Active',
+        CompanyID: companyId,
+        CompanyName: companyName,
+        IsShipped: companyId === null,
+        DefaultDurationSeconds: defaultDur,
+        MinDurationSeconds: minDur,
+        MaxDurationSeconds: maxDur,
+        DefaultFormats: (entity.DefaultFormats ?? '').trim() || '16:9',
+        BeatCount: beatItems.length || beatLabels.length,
+        BeatLabels: beatLabels,
+        BeatItems: beatItems,
+    };
+}
+
+export const MapArchetypeEntityToCard = MapArchetypeToCard;
+
+/**
+ * Derive a stable snake_case beat `Key` from its human-readable `Label`,
+ * deduplicating against `usedKeys` when provided.
+ */
+export function DeriveBeatKeyFromLabel(
+    label: string | null | undefined,
+    fallbackIndex = 1,
+    usedKeys?: Set<string>,
+): string {
+    const cleaned = (label ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    const baseKey = cleaned || `beat_${Math.max(1, fallbackIndex)}`;
+    if (!usedKeys) {
+        return baseKey;
+    }
+    let candidate = baseKey;
+    let suffix = 2;
+    while (usedKeys.has(candidate)) {
+        candidate = `${baseKey}_${suffix}`;
+        suffix += 1;
+    }
+    usedKeys.add(candidate);
+    return candidate;
 }
 
 /**

@@ -298,6 +298,38 @@ describe('VSProductionBriefComponent DOM', () => {
     expect(fixture.componentInstance.SelectedBrandKit?.ID).toBe('kit-created-99');
     expect(fixture.componentInstance.SelectedBrandKit?.Name).toBe('Freshly Created Kit');
 
+    // 7. "Make your own" link opens vs-archetype-editor and selects the newly saved archetype after Saved
+    const makeYourOwnLink = query(fixture, '[data-testid="vs-brief-make-your-own-link"]') as HTMLElement | null;
+    expect(makeYourOwnLink).not.toBeNull();
+    makeYourOwnLink!.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.IsArchetypeEditorOpen).toBe(true);
+    expect(query(fixture, '[data-testid="vs-archetype-editor"]')).not.toBeNull();
+
+    fakeArchetypes.push({
+      ID: 'arch-created-77',
+      Name: 'Custom Launch Shape',
+      Description: 'Copied from Social Spotlight',
+      Category: 'Social',
+      Status: 'Active',
+      CompanyID: 'comp-1',
+      Company: 'Acme Corp',
+      DefaultDurationSeconds: 45,
+      MinDurationSeconds: 15,
+      MaxDurationSeconds: 90,
+      DefaultFormats: '["9:16", "1:1"]',
+      BeatTemplateObject: [],
+    });
+    await fixture.componentInstance.OnArchetypeEditorSaved('arch-created-77');
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.IsArchetypeEditorOpen).toBe(false);
+    expect(fixture.componentInstance.SelectedArchetype?.ID).toBe('arch-created-77');
+    expect(fixture.componentInstance.SelectedArchetype?.Name).toBe('Custom Launch Shape');
+    expect(fixture.componentInstance.SelectedFormats).toEqual(['9:16', '1:1']);
+    expect(fixture.componentInstance.DurationSeconds).toBe(45);
+
     sub.unsubscribe();
     fixture.destroy();
     vi.restoreAllMocks();

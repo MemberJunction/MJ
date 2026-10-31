@@ -31,9 +31,20 @@
 
     <!-- 3. Shape -->
     <section class="vs-brief__section" aria-labelledby="vs-brief-shape-heading">
-      <h3 class="vs-brief__heading" id="vs-brief-shape-heading">
-        Shape
-      </h3>
+      <div class="vs-brief__section-header">
+        <h3 class="vs-brief__heading" id="vs-brief-shape-heading">
+          Shape
+        </h3>
+        <button
+          type="button"
+          class="vs-brief__action-link"
+          data-testid="vs-brief-make-your-own-link"
+          (click)="OpenArchetypeEditor()"
+        >
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>Make your own</span>
+        </button>
+      </div>
       @if (IsLoading && AllArchetypes.length === 0) {
         <div class="vs-brief__loading" data-testid="vs-brief-loading">
           <mj-loading Text="Loading archetypes…" Size="small"></mj-loading>
@@ -228,6 +239,26 @@
         (Saved)="OnBrandKitCreatorSaved($event)"
         (Cancelled)="CloseBrandKitCreator()"
       ></mj-brand-kit-creator>
+    </mj-dialog>
+  }
+
+  @if (IsArchetypeEditorOpen) {
+    <mj-dialog
+      [Visible]="true"
+      [Title]="ArchetypeEditorDialogTitle"
+      Size="lg"
+      (Close)="CloseArchetypeEditor()"
+    >
+      <vs-archetype-editor
+        [Provider]="ProviderToUse"
+        Mode="copy"
+        [SourceArchetypeId]="SelectedArchetype?.ID ?? null"
+        [Archetypes]="AllArchetypes"
+        [Companies]="AvailableCompanies"
+        [InitialCompanyId]="SelectedCompanyId !== 'all' ? SelectedCompanyId : null"
+        (Saved)="OnArchetypeEditorSaved($event)"
+        (Cancelled)="CloseArchetypeEditor()"
+      ></vs-archetype-editor>
     </mj-dialog>
   }
 

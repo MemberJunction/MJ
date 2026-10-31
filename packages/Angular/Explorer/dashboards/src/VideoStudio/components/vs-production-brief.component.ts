@@ -39,18 +39,19 @@ import {
   MJNumericInputComponent,
 } from '@memberjunction/ng-ui-components';
 import { VideoCaptionMode } from '@memberjunction/video-studio-core';
+import { VSArchetypeEditorComponent } from './vs-archetype-editor.component';
 import { VSAudioOptionsComponent } from './vs-audio-options.component';
 import { VSSetupHealthCardComponent } from './vs-setup-health-card.component';
 import {
-  ARCHETYPE_CATEGORIES,
   ArchetypeCardSnapshot,
-  ArchetypeCategory,
   BrandKitCardSnapshot,
   BuildArchetypeBeatStripItems,
   BuildSavedQuerySearchFilter,
   BuildStudioAppContext,
   ClampStudioDuration,
   ComposeStudioFirstMessage,
+  MapArchetypeToCard,
+  MapBrandKitToCard,
   ParseArchetypeDefaultFormats,
   ResolveVideoStudioItem,
   STUDIO_VIDEO_FORMATS,
@@ -129,6 +130,7 @@ export interface VSProductionBriefSetupHealthEvent {
     MJNumericInputComponent,
     MJVideoFormatGlyphComponent,
     MJVideoBeatStripComponent,
+    VSArchetypeEditorComponent,
     VSSetupHealthCardComponent,
     VSAudioOptionsComponent,
   ],
@@ -174,6 +176,7 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
   public IsSearchingQueries = false;
   public FilteredBrandKits: BrandKitCardSnapshot[] = [];
   public IsBrandKitCreatorOpen = false;
+  public IsArchetypeEditorOpen = false;
 
   private querySearchRequestId = 0;
   private readonly cdr = inject(ChangeDetectorRef);
@@ -398,13 +401,15 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
         (a: MJVideoArchetypeEntity) => a.Status === 'Active' || !a.Status,
       );
       this.AllArchetypes = activeArchetypes.map((a: MJVideoArchetypeEntity) =>
-        this.mapArchetypeToCard(a),
+        MapArchetypeToCard(a),
       );
 
       const activeKits = (bkEngine.BrandKits ?? []).filter(
         (k) => k.Status === 'Active' || !k.Status,
       );
-      this.AllBrandKits = activeKits.map((k) => this.mapBrandKitToCard(k, bkEngine));
+      this.AllBrandKits = activeKits.map((k) =>
+        MapBrandKitToCard(k, bkEngine.GetAssets?.(k.ID)),
+      );
       this.applyCompanyBrandKitFilter();
 
       if (this.SelectedBrandKit) {
@@ -540,7 +545,9 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
         (k) => k.Status === 'Active' || !k.Status,
       );
       if (activeKits.length > 0) {
-        const refreshed = activeKits.map((k) => this.mapBrandKitToCard(k, bkEngine));
+        const refreshed = activeKits.map((k) =>
+          MapBrandKitToCard(k, bkEngine.GetAssets?.(k.ID)),
+        );
         const existingExtra = this.AllBrandKits.filter(
           (existing) => !refreshed.some((r) => UUIDsEqual(r.ID, existing.ID)),
         );
@@ -581,6 +588,88 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
     this.applyCompanyBrandKitFilter();
     this.IsBrandKitCreatorOpen = false;
     this.SelectBrandKitById(trimmedId);
+  }
+
+  public get ArchetypeEditorDialogTitle(): string {
+    return this.SelectedArchetype?.Name
+      ? `Make a copy of ${this.SelectedArchetype.Name}`
+      : 'New archetype';
+  }
+
+  public OpenArchetypeEditor(): void {
+    this.IsArchetypeEditorOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public CloseArchetypeEditor(): void {
+    this.IsArchetypeEditorOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  public async OnArchetypeEditorSaved(savedArchetypeId: string): Promise<void> {
+    const trimmedId = (savedArchetypeId ?? '').trim();
+    if (!trimmedId) {
+      this.IsArchetypeEditorOpen = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      const vsEngine = VideoStudioEngine.GetProviderInstance<VideoStudioEngine>(
+        this.ProviderToUse,
+        VideoStudioEngine,
+      ) as VideoStudioEngine;
+      const user = this.ProviderToUse?.CurrentUser ?? undefined;
+      await vsEngine.Config(true, user, this.ProviderToUse);
+      const activeArchetypes = (vsEngine.Archetypes ?? []).filter(
+        (a: MJVideoArchetypeEntity) => a.Status === 'Active' || !a.Status,
+      );
+      if (activeArchetypes.length > 0) {
+        const refreshed = activeArchetypes.map((a: MJVideoArchetypeEntity) =>
+          MapArchetypeToCard(a),
+        );
+        const existingExtra = this.AllArchetypes.filter(
+          (existing) => !refreshed.some((r) => UUIDsEqual(r.ID, existing.ID)),
+        );
+        this.AllArchetypes = [...refreshed, ...existingExtra];
+      }
+    } catch {
+      // Non-fatal in test/disconnected environments; fallback card below ensures selection works.
+    }
+
+    let targetArchetype =
+      this.AllArchetypes.find((a) => UUIDsEqual(a.ID, trimmedId)) ?? null;
+    if (!targetArchetype) {
+      const source = this.SelectedArchetype ?? this.AllArchetypes[0] ?? null;
+      const companyId =
+        this.SelectedCompanyId && this.SelectedCompanyId !== 'all'
+          ? this.SelectedCompanyId
+          : (source?.CompanyID ?? null);
+      targetArchetype = {
+        ID: trimmedId,
+        Name: source ? `${source.Name} (Copy)` : 'Custom Archetype',
+        Description: source?.Description ?? '',
+        Category: source?.Category ?? 'Explainer',
+        Status: 'Active',
+        CompanyID: companyId,
+        CompanyName: null,
+        IsShipped: false,
+        DefaultDurationSeconds:
+          source?.DefaultDurationSeconds ?? DEFAULT_STUDIO_DURATION_SECONDS,
+        MinDurationSeconds:
+          source?.MinDurationSeconds ?? DEFAULT_MIN_DURATION_SECONDS,
+        MaxDurationSeconds:
+          source?.MaxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS,
+        DefaultFormats: source?.DefaultFormats ?? '["16:9"]',
+        BeatCount: source?.BeatCount ?? 0,
+        BeatLabels: source?.BeatLabels ? [...source.BeatLabels] : [],
+        BeatItems: source?.BeatItems ? [...source.BeatItems] : [],
+      };
+      this.AllArchetypes = [...this.AllArchetypes, targetArchetype];
+    }
+
+    this.IsArchetypeEditorOpen = false;
+    this.SelectArchetype(targetArchetype);
   }
 
   public IsFormatSelected(format: string): boolean {
@@ -877,67 +966,5 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
       Result: this.SetupHealthResult,
       Loading: this.IsCheckingSetupHealth,
     });
-  }
-
-  private mapArchetypeToCard(entity: MJVideoArchetypeEntity): ArchetypeCardSnapshot {
-    const rawCategory = (entity.Category ?? 'Explainer').trim();
-    const category: ArchetypeCategory = (
-      ARCHETYPE_CATEGORIES as readonly string[]
-    ).includes(rawCategory)
-      ? (rawCategory as ArchetypeCategory)
-      : 'Explainer';
-
-    const defaultDur = entity.DefaultDurationSeconds ?? DEFAULT_STUDIO_DURATION_SECONDS;
-    const rawBeats = Array.isArray(entity.BeatTemplateObject)
-      ? entity.BeatTemplateObject
-      : [];
-    const beatItems: VideoBeatStripItem[] = BuildArchetypeBeatStripItems(rawBeats, defaultDur);
-    const beatLabels = beatItems.map((b) => b.Label);
-    const companyRaw = entity.Company;
-
-    return {
-      ID: entity.ID,
-      Name: entity.Name ?? 'Untitled Archetype',
-      Description: entity.Description ?? '',
-      Category: category,
-      Status: entity.Status === 'Inactive' ? 'Inactive' : 'Active',
-      CompanyID: entity.CompanyID ?? null,
-      CompanyName:
-        typeof companyRaw === 'string' && companyRaw.trim().length > 0
-          ? companyRaw.trim()
-          : null,
-      IsShipped: entity.CompanyID === null || entity.CompanyID === undefined,
-      DefaultDurationSeconds: defaultDur,
-      MinDurationSeconds: entity.MinDurationSeconds ?? DEFAULT_MIN_DURATION_SECONDS,
-      MaxDurationSeconds: entity.MaxDurationSeconds ?? DEFAULT_MAX_DURATION_SECONDS,
-      DefaultFormats: entity.DefaultFormats ?? '["16:9"]',
-      BeatCount: beatItems.length,
-      BeatLabels: beatLabels,
-      BeatItems: beatItems,
-    };
-  }
-
-  private mapBrandKitToCard(
-    kit: MJBrandKitEntity,
-    engine: BrandKitEngine,
-  ): BrandKitCardSnapshot {
-    const assets = engine.GetAssets(kit.ID) ?? [];
-    const companyRaw = kit.Company;
-    return {
-      ID: kit.ID,
-      Name: kit.Name ?? 'Untitled Brand Kit',
-      Description: kit.Description ?? '',
-      CompanyID: kit.CompanyID ?? null,
-      CompanyName:
-        typeof companyRaw === 'string' && companyRaw.trim().length > 0
-          ? companyRaw.trim()
-          : null,
-      IsDefault: Boolean(kit.IsDefault),
-      Status: kit.Status === 'Inactive' ? 'Inactive' : 'Active',
-      Swatches: [],
-      PrimaryLogoFileID: null,
-      PrimaryLogoUrl: null,
-      AssetCount: assets.length,
-    };
   }
 }

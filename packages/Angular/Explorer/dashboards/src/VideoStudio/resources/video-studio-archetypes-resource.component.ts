@@ -5,17 +5,18 @@ import {
   OnInit,
   inject,
 } from '@angular/core';
-import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
 import {
   MJEnvironmentEntityExtended,
   MJVideoArchetypeEntity,
   ResourceData,
   VideoStudioEngine,
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FormatVideoTime, FormatVideoTimeRange } from '@memberjunction/ng-artifacts';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { ArchetypeEditorMode } from '../components/vs-archetype-editor.component';
 import {
   ARCHETYPE_CATEGORIES,
   ArchetypeCardSnapshot,
@@ -24,10 +25,10 @@ import {
   ArchetypeCategoryGroup,
   ArchetypeFilterState,
   ArchetypeScopeFilter,
-  BuildArchetypeBeatStripItems,
   BuildArchetypesAgentContext,
   FilterArchetypeCards,
   GroupArchetypesByCategory,
+  MapArchetypeToCard,
   ParseArchetypeDefaultFormats,
   ResolveVideoStudioItem,
   StudioBriefClientToolDefinition,
@@ -49,6 +50,8 @@ export interface ArchetypeBeatBlock {
 export interface ArchetypePacingView {
   AvgSecondsBetweenChanges: number;
   HoldRules: string;
+  MinBeatDurationSeconds?: number;
+  MaxBeatDurationSeconds?: number;
 }
 
 export interface ArchetypeViewItem extends ArchetypeCardSnapshot {
@@ -60,24 +63,26 @@ export interface ArchetypeViewItem extends ArchetypeCardSnapshot {
   Pacing: ArchetypePacingView | null;
 }
 
-export interface ArchetypeCompanyOption {
-  ID: string;
-  Name: string;
+export interface ArchetypeCategoryChipItem {
+  Category: ArchetypeCategory;
+  Label: string;
+  Count: number;
 }
 
 /**
  * Archetypes resource tab for the Video Studio application.
  *
- * Displays all `MJ: Video Archetypes` from `VideoStudioEngine` grouped by
- * `Category` (`Announcement | Briefing | DataStory | Explainer | Product | Social | Tutorial`),
- * with proportional beat-timeline strips (`arch.BeatTemplateObject`) and an
+ * Displays all `MJ: Video Archetypes` from `VideoStudioEngine` in a single
+ * grid with `<mj-filter-chip>` filters for `Category` (`Announcement | Briefing |
+ * DataStory | Explainer | Product | Social | Tutorial`) and scope (`Shipped` /
+ * `Yours`), proportional beat-timeline strips (`arch.BeatTemplateObject`), and an
  * inline slide-out preview showing the full beat template, pacing rules,
  * and narrative guidance.
  *
- * Company archetypes (`CompanyID` non-null) provide an "Edit record" button
- * that opens the generated `MJ: Video Archetypes` form, while shipped
- * archetypes (`CompanyID IS NULL`) are read-only with a "Clone" button that
- * creates a company copy and opens the copy's entity form.
+ * Company archetypes (`CompanyID` non-null) provide an "Edit" button that opens
+ * `vs-archetype-editor` plus an "Open record" link to the entity form, while
+ * shipped archetypes (`CompanyID IS NULL`) are read-only with a "Make a copy"
+ * button that opens `vs-archetype-editor` pre-filled with the shipped row.
  */
 @RegisterClass(BaseResourceComponent, 'VideoStudioArchetypesResource')
 @Component({
@@ -97,6 +102,8 @@ export class VideoStudioArchetypesResourceComponent
   public AllArchetypes: ArchetypeViewItem[] = [];
   public FilteredArchetypes: ArchetypeViewItem[] = [];
   public CategoryGroups: ArchetypeCategoryGroup<ArchetypeViewItem>[] = [];
+  public CategoryChipItems: ArchetypeCategoryChipItem[] = [];
+  public CategoryAllCount = 0;
   public SelectedArchetype: ArchetypeViewItem | null = null;
 
   public SearchText = '';
@@ -133,18 +140,15 @@ export class VideoStudioArchetypesResourceComponent
     scope: 'all',
   };
 
-  // Clone dialog state for shipped archetypes
-  public CloneSourceArchetype: ArchetypeViewItem | null = null;
-  public CloneName = '';
-  public CloneCompanyID = '';
-  public AvailableCompanies: ArchetypeCompanyOption[] = [];
-  public IsCloning = false;
-  public CloneError: string | null = null;
+  // Archetype editor dialog state
+  public IsEditorOpen = false;
+  public EditorMode: ArchetypeEditorMode = 'copy';
+  public EditorSourceArchetypeId: string | null = null;
+  public EditorEditingArchetypeId: string | null = null;
 
   public PageContext: Record<string, unknown> = this.buildArchetypesContext();
   public readonly PageTools: StudioBriefClientToolDefinition[] = this.buildArchetypesClientTools();
 
-  private companiesLoadError: string | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
 
   public get CurrentUser(): UserInfo | null {
@@ -184,6 +188,32 @@ export class VideoStudioArchetypesResourceComponent
     return this.FilteredArchetypes.length;
   }
 
+  public get ShippedCount(): number {
+    return this.AllArchetypes.filter((a) => a.IsShipped).length;
+  }
+
+  public get CompanyCount(): number {
+    return this.AllArchetypes.filter((a) => !a.IsShipped).length;
+  }
+
+  public get EditorDialogTitle(): string {
+    if (this.EditorMode === 'edit') {
+      const target = this.AllArchetypes.find(
+        (a) => this.EditorEditingArchetypeId && UUIDsEqual(a.ID, this.EditorEditingArchetypeId),
+      );
+      return target ? `Edit "${target.Name}"` : 'Edit archetype';
+    }
+    if (this.EditorSourceArchetypeId) {
+      const source = this.AllArchetypes.find(
+        (a) => this.EditorSourceArchetypeId && UUIDsEqual(a.ID, this.EditorSourceArchetypeId),
+      );
+      if (source) {
+        return `Make a copy of "${source.Name}"`;
+      }
+    }
+    return 'New archetype';
+  }
+
   public get ActivePopoverFilterCount(): number {
     let count = 0;
     if (this.CategoryFilter && this.CategoryFilter !== 'all') {
@@ -212,7 +242,6 @@ export class VideoStudioArchetypesResourceComponent
       await engine.Config(forceRefresh, undefined, this.ProviderToUse);
       const archetypes = engine.Archetypes;
       this.AllArchetypes = archetypes.map((arch) => this.mapArchetypeToCard(arch));
-      await this.loadAvailableCompanies();
       this.applyFiltersAndSync();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -243,6 +272,27 @@ export class VideoStudioArchetypesResourceComponent
     this.applyFiltersAndSync();
   }
 
+  public SelectCategoryChip(category: ArchetypeCategoryFilter): void {
+    const nextCategory =
+      category !== 'all' && this.CategoryFilter === category ? 'all' : category;
+    this.CategoryFilter = nextCategory;
+    this.FilterValues = {
+      ...this.FilterValues,
+      category: nextCategory,
+    };
+    this.applyFiltersAndSync();
+  }
+
+  public ToggleScopeChip(scope: 'shipped' | 'company'): void {
+    const nextScope: ArchetypeScopeFilter = this.ScopeFilter === scope ? 'all' : scope;
+    this.ScopeFilter = nextScope;
+    this.FilterValues = {
+      ...this.FilterValues,
+      scope: nextScope,
+    };
+    this.applyFiltersAndSync();
+  }
+
   public ClearAllFilters(): void {
     this.CategoryFilter = 'all';
     this.ScopeFilter = 'all';
@@ -263,10 +313,40 @@ export class VideoStudioArchetypesResourceComponent
     this.SelectArchetype(null);
   }
 
-  public EditArchetypeRecord(item: ArchetypeViewItem, event?: Event): void {
+  public OpenNewArchetypeEditor(): void {
+    this.EditorMode = 'copy';
+    this.EditorSourceArchetypeId = this.SelectedArchetype?.ID ?? null;
+    this.EditorEditingArchetypeId = null;
+    this.IsEditorOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public OpenCopyArchetypeEditor(item: ArchetypeViewItem, event?: Event): void {
+    event?.stopPropagation();
+    this.EditorMode = 'copy';
+    this.EditorSourceArchetypeId = item.ID;
+    this.EditorEditingArchetypeId = null;
+    this.IsEditorOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public OpenEditArchetypeEditor(item: ArchetypeViewItem, event?: Event): void {
     event?.stopPropagation();
     if (item.IsShipped) {
-      this.OpenCloneDialog(item, event);
+      this.OpenCopyArchetypeEditor(item, event);
+      return;
+    }
+    this.EditorMode = 'edit';
+    this.EditorSourceArchetypeId = null;
+    this.EditorEditingArchetypeId = item.ID;
+    this.IsEditorOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public OpenArchetypeRecord(item: ArchetypeViewItem, event?: Event): void {
+    event?.stopPropagation();
+    if (item.IsShipped) {
+      this.OpenCopyArchetypeEditor(item, event);
       return;
     }
     this.navigationService.OpenEntityRecord(
@@ -275,85 +355,23 @@ export class VideoStudioArchetypesResourceComponent
     );
   }
 
-  public OpenCloneDialog(item: ArchetypeViewItem, event?: Event): void {
-    event?.stopPropagation();
-    this.CloneSourceArchetype = item;
-    this.CloneName = `${item.Name} (Copy)`;
-    this.CloneCompanyID = this.AvailableCompanies[0]?.ID ?? '';
-    this.CloneError = this.companiesLoadError;
-    this.IsCloning = false;
+  public CloseArchetypeEditor(): void {
+    this.IsEditorOpen = false;
+    this.EditorSourceArchetypeId = null;
+    this.EditorEditingArchetypeId = null;
     this.cdr.markForCheck();
   }
 
-  public CancelCloneDialog(): void {
-    this.CloneSourceArchetype = null;
-    this.CloneError = null;
-    this.IsCloning = false;
+  public async OnArchetypeEditorSaved(savedArchetypeId: string): Promise<void> {
+    this.IsEditorOpen = false;
+    this.EditorSourceArchetypeId = null;
+    this.EditorEditingArchetypeId = null;
+    await this.LoadArchetypes(true);
+    const saved = this.AllArchetypes.find((a) => UUIDsEqual(a.ID, savedArchetypeId));
+    if (saved) {
+      this.SelectArchetype(saved);
+    }
     this.cdr.markForCheck();
-  }
-
-  public async ConfirmClone(): Promise<void> {
-    const source = this.CloneSourceArchetype;
-    if (!source || this.IsCloning) {
-      return;
-    }
-    const trimmedName = this.CloneName.trim();
-    if (!trimmedName) {
-      this.CloneError = 'Please enter a name for the cloned archetype.';
-      this.cdr.markForCheck();
-      return;
-    }
-    if (!this.CloneCompanyID) {
-      this.CloneError = 'Please select a company for the cloned archetype.';
-      this.cdr.markForCheck();
-      return;
-    }
-
-    this.IsCloning = true;
-    this.CloneError = null;
-    this.cdr.markForCheck();
-
-    try {
-      const copy = await this.ProviderToUse.GetEntityObject<MJVideoArchetypeEntity>(
-        'MJ: Video Archetypes',
-        this.ProviderToUse.CurrentUser,
-      );
-      copy.Name = trimmedName;
-      copy.Description = source.Description || '';
-      copy.Category = source.Category;
-      copy.CompanyID = this.CloneCompanyID;
-      copy.DefaultDurationSeconds = source.DefaultDurationSeconds;
-      copy.MinDurationSeconds = source.MinDurationSeconds;
-      copy.MaxDurationSeconds = source.MaxDurationSeconds;
-      copy.DefaultFormats = source.DefaultFormats;
-      copy.DefaultInteractionMode = source.DefaultInteractionMode as MJVideoArchetypeEntity['DefaultInteractionMode'];
-      copy.BeatTemplate = source.BeatTemplateRaw;
-      copy.Pacing = source.PacingRaw;
-      copy.Guidance = source.Guidance;
-      copy.Status = 'Active';
-
-      const saved = await copy.Save();
-      if (!saved) {
-        const message = copy.LatestResult?.CompleteMessage || 'Failed to save cloned archetype.';
-        this.CloneError = message;
-        return;
-      }
-
-      const newId = copy.ID;
-      this.CloneSourceArchetype = null;
-      await this.LoadArchetypes(true);
-      this.navigationService.OpenEntityRecord(
-        'MJ: Video Archetypes',
-        CompositeKey.FromID(newId),
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      LogError(msg);
-      this.CloneError = msg;
-    } finally {
-      this.IsCloning = false;
-      this.cdr.markForCheck();
-    }
   }
 
   public FormatCategoryLabel(category: ArchetypeCategory | string): string {
@@ -380,48 +398,41 @@ export class VideoStudioArchetypesResourceComponent
     this.OnSearchChange('');
   }
 
-  private async loadAvailableCompanies(): Promise<void> {
-    this.companiesLoadError = null;
-    try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const res = await rv.RunView<{ ID: string; Name: string }>({
-        EntityName: 'MJ: Companies',
-        Fields: ['ID', 'Name'],
-        OrderBy: 'Name ASC',
-        ResultType: 'simple',
-      });
-      if (!res.Success) {
-        const msg = res.ErrorMessage || 'Failed to load companies.';
-        LogError(msg);
-        this.companiesLoadError = `Couldn't load companies: ${msg}`;
-        this.CloneError = this.companiesLoadError;
-        return;
-      }
-      if (Array.isArray(res.Results)) {
-        this.AvailableCompanies = res.Results.map((r) => ({
-          ID: r.ID,
-          Name: r.Name,
-        }));
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      LogError(msg);
-      this.companiesLoadError = `Couldn't load companies: ${msg}`;
-      this.CloneError = this.companiesLoadError;
+  private rebuildCategoryChips(): void {
+    const rowsAfterOtherFilters = FilterArchetypeCards(this.AllArchetypes, {
+      SearchQuery: this.SearchText,
+      Category: 'all',
+      Scope: this.ScopeFilter,
+    });
+    const countsByCategory = new Map<ArchetypeCategory, number>();
+    for (const cat of ARCHETYPE_CATEGORIES) {
+      countsByCategory.set(cat, 0);
     }
+    for (const arch of rowsAfterOtherFilters) {
+      countsByCategory.set(
+        arch.Category,
+        (countsByCategory.get(arch.Category) ?? 0) + 1,
+      );
+    }
+    this.CategoryAllCount = rowsAfterOtherFilters.length;
+    this.CategoryChipItems = ARCHETYPE_CATEGORIES.map((cat) => ({
+      Category: cat,
+      Label: this.FormatCategoryLabel(cat),
+      Count: countsByCategory.get(cat) ?? 0,
+    }));
   }
 
   private mapArchetypeToCard(arch: MJVideoArchetypeEntity): ArchetypeViewItem {
-    const defaultDur = arch.DefaultDurationSeconds ?? 60;
+    const snapshot = MapArchetypeToCard(arch);
     const rawBeats = Array.isArray(arch.BeatTemplateObject) ? arch.BeatTemplateObject : [];
-    const beatItems = BuildArchetypeBeatStripItems(rawBeats, defaultDur);
+    const beatItems = snapshot.BeatItems ?? [];
     const totalWeight = beatItems.reduce((acc, item) => acc + item.Seconds, 0) || 1;
 
     const beats: ArchetypeBeatBlock[] = rawBeats.map((b, idx) => {
       const stripItem = beatItems[idx];
       const seconds = stripItem?.Seconds ?? 1;
       return {
-        Key: stripItem?.Key ?? (b.Key || `beat-${idx + 1}`),
+        Key: (b.Key ?? '').trim() || stripItem?.Key || `beat-${idx + 1}`,
         Label: stripItem?.Label ?? (b.Label || b.Key || `Beat ${idx + 1}`),
         Purpose: b.Purpose || '',
         MinDurationSeconds: b.MinDurationSeconds ?? 0,
@@ -437,33 +448,18 @@ export class VideoStudioArchetypesResourceComponent
     const pacingObj = arch.PacingObject;
     const pacing: ArchetypePacingView | null = pacingObj
       ? {
+          ...pacingObj,
           AvgSecondsBetweenChanges: pacingObj.AvgSecondsBetweenChanges ?? 0,
           HoldRules: pacingObj.HoldRules ?? '',
         }
       : null;
 
-    const companyId = arch.CompanyID ?? null;
-
     return {
-      ID: arch.ID,
-      Name: arch.Name,
-      Description: arch.Description ?? '',
-      Category: (arch.Category ?? 'Explainer') as ArchetypeCategory,
-      Status: (arch.Status === 'Inactive' ? 'Inactive' : 'Active'),
-      CompanyID: companyId,
-      CompanyName: arch.Company ?? null,
-      IsShipped: companyId === null,
-      DefaultDurationSeconds: defaultDur,
-      MinDurationSeconds: arch.MinDurationSeconds ?? 30,
-      MaxDurationSeconds: arch.MaxDurationSeconds ?? 120,
-      DefaultFormats: arch.DefaultFormats ?? '16:9',
+      ...snapshot,
       DefaultInteractionMode: arch.DefaultInteractionMode ?? 'Auto',
       Guidance: arch.Guidance ?? null,
       BeatTemplateRaw: arch.BeatTemplate ?? JSON.stringify(rawBeats),
       PacingRaw: arch.Pacing ?? (pacingObj ? JSON.stringify(pacingObj) : null),
-      BeatCount: beats.length,
-      BeatLabels: beats.map((b) => b.Label),
-      BeatItems: beatItems,
       Beats: beats,
       Pacing: pacing,
     };
@@ -478,6 +474,7 @@ export class VideoStudioArchetypesResourceComponent
   }
 
   private applyFiltersAndSync(): void {
+    this.rebuildCategoryChips();
     this.FilteredArchetypes = FilterArchetypeCards(
       this.AllArchetypes,
       this.currentFilterState(),
@@ -503,8 +500,9 @@ export class VideoStudioArchetypesResourceComponent
   }
 
   // SAFETY BOUNDARY: Only read, filter, search, select/open-for-viewing, and refresh
-  // tools are registered for the AI agent. Cloning a shipped archetype creates a new
-  // database record and is gated exclusively behind the user-driven Clone dialog.
+  // tools are registered for the AI agent. Creating or editing a company archetype
+  // writes a database record and is gated exclusively behind the user-driven
+  // vs-archetype-editor dialog.
   private buildArchetypesClientTools(): StudioBriefClientToolDefinition[] {
     return [
       {
