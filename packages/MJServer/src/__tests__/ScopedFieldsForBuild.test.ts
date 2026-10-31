@@ -174,6 +174,14 @@ describe('a refresh reads the connection\'s fields, never a cold engine cache', 
         expect(SRC).toMatch(/this\.reconcileFieldMapsForEntityMap\(em, io\.ID, user, md, autoEnableNewColumns, scopedFields\)/);
     });
 
+    it('the re-key check reads the catalog key through FieldsForBuild with the loaded rows', () => {
+        expect(SRC).toMatch(/CatalogIdentityKey\(\s*FieldsForBuild\(io\.ID, scopedFields, IntegrationEngineBase\.Instance\)\s*\)/);
+    });
+
+    it('nothing in the resolver reads field rows from the engine directly', () => {
+        expect(SRC).not.toMatch(/\.GetIntegrationObjectFields\(/);
+    });
+
     it('the dependency map reads FK parents from the edge set, not from field rows', () => {
         const deps = body('private computeObjectDependencyNames(', '\n    }\n');
         expect(deps).toMatch(/engine\.GetRelatedIntegrationObjectIDs\(io\.ID\)/);
