@@ -653,6 +653,16 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     expect(fresh.Status === 'assembled' ? fresh.Rows.map((r) => r.Values[0]) : fresh).toEqual(['Gold']);
   });
 
+  it('replays the history for a row decided after the assembly day when the history covers that day (stored value only when uncovered)', async () => {
+    const status: FeatureColumnSpec = { name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+    // The lapse is dated after the decision day, which is after the assembly day: the history says Active on that day.
+    const dated = { People: [rc('rc-create', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('rc-lapse', 'P1', 'Update', '2027-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
+    const later: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
+    const out = await new AsOfFeatureAssembler().Assemble(input([status], { Rows: later, Changes: dated }));
+    if (out.Status !== 'assembled') throw new Error(JSON.stringify(out));
+    expect([out.Rows[0].Values[0], out.Rows[0].Provenance[0].sourceVersion]).toEqual(['Active', 'rc-create']);
+  });
+
   it("covers an untracked child's updatable field in an aggregate for owners decided today", async () => {
     const pledges = { ...tables, Pledges: [{ ID: 'pl1', PersonID: 'P1', PledgedOn: '2022-06-01', Amount: 5 }, { ID: 'pl2', PersonID: 'P1', PledgedOn: '2026-10-01', Amount: 7 }] };
     const sum: FeatureColumnSpec = { name: 'Pledged', source: { kind: 'windowed-aggregate', childEntity: 'Pledges', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'PledgedOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };

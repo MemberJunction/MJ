@@ -155,7 +155,7 @@ type CoverageByField = Map<string, ChangeHistoryCoverage>;
  */
 interface AssemblyState { readonly Coverage: CoverageByField; readonly Histories: Map<string, EntityHistory>; readonly LateEntered: Map<string, number> }
 /** What a replayed field reads: the history for rows decided before the assembly's day (null when there are none), the stored rows for the others. */
-interface ReplaySources { readonly History: EntityHistory | null; readonly Stored: ReadonlyMap<string, SourceRow> }
+interface ReplaySources { readonly History: EntityHistory; readonly Stored: ReadonlyMap<string, SourceRow> }
 
 /** The level the least frequent categories beyond a column's cardinality cap fold into. */
 export const OTHER_CATEGORY_LEVEL = '__other';
@@ -446,9 +446,8 @@ export class AsOfFeatureAssembler {
     const keyOf = join.KeyOf;
     if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, state), input);
     const today = input.Rows.filter((r) => AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
-    const past = input.Rows.filter((r) => !AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
     const keysOf = (rs: readonly AssemblyRowRef[]): string[] => rs.map((r) => keyOf(r)).filter((k): k is string => k !== null);
-    const history = past.length > 0 ? await AsOfFeatureAssembler.loadHistory(entity, keysOf(past), [source.field], input, state) : null;
+    const history = await AsOfFeatureAssembler.loadHistory(entity, keysOf(input.Rows), [source.field], input, state);
     const stored = today.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keysOf(today), source.field, input) : new Map<string, SourceRow>();
     return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, { History: history, Stored: stored }, input), input);
   }
@@ -500,18 +499,18 @@ export class AsOfFeatureAssembler {
 
   /**
    * The value Record Changes say the field held as of the decision day. A row with no join key has no record to replay,
-   * so its value is missing; so is a record created after the decision day. A row the history cannot replay is uncovered.
+   * so its value is missing; so is a record created after the decision day. A row the history cannot replay is uncovered,
+   * unless it is decided on the assembly's day or later: the stored value is then the value on that day (read as covered).
    */
   private replayReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, reads: ReplaySources, input: AsOfAssemblyInput): FeatureReader {
     return (row) => {
       const key = keyOf(row);
       if (key === null) return AsOfFeatureAssembler.missingValue(spec, 'none', 'none', input);
-      if (AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
       const history = reads.History;
-      if (history === null) throw new Error('As-of assembly: no history was loaded for a row decided before the assembly day');
       const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
       const hv = history.ValueAt(key, source.field, asOf);
       if (hv.Status === 'uncovered') {
+        if (AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
         if (AsOfFeatureAssembler.createdAfter(history, key, asOf, null)) return AsOfFeatureAssembler.missingValue(spec, AsOfFeatureAssembler.fieldRef(entity, key, source.field), 'created-after-decision', input);
         return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: history.Coverage.historyStart };
       }
