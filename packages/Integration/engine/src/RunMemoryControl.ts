@@ -16,7 +16,7 @@
  */
 import { ReadResourcePressure } from './ResourcePressure.js';
 import {
-    planShedding, calibrate, estimateEntityMapBytes, batchSizeLever, resolveThresholds, PressureBytes,
+    PlanShedding, Calibrate, EstimateEntityMapBytes, BatchSizeLever, ResolveThresholds, PressureBytes,
     type Contributor, type Lever, type SheddingPlan, type GovernorReading
 } from './MemoryGovernor.js';
 
@@ -67,11 +67,11 @@ export const DECISION_INTERVAL_MS = 10_000;
  *
  * Deliberately crude: stringify ONE record and double it, because a JS string is UTF-16 in memory
  * and a parsed object carries per-property overhead beyond its serialised form. It will be wrong.
- * That is tolerable only because `calibrate` measures the error against real RSS movement and
+ * That is tolerable only because `Calibrate` measures the error against real RSS movement and
  * corrects it — without that feedback this number would be superstition. Never stringify the whole
  * batch: measuring the memory problem must not become one.
  */
-export function estimateBytesPerRecord(sample: unknown): number {
+export function EstimateBytesPerRecord(sample: unknown): number {
     try {
         const json = JSON.stringify(sample);
         return json ? json.length * 2 : 0;
@@ -151,7 +151,7 @@ export class RunMemoryControl {
             // Close the loop on the PREVIOUS decision before making a new one: how much did the
             // last shed actually free? Done first so this batch's plan uses a corrected model.
             if (this.pendingProjection > 0 && this.pressureAtDecision !== null) {
-                this.calibration = calibrate(
+                this.calibration = Calibrate(
                     this.calibration,
                     this.pendingProjection,
                     this.pressureAtDecision - pressure
@@ -160,8 +160,8 @@ export class RunMemoryControl {
                 this.pressureAtDecision = null;
             }
 
-            const t = resolveThresholds();
-            const plan = planShedding(reading, this.inventory(opts), this.calibration, t.ShedAbove, t.ShedDownTo);
+            const t = ResolveThresholds();
+            const plan = PlanShedding(reading, this.inventory(opts), this.calibration, t.ShedAbove, t.ShedDownTo);
             if (plan.Levers.length === 0 && !plan.Exhausted) {
                 if (this.shedding && reading.HostTotalBytes && pressure / reading.HostTotalBytes < t.ShedDownTo) {
                     this.recover(now);
@@ -230,8 +230,8 @@ export class RunMemoryControl {
         HonoursBatchSize: boolean;
     }): Contributor[] {
         if (opts.ObservedRecords < MIN_SAMPLE_RECORDS) return [];
-        const perRecord = estimateBytesPerRecord(opts.SampleRecord);
-        const thisMap = estimateEntityMapBytes(opts.ObservedRecords, perRecord);
+        const perRecord = EstimateBytesPerRecord(opts.SampleRecord);
+        const thisMap = EstimateEntityMapBytes(opts.ObservedRecords, perRecord);
         if (thisMap <= 0) return [];
 
         const others = Math.max(0, this.hooks.CurrentInFlight() - 1);
@@ -246,7 +246,7 @@ export class RunMemoryControl {
                 LatencyBatches: 0,
                 Reversible: true
             },
-            batchSizeLever(opts.EntityMapID, thisMap, opts.HonoursBatchSize)
+            BatchSizeLever(opts.EntityMapID, thisMap, opts.HonoursBatchSize)
         ];
         if (others > 0) {
             levers.push({
