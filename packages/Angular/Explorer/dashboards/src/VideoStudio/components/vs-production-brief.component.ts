@@ -21,7 +21,7 @@ import {
   VideoStudioSetupHealthOperation,
   VideoStudioSetupHealthOutput,
 } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
 import {
   FormatVideoTime,
   FormatVideoTimeRange,
@@ -548,8 +548,9 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
         const refreshed = activeKits.map((k) =>
           MapBrandKitToCard(k, bkEngine.GetAssets?.(k.ID)),
         );
-        const existingExtra = this.AllBrandKits.filter(
-          (existing) => !refreshed.some((r) => UUIDsEqual(r.ID, existing.ID)),
+        const existingExtra = ExcludeByUUIDs(
+          this.AllBrandKits,
+          refreshed.map((r) => r.ID),
         );
         this.AllBrandKits = [...refreshed, ...existingExtra];
       }
@@ -628,8 +629,9 @@ export class VSProductionBriefComponent extends BaseAngularComponent implements 
         const refreshed = activeArchetypes.map((a: MJVideoArchetypeEntity) =>
           MapArchetypeToCard(a),
         );
-        const existingExtra = this.AllArchetypes.filter(
-          (existing) => !refreshed.some((r) => UUIDsEqual(r.ID, existing.ID)),
+        const existingExtra = ExcludeByUUIDs(
+          this.AllArchetypes,
+          refreshed.map((r) => r.ID),
         );
         this.AllArchetypes = [...refreshed, ...existingExtra];
       }

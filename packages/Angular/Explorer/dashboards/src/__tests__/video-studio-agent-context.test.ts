@@ -453,9 +453,17 @@ describe('FilterArchetypeCards, GroupArchetypesByCategory & BuildArchetypesAgent
         const k1 = DeriveBeatKeyFromLabel('Call to Action!', 1, used);
         const k2 = DeriveBeatKeyFromLabel('Call to Action!', 2, used);
         const k3 = DeriveBeatKeyFromLabel('   ', 3, used);
+        const k4 = DeriveBeatKeyFromLabel('___Key Metric (Q3)___', 4, used);
         expect(k1).toBe('call_to_action');
         expect(k2).toBe('call_to_action_2');
         expect(k3).toBe('beat_3');
+        expect(k4).toBe('key_metric_q3');
+
+        const startMs = Date.now();
+        const k10k = DeriveBeatKeyFromLabel('_'.repeat(10_000), 1);
+        const elapsedMs = Date.now() - startMs;
+        expect(k10k).toBe('beat_1');
+        expect(elapsedMs).toBeLessThan(50);
     });
 });
 

@@ -926,7 +926,8 @@ export function DeriveBeatKeyFromLabel(
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '');
+        .replace(/^_/, '')
+        .replace(/_$/, '');
     const baseKey = cleaned || `beat_${Math.max(1, fallbackIndex)}`;
     if (!usedKeys) {
         return baseKey;
