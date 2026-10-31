@@ -13,6 +13,7 @@ import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromote
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
+import { IntrospectInCatalogScope } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -2046,10 +2047,25 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object
+      // Introspect schema ONCE for the entire connector, then reuse per object.
+      //
+      // IN THE CONNECTION'S CATALOG SCOPE. This runs at process start, outside any request, so
+      // nothing upstream has entered a scope for it — and an unscoped catalog read falls back to
+      // the SHARED catalog by design. That would build these field maps from the connector's
+      // declared fields alone: every column this connection's own discovery sampled would get a
+      // table column from the RSU (built in scope, from the per-connection rows) but no field map,
+      // and its values would land in the overflow JSON instead of the column. Observed on the
+      // sandbox 2026-09-11: 487 declared fields, 556 per-connection — 69 columns that this read
+      // would have silently left unmapped. Entering the scope is not enough on a fresh process:
+      // IntrospectInCatalogScope loads the catalog and warms each object's fields first.
       const introspect = connector.IntrospectSchema.bind(connector) as
         (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await introspect(companyIntegration, systemUser);
+      const schema = await IntrospectInCatalogScope(
+        item.CompanyIntegrationID,
+        item.SourceObjectNames,
+        () => introspect(companyIntegration, systemUser),
+        systemUser,
+      );
 
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);

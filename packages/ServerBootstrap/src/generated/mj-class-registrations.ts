@@ -1204,13 +1204,14 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/content-autotagging (6 classes)
+// @memberjunction/content-autotagging (7 classes)
 import {
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
@@ -2584,6 +2585,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
 const CLASS_REGISTRATIONS_4: any[] = [
     AutotagLocalFileSystem,
     AutotagRSSFeed,
+    AutotagUpload,
     AutotagWebsite,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
@@ -2781,11 +2783,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
-    MJRubricScaleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
     MJSearchScopeEntityServer,
@@ -2985,11 +2987,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     UpdateRecordAction,
     ValidateAddressAction,
     ValidateEmailUniqueAction,
-    VectorizeEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    VectorizeEntityAction,
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
@@ -3037,7 +3039,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1230;
+export const CLASS_REGISTRATIONS_COUNT = 1231;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
