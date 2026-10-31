@@ -105,6 +105,12 @@ describe('agents.Run', () => {
         expect(sent.TrustReservedRunData).toBeUndefined();
     });
 
+    it("passes the calling run's host-assigned search scopes to the nested agent", async () => {
+        const handlers = BuildRuntimeActionBridgeHandlers(contextWith({ ...RUN_SCOPE, SearchScopeIDs: ['scope-1'] }));
+        await handlers['agents.Run']({ AgentName: 'Helper' });
+        expect(runAgentSpy.mock.calls[0][0].SearchScopeIDs).toEqual(['scope-1']);
+    });
+
     it('starts the nested agent unscoped outside an agent run', async () => {
         const handlers = BuildRuntimeActionBridgeHandlers(contextWith());
         await handlers['agents.Run']({ AgentName: 'Helper' });

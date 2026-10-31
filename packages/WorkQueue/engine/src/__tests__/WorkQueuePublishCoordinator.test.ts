@@ -160,13 +160,34 @@ describe('WorkQueuePublishCoordinator on the Database transport', () => {
     });
 
     it("uses the caller's executor when one is provided", async () => {
-        const { coordinator, driver, executor } = Setup();
+        const { coordinator, driver, executor, notified } = Setup();
         const caller = new RecordingExecutor();
         await coordinator.Publish('import.ready', [{}], { ...INTERNAL, CallerExecutor: caller });
         const options = driver.Calls[0].Options;
         expect(IsDatabaseTransportPublishOptions(options) && options.Executor).toBe(caller);
         expect(executor.Events).toEqual([]);
         expect(caller.Events).toEqual(['begin', 'commit']);
+        expect(notified).toEqual(['import.ready']);
+    });
+
+    it('defers NotifyPublished until the caller outer transaction commits, and drops it on rollback', async () => {
+        const { coordinator, notified } = Setup();
+        const caller = new RecordingExecutor();
+
+        // Case 1: Outer transaction commits -> NotifyPublished fires only after outer.Commit()
+        const outerCommit = await caller.BeginEntityTransaction();
+        await coordinator.Publish('import.ready', [{ Payload: { step: 1 } }], { ...INTERNAL, CallerExecutor: caller });
+        expect(notified).toEqual([]);
+        await outerCommit.Commit();
+        expect(notified).toEqual(['import.ready']);
+
+        // Case 2: Outer transaction rolls back -> NotifyPublished is discarded
+        notified.length = 0;
+        const outerRollback = await caller.BeginEntityTransaction();
+        await coordinator.Publish('import.ready', [{ Payload: { step: 2 } }], { ...INTERNAL, CallerExecutor: caller });
+        expect(notified).toEqual([]);
+        await outerRollback.Rollback();
+        expect(notified).toEqual([]);
     });
 
     it("asks the driver for the whole batch's publish-order locks before the first enlisted message", async () => {

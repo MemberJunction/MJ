@@ -282,6 +282,7 @@ class FlowHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             GetSkillsForAgent: (): unknown[] => [],
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (): unknown => undefined,
             SetAgentBaseCatalog: (): void => undefined,
             GetAgentSteps: (agentId: string, status?: string): StepRow[] =>

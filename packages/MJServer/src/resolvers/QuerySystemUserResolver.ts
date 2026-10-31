@@ -375,7 +375,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         if (input.ParameterHints && input.ParameterHints.length > 0) {
             record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
         }
-        this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
+        this.ListenForEntityMessages(record, pubSub, context.userPayload);
         return record;
     }
 

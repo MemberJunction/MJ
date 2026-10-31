@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { mkdirSync } from 'fs';
+import { ComputeRemoteOperationContractFingerprint } from '@memberjunction/core';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { ordinalCompare } from '@memberjunction/global';
 import { logError } from './status_logging';
@@ -11,7 +12,12 @@ import { logError } from './status_logging';
  * generation prompt (`remote-operation-generation.template.md`) advertises the same defaults, so the model
  * never declares them. All are exported by `@memberjunction/core`.
  */
-export const DEFAULT_REMOTE_OP_LIBRARY_ITEMS: ReadonlyArray<string> = ['RunView', 'Metadata', 'RunQuery'];
+export const DEFAULT_REMOTE_OP_LIBRARY_ITEMS: ReadonlyArray<string> = [
+    'RunView',
+    'Metadata',
+    'RunQuery',
+    'RemoteOperationError',
+];
 
 /**
  * Minimal entity descriptor shape needed to resolve a Remote Operation's schema.
@@ -328,7 +334,7 @@ export class RemoteOperationGeneratorBase {
 
         add('@memberjunction/core', ['BaseRemotableOperation']);
         if (anyBody) {
-            add('@memberjunction/core', ['IMetadataProvider', 'UserInfo', ...DEFAULT_REMOTE_OP_LIBRARY_ITEMS]);
+            add('@memberjunction/core', ['IMetadataProvider', 'RemoteOpServerContext', 'UserInfo', ...DEFAULT_REMOTE_OP_LIBRARY_ITEMS]);
             add('@memberjunction/global', ['RegisterClass']);
             for (const op of ops) {
                 if (this.hasGeneratedBody(op)) {
@@ -384,7 +390,7 @@ ${jsdoc}
 export class ${className} extends BaseRemotableOperation<${inputName}, ${outputName}> {
 ${members}
 
-    protected async InternalExecute(input: ${inputName}, provider: IMetadataProvider, user: UserInfo): Promise<${outputName}> {
+    protected async InternalExecute(input: ${inputName}, provider: IMetadataProvider, user: UserInfo, context: RemoteOpServerContext): Promise<${outputName}> {
         ${body}
     }
 }
@@ -413,10 +419,21 @@ ${members}
     protected buildMembers(op: MJRemoteOperationEntity): string {
         const execMode = op.ExecutionMode === 'LongRunning' ? "'LongRunning'" : "'Sync'";
         const scopeLine = op.RequiredScope ? `\n    public readonly RequiredScope = ${JSON.stringify(op.RequiredScope)};` : '';
+        const fingerprint = ComputeRemoteOperationContractFingerprint({
+            OperationKey: op.OperationKey,
+            ExecutionMode: op.ExecutionMode,
+            InputTypeName: op.InputTypeName,
+            InputTypeDefinition: op.InputTypeDefinition,
+            InputTypeIsArray: op.InputTypeIsArray,
+            OutputTypeName: op.OutputTypeName,
+            OutputTypeDefinition: op.OutputTypeDefinition,
+            OutputTypeIsArray: op.OutputTypeIsArray,
+        });
         return (
             `    public readonly OperationKey = ${JSON.stringify(op.OperationKey)};\n` +
             `    public readonly ExecutionMode = ${execMode} as const;${scopeLine}\n` +
-            `    public readonly RequiresSystemUser = ${op.RequiresSystemUser ? 'true' : 'false'};`
+            `    public readonly RequiresSystemUser = ${op.RequiresSystemUser ? 'true' : 'false'};\n` +
+            `    public readonly ContractFingerprint = ${JSON.stringify(fingerprint)};`
         );
     }
 }

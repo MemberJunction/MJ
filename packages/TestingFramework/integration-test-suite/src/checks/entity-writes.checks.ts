@@ -659,19 +659,27 @@ export const EntityWritesChecks: NamedCheck[] = [
             const isGraphQLTransport = typeof (ctx.Provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function';
 
             // Helper that runs entity.Save() directly over GraphQLDataProvider when on client transport,
-            // or executes the identical delta extraction + DB-truth merge in-process when on server transport.
+            // or executes the identical delta extraction + optimistic concurrency check + DB-truth merge
+            // in-process when on server transport.
             const saveDelta = async (clientEntity: MJActionCategoryEntity): Promise<boolean> => {
                 if (isGraphQLTransport) {
                     return clientEntity.Save();
                 }
-                const deltaInput: Record<string, unknown> = {};
-                for (const field of clientEntity.Fields) {
-                    if (field.IsPrimaryKey || (!field.ReadOnly && field.Dirty && !field.NotLoaded)) {
-                        deltaInput[field.Name] = field.Value;
-                    }
-                }
                 const serverEntity = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
                 Assert(await serverEntity.Load(clientEntity.ID), 'EW12 server truth Load failed');
+                const serverValues = serverEntity.GetAll();
+                const deltaInput: Record<string, string | number | boolean | Date | null> = {};
+                for (const field of clientEntity.Fields) {
+                    if (field.IsPrimaryKey || (!field.ReadOnly && field.Dirty && !field.NotLoaded)) {
+                        if (!field.IsPrimaryKey) {
+                            const dbVal = serverValues[field.Name];
+                            if (field.OldValue !== dbVal && field.Value !== dbVal) {
+                                return false;
+                            }
+                        }
+                        deltaInput[field.Name] = field.Value as string | number | boolean | Date | null;
+                    }
+                }
                 serverEntity.SetMany(deltaInput);
                 const ok = await serverEntity.Save();
                 if (ok) {
@@ -719,8 +727,9 @@ export const EntityWritesChecks: NamedCheck[] = [
             AssertEqual(verifyMerged.Status, 'Pending', 'EW12 DB Status reflects catB update');
 
             // 3) Overlapping concurrent update on the SAME field (Description): load catC while Description
-            //    is 'EW12 Initial Description', update Description via catA first, then update Description
-            //    via stale catC. Server loads DB truth, detects the OldValues___ overlap on Description,
+            //    is 'EW12 Initial Description', update Description via catA first, then attempt an overlapping
+            //    update via stale catC. Server detects the OldValues___ conflict on Description and rejects
+            //    the stale overwrite (preserving 'EW12 Writer 1'); after reloading DB truth, catC saves cleanly
             //    and records the true DB oldValue ('EW12 Writer 1') in Record Changes.
             const catC = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
             Assert(await catC.Load(catA.ID), 'EW12 catC Load failed');
@@ -729,8 +738,18 @@ export const EntityWritesChecks: NamedCheck[] = [
             Assert(await saveDelta(catA), `EW12 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
             catC.Description = 'EW12 Writer 2 (Overlapping)';
-            Assert(await saveDelta(catC), `EW12 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated (last-write-wins on overlapping field)');
+            const staleSaveSucceeded = await saveDelta(catC);
+            Assert(!staleSaveSucceeded, 'EW12 stale catC overlapping save should be rejected with CONCURRENT_MODIFICATION_CONFLICT');
+
+            const verifyNotClobbered = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await verifyNotClobbered.Load(catA.ID), 'EW12 verifyNotClobbered Load failed');
+            AssertEqual(verifyNotClobbered.Description, 'EW12 Writer 1', 'EW12 Writer 1 preserved when stale overlapping write is rejected');
+
+            // Reload DB truth on catC and complete the update cleanly
+            Assert(await catC.Load(catA.ID), 'EW12 catC reload failed');
+            catC.Description = 'EW12 Writer 2 (Overlapping)';
+            Assert(await saveDelta(catC), `EW12 catC Writer 2 save after reload failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated after reload');
             AssertEqual(catC.Status, 'Pending', 'EW12 catC untouched Status preserved');
 
             // Poll Record Changes until all 5 rows (1 Create + 4 Updates) land

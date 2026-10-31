@@ -3778,7 +3778,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // These rows are the cache's shared, deep-frozen objects — the runtime freeze is
                 // what stops a consumer from corrupting the cache. Anything that needs to
                 // transform them must map onto copies.
-                let results = cached.results;
+                // Materialize any encrypted fields stored as ciphertext at rest before projection.
+                let results = await this.MaterializeCachedRowsForCaller(
+                    cached.results as Record<string, unknown>[],
+                    entity,
+                    contextUser,
+                    Boolean(params.PreserveRestrictedApiCiphertext),
+                );
                 if (projectedCallerFields && params.ResultType !== 'entity_object') {
                     results = ProjectRowsToFields(results, projectedCallerFields);
                 }
@@ -4020,7 +4026,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
                     // Shared, deep-frozen cache rows — same contract as the single-view hit path.
-                    let results = cached.results;
+                    let results = await this.MaterializeCachedRowsForCaller(
+                        cached.results as Record<string, unknown>[],
+                        batchEntity,
+                        contextUser,
+                        Boolean(param.PreserveRestrictedApiCiphertext),
+                    );
                     if (projectedCallerFields && param.ResultType !== 'entity_object') {
                         results = ProjectRowsToFields(results, projectedCallerFields);
                     }
@@ -4535,6 +4546,33 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param preResult - The pre-processing result
      * @param contextUser - Optional user context
      */
+    /**
+     * Hook allowing server database providers to substitute pre-decryption (ciphertext-preserving)
+     * rows before storing view results in {@link LocalCacheManager} / Redis, ensuring decrypted
+     * plaintext secrets are never persisted in local or shared caches.
+     *
+     * Client-side providers inherit this default identity implementation.
+     */
+    protected PrepareRowsForCacheStorage(rows: unknown[], _entityInfo?: EntityInfo): unknown[] {
+        return rows;
+    }
+
+    /**
+     * Hook allowing server database providers to decrypt ciphertext-at-rest rows retrieved from
+     * {@link LocalCacheManager} for in-process callers (or selectively preserve restricted
+     * ciphertext when `preserveRestrictedApiCiphertext` is `true`).
+     *
+     * Client-side providers inherit this default identity implementation.
+     */
+    protected async MaterializeCachedRowsForCaller(
+        rows: Record<string, unknown>[],
+        _entityInfo?: EntityInfo,
+        _contextUser?: UserInfo,
+        _preserveRestrictedApiCiphertext?: boolean,
+    ): Promise<Record<string, unknown>[]> {
+        return rows;
+    }
+
     protected async PostRunView(
         result: RunViewResult,
         params: RunViewParams,
@@ -4548,13 +4586,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // entity objects when ResultType === 'entity_object'.
         // preResult.populateCache records PreRunView's widening decision so narrow Fields
         // queries (without CacheLocal: true) never poison the Fields-agnostic superset slot.
+        const resolvedEntity = this.resolveEntityForRunViewParams(params);
         const shouldPopulateSlot = preResult.populateCache ?? this.shouldWidenAndPopulateCache(params);
         if (shouldPopulateSlot && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
                 params,
-                result.Results,
+                this.PrepareRowsForCacheStorage(result.Results, resolvedEntity),
                 maxUpdatedAt,
                 result.AggregateResults,
                 result.TotalRowCount,
@@ -4569,7 +4608,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await LocalCacheManager.Instance.SetRunViewResult(
                 fingerprint,
                 params,
-                result.Results,
+                this.PrepareRowsForCacheStorage(result.Results, resolvedEntity),
                 maxUpdatedAt,
                 result.AggregateResults,
                 result.TotalRowCount,
@@ -4669,6 +4708,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // CRITICAL: must reflect the SAME widening predicate PreRunViews used to decide
             // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
             // result here poisons the Fields-agnostic superset slot.
+            const itemEntity = this.resolveEntityForRunViewParams(params[i]);
             const shouldPopulateBatchSlot = preResult.populateCacheSet
                 ? preResult.populateCacheSet.has(i)
                 : this.shouldWidenAndPopulateCache(params[i]);
@@ -4677,7 +4717,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
                     params[i],
-                    results[i].Results,
+                    this.PrepareRowsForCacheStorage(results[i].Results, itemEntity),
                     maxUpdatedAt,
                     results[i].AggregateResults,
                     results[i].TotalRowCount,
@@ -4688,7 +4728,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
                     params[i],
-                    results[i].Results,
+                    this.PrepareRowsForCacheStorage(results[i].Results, itemEntity),
                     maxUpdatedAt,
                     results[i].AggregateResults,
                     results[i].TotalRowCount,
@@ -5349,6 +5389,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Resolves the {@link EntityInfo} normalization should read field types from, using only
      * synchronously available information on the params.
      */
+    protected resolveEntityForRunViewParams(param: RunViewParams): EntityInfo | undefined {
+        return this.resolveEntityForNormalization(param);
+    }
+
     private resolveEntityForNormalization(param: RunViewParams): EntityInfo | undefined {
         if (param.EntityName) {
             return this.EntityByName(param.EntityName);

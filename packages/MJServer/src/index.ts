@@ -70,7 +70,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
 import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
+import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
   HANDOFF_OFFER_FANOUT_CHANNEL,
   HANDOFF_OFFER_TOPIC,
@@ -86,6 +86,7 @@ import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResol
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
+import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -100,7 +101,20 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import {
+  ServerExtensionLoader,
+  ServerExtensionConfig,
+  SERVER_EXTENSION_CORE_SERVICE_KEYS,
+  type IServerExtensionHostRuntimeService,
+  mergeServerExtensionConfigs,
+  prepareServerExtensionConfigs,
+  describeServerExtensionMount,
+  InstallMediaUpgradeDispatcher,
+  IsGraphQLWsPath,
+  GetCorsOwningServerExtensionRoots,
+} from '@memberjunction/server-extensions-core';
+import { CreateIsolatedProvider } from './isolatedProvider.js';
+import { ResolveConfiguredPrincipal } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -343,8 +357,6 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
-/** How often to re-check for conversation details left behind by finished runs. */
-const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -1368,6 +1380,19 @@ const setupComplete$ = new ReplaySubject(1);
   const extensionLoader = new ServerExtensionLoader();
   _currentExtensionLoader = extensionLoader;
 
+  const hostRuntimeService: IServerExtensionHostRuntimeService = {
+    CreateIsolatedProvider,
+    GetSystemUser: () => getSystemUser(),
+    ResolvePrincipal: (configuredEmailOrId, subsystemLabel) => ResolveConfiguredPrincipal(configuredEmailOrId, subsystemLabel),
+  };
+  extensionLoader.Services.RegisterService(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime, hostRuntimeService);
+  if (coreAuthenticatedRouters.MagicLinkService) {
+    extensionLoader.Services.RegisterService(
+      SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink,
+      coreAuthenticatedRouters.MagicLinkService,
+    );
+  }
+
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
@@ -1623,6 +1648,11 @@ const setupComplete$ = new ReplaySubject(1);
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
 
+  // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
+  AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
+  ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
+
   // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
   //
   // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
@@ -1722,23 +1752,15 @@ const setupComplete$ = new ReplaySubject(1);
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       const sweepUser = resumeUser;
       const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser, configInfo.agentRunWatchdog)
         .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
 
       // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
       // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
       // beside a message that still claims to be generating, and it spins forever for anyone who
-      // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
-      // mirroring the watchdog's own two-phase shape.
-      const reconcileOrphans = () =>
-        ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
-          .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
-      void reconcileOrphans();
-      const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
-      ShutdownRegistry.Instance.Register({
-        ShutdownName: 'OrphanDetailReconciler',
-        Shutdown: () => { clearInterval(orphanDetailTimer); },
-      });
+      // opens it. Runs at boot (closes restart orphans) and, unless `conversationDetailReconciler.enabled`
+      // is false, on a timer (closes mid-life orphans), mirroring the watchdog's own two-phase shape.
+      StartOrphanedConversationDetailReconciler(sweepProvider, sweepUser, configInfo.conversationDetailReconciler);
     }
 
     // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
@@ -1746,11 +1768,12 @@ const setupComplete$ = new ReplaySubject(1);
     // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
     // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-      SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      // `agentSessions.janitor.enabled: false` keeps the boot recovery and shutdown drain but schedules no tick.
+      SessionJanitor.Instance.StartWithSettings(configInfo.agentSessions.janitor, Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
         .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
       // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
       // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
-      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser, configInfo.agentSessions.bridgeReconciler); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
     }
   }
 
