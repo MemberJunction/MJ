@@ -53,3 +53,16 @@ describe('UnitModelLineageParser.ParseUnitModelLineage', () => {
     expect(r.Ok === false && r.Errors[0]).toMatch(/predictionUnitId/);
   });
 });
+
+describe('UnitModelLineageParser.IsLegacyLineage', () => {
+  const steps = { Steps: [{ Id: 'select-raw', Kind: 'select', Columns: ['Plan'] }] };
+  it('reads the legacy feature graph without a unit as a legacy lineage', () => {
+    expect(UnitModelLineageParser.IsLegacyLineage(JSON.stringify({ pipelineId: 'p', targetEntityName: 'Years', featureSteps: steps }))).toBe(true);
+  });
+  it('never reads a lineage that names a unit as legacy, even beside the feature graph', () => {
+    expect(UnitModelLineageParser.IsLegacyLineage(stored({ featureSteps: steps }))).toBe(false);
+  });
+  it('never reads a lineage without the feature graph, or one that is missing or not JSON, as legacy', () => {
+    expect([JSON.stringify({ pipelineId: 'p' }), '', null, '{not json'].map((t) => UnitModelLineageParser.IsLegacyLineage(t))).toEqual([false, false, false, false]);
+  });
+});
