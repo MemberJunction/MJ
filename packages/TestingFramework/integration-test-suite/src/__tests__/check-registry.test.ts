@@ -96,6 +96,10 @@ import { QueryApiLifecycleChecks } from '../checks/query-api-lifecycle.checks';
 import { QuerySecurityChecks } from '../checks/query-security.checks';
 import { SqlPipeMatrixChecks, SqlPipeMatrixCrossChecks } from '../checks/sqlpipe-matrix.checks';
 import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.checks';
+import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
+import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
+import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
+import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
 import { SqlPipeExtractionFixtureChecks } from '../checks/sqlpipe-extraction-fixtures.checks';
 import { AgentExecutionPrimitivesChecks } from '../checks/agent-execution-primitives.checks';
 import { AgentExecutionPrimitivesLiveChecks } from '../checks/agent-execution-primitives-live.checks';
@@ -264,6 +268,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['sqlpipe-matrix-cross', SqlPipeMatrixCrossChecks, 4], // SPM2-SPM4 full cross products, SPM5 extraction properties (IT146)
         ['agent-execution-primitives', AgentExecutionPrimitivesChecks, 6], // AEP1-AEP6 native tool-calling JSON bridge, multi-step loop steps[], durable TaskGraph settlement, Flow graduation round-trip (IT147)
         ['agent-execution-primitives-live', AgentExecutionPrimitivesLiveChecks, 4], // AEPL1-AEPL4 live native-tool-calling providers running Pipeline, multi-step ForEach, and durable Tasks (IT148)
+        ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT158)
+        ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
+        ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
+        ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -352,22 +360,26 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-immutability': 15,
         'calendar-event-links': 2,
         'chief-of-staff': 8,
+        'ciphertext-cache': 5,
         'class-resolution': 5,
         'client-cache': 14,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
+        'concurrency-conflict-client': 5,
         'concurrent': 2,
         'content-pipeline': 15,
         'content-vectorization': 10,
         'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
+        'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
         'entity-server-invariants': 9,
+        'entity-status-fanout-client': 3,
         'entity-writes': 13,
         'feature-pipeline-core': 9,
         'feature-value-only': 5,
@@ -507,7 +519,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(173);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(177);
     });
 });
 
@@ -567,8 +579,18 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-gauntlet.CG7',
         'cache-gauntlet.CG8',
         'cache-immutability.F12',
+        'ciphertext-cache.CT0',
+        'ciphertext-cache.CT1',
+        'ciphertext-cache.CT2',
+        'ciphertext-cache.CT3',
+        'ciphertext-cache.CT4',
         'client-cache.C10',
         'client-cache.C14',
+        'concurrency-conflict-client.CC1',
+        'concurrency-conflict-client.CC2',
+        'concurrency-conflict-client.CC3',
+        'concurrency-conflict-client.CC4',
+        'concurrency-conflict-client.CC5',
         'content-pipeline.CP1',
         'content-pipeline.CP10',
         'content-pipeline.CP11',
@@ -606,6 +628,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-authorship-client.CA7',
         'conversation-authorship-client.CA8',
         'conversation-authorship-client.CA9',
+        'encrypted-read-client.ER1',
+        'encrypted-read-client.ER2',
+        'encrypted-read-client.ER3',
+        'encrypted-read-client.ER4',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -639,6 +665,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI3',
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
+        'entity-status-fanout-client.SF1',
+        'entity-status-fanout-client.SF2',
+        'entity-status-fanout-client.SF3',
         'entity-writes.EW1',
         'entity-writes.EW10',
         'entity-writes.EW11',
