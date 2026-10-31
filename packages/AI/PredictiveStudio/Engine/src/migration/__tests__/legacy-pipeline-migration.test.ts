@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { ADVERSE_CLASS_HOLD_REASON, LegacyPipelines } from '@memberjunction/predictive-studio-core';
+import { ADVERSE_CLASS_HOLD_REASON, LegacyPipelines, TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
 import { PredictionUnitRowReader } from '../../prediction-unit/unit-row-reader';
 import { PipelineMigration, type IPipelineMigrationReads, type MigrationDeps } from '../legacy-pipeline-migration';
 import type { AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
@@ -143,6 +143,17 @@ describe('PipelineMigration.EnsurePipelineUnitAndProtocol', () => {
     const again = await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, { ...deps, Today: '2026-10-21' }, false);
     expect([first.Action, first.Reason, again.Action, p.Saves, factory.Units.Rows.length]).toEqual(['held', ADVERSE_CLASS_HOLD_REASON, 'held', 1, 0]);
     expect(p.Description).toBe(`Truth fixture\nHeld by the Prediction Unit migration on 2026-10-20: ${ADVERSE_CLASS_HOLD_REASON}.`);
+  });
+
+  it('holds a time-indexed pipeline with the decision-form line and writes no unit or protocol', async () => {
+    const { deps, factory } = setup();
+    const p = new LegacyPipeline();
+    p.AsOfStrategy = null;
+    p.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'StartDate' });
+    const r = await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, false);
+    expect([r.Action, r.Reason, p.PredictionUnitID, p.EvaluationProtocolID, factory.Units.Rows.length, factory.Protocols.length]).toEqual(['held', TIME_INDEX_HOLD_REASON, null, null, 0, 0]);
+    expect(p.Description).toBe(`Truth fixture\nHeld by the Prediction Unit migration on 2026-10-20: ${TIME_INDEX_HOLD_REASON}.`);
+    expect(await PipelineMigration.BindMigratedUnit(p.Entity, deps)).toEqual({ Ok: false, Reason: TIME_INDEX_HOLD_REASON });
   });
 
   it('deletes the unit and restores the pipeline when binding the unit fails, so a re-run creates exactly one unit', async () => {

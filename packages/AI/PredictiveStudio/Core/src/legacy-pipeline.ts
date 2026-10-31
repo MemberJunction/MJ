@@ -20,6 +20,9 @@ import { UtcDay, type CellValue } from './utc-day';
 export const ADVERSE_CLASS_HOLD_REASON =
   'adverse class undetermined: no OutcomeConfig polarity or red/green class style on the pipeline, its newest model or the target name; set FeatureSteps.OutcomeConfig.Polarity (or OutcomeStyles) and run this Action again';
 
+/** Why a pipeline that declares a time index is held: a random holdout over time-ordered rows would clear it unevaluated. */
+export const TIME_INDEX_HOLD_REASON = 'a time-indexed pipeline needs a forecast unit with a rolling-origin protocol';
+
 /** The holdout share used when a pipeline's ValidationStrategy names none. */
 export const LEGACY_DEFAULT_HOLDOUT_SHARE = 0.25;
 /** The smallest and largest holdout share a migrated protocol takes (the legacy fraction is clamped to them). */
@@ -36,6 +39,8 @@ export interface LegacyPipelineFields {
   /** `string`, not the two-valued union: an older database also holds `sequence`. */
   readonly ProblemType: string;
   readonly AsOfStrategy: string | null;
+  /** Read for its `TimeIndexColumn`: a pipeline that declares one is held. */
+  readonly ValidationStrategy: string | null;
 }
 
 /** Where a migrated unit's adverse class came from, in the legacy engine's order of precedence. */
@@ -198,12 +203,14 @@ export class LegacyPipelines {
     return { Kind: 'undetermined', Reason: ADVERSE_CLASS_HOLD_REASON };
   }
 
-  /** The decision-date column a pipeline's AsOfStrategy names (null for none), or why it has no unit form. */
+  /** The decision-date column a pipeline's AsOfStrategy names (null for none), or why it gets no unit (no form, or a declared time index). */
   private static decisionColumn(p: LegacyPipelineFields): LegacyDecisionColumn {
     if (p.ProblemType === 'sequence') return { Kind: 'archive', Reason: 'an HMM latent state has no outcome window' };
     const asOf = LegacyPipelines.readObject(p.AsOfStrategy);
     const mode = asOf === null ? 'none' : JsonParse.JsonString(asOf, 'Mode') || 'none';
     if (mode === 'offset') return { Kind: 'archive', Reason: 'offset as-of cannot be expressed as a Prediction Unit' };
+    const validation = LegacyPipelines.readObject(p.ValidationStrategy);
+    if (validation !== null && JsonParse.JsonString(validation, 'TimeIndexColumn') !== null) return { Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON };
     if (mode !== 'column' || asOf === null) return { Kind: 'column', Column: null };
     const column = JsonParse.JsonString(asOf, 'Column');
     return column === null ? { Kind: 'archive', Reason: 'AsOfStrategy column mode names no column' } : { Kind: 'column', Column: column };

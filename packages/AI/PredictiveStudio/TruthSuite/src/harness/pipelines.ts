@@ -4,6 +4,7 @@ import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MetadataEntityFactory, PipelineMigration } from '@memberjunction/predictive-studio';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
+  TIME_INDEX_HOLD_REASON,
   UtcDay,
   type CandidateFeatureKind,
   type FeatureStepGraph,
@@ -50,9 +51,10 @@ export class HarnessPipelines {
   /**
    * Creates and saves a truth-suite pipeline from a spec; throws with the save's message when it fails. A pipeline
    * without an as-of (`AsOf.Mode === 'none'`) is then given version 1 of its Prediction Unit and Evaluation Protocol by
-   * the pipeline migration, as every existing pipeline is, so it trains on the unit path; anything but `migrated` is a
-   * harness error, never a measured outcome. A pipeline with an as-of stays unbound on purpose: G0.8 measures that it
-   * is refused (`UNIT_REQUIRED`).
+   * the pipeline migration, as every existing pipeline is, so it trains on the unit path. A pipeline that declares a time
+   * index is held by the migration (no unit, the held line in its Description) and stays unbound: G0.11 measures that it
+   * is refused. Any other outcome than `migrated` or that hold is a harness error, never a measured outcome. A pipeline
+   * with an as-of stays unbound on purpose: G0.8 measures that it is refused (`UNIT_REQUIRED`).
    */
   public static async CreatePipeline(
     provider: GraphQLDataProvider,
@@ -93,6 +95,7 @@ export class HarnessPipelines {
   private static async migrate(provider: GraphQLDataProvider, user: UserInfo, p: MJMLTrainingPipelineEntity): Promise<void> {
     const deps = { Provider: provider, User: user, EntityFactory: new MetadataEntityFactory(provider), Today: UtcDay.UtcDayIso(new Date()) };
     const row = await PipelineMigration.EnsurePipelineUnitAndProtocol(p, deps, false);
+    if (row.Action === 'held' && row.Reason === TIME_INDEX_HOLD_REASON) return;
     if (row.Action !== 'migrated') throw new Error(`pipeline ${p.Name}: the migration ${row.Action} it (${row.Reason || 'no reason'}), so it cannot train under a unit`);
   }
 }

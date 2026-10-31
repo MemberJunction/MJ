@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  LegacyPipelines, LEGACY_PROTOCOL_SEED,
+  LegacyPipelines, LEGACY_PROTOCOL_SEED, TIME_INDEX_HOLD_REASON,
   type LegacyOutcomeInputs, type LegacyPipelineFields,
 } from '../legacy-pipeline';
 import { PredictionUnit } from '../prediction-unit';
@@ -9,7 +9,7 @@ import { EvaluationProtocolRules } from '../evaluation-protocol-rules';
 
 const pipeline = (over: Partial<LegacyPipelineFields> = {}): LegacyPipelineFields => ({
   Name: 'Member Renewal Risk', TargetEntity: 'Membership Years', TargetVariable: 'Renewed', ProblemType: 'classification',
-  AsOfStrategy: JSON.stringify({ Mode: 'column', Column: 'StartDate' }), ...over,
+  AsOfStrategy: JSON.stringify({ Mode: 'column', Column: 'StartDate' }), ValidationStrategy: null, ...over,
 });
 const outcome = (over: Partial<LegacyOutcomeInputs> = {}): LegacyOutcomeInputs => ({
   FeatureSteps: null, Hyperparameters: null, ModelLineage: null, TargetVariable: 'Renewed', ProblemType: 'classification', ...over,
@@ -166,5 +166,16 @@ describe('ClassLabel and LegacyProtocolDraft', () => {
     const plain = LegacyPipelines.LegacyProtocolInputs(null, null, null, []);
     if (plain.Kind !== 'protocol') throw new Error(plain.Reason);
     expect(LegacyPipelines.LegacyProtocolDraft(parsed.Value, plain, 'x').innerValidation).toEqual(EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: parsed.Value, Holdout: plain.Holdout, Candidates: 1, Seed: 0, Name: 'x' }).innerValidation);
+  });
+});
+
+describe('LegacyUnitInputs for a time-indexed pipeline', () => {
+  it('holds a pipeline that declares a time index, and archives what has no unit form before that', () => {
+    const indexed = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression', ValidationStrategy: indexed }), [], '2026-10-20', []))
+      .toEqual({ Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON });
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'sequence', ValidationStrategy: indexed }), [], '2026-10-20', [])).toMatchObject({ Kind: 'archive' });
+    const plain = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression', ValidationStrategy: JSON.stringify({ TimeIndexColumn: '' }) }), [], '2026-10-20', []);
+    expect(plain.Kind).toBe('unit');
   });
 });

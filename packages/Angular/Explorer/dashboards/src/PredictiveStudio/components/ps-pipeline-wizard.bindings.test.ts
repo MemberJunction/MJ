@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { ADVERSE_CLASS_HOLD_REASON } from '@memberjunction/predictive-studio-core';
+import { ADVERSE_CLASS_HOLD_REASON, TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
 import { PipelineWizardBindings, type WizardPipelineFields } from './ps-pipeline-wizard.bindings';
 
 type Cell = string | number | boolean | Date | null;
@@ -91,6 +91,10 @@ describe('PipelineWizardBindings.Plan', () => {
     expect(plan.Unit.UnitRows).toEqual({ kind: 'grain', grainEntity: 'Members', decisionDate: { kind: 'fixed', date: '2026-10-31', advance: 'each-run' }, filter: [] });
     expect(plan.Unit.TaskType).toEqual({ kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 });
     expect(plan.Protocol.Holdout).toEqual({ kind: 'seeded-random', fraction: 0.25 });
+  });
+  it('holds a pipeline that declares a time index', () => {
+    const indexed = fields({ ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TimeIndexColumn: 'JoinDate' }) });
+    expect(PipelineWizardBindings.Plan(indexed, ['1', '0'], '2026-10-31')).toEqual({ Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON });
   });
   it('holds a binary target nothing declares the adverse class of', () => {
     expect(PipelineWizardBindings.Plan(fields({ TargetVariable: 'Segment' }), ['A', 'B'], '2026-10-31')).toEqual({ Kind: 'hold', Reason: ADVERSE_CLASS_HOLD_REASON });
