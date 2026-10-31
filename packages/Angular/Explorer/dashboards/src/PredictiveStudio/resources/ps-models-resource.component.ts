@@ -5,7 +5,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
 import { MODELS_SECTIONS, PSSection, sectionGroups, sectionsInGroup, sectionLabel, hasSection } from '../predictive-studio.nav';
-import { buildModelsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
+import { BuildModelsAgentContext, ResolvePSRecord, BuildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 
 /**
@@ -248,7 +248,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
   /** Deep agent context for the Models door: active section + trained-model lifecycle counts. */
   protected override extraAgentContext(): Record<string, unknown> {
     const models = this.engine.Models;
-    return buildModelsAgentContext({
+    return BuildModelsAgentContext({
       ActiveSection: this.ActiveSection,
       ActiveSectionLabel: this.ActiveLabel,
       SectionLabels: this.sections.map((s) => s.label),
@@ -274,8 +274,8 @@ export class PSModelsResourceComponent extends PSResourceBase {
           const check = validateStringParam(params['section'], 'section');
           if (!check.ok) return check.result;
           const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
-          const match = resolvePSRecord(check.value, candidates);
-          if (!match) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'section') };
+          const match = ResolvePSRecord(check.value, candidates);
+          if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
           this.selectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },

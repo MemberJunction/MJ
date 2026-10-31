@@ -17,9 +17,9 @@ import {
   routeHomeNavigate,
 } from '../predictive-studio.nav';
 import {
-  buildStudioAgentContext,
-  resolvePSRecord,
-  buildPSNotFoundError,
+  BuildStudioAgentContext,
+  ResolvePSRecord,
+  BuildPSNotFoundError,
 } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 import type { NavigationRequest } from '@memberjunction/ng-artifacts';
@@ -424,7 +424,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
 
   /** Deep agent context for the Studio door (build/run workbench counts + active section). */
   protected override extraAgentContext(): Record<string, unknown> {
-    return buildStudioAgentContext({
+    return BuildStudioAgentContext({
       ActiveSection: this.ActiveSection,
       ActiveSectionLabel: this.ActiveLabel,
       SectionLabels: this.sections.map((s) => s.label),
@@ -454,8 +454,8 @@ export class PSStudioResourceComponent extends PSResourceBase {
           const check = validateStringParam(params['section'], 'section');
           if (!check.ok) return check.result;
           const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
-          const match = resolvePSRecord(check.value, candidates);
-          if (!match) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'section') };
+          const match = ResolvePSRecord(check.value, candidates);
+          if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
           this.selectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },

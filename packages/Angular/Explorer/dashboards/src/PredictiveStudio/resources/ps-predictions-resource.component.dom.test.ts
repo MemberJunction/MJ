@@ -10,7 +10,7 @@ import { ResourceData, type MJListDetailEntity, type MJListEntity, type MJMLMode
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
-import { AtRiskRules, type AtRiskRow } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, TRAINING_RUN_RESULTS_SCHEMA, type AtRiskRow, type GateDecision, type StoredGateRecord } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
@@ -89,13 +89,38 @@ const model = {
   __mj_UpdatedAt: new Date('2026-10-01T00:00:00Z'),
 } as unknown as MJMLModelEntity;
 
+const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
+const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
+
+/** The `ValidationResults` a unit training run stores, with this gate decision measured on 1,205 holdout rows. */
+function storedResults(decision: GateDecision): string {
+  const gate: StoredGateRecord = {
+    evaluationProtocolId: 'EP-1', margin: 0, primaryMetric: 'log-loss', holdoutRows: 1205,
+    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null },
+    guards: { taskKind: 'binary', holdoutClassCounts: { '0': 900, '1': 305 }, modelAucInterval: { level: 0.95, lower: 0.6, upper: 0.7 }, minMinorityClassRows: 20 },
+    transcribed: decision, decision, guardRefusal: null,
+    reason: { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: decision.outcome === 'no-signal' ? 'Nothing beats the flat guess.' : 'The model beats the flat guess.' },
+    incumbentDiff: null, sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
+  };
+  return JSON.stringify({
+    schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+    unitResolution: { rowsRead: 1205, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1205, dataCutoff: '2026-07-30' },
+    legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate,
+  });
+}
+
 /** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
-function fakeEngine() {
+function fakeEngine(validationResults: string | null = storedResults(SHIPPED)) {
   return {
     Config: vi.fn(async () => undefined),
     Models: [model],
     Sessions: [],
     PublishedModels: [model],
+    // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
+    TrainingRuns: [
+      { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
+      { ID: 'run-old', ResultingModelID: MODEL_ID, ValidationResults: storedResults(NO_SIGNAL) },
+    ],
     Pipelines: [{ ID: 'P1', TargetEntityID: ENTITY_ID } as unknown as MJMLTrainingPipelineEntity],
     ModelDisplayName: () => 'Who will renew?',
     LoadRecentRunsForModel: vi.fn(async () => [{ ID: 'run-1' }]),
@@ -124,8 +149,8 @@ const settle = async (fixture: ComponentFixture<PSPredictionsResourceComponent>)
   fixture.detectChanges();
 };
 
-async function renderWorkspace(provider: IMetadataProvider = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] })) {
-  const engine = fakeEngine();
+async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null) {
+  const engine = fakeEngine(validationResults);
   vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as PredictiveStudioEngine);
   const fixture = RenderComponentFixture(PSPredictionsResourceComponent, {
     imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, GridStub],
@@ -138,11 +163,17 @@ async function renderWorkspace(provider: IMetadataProvider = CreateFakeProvider(
     },
   });
   await settle(fixture);
-  const resource = fixture.componentInstance;
+  return { fixture, resource: fixture.componentInstance, engine };
+}
+
+async function renderWorkspace(provider: IMetadataProvider = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] })) {
+  const { fixture, resource, engine } = await renderCatalog(provider);
   resource.Open(resource.Cards[0]);
   await settle(fixture);
   return { fixture, resource, engine };
 }
+
+const defaultProvider = (): IMetadataProvider => CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
 
 /** The grid stub the workspace rendered, or null. */
 const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): GridStub | null => {
@@ -151,6 +182,47 @@ const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): Gr
 };
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate decision', () => {
+  it("a shipped model's card shows the outcome title and the comparison with the flat guess, and opens", async () => {
+    const { fixture } = await renderCatalog(defaultProvider());
+    const card = Query(fixture, '[data-testid="ps-prediction-card"]');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.textContent?.trim()).toBe('Ships — the model beats the flat guess');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.className).toContain('trust-ships');
+    expect(card?.querySelector('.ps-biz-card-line')?.textContent?.trim()).toBe('Beats the flat guess by 0.0177 [0.0098, 0.0254] (log-loss).');
+    expect(card?.querySelector('[data-testid="ps-open-prediction"]')).not.toBeNull();
+  });
+
+  it('the workspace banner shows the title, the headline, the stored reason and the holdout the decision was measured on', async () => {
+    const { fixture } = await renderWorkspace();
+    const banner = Query(fixture, '[data-testid="ps-trust-banner"]');
+    expect(banner?.className).toContain('trust-ships');
+    expect(banner?.querySelector('.ps-trust-grade')?.textContent?.trim()).toBe('Ships — the model beats the flat guess');
+    expect(banner?.querySelector('.ps-trust-line')?.textContent?.trim()).toBe('Beats the flat guess by 0.0177 [0.0098, 0.0254] (log-loss).');
+    expect(banner?.querySelector('.ps-trust-explain')?.textContent?.trim()).toBe('The model beats the flat guess.');
+    expect(banner?.querySelector('.ps-trust-evidence')?.textContent?.trim()).toBe('Checked against 1,205 past records it had never seen.');
+    expect(banner?.querySelector('.fa-star')).toBeNull();
+  });
+
+  it('a published model whose run stores no-signal does not open, and says why', async () => {
+    const { fixture } = await renderCatalog(defaultProvider(), storedResults(NO_SIGNAL));
+    const card = Query(fixture, '[data-testid="ps-prediction-card"]');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.textContent?.trim()).toBe('No signal — not usable');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.className).toContain('trust-none');
+    expect(card?.querySelector('.ps-biz-card-line')?.textContent?.trim()).toBe('Nothing beats the flat guess.');
+    expect(card?.querySelector('[data-testid="ps-open-prediction"]')).toBeNull();
+  });
+
+  it('a published model whose run stores no gate decision is not evaluated and does not open', async () => {
+    const { fixture, resource } = await renderCatalog(defaultProvider(), null);
+    const card = Query(fixture, '[data-testid="ps-prediction-card"]');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.textContent?.trim()).toBe('Not evaluated yet');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.className).toContain('trust-unmeasured');
+    expect(card?.querySelector('[data-testid="ps-open-prediction"]')).toBeNull();
+    resource.Open(resource.Cards[0]);
+    expect(resource.View).toBe('catalog');
+  });
+});
 
 describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   it('passes the resolved latest run to the grid and takes its rows from RowsLoaded, never reading the run itself', async () => {

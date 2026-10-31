@@ -50,11 +50,11 @@ export const PS_CAPABILITY_CARDS: readonly PSCapabilityCard[] = [
 // "Improve this" seed for a blocked (not-trustworthy-enough) prediction
 // ============================================================================
 
-/** Context for {@link buildImprovePrompt} — a blocked prediction the user wants to improve. */
+/** Context for {@link BuildImprovePrompt} — a blocked prediction the user wants to improve. */
 export interface ImprovePromptInput {
   /** The prediction's display name. */
   Name: string;
-  /** Its trust grade (Poor/Fair/…), when known. */
+  /** Its trust verdict's title (`TrustVerdicts.OutcomeTitle`, e.g. "No signal — not usable"), when known. */
   TrustGrade?: string | null;
   /** The plain-language reason it's blocked (trust gate / leakage), when known. */
   Reason?: string | null;
@@ -82,9 +82,4 @@ export function BuildImprovePrompt(input: ImprovePromptInput): string {
     `The "${name}" prediction${gradePart} isn't trustworthy enough to use yet.${why} ` +
     'Help me improve it — what would make it reliable? Consider more or cleaner training data, more history, a clearer outcome definition, or a different algorithm, then rebuild it if that helps.'
   );
-}
-
-/** @deprecated Use {@link BuildImprovePrompt}. */
-export function buildImprovePrompt(input: ImprovePromptInput): string {
-  return BuildImprovePrompt(input);
 }
