@@ -48,13 +48,7 @@ export class PredictionUnitRowReader {
   /** Labels in one canonical form: classes are trimmed strings (booleans → '1'/'0'); numeric tasks are numbers. Empty → null. */
   public static CanonicalLabel(value: CellValue, task: TaskType): CanonicalLabelValue | null {
     if (value === null || value === undefined) return null;
-    if (TaskTypeRules.IsClassificationTask(task)) {
-      if (typeof value === 'boolean') return value ? '1' : '0';
-      if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
-      if (value instanceof Date) return UtcDay.UtcDayIso(value);
-      const t = value.trim();
-      return t.length === 0 ? null : t;
-    }
+    if (TaskTypeRules.IsClassificationTask(task)) return TaskTypeRules.ClassLabel(value);
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     if (typeof value === 'boolean') return value ? 1 : 0;
     if (value instanceof Date) return null;

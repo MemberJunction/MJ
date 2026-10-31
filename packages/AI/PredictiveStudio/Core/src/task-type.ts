@@ -6,6 +6,7 @@
  * indices into it and are derived by {@link TaskTypeRules.ScoreSemantics}, never stored as a second copy that could disagree.
  */
 import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
+import { UtcDay, type CellValue } from './utc-day';
 
 export type TaskType =
   // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -35,6 +36,20 @@ export interface ScoreSemanticsResult {
  * and the TaskType parser (static members on one owner class).
  */
 export class TaskTypeRules {
+  /**
+   * A cell as a class label, the one rule every classification task reads labels by (the unit row reader, the pipeline
+   * migration and the wizard): a bit reads `'1'`/`'0'`, a finite number its text, a date its UTC day, text trimmed;
+   * null for an empty cell or a non-finite number.
+   */
+  public static ClassLabel(value: CellValue): string | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'boolean') return value ? '1' : '0';
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+    if (value instanceof Date) return UtcDay.UtcDayIso(value);
+    const t = value.trim();
+    return t.length === 0 ? null : t;
+  }
+
   /** The one derivation of score semantics; UI and scoring call this, never store a copy. */
   public static ScoreSemantics(task: TaskType): ScoreSemanticsResult {
     switch (task.kind) {

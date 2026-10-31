@@ -58,3 +58,10 @@ describe('LegacyProblemTypeForTask', () => {
     expect(TaskTypeRules.LegacyProblemTypeForTask({ kind: 'non-negative', tweediePower: 1.5 })).toBe('regression');
   });
 });
+
+describe('TaskTypeRules.ClassLabel', () => {
+  it('reads a cell as a class label: bits as 1/0, finite numbers as text, dates as their UTC day, text trimmed', () => {
+    expect([true, false, 1, 0.5, ' A ', '', null, undefined, Number.NaN].map((v) => TaskTypeRules.ClassLabel(v))).toEqual(['1', '0', '1', '0.5', 'A', null, null, null, null]);
+    expect(TaskTypeRules.ClassLabel(new Date('2024-03-05T10:00:00Z'))).toBe('2024-03-05');
+  });
+});

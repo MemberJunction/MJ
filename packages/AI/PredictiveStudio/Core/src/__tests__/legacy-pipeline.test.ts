@@ -18,7 +18,7 @@ const LegacyCandidatesFor = (target: string): ReturnType<typeof LegacyPipelines.
 
 describe('LegacyUnitInputs', () => {
   it('maps a column as-of classification pipeline to a binary grain unit decided on that column', () => {
-    const r = LegacyPipelines.LegacyUnitInputs(pipeline(), ['true', 'false'], '2026-10-20', LegacyPipelines.LegacyOutcomeCandidates(outcome()));
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline(), ['true', 'false'], '2026-10-20', LegacyPipelines.LegacyOutcomeCandidates(outcome()), 'migration');
     if (r.Kind !== 'unit') throw new Error(r.Reason);
     expect(r.Draft.UnitRows).toEqual({ kind: 'grain', grainEntity: 'Membership Years', decisionDate: { kind: 'column', column: 'StartDate' }, filter: [] });
     expect(r.Draft.LabelRule).toEqual({ kind: 'column', column: 'Renewed' });
@@ -29,7 +29,7 @@ describe('LegacyUnitInputs', () => {
     expect(r.Notes).toContain('class order false, true; adverse class false (target-name polarity: Polarity positive)');
   });
   it('fixes the decision date at the migration day, advancing each run, when the pipeline had no as-of', () => {
-    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression' }), [], '2026-10-20', []);
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression' }), [], '2026-10-20', [], 'migration');
     if (r.Kind !== 'unit') throw new Error(r.Reason);
     expect(r.Draft.UnitRows).toEqual({ kind: 'grain', grainEntity: 'Membership Years', decisionDate: { kind: 'fixed', date: '2026-10-20', advance: 'each-run' }, filter: [] });
     expect(r.Draft.Censoring).toEqual({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-10-21' } });
@@ -37,13 +37,13 @@ describe('LegacyUnitInputs', () => {
     expect(r.DateColumn).toBeNull();
   });
   it('archives what has no Prediction Unit form and holds a binary target whose adverse class nothing declares', () => {
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: JSON.stringify({ Mode: 'offset', OffsetDays: 30 }) }), ['a', 'b'], '2026-10-20', []))
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: JSON.stringify({ Mode: 'offset', OffsetDays: 30 }) }), ['a', 'b'], '2026-10-20', [], 'migration'))
       .toEqual({ Kind: 'archive', Reason: 'offset as-of cannot be expressed as a Prediction Unit' });
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline(), ['1'], '2026-10-20', [])).toEqual({ Kind: 'archive', Reason: 'single-valued target (1 class observed)' });
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'sequence' }), ['a', 'b'], '2026-10-20', []))
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline(), ['1'], '2026-10-20', [], 'migration')).toEqual({ Kind: 'archive', Reason: 'single-valued target (1 class observed)' });
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'sequence' }), ['a', 'b'], '2026-10-20', [], 'migration'))
       .toEqual({ Kind: 'archive', Reason: 'an HMM latent state has no outcome window' });
     const neutral = LegacyCandidatesFor('Segment');
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ TargetVariable: 'Segment' }), ['A', 'B'], '2026-10-20', neutral)).toEqual({
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ TargetVariable: 'Segment' }), ['A', 'B'], '2026-10-20', neutral, 'migration')).toEqual({
       Kind: 'hold',
       Reason: 'adverse class undetermined: no OutcomeConfig polarity or red/green class style on the pipeline, its newest model or the target name; set FeatureSteps.OutcomeConfig.Polarity (or OutcomeStyles) and run this Action again',
     });
@@ -65,7 +65,26 @@ describe('LegacyAdverseClass', () => {
   });
 });
 
+describe('LegacyUnitInputs — provenance', () => {
+  it('words the unit Name and Description by its creator: the migration, the Pipeline Wizard or the Pipeline Builder', () => {
+    const draftOf = (creator: 'migration' | 'wizard' | 'builder') => {
+      const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression' }), [], '2026-10-20', [], creator);
+      return r.Kind === 'unit' ? [r.Draft.Name, r.Draft.Description.split(' from ')[0]] : r;
+    };
+    expect([draftOf('migration'), draftOf('wizard'), draftOf('builder')]).toEqual([
+      ['Member Renewal Risk — migrated unit', 'Created by the Prediction Unit pipeline migration on 2026-10-20'],
+      ['Member Renewal Risk — unit', 'Created by the Pipeline Wizard on 2026-10-20'],
+      ['Member Renewal Risk — unit', 'Created by the Pipeline Builder on 2026-10-20'],
+    ]);
+  });
+});
+
 describe('LegacyProtocolInputs', () => {
+  it('holds a time-indexed pipeline instead of giving it a seeded-random holdout, and keeps its date carve', () => {
+    const timed = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
+    expect(LegacyPipelines.LegacyProtocolInputs(timed, null, null, [])).toEqual({ Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON });
+    expect(LegacyPipelines.LegacyProtocolInputs(timed, null, 'StartDate', dates).Kind).toBe('protocol');
+  });
   const dates = ['2020-05-01', '2021-05-01', '2022-05-01', '2023-05-01', '2024-05-01', '2024-06-01', '2024-07-01', '2024-08-01'];
   it('turns the trailing holdout fraction into a date cutoff, k-fold into repeated folds and the deny lists into exclusions', () => {
     const r = LegacyPipelines.LegacyProtocolInputs(JSON.stringify({ Strategy: 'kfold', K: 4, LockedHoldoutFraction: 0.5 }), JSON.stringify({ DenyFields: ['Status'], DenySources: [], SingleFeatureDominanceThreshold: 0.6 }), 'StartDate', dates);
@@ -113,17 +132,17 @@ describe('LegacyAdverseClass within one source', () => {
 describe('LegacyUnitInputs for three or more classes', () => {
   it('maps a multiclass target to the classes the first declaring source styles red', () => {
     const styled = LegacyPipelines.LegacyOutcomeCandidates(outcome({ TargetVariable: 'Tier', FeatureSteps: JSON.stringify({ OutcomeConfig: { OutcomeStyles: { lapsed: { BadgeColor: 'red' }, gold: { BadgeColor: 'green' } } } }) }));
-    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ TargetVariable: 'Tier' }), ['silver', 'lapsed', 'gold', ' silver '], '2026-10-20', styled);
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ TargetVariable: 'Tier' }), ['silver', 'lapsed', 'gold', ' silver '], '2026-10-20', styled, 'migration');
     if (r.Kind !== 'unit') throw new Error(r.Kind);
     expect(r.Draft.TaskType).toEqual({ kind: 'multiclass', classOrder: ['gold', 'lapsed', 'silver'], adverseIndices: [1] });
     expect(r.Notes[0]).toBe('class order gold, lapsed, silver; adverse classes lapsed (pipeline OutcomeConfig: red OutcomeStyles)');
-    const none = LegacyPipelines.LegacyUnitInputs(pipeline({ TargetVariable: 'Tier' }), ['a', 'b', 'c'], '2026-10-20', LegacyCandidatesFor('Tier'));
+    const none = LegacyPipelines.LegacyUnitInputs(pipeline({ TargetVariable: 'Tier' }), ['a', 'b', 'c'], '2026-10-20', LegacyCandidatesFor('Tier'), 'migration');
     expect(none.Kind === 'unit' && none.Draft.TaskType).toEqual({ kind: 'multiclass', classOrder: ['a', 'b', 'c'], adverseIndices: [] });
   });
   it('archives a column-mode as-of that names no column and keeps the report text free of plan ids', () => {
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: JSON.stringify({ Mode: 'column' }) }), ['a', 'b'], '2026-10-20', []))
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: JSON.stringify({ Mode: 'column' }) }), ['a', 'b'], '2026-10-20', [], 'migration'))
       .toEqual({ Kind: 'archive', Reason: 'AsOfStrategy column mode names no column' });
-    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'regression' }), [], '2026-10-20', []);
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'regression' }), [], '2026-10-20', [], 'migration');
     expect(r.Kind === 'unit' && r.Notes[0]).toBe('declared continuous; a count or a non-negative amount is a different task and is declared in a new unit version');
   });
 });
@@ -147,13 +166,9 @@ describe('LegacyProtocolInputs edge rules', () => {
   });
 });
 
-describe('ClassLabel and LegacyProtocolDraft', () => {
-  it('reads a target cell as the unit row reader labels a class', () => {
-    expect([true, false, 1, 0.5, ' A ', '', null, undefined, Number.NaN].map((v) => LegacyPipelines.ClassLabel(v))).toEqual(['1', '0', '1', '0.5', 'A', null, null, null, null]);
-    expect(LegacyPipelines.ClassLabel(new Date('2024-03-05T10:00:00Z'))).toBe('2024-03-05');
-  });
+describe('LegacyProtocolDraft', () => {
   it('gives the default protocol one candidate, the legacy seed, holdout, folds and exclusions', () => {
-    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null }), ['1', '0'], '2026-10-20', LegacyCandidatesFor('Renewed'));
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null }), ['1', '0'], '2026-10-20', LegacyCandidatesFor('Renewed'), 'migration');
     if (r.Kind !== 'unit') throw new Error(r.Kind);
     const parsed = PredictionUnit.ParsePredictionUnitRow({ ID: 'U', LineageRootID: 'U', Version: 1, LabelVersion: 1, AuthoredBy: JSON.stringify({ kind: 'system', component: 'pipeline-migration' }), ...ProtocolRows.UnitDraftColumns(r.Draft) });
     if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
@@ -172,10 +187,10 @@ describe('ClassLabel and LegacyProtocolDraft', () => {
 describe('LegacyUnitInputs for a time-indexed pipeline', () => {
   it('holds a pipeline that declares a time index, and archives what has no unit form before that', () => {
     const indexed = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression', ValidationStrategy: indexed }), [], '2026-10-20', []))
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression', ValidationStrategy: indexed }), [], '2026-10-20', [], 'migration'))
       .toEqual({ Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON });
-    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'sequence', ValidationStrategy: indexed }), [], '2026-10-20', [])).toMatchObject({ Kind: 'archive' });
-    const plain = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression', ValidationStrategy: JSON.stringify({ TimeIndexColumn: '' }) }), [], '2026-10-20', []);
+    expect(LegacyPipelines.LegacyUnitInputs(pipeline({ ProblemType: 'sequence', ValidationStrategy: indexed }), [], '2026-10-20', [], 'migration')).toMatchObject({ Kind: 'archive' });
+    const plain = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression', ValidationStrategy: JSON.stringify({ TimeIndexColumn: '' }) }), [], '2026-10-20', [], 'migration');
     expect(plain.Kind).toBe('unit');
   });
 });

@@ -13,14 +13,13 @@ import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/
 import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import {
-  LegacyPipelines, PredictionUnit,
-  type Actor, type CellValue, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type TaskType, type UnitDraft,
+  LegacyPipelines, PredictionUnit, TaskTypeRules,
+  type Actor, type CellValue, type LegacyProtocolOutcome, type LegacyUnitCreator, type LegacyStop, type PredictionUnitSpec, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { CompleteReader } from '../feature-assembly/read-policy';
 import { ProviderAssemblyMetadata, type AssemblyEntityInfo, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
-import { PredictionUnitRowReader } from '../prediction-unit/unit-row-reader';
 import { PredictionUnitVersioning } from '../prediction-unit/unit-versioning';
 import { EvaluationProtocolVersioning } from '../protocol/protocol-versioning';
 import type { IEntityFactory } from '../training/types';
@@ -51,7 +50,8 @@ export interface IPipelineMigrationReads {
   ColumnValues(entity: AssemblyEntityInfo, field: string): Promise<string[]>;
   /**
    * Every non-empty value of a target column as a class label, in the form the unit row reader labels rows
-   * (`PredictionUnitRowReader.CanonicalLabel`: a bit reads `'1'`/`'0'`), read completely.
+   * (`TaskTypeRules.ClassLabel`, the rule `PredictionUnitRowReader.CanonicalLabel` reads classes by: a bit reads
+   * `'1'`/`'0'`), read completely.
    */
   LabelValues(entity: AssemblyEntityInfo, field: string): Promise<string[]>;
   /** `Lineage` of the pipeline's newest Published model, else its newest model; null when it has none. */
@@ -160,7 +160,7 @@ export class PipelineMigration {
     if (p.PredictionUnitID !== null) return { Ok: true, UnitID: p.PredictionUnitID };
     const entity = PipelineMigration.metadataOf(deps).Entity(p.TargetEntity);
     if (entity === null) return { Ok: false, Reason: `target entity "${p.TargetEntity}" is not registered or has a composite key` };
-    const mapped = await PipelineMigration.mapNewUnit(p, entity, deps);
+    const mapped = await PipelineMigration.mapNewUnit(p, entity, deps, 'builder');
     if (mapped.Kind !== 'unit') return { Ok: false, Reason: mapped.Reason };
     const bound = await PipelineMigration.bindNewUnit(p, mapped.Draft, mapped.DateColumn !== null, deps);
     return bound.Ok === false ? { Ok: false, Reason: bound.Reason } : { Ok: true, UnitID: bound.UnitID };
@@ -197,7 +197,7 @@ export class PipelineMigration {
     const reads = PipelineMigration.readsOf(deps);
     const dates = unit.DateColumn === null ? [] : await reads.ColumnValues(entity, unit.DateColumn);
     const protocol = LegacyPipelines.LegacyProtocolInputs(p.ValidationStrategy, p.LeakageGuard, unit.DateColumn, dates);
-    if (protocol.Kind === 'archive') return protocol;
+    if (protocol.Kind !== 'protocol') return protocol;
     return { Kind: 'plan', Plan: { Unit: unit.Unit, MovesAsOf: unit.MovesAsOf, Protocol: protocol, Notes: [...unit.Notes, ...protocol.Notes] } };
   }
 
@@ -213,19 +213,19 @@ export class PipelineMigration {
       const dateColumn = rows.kind === 'grain' && rows.decisionDate.kind === 'column' ? rows.decisionDate.column : null;
       return { Kind: 'planned', Unit: { Kind: 'bound', Spec: parsed.Value }, DateColumn: dateColumn, MovesAsOf: false, Notes: [] };
     }
-    const mapped = await PipelineMigration.mapNewUnit(p, entity, deps);
+    const mapped = await PipelineMigration.mapNewUnit(p, entity, deps, 'migration');
     if (mapped.Kind !== 'unit') return mapped;
     return { Kind: 'planned', Unit: { Kind: 'new', Draft: mapped.Draft }, DateColumn: mapped.DateColumn, MovesAsOf: mapped.DateColumn !== null, Notes: mapped.Notes };
   }
 
   /** Version 1 of the pipeline's unit from its legacy columns, its target's observed classes and its declared outcome semantics. */
-  private static async mapNewUnit(p: MJMLTrainingPipelineEntity, entity: AssemblyEntityInfo, deps: MigrationDeps): Promise<ReturnType<typeof LegacyPipelines.LegacyUnitInputs>> {
+  private static async mapNewUnit(p: MJMLTrainingPipelineEntity, entity: AssemblyEntityInfo, deps: MigrationDeps, creator: LegacyUnitCreator): Promise<ReturnType<typeof LegacyPipelines.LegacyUnitInputs>> {
     const reads = PipelineMigration.readsOf(deps);
     const [labels, lineage] = await Promise.all([reads.LabelValues(entity, p.TargetVariable), reads.NewestModelLineage(p.ID)]);
     const outcome = LegacyPipelines.LegacyOutcomeCandidates({
       FeatureSteps: p.FeatureSteps, Hyperparameters: p.Hyperparameters, ModelLineage: lineage, TargetVariable: p.TargetVariable, ProblemType: p.ProblemType,
     });
-    return LegacyPipelines.LegacyUnitInputs(p, labels, deps.Today, outcome);
+    return LegacyPipelines.LegacyUnitInputs(p, labels, deps.Today, outcome, creator);
   }
 
   // region: writes ------------------------------------------------------------------------------------------------
@@ -310,12 +310,6 @@ export class PipelineMigration {
   }
 }
 
-/**
- * A classification task to read class labels with: `CanonicalLabel` reads classes the same way for every
- * classification task, and the migration reads them before the unit's task (binary or multiclass) is known.
- */
-const CLASS_LABELS: TaskType = { kind: 'multiclass', classOrder: [], adverseIndices: [] };
-
 /** The migration's reads through the request's provider (never the global one). */
 export class ProviderMigrationReads implements IPipelineMigrationReads {
   constructor(private readonly provider: IMetadataProvider, private readonly user: UserInfo) {}
@@ -329,8 +323,8 @@ export class ProviderMigrationReads implements IPipelineMigrationReads {
 
   public async LabelValues(entity: AssemblyEntityInfo, field: string): Promise<string[]> {
     return (await this.readColumn(entity, field)).flatMap((v) => {
-      const label = PredictionUnitRowReader.CanonicalLabel(v, CLASS_LABELS);
-      return typeof label === 'string' ? [label] : [];
+      const label = TaskTypeRules.ClassLabel(v);
+      return label === null ? [] : [label];
     });
   }
 

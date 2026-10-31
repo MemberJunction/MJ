@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { ADVERSE_CLASS_HOLD_REASON, LegacyPipelines, TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
-import { PredictionUnitRowReader } from '../../prediction-unit/unit-row-reader';
+import { ADVERSE_CLASS_HOLD_REASON, TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
 import { PipelineMigration, type IPipelineMigrationReads, type MigrationDeps } from '../legacy-pipeline-migration';
 import type { AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
 import type { IEntityFactory } from '../../training/types';
@@ -156,6 +155,19 @@ describe('PipelineMigration.EnsurePipelineUnitAndProtocol', () => {
     expect(await PipelineMigration.BindMigratedUnit(p.Entity, deps)).toEqual({ Ok: false, Reason: TIME_INDEX_HOLD_REASON });
   });
 
+  it('holds a time-indexed pipeline whose fixed-date unit is already bound, and writes no protocol for it', async () => {
+    const { deps, factory } = setup();
+    const p = new LegacyPipeline();
+    p.AsOfStrategy = JSON.stringify({ Mode: 'none' });
+    expect((await PipelineMigration.BindMigratedUnit(p.Entity, deps)).Ok).toBe(true);
+    const unitId = p.PredictionUnitID;
+    p.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'StartDate' });
+    expect((await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, true)).Action).toBe('would-hold');
+    const r = await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, false);
+    expect([r.Action, r.Reason, p.PredictionUnitID, p.EvaluationProtocolID, factory.Units.Rows.length, factory.Protocols.length]).toEqual(['held', TIME_INDEX_HOLD_REASON, unitId, null, 1, 0]);
+    expect(p.Description).toBe(`Truth fixture\nHeld by the Prediction Unit migration on 2026-10-20: ${TIME_INDEX_HOLD_REASON}.`);
+  });
+
   it('deletes the unit and restores the pipeline when binding the unit fails, so a re-run creates exactly one unit', async () => {
     const { deps, factory } = setup();
     const p = new LegacyPipeline([1]);
@@ -184,6 +196,7 @@ describe('PipelineMigration.EnsurePipelineUnitAndProtocol', () => {
     expect((await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, false)).Cutoff).toBeNull();
     expect(JSON.parse(factory.Protocols[0].Holdout)).toEqual({ kind: 'seeded-random', fraction: 0.25 });
     expect(JSON.parse(factory.Units.Rows[0].UnitRows).decisionDate).toEqual({ kind: 'fixed', date: '2026-10-20', advance: 'each-run' });
+    expect([factory.Units.Rows[0].Name.endsWith(' — migrated unit'), factory.Units.Rows[0].Description.startsWith('Created by the Prediction Unit pipeline migration on 2026-10-20 ')]).toEqual([true, true]);
     const archived = new LegacyPipeline();
     archived.Status = 'Archived';
     expect((await PipelineMigration.EnsurePipelineUnitAndProtocol(archived.Entity, deps, false)).Reason).toBe('archived');
@@ -197,6 +210,7 @@ describe('PipelineMigration.BindMigratedUnit', () => {
     p.AsOfStrategy = JSON.stringify({ Mode: 'none' });
     const bound = await PipelineMigration.BindMigratedUnit(p.Entity, deps);
     expect([bound.Ok, p.PredictionUnitID === null, p.EvaluationProtocolID, factory.Protocols.length]).toEqual([true, false, null, 0]);
+    expect([factory.Units.Rows[0].Name.endsWith(' — unit'), factory.Units.Rows[0].Description.startsWith('Created by the Pipeline Builder on 2026-10-20 ')]).toEqual([true, true]);
     const neutral = new LegacyPipeline();
     neutral.TargetVariable = 'Segment';
     const { deps: d2 } = setup({ Segment: ['A', 'B'] });
@@ -212,11 +226,3 @@ describe('PipelineMigration.RunOf', () => {
   });
 });
 
-describe('the class label rule', () => {
-  it("is the unit row reader's: Core's LegacyPipelines.ClassLabel gives CanonicalLabel's class for every cell kind", () => {
-    const task = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 } as const;
-    for (const v of [true, false, 0, 1, 2.5, Number.NaN, ' Renewed ', '', null, undefined, new Date('2024-03-05T10:00:00Z')]) {
-      expect(LegacyPipelines.ClassLabel(v)).toBe(PredictionUnitRowReader.CanonicalLabel(v, task));
-    }
-  });
-});

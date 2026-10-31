@@ -37,10 +37,10 @@ export class PipelineWizardBindings {
     const outcome = LegacyPipelines.LegacyOutcomeCandidates({
       FeatureSteps: p.FeatureSteps, Hyperparameters: p.Hyperparameters, ModelLineage: null, TargetVariable: p.TargetVariable, ProblemType: p.ProblemType,
     });
-    const unit = LegacyPipelines.LegacyUnitInputs(p, labels, today, outcome);
+    const unit = LegacyPipelines.LegacyUnitInputs(p, labels, today, outcome, 'wizard');
     if (unit.Kind !== 'unit') return unit;
     const protocol = LegacyPipelines.LegacyProtocolInputs(p.ValidationStrategy, p.LeakageGuard, unit.DateColumn, []);
-    if (protocol.Kind === 'archive') return protocol;
+    if (protocol.Kind !== 'protocol') return protocol;
     return { Kind: 'plan', Unit: unit.Draft, Protocol: protocol };
   }
 
@@ -73,7 +73,7 @@ export class PipelineWizardBindings {
       { EntityName: p.TargetEntity, Fields: [p.TargetVariable], OrderBy: orderBy, StartRow: startRow, MaxRows: LABEL_PAGE_ROWS, ResultType: 'simple' }, user);
     if (!r.Success) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} failed: ${r.ErrorMessage}`);
     const labels = r.Results.flatMap((row) => {
-      const label = LegacyPipelines.ClassLabel(row[p.TargetVariable]);
+      const label = TaskTypeRules.ClassLabel(row[p.TargetVariable]);
       return label === null ? [] : [label];
     });
     // A view that reports no total has returned every row it holds.

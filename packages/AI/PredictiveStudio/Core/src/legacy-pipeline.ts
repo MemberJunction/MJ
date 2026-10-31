@@ -43,6 +43,16 @@ export interface LegacyPipelineFields {
   readonly ValidationStrategy: string | null;
 }
 
+/** Who creates a unit from a pipeline's legacy columns: the pipeline migration, the Pipeline Wizard or the Pipeline Builder. */
+export type LegacyUnitCreator = 'migration' | 'wizard' | 'builder';
+
+/** The unit Name suffix and the Description's "Created by" phrase of each creator. */
+const UNIT_CREATOR_WORDING: Readonly<Record<LegacyUnitCreator, { readonly NameSuffix: string; readonly CreatedBy: string }>> = {
+  migration: { NameSuffix: 'migrated unit', CreatedBy: 'the Prediction Unit pipeline migration' },
+  wizard: { NameSuffix: 'unit', CreatedBy: 'the Pipeline Wizard' },
+  builder: { NameSuffix: 'unit', CreatedBy: 'the Pipeline Builder' },
+};
+
 /** Where a migrated unit's adverse class came from, in the legacy engine's order of precedence. */
 export type AdverseClassSource = 'pipeline-outcome-config' | 'model-lineage-outcome-config' | 'target-name-polarity';
 
@@ -92,7 +102,7 @@ export type LegacyProtocolOutcome =
       readonly Exclusions: ProtocolExclusions;
       readonly Notes: readonly string[];
     }
-  | { readonly Kind: 'archive'; readonly Reason: string };
+  | LegacyStop;
 
 /** The task a pipeline's outcome maps to, the semantics recorded on the unit, and the report note. */
 interface LegacyTaskChoice {
@@ -122,13 +132,6 @@ export class LegacyPipelines {
   private static stringList(o: JsonObject | null, key: string): string[] {
     const v = o === null ? null : JsonParse.JsonArrayField(o, key);
     return v === null ? [] : v.filter((x): x is string => typeof x === 'string');
-  }
-
-  /** `day` (yyyy-mm-dd) plus `days` whole UTC days. */
-  private static addDays(day: string, days: number): string {
-    const parsed = UtcDay.ToUtcDay(day);
-    if (parsed === null) throw new Error(`"${day}" is not a yyyy-mm-dd day`);
-    return UtcDay.UtcDayIso(UtcDay.AddUtcDays(parsed, days));
   }
 
   private static semanticsFromJson(source: AdverseClassSource, o: JsonObject): LegacyOutcomeSemantics {
@@ -203,14 +206,18 @@ export class LegacyPipelines {
     return { Kind: 'undetermined', Reason: ADVERSE_CLASS_HOLD_REASON };
   }
 
+  /** Whether a pipeline's ValidationStrategy declares a time index (`TimeIndexColumn`). */
+  private static declaresTimeIndex(validation: JsonObject | null): boolean {
+    return validation !== null && JsonParse.JsonString(validation, 'TimeIndexColumn') !== null;
+  }
+
   /** The decision-date column a pipeline's AsOfStrategy names (null for none), or why it gets no unit (no form, or a declared time index). */
   private static decisionColumn(p: LegacyPipelineFields): LegacyDecisionColumn {
     if (p.ProblemType === 'sequence') return { Kind: 'archive', Reason: 'an HMM latent state has no outcome window' };
     const asOf = LegacyPipelines.readObject(p.AsOfStrategy);
     const mode = asOf === null ? 'none' : JsonParse.JsonString(asOf, 'Mode') || 'none';
     if (mode === 'offset') return { Kind: 'archive', Reason: 'offset as-of cannot be expressed as a Prediction Unit' };
-    const validation = LegacyPipelines.readObject(p.ValidationStrategy);
-    if (validation !== null && JsonParse.JsonString(validation, 'TimeIndexColumn') !== null) return { Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON };
+    if (LegacyPipelines.declaresTimeIndex(LegacyPipelines.readObject(p.ValidationStrategy))) return { Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON };
     if (mode !== 'column' || asOf === null) return { Kind: 'column', Column: null };
     const column = JsonParse.JsonString(asOf, 'Column');
     return column === null ? { Kind: 'archive', Reason: 'AsOfStrategy column mode names no column' } : { Kind: 'column', Column: column };
@@ -225,13 +232,15 @@ export class LegacyPipelines {
 
   /**
    * Version 1 of a pipeline's Prediction Unit: a grain unit on its target entity, decided on its as-of column or on the
-   * migration day (advancing each run), labelled by its target column, with the task its outcome maps to.
+   * migration day (advancing each run), labelled by its target column, with the task its outcome maps to. `creator`
+   * words the unit's Name and Description, so its stored provenance says who made it.
    */
   public static LegacyUnitInputs(
     p: LegacyPipelineFields,
     distinctLabels: readonly string[],
     migrationDay: string,
     outcome: readonly LegacyOutcomeSemantics[],
+    creator: LegacyUnitCreator,
   ): LegacyUnitOutcome {
     const decision = LegacyPipelines.decisionColumn(p);
     if (decision.Kind !== 'column') return decision;
@@ -245,19 +254,22 @@ export class LegacyPipelines {
       Kind: 'unit',
       DateColumn: column,
       Notes: [task.Note, dateNote, 'uncovered history rows are excluded and counted, not refused'],
-      Draft: LegacyPipelines.unitDraft(p, column, migrationDay, task),
+      Draft: LegacyPipelines.unitDraft(p, column, migrationDay, task, creator),
     };
   }
 
   /** The unit draft of a pipeline whose decision column and task are known. */
-  private static unitDraft(p: LegacyPipelineFields, column: string | null, migrationDay: string, task: LegacyTaskChoice): UnitDraft {
+  private static unitDraft(p: LegacyPipelineFields, column: string | null, migrationDay: string, task: LegacyTaskChoice, creator: LegacyUnitCreator): UnitDraft {
+    const wording = UNIT_CREATOR_WORDING[creator];
     const decisionDate: DecisionDateRule = column === null ? { kind: 'fixed', date: migrationDay, advance: 'each-run' } : { kind: 'column', column };
+    const day = UtcDay.ToUtcDay(migrationDay);
+    if (day === null) throw new Error(`"${migrationDay}" is not a yyyy-mm-dd day`);
     const censoring: CensoringRule = column === null
-      ? { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: LegacyPipelines.addDays(migrationDay, 1) } }
+      ? { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: UtcDay.UtcDayIso(UtcDay.AddUtcDays(day, 1)) } }
       : { rule: 'exclude-unresolved', cutoff: { kind: 'now' } };
     return {
-      Name: `${p.Name} — migrated unit`,
-      Description: `Created by the Prediction Unit pipeline migration on ${migrationDay} from the pipeline's TargetEntity, TargetVariable, ProblemType and AsOfStrategy${task.Semantics ? `; ${task.Semantics}` : ''}.`,
+      Name: `${p.Name} — ${wording.NameSuffix}`,
+      Description: `Created by ${wording.CreatedBy} on ${migrationDay} from the pipeline's TargetEntity, TargetVariable, ProblemType and AsOfStrategy${task.Semantics ? `; ${task.Semantics}` : ''}.`,
       UnitRows: { kind: 'grain', grainEntity: p.TargetEntity, decisionDate, filter: [] },
       LabelRule: { kind: 'column', column: p.TargetVariable },
       LabelWindowDays: 1,
@@ -350,20 +362,6 @@ export class LegacyPipelines {
   }
 
   /**
-   * A target cell as a class label, the way the unit row reader labels rows for a classification task: a bit reads
-   * `'1'`/`'0'`, a number its text, a date its UTC day, text trimmed; null for an empty cell. (The Engine's
-   * `PredictionUnitRowReader.CanonicalLabel` is the reader's own rule; a parity test pins the two together.)
-   */
-  public static ClassLabel(value: CellValue): string | null {
-    if (value === null || value === undefined) return null;
-    if (typeof value === 'boolean') return value ? '1' : '0';
-    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
-    if (value instanceof Date) return UtcDay.UtcDayIso(value);
-    const t = value.trim();
-    return t.length === 0 ? null : t;
-  }
-
-  /**
    * Version 1 of a migrated pipeline's protocol: the unit's default protocol for one candidate with the legacy holdout,
    * the legacy k-fold (when it had one) and the legacy deny lists as exclusions.
    */
@@ -374,12 +372,15 @@ export class LegacyPipelines {
 
   /**
    * The inputs of a pipeline's version-1 protocol from its ValidationStrategy and LeakageGuard. `dateColumn` null = a
-   * fixed-date unit: a seeded-random holdout of the legacy share.
+   * fixed-date unit: a seeded-random holdout of the legacy share. A pipeline that declares a time index is held instead
+   * of getting a seeded-random holdout (whether its unit is new or already bound): it is judged only on a holdout that
+   * respects time.
    */
   public static LegacyProtocolInputs(validationJson: string | null, leakageJson: string | null, dateColumn: string | null, dates: readonly string[]): LegacyProtocolOutcome {
     const v = LegacyPipelines.readObject(validationJson);
     const holdout = LegacyPipelines.legacyHoldout(LegacyPipelines.holdoutShare(v), dateColumn, dates);
     if ('Kind' in holdout) return { Kind: 'archive', Reason: holdout.Reason };
+    if (holdout.Holdout.kind === 'seeded-random' && LegacyPipelines.declaresTimeIndex(v)) return { Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON };
     const notes: string[] = v === null ? ['ValidationStrategy missing or unreadable: defaults used.', holdout.Note] : [holdout.Note];
     const guard = LegacyPipelines.readObject(leakageJson);
     const threshold = guard === null ? null : JsonParse.JsonNumber(guard, 'SingleFeatureDominanceThreshold');
