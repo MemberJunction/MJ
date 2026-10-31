@@ -30,7 +30,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
   selector: 'mj-ps-predictions-resource',
   template: `
     <mj-page-header-interior
-      [Title]="View === 'workspace' ? (Selected?.title ?? 'Prediction') : 'Predictions'"
+      [Title]="View === 'workspace' ? (Selected?.title || 'Prediction') : 'Predictions'"
       [Subtitle]="View === 'workspace' ? 'Who to focus on, how much to trust it, and what to do next' : 'Ready-to-use predictions for your records'">
       <div actions>
         @if (View === 'catalog') {
