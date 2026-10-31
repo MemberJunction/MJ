@@ -437,7 +437,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
      * Select/Open log tools — so the agent can refer to a row exactly as it's described
      * in context.
      */
-    private logDisplayName(log: { CommunicationProvider?: string; CommunicationProviderMessageType?: string; Status: string }): string {
+    private logDisplayName(log: { CommunicationProvider?: string | null; CommunicationProviderMessageType?: string | null; Status: string }): string {
         return `${log.CommunicationProvider || 'Unknown'} · ${log.CommunicationProviderMessageType || 'Message'} · ${log.Status}`;
     }
 

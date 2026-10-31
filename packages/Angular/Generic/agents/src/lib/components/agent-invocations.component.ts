@@ -340,8 +340,8 @@ export class AgentInvocationsComponent extends BaseAngularComponent {
             const live = (invocationsByBinding.get(binding.ID) ?? []).filter((i) => i.Status === 'Active');
             return {
                 Kind: 'DataChange' as const,
-                Title: binding.Entity,
-                Trigger: DescribeInvocationTypes(live.map((i) => i.InvocationType)),
+                Title: binding.Entity ?? binding.EntityID,
+                Trigger: DescribeInvocationTypes(live.map((i) => i.InvocationType ?? '')),
                 State: ResolveInvocationState(binding.Status),
                 StateDetail: this.explainState(binding.Status),
                 EntityName: 'MJ: Entity Actions',

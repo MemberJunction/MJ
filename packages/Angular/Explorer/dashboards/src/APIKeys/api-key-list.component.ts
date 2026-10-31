@@ -267,7 +267,7 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
             filtered = filtered.filter(k =>
                 k.Label.toLowerCase().includes(search) ||
                 (k.Description && k.Description.toLowerCase().includes(search)) ||
-                k.User.toLowerCase().includes(search) ||
+                (k.User ?? '').toLowerCase().includes(search) ||
                 k.Hash.toLowerCase().includes(search)
             );
         }
@@ -287,8 +287,8 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
                     bVal = b.Status;
                     break;
                 case 'User':
-                    aVal = a.User.toLowerCase();
-                    bVal = b.User.toLowerCase();
+                    aVal = (a.User ?? '').toLowerCase();
+                    bVal = (b.User ?? '').toLowerCase();
                     break;
                 case 'LastUsedAt':
                     aVal = a.LastUsedAt ? new Date(a.LastUsedAt).getTime() : 0;

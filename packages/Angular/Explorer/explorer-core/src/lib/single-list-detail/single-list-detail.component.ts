@@ -1911,7 +1911,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
 
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result: RunViewResult = await rv.RunView({
-      EntityName: this.ListRecord.Entity,
+      EntityName: sourceEntityInfo.Name,
       ExtraFilter: filter,
       MaxRows: 100,
       ResultType: 'simple'

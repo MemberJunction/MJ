@@ -136,8 +136,8 @@ interface CategoryNode {
                   role="listitem"
                   [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
                   <div class="card-header">
-                    <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
-                      <i [class]="getEntityIcon(item.list.Entity)"></i>
+                    <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity ?? '')" aria-hidden="true">
+                      <i [class]="getEntityIcon(item.list.Entity ?? '')"></i>
                     </div>
                     <div class="card-menu">
                       <button class="menu-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
