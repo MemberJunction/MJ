@@ -16,6 +16,7 @@ describe('TrainingRunResultsParser', () => {
       { kind: 'protocol-created-after-run', protocolId: 'P1', protocolCreatedAt: '2026-05-01T10:00:00.001Z', runCreatedAt: '2026-05-01T10:00:00.000Z' },
       { kind: 'protocol-unit-mismatch', protocolId: 'P1', problems: ['one', 'two'] },
       { kind: 'protocol-invalid', protocolId: 'P1', errors: ['Holdout must be an object'] },
+      { kind: 'time-index-needs-time-holdout', pipelineId: 'p1', protocolId: 'P1', timeIndexColumn: 'MonthIndex', holdout: 'seeded-random' },
     ];
     for (const reason of reasons) {
       const r = TrainingRunResultsParser.ParseTrainingRunResults(envelope(reason));
@@ -23,6 +24,8 @@ describe('TrainingRunResultsParser', () => {
     }
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'too-many-candidates', pipelineId: 'p1', candidates: 2.5, maxCandidates: 2 }));
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.candidates/);
+    const badHoldout = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'time-index-needs-time-holdout', pipelineId: 'p1', protocolId: 'P1', timeIndexColumn: 'T', holdout: 'trailing' }));
+    expect(badHoldout.Ok ? null : badHoldout.Errors.join('\n')).toMatch(/refusal\.reason\.holdout/);
   });
   it('refuses an envelope whose members have the wrong shape, naming the path', () => {
     const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' }, legacy: null, legacyRequest: null }));

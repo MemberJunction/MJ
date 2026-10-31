@@ -90,3 +90,18 @@ describe('ProtocolSearchGuard.ProtocolPrecedesRun and CheckProtocolForUnit', () 
     expect(ProtocolSearchGuard.CheckProtocolForUnit(grouped, { ...unit, groupKey: 'personid' })).toBeNull();
   });
 });
+
+describe('ProtocolSearchGuard.CheckTimeIndexHoldout', () => {
+  const at = (holdout: EvaluationProtocolDraft['holdout']): LoadedProtocol =>
+    ({ RowID: 'P1', Version: 1, CreatedAt: createdAt, Protocol: { ...draft, holdout, id: 'P1', lineageRootId: 'P1', version: 1, authoredBy: { kind: 'human', userId: 'U' } } });
+  it('refuses a time-indexed pipeline under a seeded-random holdout, naming the column and the holdout', () => {
+    expect(ProtocolSearchGuard.CheckTimeIndexHoldout(at({ kind: 'seeded-random', fraction: 0.2 }), 'PL1', 'MonthIndex'))
+      .toEqual({ kind: 'time-index-needs-time-holdout', pipelineId: 'PL1', protocolId: 'P1', timeIndexColumn: 'MonthIndex', holdout: 'seeded-random' });
+  });
+  it('allows a date-carved or rolling-origin holdout, and any holdout for a pipeline without a time index', () => {
+    const rolling = at({ kind: 'rolling-origin', origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 12, window: 'expanding' });
+    expect(ProtocolSearchGuard.CheckTimeIndexHoldout(at(draft.holdout), 'PL1', 'MonthIndex')).toBeNull();
+    expect(ProtocolSearchGuard.CheckTimeIndexHoldout(rolling, 'PL1', 'MonthIndex')).toBeNull();
+    for (const none of [null, undefined, '']) expect(ProtocolSearchGuard.CheckTimeIndexHoldout(at({ kind: 'seeded-random', fraction: 0.2 }), 'PL1', none)).toBeNull();
+  });
+});

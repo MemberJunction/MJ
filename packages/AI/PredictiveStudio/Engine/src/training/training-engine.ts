@@ -349,7 +349,8 @@ export class TrainingEngine {
 
   /**
    * Train a pipeline that points at a Prediction Unit. The bound Evaluation Protocol version is resolved first: a
-   * missing protocol or more candidates than its budget allows are refused before any run row is written. The unit
+   * missing protocol, more candidates than its budget allows, or a pipeline that declares a time index under a holdout
+   * that does not respect time (`time-index-needs-time-holdout`) is refused before any run row is written. The unit
    * decides the rows, their decision dates and their labels: inputs that would override them (`maxRows`,
    * `labelEventDates`, a point-in-time AsOfStrategy) are refused, censored and label-known rows are excluded and
    * counted, and a protocol that does not fit the unit or a target that cannot train a model is refused before anything
@@ -361,6 +362,9 @@ export class TrainingEngine {
   private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const protocol = await this.requireBoundProtocol(resolved, input, deps);
+    // A time-indexed pipeline under a holdout that does not respect time is refused before any run row exists.
+    const timeIndex = ProtocolSearchGuard.CheckTimeIndexHoldout(protocol, resolved.pipeline.ID, resolved.validation.TimeIndexColumn);
+    if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
     const run = await this.createRunRow(resolved, input, deps);
     try {
       TrainingEngine.refuseProtocolNewerThanRun(protocol, run);

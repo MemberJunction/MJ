@@ -674,6 +674,22 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 });
 
+describe('TrainingEngine — a time-indexed pipeline is judged only on a time-respecting holdout', () => {
+  it('refuses a seeded-random holdout before any run row, and trains under a date carve', async () => {
+    const seeded = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    seeded.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'StartDate' });
+    seeded.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ MinMinorityClassRows: 1, Holdout: JSON.stringify({ kind: 'seeded-random', fraction: 0.25 }) })]);
+    await expect(seeded.engine.trainModel({ pipelineId: seeded.pipeline.ID }, seeded.deps)).rejects.toMatchObject({
+      Refusal: { stage: 'pipeline', reason: { kind: 'time-index-needs-time-holdout', pipelineId: seeded.pipeline.ID, protocolId: ProtocolRowFixture.ID, timeIndexColumn: 'StartDate', holdout: 'seeded-random' } },
+    });
+    expect([seeded.runs.length, seeded.trainer.Requests.length]).toEqual([0, 0]);
+    const carved = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    carved.pipeline.ValidationStrategy = seeded.pipeline.ValidationStrategy;
+    const trained = await carved.engine.trainModel({ pipelineId: carved.pipeline.ID }, carved.deps);
+    expect([trained.run.Status, carved.trainer.Requests.length]).toEqual(['Completed', 1]);
+  });
+});
+
 describe('TrainingEngine — an advancing fixed decision date', () => {
   it('saves the unit version dated the run day before the run, trains under it, and saves no third version the same day', async () => {
     const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());

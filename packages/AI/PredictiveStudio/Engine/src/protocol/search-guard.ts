@@ -7,7 +7,7 @@
  * (both instants from the database clock).
  */
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { EvaluationProtocolRules, type PipelineRefusal, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
+import { EvaluationProtocolRules, type HoldoutSplit, type PipelineRefusal, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { EvaluationProtocolSpecs, type IEvaluationProtocolStore, type LoadedProtocol } from '../training/evaluation-protocol-store';
 
 /** The bound protocol version a search may run under, or the refusal that stops it before a run row is written. */
@@ -41,6 +41,21 @@ export class ProtocolSearchGuard {
   /** Whether the protocol row was created before (or at) the run row: a run is judged only under a protocol that preceded it. */
   public static ProtocolPrecedesRun(protocolCreatedAt: Date, runCreatedAt: Date): boolean {
     return protocolCreatedAt.getTime() <= runCreatedAt.getTime();
+  }
+
+  /** The holdout kinds that respect time: rows are tested on dates after the rows trained on. */
+  public static readonly TimeRespectingHoldouts: readonly HoldoutSplit['kind'][] = ['date-carved', 'rolling-origin'];
+
+  /**
+   * A pipeline that declares a time index (`ValidationStrategy.TimeIndexColumn`) is judged only on a time-respecting
+   * holdout: any other (a seeded row hash) would test it on rows interleaved in time with its training rows and clear it
+   * unevaluated. The refusal, or null when the pipeline declares no time index or the holdout respects time.
+   */
+  public static CheckTimeIndexHoldout(loaded: LoadedProtocol, pipelineId: string, timeIndexColumn: string | null | undefined): PipelineRefusal | null {
+    if (!timeIndexColumn) return null;
+    const holdout = loaded.Protocol.holdout.kind;
+    if (ProtocolSearchGuard.TimeRespectingHoldouts.includes(holdout)) return null;
+    return { kind: 'time-index-needs-time-holdout', pipelineId, protocolId: loaded.RowID, timeIndexColumn, holdout };
   }
 
   /** The unit-dependent protocol rules as one storable refusal, or null when the protocol fits the unit. */

@@ -36,7 +36,9 @@ export type PipelineRefusal =
   | { readonly kind: 'too-many-candidates'; readonly pipelineId: string; readonly candidates: number; readonly maxCandidates: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'protocol-created-after-run'; readonly protocolId: string; readonly protocolCreatedAt: string; readonly runCreatedAt: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'protocol-unit-mismatch'; readonly protocolId: string; readonly problems: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'protocol-invalid'; readonly protocolId: string; readonly errors: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'protocol-invalid'; readonly protocolId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** A pipeline that declares a time index is judged only on a time-respecting holdout (a date carve or rolling origins). */
+  | { readonly kind: 'time-index-needs-time-holdout'; readonly pipelineId: string; readonly protocolId: string; readonly timeIndexColumn: string; readonly holdout: HoldoutSplit['kind'] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
 /** A trainer run that did not complete: the stage it failed at, or a lineage the run cannot record. */
 export type TrainerRefusal =
@@ -108,6 +110,13 @@ export type TrainingRunResults =
 // Each schema is annotated with the TypeScript type it parses, so `tsc` refuses a schema whose output does not fit it.
 // A new envelope member, refusal stage or refusal kind needs its schema here and a case in
 // `training-run-results.test.ts`: the union cannot make `tsc` notice a missing variant.
+/** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
+type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
+/** Every holdout kind a stored carve summary may name; `satisfies` refuses a value that is not one. */
+const HOLDOUT_KINDS = ['date-carved', 'rolling-origin', 'seeded-random'] as const satisfies readonly HoldoutSplit['kind'][];
+/** Compile-time completeness: a `HoldoutSplit` kind added without listing it here breaks the build (a stored carve of that kind would otherwise be refused on read). */
+const holdoutKindsComplete: ListsEveryMember<HoldoutSplit['kind'], (typeof HOLDOUT_KINDS)[number]> = true;
+void holdoutKindsComplete;
 const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unit-required'), pipelineId: z.string(), why: z.string() }),
   z.object({ kind: z.literal('protocol-required'), pipelineId: z.string() }),
@@ -117,6 +126,7 @@ const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('
   z.object({ kind: z.literal('protocol-created-after-run'), protocolId: z.string(), protocolCreatedAt: z.string(), runCreatedAt: z.string() }),
   z.object({ kind: z.literal('protocol-unit-mismatch'), protocolId: z.string(), problems: z.array(z.string()) }),
   z.object({ kind: z.literal('protocol-invalid'), protocolId: z.string(), errors: z.array(z.string()) }),
+  z.object({ kind: z.literal('time-index-needs-time-holdout'), pipelineId: z.string(), protocolId: z.string(), timeIndexColumn: z.string(), holdout: z.enum(HOLDOUT_KINDS) }),
 ]);
 const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('single-valued-target'), value: z.string(), rows: z.number() }),
@@ -159,13 +169,6 @@ const carveRefusalSchema: z.ZodType<CarveRefusal> = z.discriminatedUnion('kind',
     gapPeriods: z.number().int(), minTrainPeriods: z.number().int(),
   }),
 ]);
-/** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
-type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
-/** Every holdout kind a stored carve summary may name; `satisfies` refuses a value that is not one. */
-const HOLDOUT_KINDS = ['date-carved', 'rolling-origin', 'seeded-random'] as const satisfies readonly HoldoutSplit['kind'][];
-/** Compile-time completeness: a `HoldoutSplit` kind added without listing it here breaks the build (a stored carve of that kind would otherwise be refused on read). */
-const holdoutKindsComplete: ListsEveryMember<HoldoutSplit['kind'], (typeof HOLDOUT_KINDS)[number]> = true;
-void holdoutKindsComplete;
 const nonNegativeCount = z.number().int().nonnegative();
 // The input type is left open (`unknown`) because the new-entity hashes may be absent on read (a summary stored before
 // they existed) while the parsed value always has them (absent reads as null).
