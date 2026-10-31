@@ -675,6 +675,43 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual(['Lapsed']);
   });
 
+  const later: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
+  const replayedStatus: FeatureColumnSpec = { name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+  const excludeAndCountUnit: PredictionUnitSpec = { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } };
+
+  it('replays a history that reaches a later decision day but is ineligible (an External Create) as uncovered, never the stored value', async () => {
+    const external: RecordChangeRow = { ...rc('rc-ext', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), Source: 'External' };
+    const dated = { People: [external, rc('rc-lapse', 'P1', 'Update', '2027-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayedStatus], { Rows: later, Changes: dated }));
+    expect(out.Status).toBe('refused');
+    const counted = await new AsOfFeatureAssembler().Assemble(input([replayedStatus], { Rows: later, Changes: dated, Unit: excludeAndCountUnit }));
+    expect(counted.Status === 'assembled' ? [counted.Rows.length, counted.UncoveredRowsExcluded.length] : counted).toEqual([0, 1]);
+  });
+
+  it('replays a history whose replay does not match the stored row (a continuity mismatch) as uncovered, never the stored value', async () => {
+    const data = { ...tables, People: [{ ID: 'P1', Status: 'Expired' }] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayedStatus], { Rows: later, Tables: data, Unit: excludeAndCountUnit }));
+    expect(out.Status === 'assembled' ? [out.Rows.length, out.UncoveredRowsExcluded.length] : out).toEqual([0, 1]);
+  });
+
+  it('judges a join key read for a later decision day by the replay rule: a covering history with a later update refuses, no history reads the stored key', async () => {
+    const moved = { ...changes, Years: [rc('yc-create', 'y1', 'Create', '2021-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P0' }), rc('yc-move', 'y1', 'Update', '2027-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P1' }, ['PersonID'])] };
+    expect(await new AsOfFeatureAssembler().Assemble(input([replayedStatus], { Rows: later, Changes: moved, RowEntity: yearsWithUpdatable('PersonID') })))
+      .toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Years', field: 'PersonID', changesAfter: 1 } });
+    const unmoved = await new AsOfFeatureAssembler().Assemble(input([replayedStatus], { Rows: later, RowEntity: yearsWithUpdatable('PersonID') }));
+    expect(unmoved.Status === 'assembled' ? unmoved.Rows.map((r) => r.Values[0]) : unmoved).toEqual(['Lapsed']);
+  });
+
+  it("judges a tracked child row's value for a later decision day by the replay rule: a covering history with a later edit refuses, no history reads the stored value", async () => {
+    const data = { ...tables, Donations: [{ ID: 'd1', PersonID: 'P1', GivenOn: '2025-06-01', Amount: 20 }] };
+    const sum: FeatureColumnSpec = { name: 'GivenToDate', source: { kind: 'windowed-aggregate', childEntity: 'Donations', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'GivenOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };
+    const edited = { ...changes, Donations: [rc('dc-create', 'd1', 'Create', '2025-06-01T00:00:00Z', { ID: 'd1', Amount: 10 }), rc('dc-edit', 'd1', 'Update', '2027-01-01T00:00:00Z', { ID: 'd1', Amount: 20 }, ['Amount'])] };
+    expect(await new AsOfFeatureAssembler().Assemble(input([sum], { Rows: later, Tables: data, Changes: edited })))
+      .toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Donations', field: 'Amount', changesAfter: 1 } });
+    const unedited = await new AsOfFeatureAssembler().Assemble(input([sum], { Rows: later, Tables: data }));
+    expect(unedited.Status === 'assembled' ? unedited.Rows.map((r) => r.Values[0]) : unedited).toEqual([20]);
+  });
+
   it("covers an untracked child's updatable field in an aggregate for owners decided today", async () => {
     const pledges = { ...tables, Pledges: [{ ID: 'pl1', PersonID: 'P1', PledgedOn: '2022-06-01', Amount: 5 }, { ID: 'pl2', PersonID: 'P1', PledgedOn: '2026-10-01', Amount: 7 }] };
     const sum: FeatureColumnSpec = { name: 'Pledged', source: { kind: 'windowed-aggregate', childEntity: 'Pledges', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'PledgedOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };

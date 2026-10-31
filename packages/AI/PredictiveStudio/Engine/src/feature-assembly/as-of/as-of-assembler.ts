@@ -22,9 +22,9 @@
  * that day (no history, or one that starts after it) is the stored value read, as covered; a covering history replays
  * (or, read directly, refuses an update dated after the day, exactly as for a past day). On an untracked entity
  * nothing can be consulted, so the stored value is read for such a row. A record created after the decision day still
- * reads as missing. Rows with a past decision day keep the rule above. A record whose history cannot be replayed for another reason (a continuity
- * mismatch, a deletion, an ineligible external row) makes the rows reading it uncovered, exactly as a replayed field
- * does. Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
+ * reads as missing. Rows with a past decision day keep the rule above. On any decision day, past or later, a record
+ * whose history reaches the day but cannot be replayed (a continuity mismatch, a deletion, an ineligible external row)
+ * makes the rows reading it uncovered, read directly or replayed alike; it never reads the stored value. Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
  * after a decision day can move between owners, so every child row read passes the rule for its owner key, date, value
  * and filter fields (void and end dates are compared with the decision day and need no check), and one the rule
  * excludes makes every unit row uncovered.
@@ -156,7 +156,11 @@ type CoverageByField = Map<string, ChangeHistoryCoverage>;
  * and, per windowed-aggregate column, the late-entered child rows dropped from owner windows.
  */
 interface AssemblyState { readonly Coverage: CoverageByField; readonly Histories: Map<string, EntityHistory>; readonly LateEntered: Map<string, number> }
-/** What a replayed field reads: the history of every row's record, and the stored rows of the rows decided on or after the assembly's day (read only where the history does not cover the day). */
+/**
+ * What a replayed field reads: the history of every row's record, and the stored rows of the rows decided on or after
+ * the assembly's day, read only where the history does not reach the day (no history, or one that starts after it); a
+ * history that reaches it but cannot be replayed leaves the row uncovered.
+ */
 interface ReplaySources { readonly History: EntityHistory; readonly Stored: ReadonlyMap<string, SourceRow> }
 
 /** The level the least frequent categories beyond a column's cardinality cap fold into. */
@@ -502,7 +506,9 @@ export class AsOfFeatureAssembler {
   /**
    * The value Record Changes say the field held as of the decision day. A row with no join key has no record to replay,
    * so its value is missing; so is a record created after the decision day. A row the history cannot replay is uncovered,
-   * unless it is decided on the assembly's day or later: the stored value is then the value on that day (read as covered).
+   * with one exception, the module's one rule: a row decided on the assembly's day or later whose history does not reach
+   * that day (no history, or one that starts after it) reads the stored value as covered. A history that reaches the day
+   * but cannot be replayed (an ineligible external change, a continuity mismatch, a deletion) stays uncovered.
    */
   private replayReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, reads: ReplaySources, input: AsOfAssemblyInput): FeatureReader {
     return (row) => {
@@ -512,7 +518,8 @@ export class AsOfFeatureAssembler {
       const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
       const hv = history.ValueAt(key, source.field, asOf);
       if (hv.Status === 'uncovered') {
-        if (AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
+        const unreached = hv.Reason === 'no-history' || hv.Reason === 'before-history-start';
+        if (unreached && AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
         if (AsOfFeatureAssembler.createdAfter(history, key, asOf, null)) return AsOfFeatureAssembler.missingValue(spec, AsOfFeatureAssembler.fieldRef(entity, key, source.field), 'created-after-decision', input);
         return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: history.Coverage.historyStart };
       }
