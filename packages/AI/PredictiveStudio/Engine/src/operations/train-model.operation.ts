@@ -27,7 +27,7 @@ import {
   type PredictiveStudioTrainModelOutput,
 } from '@memberjunction/core-entities';
 
-import type { TrainModelInput } from '../training/types';
+import type { TrainModelInput, TrainModelResult } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { TrainingDelegation, WasTrainingLeakageFlagged } from './delegation';
@@ -75,18 +75,24 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
 
     const result = await TrainingDelegation.TrainModelViaEngine(engineInput, provider, user, this.engine());
 
-    const model = result.model;
     context.emitProgress({
       OperationKey: this.OperationKey,
       Processed: 1,
       Total: 1,
       Status: 'Running',
-      Message: model === null
+      Message: result.model === null
         ? `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`
-        : `Trained model ${model.ID} (v${model.Version}).`,
+        : `Trained model ${result.model.ID} (v${result.model.Version}).`,
     });
-    // A run whose gate decision ships no artifact completes without a model: the model fields are null and the run's
-    // stored gate record holds the reason.
+    return this.toOutput(result);
+  }
+
+  /**
+   * Map the engine's {@link TrainModelResult} onto the operation's typed output. A run whose gate decision ships no
+   * artifact completes without a model: the model fields are null and the run's stored gate record holds the reason.
+   */
+  protected toOutput(result: TrainModelResult): PredictiveStudioTrainModelOutput {
+    const model = result.model;
     return {
       modelId: model === null ? null : model.ID,
       trainingRunId: result.run.ID,
