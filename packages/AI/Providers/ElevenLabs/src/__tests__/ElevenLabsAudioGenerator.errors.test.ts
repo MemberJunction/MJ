@@ -5,11 +5,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * ElevenLabs SDK throws. Only the text-to-speech endpoint is stubbed.
  */
 const convert = vi.hoisted(() => vi.fn());
+const convertWithTimestamps = vi.hoisted(() => vi.fn());
 
 vi.mock('@elevenlabs/elevenlabs-js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@elevenlabs/elevenlabs-js')>();
     class StubElevenLabsClient {
-        public textToSpeech = { convert };
+        public textToSpeech = { convert, convertWithTimestamps };
     }
     return { ...actual, ElevenLabsClient: StubElevenLabsClient };
 });
@@ -23,6 +24,7 @@ function speakOnce(): ReturnType<ElevenLabsAudioGenerator['CreateSpeech']> {
 
 beforeEach(() => {
     convert.mockReset();
+    convertWithTimestamps.mockReset();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 
@@ -130,5 +132,61 @@ describe('ElevenLabsAudioGenerator cancellation', () => {
 
         expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
         expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes the CancellationToken to convertWithTimestamps when IncludeTimestamps is true, and reports its abort as Cancelled', async () => {
+        const controller = new AbortController();
+        convertWithTimestamps.mockImplementationOnce(
+            (_voice: string, _body: object, options?: { abortSignal?: AbortSignal }) =>
+                new Promise<never>((_resolve, reject) => {
+                    options?.abortSignal?.addEventListener(
+                        'abort',
+                        () => reject(Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' })),
+                        { once: true }
+                    );
+                })
+        );
+
+        const pending = new ElevenLabsAudioGenerator('test-key').CreateSpeech({
+            text: 'Hello with timestamps',
+            voice: 'v1',
+            model_id: 'eleven_v4',
+            IncludeTimestamps: true,
+            CancellationToken: controller.signal,
+        });
+        controller.abort();
+        const result = await pending;
+
+        expect(convertWithTimestamps.mock.calls[0][2]).toEqual({ abortSignal: controller.signal });
+        expect(result.success).toBe(false);
+        expect(result.Alignment).toBeUndefined();
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
+    });
+
+    it('reports Cancelled when the token aborts as convertWithTimestamps resolves', async () => {
+        const controller = new AbortController();
+        convertWithTimestamps.mockImplementationOnce(async () => {
+            controller.abort();
+            return {
+                audioBase64: Buffer.from([1, 2, 3]).toString('base64'),
+                alignment: {
+                    characters: ['H'],
+                    characterStartTimesSeconds: [0],
+                    characterEndTimesSeconds: [0.1],
+                },
+            };
+        });
+
+        const result = await new ElevenLabsAudioGenerator('test-key').CreateSpeech({
+            text: 'H',
+            voice: 'v1',
+            IncludeTimestamps: true,
+            CancellationToken: controller.signal,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.data).toBeUndefined();
+        expect(result.Alignment).toBeUndefined();
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
     });
 });

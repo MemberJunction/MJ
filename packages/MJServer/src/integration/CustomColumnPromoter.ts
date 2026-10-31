@@ -47,7 +47,11 @@ import {
     type PromotionCandidate,
     type CustomKeyStat,
     type InferredColumnType,
+    BuildCatalogWriter,
+    WithCatalogScope,
 } from '@memberjunction/integration-engine';
+import { UUIDsEqual } from '@memberjunction/global';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 
 /**
  * A custom-key candidate persisted to CompanyIntegration.Configuration.customKeyCandidates
@@ -390,12 +394,19 @@ export class IntegrationCustomColumnPromoter {
      * Idempotent, because a pending row is marked Completed only after success and so stays
      * re-processable after a crash: field maps are filtered against those already active, and the
      * spread only fills a destination that is still empty.
+     *
+     * One entity's failure does not stop the others, but it is not swallowed either: after every
+     * entry has run, any failure is THROWN, so the caller fails the pending row instead of marking
+     * it Completed over columns that exist in the database and are never mapped.
+     *
+     * @throws PROMOTION_INCOMPLETE naming each entity that failed.
      */
     public async CompletePromotion(
         promoted: NonNullable<RSUPendingWork['PromotedColumns']>,
         knownEntities?: ReadonlyMap<string, EntityInfo>,
     ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
         const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
+        const failures: string[] = [];
         for (const entry of promoted) {
             try {
                 // Provider first — post-restart it holds the REGENERATED class, which is the whole
@@ -404,6 +415,7 @@ export class IntegrationCustomColumnPromoter {
                 const entityInfo = this.provider.EntityByName(entry.EntityName) ?? knownEntities?.get(entry.EntityName);
                 if (!entityInfo) {
                     LogError(`[CustomColumnPromoter] Post-restart: entity '${entry.EntityName}' not found; skipping.`);
+                    failures.push(`${entry.EntityName}: entity not found`);
                     continue;
                 }
                 // Destination names are CARRIED, never recomputed: uniqueColumnName may have
@@ -429,16 +441,22 @@ export class IntegrationCustomColumnPromoter {
                     needsFieldMap: !existingMaps.has(c.SourceKey.toLowerCase()),
                 }));
 
-                await this.createIntegrationObjectFields(entry.IntegrationID, entry.ExternalObjectName, named);
+                await this.createIntegrationObjectFields(entry.IntegrationID, entry.EntityMapID, entry.ExternalObjectName, named);
                 await this.createFieldMaps(entry.EntityMapID, named.filter(n => n.needsFieldMap));
                 await this.spreadAndRebaseline(entry.EntityName, entry.EntityMapID, entityInfo, named);
 
                 LogStatus(`[CustomColumnPromoter] Post-restart: completed ${named.length} promoted column(s) on ${entry.EntityName}: ${named.map(n => n.columnName).join(', ')}`);
                 columnsAdded.push(...named.map(n => ({ EntityName: entry.EntityName, ColumnName: n.columnName })));
             } catch (err) {
-                // One entity must not abort the others; the pending row stays open for retry.
+                // One entity must not abort the others; the failure is thrown once they have all run.
                 LogError(`[CustomColumnPromoter] Post-restart completion failed for '${entry.EntityName}': ${this.msg(err)}`);
+                failures.push(`${entry.EntityName}: ${this.msg(err)}`);
             }
+        }
+        if (failures.length > 0) {
+            throw new Error(
+                `PROMOTION_INCOMPLETE: ${failures.length} of ${promoted.length} entity(ies) failed to complete — ${failures.join('; ')}`
+            );
         }
         return columnsAdded;
     }
@@ -787,12 +805,44 @@ export class IntegrationCustomColumnPromoter {
     /** Creates an IOF row per promoted field (IsCustom, MetadataSource='Discovered'). */
     private async createIntegrationObjectFields(
         integrationID: string,
+        entityMapID: string,
         externalObjectName: string,
         named: WorkItem[],
     ): Promise<void> {
-        const objectID = await this.resolveIntegrationObjectID(integrationID, externalObjectName);
+        // Resolve the CONNECTION from the entity map rather than hopping connection → integration
+        // and writing the shared rows. That hop is what let one tenant's promoted column appear in
+        // the catalog every other tenant on the same connector reads.
+        const entityMap = IntegrationEngineBase.Instance.EntityMaps.find(m => UUIDsEqual(m.ID, entityMapID));
+        const companyIntegration = entityMap
+            ? IntegrationEngineBase.Instance.GetCompanyIntegrationByID(entityMap.CompanyIntegrationID)
+            : undefined;
+        if (!companyIntegration) {
+            LogError(`[CustomColumnPromoter] Could not resolve the connection behind entity map ${entityMapID}; catalog rows skipped for '${externalObjectName}'.`);
+            return;
+        }
+        // In the connection's own scope, entered here per entry: the post-restart consumer calls
+        // in with no scope, and unscoped a connection with per-connection rows reads as having none,
+        // so BuildCatalogWriter throws PER_CONNECTION_CATALOG_MISSING. Per entry, so a batch that
+        // spans connections resolves each one to its own catalog.
+        await WithCatalogScope(
+            companyIntegration.ID,
+            () => this.writeIntegrationObjectFields(companyIntegration, integrationID, externalObjectName, named),
+            this.user,
+        );
+    }
+
+    /** The catalog writes of {@link createIntegrationObjectFields}, run inside the connection's scope. */
+    private async writeIntegrationObjectFields(
+        companyIntegration: MJCompanyIntegrationEntity,
+        integrationID: string,
+        externalObjectName: string,
+        named: WorkItem[],
+    ): Promise<void> {
+        const writer = BuildCatalogWriter(this.provider, companyIntegration, this.user);
+        const objectID = (await writer.ObjectsInScope())
+            .find(o => o.Name.toLowerCase() === externalObjectName.toLowerCase())?.ID ?? null;
         if (!objectID) {
-            LogError(`[CustomColumnPromoter] No IntegrationObject '${externalObjectName}' for integration ${integrationID}; IOF rows skipped.`);
+            LogError(`[CustomColumnPromoter] No catalog object '${externalObjectName}' for integration ${integrationID}; catalog field rows skipped.`);
             return;
         }
         // Lookup-or-reactivate-or-create — NEVER blind-create over an existing field. A field the source
@@ -800,13 +850,16 @@ export class IntegrationCustomColumnPromoter {
         // key reappears in the payload and reaches promotion, the IOF already exists: reactivate it (so the
         // active-filtered ApplyAll re-materializes the still-present column) instead of creating a duplicate.
         // This is the "removed-then-re-added" case + the recovery case (column existed, field map missing).
-        const existingIOFs = await this.existingIOFsByName(objectID);
+        const existingIOFs = new Map<string, { ID: string; Status: string }>();
+        for (const f of await writer.FieldsForObject(objectID)) {
+            existingIOFs.set((f.Name ?? '').toLowerCase(), { ID: f.ID, Status: f.Status ?? 'Active' });
+        }
         for (const n of named) {
             const existing = existingIOFs.get(n.sourceKey.toLowerCase());
             if (existing) {
                 if (existing.Status !== 'Active') {
-                    const reIof = await this.provider.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', this.user);
-                    if (await reIof.Load(existing.ID)) {
+                    const reIof = await writer.LoadField(existing.ID);
+                    if (reIof) {
                         reIof.Status = 'Active';
                         const ok = await reIof.Save();
                         if (!ok) LogError(`[CustomColumnPromoter] Failed to reactivate IOF '${n.sourceKey}': ${reIof.LatestResult?.CompleteMessage ?? 'unknown'}`);
@@ -814,8 +867,10 @@ export class IntegrationCustomColumnPromoter {
                 }
                 continue;
             }
-            const iof = await this.provider.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', this.user);
-            iof.NewRecord();
+            const iof = await writer.NewFieldRow();
+            // An overflow-promoted column was seen in live data, never described by an endpoint and
+            // never declared — so its provenance is 'Sampled', and it has no declared row behind it.
+            writer.StampNewField(iof, null, 'Sampled');
             iof.IntegrationObjectID = objectID;
             iof.Name = n.sourceKey;
             iof.DisplayName = n.sourceKey;
@@ -1113,36 +1168,7 @@ export class IntegrationCustomColumnPromoter {
         return row ? { ID: row.ID, ExternalObjectName: row.ExternalObjectName } : null;
     }
 
-    /** Existing IOF field names (lowercased) for an object — for idempotent IOF creation. */
-    private async existingIOFsByName(objectID: string): Promise<ReadonlyMap<string, { ID: string; Status: string }>> {
-        const rv = new RunView();
-        const res = await rv.RunView<MJIntegrationObjectFieldEntity>({
-            EntityName: 'MJ: Integration Object Fields',
-            ExtraFilter: `IntegrationObjectID='${objectID}'`,
-            Fields: ['ID', 'Name', 'Status'],
-            ResultType: 'simple',
-        }, this.user);
-        const map = new Map<string, { ID: string; Status: string }>();
-        if (res.Success) for (const r of res.Results ?? []) {
-            map.set((r.Name ?? '').toLowerCase(), { ID: String(r.ID), Status: r.Status ?? 'Active' });
-        }
-        return map;
-    }
 
-    /** Resolves the IntegrationObject ID for an external object name under an integration. */
-    private async resolveIntegrationObjectID(integrationID: string, externalObjectName: string): Promise<string | null> {
-        const rv = new RunView();
-        const res = await rv.RunView<MJIntegrationObjectEntity>({
-            EntityName: 'MJ: Integration Objects',
-            ExtraFilter: `IntegrationID='${integrationID}' AND Name='${this.escape(externalObjectName)}'`,
-            Fields: ['ID', 'Name', 'IntegrationID'],
-            ResultType: 'simple',
-            MaxRows: 1,
-            SkipTotalRowCount: true,
-        }, this.user);
-        const row = res.Success ? res.Results?.[0] : undefined;
-        return row ? row.ID : null;
-    }
 
     private escape(value: string): string {
         return value.replace(/'/g, "''");

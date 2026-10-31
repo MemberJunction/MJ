@@ -58,6 +58,12 @@ export type TaskGraphSubmitRequest = {
      */
     Invocation?: TaskGraphInvocationEnvelope;
     /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * run that emitted this graph, carried onto the parent task so dispatched agent steps inherit
+     * the hierarchy directly without walking ancestor runs in a loop.
+     */
+    ParentAgentHierarchy?: string[];
+    /**
      * Seed `$.debug` on the parent row at insert. `paused: true` is start-paused — the dispatcher
      * must not claim until Resume/Step. Written with the row because Pause-after-submit races the
      * first poll.

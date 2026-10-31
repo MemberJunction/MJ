@@ -141,7 +141,7 @@ async function refusalOf(call: () => Promise<unknown>): Promise<string | null> {
 }
 
 /** ST8's fixture: a storage account (and, when no credential existed to reuse, the credential it points at). */
-interface AccountFixture {
+export interface AccountFixture {
     Account: MJFileStorageAccountEntity;
     CreatedCredential: MJCredentialEntity | null;
     Permissions: MJFileStorageAccountPermissionEntity[];
@@ -151,7 +151,7 @@ interface AccountFixture {
  * The credential a fixture account points at: an existing one when the deployment has any (it is never decrypted —
  * no driver call succeeds in this bundle), else a fresh fixture credential. Null (with the reason) when neither works.
  */
-async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
+export async function FixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
     const existing = await new RunView().RunView<{ ID: string }>(
         { EntityName: 'MJ: Credentials', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
     if (existing.Success && existing.Results.length > 0) {
@@ -181,16 +181,20 @@ async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: st
     return { ID: credential.ID, Created: credential };
 }
 
-/** Creates ST8's fixture account on the AWS S3 provider, or returns why it could not. */
-async function createAccountFixture(ctx: IntegrationCheckContext, engine: FileStorageEngine): Promise<AccountFixture | string> {
-    const credential = await fixtureCredential(ctx);
+/** Creates ST8's fixture account on the given provider (defaulting to the AWS S3 provider), or returns why it could not. */
+export async function CreateAccountFixture(
+    ctx: IntegrationCheckContext,
+    engine: FileStorageEngine,
+    provider?: MJFileStorageProviderEntity
+): Promise<AccountFixture | string> {
+    const credential = await FixtureCredential(ctx);
     if (typeof credential === 'string') {
         return credential;
     }
     const account = await ctx.Provider.GetEntityObject<MJFileStorageAccountEntity>('MJ: File Storage Accounts', ctx.User);
     account.NewRecord();
     account.Name = `mj-it-storage-acl-${Date.now()} ${FIXTURE_TAG}`;
-    account.ProviderID = requireProvider(engine, 'AWS S3 Storage').ID;
+    account.ProviderID = (provider ?? requireProvider(engine, 'AWS S3 Storage')).ID;
     account.CredentialID = credential.ID;
     account.IncludeInGlobalSearch = false;
     if (!(await account.Save())) {
@@ -551,7 +555,7 @@ export const StorageChecks: NamedCheck[] = [
             if (!roleID) {
                 SkipCheck('the context user has no role to restrict the fixture account to.');
             }
-            const fixture = await createAccountFixture(ctx, engine);
+            const fixture = await CreateAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
                 SkipCheck(`no fixture storage account could be created: ${fixture}`);
             }
@@ -579,7 +583,7 @@ export const StorageChecks: NamedCheck[] = [
                 SkipCheck(!roleID ? 'the context user has no role to restrict the fixture account to.'
                     : 'the File Storage core actions are not in the action catalog; push the core action metadata.');
             }
-            const fixture = await createAccountFixture(ctx, engine);
+            const fixture = await CreateAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
                 SkipCheck(`no fixture storage account could be created: ${fixture}`);
             }
