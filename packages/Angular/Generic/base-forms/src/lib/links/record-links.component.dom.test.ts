@@ -109,6 +109,7 @@ const flushPromises = () => new Promise<void>((resolve) => setTimeout(resolve, 0
 
 describe('MjRecordLinksComponent', () => {
     afterEach(() => {
+        MjRecordLinksComponent.ClearDependencyCache();
         MjRecordPreviewPopoverComponent.ClearCache();
         vi.restoreAllMocks();
     });

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemberJunction</title>
+  <!-- Office add-ins must load office.js from Microsoft's CDN. -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="pane.css">
+  <script type="module" src="taskpane.js"></script>
+</head>
+<body>
+  <header class="pane-header">
+    <img src="assets/icon-32.png" alt="" width="24" height="24">
+    <div class="pane-header-titles">
+      <h1 class="pane-title">MemberJunction</h1>
+      <div class="pane-subtitle-row">
+        <span class="pane-subtitle" id="server-name"></span>
+        <span class="badge badge-subtle" id="server-custom-badge" hidden>Custom</span>
+      </div>
+    </div>
+    <button
+      type="button"
+      class="button button-secondary button-small"
+      id="toggle-server-switcher"
+      aria-expanded="false"
+      aria-controls="server-switcher"
+    >Server</button>
+  </header>
+
+  <section class="card" id="server-switcher" aria-label="MemberJunction server settings" hidden>
+    <form id="server-form" novalidate>
+      <div class="field-group">
+        <label class="field-label" for="server-url-input">MemberJunction Server URL</label>
+        <input
+          id="server-url-input"
+          name="serverUrl"
+          class="text-input"
+          type="url"
+          autocomplete="url"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          required
+          placeholder="https://api.example.org"
+          aria-describedby="server-url-hint"
+        >
+        <p class="field-hint" id="server-url-hint">Connect to any MemberJunction instance serving the Excel add-in.</p>
+      </div>
+      <div class="action-row">
+        <button type="submit" class="button button-primary button-small" id="connect-server-btn">Connect server</button>
+        <button type="button" class="button button-secondary button-small" id="reset-server-btn" hidden>Use default</button>
+        <button type="button" class="button button-link" id="cancel-server-btn">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <main id="pane-main">
+    <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
+
+    <section class="notice" id="workbook-host-mismatch" role="region" aria-label="Workbook server mismatch" hidden>
+      <p id="workbook-host-mismatch-text"></p>
+      <button type="button" class="button button-secondary button-small" id="adopt-workbook-server">Switch to workbook server</button>
+    </section>
+
+    <section class="card" id="signed-out" hidden>
+      <p>Sign in with your MemberJunction account to browse entities, views, and queries or refresh this workbook.</p>
+      <button type="button" class="button button-primary" id="sign-in">Sign in</button>
+
+      <div class="handoff-box" id="external-handoff-box" hidden>
+        <form id="handoff-code-form" novalidate>
+          <div class="field-group">
+            <label class="field-label" for="connection-code-input">One-time connection code</label>
+            <input
+              id="connection-code-input"
+              name="connectionCode"
+              class="text-input"
+              type="text"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              required
+              aria-describedby="connection-code-hint"
+            >
+            <p class="field-hint" id="connection-code-hint">Approve the connection in your browser, copy the code shown there, and paste it here.</p>
+          </div>
+          <div class="action-row">
+            <button type="submit" class="button button-primary button-small" id="complete-handoff-btn">Complete sign-in</button>
+            <button type="button" class="button button-link" id="cancel-handoff-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="card account-bar" id="signed-in" hidden>
+      <div class="account-meta">
+        <div class="account-who">Signed in as <strong id="signed-in-as"></strong></div>
+        <div class="muted" id="expires"></div>
+      </div>
+      <div class="account-actions">
+        <button type="button" class="button button-link" id="reload-catalog">Reload catalog</button>
+        <span class="muted" aria-hidden="true">&middot;</span>
+        <button type="button" class="button button-link" id="sign-out">Sign out</button>
+      </div>
+    </section>
+
+    <div class="tab-bar" role="tablist" aria-label="MemberJunction workspace" id="workspace-tabs">
+      <button
+        type="button"
+        role="tab"
+        class="tab-button"
+        id="tab-browse"
+        aria-controls="panel-browse"
+        aria-selected="true"
+        tabindex="0"
+      >Browse Data</button>
+      <button
+        type="button"
+        role="tab"
+        class="tab-button"
+        id="tab-workbook"
+        aria-controls="panel-workbook"
+        aria-selected="false"
+        tabindex="-1"
+      >Workbook <span class="tab-badge" id="workbook-count">0</span></button>
+    </div>
+
+    <section id="panel-browse" role="tabpanel" aria-labelledby="tab-browse">
+      <div class="card" id="browse-signed-out-hint" hidden>
+        <p class="muted">Sign in above to browse your MemberJunction applications, entities, saved views, and saved queries.</p>
+      </div>
+
+      <div id="browse-workspace" hidden>
+        <fieldset class="segmented-fieldset">
+          <legend class="sr-only">Data source category</legend>
+          <label class="segmented-option" for="mode-entities">
+            <input type="radio" name="browseMode" id="mode-entities" value="entities" checked>
+            <span>Entities &amp; Views</span>
+          </label>
+          <label class="segmented-option" for="mode-queries">
+            <input type="radio" name="browseMode" id="mode-queries" value="queries">
+            <span>Queries</span>
+          </label>
+        </fieldset>
+
+        <p class="muted status-line" id="catalog-loading" role="status" aria-live="polite" hidden>Loading catalog...</p>
+
+        <div id="entities-browser">
+          <div id="entities-list-view">
+            <div class="field-group">
+              <label class="field-label" for="app-filter">Application</label>
+              <select id="app-filter" class="select-input"></select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="entity-search">Search entities</label>
+              <input
+                id="entity-search"
+                class="text-input"
+                type="search"
+                placeholder="Filter by name or description"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+              >
+            </div>
+            <p class="list-summary muted" id="entity-count"></p>
+            <ul class="catalog-list" id="entity-list"></ul>
+          </div>
+
+          <div class="card" id="entity-detail-view" hidden>
+            <button type="button" class="button button-link back-button" id="back-to-entities">&larr; Back to entities</button>
+            <h2 class="section-heading" id="selected-entity-title"></h2>
+            <p class="muted detail-description" id="selected-entity-desc"></p>
+
+            <form id="entity-load-form">
+              <fieldset class="choice-fieldset">
+                <legend class="field-label">Records &amp; columns</legend>
+                <div class="choice-list" id="entity-view-choices"></div>
+              </fieldset>
+
+              <fieldset class="choice-fieldset">
+                <legend class="field-label">Destination worksheet</legend>
+                <div class="choice-list">
+                  <label class="choice-row" for="entity-target-new">
+                    <input type="radio" name="entityTargetSheet" id="entity-target-new" value="new" checked>
+                    <span class="choice-body">
+                      <span class="choice-title">New worksheet</span>
+                      <span class="choice-sub">Creates a dedicated sheet and Excel table</span>
+                    </span>
+                  </label>
+                  <label class="choice-row" for="entity-target-current">
+                    <input type="radio" name="entityTargetSheet" id="entity-target-current" value="current">
+                    <span class="choice-body">
+                      <span class="choice-title">Current worksheet</span>
+                      <span class="choice-sub" id="entity-current-sheet-label">Active worksheet</span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <button type="submit" class="button button-primary button-block" id="load-entity-btn">Load into Excel</button>
+            </form>
+          </div>
+        </div>
+
+        <div id="queries-browser" hidden>
+          <div id="queries-list-view">
+            <div class="field-group">
+              <label class="field-label" for="query-category">Category</label>
+              <select id="query-category" class="select-input"></select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="query-search">Search queries</label>
+              <input
+                id="query-search"
+                class="text-input"
+                type="search"
+                placeholder="Filter by query name or description"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+              >
+            </div>
+            <p class="list-summary muted" id="query-count"></p>
+            <ul class="catalog-list" id="query-list"></ul>
+          </div>
+
+          <div class="card" id="query-detail-view" hidden>
+            <button type="button" class="button button-link back-button" id="back-to-queries">&larr; Back to queries</button>
+            <div class="detail-badges">
+              <span class="badge badge-subtle" id="selected-query-category" hidden></span>
+            </div>
+            <h2 class="section-heading" id="selected-query-title"></h2>
+            <p class="muted detail-description" id="selected-query-desc"></p>
+
+            <form id="query-load-form" novalidate>
+              <fieldset class="choice-fieldset" id="query-params-fieldset" hidden>
+                <legend class="field-label">Query parameters</legend>
+                <div id="query-params-container"></div>
+              </fieldset>
+
+              <fieldset class="choice-fieldset">
+                <legend class="field-label">Destination worksheet</legend>
+                <div class="choice-list">
+                  <label class="choice-row" for="query-target-new">
+                    <input type="radio" name="queryTargetSheet" id="query-target-new" value="new" checked>
+                    <span class="choice-body">
+                      <span class="choice-title">New worksheet</span>
+                      <span class="choice-sub">Creates a dedicated sheet and Excel table</span>
+                    </span>
+                  </label>
+                  <label class="choice-row" for="query-target-current">
+                    <input type="radio" name="queryTargetSheet" id="query-target-current" value="current">
+                    <span class="choice-body">
+                      <span class="choice-title">Current worksheet</span>
+                      <span class="choice-sub" id="query-current-sheet-label">Active worksheet</span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <div class="notice is-error" id="query-form-error" role="alert" hidden></div>
+
+              <button type="submit" class="button button-primary button-block" id="load-query-btn">Run &amp; Load into Excel</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-workbook" role="tabpanel" aria-labelledby="tab-workbook" hidden>
+      <div class="notice is-error" id="sources-error" role="alert" hidden></div>
+
+      <section class="card" id="no-sources">
+        <p>This workbook has no connected MemberJunction sheets yet.</p>
+        <p class="muted">Choose <strong>Browse Data</strong> to load any entity, saved view, or saved query, or use <strong>Open in Excel</strong> from MemberJunction Explorer.</p>
+        <button type="button" class="button button-secondary button-small" id="go-to-browse-btn">Browse Data</button>
+      </section>
+
+      <section id="sources" hidden>
+        <div class="sources-header">
+          <h2 class="section-heading">Connected sheets</h2>
+          <div class="action-row">
+            <button type="button" class="button button-secondary button-small" id="add-more-data-btn">+ Add sheet</button>
+            <button type="button" class="button button-primary button-small" id="refresh-all">Refresh all</button>
+          </div>
+        </div>
+        <ul class="source-list" id="source-list"></ul>
+        <p class="muted">Each refresh loads what your MemberJunction account can see right now.</p>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

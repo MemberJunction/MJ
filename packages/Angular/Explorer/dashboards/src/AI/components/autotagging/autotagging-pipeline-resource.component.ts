@@ -662,7 +662,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             Fields: ['ID'],
             ResultType: 'count_only',
         });
-        this.InboxPendingCount = result.Success ? result.TotalRowCount : 0;
+        this.InboxPendingCount = result.Success ? result.TotalRowCount ?? 0 : 0;
     }
 
     /**
@@ -693,7 +693,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             Fields: ['ID'],
             ResultType: 'count_only',
         });
-        this.HealthPendingCount = result.Success ? result.TotalRowCount : 0;
+        this.HealthPendingCount = result.Success ? result.TotalRowCount ?? 0 : 0;
     }
 
     /**
@@ -810,9 +810,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
-            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
-            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
-            this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount : 0;
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount ?? 0 : 0;
+            this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount ?? 0 : 0;
 
             // Load Scheduled Job entities referenced by sources so cron descriptions are available
             await this.loadScheduledJobsForSources();
@@ -1039,7 +1039,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             });
             if (result.Success) {
                 this.contentRunsRaw = result.Results;
-                this.totalRunHistoryCount = result.TotalRowCount;
+                this.totalRunHistoryCount = result.TotalRowCount ?? 0;
             }
         }
     }

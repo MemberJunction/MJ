@@ -24,7 +24,7 @@ function buildRoutine(): MJUserRoutineEntity {
         LastResultHash: null,
         WakeConfiguration: null,
         WakeConfigurationObject: {
-            watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+            watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
             wakeGate: {},
         },
     } as unknown as MJUserRoutineEntity;
@@ -47,25 +47,20 @@ describe('WakeGateEvaluator — default watermark collector', () => {
         vi.restoreAllMocks();
     });
 
-    it('reads more than one row for the latest-record probe and keeps the full total', async () => {
+    it('reads the latest record and keeps the full total', async () => {
         const runViews = vi.spyOn(RunView.prototype, 'RunViews').mockResolvedValue([
             viewResult([{ ID: 'a', __mj_UpdatedAt: '2026-10-17T11:30:00Z' }], 1),
-            viewResult(
-                [
-                    { ID: 'a', __mj_UpdatedAt: '2026-10-17T11:30:00Z' },
-                    { ID: 'b', __mj_UpdatedAt: '2026-10-16T09:00:00Z' },
-                ],
-                42
-            ),
+            viewResult([{ ID: 'a', __mj_UpdatedAt: '2026-10-17T11:30:00Z' }], 42),
         ]);
 
         const result = await new WakeGateEvaluator().Evaluate(buildRoutine(), contextUser, now);
 
         expect(runViews).toHaveBeenCalledTimes(1);
         const params: RunViewParams[] = runViews.mock.calls[0][0];
-        expect(params[1].MaxRows).toBeGreaterThan(1);
+        expect(params[1].MaxRows).toBe(1);
+        expect(params[1].SkipTotalRowCount).toBeUndefined();
 
-        const snapshot = result.watermarks['tasks'];
+        const snapshot = result.watermarks['requests'];
         expect(snapshot.totalMatchingCount).toBe(42);
         expect(snapshot.changedCount).toBe(1);
         expect(snapshot.maxUpdatedAt).toBe('2026-10-17T11:30:00.000Z');

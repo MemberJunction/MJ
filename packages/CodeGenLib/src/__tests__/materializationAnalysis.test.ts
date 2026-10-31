@@ -5,9 +5,10 @@ import {
     DEFAULT_SURROGATE_SQL_TYPE,
     DetectAggregationKeyColumns,
     DetectAdditiveMeasures,
+    ChooseMaterializationRefreshStrategy,
     type QueryFieldShape,
 } from '../Database/materializationAnalysis';
-import { SQLServerDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Sub-step C1: query-materialization qualifying + result-shape + surrogate-key analysis
@@ -115,6 +116,19 @@ describe('detectAggregationKeyColumns (Phase 3)', () => {
             sql: 'SELECT region, YEAR(OrderDate) AS yr, SUM(amt) AS total FROM sales GROUP BY region, YEAR(OrderDate)',
             dialect, fields,
         })).toBeNull();
+    });
+    it('returns null for ROLLUP, CUBE and ordinal grouping (not a plain list of grouping columns)', () => {
+        for (const groupBy of ['GROUP BY ROLLUP(region, yr)', 'GROUP BY region, yr WITH ROLLUP', 'GROUP BY CUBE(region, yr)', 'GROUP BY 1, 2']) {
+            const sql = `SELECT region, yr, SUM(amt) AS total FROM sales ${groupBy}`;
+            expect(DetectAggregationKeyColumns({ sql, dialect, fields })).toBeNull();
+        }
+    });
+    it('keys the outer query of a WITH-headed aggregation, with bracket-quoted names read unquoted', () => {
+        const key = DetectAggregationKeyColumns({
+            sql: 'WITH s AS (SELECT * FROM sales) SELECT [region], yr, SUM(amt) AS total FROM s GROUP BY [region], yr',
+            dialect, fields,
+        });
+        expect(key).toEqual([{ name: 'region', type: 'nvarchar(50)' }, { name: 'yr', type: 'int' }]);
     });
     it('returns null when a grouped column is not projected (key would be too narrow)', () => {
         // GROUP BY region, yr but only region is projected → key can only be {region}, which collides.
@@ -226,5 +240,45 @@ describe('detectAdditiveMeasures (Phase 4)', () => {
     it('false when there is no additive aggregate at all', () => {
         expect(DetectAdditiveMeasures('SELECT region FROM sales GROUP BY region')).toBe(false);
         expect(DetectAdditiveMeasures('')).toBe(false);
+    });
+});
+
+describe('ChooseMaterializationRefreshStrategy', () => {
+    const ss = new SQLServerDialect();
+    const pg = new PostgreSQLDialect();
+
+    it('refreshes a keyed single-table aggregation in place', () => {
+        const additive = 'SELECT CustomerID, SUM(Amount) AS Total FROM dbo.Orders GROUP BY CustomerID';
+        const nonAdditive = 'SELECT CustomerID, MAX(Amount) AS Top FROM dbo.Orders GROUP BY CustomerID';
+        expect(ChooseMaterializationRefreshStrategy({ sql: additive, dialect: ss, isKeyed: true })).toBe('Incremental');
+        expect(ChooseMaterializationRefreshStrategy({ sql: nonAdditive, dialect: ss, isKeyed: true })).toBe('DirtyGroupRecompute');
+    });
+
+    it('rebuilds unkeyed and multi-table aggregations in full', () => {
+        const join = 'SELECT o.CustomerID, SUM(o.Amount) AS Total FROM dbo.Orders o JOIN dbo.Customers c ON c.ID = o.CustomerID GROUP BY o.CustomerID';
+        expect(ChooseMaterializationRefreshStrategy({ sql: 'SELECT SUM(Amount) AS Total FROM dbo.Orders', dialect: ss, isKeyed: false })).toBe('FullRebuild');
+        expect(ChooseMaterializationRefreshStrategy({ sql: join, dialect: ss, isKeyed: true })).toBe('FullRebuild');
+    });
+
+    // CTE names are no longer reported as tables by ExtractTableRefs (COMPAT-MAP §4 B1), so a CTE-headed
+    // query over one table now has one table reference. The decision (DISCUSSION §6, 2026-10-27) keeps
+    // FullRebuild for CTE-headed materialized queries, as before.
+    it('keeps a CTE-headed aggregation over one table on FullRebuild, on both platforms', () => {
+        const ssSQL = 'WITH o AS (SELECT CustomerID, Amount FROM dbo.Orders) SELECT CustomerID, SUM(Amount) AS Total FROM o GROUP BY CustomerID';
+        const pgSQL = 'WITH o AS (SELECT customer_id, amount FROM orders) SELECT customer_id, SUM(amount) AS total FROM o GROUP BY customer_id';
+        expect(ChooseMaterializationRefreshStrategy({ sql: ssSQL, dialect: ss, isKeyed: true })).toBe('FullRebuild');
+        expect(ChooseMaterializationRefreshStrategy({ sql: pgSQL, dialect: pg, isKeyed: true })).toBe('FullRebuild');
+    });
+
+    it('counts a table written with and without its default schema as one table', () => {
+        const ssSQL = 'SELECT CustomerID, SUM(Amount) AS Total FROM dbo.Orders WHERE ID IN (SELECT ID FROM Orders) GROUP BY CustomerID';
+        const pgSQL = 'SELECT customer_id, SUM(amount) AS total FROM public.orders WHERE id IN (SELECT id FROM orders) GROUP BY customer_id';
+        expect(ChooseMaterializationRefreshStrategy({ sql: ssSQL, dialect: ss, isKeyed: true })).toBe('Incremental');
+        expect(ChooseMaterializationRefreshStrategy({ sql: pgSQL, dialect: pg, isKeyed: true })).toBe('Incremental');
+    });
+
+    it('keeps a CTE-headed query on FullRebuild even when it is keyed and additive (explicit rule)', () => {
+        const sql = 'WITH x AS (SELECT 1 AS n) SELECT CustomerID, SUM(Amount) AS Total FROM dbo.Orders GROUP BY CustomerID';
+        expect(ChooseMaterializationRefreshStrategy({ sql, dialect: ss, isKeyed: true })).toBe('FullRebuild');
     });
 });

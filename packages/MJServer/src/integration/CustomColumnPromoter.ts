@@ -1162,6 +1162,7 @@ export class IntegrationCustomColumnPromoter {
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND Entity='${this.escape(entityName)}'`,
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, this.user);
         const row = res.Success ? res.Results?.[0] : undefined;
         return row ? { ID: row.ID, ExternalObjectName: row.ExternalObjectName } : null;

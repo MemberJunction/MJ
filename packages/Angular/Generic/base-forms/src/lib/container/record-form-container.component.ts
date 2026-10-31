@@ -2777,6 +2777,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         ResultType: 'simple',
         BypassCache: true,
         MaxRows: 1,
+        SkipTotalRowCount: true,
       });
 
       if (!result?.Success || !Array.isArray(result.Results) || result.Results.length === 0 || this.destroyed) {

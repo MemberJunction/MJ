@@ -141,7 +141,7 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         expect(history[0].parts).toEqual([{ text: 'Describe the active members.' }]);
     });
 
-    it('does not add a turn to a first request that has only a system prompt (the message sent is the empty user turn it always was)', async () => {
+    it('sends the leading user turn for a first request that has only a system prompt (Vertex AI rejects an empty message)', async () => {
         const { client, captured } = capturingSeam();
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof client })._gemini = client;
@@ -150,7 +150,7 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         params.messages = [{ role: 'system', content: 'Everything is in here.' }];
         await llm.ChatCompletion(params);
         expect(captured.create?.history ?? []).toEqual([]);
-        expect(captured.send?.message).toEqual([{ text: '' }]);
+        expect(captured.send?.message).toEqual([{ text: GEMINI_LEADING_USER_TURN_TEXT }]);
     });
 });
 

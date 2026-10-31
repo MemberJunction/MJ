@@ -129,3 +129,41 @@ describe('RelatedRecordCollection.Load — unsaved work', () => {
         expect(collection.Count).toBe(1);
     });
 });
+
+/**
+ * A RunView served from a cache slot can return a frozen array. The collection appends to and
+ * removes from its own list, so it keeps a copy rather than the array it was handed.
+ */
+describe('RelatedRecordCollection — loaded rows from a frozen (cached) result', () => {
+    function frozenOwner(rows: readonly BaseEntity[]): BaseEntity {
+        return {
+            EntityInfo: { Name: 'MJ: Actions' },
+            FirstPrimaryKey: { Value: 'A1' },
+            PrimaryKey: { ToString: () => 'A1' },
+            IsSaved: true,
+            ContextCurrentUser: undefined,
+            ProviderToUse: { RunView: async () => ({ Success: true, Results: Object.freeze([...rows]) }) },
+        } as unknown as BaseEntity;
+    }
+
+    it('Load() over an empty frozen result still lets Add() append', async () => {
+        const collection = new RelatedRecordCollection(frozenOwner([]), { Name: 'Params', RelatedEntity: 'MJ: Action Params', RelatedEntityJoinField: 'ActionID' });
+        await collection.Load();
+        collection.Add(makeRecord('NEW', true, false));
+        expect(collection.Count).toBe(1);
+    });
+
+    it('Load() over a frozen result with rows still lets Add() append', async () => {
+        const collection = new RelatedRecordCollection(frozenOwner([makeRecord('P1')]), { Name: 'Params', RelatedEntity: 'MJ: Action Params', RelatedEntityJoinField: 'ActionID' });
+        await collection.Load();
+        collection.Add(makeRecord('NEW', true, false));
+        expect(collection.Items.map(i => i.Get('ID'))).toEqual(['P1', 'NEW']);
+    });
+
+    it('SetLoadedItems() with a frozen array still lets Add() append', () => {
+        const collection = new RelatedRecordCollection(frozenOwner([]), { Name: 'Params', RelatedEntity: 'MJ: Action Params', RelatedEntityJoinField: 'ActionID' });
+        collection.SetLoadedItems(Object.freeze([makeRecord('P1')]) as BaseEntity[]);
+        collection.Add(makeRecord('NEW', true, false));
+        expect(collection.Count).toBe(2);
+    });
+});

@@ -29,7 +29,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS } from '../generic/runQuerySQLFilterImplementations';
+import { RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS, RunQuerySQLFilterManager } from '../generic/runQuerySQLFilterImplementations';
 
 /** The filter under test, reached through the module's public export. */
 function noKeywordsExpression(value: string): string {
@@ -155,5 +155,37 @@ describe('sqlNoKeywordsExpression safety is unchanged for PostgreSQL input', () 
         // either direction.
         expect(() => noKeywordsExpression('TRUNC(Amount, 2)')).not.toThrow();
         expect(() => noKeywordsExpression('TRUNCATE TABLE Users')).toThrow(/Dangerous SQL keyword detected/);
+    });
+});
+
+/**
+ * The dialect filters write their string literals with the dialect's own writer: where a backslash
+ * escapes (MySQL, Snowflake, Databricks), backslashes are escaped too, so the literal ends where the
+ * database reads it ending. SQL Server and PostgreSQL literals are unchanged (quotes doubled).
+ */
+describe('dialect string literals', () => {
+    const value = "\\' OR 1=1 -- ";
+    const render = (filter: string, dialect: string, v: unknown = value) =>
+        RunQuerySQLFilterManager.Instance.GetFilter(filter, dialect)!.implementation!(v);
+
+    it('sqlString escapes backslashes where they escape, and only there', () => {
+        expect(render('sqlString', 'sqlserver')).toBe("'\\'' OR 1=1 -- '");
+        expect(render('sqlString', 'postgresql')).toBe("'\\'' OR 1=1 -- '");
+        expect(render('sqlString', 'mysql')).toBe("'\\\\'' OR 1=1 -- '");
+        expect(render('sqlString', 'snowflake')).toBe("'\\\\'' OR 1=1 -- '");
+        expect(render('sqlString', 'databricks')).toBe("'\\\\\\' OR 1=1 -- '");
+    });
+
+    it('sqlIn writes each text item the same way', () => {
+        expect(render('sqlIn', 'mysql', ['a\\b', "c'd"])).toBe("('a\\\\b', 'c''d')");
+    });
+
+    it('sqlString drops NUL characters', () => {
+        expect(render('sqlString', 'sqlserver', 'a\u0000b')).toBe("'ab'");
+    });
+
+    it('sqlLikeContains escapes the pattern for LIKE, then writes it as the dialect\'s literal', () => {
+        expect(render('sqlLikeContains', 'sqlserver', "50%'s")).toBe("'%50[%]''s%'");
+        expect(render('sqlLikeContains', 'mysql', 'a\\b')).toBe("'%a\\\\\\\\b%'");
     });
 });

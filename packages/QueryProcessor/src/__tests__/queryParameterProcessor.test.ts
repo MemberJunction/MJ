@@ -307,6 +307,28 @@ describe('QueryParameterProcessor.validateParameters ValidationFilters enforceme
       const result = QueryParameterProcessor.validateParameters({ p: 'a@b.co' }, defWithFilters([{ name: 'email' }]) as never[]);
       expect(result.success).toBe(true);
     });
+    it.each([
+      ['a@b.co', true],
+      ['first.last@sub.example.org', true],
+      ['a@b.c.d', true],
+      ['a@.co', false],
+      ['a@b.', false],
+      ['a@bco', false],
+      ['@b.co', false],
+      ['a@b@c.co', false],
+      ['a b@c.co', false],
+      ['a@b.c o', false],
+    ])('treats %s as an address: %s', (address, valid) => {
+      const result = QueryParameterProcessor.validateParameters({ p: address }, defWithFilters([{ name: 'email' }]) as never[]);
+      expect(result.success).toBe(valid);
+    });
+    it('rejects a long crafted value in linear time', () => {
+      const started = Date.now();
+      const crafted = '!@!.' + '!.'.repeat(100_000) + ' ';
+      const result = QueryParameterProcessor.validateParameters({ p: crafted }, defWithFilters([{ name: 'email' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(Date.now() - started).toBeLessThan(500);
+    });
   });
 
   describe('min filter', () => {
@@ -635,6 +657,19 @@ describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing',
     expect(result.processedSQL).not.toContain('{%');
     expect(result.processedSQL).not.toContain('WHERE');
     expect(result.processedSQL).toContain('SELECT * FROM T');
+  });
+
+  it('treats a null value of a declared parameter as no value when force-processing, so default() applies', () => {
+    const query = {
+      SQL: 'SELECT * FROM T WHERE S >= {{ Lo | default(30) | sqlNumber }}',
+      UsesTemplate: true,
+      Parameters: [{ Name: 'Lo', Type: 'number', IsRequired: false, IsServerSet: false, ValidationFilters: null }],
+    };
+    const forced = QueryParameterProcessor.processQueryTemplate(query as never, { Lo: null }, undefined, true);
+    const plain = QueryParameterProcessor.processQueryTemplate(query as never, { Lo: null }, undefined, false);
+    expect(forced.success).toBe(true);
+    expect(forced.processedSQL).toBe('SELECT * FROM T WHERE S >= 30');
+    expect(plain.processedSQL).toBe(forced.processedSQL);
   });
 
   it('should merge extra params not in query.Parameters into render context', () => {

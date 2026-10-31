@@ -72,6 +72,22 @@ import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/generic-database-provider";
 
+// ─── SQL filter guard ───────────────────────────────────────────────────────
+
+const UUID_SHAPE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/**
+ * Validates that a caller-supplied record id is a UUID before it is interpolated into a SQL
+ * filter, and returns it unchanged. Every id this resolver family accepts is a UNIQUEIDENTIFIER,
+ * so anything else is refused outright rather than escaped — a validated UUID cannot carry SQL.
+ */
+function sqlUuid(value: string, argName: string): string {
+    if (typeof value !== 'string' || !UUID_SHAPE.test(value)) {
+        throw new Error(`${argName} must be a UUID`);
+    }
+    return value;
+}
+
 // ─── RSU Pipeline Output Types ──────────────────────────────────────────────
 
 @ObjectType()
@@ -1246,7 +1262,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const rv = new RunView();
         const result = await rv.RunView<MJIntegrationObjectEntity>({
             EntityName: 'MJ: Integration Objects',
-            ExtraFilter: `IntegrationID='${integrationID}'`,
+            ExtraFilter: `IntegrationID='${sqlUuid(integrationID, 'integrationID')}'`,
             ResultType: 'entity_object',
         }, user);
         if (!result.Success) {
@@ -1998,7 +2014,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             .map(so => so.SourceObjectID!);
 
         // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
-        const idToName = await LookupObjectNamesByID(idsToLookup, user);
+        const idToName = await LookupObjectNamesByID(idsToLookup.map(id => sqlUuid(id, 'ID')), user);
 
         const plan: Array<{ Name: string; Fields?: string[] }> = [];
         for (const so of sourceObjects) {
@@ -2039,7 +2055,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         if (ids && ids.length > 0) {
             // Through the connection's catalog first, and in INPUT order: the batch flow zips these
             // names back onto its id cursor, which a database-ordered result did not match.
-            const idToName = await LookupObjectNamesByID(ids, user);
+            const idToName = await LookupObjectNamesByID(ids.map(id => sqlUuid(id, 'ID')), user);
             return ids
                 .map(id => idToName.get(String(id).toUpperCase()))
                 .filter((n): n is string => !!n);
@@ -2085,7 +2101,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             .map(so => so.SourceObjectID)
             .filter((id): id is string => typeof id === 'string' && id.length > 0);
         // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
-        const idToName = await LookupObjectNamesByID(idsToLookup, user);
+        const idToName = await LookupObjectNamesByID(idsToLookup.map(id => sqlUuid(id, 'ID')), user);
 
         const schemaNameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
         const resolvedNames: string[] = [];
@@ -2128,7 +2144,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<void> {
         const idsToResolve = objects.filter(o => o.SourceObjectID && !o.SourceObjectName).map(o => o.SourceObjectID!);
         if (idsToResolve.length > 0) {
-            const idToName = await LookupObjectNamesByID(idsToResolve, user);
+            const idToName = await LookupObjectNamesByID(idsToResolve.map(id => sqlUuid(id, 'ID')), user);
             for (const obj of objects) {
                 if (obj.SourceObjectID) {
                     const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
@@ -2189,8 +2205,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const rv = new RunView();
         const result = await rv.RunView<MJCompanyIntegrationEntity>({
             EntityName: 'MJ: Company Integrations',
-            ExtraFilter: `ID='${companyIntegrationID}'`,
+            ExtraFilter: `ID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             Fields: ['ID']
         }, user);
@@ -2644,7 +2661,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // Shared-credential safety: do not delete if any OTHER CompanyIntegration uses it.
         const sharedResult = await rv.RunView<MJCompanyIntegrationEntity>({
             EntityName: 'MJ: Company Integrations',
-            ExtraFilter: `CredentialID='${credentialID}' AND ID<>'${companyIntegrationID}'`,
+            ExtraFilter: `CredentialID='${sqlUuid(credentialID, 'credentialID')}' AND ID<>'${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
             ResultType: 'simple',
             Fields: ['ID']
         }, user);
@@ -2729,7 +2746,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Filter stays server-side; no client-side `.filter()` post-pass.
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as DatabaseProviderBase;
             const filters: string[] = [];
-            if (companyID) filters.push(`CompanyID='${companyID}'`);
+            if (companyID) filters.push(`CompanyID='${sqlUuid(companyID, 'companyID')}'`);
             if (activeOnly) filters.push(`IsActive = ${provider.Dialect.BooleanLiteral(true)}`);
             const filter = filters.join(' AND ');
             const result = await rv.RunView<MJCompanyIntegrationEntity>({
@@ -3081,7 +3098,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const rv = new RunView();
         const res = await rv.RunView<{ Entity: string }>({
             EntityName: 'MJ: Company Integration Entity Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+            ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
             Fields: ['Entity'],
             ResultType: 'simple',
         }, user);
@@ -3317,9 +3334,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const escapedObjectName = mapDef.ExternalObjectName.replace(/'/g, "''");
                 const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
                     EntityName: 'MJ: Company Integration Entity Maps',
-                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+                    ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND ExternalObjectName='${escapedObjectName}'`,
                     OrderBy: '__mj_CreatedAt ASC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                     BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
                 }, user);
@@ -3348,7 +3366,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 if (mapDef.FieldMaps) {
                     const existingFieldMaps = await new RunView().RunView<{ SourceFieldName: string }>({
                         EntityName: 'MJ: Company Integration Field Maps',
-                        ExtraFilter: `EntityMapID='${entityMapID}'`,
+                        ExtraFilter: `EntityMapID='${sqlUuid(entityMapID, 'entityMapID')}'`,
                         Fields: ['SourceFieldName'],
                         ResultType: 'simple',
                         BypassCache: true, // read committed field-map state for the idempotency skip
@@ -3721,9 +3739,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // map existed for this connection before this apply. Explicit input always wins.
             const priorMapsResult = await new RunView().RunView<{ ID: string }>({
                 EntityName: 'MJ: Company Integration Entity Maps',
-                ExtraFilter: `CompanyIntegrationID='${input.CompanyIntegrationID.replace(/'/g, "''")}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(input.CompanyIntegrationID, 'CompanyIntegrationID')}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 BypassCache: true,
             }, user);
@@ -3896,7 +3915,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const existingMapByExternalName = new Map<string, MJCompanyIntegrationEntityMapEntity>();
         const allMaps = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
             EntityName: 'MJ: Company Integration Entity Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+            ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
             ResultType: 'entity_object',
             BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
         }, user);
@@ -3955,9 +3974,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const escapedObjectName = obj.SourceObjectName.replace(/'/g, "''");
             const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
                 EntityName: 'MJ: Company Integration Entity Maps',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND ExternalObjectName='${escapedObjectName}'`,
                 OrderBy: '__mj_CreatedAt ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
                 BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
             }, user);
@@ -4024,7 +4044,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // already exist for this entity map, or re-applies multiply them in lockstep.
             const existingFieldMaps = await new RunView().RunView<{ SourceFieldName: string }>({
                 EntityName: 'MJ: Company Integration Field Maps',
-                ExtraFilter: `EntityMapID='${entityMapID}'`,
+                ExtraFilter: `EntityMapID='${sqlUuid(entityMapID, 'entityMapID')}'`,
                 Fields: ['SourceFieldName'],
                 ResultType: 'simple',
                 BypassCache: true, // read committed field-map state for the idempotency skip
@@ -4080,9 +4100,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
             const runResult = await rv.RunView<{ ID: string }>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND Status='In Progress'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND Status='In Progress'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
@@ -4396,9 +4417,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const rv = new RunView();
                 const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
                     EntityName: 'MJ: Company Integration Runs',
-                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND StartedAt >= '${firedAtFilter}'`,
+                    ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}' AND StartedAt >= '${firedAtFilter}'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     Fields: ['ID', 'Status', 'StartedAt']
                 }, user);
@@ -4531,8 +4553,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
             const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
                 EntityName: 'MJ: Company Integrations',
-                ExtraFilter: `ID='${companyIntegrationID}'`,
+                ExtraFilter: `ID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, user);
 
@@ -4550,6 +4573,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Integrations',
                 ExtraFilter: `ID='${companyIntegration.IntegrationID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, user);
             if (!integResult.Success || integResult.Results.length === 0) {
@@ -4616,6 +4640,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Scheduled Job Types',
                 ExtraFilter: `DriverClass='${driverClass}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
@@ -4691,13 +4716,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         companyIntegrationID: string,
         user: UserInfo
     ): Promise<{ ID: string } | null> {
-        const esc = (s: string) => s.replace(/'/g, "''");
-        const lower = esc(companyIntegrationID.toLowerCase());
-        const upper = esc(companyIntegrationID.toUpperCase());
+        const validJobTypeID = sqlUuid(jobTypeID, 'jobTypeID');
+        const validCompanyIntegrationID = sqlUuid(companyIntegrationID, 'companyIntegrationID');
+        const lower = validCompanyIntegrationID.toLowerCase();
+        const upper = validCompanyIntegrationID.toUpperCase();
         const result = await new RunView().RunView<{ ID: string }>({
             EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter:
-                `JobTypeID='${esc(jobTypeID)}' AND Status IN ('Active','Paused') AND ` +
+                `JobTypeID='${validJobTypeID}' AND Status IN ('Active','Paused') AND ` +
                 // Structured "CompanyIntegrationID":"<uuid>" predicate (same form as IntegrationListSchedules),
                 // NOT a bare-UUID substring — so this CI's id can't false-match the same UUID appearing in
                 // another config key (e.g. RelatedCompanyIntegrationID) and repurpose an unrelated job.
@@ -4705,6 +4731,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             OrderBy: '__mj_CreatedAt DESC',
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // uniqueness must see committed jobs, not a stale filtered cache
         }, user);
@@ -4793,7 +4820,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Clear ScheduledJobID on any CompanyIntegration that references this job
             const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
                 EntityName: 'MJ: Company Integrations',
-                ExtraFilter: `ScheduledJobID='${scheduledJobID}'`,
+                ExtraFilter: `ScheduledJobID='${sqlUuid(scheduledJobID, 'scheduledJobID')}'`,
                 ResultType: 'entity_object',
             }, sysUser);
             if (ciResult.Success) {
@@ -4808,7 +4835,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Null out ScheduledJobRunID on CompanyIntegrationRuns that reference this job's runs
             const jobRunsResult = await rv.RunView<MJScheduledJobRunEntity>({
                 EntityName: 'MJ: Scheduled Job Runs',
-                ExtraFilter: `ScheduledJobID='${scheduledJobID}'`,
+                ExtraFilter: `ScheduledJobID='${sqlUuid(scheduledJobID, 'scheduledJobID')}'`,
                 ResultType: 'entity_object',
             }, sysUser);
             if (jobRunsResult.Success) {
@@ -4864,7 +4891,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string; Name: string; Status: string; CronExpression: string; Timezone: string; NextRunAt: string; LastRunAt: string; RunCount: number; SuccessCount: number; FailureCount: number }>({
                 EntityName: 'MJ: Scheduled Jobs',
-                ExtraFilter: `Configuration LIKE '%"CompanyIntegrationID":"${companyIntegrationID}"%'`,
+                ExtraFilter: `Configuration LIKE '%"CompanyIntegrationID":"${sqlUuid(companyIntegrationID, 'companyIntegrationID')}"%'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 ResultType: 'simple',
                 Fields: ['ID', 'Name', 'Status', 'CronExpression', 'Timezone', 'NextRunAt', 'LastRunAt', 'RunCount', 'SuccessCount', 'FailureCount']
@@ -4905,7 +4932,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
             const result = await rv.RunView<EntityMapSummaryOutput>({
                 EntityName: 'MJ: Company Integration Entity Maps',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 OrderBy: 'Priority ASC',
                 ResultType: 'simple',
                 Fields: ['ID', 'EntityID', 'Entity', 'ExternalObjectName', 'SyncDirection', 'Priority', 'Status', 'Configuration'],
@@ -4934,7 +4961,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
             const result = await rv.RunView<FieldMapSummaryOutput>({
                 EntityName: 'MJ: Company Integration Field Maps',
-                ExtraFilter: `EntityMapID='${entityMapID}'`,
+                ExtraFilter: `EntityMapID='${sqlUuid(entityMapID, 'entityMapID')}'`,
                 OrderBy: 'SourceFieldName',
                 ResultType: 'simple',
                 BypassCache: true, // operational list must reflect COMMITTED state
@@ -5017,7 +5044,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 // Delete field maps
                 const fmResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
                     EntityName: 'MJ: Company Integration Field Maps',
-                    ExtraFilter: `EntityMapID='${entityMapID}'`,
+                    ExtraFilter: `EntityMapID='${sqlUuid(entityMapID, 'entityMapID')}'`,
                     ResultType: 'entity_object'
                 }, sysUser);
                 if (fmResult.Success) {
@@ -5027,7 +5054,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 // Delete watermarks
                 const wmResult = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
                     EntityName: 'MJ: Company Integration Sync Watermarks',
-                    ExtraFilter: `EntityMapID='${entityMapID}'`,
+                    ExtraFilter: `EntityMapID='${sqlUuid(entityMapID, 'entityMapID')}'`,
                     ResultType: 'entity_object'
                 }, sysUser);
                 if (wmResult.Success) {
@@ -5141,7 +5168,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const [mapsResult, runsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Company Integration Entity Maps',
-                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                    ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                     ResultType: 'simple',
                     Fields: ['ID', 'Status'],
                     // Status must reflect the live state immediately after a deselect/reselect
@@ -5151,9 +5178,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 },
                 {
                     EntityName: 'MJ: Company Integration Runs',
-                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                    ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords'],
                     BypassCache: true
@@ -5203,7 +5231,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
             const result = await rv.RunView<SyncRunSummaryOutput>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 OrderBy: 'StartedAt DESC',
                 MaxRows: limit,
                 ResultType: 'simple',
@@ -5873,6 +5901,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Scheduled Job Types',
                 ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
@@ -5947,7 +5976,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Step 2: Null out ScheduledJobRunID on CompanyIntegrationRuns (break FK before deleting job runs)
             const ciRunsResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
             }, sysUser);
             if (ciRunsResult.Success) {
@@ -5962,7 +5991,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Step 3: Delete scheduled job runs + jobs (reference CI via Configuration JSON)
             const jobsResult = await rv.RunView<MJScheduledJobEntity>({
                 EntityName: 'MJ: Scheduled Jobs',
-                ExtraFilter: `Configuration LIKE '%${companyIntegrationID}%'`,
+                ExtraFilter: `Configuration LIKE '%${sqlUuid(companyIntegrationID, 'companyIntegrationID')}%'`,
                 ResultType: 'entity_object'
             }, sysUser);
             if (jobsResult.Success) {
@@ -6012,7 +6041,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Step 4: Delete entity map children (field maps, watermarks, record maps)
             const entityMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
                 EntityName: 'MJ: Company Integration Entity Maps',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
             }, sysUser);
             const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
@@ -6044,7 +6073,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
                 const rmResult = await rv.RunView<MJCompanyIntegrationRecordMapEntity>({
                     EntityName: 'MJ: Company Integration Record Maps',
-                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                    ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                     ResultType: 'entity_object'
                 }, sysUser);
                 if (rmResult.Success) {
@@ -6064,7 +6093,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Step 6: Delete employee-company integration links
             const empResult = await rv.RunView<MJEmployeeCompanyIntegrationEntity>({
                 EntityName: 'MJ: Employee Company Integrations',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object'
             }, sysUser);
             if (empResult.Success) {
@@ -6233,7 +6262,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const activeNamesLower = new Set(activeIOs.map(o => o.Name.toLowerCase()));
             const priorMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
                 EntityName: 'MJ: Company Integration Entity Maps',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
                 ResultType: 'entity_object',
                 BypassCache: true, // the diff must read committed state
             }, user);

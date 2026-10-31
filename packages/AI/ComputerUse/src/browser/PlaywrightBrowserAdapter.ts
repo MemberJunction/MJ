@@ -39,6 +39,7 @@ import {
     WaitForLoadState,
     GetAccessibilitySnapshot,
     QueryElement,
+    EvaluateInPage,
 } from './page-perception.js';
 import { RetryPastDismissableOverlay } from './overlay-dismiss.js';
 import {
@@ -48,6 +49,7 @@ import {
 } from './element-extraction.js';
 // ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
 import { ResolveActionLocator } from './selector-resolution.js';
+import { NavigationGuard } from './NavigationGuard.js';
 // warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter.
 import { StorageSnapshot, CaptureStorageInPage, RestoreStorageInPage } from './page-storage.js';
 
@@ -257,6 +259,15 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     /** Per-domain extra headers. Key = domain, Value = headers map */
     private domainHeaders: Map<string, Record<string, string>> = new Map();
+    /** Where navigation may go once {@link RestrictNavigation} is called; `null` = unrestricted. */
+    private navigationPolicy: { AllowedPrivateHosts: string[] | null } | null = null;
+    /** Whether the private-network route and landing check are installed. */
+    private privateNetworkGuardActive = false;
+    /**
+     * The `about:blank` navigation the landing listener started for a blocked page. Awaited before the
+     * next navigation, which it would otherwise interrupt (or be interrupted by).
+     */
+    private pendingBlankNavigation: Promise<void> = Promise.resolve();
     /** Whether the route interceptor has been set up */
     private routeInterceptorActive: boolean = false;
 
@@ -411,7 +422,97 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     public override async Navigate(url: string): Promise<void> {
         this.requirePage();
-        await this.page!.goto(url, { waitUntil: 'load' });
+        this.assertNavigable(url);
+        await this.pendingBlankNavigation;
+        const response = await this.page!.goto(url, { waitUntil: 'load' });
+        await this.refuseBlockedLanding(response?.url());
+    }
+
+    /**
+     * Restricts where this browser may go, for a browser an agent drives (a test harness leaves it
+     * unrestricted). Navigation then opens only http(s) pages and `about:blank`. With
+     * `allowedPrivateHosts`, a request to a loopback, link-local or private-network host (listed ones,
+     * as `host` or `host:port`, excepted) is aborted, and a main-frame navigation that lands on one (a
+     * redirect) is sent back to `about:blank`. Can be called again to replace the list.
+     *
+     * ponytail: best effort, by hostname, for the main frame (see {@link NavigationGuard.IsPrivateNetworkHost}).
+     * Gets through: names that resolve to private addresses, WebSockets, service-worker fetches, an
+     * iframe whose source redirects to a private host, redirects of the page's own requests, and the
+     * redirect request itself (only where it lands is refused). Real isolation is network egress rules
+     * on the machine the browser runs on.
+     */
+    public async RestrictNavigation(allowedPrivateHosts: string[] | null): Promise<void> {
+        this.navigationPolicy = { AllowedPrivateHosts: allowedPrivateHosts?.map((h) => h.trim().toLowerCase().replace(/\.$/, '')) ?? null };
+        if (!allowedPrivateHosts || this.privateNetworkGuardActive) {
+            return;
+        }
+        this.requirePage();
+        this.privateNetworkGuardActive = true;
+        if (!this.routeInterceptorActive) {
+            await this.setupRouteInterceptor();
+            this.routeInterceptorActive = true;
+        }
+        // The route sees a request's first URL only; a redirect's landing shows up here.
+        const page = this.page!;
+        page.on('framenavigated', (frame) => {
+            if (frame === page.mainFrame() && this.isBlockedLanding(frame.url())) {
+                this.pendingBlankNavigation = page.goto('about:blank').then(() => undefined, () => undefined);
+            }
+        });
+    }
+
+    /**
+     * Refuses when a redirect landed a navigation on a blocked host, and sends the page back to
+     * `about:blank`. Reads the landing from the navigation's response: the main-frame listener may
+     * already have moved the page away, so `page.url()` can read `about:blank` by now.
+     */
+    private async refuseBlockedLanding(responseUrl: string | undefined): Promise<void> {
+        const landed = responseUrl ?? this.page!.url();
+        if (this.isBlockedLanding(landed)) {
+            await this.pendingBlankNavigation;
+            if (this.page!.url() !== 'about:blank') {
+                await this.page!.goto('about:blank');
+            }
+            const where = /^https?:/i.test(landed) ? `${new URL(landed).host}, which is on a private network` : `a ${landed.split(':')[0]}: page`;
+            throw new Error(`Navigation refused: it was redirected to ${where}.`);
+        }
+    }
+
+    /** Whether a page landed somewhere the policy refuses: a scheme other than http(s), or a blocked host. */
+    private isBlockedLanding(url: string): boolean {
+        if (!this.navigationPolicy || /^about:blank(#|$)/i.test(url)) {
+            return false;
+        }
+        return !/^https?:/i.test(url) || this.isBlockedPrivateHost(new URL(url));
+    }
+
+    /** Throws when the navigation policy refuses `url`. */
+    private assertNavigable(url: string): void {
+        if (!this.navigationPolicy || url.trim().toLowerCase() === 'about:blank') {
+            return;
+        }
+        let parsed: URL;
+        try {
+            parsed = new URL(url);
+        } catch {
+            throw new Error(`Navigation refused: "${url}" is not a URL.`);
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            throw new Error(`Navigation refused: only http and https pages can be opened (got ${parsed.protocol}).`);
+        }
+        if (this.isBlockedPrivateHost(parsed)) {
+            throw new Error(`Navigation refused: ${parsed.host} is on a private network.`);
+        }
+    }
+
+    /** Whether the policy's private-network rule blocks this http(s) URL. */
+    private isBlockedPrivateHost(url: URL): boolean {
+        const allowed = this.navigationPolicy?.AllowedPrivateHosts;
+        if (!allowed || !NavigationGuard.IsPrivateNetworkHost(url.hostname)) {
+            return false;
+        }
+        const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+        return !allowed.includes(hostname) && !allowed.includes(url.port ? `${hostname}:${url.port}` : hostname);
     }
 
     // ─── Screenshot ────────────────────────────────────────
@@ -454,6 +555,10 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
         return GetAccessibilitySnapshot(this.page);
+    }
+
+    public override async EvaluateInPage<R, A>(fn: (arg: A) => R, arg: A): Promise<R | null> {
+        return EvaluateInPage(this.page, fn, arg, this.config.ActionTimeoutMs);
     }
 
     public override async QueryElement(selector: string): Promise<ElementInfo> {
@@ -843,7 +948,9 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 break;
 
             case 'Navigate':
-                await page.goto(action.Url, { waitUntil: 'load' });
+                this.assertNavigable(action.Url);
+                await this.pendingBlankNavigation;
+                await this.refuseBlockedLanding((await page.goto(action.Url, { waitUntil: 'load' }))?.url());
                 break;
 
             case 'GoBack':
@@ -1013,13 +1120,20 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     }
 
     /**
-     * Set up a single route interceptor that handles all domain-scoped
-     * header injection. Matches every request URL against our domain
-     * headers map and adds matching headers.
+     * Set up the single route interceptor: it aborts a request the navigation policy's private-network
+     * rule blocks, and otherwise adds any domain-scoped extra headers. One interceptor, because a second
+     * one could run first and `continue()` past the other.
      */
     private async setupRouteInterceptor(): Promise<void> {
-        await this.page!.route('**/*', async (route: Route) => {
+        // On the context, so a popup (`window.open`, `target=_blank`), a new page that a page route never
+        // sees, is covered too. A context this adapter attached to is someone else's, with pages of its own
+        // to leave alone, so there it covers this page only.
+        await (this.ownsContext ? this.context! : this.page!).route('**/*', async (route: Route) => {
             const requestUrl = route.request().url();
+            if (this.navigationPolicy?.AllowedPrivateHosts && /^https?:/i.test(requestUrl) && this.isBlockedPrivateHost(new URL(requestUrl))) {
+                await route.abort('blockedbyclient');
+                return;
+            }
             const requestDomain = this.ExtractDomain(requestUrl);
 
             // Find matching domain headers

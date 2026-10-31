@@ -41,7 +41,7 @@ import { RunView, LocalCacheManager, EntityPermissionType } from '@memberjunctio
 import { RowLevelSecurityFilterInfo } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RlsFixture } from '@memberjunction/testing-integration';
 import {
@@ -49,6 +49,7 @@ import {
     SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEEDED_NOGRANT_EMAIL,
     SEEDED_RLS_ENTITY, SEED_FIXTURES_COMMAND
 } from '@memberjunction/testing-integration';
+import { CheckRls12TwoFilterLoadById } from './rls-two-filter-load';
 
 /** ProviderBase exposes the per-instance connection string used in the fingerprint. */
 function connStrOf(provider: IMetadataProvider): string {
@@ -65,16 +66,14 @@ function coldFilter(tag: string): string {
     return `'${tag}' <> 'zzz-cache-test-marker'`;
 }
 
-/** A check on an unusable two-user RLS fixture skip-passes (degrade gracefully) with a loud log. */
-function skipIfUnusable(fx: RlsFixture | undefined, checkId: string): fx is RlsFixture {
+/** A check on an unusable two-user RLS fixture is recorded as skipped ({@link SkipCheck}), not passed. */
+function requireUsableFixture(fx: RlsFixture | undefined): asserts fx is RlsFixture {
     if (!fx || !fx.Usable) {
-        console.warn(
-            `  ⚠ ${checkId} SKIPPED — no two non-exempt users with distinct RLS clauses ` +
-            `(${fx?.Reason ?? 'fixture not provisioned'}). RLS isolation not exercised on this DB.`
+        SkipCheck(
+            `no two non-exempt users with distinct RLS clauses ` +
+            `(${fx?.Reason ?? 'fixture not provisioned'}); RLS isolation is not exercisable on this DB.`
         );
-        return false;
     }
-    return true;
 }
 
 
@@ -88,8 +87,7 @@ function skipIfUnusable(fx: RlsFixture | undefined, checkId: string): fx is RlsF
 export async function CheckRls1TokenSubstitution(ctx: IntegrationCheckContext): Promise<void> {
     const filter = ctx.RlsFixture?.TokenFilter;
     if (!filter) {
-        console.warn('  ⚠ rls-isolation.RLS1 SKIPPED — no {{UserID}}-scoped RLS filter in metadata; token substitution not exercised.');
-        return;
+        SkipCheck('no {{UserID}}-scoped RLS filter in metadata, so token substitution cannot be exercised.');
     }
     const markup = filter.MarkupFilterText(ctx.User);
     Assert(markup.includes(ctx.User.ID), `{{UserID}} not substituted to ${ctx.User.ID}: ${markup}`);
@@ -111,12 +109,10 @@ export async function CheckRls2DistinctPredicateText(ctx: IntegrationCheckContex
     const fx = ctx.RlsFixture;
     const filter = fx?.TokenFilter;
     if (!filter) {
-        console.warn('  ⚠ rls-isolation.RLS2 SKIPPED — no {{UserID}}-scoped RLS filter in metadata.');
-        return;
+        SkipCheck('no {{UserID}}-scoped RLS filter in metadata.');
     }
     if (!fx || UUIDsEqual(fx.UserA.ID, fx.UserB.ID)) {
-        console.warn('  ⚠ rls-isolation.RLS2 SKIPPED — only one distinct user available; isolation not demonstrable (RLS1 proves the mechanism).');
-        return;
+        SkipCheck('only one distinct user is available, so isolation is not demonstrable (RLS1 proves the mechanism).');
     }
     const ma = filter.MarkupFilterText(fx.UserA);
     const mb = filter.MarkupFilterText(fx.UserB);
@@ -136,9 +132,7 @@ export async function CheckRls2_DistinctPredicateText(ctx: IntegrationCheckConte
  * GenerateRunViewFingerprint (the `rls:<hash>` segment).
  */
 export async function CheckRls3FingerprintDiverges(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.RlsFixture, 'rls-isolation.RLS3')) {
-        return;
-    }
+    requireUsableFixture(ctx.RlsFixture);
     const fx = ctx.RlsFixture;
     const entity = ctx.Provider.EntityByName(fx.EntityName);
     Assert(entity != null, `RLS entity '${fx.EntityName}' not found in provider metadata`);
@@ -170,9 +164,7 @@ export async function CheckRls3_FingerprintDiverges(ctx: IntegrationCheckContext
  * 'RunViewCache' (the registry index lives in another category).
  */
 export async function CheckRls4ServerSupersetNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.RlsFixture, 'rls-isolation.RLS4')) {
-        return;
-    }
+    requireUsableFixture(ctx.RlsFixture);
     const fx = ctx.RlsFixture;
     const rv = new RunView();
     const params = (): RunViewParams => ({ EntityName: fx.EntityName, ExtraFilter: coldFilter('rls4'), ResultType: 'simple' });
@@ -214,8 +206,7 @@ export async function CheckRls4_ServerSupersetNoCrossServe(ctx: IntegrationCheck
 export async function CheckRls5LiveRunViewScoping(ctx: IntegrationCheckContext): Promise<void> {
     const pair = ctx.RlsFixture?.LivePair;
     if (!pair) {
-        console.warn('  ⚠ rls-isolation.RLS5 SKIPPED — all available users are RLS-exempt (admins); live scoping not observable here (RLS1/RLS3 prove the mechanism).');
-        return;
+        SkipCheck('all available users are RLS-exempt (admins), so live scoping is not observable here (RLS1/RLS3 prove the mechanism).');
     }
     const entity = ctx.Provider.EntityByName(pair.EntityName);
     Assert(entity != null, `live-pair entity '${pair.EntityName}' not found in provider metadata`);
@@ -282,8 +273,7 @@ export async function CheckRls8SeededScopedDivergence(ctx: IntegrationCheckConte
     const a = ctx.RlsFixture?.SeededScopedA;
     const b = ctx.RlsFixture?.SeededScopedB;
     if (!a || !b) {
-        console.warn(`  ⚠ rls-isolation.RLS8 SKIPPED — seeded scoped users (${SEEDED_SCOPED_A_EMAIL} / ${SEEDED_SCOPED_B_EMAIL}) not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
-        return;
+        SkipCheck(`seeded scoped users (${SEEDED_SCOPED_A_EMAIL} / ${SEEDED_SCOPED_B_EMAIL}) are not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
     }
     const entity = ctx.Provider.EntityByName(SEEDED_RLS_ENTITY);
     Assert(entity != null, `seeded RLS entity '${SEEDED_RLS_ENTITY}' not found in provider metadata`);
@@ -319,8 +309,7 @@ export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckCont
 export async function CheckRls9SeededLiveNoLeak(ctx: IntegrationCheckContext): Promise<void> {
     const a = ctx.RlsFixture?.SeededScopedA;
     if (!a) {
-        console.warn(`  ⚠ rls-isolation.RLS9 SKIPPED — seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
-        return;
+        SkipCheck(`seeded scoped user ${SEEDED_SCOPED_A_EMAIL} is not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
     }
     const result = await new RunView().RunView<{ UserID?: string }>(
         { EntityName: SEEDED_RLS_ENTITY, ResultType: 'simple', MaxRows: 50, BypassCache: true }, a
@@ -345,8 +334,7 @@ export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): 
 export async function CheckRls10NoGrantUserDenied(ctx: IntegrationCheckContext): Promise<void> {
     const nogrant = ctx.RlsFixture?.SeededNoGrant;
     if (!nogrant) {
-        console.warn(`  ⚠ rls-isolation.RLS10 SKIPPED — seeded no-grant user ${SEEDED_NOGRANT_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
-        return;
+        SkipCheck(`seeded no-grant user ${SEEDED_NOGRANT_EMAIL} is not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
     }
     const result = await new RunView().RunView<{ UserID?: string }>(
         { EntityName: SEEDED_RLS_ENTITY, ResultType: 'simple', MaxRows: 50, BypassCache: true }, nogrant
@@ -372,9 +360,7 @@ export async function CheckRls10_NoGrantUserDenied(ctx: IntegrationCheckContext)
  * is provisioned, exactly as IT03 is.
  */
 export async function CheckRls7ClientSmartCacheNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.RlsFixture, 'rls-isolation-client.RLS7')) {
-        return;
-    }
+    requireUsableFixture(ctx.RlsFixture);
     const fx = ctx.RlsFixture;
     const rv = new RunView();
     const params = (): RunViewParams => ({ EntityName: fx.EntityName, CacheLocal: true, ResultType: 'simple' });
@@ -541,6 +527,11 @@ export const RlsIsolationChecks: NamedCheck[] = [
         Id: 'rls-isolation.RLS10',
         Name: 'RLS10: a SEEDED no-grant user is served ZERO rows (deterministic negative — no unauthorized set)',
         Fn: CheckRls10NoGrantUserDenied
+    },
+    {
+        Id: 'rls-isolation.RLS12',
+        Name: 'RLS12: a user holding two Read RLS filters loads one record by ID and gets exactly that record (role clause, single-record resolver, BaseEntity.Load), and list reads return exactly the rows either filter admits',
+        Fn: CheckRls12TwoFilterLoadById
     }
 ];
 

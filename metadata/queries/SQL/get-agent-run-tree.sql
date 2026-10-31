@@ -84,7 +84,7 @@ WITH Tree AS (
         -- Authoring order, used as the sort tiebreak. See the ORDER BY at the bottom.
         r.__mj_CreatedAt                                     AS CreatedAt
     FROM [__mj].[vwAIAgentRuns] r
-    WHERE r.ID = '{{ agentRunID }}'
+    WHERE r.ID = {{ agentRunID | sqlString }}
 
     UNION ALL
 
@@ -118,7 +118,7 @@ WITH Tree AS (
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.AgentRunID = t.NodeID
     WHERE t.NodeType = 'Run'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -153,7 +153,7 @@ WITH Tree AS (
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = JSON_VALUE(s.OutputData, '$.parentTaskID')
     WHERE t.NodeType = 'Step'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -209,7 +209,7 @@ WITH Tree AS (
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ParentID = t.NodeID
     WHERE t.NodeType IN ('TaskGraph', 'Task')
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -249,7 +249,7 @@ WITH Tree AS (
         ON r.ID = s.TargetLogID
     WHERE t.NodeType = 'Step'
       AND s.StepType = 'Sub-Agent'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -289,7 +289,7 @@ WITH Tree AS (
     -- this graph, forever — a cycle bounded only by the depth cap, producing a tree a hundred
     -- levels deep that is the same five nodes repeated.
     WHERE t.NodeType = 'Task'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 )
 SELECT
     t.NodeID,

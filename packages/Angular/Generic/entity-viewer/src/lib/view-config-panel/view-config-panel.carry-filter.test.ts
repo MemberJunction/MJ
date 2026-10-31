@@ -25,6 +25,7 @@ function makeEntity(): EntityInfo {
     ID: 'entity-1',
     Name: 'Accounts',
     DisplayNameOrName: 'Accounts',
+    GetDeniedReadFields: () => new Set<string>(),
     Fields: [
       { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', Description: 'Primary legal name of the account', DefaultInView: true, DefaultColumnWidth: 200, Type: 'nvarchar', NeedsQuotes: true, EntityFieldValues: [] },
       { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', Description: 'Lifecycle status of the account', DefaultInView: true, DefaultColumnWidth: 120, Type: 'nvarchar', NeedsQuotes: true, EntityFieldValues: [] },
@@ -263,6 +264,9 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
 
   it('decorates FilterFields with description and sqlType, compiles Rule Builder to SQL WHERE, and supports one-way Custom SQL Override in Advanced Mode', () => {
     const panel = makePanel();
+    panel.Provider = {
+      CurrentUser: { ID: 'user-owner', Type: 'Owner' },
+    } as Partial<IMetadataProvider> as IMetadataProvider;
     panel.DefaultSaveAsNew = true;
     panel.PendingNewViewFilterState = {
       logic: 'and',

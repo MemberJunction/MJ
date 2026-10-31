@@ -24,6 +24,12 @@
         <button class="icon-btn" (click)="refresh()" title="Refresh">
           <i class="fa-solid fa-refresh"></i>
         </button>
+        @if (CanEditQuery) {
+          <button class="icon-btn" (click)="OpenRefreshForAll()" title="Refresh the metadata of all queries (dry run first)"
+            aria-label="Refresh the metadata of all queries">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+          </button>
+        }
       </div>
     </div>
 
@@ -146,6 +152,10 @@
             </span>
           }
           @if (CanEditQuery) {
+            <button class="icon-btn" (click)="OpenRefreshForQuery(selectedQuery)" title="Refresh this query's metadata (dry run first)"
+              aria-label="Refresh this query's metadata">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
             <button class="icon-btn" (click)="OpenEditDrawer(selectedQuery)" title="Edit Query">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
@@ -180,6 +190,14 @@
         [class.fa-folder-open]="node.expanded"></i>
         <span class="category-name">{{ node.category.Name }}</span>
         <span class="category-count">({{ getNodeQueryCount(node) }})</span>
+        @if (CanEditQuery && node.category.ID !== '__uncategorized__') {
+          <button class="category-add-btn category-refresh-btn"
+            (click)="OpenRefreshForCategory(node, $event)"
+            [title]="'Refresh the metadata of the queries in ' + node.category.Name + ' (dry run first)'"
+            [attr.aria-label]="'Refresh the metadata of the queries in ' + node.category.Name">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+          </button>
+        }
         @if (CanCreateQuery && node.category.ID !== '__uncategorized__') {
           <button class="category-add-btn"
             (click)="OpenCreateDrawer(node.category.ID); $event.stopPropagation()"
@@ -355,7 +373,9 @@
     <div class="query-drawer-footer">
 
       <!-- Error message -->
-      @if (DrawerSaveError) {
+      @if (DrawerSaveDiagnostics.length > 0) {
+        <mj-query-diagnostics class="drawer-diagnostics" [Headline]="DrawerSaveError" [Diagnostics]="DrawerSaveDiagnostics" Severity="error" />
+      } @else if (DrawerSaveError) {
         <div class="drawer-error">
           <i class="fa-solid fa-triangle-exclamation"></i> {{ DrawerSaveError }}
         </div>
@@ -383,3 +403,15 @@
 
   </div>
 }
+
+<!-- Refresh metadata: dry run first, then apply; live progress per query -->
+<mj-query-refresh-dialog
+  [Visible]="ShowRefreshDialog"
+  [Scope]="RefreshScope"
+  [ScopeLabel]="RefreshScopeLabel"
+  [AllowOpenQuery]="true"
+  [AllowSkipDryRun]="RefreshScope?.Kind === 'Queries'"
+  [Provider]="ProviderToUse"
+  (Closed)="OnRefreshDialogClosed()"
+  (Applied)="OnRefreshApplied()"
+  (OpenQuery)="OnRefreshOpenQuery($event)" />

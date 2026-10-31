@@ -44,7 +44,7 @@
  */
 import type { EntityInfo } from '@memberjunction/core';
 import { RunView } from '@memberjunction/core';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { HasFullCatalogVisibility } from './catalog-visibility';
@@ -109,19 +109,17 @@ function catalogAccess(ctx: IntegrationCheckContext): CatalogAccess | null {
 }
 
 /**
- * The layered entities, or null when this run genuinely cannot reach any catalog.
+ * The layered entities; skips the running check when this run genuinely cannot reach any catalog.
  *
- * The skip is logged with the provider name so a green result is never mistaken for a real one.
+ * The skip reason names the provider so a skipped result is never mistaken for a real one.
  */
-async function catalogOrSkip(ctx: IntegrationCheckContext, checkId: string): Promise<EntityInfo[] | null> {
+async function catalogOrSkip(ctx: IntegrationCheckContext): Promise<EntityInfo[]> {
     if (!catalogAccess(ctx)) {
         const providerName = ctx.Provider?.constructor?.name ?? 'unknown';
-        console.log(`      → ${checkId} SKIPPED (no assertions ran): no catalog access on this run path (provider '${providerName}')`);
-        return null;
+        SkipCheck(`no catalog access on this run path (provider '${providerName}'): needs an mssql pool or a PostgreSQL provider with ExecuteSQL`);
     }
     if (ctx.Pool && !(await HasFullCatalogVisibility(ctx.Pool))) {
-        console.log(`      → ${checkId} SKIPPED (no assertions ran): the login lacks VIEW DEFINITION — sys.sql_modules definitions are hidden from least-privilege logins`);
-        return null;
+        SkipCheck('the login lacks VIEW DEFINITION; sys.sql_modules definitions are hidden from least-privilege logins (needs a db_owner/sa connection)');
     }
     return requireLayered(ctx);
 }
@@ -207,8 +205,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV2',
         Name: 'LBV2: both the inner and outer views physically exist as distinct objects',
         Fn: async (ctx): Promise<void> => {
-            const entities = await catalogOrSkip(ctx, 'LBV2');
-            if (!entities) return;
+            const entities = await catalogOrSkip(ctx);
 
             for (const e of entities) {
                 const inner = await viewColumns(ctx, e.SchemaName, e.GeneratedViewName);
@@ -225,8 +222,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV3',
         Name: 'LBV3: the outer view selects FROM the inner view — it is genuinely a wrapper',
         Fn: async (ctx): Promise<void> => {
-            const entities = await catalogOrSkip(ctx, 'LBV3');
-            if (!entities) return;
+            const entities = await catalogOrSkip(ctx);
 
             for (const e of entities) {
                 const def = await viewDefinition(ctx, e.SchemaName, e.BaseView);
@@ -241,8 +237,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV4',
         Name: 'LBV4: CodeGen has not overwritten the application-owned outer view',
         Fn: async (ctx): Promise<void> => {
-            const entities = await catalogOrSkip(ctx, 'LBV4');
-            if (!entities) return;
+            const entities = await catalogOrSkip(ctx);
 
             for (const e of entities) {
                 const outer = await viewDefinition(ctx, e.SchemaName, e.BaseView);
@@ -264,8 +259,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV5',
         Name: 'LBV5: every inner-view column is inherited by the outer view',
         Fn: async (ctx): Promise<void> => {
-            const entities = await catalogOrSkip(ctx, 'LBV5');
-            if (!entities) return;
+            const entities = await catalogOrSkip(ctx);
 
             for (const e of entities) {
                 const inner = await viewColumns(ctx, e.SchemaName, e.GeneratedViewName);

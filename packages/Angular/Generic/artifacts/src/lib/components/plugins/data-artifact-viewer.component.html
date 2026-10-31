@@ -126,6 +126,16 @@
         </div>
       }
 
+      @if (UpdateQueryError) {
+        <div class="update-query-failure">
+          @if (UpdateQueryDiagnostics.length > 0) {
+            <mj-query-diagnostics [Headline]="UpdateQueryError" [Diagnostics]="UpdateQueryDiagnostics" Severity="error" />
+          } @else {
+            <mj-alert Variant="error" Size="sm">{{ UpdateQueryError }}</mj-alert>
+          }
+        </div>
+      }
+
       <!-- Grid -->
       <div class="grid-container">
         <!-- Saving overlay -->

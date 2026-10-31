@@ -1,0 +1,90 @@
+<div class="qcg-wrap">
+  <table class="qcg-table">
+    <thead>
+      <tr>
+        <th class="qcg-seq">#</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Nullable</th>
+        <th>Source</th>
+        <th>Detected by</th>
+        <th class="qcg-annotation">Description</th>
+        @if (EditMode) {
+          <th class="qcg-actions"><span class="qcg-sr-only">Actions</span></th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (field of Fields; track TrackField($index, field)) {
+        <tr class="qcg-row">
+          <td class="qcg-seq qcg-fact">{{ field.Sequence }}</td>
+          <td class="qcg-fact qcg-name">
+            @if (EditMode && !field.IsSaved) {
+              <input class="mj-input qcg-input" [(ngModel)]="field.Name" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" aria-label="Field name" placeholder="Column name" />
+            } @else {
+              <code>{{ field.Name }}</code>
+            }
+            @if (field.IsComputed) {
+              <span class="qcg-tag" title="The column has no direct source; the database computes it.">computed</span>
+            }
+            @if (field.IsSummary) {
+              <span class="qcg-tag" title="A summary column">summary</span>
+            }
+          </td>
+          <td class="qcg-fact"><code>{{ field.SQLFullType || field.SQLBaseType }}</code></td>
+          <td class="qcg-fact">{{ NullableLabel(field) }}</td>
+          <td class="qcg-fact qcg-source">
+            @if (EntitySource(field); as source) {
+              <button type="button" class="qcg-link" (click)="OnOpenSource(field)"
+                [title]="'Open the entity field ' + source">
+                <i class="fa-solid fa-link"></i> {{ source }}
+              </button>
+            } @else if (field.SourceObjectName) {
+              <code class="qcg-object" title="Reported by the database server; no MJ entity reads this object">{{ field.SourceObjectName }}</code>
+            } @else {
+              <span class="qcg-muted">—</span>
+            }
+          </td>
+          <td class="qcg-fact">
+            <span class="qcg-detect" [class]="'qcg-detect qcg-detect--' + (field.DetectionMethod || 'none').toLowerCase()" [title]="DetectionTitle(field)">{{ DetectionLabel(field) }}</span>
+          </td>
+          <td class="qcg-annotation">
+            @if (EditMode) {
+              <textarea class="mj-input qcg-textarea" rows="1" [(ngModel)]="field.Description" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Description of ' + field.Name" placeholder="Describe this column"></textarea>
+              @if (field.IsComputed) {
+                <textarea class="mj-input qcg-textarea" rows="1" [(ngModel)]="field.ComputationDescription" [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'How ' + field.Name + ' is computed'" placeholder="How it is computed"></textarea>
+              }
+              <label class="qcg-check">
+                <input type="checkbox" [(ngModel)]="field.IsSummary" [ngModelOptions]="{ standalone: true }" (ngModelChange)="OnAnnotationChange()" />
+                Summary column
+              </label>
+              @if (field.IsSummary) {
+                <textarea class="mj-input qcg-textarea" rows="1" [(ngModel)]="field.SummaryDescription" [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Summary description of ' + field.Name" placeholder="What it summarizes"></textarea>
+              }
+            } @else {
+              @if (field.Description) {
+                <span>{{ field.Description }}</span>
+              } @else {
+                <span class="qcg-muted">—</span>
+              }
+              @if (field.ComputationDescription) {
+                <div class="qcg-sub">{{ field.ComputationDescription }}</div>
+              }
+            }
+          </td>
+          @if (EditMode) {
+            <td class="qcg-actions">
+              <button mjButton Variant="icon" type="button" (click)="Remove.emit(field)" [attr.aria-label]="'Remove field ' + field.Name" title="Remove field">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
