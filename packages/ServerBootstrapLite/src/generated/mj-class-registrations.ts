@@ -1156,7 +1156,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (66 classes)
+// @memberjunction/core-entities-server (67 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1227,7 +1227,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (165 classes)
+// @memberjunction/core-actions (167 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1294,6 +1294,7 @@ import {
     GenerateIntegrationActionAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -1349,6 +1350,7 @@ import {
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2443,6 +2445,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GenerateIntegrationActionAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -2469,13 +2472,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IPGeolocationAction,
     IntegrationActionExecutor,
     InviteToListAction,
-    JSONTransformAction,
-    ListMCPToolsAction,
-    ListObjectsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    JSONTransformAction,
+    ListMCPToolsAction,
+    ListObjectsAction,
     ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
@@ -2502,6 +2505,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2592,7 +2596,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1102;
+export const CLASS_REGISTRATIONS_COUNT = 1104;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

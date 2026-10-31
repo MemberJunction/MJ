@@ -1,0 +1,32 @@
+{
+  "kind": "workflow",
+  "title": "How do I renew my certification?",
+  "lanes": [
+    { "id": "member", "label": "Member" },
+    { "id": "staff", "label": "Certification staff" },
+    { "id": "exceptions", "label": "Exceptions", "role": "exceptions" }
+  ],
+  "nodes": [
+    { "id": "log", "lane": "member", "kind": "start", "label": "Log CE credits", "sublabel": "30 credits in portal", "detail": "Record each course or session as you finish it so the audit finds your 30 required credits." },
+    { "id": "submit", "lane": "member", "kind": "task", "label": "Submit renewal", "sublabel": "form and fee by Dec 31", "detail": "Send the renewal form and pay the fee before your certificate expires on December 31." },
+    { "id": "review", "lane": "staff", "kind": "decision", "label": "Enough CE credits?", "sublabel": "10% audit sample", "detail": "Staff verify your logged credits against the renewal requirement." },
+    { "id": "issue", "lane": "staff", "kind": "end", "label": "Issue new certificate", "sublabel": "valid 3 years", "detail": "Your new certificate is issued and the next 3-year renewal cycle begins." },
+    { "id": "short", "lane": "exceptions", "kind": "error", "label": "Short on credits", "sublabel": "90-day extension", "detail": "If you are short on credits, staff offer a 90-day extension instead of letting the certificate lapse." },
+    { "id": "makeup", "lane": "member", "kind": "task", "label": "Make up credits", "sublabel": "within the extension", "detail": "Earn and log the missing credits during the 90-day grace window, then resubmit." },
+    { "id": "payfail", "lane": "exceptions", "kind": "error", "label": "Payment fails", "sublabel": "renewal on hold", "detail": "A declined payment puts the renewal on hold until the fee is paid." }
+  ],
+  "edges": [
+    { "id": "e1", "from": "log", "to": "submit", "label": "credits logged" },
+    { "id": "e2", "from": "submit", "to": "review", "label": "fee paid" },
+    { "id": "e3", "from": "review", "to": "issue", "label": "yes", "role": "branch" },
+    { "id": "e4", "from": "review", "to": "short", "label": "no", "role": "error" },
+    { "id": "e5", "from": "short", "to": "makeup", "label": "extension granted" },
+    { "id": "e6", "from": "makeup", "to": "submit", "label": "resubmit" },
+    { "id": "e7", "from": "submit", "to": "payfail", "label": "card declined", "role": "error" }
+  ],
+  "mainPath": ["log", "submit", "review", "issue"],
+  "cards": [
+    { "id": "deadline", "tone": "success", "title": "Renew before December 31", "body": "Log 30 CE credits and submit the form and fee before your certificate expires.", "nodes": ["log", "submit", "review", "issue"] },
+    { "id": "short-card", "tone": "warning", "title": "Short on CE credits?", "body": "Ask for a 90-day extension instead of letting your certification lapse.", "nodes": ["short", "makeup", "submit"] }
+  ]
+}

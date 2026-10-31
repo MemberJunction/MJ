@@ -1,0 +1,45 @@
+{
+  "kind": "workflow",
+  "title": "How does laboratory accreditation and site-visit remediation work?",
+  "lanes": [
+    { "id": "lab", "label": "Applicant lab" },
+    { "id": "intake", "label": "Accreditation staff" },
+    { "id": "inspectors", "label": "Site assessors" },
+    { "id": "exceptions", "label": "Remediation & appeals", "role": "exceptions" }
+  ],
+  "nodes": [
+    { "id": "apply", "lane": "lab", "col": 0, "kind": "start", "label": "Submit application", "sublabel": "quality manual + fee", "detail": "Upload the laboratory quality manual, proficiency test history, and application fee." },
+    { "id": "completeness", "lane": "intake", "col": 1, "kind": "decision", "label": "Dossier complete?", "sublabel": "staff desk review", "detail": "Staff verify all required SOPs and proficiency records are attached." },
+    { "id": "rfi", "lane": "exceptions", "col": 1, "kind": "waiting", "label": "Request missing docs", "sublabel": "30-day window", "detail": "Applicant has 30 days to upload missing SOPs before the application expires." },
+    { "id": "reupload", "lane": "lab", "col": 2, "kind": "task", "label": "Upload revised dossier", "sublabel": "portal supplement", "detail": "Provide the requested documents to resume desk review." },
+    { "id": "schedule", "lane": "intake", "col": 2, "kind": "task", "label": "Assign assessor team", "sublabel": "2-day site window", "detail": "Staff match conflict-free technical assessors to the lab's test disciplines." },
+    { "id": "prep", "lane": "lab", "col": 3, "kind": "task", "label": "Confirm site readiness", "sublabel": "calibration logs ready", "detail": "Confirm dates and prepare instrument calibration records for inspection." },
+    { "id": "onsite", "lane": "inspectors", "col": 4, "kind": "task", "label": "Conduct on-site audit", "sublabel": "witnessed testing", "detail": "Assessors observe bench testing and audit traceability records." },
+    { "id": "findings", "lane": "inspectors", "col": 5, "kind": "decision", "label": "Any deficiencies?", "sublabel": "exit briefing", "detail": "Assessors classify findings as none, minor CAPA, or major non-conformance." },
+    { "id": "capa", "lane": "exceptions", "col": 5, "kind": "error", "label": "Submit CAPA plan", "sublabel": "60 days for root cause", "detail": "Lab submits root-cause corrective actions and evidence for each deficiency." },
+    { "id": "verify_capa", "lane": "inspectors", "col": 6, "kind": "decision", "label": "CAPA verified?", "sublabel": "assessor sign-off", "detail": "Lead assessor reviews corrective evidence or requests a focused follow-up." },
+    { "id": "committee_vote", "lane": "intake", "col": 7, "kind": "task", "label": "Committee grant", "sublabel": "2-year certificate", "detail": "Accreditation committee ratifies the report and issues the certificate." },
+    { "id": "accredited", "lane": "lab", "col": 8, "kind": "end", "label": "Accredited lab", "sublabel": "listed in directory", "detail": "Laboratory receives its accreditation seal and public directory listing." }
+  ],
+  "edges": [
+    { "id": "e1", "from": "apply", "to": "completeness", "label": "submitted" },
+    { "id": "e2", "from": "completeness", "to": "schedule", "label": "complete", "role": "branch" },
+    { "id": "e3", "from": "completeness", "to": "rfi", "label": "missing items", "role": "error" },
+    { "id": "e4", "from": "rfi", "to": "reupload", "label": "notice sent" },
+    { "id": "e5", "from": "reupload", "to": "completeness", "label": "resubmitted" },
+    { "id": "e6", "from": "schedule", "to": "prep", "label": "dates proposed" },
+    { "id": "e7", "from": "prep", "to": "onsite", "label": "confirmed" },
+    { "id": "e8", "from": "onsite", "to": "findings", "label": "audit complete" },
+    { "id": "e9", "from": "findings", "to": "committee_vote", "label": "clear", "role": "branch" },
+    { "id": "e10", "from": "findings", "to": "capa", "label": "deficiencies cited", "role": "error" },
+    { "id": "e11", "from": "capa", "to": "verify_capa", "label": "evidence uploaded" },
+    { "id": "e12", "from": "verify_capa", "to": "committee_vote", "label": "accepted", "role": "branch" },
+    { "id": "e13", "from": "verify_capa", "to": "capa", "label": "needs revision", "role": "error" },
+    { "id": "e14", "from": "committee_vote", "to": "accredited", "label": "issued" }
+  ],
+  "mainPath": ["apply", "completeness", "schedule", "prep", "onsite", "findings", "committee_vote", "accredited"],
+  "cards": [
+    { "id": "standard-track", "tone": "success", "title": "Standard accreditation track", "body": "Complete dossier, 2-day site audit with no open deficiencies, and committee grant.", "nodes": ["apply", "completeness", "schedule", "prep", "onsite", "findings", "committee_vote", "accredited"] },
+    { "id": "capa-window", "tone": "error", "title": "Deficiencies & CAPA", "body": "Labs have 60 days after the exit briefing to submit corrective action evidence.", "nodes": ["findings", "capa", "verify_capa", "committee_vote"] }
+  ]
+}

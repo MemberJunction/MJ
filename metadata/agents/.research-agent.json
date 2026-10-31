@@ -783,6 +783,26 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C039923-81FB-47A3-97DC-9A163AD4D2DF"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A5825063-5B35-40B2-95A3-C64F402BAB1E"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
                   "ActionID": "@lookup:MJ: Actions.Name=Generate Image",
                   "Status": "Active"
                 },
