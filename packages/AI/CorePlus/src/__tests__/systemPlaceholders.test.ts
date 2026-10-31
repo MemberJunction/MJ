@@ -5,6 +5,7 @@ import {
     SYSTEM_PLACEHOLDER_CATEGORIES
 } from '../prompt.system-placeholders';
 import type { SystemPlaceholder, AIPromptParams } from '../index';
+import type { ChatMessage } from '@memberjunction/ai';
 
 describe('SYSTEM_PLACEHOLDER_CATEGORIES', () => {
     it('should have expected categories', () => {
@@ -224,5 +225,66 @@ describe('SystemPlaceholderManager', () => {
             expect(resolved._HAS_CONVERSATION_CONTEXT).toBe('true');
             expect(resolved._CONVERSATION_LENGTH).toBe('2');
         });
+    });
+});
+
+describe('SystemPlaceholderManager.ReplaceAvailablePlaceholders', () => {
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+        SystemPlaceholderManager.resetToDefaults();
+    });
+
+    const sys = (content: string): ChatMessage => ({ role: 'system', content });
+    const replace = (messages: ChatMessage[], params: Partial<AIPromptParams> = {}) =>
+        SystemPlaceholderManager.ReplaceAvailablePlaceholders(messages, params);
+    const user = { Name: 'Ada', Email: 'ada@example.com' } as unknown as AIPromptParams['contextUser'];
+
+    it('replaces a token in every message with the same value', async () => {
+        const out = await replace([sys('Today is {{ _CURRENT_DATE }}.'), { role: 'user', content: 'Since {{_CURRENT_DATE}}' }]);
+        expect(out.map(m => m.content)).toEqual(['Today is 2026-10-14.', 'Since 2026-10-14']);
+        expect(out[1].role).toBe('user');
+    });
+
+    it('sends everything except bare tokens exactly as written', async () => {
+        const literal = "{{name}} {{ source.title }} {{ items[0] }} {{ a + b }} {{ _CURRENT_DATE | upper }} " +
+            "{% if not sources %}none{% endif %} {{ title | default('x') }} {% for i in range(3) %}{% endfor %} " +
+            "\\frac{{a}}{b} {# note #} {{#each items}} {{{ _CURRENT_DATE }}} {{ constructor }} Acme & Co <b>";
+        const [out] = await replace([sys(`${literal} {{ _CURRENT_DATE }}`)]);
+        expect(out.content).toBe(`${literal} 2026-10-14`);
+    });
+
+    it('resolves user tokens only with a contextUser, and never prompt or execution tokens without them', async () => {
+        const text = '{{ _USER_NAME }} {{ _PROMPT_NAME }} {{ _MODEL_ID }}';
+        expect((await replace([sys(text)]))[0].content).toBe(text);
+        expect((await replace([sys(text)], { contextUser: user }))[0].content).toBe('Ada {{ _PROMPT_NAME }} {{ _MODEL_ID }}');
+    });
+
+    it('leaves block content alone', async () => {
+        const blocks: ChatMessage = { role: 'user', content: [{ type: 'text', content: '{{ _CURRENT_DATE }}' }] } as unknown as ChatMessage;
+        const out = await replace([blocks, sys('{{ _CURRENT_DATE }}')]);
+        expect(out[0]).toBe(blocks);
+        expect(out[1].content).toBe('2026-10-14');
+    });
+
+    it('runs only the placeholders the text names, and returns the input when it names none', async () => {
+        const other = vi.fn(async () => 'x');
+        SystemPlaceholderManager.addPlaceholder({ name: '_OTHER', requires: [], getValue: other });
+        await replace([sys('{{ _CURRENT_DATE }}')]);
+        expect(other).not.toHaveBeenCalled();
+        const input = [sys('{{name}} and no placeholder')];
+        expect(await replace(input)).toBe(input);
+    });
+
+    it('keeps the token of a placeholder that fails, returns nothing, or does not declare requires', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        SystemPlaceholderManager.addPlaceholder({ name: '_BROKEN', requires: [], getValue: async () => { throw new Error('no'); } });
+        SystemPlaceholderManager.addPlaceholder({ name: '_EMPTY', requires: ['contextUser'], getValue: async () => undefined as unknown as string });
+        SystemPlaceholderManager.addPlaceholder({ name: '_TURN_COUNT', getValue: async (p) => String(p.conversationMessages?.length || 0) });
+        const [out] = await replace([sys('{{ _BROKEN }} {{ _EMPTY }} {{ _TURN_COUNT }} {{ _CURRENT_DATE }}')], { contextUser: user });
+        expect(out.content).toBe('{{ _BROKEN }} {{ _EMPTY }} {{ _TURN_COUNT }} 2026-10-14');
     });
 });

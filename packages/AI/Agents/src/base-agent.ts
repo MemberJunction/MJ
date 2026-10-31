@@ -110,6 +110,7 @@ import {
     GetTaskGraphSubmitter,
     SkillAvailabilityPurpose,
     ArtifactDirective,
+    SystemPlaceholderManager,
     type AIPromptExecutionScope
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
@@ -1708,6 +1709,7 @@ export class BaseAgent {
 
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
             // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
+            const messagesBeforeParts = new Set(wrappedParams.conversationMessages);
             this.InjectScopedPromptParts(
                 params.agent,
                 wrappedParams.conversationMessages,
@@ -1715,6 +1717,7 @@ export class BaseAgent {
                 primaryScopeRecordId,
                 secondaryScopes
             );
+            await this.replaceScopedPartPlaceholders(wrappedParams.conversationMessages, messagesBeforeParts, params.contextUser);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -3236,7 +3239,9 @@ export class BaseAgent {
      * primary prompt under the run's polymorphic scope (the SAME PrimaryScope/SecondaryScopes the
      * runtime threads for memory), and unshifts the assembled role-tagged messages onto
      * `conversationMessages`. In-memory + synchronous (parts are cached on `AIEngine`). No-op when
-     * the agent has no active prompt or no parts resolve for the scope.
+     * the agent has no active prompt or no parts resolve for the scope. System placeholders in the
+     * messages it adds are replaced afterwards ({@link replaceScopedPartPlaceholders}), so an override
+     * gets that too.
      */
     protected InjectScopedPromptParts(
         agent: MJAIAgentEntityExtended,
@@ -3263,6 +3268,26 @@ export class BaseAgent {
                 { primaryScopeEntityId, primaryScopeRecordId, secondaryScopes },
                 conversationMessages
             );
+        } catch (e) {
+            this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'ScopedPromptParts' });
+        }
+    }
+
+    /**
+     * Replace system placeholders such as `{{ _CURRENT_DATE }}` in the messages that
+     * {@link InjectScopedPromptParts} added, meaning every message not in `before`. Part text is not a
+     * template: see {@link SystemPlaceholderManager.ReplaceAvailablePlaceholders} for what resolves.
+     * On failure the parts are kept as written.
+     */
+    private async replaceScopedPartPlaceholders(messages: ChatMessage[], before: ReadonlySet<ChatMessage>, contextUser?: UserInfo): Promise<void> {
+        const added = messages.filter(m => !before.has(m));
+        if (added.length === 0) return;
+        try {
+            const replaced = await SystemPlaceholderManager.ReplaceAvailablePlaceholders(added, { contextUser });
+            let next = 0;
+            for (let i = 0; i < messages.length; i++) {
+                if (!before.has(messages[i])) messages[i] = replaced[next++];
+            }
         } catch (e) {
             this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'ScopedPromptParts' });
         }
