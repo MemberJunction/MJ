@@ -645,6 +645,21 @@ beforeEach(() => {
     harness = new CatalogHarness();
 });
 
+describe('runtime actionChanges that remove every action', () => {
+    it('leave the run with no actions: an empty computed list never falls back to the agent configuration', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(actionsEnvelope('Look Up Weather')), () => llmEnvelope(SUCCESS)]);
+        const params: ExecuteAgentParams = {
+            ...makeParams(),
+            actionChanges: [{ scope: 'root', mode: 'remove', actionIds: ACTIONS.map(a => a.ID) }],
+        };
+
+        await agent.Execute(params);
+
+        expect(harness.actionsRun).toEqual([]);
+        expect((agent as unknown as AgentInternals)._effectiveActions).toEqual([]);
+    });
+});
+
 describe('catalog narrowing — off by default', () => {
     it('reproduces the template data BaseAgent produced before narrowing existed, and asks nothing', async () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask');
