@@ -14,6 +14,7 @@ import {
     IsUploadItemURL,
     UploadItemURL,
 } from '../ContentUploadIngestor.js';
+import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
 import { ContentPipelineStartup } from '../ContentPipelineStartup.js';
 import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
@@ -707,6 +708,36 @@ describe('ContentUploadIngestor', () => {
         expect(runByID).not.toHaveBeenCalled();
     });
 
+    it('throws instead of skipping Embed when the RunNow chunk lookup fails on a retry, and runs no stage', async () => {
+        const { runView, provider, contextUser } = createFakeEnvironment();
+        await ContentUploadIngestor.Ingest({
+            ContentSourceID: 'SRC-UPLOAD-1',
+            FileID: 'FILE-223',
+            Name: 'chunk-lookup-fails.pdf',
+            ContextUser: contextUser,
+            Provider: provider,
+        });
+        const realRunView = runView.getMockImplementation()!;
+        runView.mockImplementation(async (params: CapturedRunViewParams) =>
+            params.EntityName === 'MJ: Content Item Chunks'
+                ? ({ Success: false, Results: [], ErrorMessage: 'db down' } as never)
+                : realRunView(params),
+        );
+        const runByID = vi.spyOn(RecordProcessExecutor.prototype, 'RunByID');
+
+        await expect(
+            ContentUploadIngestor.Ingest({
+                ContentSourceID: 'SRC-UPLOAD-1',
+                FileID: 'FILE-223',
+                Name: 'chunk-lookup-fails.pdf',
+                RunNow: true,
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/Could not read the chunks of Content Item\(s\) .*db down/);
+        expect(runByID).not.toHaveBeenCalled();
+    });
+
     it('refuses a ContentSourceID whose driver is not push-only with a clear error', async () => {
         const { provider, contextUser } = createFakeEnvironment();
 
@@ -1291,6 +1322,19 @@ describe('ContentUploadIngestor', () => {
                 Provider: provider,
             }),
         ).rejects.toThrow(/belongs to Content Source 'SRC-UPLOAD-1', not 'SRC-OTHER-ENTITY'/);
+
+        // M9: a root that cannot be marked throws, and keeps its file (the mark runs before the detach).
+        vi.spyOn(ContentPipelineDeleteMarker.prototype, 'MarkForDeletion').mockResolvedValue(false);
+        await expect(
+            ContentUploadIngestor.Remove({
+                ContentItemID: 'ITEM-UPLOAD-1',
+                ContextUser: contextUser,
+                Provider: provider,
+            }),
+        ).rejects.toThrow(/Failed to mark Content Item 'ITEM-UPLOAD-1' for deletion/);
+        const root = items.find((i) => i.ID === 'ITEM-UPLOAD-1');
+        expect(root?.FileID).toBe('FILE-600');
+        expect(root?.DeleteStatus).toBeNull();
     });
 
     it('Sync and Discover over an Upload source return Skipped, mark zero existing uploaded items for deletion, and stamp LastDiscoveredAt / LastSyncedAt', async () => {

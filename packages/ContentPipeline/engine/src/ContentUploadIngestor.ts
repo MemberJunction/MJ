@@ -936,9 +936,9 @@ export class ContentUploadIngestor {
             },
             contextUser,
         );
+        // Throws like collectLiveTreeItems: returning [] would silently skip Embed and the Failed-chunk reset.
         if (!chunks.Success) {
-            LogError(`ContentUploadIngestor: could not query chunks for item(s) [${itemIDs.join(', ')}]: ${chunks.ErrorMessage}`);
-            return [];
+            throw new Error(`Could not read the chunks of Content Item(s) [${itemIDs.join(', ')}]: ${chunks.ErrorMessage}`);
         }
         return chunks.Results;
     }
@@ -1053,10 +1053,12 @@ export class ContentUploadIngestor {
         const marker = new ContentPipelineDeleteMarker(provider, contextUser);
         let dependentsMarked = 0;
         for (const root of rootTargets) {
-            await this.detachCallerOwnedFileOnRoot(root, provider, contextUser);
+            // Mark first: a failed mark leaves the item live WITH its file. If the detach then fails,
+            // DeleteStage still only detaches (never deletes) a caller-owned file.
             if (!(await marker.MarkForDeletion('MJ: Content Items', root.ID))) {
                 throw new Error(`Failed to mark Content Item '${root.ID}' for deletion`);
             }
+            await this.detachCallerOwnedFileOnRoot(root, provider, contextUser);
         }
         for (const descID of descendantIDs) {
             if (await marker.MarkForDeletion('MJ: Content Items', descID)) {

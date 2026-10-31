@@ -121,8 +121,8 @@ export class ContentVectorInfrastructure {
      * 3. `ContentPipeline.DefaultVectorIndexID` on the active default `MJ: AI Configurations` row,
      *    or the sole vector index when `VectorIndexes.length === 1`.
      *
-     * Returns `null` (and logs) when no default index can be unambiguously resolved, so callers
-     * recording an informational `VectorIndexID` do not abort ingestion.
+     * Returns `null` (and logs) when no default index can be unambiguously resolved; the caller
+     * decides what that means (creating an Entity Record Document treats it as a configuration error).
      */
     public async ResolveVectorIndexID(source: {
         ID: string;
