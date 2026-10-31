@@ -360,6 +360,164 @@ describe('AgentSpecSync', () => {
       expect(sync.spec.SubAgents).toHaveLength(1);
       expect(sync.spec.SubAgents![0].Type).toBe('child');
     });
+
+    it('should round-trip ConfigurationPresetID on a related sub-agent', async () => {
+      const savedRelEntity: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        NewRecord: vi.fn(),
+        ID: 'rel-1',
+        AgentID: null,
+        SubAgentID: null,
+        Status: null,
+        SubAgentOutputMapping: null,
+        SubAgentInputMapping: null,
+        SubAgentContextPaths: null,
+        ConfigurationPresetID: null,
+      };
+      const mockProvider = {
+        GetEntityObject: vi.fn().mockResolvedValue(savedRelEntity),
+      } as never;
+
+      const sync = new AgentSpecSync({ Name: 'Parent Agent' }, mockUser, mockProvider);
+      const internals = sync as unknown as {
+        mapRelatedAgentToSpec: (rel: Record<string, unknown>) => Record<string, unknown>;
+        saveRelatedSubAgent: (agentId: string, subSpec: Record<string, unknown>) => Promise<void>;
+      };
+
+      const mapped = internals.mapRelatedAgentToSpec({
+        ID: 'rel-1',
+        SubAgentID: 'sub-1',
+        Status: 'Active',
+        SubAgentOutputMapping: '{"*":"result"}',
+        SubAgentInputMapping: '{"*":"input"}',
+        SubAgentContextPaths: '["*"]',
+        ConfigurationPresetID: 'preset-uuid-123',
+      });
+      expect(mapped.ConfigurationPresetID).toBe('preset-uuid-123');
+
+      await internals.saveRelatedSubAgent('parent-uuid-1', mapped);
+      expect(savedRelEntity.ConfigurationPresetID).toBe('preset-uuid-123');
+      expect(savedRelEntity.Save).toHaveBeenCalled();
+    });
+
+    it('should round-trip ChatHandlingOption on a related sub-agent and MaxSubAgentConsultRounds (including 0) on the agent', async () => {
+      const savedAgentEntity: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        NewRecord: vi.fn(),
+        Validate: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+        ID: 'agent-1',
+        Name: 'Parent Agent',
+        ChatHandlingOption: null,
+        MaxSubAgentConsultRounds: 3,
+      };
+      const savedRelEntity: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        NewRecord: vi.fn(),
+        ID: 'rel-1',
+        AgentID: null,
+        SubAgentID: null,
+        Status: null,
+        SubAgentOutputMapping: null,
+        SubAgentInputMapping: null,
+        SubAgentContextPaths: null,
+        ChatHandlingOption: null,
+        ConfigurationPresetID: null,
+      };
+      const mockProvider = {
+        GetEntityObject: vi.fn().mockImplementation((entityName: string) =>
+          Promise.resolve(entityName === 'MJ: AI Agent Relationships' ? savedRelEntity : savedAgentEntity)
+        ),
+      } as never;
+
+      const sync = new AgentSpecSync(
+        {
+          Name: 'Parent Agent',
+          ChatHandlingOption: 'Consult',
+          MaxSubAgentConsultRounds: 5,
+        },
+        mockUser,
+        mockProvider
+      );
+      expect(sync.spec.ChatHandlingOption).toBe('Consult');
+      expect(sync.spec.MaxSubAgentConsultRounds).toBe(5);
+
+      const internals = sync as unknown as {
+        mapEntitiesToRawSpec: (
+          agent: Record<string, unknown>,
+          actions: unknown[],
+          childAgents: unknown[],
+          relatedAgents: unknown[],
+          agentPrompts: unknown[],
+          fullPrompts: unknown[],
+          steps: unknown[],
+          paths: unknown[]
+        ) => Record<string, unknown>;
+        mapRelatedAgentToSpec: (rel: Record<string, unknown>) => Record<string, unknown>;
+        saveAgentEntity: (validate?: boolean) => Promise<Record<string, unknown>>;
+        saveRelatedSubAgent: (agentId: string, subSpec: Record<string, unknown>) => Promise<void>;
+      };
+
+      await internals.saveAgentEntity(false);
+      expect(savedAgentEntity.ChatHandlingOption).toBe('Consult');
+      expect(savedAgentEntity.MaxSubAgentConsultRounds).toBe(5);
+
+      const loadedSpec = internals.mapEntitiesToRawSpec(
+        {
+          ID: 'agent-1',
+          Name: 'Parent Agent',
+          Status: 'Active',
+          InvocationMode: 'Any',
+          ChatHandlingOption: 'Consult',
+          MaxSubAgentConsultRounds: 5,
+        },
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      );
+      expect(loadedSpec.ChatHandlingOption).toBe('Consult');
+      expect(loadedSpec.MaxSubAgentConsultRounds).toBe(5);
+
+      // Entity with MaxSubAgentConsultRounds: null -> spec -> save keeps MaxSubAgentConsultRounds as null
+      const nullRoundsSpec = internals.mapEntitiesToRawSpec(
+        {
+          ID: 'agent-2',
+          Name: 'Null Rounds Agent',
+          Status: 'Active',
+          InvocationMode: 'Any',
+          ChatHandlingOption: 'Consult',
+          MaxSubAgentConsultRounds: null,
+        },
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      );
+      expect(nullRoundsSpec.MaxSubAgentConsultRounds).toBeUndefined();
+      const nullSync = new AgentSpecSync(nullRoundsSpec, mockUser, mockProvider);
+      await (nullSync as unknown as typeof internals).saveAgentEntity(false);
+      expect(savedAgentEntity.MaxSubAgentConsultRounds).toBeNull();
+
+      const mappedRel = internals.mapRelatedAgentToSpec({
+        ID: 'rel-1',
+        SubAgentID: 'sub-1',
+        Status: 'Active',
+        ChatHandlingOption: 'Consult',
+      });
+      expect(mappedRel.ChatHandlingOption).toBe('Consult');
+
+      await internals.saveRelatedSubAgent('agent-1', mappedRel);
+      expect(savedRelEntity.ChatHandlingOption).toBe('Consult');
+    });
   });
 
   describe('spec with prompts', () => {
