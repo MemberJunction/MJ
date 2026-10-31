@@ -2,7 +2,8 @@
  * Gate outcome measurements read the gate record stored on the training run: W7 → S4.2 #2 (guards), C1 → S4.2 (the
  * reference-grade outcome) and C1 → S1.3 (the incumbent heuristic as a named comparator). Each trains through MJAPI
  * exactly as a user would (`h.Train`, PredictiveStudio.TrainModel). `StoredRunCoverage` measures the stored halves of
- * G2.21, G2.33, G2.36 and G2.37 as additional coverage: reported in `Measured`, never part of `Passed`.
+ * G2.21, G2.33, G2.36 and G2.37 as additional coverage: reported in `Measured`; only W7 → S4.2 #2 also gates on its
+ * stored-bounds count (G2.33's stored half on W7).
  */
 import { GateRecords, GateRules, TrainingRunResultsParser, type MetricWithInterval, type StoredGateRecord, type StoredTrainerResult } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
@@ -112,7 +113,7 @@ export class GateOutcomeMeasures {
     };
   }
 
-  /** C1 → S4.2: the stored decision on C1's reference split is keep-simple-baseline (the reference keeps its GLM). */
+  /** C1 → S4.2: the stored decision on C1's reference split is keep-simple-baseline shipping the GLM (the reference keeps its GLM). */
   public static async MeasureC1GateOutcome(h: TruthHarness): Promise<GateMeasurement> {
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionC1AssemblyPipeline(h, EvaluationProtocolGates.C1ReferenceProtocol);
     const s = await GateOutcomeMeasures.trainAndRead(h, pipeline);
@@ -120,7 +121,7 @@ export class GateOutcomeMeasures {
     const g = s.Gate;
     const glm = g.intervals.memberVsDummy['glm'];
     return {
-      Passed: g.decision.outcome === 'keep-simple-baseline',
+      Passed: g.decision.outcome === 'keep-simple-baseline' && g.decision.shipped === 'glm',
       Measured: {
         outcome: g.decision.outcome, shipped: g.decision.shipped || 'none', reason: g.reason.code, holdoutRows: g.holdoutRows,
         glmVsDummy: glm === undefined ? 'absent' : GateRules.FormatInterval(glm),

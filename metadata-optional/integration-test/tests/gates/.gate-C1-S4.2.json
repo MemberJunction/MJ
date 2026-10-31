@@ -7,7 +7,7 @@
     "Tags": "[\"gate\",\"G2.7\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S4.2\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "C1 on its reference split stores the gate decision keep-simple-baseline (the GLM kept)."
+      "summary": "C1 on its reference split stores the gate decision keep-simple-baseline with the GLM as the shipped member (shipped = glm)."
     },
     "Configuration": {
       "tier": "mutation",
