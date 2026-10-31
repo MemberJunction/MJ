@@ -216,6 +216,40 @@
   box-shadow: var(--mj-focus-ring);
 }
 
+.with-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1-5);
+  padding: 2px var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  line-height: var(--mj-leading-tight);
+  flex-shrink: 0;
+}
+
+.with-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--mj-radius-full);
+  background: var(--agent-accent, var(--mj-brand-primary));
+  transition: background-color 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  flex-shrink: 0;
+}
+
+.with-chip b {
+  color: var(--mj-text-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .with-chip .dot {
+    transition: none;
+  }
+}
+
 .shared-by-badge {
   display: inline-flex;
   align-items: center;

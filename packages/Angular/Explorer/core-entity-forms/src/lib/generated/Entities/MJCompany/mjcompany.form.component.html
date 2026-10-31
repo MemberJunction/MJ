@@ -254,6 +254,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Brand Kits Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBrandKits"
+        SectionName="Brand Kits"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBrandKits')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Brand Kits','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: Brand Kits','CompanyID')"
+                [AllowLoad]="IsSectionExpanded('mJBrandKits')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBrandKits', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Video Archetypes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJVideoArchetypes"
+        SectionName="Video Archetypes"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJVideoArchetypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Video Archetypes','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: Video Archetypes','CompanyID')"
+                [AllowLoad]="IsSectionExpanded('mJVideoArchetypes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJVideoArchetypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

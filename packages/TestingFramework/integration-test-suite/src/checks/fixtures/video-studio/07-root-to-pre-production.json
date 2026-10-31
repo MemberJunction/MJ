@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Pre-Production to resolve data bindings, synthesize narration, and generate requested assets.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Pre-Production",
+            "message": "Freeze data snapshot, synthesize narration lines, and generate requested assets.",
+            "terminateAfter": false
+        }
+    }
+}

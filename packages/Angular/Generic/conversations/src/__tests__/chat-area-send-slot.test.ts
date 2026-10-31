@@ -181,4 +181,26 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(ConversationChatAreaComponent.FormatElapsed(5 * 60_000 + 3_000)).toBe('5:03');
     expect(ConversationChatAreaComponent.FormatElapsed(3_600_000 + 7_000)).toBe('1:00:07');
   });
+
+  it('uses a video-specific placeholder only when CurrentOwnerAgent is Video Studio, and a neutral placeholder for other specialist agents', () => {
+    const videoStudio = createHarness({ inFlight: [] });
+    Object.defineProperty(videoStudio.open, 'CurrentOwnerAgent', {
+      get: () => ({ ID: 'vs-agent-id', Name: 'Video Studio', IsConversationManager: false }),
+      configurable: true,
+    });
+    expect(videoStudio.component.ComposerPlaceholderFor('conv-1')).toBe(
+      'Ask Video Studio for changes, like "make the opening faster"',
+    );
+    expect(videoStudio.component.ModePickerTargetAgentId).toBe('vs-agent-id');
+
+    const formBuilder = createHarness({ inFlight: [] });
+    Object.defineProperty(formBuilder.open, 'CurrentOwnerAgent', {
+      get: () => ({ ID: 'fb-agent-id', Name: 'Form Builder', IsConversationManager: false }),
+      configurable: true,
+    });
+    expect(formBuilder.component.ComposerPlaceholderFor('conv-1')).toBe(
+      'Ask Form Builder for changes or a follow-up...',
+    );
+    expect(formBuilder.component.ModePickerTargetAgentId).toBe('fb-agent-id');
+  });
 });
