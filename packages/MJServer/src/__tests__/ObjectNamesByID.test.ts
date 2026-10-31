@@ -123,6 +123,15 @@ describe('LookupObjectNamesByID', () => {
         expect((runView.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe("ID='X'' OR 1=1 --'");
     });
 
+    it('escapes ids the way every filter does: a NUL byte never reaches the query', async () => {
+        installEngine([]);
+        runView.mockResolvedValue({ Success: true, Results: [] } as unknown as RunViewResult);
+
+        await LookupObjectNamesByID(['io-1\0'], USER);
+
+        expect((runView.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe("ID='IO-1'");
+    });
+
     it('asks nothing for an empty selection', async () => {
         installEngine([]);
         expect((await LookupObjectNamesByID([], USER)).size).toBe(0);
