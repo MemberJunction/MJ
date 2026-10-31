@@ -48,6 +48,10 @@ describe('GetEvaluationProtocolShapeProblems', () => {
   it('refuses a primary score whose metric does not belong to its family', () => {
     const problems = EvaluationProtocol.GetEvaluationProtocolShapeProblems(protocolRow({ PrimaryScore: JSON.stringify({ family: 'count', metric: 'rmse' }) }));
     expect(problems).toContain('PrimaryScore metric "rmse" is not a proper score of family "count" (allowed: poisson-deviance)');
+  });  it('refuses a holdout cutoff that is not a calendar day, as the editors do (one day predicate)', () => {
+    const holdout = (cutoff: string): string => JSON.stringify({ kind: 'date-carved', dateColumn: 'OrderDate', cutoff, holdoutEnd: null, newEntityReport: null });
+    expect(EvaluationProtocol.GetEvaluationProtocolShapeProblems(protocolRow({ Holdout: holdout('2024-02-30') }))).toContain('Holdout date-carved needs dateColumn and cutoff yyyy-mm-dd');
+    expect(EvaluationProtocol.GetEvaluationProtocolShapeProblems(protocolRow({ Holdout: holdout('2024-02-29') }))).toEqual([]);
   });
 });
 

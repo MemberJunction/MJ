@@ -40,7 +40,7 @@ const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({
 
 async function savedV1(): Promise<MemoryProtocolRow> {
   const row = new MemoryProtocolRow();
-  await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, user, V1_ID), 'v1');
+  await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1(draft, user, V1_ID), 'v1');
   return row;
 }
 
@@ -55,24 +55,25 @@ describe('protocol version rows', () => {
   it('writes the next version under the same lineage with the changes applied and no client ID, as unit versions are written', async () => {
     const v1 = await savedV1();
     v1.Description = 'kept across versions';
-    const next = EvaluationProtocolVersioning.BuildNextVersionColumns(v1, { seed: 7 }, agent);
-    expect([next.ID, next.Version, next.LineageRootID, next.Seed, next.AuthoredBy, next.Description]).toEqual([null, 2, v1.ID, 7, JSON.stringify(agent), 'kept across versions']);
+    const next = EvaluationProtocolVersioning.BuildNextVersion(v1, { seed: 7 }, agent);
+    expect(next.Meta).toEqual({ ID: null, Version: 2, LineageRootID: v1.ID, AuthoredBy: agent, Description: 'kept across versions' });
+    expect(next.Draft).toEqual({ ...draft, seed: 7 });
     const v2 = new MemoryProtocolRow();
     v2.ID = 'SERVER-ASSIGNED';
     await EvaluationProtocolVersioning.WriteVersionRow(v2, next, 'v2');
-    expect([v2.ID, v2.Version, v2.LineageRootID, v2.Seed]).toEqual(['SERVER-ASSIGNED', 2, v1.ID, 7]);
-    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow({ ...next, ID: 'P2' });
+    expect([v2.ID, v2.Version, v2.LineageRootID, v2.Seed, v2.AuthoredBy, v2.Description]).toEqual(['SERVER-ASSIGNED', 2, v1.ID, 7, JSON.stringify(agent), 'kept across versions']);
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow({ ...v2, ID: 'P2' });
     expect(parsed.Ok && EvaluationProtocolRules.DraftFromProtocolSpec(parsed.Value)).toEqual({ ...draft, seed: 7 });
   });
 
   it('refuses to start a next version from a row that does not parse', () => {
     const broken = new MemoryProtocolRow();
-    expect(() => EvaluationProtocolVersioning.BuildNextVersionColumns(broken, { seed: 7 }, user)).toThrow(/does not parse/);
+    expect(() => EvaluationProtocolVersioning.BuildNextVersion(broken, { seed: 7 }, user)).toThrow(/does not parse/);
   });
 
   it('throws with the save message when the row is not saved', async () => {
     const row = new MemoryProtocolRow('Violation of CHECK constraint');
-    await expect(EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, user, V1_ID), 'Evaluation Protocol "renewal" v1'))
+    await expect(EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1(draft, user, V1_ID), 'Evaluation Protocol "renewal" v1'))
       .rejects.toThrow('Saving Evaluation Protocol "renewal" v1 failed: Violation of CHECK constraint');
   });
 });

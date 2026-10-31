@@ -11,7 +11,8 @@ import {
   PredictionUnit,
   type CensoringCutoff, type CensoringRule, type ChangeHistoryPolicy, type DecisionSpec, type LabelRule, type PredictionUnitSpec, type UnitRows,
 } from './prediction-unit';
-import { ProtocolRows, type UnitDraft } from './protocol-rows';
+import type { UnitDraft } from './protocol-rows';
+import { UtcDay } from './utc-day';
 import type { TaskKind, TaskType } from './task-type';
 
 /** The fields of a unit version an analyst edits in a form. */
@@ -164,7 +165,7 @@ export class UnitEdits {
       case 'now':
         return { rule: 'exclude-unresolved', cutoff: { kind: 'now' } };
       case 'fixed':
-        return ProtocolRows.IsIsoDay(form.CensoringFixedAt)
+        return UtcDay.IsIsoDay(form.CensoringFixedAt)
           ? { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: form.CensoringFixedAt } }
           : `The censoring date must be yyyy-mm-dd (got "${form.CensoringFixedAt}").`;
       case 'corpus-end':

@@ -52,15 +52,6 @@ describe('NewVersionRowID', () => {
   });
 });
 
-describe('IsIsoDay', () => {
-  it('accepts exactly a yyyy-mm-dd calendar day', () => {
-    expect(ProtocolRows.IsIsoDay('2024-02-29')).toBe(true);
-    expect(['2023-02-29', '2024-1-1', '2024-01-01T00:00:00Z', ' 2024-01-01', '']).toEqual(
-      ['2023-02-29', '2024-1-1', '2024-01-01T00:00:00Z', ' 2024-01-01', ''].filter((d) => !ProtocolRows.IsIsoDay(d)),
-    );
-  });
-});
-
 describe('ApplyProtocolDraftToRow', () => {
   it('writes every column of a version-1 row that is its own lineage root and parses back to the same protocol', () => {
     const row = emptyProtocolRow('');

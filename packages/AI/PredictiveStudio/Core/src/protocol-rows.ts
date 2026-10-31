@@ -13,7 +13,6 @@ import type {
   CensoringRule, ChangeHistoryPolicy, DecisionSpec, IncumbentHeuristic, LabelRule, PredictionUnitColumns, TemporalSpec, UnitRows,
 } from './prediction-unit';
 import type { TaskType } from './task-type';
-import { UtcDay } from './utc-day';
 
 /** A row an Evaluation Protocol version is written into: the protocol columns plus the free-text description. */
 export type EvaluationProtocolRowTarget = EvaluationProtocolColumns & { Description: string | null };
@@ -55,6 +54,18 @@ export interface UnitDraft {
   readonly IncumbentHeuristic: IncumbentHeuristic;
 }
 
+/** A protocol version to write: its draft and its row identity. */
+export interface ProtocolVersionWrite {
+  readonly Draft: EvaluationProtocolDraft;
+  readonly Meta: ProtocolRowWriteMeta;
+}
+
+/** A unit version to write: its draft and its row identity. */
+export interface UnitVersionWrite {
+  readonly Draft: UnitDraft;
+  readonly Meta: UnitRowMeta;
+}
+
 /** The `MJ: Prediction Units` columns a unit draft determines, JSON columns serialized. */
 export type UnitDraftColumns = Omit<PredictionUnitColumns, 'ID' | 'LineageRootID' | 'Version' | 'LabelVersion' | 'AuthoredBy'> & {
   readonly Description: string | null;
@@ -69,15 +80,6 @@ export class ProtocolRows {
    */
   public static NewVersionRowID(): string {
     return globalThis.crypto.randomUUID().toUpperCase();
-  }
-
-  /**
-   * True for a `yyyy-mm-dd` string that names a calendar day — the form every date in a version row is stored in
-   * (holdout cutoff and end, a fixed censoring date). `2024-02-30` and `2024-1-1` are refused.
-   */
-  public static IsIsoDay(text: string): boolean {
-    const day = UtcDay.ToUtcDay(text);
-    return day !== null && UtcDay.UtcDayIso(day) === text;
   }
 
   /** Writes a protocol draft into a row through the protocol's one serializer; only the row-identity rules are added here. */

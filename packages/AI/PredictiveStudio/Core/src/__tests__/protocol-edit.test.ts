@@ -70,6 +70,12 @@ describe('protocol editing (a new version from the previous one)', () => {
     expect(edited({ MaxCandidates: 0 })).toEqual(error);
     expect(edited({ MaxComputeSeconds: 0 })).toEqual(error);
   });
+  it('refuses a negative, fractional or missing seed (the server shape check refuses it)', () => {
+    const error = { Ok: false, Error: 'The seed must be a whole number, 0 or more.' };
+    expect(edited({ Seed: -1 })).toEqual(error);
+    expect(edited({ Seed: 1.5 })).toEqual(error);
+    expect(edited({ Seed: Number.NaN })).toEqual(error);
+  });
   it('refuses a blank name', () => {
     expect(edited({ Name: '   ' })).toEqual({ Ok: false, Error: 'The protocol needs a name.' });
   });

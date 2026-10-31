@@ -12,6 +12,7 @@ import {
   type JsonObject, type JsonValue, type ParseResult,
 } from './json-value';
 import { TaskTypeRules, type TaskKind, type TaskType } from './task-type';
+import { UtcDay } from './utc-day';
 
 export type DecisionDateRule =
   | { readonly kind: 'column'; readonly column: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -147,11 +148,10 @@ export type UnitValidation =
   | { readonly status: 'valid'; readonly observedLevels: number; readonly eligibleRows: number; readonly censoredRows: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly status: 'refused'; readonly reason: UnitRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The Prediction Unit's parser and derivations: parse a unit row, name its row entity, describe its label rule,
- * detect an outcome-definition change and list the fields it references (static members on one owner class).
+ * detect an outcome-definition change and list the fields it references.
  */
 export class PredictionUnit {
   /** Parse every JSON column of a unit row and check the cross-field rules; all problems are reported. */
@@ -287,8 +287,8 @@ export class PredictionUnit {
     } else if (kind === 'fixed') {
       const date = JsonParse.JsonString(v, 'date');
       const advance = v['advance'];
-      if (date && ISO_DATE.test(date) && advance === undefined) return { kind, date };
-      if (date && ISO_DATE.test(date) && advance === 'each-run') return { kind, date, advance };
+      if (date && UtcDay.IsIsoDay(date) && advance === undefined) return { kind, date };
+      if (date && UtcDay.IsIsoDay(date) && advance === 'each-run') return { kind, date, advance };
     }
     errors.push('UnitRows.decisionDate must be {kind:"column",column}, {kind:"column-offset",column,offsetDays} or {kind:"fixed",date:"yyyy-mm-dd",advance?:"each-run"}');
     return null;
@@ -387,7 +387,7 @@ export class PredictionUnit {
       if (kind === 'now') return { rule: 'exclude-unresolved', cutoff: { kind } };
       if (kind === 'fixed') {
         const at = JsonParse.JsonString(cutoff, 'at');
-        if (at && ISO_DATE.test(at)) return { rule: 'exclude-unresolved', cutoff: { kind, at } };
+        if (at && UtcDay.IsIsoDay(at)) return { rule: 'exclude-unresolved', cutoff: { kind, at } };
       }
       if (kind === 'corpus-end') {
         const entity = JsonParse.JsonString(cutoff, 'entity');

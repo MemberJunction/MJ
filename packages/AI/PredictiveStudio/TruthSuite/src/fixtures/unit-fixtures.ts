@@ -78,10 +78,7 @@ export interface ProvisionedUnitPipeline {
   readonly Pipeline: MJMLTrainingPipelineEntity;
 }
 
-/**
- * Prediction Unit and pipeline fixtures for the gates, as static members on one owner class. Later provisioners are
- * added here too.
- */
+/** Prediction Unit and pipeline fixtures for the gates. Later provisioners are added here too. */
 export class UnitFixtures {
   /** The product's entity factory over the harness's provider (the training engine's entity-factory seam). */
   public static EntityFactory(h: TruthHarness): IEntityFactory {

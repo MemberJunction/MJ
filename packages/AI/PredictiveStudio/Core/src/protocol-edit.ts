@@ -10,7 +10,7 @@ import {
   type EvaluationProtocolSpec, type GuardFieldsEditableBy, type HoldoutSplit, type InnerValidation, type ProperScore,
 } from './evaluation-protocol';
 import { EvaluationProtocolRules, type EvaluationProtocolDraft } from './evaluation-protocol-rules';
-import { ProtocolRows } from './protocol-rows';
+import { UtcDay } from './utc-day';
 
 /** The fields of a protocol version an analyst edits in a form. */
 export interface ProtocolEditForm {
@@ -72,7 +72,7 @@ export class ProtocolEdits {
     return { Ok: true, Draft: ProtocolEdits.editedDraft(base, form, primary) };
   }
 
-  /** The first problem with the counts, budget, margin or name; null when they are acceptable. */
+  /** The first problem with the counts, budget, margin, seed or name; null when they are acceptable. */
   private static numberProblem(form: ProtocolEditForm): string | null {
     if (!Number.isInteger(form.Folds) || form.Folds < 2 || !Number.isInteger(form.Repeats) || form.Repeats < 1) {
       return 'Folds must be a whole number of at least 2 and repeats at least 1.';
@@ -81,6 +81,7 @@ export class ProtocolEdits {
       return 'The budget needs at least one candidate and a positive number of compute seconds.';
     }
     if (!Number.isFinite(form.Margin) || form.Margin < 0) return `The margin must be a number >= 0 (got ${String(form.Margin)}).`;
+    if (!Number.isInteger(form.Seed) || form.Seed < 0) return 'The seed must be a whole number, 0 or more.';
     if (form.Name.trim().length === 0) return 'The protocol needs a name.';
     return null;
   }
@@ -88,9 +89,9 @@ export class ProtocolEdits {
   /** The first problem with the test-set dates of a date-carved holdout; null for other holdouts and valid dates. */
   private static holdoutProblem(holdout: HoldoutSplit, form: ProtocolEditForm): string | null {
     if (holdout.kind !== 'date-carved') return null;
-    if (!ProtocolRows.IsIsoDay(form.Cutoff)) return `The test-set start must be a date yyyy-mm-dd (got "${form.Cutoff}").`;
+    if (!UtcDay.IsIsoDay(form.Cutoff)) return `The test-set start must be a date yyyy-mm-dd (got "${form.Cutoff}").`;
     const end = form.HoldoutEnd.trim();
-    if (end !== '' && (!ProtocolRows.IsIsoDay(end) || end <= form.Cutoff)) {
+    if (end !== '' && (!UtcDay.IsIsoDay(end) || end <= form.Cutoff)) {
       return `The test-set end must be a date yyyy-mm-dd after the start (got "${end}").`;
     }
     return null;

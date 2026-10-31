@@ -5,35 +5,12 @@
  * applies the changes, takes Version = latest + 1 and LabelVersion = previous + 1 exactly when the outcome definition
  * changed. A saved version is never updated (the server subclass refuses it).
  */
-import { randomUUID } from 'node:crypto';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { PredictionUnit, ProtocolRows, type Actor, type PredictionUnitSpec, type UnitDraft, type UnitDraftColumns } from '@memberjunction/predictive-studio-core';
+import { PredictionUnit, ProtocolRows, type Actor, type PredictionUnitSpec, type UnitDraft, type UnitVersionWrite } from '@memberjunction/predictive-studio-core';
 import type { IEntityFactory } from '../training/types';
 
-/** The `MJ: Prediction Units` column values of one version row, JSON columns serialized. */
-export interface UnitVersionColumns {
-  readonly ID: string | null;
-  readonly LineageRootID: string;
-  readonly Version: number;
-  readonly LabelVersion: number;
-  readonly Name: string;
-  readonly Description: string | null;
-  readonly UnitRows: string;
-  readonly LabelRule: string;
-  readonly LabelWindowDays: number;
-  readonly LabelGapDays: number;
-  readonly TaskType: string;
-  readonly Censoring: string;
-  readonly ChangeHistoryPolicy: string;
-  readonly GroupKey: string | null;
-  readonly TemporalSpec: string | null;
-  readonly DecisionSpec: string;
-  readonly IncumbentHeuristic: string;
-  readonly AuthoredBy: string;
-}
-
-/** Creating unit versions: build, assign and save version rows. */
+/** Creating unit versions: build each version's draft and row identity, write it with Core's row writer, save it. */
 export class PredictionUnitVersioning {
   /**
    * Whether the outcome definition (rule, window, gap, task) changed, decided the way the server decides it: both drafts
@@ -51,53 +28,34 @@ export class PredictionUnitVersioning {
   private static parseDraft(d: UnitDraft, lineageRootId: string, actor: Actor): PredictionUnitSpec {
     const parsed = PredictionUnit.ParsePredictionUnitRow({
       ID: lineageRootId, LineageRootID: lineageRootId, Version: 1, LabelVersion: 1, AuthoredBy: JSON.stringify(actor),
-      ...PredictionUnitVersioning.columnsOf(d),
+      ...ProtocolRows.UnitDraftColumns(d),
     });
     if (parsed.Ok === false) throw new Error(`Prediction Unit "${d.Name}" does not parse: ${parsed.Errors.join('; ')}`);
     return parsed.Value;
   }
 
-  /** The columns a draft determines: Core's one serializer of a unit draft. */
-  private static columnsOf(d: UnitDraft): UnitDraftColumns {
-    return ProtocolRows.UnitDraftColumns(d);
-  }
-
-  /** Pure: the columns of the next version. Throws when the previous or the changed draft does not parse. */
-  public static BuildNextVersionColumns(
+  /**
+   * Pure: the draft and row identity of the next version — `changes` over the previous draft, Version = latest + 1 under
+   * the same lineage root, the label version bumped exactly when the outcome definition changed, the ID left to the
+   * database. Throws when the previous or the changed draft does not parse.
+   */
+  public static BuildNextVersion(
     lineage: { readonly lineageRootId: string; readonly latestVersion: number; readonly previousLabelVersion: number; readonly previous: UnitDraft },
     changes: Partial<UnitDraft>,
     actor: Actor,
-  ): UnitVersionColumns {
+  ): UnitVersionWrite {
     const next: UnitDraft = { ...lineage.previous, ...changes };
+    const changed = PredictionUnitVersioning.labelDefinitionChanged(lineage.previous, next, lineage.lineageRootId, actor);
     return {
-      ID: null,
-      LineageRootID: lineage.lineageRootId,
-      Version: lineage.latestVersion + 1,
-      LabelVersion: lineage.previousLabelVersion + (PredictionUnitVersioning.labelDefinitionChanged(lineage.previous, next, lineage.lineageRootId, actor) ? 1 : 0),
-      AuthoredBy: JSON.stringify(actor),
-      ...PredictionUnitVersioning.columnsOf(next),
+      Draft: next,
+      Meta: { ID: null, LineageRootID: lineage.lineageRootId, Version: lineage.latestVersion + 1, LabelVersion: lineage.previousLabelVersion + (changed ? 1 : 0), AuthoredBy: actor },
     };
   }
 
-  private static assign(entity: MJPredictionUnitEntity, c: UnitVersionColumns): void {
-    if (c.ID) entity.ID = c.ID;
-    entity.LineageRootID = c.LineageRootID;
-    entity.Version = c.Version;
-    entity.LabelVersion = c.LabelVersion;
-    entity.Name = c.Name;
-    entity.Description = c.Description;
-    entity.UnitRows = c.UnitRows;
-    entity.LabelRule = c.LabelRule;
-    entity.LabelWindowDays = c.LabelWindowDays;
-    entity.LabelGapDays = c.LabelGapDays;
-    entity.TaskType = c.TaskType;
-    entity.Censoring = c.Censoring;
-    entity.ChangeHistoryPolicy = c.ChangeHistoryPolicy;
-    entity.GroupKey = c.GroupKey;
-    entity.TemporalSpec = c.TemporalSpec;
-    entity.DecisionSpec = c.DecisionSpec;
-    entity.IncumbentHeuristic = c.IncumbentHeuristic;
-    entity.AuthoredBy = c.AuthoredBy;
+  /** Writes a version into a new row through Core's one row writer and saves it. */
+  private static async writeVersion(entity: MJPredictionUnitEntity, version: UnitVersionWrite, what: string): Promise<MJPredictionUnitEntity> {
+    ProtocolRows.ApplyPredictionUnitDraftToRow(entity, version.Draft, version.Meta);
+    return PredictionUnitVersioning.saveOrThrow(entity, what);
   }
 
   private static async saveOrThrow(entity: MJPredictionUnitEntity, what: string): Promise<MJPredictionUnitEntity> {
@@ -107,10 +65,10 @@ export class PredictionUnitVersioning {
 
   /** Save version 1 of a new lineage: the row is its own lineage root. */
   public static async CreatePredictionUnitV1(draft: UnitDraft, actor: Actor, entityFactory: IEntityFactory, contextUser?: UserInfo): Promise<MJPredictionUnitEntity> {
-    const id = randomUUID().toUpperCase();
+    const id = ProtocolRows.NewVersionRowID();
     const entity = await entityFactory.getEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', contextUser);
-    PredictionUnitVersioning.assign(entity, { ID: id, LineageRootID: id, Version: 1, LabelVersion: 1, AuthoredBy: JSON.stringify(actor), ...PredictionUnitVersioning.columnsOf(draft) });
-    return PredictionUnitVersioning.saveOrThrow(entity, `Prediction Unit "${draft.Name}" v1`);
+    const v1: UnitVersionWrite = { Draft: draft, Meta: { ID: id, LineageRootID: id, Version: 1, LabelVersion: 1, AuthoredBy: actor } };
+    return PredictionUnitVersioning.writeVersion(entity, v1, `Prediction Unit "${draft.Name}" v1`);
   }
 
   /** Read a saved version back into a draft in canonical form (the parser's output), through the same parser that validated it. */
@@ -133,13 +91,12 @@ export class PredictionUnitVersioning {
     entityFactory: IEntityFactory,
     contextUser?: UserInfo,
   ): Promise<MJPredictionUnitEntity> {
-    const columns = PredictionUnitVersioning.BuildNextVersionColumns(
+    const next = PredictionUnitVersioning.BuildNextVersion(
       { lineageRootId: latest.LineageRootID, latestVersion: latest.Version, previousLabelVersion: latest.LabelVersion, previous: PredictionUnitVersioning.DraftFromUnitRow(latest) },
       changes,
       actor,
     );
     const entity = await entityFactory.getEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', contextUser);
-    PredictionUnitVersioning.assign(entity, columns);
-    return PredictionUnitVersioning.saveOrThrow(entity, `Prediction Unit "${columns.Name}" v${columns.Version}`);
+    return PredictionUnitVersioning.writeVersion(entity, next, `Prediction Unit "${next.Draft.Name}" v${next.Meta.Version}`);
   }
 }

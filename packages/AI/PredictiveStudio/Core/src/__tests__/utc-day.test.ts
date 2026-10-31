@@ -28,3 +28,11 @@ describe('UtcDay arithmetic and form', () => {
     expect(MS_PER_DAY).toBe(86_400_000);
   });
 });
+
+describe('UtcDay.IsIsoDay', () => {
+  it('accepts exactly a yyyy-mm-dd calendar day', () => {
+    expect(UtcDay.IsIsoDay('2024-02-29')).toBe(true);
+    const refused = ['2023-02-29', '2024-02-30', '2024-1-1', '2024-01-01T00:00:00Z', ' 2024-01-01', ''];
+    expect(refused.filter((d) => UtcDay.IsIsoDay(d))).toEqual([]);
+  });
+});

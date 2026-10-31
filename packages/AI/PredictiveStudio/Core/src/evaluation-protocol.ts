@@ -7,6 +7,7 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
 import { PredictionUnit, type Actor } from './prediction-unit';
+import { UtcDay } from './utc-day';
 
 declare const nonNegativeBrand: unique symbol;
 /** A number >= 0, produced only by {@link EvaluationProtocol.ToNonNegative}. */
@@ -141,8 +142,6 @@ export interface EvaluationProtocolSpec {
   readonly authoredBy: Actor;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
-/** A calendar day, yyyy-mm-dd (the holdout cutoff and end). */
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The one sentence the shape check and the parser give a seeded-random holdout whose fraction is not in (0, 1). */
 const SEEDED_RANDOM_FRACTION_PROBLEM = 'Holdout seeded-random needs a fraction strictly between 0 and 1';
 /** Every `SecondaryMetric`; `satisfies` refuses a value that is not one. */
@@ -162,7 +161,7 @@ export interface EvaluationProtocolColumns {
 }
 
 /**
- * The Evaluation Protocol's column checks and its typed parser: static members on one owner class. The protocol
+ * The Evaluation Protocol's column checks and its typed parser. The protocol
  * behaviour rules live in EvaluationProtocolRules (evaluation-protocol-rules.ts).
  */
 export class EvaluationProtocol {
@@ -268,9 +267,9 @@ export class EvaluationProtocol {
       if (origins === null || origins < MIN_ROLLING_ORIGINS) problems.push(`Holdout rolling-origin needs at least ${MIN_ROLLING_ORIGINS} origins (${origins === null ? 'none' : origins} given)`);
     } else if (kind === 'date-carved') {
       const cutoff = JsonParse.JsonString(holdout, 'cutoff') || '';
-      if (!JsonParse.JsonString(holdout, 'dateColumn') || !ISO_DAY.test(cutoff)) problems.push('Holdout date-carved needs dateColumn and cutoff yyyy-mm-dd');
+      if (!JsonParse.JsonString(holdout, 'dateColumn') || !UtcDay.IsIsoDay(cutoff)) problems.push('Holdout date-carved needs dateColumn and cutoff yyyy-mm-dd');
       const end = holdout['holdoutEnd'];
-      if (end !== undefined && end !== null && (typeof end !== 'string' || !ISO_DAY.test(end) || end <= cutoff)) problems.push('Holdout date-carved holdoutEnd must be null or a yyyy-mm-dd date after cutoff');
+      if (end !== undefined && end !== null && (typeof end !== 'string' || !UtcDay.IsIsoDay(end) || end <= cutoff)) problems.push('Holdout date-carved holdoutEnd must be null or a yyyy-mm-dd date after cutoff');
     } else if (kind === 'seeded-random') {
       if (!EvaluationProtocol.isOpenUnitFraction(JsonParse.JsonNumber(holdout, 'fraction'))) problems.push(SEEDED_RANDOM_FRACTION_PROBLEM);
     } else {
@@ -457,8 +456,8 @@ export class EvaluationProtocol {
     const groupKey = reportObj === null ? null : JsonParse.JsonString(reportObj, 'groupKey');
     const fraction = reportObj === null ? null : JsonParse.JsonNumber(reportObj, 'holdoutFraction');
     const reportOk = reportObj === null || (groupKey !== null && fraction !== null && fraction > 0 && fraction < 1);
-    const endOk = holdoutEnd === null || (ISO_DAY.test(holdoutEnd) && cutoff !== null && holdoutEnd > cutoff);
-    if (dateColumn && cutoff && ISO_DAY.test(cutoff) && endOk && reportOk && (endRaw === undefined || endRaw === null || holdoutEnd !== null)) {
+    const endOk = holdoutEnd === null || (UtcDay.IsIsoDay(holdoutEnd) && cutoff !== null && holdoutEnd > cutoff);
+    if (dateColumn && cutoff && UtcDay.IsIsoDay(cutoff) && endOk && reportOk && (endRaw === undefined || endRaw === null || holdoutEnd !== null)) {
       return {
         kind: 'date-carved', dateColumn, cutoff, holdoutEnd,
         newEntityReport: reportObj === null || groupKey === null || fraction === null ? null : { groupKey, holdoutFraction: fraction },

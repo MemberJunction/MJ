@@ -11,7 +11,7 @@ export const MS_PER_DAY = 86_400_000;
 /** A cell value as a row read returns it. */
 export type CellValue = string | number | boolean | Date | null | undefined;
 
-/** UTC-day conversion and arithmetic (static members on one owner class). */
+/** UTC-day conversion, arithmetic and the one "is a calendar day" predicate. */
 export class UtcDay {
   /**
    * The UTC day a value denotes: a `yyyy-mm-dd…` string by its date part (a time and zone after it are ignored, as
@@ -34,6 +34,16 @@ export class UtcDay {
   /** `day` plus `days` whole days (negative moves back). */
   public static AddUtcDays(day: Date, days: number): Date {
     return new Date(day.getTime() + days * MS_PER_DAY);
+  }
+
+  /**
+   * True for a string that is exactly `yyyy-mm-dd` and names a calendar day — the form every stored date column of a
+   * protocol or unit uses. `2024-02-30`, `2024-1-1` and text after the day are refused. The one predicate for "is a
+   * day": the row parsers, the shape check and the editors all call it.
+   */
+  public static IsIsoDay(text: string): boolean {
+    const day = UtcDay.ToUtcDay(text);
+    return day !== null && UtcDay.UtcDayIso(day) === text;
   }
 
   /** The `yyyy-mm-dd` form of a UTC day. */
