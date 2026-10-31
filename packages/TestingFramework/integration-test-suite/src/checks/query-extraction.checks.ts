@@ -503,7 +503,7 @@ function refreshService(ctx: IntegrationCheckContext): QueryExtractionService {
 async function countRows(ctx: IntegrationCheckContext, entityName: string, filter: string): Promise<number> {
     const result = await RequireQueryDb(ctx.Provider, BUNDLE).RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only', BypassCache: true }, ctx.User);
     if (!result.Success) throw new Error(`${BUNDLE}: counting ${entityName} failed: ${result.ErrorMessage}`);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 /**

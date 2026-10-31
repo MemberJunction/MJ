@@ -65,6 +65,7 @@ import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.comp
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { OfficeConnectComponent } from './lib/office/office-connect.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
@@ -84,6 +85,7 @@ import {
   declarations: [
     OAuthCallbackComponent,
     ClaimRedeemComponent,
+    OfficeConnectComponent,
     ResourceContainerComponent,
     DashboardResource,
     DashboardAddToMenuComponent,

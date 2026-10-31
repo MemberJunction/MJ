@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT148 - Agent Execution Primitives and Multi-Step Loops (live providers)",
+      "Description": "LIVE-MODEL tier (real model calls cost tokens). Runs three specialized fixture Loop agents through AgentRunner on real native-tool-calling models (Anthropic, OpenAI, Gemini via ITRecordingLLM) and verifies persisted MJ: AI Agent Runs, MJ: AI Agent Run Steps, MJ: Tasks, MJ: Task Dependencies, and MJ: Action Execution Logs. AEPL1: server-side Pipeline via JSON envelope bridge under native tool calling (19*23 + 100 = 537). AEPL2: in-turn ForEach with multi-step steps[] over [3, 7, 11] producing [14, 26, 38] and 6 child Actions steps. AEPL3: durable Tasks graph (2 connected Action nodes) parking the agent run and settling to Completed via TaskGraphDispatcher (144 -> 200). AEPL4: durable Tasks graph with a multi-step ForEach node over [4, 9] producing [42, 92] and settling the submitting agent run to Completed. Self-cleaning.",
+      "MaxExecutionTimeMS": 1800000,
+      "InputDefinition": {},
+      "ExpectedOutcomes": {
+        "summary": "Zero provider protocol rejections across callable native-tool-calling providers; Pipeline, multi-step ForEach, and durable TaskGraph runs persist exact step lineage and arithmetic outputs and settle cleanly."
+      },
+      "Configuration": {
+        "tier": "live-model",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "agent-execution-primitives-live"
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B761812B-EB50-417C-9EB0-C287E59B2C16"
+    }
+  }
+]

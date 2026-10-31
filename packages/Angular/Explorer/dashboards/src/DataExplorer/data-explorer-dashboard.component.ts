@@ -2644,7 +2644,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         EntityName: entityName,
         ExtraFilter: CompositeKey.FromURLSegment(entityInfo, recordId).ToWhereClause(),
         ResultType: 'simple',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
 
       if (result.Success && result.Results.length > 0) {

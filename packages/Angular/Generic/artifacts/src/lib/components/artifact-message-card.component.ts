@@ -424,6 +424,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
         EntityName: 'MJ: Conversation Artifacts',
         ExtraFilter: `ID='${this.artifactId}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object'
       }, this.CurrentUser);
 
@@ -457,6 +458,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
         ExtraFilter: filter,
         OrderBy: 'VersionNumber DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object'
       }, this.CurrentUser);
 

@@ -188,6 +188,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
                 ExtraFilter: `${ConversationEngine.ScopeFilter(scope)} AND [Role]='AI'`,
                 OrderBy: 'Sequence DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             },
             this.contextUser ?? undefined,
