@@ -71,8 +71,11 @@ export type LegacyUnitOutcome =
   | { readonly Kind: 'unit'; readonly Draft: UnitDraft; readonly DateColumn: string | null; readonly Notes: readonly string[] }
   | LegacyStop;
 
+/** The holdout kinds a migrated protocol uses (a module-private selector: its member is the contract's wire name). */
+type LegacyHoldoutKinds = { readonly kind: 'date-carved' | 'seeded-random' };
+
 /** The holdouts a migrated protocol uses: a date carve on the unit's date column, or a seeded row hash for one fixed date. */
-export type LegacyHoldout = Extract<HoldoutSplit, { readonly kind: 'date-carved' | 'seeded-random' }>;
+export type LegacyHoldout = Extract<HoldoutSplit, LegacyHoldoutKinds>;
 
 /** The inputs of a pipeline's version-1 protocol, or why it gets none. */
 export type LegacyProtocolOutcome =
