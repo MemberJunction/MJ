@@ -120,6 +120,21 @@ class TestAssembler extends FeatureAssemblyExecutor {
   }
 }
 
+/**
+ * A provider whose only use is the pipeline-row fallback read (`RunView` of `MJ: ML Training Pipelines`): it answers
+ * with `rows` and records each read. The one deliberate test-double cast at the seam, shared by every fallback test.
+ */
+function pipelineRowProvider(rows: Record<string, string>[], reads: string[]): IMetadataProvider {
+  const slice = {
+    EntityByID: (): undefined => undefined,
+    RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, string>>> => {
+      reads.push(`${params.EntityName}|${params.ExtraFilter}`);
+      return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
+    },
+  };
+  return slice as unknown as IMetadataProvider;
+}
+
 const CTX: RecordProcessorContext = {
   ContextUser: undefined as unknown as UserInfo,
   Provider: undefined as unknown as IMetadataProvider,
@@ -271,14 +286,8 @@ describe('MLModelInferenceProcessor — a model trained before Prediction Units 
     const bound = { PredictionUnitIDOf: async () => 'U-MIGRATED' };
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits: bound } }, new TestAssembler(new InMemoryDataAccess()));
     const pipelineQueries: string[] = [];
-    const provider = {
-      EntityByID: () => undefined,
-      RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, string>>> => {
-        pipelineQueries.push(`${params.EntityName}|${params.ExtraFilter}`);
-        const row = { TargetEntity: 'Members', SourceBindings: JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }]), FeatureSteps: JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure', 'events_at_signup', 'city'] }] }), AsOfStrategy: JSON.stringify({ Mode: 'none' }) };
-        return { Success: true, Results: [row], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '' };
-      },
-    } as unknown as IMetadataProvider;
+    const row = { TargetEntity: 'Members', SourceBindings: JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }]), FeatureSteps: JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure', 'events_at_signup', 'city'] }] }), AsOfStrategy: JSON.stringify({ Mode: 'none' }) };
+    const provider = pipelineRowProvider([row], pipelineQueries);
     const result = await proc.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), { ...CTX, Provider: provider });
     expect([result.Status, result.ErrorMessage || null]).toEqual(['Succeeded', null]);
     expect(pipelineQueries).toEqual(["MJ: ML Training Pipelines|ID='pipe-members'"]);
@@ -314,12 +323,7 @@ describe('MLModelInferenceProcessor — empty feature assembly guardrail', () =>
     const proc = buildProcessor(deps);
     // The empty lineage sends the processor to the pipeline row for its steps; that row has none to offer either.
     const pipelineQueries: string[] = [];
-    const provider = {
-      RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, string>>> => {
-        pipelineQueries.push(`${params.EntityName}|${params.ExtraFilter}`);
-        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
-      },
-    } as unknown as IMetadataProvider;
+    const provider = pipelineRowProvider([], pipelineQueries);
     const errors = ConsoleCapture.Errors();
 
     const result = await proc.ProcessRecord(memberRecord('m1', 1, 1, 'NYC'), { ...CTX, Provider: provider });

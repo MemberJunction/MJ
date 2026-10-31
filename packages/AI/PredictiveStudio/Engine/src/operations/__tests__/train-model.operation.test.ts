@@ -137,9 +137,9 @@ describe('PredictiveStudioTrainModelServerOperation — inputs that decision dat
   });
 
   it('refuses primaryKeyField by name, as a typed refusal (the unit keys rows by the row entity)', () => {
-    let caught: Error | null = null;
-    try { op.MapInput({ pipelineId: 'p', primaryKeyField: 'MembershipID' }); } catch (e) { caught = e as Error; }
-    expect(caught).toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'primaryKeyField' } } });
+    let caught: TrainingRefusedError | null = null;
+    try { op.MapInput({ pipelineId: 'p', primaryKeyField: 'MembershipID' }); } catch (e) { if (e instanceof TrainingRefusedError) caught = e; }
+    expect(caught?.Refusal).toMatchObject({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'primaryKeyField' } });
   });
 
   it("accepts an asOf input of Mode 'none' (it asks for nothing)", () => {

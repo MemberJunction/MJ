@@ -75,7 +75,7 @@ export class UnitModelLineageParser {
 
   /**
    * True when a stored `Lineage` text is a readable JSON object. With {@link NamesUnit} false it is a model trained
-   * before Prediction Units (every pre-PR-3 shape: provenance only, or with the feature graph): only unit training
+   * before Prediction Units (every such shape: provenance only, or with the feature graph): only unit training
    * writes `predictionUnitId`, so its absence from a readable lineage identifies a legacy model.
    */
   public static IsReadable(text: string | null | undefined): boolean {

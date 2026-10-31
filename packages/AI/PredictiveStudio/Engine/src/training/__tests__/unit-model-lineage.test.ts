@@ -55,7 +55,7 @@ describe('UnitModelLineageParser.ParseUnitModelLineage', () => {
 });
 
 describe('UnitModelLineageParser.IsReadable', () => {
-  it('reads every pre-PR-3 lineage shape and a unit lineage as readable', () => {
+  it('reads every lineage shape of a model trained before Prediction Units, and a unit lineage, as readable', () => {
     const preJune = JSON.stringify({ pipelineId: 'p', pipelineVersion: 1, sourceBindings: [], asOfStrategy: { Mode: 'none' }, sidecarVersion: null, lockedHoldoutRowCount: 2, trainingRowCount: 8, assembledAt: '2026-05-01T00:00:00.000Z' });
     const withGraph = JSON.stringify({ pipelineId: 'p', targetEntityName: 'Years', featureSteps: { Steps: [] } });
     expect([preJune, withGraph, stored()].map((t) => UnitModelLineageParser.IsReadable(t))).toEqual([true, true, true]);

@@ -372,7 +372,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * legacy model. The model's own Lineage, frozen at training, decides, by the marker only unit training writes
    * (`predictionUnitId`): a Lineage that carries it takes the unit path (the unit it stored, even when the pipeline's
    * editable `PredictionUnitID` was later cleared or moved) and must validate. Every other readable Lineage is a model
-   * trained before Prediction Units (every pre-PR-3 shape, with or without the feature graph, which the pipeline-row
+   * trained before Prediction Units (every such shape, with or without the feature graph, which the pipeline-row
    * fallback rebuilds): it keeps scoring on the legacy path even after the migration bound its pipeline to a unit. A
    * Lineage that cannot be read fails loudly on a pipeline that points at a unit (it cannot be told apart); on one that
    * does not, the model is legacy, as it always was. A unit Lineage that fails validation, or whose unit cannot be

@@ -1091,7 +1091,7 @@
   },
   {
     "_comments": [
-      "Migrate Pipelines to Prediction Units and Evaluation Protocols — the Prediction Unit data migration, run by the release step (dry run by default, idempotent; a re-run migrates held pipelines once their adverse class is declared).",
+      "Migrate Pipelines to Prediction Units and Evaluation Protocols — the Prediction Unit data migration, run by the release step (dry run by default, idempotent). It holds two kinds of pipeline: one whose adverse class is not declared (a re-run migrates it once declared) and one that declares a time index (held until a forecast unit with a rolling-origin protocol is bound).",
       "Type='Custom' + DriverClass binds to @RegisterClass(BaseAction,'PredictiveStudioMigratePipelinesAction')."
     ],
     "fields": {

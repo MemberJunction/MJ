@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { RunActionParams, type ActionParam, type ActionResultSimple } from '@memberjunction/actions-base';
+import { UserInfo } from '@memberjunction/core';
 import { PredictiveStudioMigratePipelinesAction } from '../migrate-pipelines.action';
 import { PipelineMigration, type MigrationDeps, type MigrationReportRow, type MigrationRun } from '../../migration/legacy-pipeline-migration';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { fakeProvider } from '../../__tests__/fakes/training-fakes';
 
 /** Deps the action hands the migration; the migration itself is replaced by a spy, so nothing reads them. */
-const INJECTED: MigrationDeps = { Provider: {} as IMetadataProvider, User: {} as UserInfo, EntityFactory: { getEntityObject: async () => { throw new Error('not used'); } }, Today: '2026-10-31' };
+const INJECTED: MigrationDeps = { Provider: fakeProvider, User: new UserInfo(), EntityFactory: { getEntityObject: async () => { throw new Error('not used'); } }, Today: '2026-10-31' };
 
 /** The action with injected deps (the seam its doc names). */
 class TestableMigrateAction extends PredictiveStudioMigratePipelinesAction {
@@ -23,7 +24,11 @@ class TestableMigrateAction extends PredictiveStudioMigratePipelinesAction {
 const row = (Action: MigrationReportRow['Action'], Reason: string | null = null): MigrationReportRow =>
   ({ PipelineID: 'P-1', PipelineName: 'Renewal', Action, Reason, PredictionUnitID: null, EvaluationProtocolID: null, Cutoff: null, Notes: [] });
 const runOf = (rows: MigrationReportRow[]): MigrationRun => PipelineMigration.RunOf(rows);
-const params = (list: ActionParam[]): RunActionParams => ({ Params: list }) as RunActionParams;
+const params = (list: ActionParam[]): RunActionParams => {
+  const p = new RunActionParams();
+  p.Params = list;
+  return p;
+};
 const input = (Name: string, Value: ActionParam['Value']): ActionParam => ({ Name, Value, Type: 'Input' });
 const out = (p: RunActionParams, name: string): ActionParam['Value'] => p.Params.find((x) => x.Name === name)?.Value;
 
