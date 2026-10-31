@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { SafeJSONParse } from '@memberjunction/global';
-import { EvaluationLineage, TrustVerdicts, type ValidationStrategy } from '@memberjunction/predictive-studio-core';
+import { EvaluationLineage, TRAINING_RUN_RESULTS_SCHEMA, TrustVerdicts, type GateDecision, type StoredGateRecord, type ValidationStrategy } from '@memberjunction/predictive-studio-core';
 import { ContainmentProbe } from '../containment-probe';
 import { HarnessModels } from '../promote';
 import type { CandidateModel, ScoreAttempt, TrainAttempt } from '../types';
@@ -37,7 +37,7 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   HoldoutRowCount: 2,
   Metrics: {},
   HoldoutMetrics: {},
-  Trust: TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.5 }), ProblemType: 'classification', Lineage: null }),
+  Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null }),
   TrainingRunStatus: 'Completed',
   TrainingRunNotes: null,
   LineageJSON: null,
@@ -64,32 +64,72 @@ describe('refusals are decided by code', () => {
   });
 });
 
+/** A run's stored results whose gate decision is `decision`. */
+function storedRun(decision: GateDecision): string {
+  const gate: StoredGateRecord = {
+    evaluationProtocolId: 'EP-1', margin: 0, primaryMetric: 'log-loss', holdoutRows: 120,
+    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.02, lower: 0.01, upper: 0.03 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null },
+    guards: { taskKind: 'binary', holdoutClassCounts: { '0': 100, '1': 20 }, modelAucInterval: { level: 0.95, lower: 0.6, upper: 0.7 }, minMinorityClassRows: 20 },
+    transcribed: decision, decision, guardRefusal: null,
+    reason: { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: 'stored reason' },
+    incumbentDiff: null, sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
+  };
+  return JSON.stringify({
+    schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+    unitResolution: { rowsRead: 120, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 120, dataCutoff: '2026-07-30' },
+    legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate,
+  });
+}
+const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
+const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
+
 describe('containment probe — predicates', () => {
   it('counts Published, and only Published, as reaching publication', () => {
     expect(ContainmentProbe.ReachedPublishedUnattended(model({ Status: 'Published' }))).toBe(true);
     expect(ContainmentProbe.ReachedPublishedUnattended(model({ Status: 'Validated' }))).toBe(false);
   });
-  it('flags a verdict above Poor or one cleared to act', () => {
-    expect(ContainmentProbe.GradedAbovePoorOrActionable(model({}))).toBe(false); // AUC 0.5 → Poor, not actionable
-    const good = TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.8 }), ProblemType: 'classification', Lineage: null });
-    expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: good }))).toBe(true);
-    expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: { ...model({}).Trust, canAct: true } }))).toBe(true);
+  it('flags a verdict cleared to act: only a stored decision that ships', () => {
+    expect(ContainmentProbe.GradedAbovePoorOrActionable(model({}))).toBe(false); // no stored decision: not evaluated
+    const shipped = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun(SHIPPED) });
+    expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: shipped }))).toBe(true);
+    const noSignal = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun(NO_SIGNAL) });
+    expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: noSignal }))).toBe(false);
   });
 });
 
-/** A T4-like regression model whose trust is derived from its own lineage, as `ReadModel` derives it. */
+describe('containment probe — majority-baseline finding from the stored model', () => {
+  const metrics = (accuracy: number, baseline: number, extra: Record<string, number> = {}): Record<string, number> => ({ accuracy, baseline_accuracy: baseline, predicted_classes: 2, ...extra });
+  it('finds a classifier at or below the majority rate, enforced under the lineage default rule', () => {
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ HoldoutMetrics: metrics(0.9206, 0.9206, { auc: 0.61 }) }))).toEqual({
+      Rule: 'enforce', Enforced: true, Accuracy: 0.9206, BaselineAccuracy: 0.9206, PredictedClasses: 2,
+    });
+  });
+  it('under the stored warn rule, enforces only when accuracy is the only evidence (no AUC)', () => {
+    const lineage = JSON.stringify({ evaluation: { ValidationOutOfSample: true, MajorityBaselineRule: 'warn' } });
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ LineageJSON: lineage, HoldoutMetrics: metrics(0.9, 0.92, { auc: 0.6 }) }))?.Enforced).toBe(false);
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ LineageJSON: lineage, HoldoutMetrics: metrics(0.9, 0.92) }))?.Enforced).toBe(true);
+  });
+  it('a classifier that predicts one class is at the majority rate whatever its accuracy', () => {
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ HoldoutMetrics: { accuracy: 0.95, baseline_accuracy: 0.9, predicted_classes: 1 } }))?.Enforced).toBe(true);
+  });
+  it('finds nothing for a model above the majority rate or without the numbers', () => {
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ HoldoutMetrics: metrics(0.95, 0.9) }))).toBeNull();
+    expect(ContainmentProbe.ReadMajorityBaselineFinding(model({ HoldoutMetrics: { r2: 0.4 } }))).toBeNull();
+  });
+});
+
+/** A T4-like regression model trained without a unit: its run stores no gate decision, as `ReadModel` reads it. */
 function candidate(lineageJSON: string | null): CandidateModel {
-  const holdoutMetrics = { r2: 0.7775 };
   return model({
-    Algorithm: 'lightgbm', HoldoutMetrics: holdoutMetrics, LineageJSON: lineageJSON,
-    Trust: TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify(holdoutMetrics), ProblemType: 'regression', Lineage: lineageJSON }),
+    Algorithm: 'lightgbm', HoldoutMetrics: { r2: 0.7775 }, LineageJSON: lineageJSON,
+    Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null }),
   });
 }
 
 describe('containment probe — stored verdict and time index', () => {
   it('reads the stored withheld verdict', () => {
     const lineage = JSON.stringify({ evaluation: { ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast } });
-    expect(ContainmentProbe.ReadStoredWithheldVerdict(candidate(lineage))).toEqual({ CanAct: false, Grade: 'Poor', Reason: EvaluationLineage.NotEvaluatedAsForecast });
+    expect(ContainmentProbe.ReadStoredWithheldVerdict(candidate(lineage))).toEqual({ CanAct: false, Grade: 'Not evaluated yet', Reason: EvaluationLineage.NotEvaluatedAsForecast });
   });
 
   it('returns null when nothing is withheld', () => {

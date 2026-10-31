@@ -69,7 +69,8 @@ export class HarnessModels {
       HoldoutRowCount: HarnessModels.parseHoldoutRowCount(m.Lineage),
       Metrics: HarnessModels.parseMetrics(m.Metrics),
       HoldoutMetrics: HarnessModels.parseMetrics(m.HoldoutMetrics),
-      Trust: TrustVerdicts.DeriveTrustVerdict(m),
+      // The verdict renders the run's stored gate decision; an empty column is not a record.
+      Trust: TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run?.ValidationResults || null }),
       TrainingRunStatus: run?.Status ?? null,
       TrainingRunNotes: run?.Notes ?? null,
       LineageJSON: m.Lineage ?? null,

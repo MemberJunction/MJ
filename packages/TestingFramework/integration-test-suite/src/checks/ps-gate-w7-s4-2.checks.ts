@@ -1,9 +1,11 @@
 /**
  * Gate G0.12 "W7 → S4.2": on W7-small-imbalanced s42–s44, every builder-agent run either produces no model or produces
  * one whose holdout accuracy is at or below the always-majority rate of its locked holdout (at least one such model, none without an
- * accuracy), and every such model's stored trust verdict is Poor, not actionable, and carries the enforced
- * majority-baseline finding. A model that beats the majority rate fails the gate: it would leave the rule unmeasured.
+ * accuracy), and every such model is not actionable (its trust verdict, the training run's stored gate decision, does not
+ * clear it) and carries the enforced majority-baseline finding read from the stored model (its lineage's rule and its
+ * holdout numbers). A model that beats the majority rate fails the gate: it would leave the rule unmeasured.
  */
+import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { AgentPlans, ContainmentProbe, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type CandidateModel, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
@@ -24,11 +26,12 @@ class MajorityBaselineSteps {
   }
 
   /**
-   * The majority-baseline rule held for `m`: its verdict (Core's `TrustVerdicts.DeriveTrustVerdict` on the stored model
-   * row, as the UI derives it) is Poor, not actionable, and carries the enforced majority-baseline finding.
+   * The majority-baseline rule held for `m`: its trust verdict (Core's `TrustVerdicts.DeriveTrustVerdict` on its
+   * training run, as the UI derives it) does not let a user act on it, and the stored model carries the enforced
+   * majority-baseline finding.
    */
   public static Downgraded(m: CandidateModel): boolean {
-    return !ContainmentProbe.GradedAbovePoorOrActionable(m) && m.Trust.MajorityBaseline?.Enforced === true;
+    return !m.Trust.CanAct && ContainmentProbe.ReadMajorityBaselineFinding(m)?.Enforced === true;
   }
 }
 
@@ -57,9 +60,10 @@ export const PsGateW7S42Checks: NamedCheck[] = [
         const m = await h.ReadModel(r.BuildModelID);
         const majority = await MajorityBaselineSteps.MajorityRate(h, m, seed);
         const accuracy = m.HoldoutMetrics['accuracy'] ?? null; // `??` on purpose: an accuracy of 0 is a legitimate value
+        // `?? null` on the finding: an Enforced of false is a real value.
         Object.assign(out, {
-          [`s${seed}Accuracy`]: accuracy, [`s${seed}Majority`]: majority, [`s${seed}Grade`]: m.Trust.grade,
-          [`s${seed}CanAct`]: m.Trust.canAct, [`s${seed}MajorityEnforced`]: m.Trust.MajorityBaseline?.Enforced ?? null,
+          [`s${seed}Accuracy`]: accuracy, [`s${seed}Majority`]: majority, [`s${seed}Outcome`]: TrustVerdicts.OutcomeTitle(m.Trust),
+          [`s${seed}CanAct`]: m.Trust.CanAct, [`s${seed}MajorityEnforced`]: ContainmentProbe.ReadMajorityBaselineFinding(m)?.Enforced ?? null,
         });
         // A model without a holdout accuracy cannot be placed against the majority rate: a failure, not a skip.
         if (accuracy === null) noAccuracy += 1;
@@ -74,7 +78,7 @@ export const PsGateW7S42Checks: NamedCheck[] = [
         Passed: measured && violations === 0,
         Measured: { ...out, qualifying, violations, runsWithoutModel: noModel, modelsWithoutAccuracy: noAccuracy },
         Detail: measured
-          ? `${violations} of ${qualifying} at-or-below-majority models lack the Poor, not-actionable verdict with the enforced majority-baseline finding`
+          ? `${violations} of ${qualifying} at-or-below-majority models lack the not-actionable verdict with the enforced majority-baseline finding`
           : `the rule was not fully measured: ${qualifying} qualifying, ${noModel} without a model, ${noAccuracy} without an accuracy, ${3 - qualifying - noModel - noAccuracy} above the majority rate (of 3 runs)`,
       });
     },

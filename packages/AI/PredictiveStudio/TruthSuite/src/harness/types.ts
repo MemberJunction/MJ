@@ -45,7 +45,7 @@ export interface TrainAttempt {
 
 export interface CandidateModel {
   // Status unions are derived from the generated entities (never widened to string), so a value CodeGen adds reaches
-  // every comparison as a compile-time change. `Trust` is Core's shipped TrustVerdict, whose members stay camelCase.
+  // every comparison as a compile-time change. `Trust` is Core's TrustVerdict: the model's training run's stored gate decision.
   ModelID: string; PipelineID: string; Algorithm: AlgorithmKey; Status: MJMLModelEntity['Status']; TrainingRowCount: number | null;
   HoldoutRowCount: number | null; Metrics: Record<string, number>; HoldoutMetrics: Record<string, number>;
   Trust: TrustVerdict; TrainingRunStatus: MJMLTrainingRunEntity['Status'] | null; TrainingRunNotes: string | null; LineageJSON: string | null;
@@ -99,7 +99,7 @@ export interface TruthHarness {
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */
   Train(pipeline: MJMLTrainingPipelineEntity, opts?: { MaxRows?: number; AsOf?: PredictiveStudioTrainAsOf }): Promise<TrainAttempt>;
   RunBuilderAgent(plan: ModelingPlanSpec): Promise<AgentStepResult>;
-  /** Trust = TrustVerdicts.DeriveTrustVerdict(<the loaded MJ: ML Models entity>) — the whole entity, so Lineage reaches the verdict. */
+  /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults }) of the model's training run (its stored gate decision). */
   ReadModel(modelId: string): Promise<CandidateModel>;
   ModelsForPipelineNamePrefix(prefix: string): Promise<CandidateModel[]>;
   Promote(modelId: string, target: PredictiveStudioModelTargetStatus, reason: string): Promise<PromoteAttempt>;

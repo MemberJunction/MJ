@@ -3,7 +3,8 @@
  * builder**: `PredictiveStudioPipelineBuilder.build(ModelingPlanSpec)` — the code (no-LLM) step that
  * turns the agent's approved, strongly-typed modeling plan into real metadata: it creates the
  * `MJ: ML Training Pipelines` row, trains a model via the engine, and **publishes the model only if
- * the trust verdict clears the bar** (the same `TrustVerdicts.DeriveTrustVerdict` gate the business UI uses).
+ * the trust verdict clears the bar** (the same `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's stored
+ * gate decision the business UI uses; a pipeline trained without a Prediction Unit stores none, so it is not evaluated).
  *
  * This is what proves "the agent can BUILD NEW THINGS" without needing the full LLM loop — we feed the
  * builder a hand-authored plan (what the Goal Analyst / Data Scout / Experiment Designer sub-agents
@@ -30,7 +31,7 @@ import { BootstrapAI } from './lib/ai-bootstrap';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { TrustVerdicts, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioPipelineBuilder, LoadMLModelInferenceProcessor } from '@memberjunction/predictive-studio';
 
 // Anchor the side-effect registration so the transpiler/bundler can't drop the 'ML Model' work type.
@@ -142,14 +143,14 @@ async function main(): Promise<void> {
     const t0 = Date.now();
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
     console.log(`  Built in ${Date.now() - t0}ms — success=${result.success} pipelineId=${result.pipelineId} modelId=${result.modelId}`);
-    console.log(`  Trust: grade=${result.trust?.grade} canAct=${result.trust?.canAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason ?? '(n/a)'}`);
+    console.log(`  Trust: outcome=${result.trust ? TrustVerdicts.OutcomeTitle(result.trust) : '(none)'} canAct=${result.trust?.CanAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason ?? '(n/a)'}`);
     created.pipelineId = result.pipelineId;
     created.modelId = result.modelId;
 
     check(result.success, 'builder reported success');
     check(!!result.pipelineId, 'a training pipeline was created');
     check(!!result.modelId, 'a model was trained');
-    check(!!result.trust && ['Poor', 'Fair', 'Good', 'Excellent'].includes(result.trust.grade), 'a plain-language trust verdict was produced');
+    check(!!result.trust && (result.trust.Kind === 'evaluated' || result.trust.Kind === 'not-evaluated'), 'a stored-gate trust verdict was produced');
     console.log(`  Leaderboard: ${JSON.stringify(result.leaderboard)}`);
     console.log(`  Untrained experiments: ${JSON.stringify(result.untrainedExperiments)}`);
     check((result.leaderboard || []).length === 1, 'one training run gives one leaderboard row (no search without a Prediction Unit)');
@@ -157,7 +158,7 @@ async function main(): Promise<void> {
     check(JSON.stringify(result.untrainedExperiments) === JSON.stringify(['XGB challenger']), 'the experiment that was not trained is named');
 
     // The core invariant: a model is published IFF the trust verdict clears the bar AND no leakage flag.
-    const shouldPublish = !!result.trust?.canAct && !result.leakageFlagged;
+    const shouldPublish = !!result.trust?.CanAct && !result.leakageFlagged;
     check(result.published === shouldPublish, `publish gate honored (published=${result.published} === canAct&&!leakage=${shouldPublish})`);
     if (!result.published) check(!!result.heldReason, 'a held model carries a plain-language reason (the safety gate)');
 

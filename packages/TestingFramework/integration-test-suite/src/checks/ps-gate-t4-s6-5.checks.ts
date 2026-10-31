@@ -1,6 +1,7 @@
 /**
  * Gate G0.11 "T4 → S6.5": with MonthIndex declared as the time index, 0 of 12 rolling origins' lightgbm runs on T4 are
- * graded above Poor or cleared to act, and each stores the withheld verdict with its reason, 12 of 12.
+ * cleared to act (their trust verdict renders the training run's stored gate decision; these runs train without a
+ * Prediction Unit, so it is "not evaluated"), and each stores the withheld verdict with its reason, 12 of 12.
  */
 import { EvaluationLineage } from '@memberjunction/predictive-studio-core';
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
