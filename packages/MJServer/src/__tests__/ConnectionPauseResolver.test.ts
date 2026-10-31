@@ -34,14 +34,14 @@ describe('IntegrationDeactivateConnection — pause means pause', () => {
   });
 
   it('pauses the scheduled jobs', () => {
-    expect(body()).toMatch(/decideSchedulesToPause/);
+    expect(body()).toMatch(/DecideSchedulesToPause/);
     expect(body()).toMatch(/setScheduledJobStatus\([^)]*'Paused'/s);
   });
 
   it('records what it paused through the guard that survives a second pause', () => {
-    // decidePauseWrite is the only thing standing between a re-pause and a lost record.
-    expect(body()).toMatch(/decidePauseWrite/);
-    expect(body()).toMatch(/writePausedSchedules/);
+    // DecidePauseWrite is the only thing standing between a re-pause and a lost record.
+    expect(body()).toMatch(/DecidePauseWrite/);
+    expect(body()).toMatch(/WritePausedSchedules/);
   });
 
   it('asks an in-flight sync to stop', () => {
@@ -50,7 +50,7 @@ describe('IntegrationDeactivateConnection — pause means pause', () => {
 
   it('reports how far the cancel actually reached instead of assuming', () => {
     const b = body();
-    expect(b).toMatch(/describeCancelScope/);
+    expect(b).toMatch(/DescribeCancelScope/);
     expect(b).toMatch(/IsSyncRunningInThisProcess/);
     expect(b).toMatch(/CancelScope/);
   });
@@ -72,15 +72,15 @@ describe('IntegrationReactivateConnection — restore exactly what pause took', 
 
   it('restores through the record, not by activating everything', () => {
     const b = body();
-    expect(b).toMatch(/decideSchedulesToResume/);
+    expect(b).toMatch(/DecideSchedulesToResume/);
     // The tell for the bug this avoids: no unconditional sweep to Active.
     expect(b).not.toMatch(/jobs\.map\([^)]*'Active'/s);
   });
 
   it('consumes the record so the NEXT pause is not treated as a re-pause', () => {
-    // decidePauseWrite refuses to write when a record is stored. Leaving a consumed record
+    // DecidePauseWrite refuses to write when a record is stored. Leaving a consumed record
     // behind would make every future pause a silent no-op.
-    expect(body()).toMatch(/writePausedSchedules\(ci\.Configuration, \[\]\)/);
+    expect(body()).toMatch(/WritePausedSchedules\(ci\.Configuration, \[\]\)/);
   });
 
   it('still does not rescan the source by default', () => {
