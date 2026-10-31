@@ -17,16 +17,10 @@ import {
 } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type {
-  TrainRequest,
-  TrainResponse,
-  MatrixData,
-  TrainerRequest,
-  TrainerResult,
-} from '@memberjunction/predictive-studio-core';
+import type { TrainerRequest, TrainerResult } from '@memberjunction/predictive-studio-core';
 import { MLSidecar, SidecarError, TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
-import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator } from './types';
+import type { IEntityFactory, IRecordLoader, ITrainerEvaluator } from './types';
 
 /**
  * Provider-bound {@link IEntityFactory}: every entity is created through the
@@ -152,7 +146,7 @@ export class RunViewRecordLoader implements IRecordLoader {
 }
 
 /**
- * {@link ISidecarTrainer} and {@link ITrainerEvaluator} backed by the self-managing {@link MLSidecar} client.
+ * {@link ITrainerEvaluator} backed by the self-managing {@link MLSidecar} client.
  * Lazily starts the sidecar on first use (managed or remote mode is decided by
  * `MLSidecar` from options/env). Defaults to the process-shared
  * {@link MLSidecarProvider} instance rather than constructing a private `MLSidecar`
@@ -160,9 +154,7 @@ export class RunViewRecordLoader implements IRecordLoader {
  * child process per action run. Tests (and callers that genuinely need an isolated
  * sidecar) can still inject their own via the constructor parameter.
  */
-export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
-  private started = false;
-
+export class MJSidecarTrainer implements ITrainerEvaluator {
   /**
    * @param sidecar an `MLSidecar` instance (managed or remote); defaults to the
    *   shared, process-lifetime instance from {@link MLSidecarProvider}
@@ -172,22 +164,6 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
     private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar(),
     private readonly clockMs: () => number = () => performance.now(),
   ) {}
-
-  /** @inheritdoc */
-  public async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
-    await this.ensureStarted();
-    // Forward the orchestrator-carved **locked holdout** (plan §8.2) on the shared
-    // `TrainRequest.holdout` channel. The sidecar fits preprocessing on the
-    // training `data` only, then APPLIES that frozen fitted transform to these
-    // holdout rows and scores them exactly once → `holdout_metrics` (the anti-skew
-    // guarantee, plan §6.2 — holdout preprocessing is never re-fit). `req.data`
-    // already excludes the holdout, so the carve stays deterministic + auditable
-    // on the TypeScript side. When no holdout was carved (e.g. tiny datasets) we
-    // simply omit it and the sidecar returns no `holdout_metrics`.
-    const withHoldout: TrainRequest =
-      lockedHoldout && lockedHoldout.rows.length > 0 ? { ...req, holdout: lockedHoldout } : req;
-    return this.sidecar.Train(withHoldout);
-  }
 
   /**
    * Run one protocol-driven training with bounded retries: a transport failure or a 5xx answer is retried up to
@@ -227,13 +203,5 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
   /** A refusal (4xx) or a malformed answer: sending the same request again gets the same answer. */
   private static isNotRetryable(err: Error | object | string | number | boolean | null | undefined): boolean {
     return err instanceof TrainerResultMalformedError || (err instanceof SidecarError && err.Status >= 400 && err.Status < 500);
-  }
-
-  /** Start the sidecar once per trainer for the legacy `train` path; later calls reuse the connection. */
-  private async ensureStarted(): Promise<void> {
-    if (!this.started) {
-      await this.sidecar.Start();
-      this.started = true;
-    }
   }
 }

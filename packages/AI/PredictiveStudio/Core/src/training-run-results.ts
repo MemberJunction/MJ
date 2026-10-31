@@ -3,11 +3,10 @@
  *
  * What a unit-based training run stores in `MJ: ML Training Runs.ValidationResults` (schema `ps-run-results/v2`).
  * The `refused` variant carries the refusal (its stage and reason); the `completed` variant carries the unit resolution
- * counts and one of two records of the training, so a later training of the same snapshot can call the trainer the
- * same way: a run trained under an Evaluation Protocol stores the trainer's result (`trainer`, artifacts as stored file
- * references, never bytes) and the request settings (`trainerRequest`); a unit run stored before every unit run was
- * trained under its protocol holds the legacy trainer's metrics and row counts (`legacy`) and the request settings
- * (`legacyRequest`), and is read but no longer written. A completed run also stores the
+ * counts and the record of the training, so a later training of the same snapshot can call the trainer the same way:
+ * the trainer's result (`trainer`, artifacts as stored file references, never bytes) and the request settings
+ * (`trainerRequest`). (Members an older envelope stored beside them are not part of the schema and are dropped on read.)
+ * A completed run also stores the
  * locked-holdout carve its protocol declared (`carve`) and the gate decision with its reason (`gate`, the record
  * `GateRecords.BuildStoredGateRecord` builds). An envelope written before trainer results, the carve or the gate record
  * were stored has no `trainer`/`trainerRequest`/`carve`/`gate` members and reads them as null. A run whose sidecar
@@ -21,7 +20,7 @@ import type { GateStageRefusal, SliceCoverage, StoredGateRecord } from './run-ev
 import type { CarveRefusal, HoldoutCarveSummary } from './holdout-carve';
 import type { UnitRefusal } from './prediction-unit';
 import { TASK_KINDS } from './task-type';
-import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
+import { JsonParse, type ParseResult } from './json-value';
 import type { StoredTrainerResult, TrainerFailureStage, TrainerRequestConfig } from './trainer-contract';
 import { METRIC_KEYS, TrainerResultSchemas } from './trainer-result-schemas';
 import { SELECTION_FAILURE_REASONS, type SelectionFailureReason } from './selection';
@@ -65,38 +64,12 @@ export interface UnitResolutionCounts {
   readonly dataCutoff: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
-export interface LegacyTrainerMetrics {
-  readonly metrics: Readonly<Record<string, number>>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly holdoutMetrics: Readonly<Record<string, number>> | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly trainingRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-}
-
-/**
- * The settings a unit run called the trainer with, apart from the rows (those come from the run's Training Snapshot):
- * the algorithm driver key, the problem type, the hyperparameters and the validation the trainer applies inside the
- * development rows.
- */
-export interface LegacyRequestConfig {
-  readonly algorithm: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly problemType: 'classification' | 'regression';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly hyperparameters: JsonObject;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly validation: {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-    readonly strategy: 'train_test_split' | 'kfold' | 'holdout';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-    readonly test_size?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-    readonly k?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-    readonly random_state?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  };
-}
-
 export type TrainingRunResults =
   | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'refused'; readonly refusal: TrainingRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly status: 'completed';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly unitResolution: UnitResolutionCounts;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly legacy: LegacyTrainerMetrics | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly legacyRequest: LegacyRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly trainer: StoredTrainerResult | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly trainerRequest: TrainerRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       /** The locked-holdout carve the protocol declared; null for a run without one and for an envelope stored before it existed. */
@@ -251,24 +224,6 @@ const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
   rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
   emptyLabelRowsExcluded: z.number(), duplicateRowsRemoved: z.number(), resolvedRows: z.number(), dataCutoff: z.string(),
 });
-const legacyTrainerMetricsSchema: z.ZodType<LegacyTrainerMetrics> = z.object({
-  metrics: z.record(z.number()), holdoutMetrics: z.record(z.number()).nullable(),
-  trainingRowCount: z.number(), holdoutRowCount: z.number(),
-});
-const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)]),
-);
-const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
-  algorithm: z.string(),
-  problemType: z.enum(['classification', 'regression']),
-  hyperparameters: z.record(jsonValueSchema),
-  validation: z.object({
-    strategy: z.enum(['train_test_split', 'kfold', 'holdout']),
-    test_size: z.number().optional(),
-    k: z.number().int().optional(),
-    random_state: z.number().int().optional(),
-  }),
-});
 // The input type is left open (`unknown`) because `trainer`, `trainerRequest`, `carve` and `gate` may be absent on read (an
 // envelope written before they existed) while the parsed value always has them (absent reads as null).
 const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unknown> = z.discriminatedUnion('status', [
@@ -277,8 +232,6 @@ const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unkn
     schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA),
     status: z.literal('completed'),
     unitResolution: unitResolutionCountsSchema,
-    legacy: legacyTrainerMetricsSchema.nullable(),
-    legacyRequest: legacyRequestConfigSchema.nullable(),
     trainer: TrainerResultSchemas.StoredTrainerResult.nullable().default(null),
     trainerRequest: TrainerResultSchemas.TrainerRequestConfig.nullable().default(null),
     carve: holdoutCarveSummarySchema.nullable().default(null),

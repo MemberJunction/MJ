@@ -8,7 +8,7 @@
  *
  * Per CLAUDE.md "Actions are boundaries": this action does NOT do any training
  * logic. It validates `PipelineID`, builds the engine's production dependency
- * bundle (entity factory + record loader + sidecar + artifact store), delegates to
+ * bundle (entity factory + record loader + trainer + artifact store), delegates to
  * `TrainingEngine.trainModel`, then maps the result onto output params. The engine
  * and the deps bundle are created behind overridable factory seams so unit tests
  * substitute mocks with no live DB and no sidecar.

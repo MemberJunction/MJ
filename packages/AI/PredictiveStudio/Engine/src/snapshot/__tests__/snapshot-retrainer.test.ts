@@ -38,9 +38,9 @@ async function trainedUnitRun(trainer: DeterministicTrainer) {
 describe('SnapshotRetrainer.Retrain', () => {
   it('retrains a unit run through the trainer from its snapshot files and logged request and reproduces its holdout metrics exactly', async () => {
     const trainer = new DeterministicTrainer();
-    const { deps, run, snapshots, sidecar } = await trainedUnitRun(trainer);
+    const { deps, run, snapshots } = await trainedUnitRun(trainer);
     const result = await new SnapshotRetrainer().Retrain(run.ID, deps);
-    expect([trainer.CallCount, sidecar.CallCount]).toEqual([2, 0]);
+    expect(trainer.CallCount).toBe(2);
     expect(result).toMatchObject({ TrainingRunID: run.ID, TrainingSnapshotID: snapshots[0].ID, FilesVerified: true, ContentHashVerified: true, MaxAbsDiff: 0, Reproduced: true });
     expect(Object.keys(result.Original).sort()).toEqual(['auc', 'log-loss']);
     expect(result.Retrained).toEqual(result.Original);
@@ -53,8 +53,6 @@ describe('SnapshotRetrainer.Retrain', () => {
     run.ValidationResults = JSON.stringify({
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
       unitResolution: { rowsRead: 12, censoredRowsExcluded: 4, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 8, dataCutoff: '2026-01-01' },
-      legacy: { metrics: { auc: 0.7 }, holdoutMetrics: { auc: 0.68 }, trainingRowCount: 6, holdoutRowCount: 2 },
-      legacyRequest: { algorithm: 'xgboost', problemType: 'classification', hyperparameters: {}, validation: { strategy: 'train_test_split', test_size: 0.2 } },
     });
     await expect(new SnapshotRetrainer().Retrain(run.ID, deps)).rejects.toThrow(`Run ${run.ID} has no trainer request; only runs trained through /trainer are retrained`);
     expect(trainer.CallCount).toBe(1);

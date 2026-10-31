@@ -129,7 +129,7 @@ describe('GateRecords.BuildStoredGateRecord', () => {
   it('stores a gate record the run-results parser reads back, and refuses one with a wrong-typed member', () => {
     const b = GateRecords.BuildStoredGateRecord(args());
     if (!b.Ok) throw new Error(b.Refusal.kind);
-    const envelope = (gate: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: COUNTS, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate });
+    const envelope = (gate: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: COUNTS, trainer: null, trainerRequest: null, carve: null, gate });
     const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(b.Record));
     expect(ok.Ok && ok.Value.status === 'completed' ? ok.Value.gate : null).toEqual(b.Record);
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...b.Record, reason: { code: 'made-up', text: 'x' } }));
@@ -156,7 +156,7 @@ describe('GateRecords.ParseStoredGateRecord', () => {
     const envelope: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
       unitResolution: { rowsRead: 6673, censoredRowsExcluded: 1756, labelKnownRowsExcluded: 44, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 4873, dataCutoff: '2026-07-30' },
-      legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate: b.Record,
+      trainer: null, trainerRequest: null, carve: null, gate: b.Record,
     };
     expect(GateRecords.ParseStoredGateRecord(JSON.stringify(envelope))?.decision.shipped).toBe('glm');
     expect(GateRecords.ParseStoredGateRecord(JSON.stringify({ ...envelope, gate: null }))).toBeNull();

@@ -79,8 +79,6 @@ export class WidgetFixtures {
       schema: TRAINING_RUN_RESULTS_SCHEMA,
       status: 'completed',
       unitResolution: { rowsRead: 6673, censoredRowsExcluded: 1756, labelKnownRowsExcluded: 44, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 4873, dataCutoff: '2026-07-30' },
-      legacy: null,
-      legacyRequest: null,
       trainer,
       trainerRequest: { evaluationProtocolId: '33333333-4444-4555-8666-777777777777', candidates: [{ name: 'xgb', algorithmId: '66666666-7777-4888-8999-000000000000', driverKey: 'xgboost', hyperparameters: {} }], seed: 42, threads: 1, timeoutSeconds: 3600, maxRetries: 2 },
       carve: null,

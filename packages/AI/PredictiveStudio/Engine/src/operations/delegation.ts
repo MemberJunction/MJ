@@ -23,7 +23,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
 import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
-import type { ISidecarTrainer, ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
+import type { ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
@@ -81,8 +81,7 @@ export class TrainingDelegation {
    * declares (date-carved, seeded-random or rolling-origin). A unit run's Training Snapshot files go to the storage provider
    * `PS_SNAPSHOT_STORAGE_PROVIDER` names, recorded as `MJ: Files` rows, and snapshots are found by content hash
    * through the same provider and user. A unit pipeline reads the Evaluation Protocol it is bound to through the
-   * same provider and user and trains through the trainer, which is the same `MJSidecarTrainer` as `sidecar`, so both
-   * reach one sidecar process.
+   * same provider and user and trains through the trainer (`MJSidecarTrainer` over the process-shared sidecar).
    *
    * @param provider the owning provider for data access / multi-provider correctness
    * @param user the acting user threaded through every entity op for isolation/audit
@@ -90,13 +89,10 @@ export class TrainingDelegation {
   public static async BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
     const entityFactory = new MetadataEntityFactory(provider);
     const providerId = await ResolveActiveFileStorageProviderId(user, provider);
-    // One trainer serves both seams, so the legacy train call and the protocol trainer reach the same sidecar process.
-    const trainer = new MJSidecarTrainer();
     return {
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
-      sidecar: trainer,
-      trainer,
+      trainer: new MJSidecarTrainer(),
       artifactStore: BuildArtifactStore(providerId, entityFactory),
       contextUser: user,
       provider,
@@ -138,25 +134,23 @@ export class TrainingDelegation {
    * sent again and the holdout metrics are compared.
    *
    * A retraining reproduces only on the trainer the run was trained on, so a caller outside the server that trained it
-   * passes that trainer as `trainer`; it serves both seams (the legacy train call and the protocol trainer), as the
-   * production `MJSidecarTrainer` does, and the retraining goes through the protocol trainer. Without one, the
-   * production deps' shared trainer is used.
+   * passes that trainer as `trainer`. Without one, the production deps' trainer is used.
    *
    * @param trainingRunId the `MJ: ML Training Runs` row to retrain
    * @param provider the owning provider
    * @param user the acting user
-   * @param trainer optional trainer to retrain on, for both the legacy and the protocol path (defaults to the production deps' trainer)
+   * @param trainer optional trainer to retrain on (defaults to the production deps' trainer)
    * @param retrainer optional retrainer override (defaults to a fresh {@link SnapshotRetrainer})
    */
   public static async RetrainFromSnapshotViaEngine(
     trainingRunId: string,
     provider: IMetadataProvider,
     user: UserInfo,
-    trainer?: ISidecarTrainer & ITrainerEvaluator,
+    trainer?: ITrainerEvaluator,
     retrainer: SnapshotRetrainer = new SnapshotRetrainer(),
   ): Promise<RetrainResult> {
     const deps = await TrainingDelegation.BuildTrainingDeps(provider, user);
-    return retrainer.Retrain(trainingRunId, trainer ? { ...deps, sidecar: trainer, trainer } : deps);
+    return retrainer.Retrain(trainingRunId, trainer ? { ...deps, trainer } : deps);
   }
 }
 

@@ -1,37 +1,13 @@
 /**
  * @module training/training-engine
  *
- * The **TrainingEngine** — Predictive Studio's training orchestrator (plan §3 /
- * §4.3 / §4.4 / §6 / §8.2 / §11). It composes the FeatureAssembly executor, the
- * Python sidecar, and artifact storage into one auditable flow that produces an
- * **immutable, versioned `MJ: ML Models`** row plus the `MJ: ML Training Runs`
- * row that recorded the attempt.
+ * The **TrainingEngine** — Predictive Studio's training orchestrator. Every pipeline trains under the Prediction
+ * Unit and the Evaluation Protocol version it is bound to, and the run produces an **immutable, versioned
+ * `MJ: ML Models`** row (when the gate ships an artifact) plus the `MJ: ML Training Runs` row that recorded the attempt.
+ * A pipeline without a Prediction Unit is refused before any run row is written (`unit-required`): the "Migrate
+ * Pipelines to Prediction Units and Evaluation Protocols" Action binds one, or holds the pipeline with the reason.
  *
- * ## Flow ({@link TrainingEngine.trainModel})
- * 1. Resolve the pipeline (parse its JSON columns via the core type contracts),
- *    then refuse — before any row is written — an unknown `MajorityBaselineRule`
- *    (`InvalidMajorityBaselineRuleError`).
- * 2. Create the training-run row (`Status='Running'`, `StartedAt`). A pipeline
- *    without a Prediction Unit whose AsOfStrategy asks for point-in-time assembly
- *    is refused here (`unit-required`, recorded on the run): that assembly lives
- *    in a Prediction Unit.
- * 3. Assemble the raw matrix + schema + preprocessing ops via FeatureAssembly
- *    (context `'train'`), carrying the label column. The target read is ordered by
- *    the entity's primary key, so the same data always arrives in the same order.
- * 4. **Carve the locked holdout FIRST** (§8.2 — never trained/tuned on) with the
- *    seeded, stratified {@link LockedHoldoutSplitter}; the remaining
- *    `train_test_split`/`kfold`/`holdout` validation is delegated to the sidecar
- *    with the same seed. Build the sidecar `ValidationConfig`.
- * 5. Build the `TrainRequest` and call the sidecar → `TrainResponse`; the locked
- *    holdout is scored exactly once → `HoldoutMetrics`.
- * 6. Persist the artifact to `MJ: Files` via the injected store → `ArtifactFileID`.
- * 7. Create the immutable `MJ: ML Models` row (Status `Draft`).
- * 8. **Leakage guard (§6.4):** single-feature-dominance check; a dominant feature
- *    flags the run, keeps the model `Draft`, and NEVER auto-promotes.
- * 9. Finalize the run (`Completed`/`Failed`, results, costs, notes).
- *
- * A pipeline that points at a Prediction Unit takes the unit path instead, and is trained only under
- * the Evaluation Protocol version its `EvaluationProtocolID` names: a pipeline without one, a missing
+ * A pipeline is trained only under the Evaluation Protocol version its `EvaluationProtocolID` names: a pipeline without one, a missing
  * protocol row, a row that does not parse, or more candidates than the protocol's budget allows are
  * refused before any run row is written. The protocol row must predate the run row, and a protocol
  * that does not fit the unit is refused on the run. The unit row reader then reads every unit row
@@ -63,16 +39,12 @@ import { LogError, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
-  type TrainResponse,
   type FeatureImportance,
-  type ValidationConfig,
-  type MatrixData,
   type SourceBinding,
   type AsOfStrategy,
   type LeakageGuard,
   type ValidationStrategy,
   type ProblemType,
-  type FittedPreprocessing,
   type FeatureStepGraph,
   type OutcomeConfig,
   resolveOutcomeConfig,
@@ -108,7 +80,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
-import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
@@ -125,8 +97,7 @@ import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapsho
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import { SnapshotHash } from '../snapshot/snapshot-hash';
-import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
-import { TrainRequestBuilder } from './train-request';
+import { LockedHoldoutSplitter, type LockedHoldoutSplit } from './locked-holdout';
 import { TrainerRequestBuilder } from './trainer-request';
 import { TrainerRunRecorder, TrainerLineageRefusedError } from './trainer-result';
 import { RunViewEvaluationProtocolStore, type LoadedProtocol } from './evaluation-protocol-store';
@@ -240,28 +211,21 @@ interface ShippedArtifact {
  * dependencies are supplied per call via {@link TrainingDeps}.
  */
 export class TrainingEngine {
-  private readonly assembler: FeatureAssemblyExecutor;
   private readonly unitReader = new PredictionUnitRowReader();
-
-  /**
-   * @param assembler optional FeatureAssembly executor override (tests may inject one)
-   */
-  constructor(assembler?: FeatureAssemblyExecutor) {
-    this.assembler = assembler ?? new FeatureAssemblyExecutor();
-  }
 
   /**
    * Train a model end-to-end from a pipeline definition.
    *
-   * @param input the pipeline id + optional session-iteration / as-of inputs
-   * @param deps the injected dependency bundle (entity factory, loader, sidecar, store)
-   * @returns the produced `Draft` model and the `Completed`/`Failed` training run
+   * @param input the pipeline id + optional session-iteration inputs
+   * @param deps the injected dependency bundle (entity factory, loader, trainer, stores)
+   * @returns the produced `Draft` model (null when the gate ships nothing) and the training run
+   * @throws TrainingRefusedError (`unit-required`) before any run row when the pipeline has no Prediction Unit
    */
   public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     // The compute rate is read before anything is written or trained, so a misconfigured rate fails fast.
     const usdPerSecond = ComputePricing.ReadComputeRate();
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
-    if (!resolved.pipeline.PredictionUnitID) return this.trainLegacyPipeline(resolved, input, deps, usdPerSecond);
+    if (!resolved.pipeline.PredictionUnitID) throw TrainingEngine.UnitRequired(resolved.pipeline.ID);
     const unitId = await this.advanceDecisionDate(resolved.pipeline, deps);
     return this.trainUnitPipeline(resolved, unitId || resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond);
   }
@@ -282,58 +246,14 @@ export class TrainingEngine {
   }
 
   /**
-   * Train a pipeline that does not point at a Prediction Unit: the `MajorityBaselineRule` parse and the refusal of a
-   * search's candidates (`unit-required`) run before the run row is written; a point-in-time AsOfStrategy is refused on
-   * the run (`unit-required`); then the target entity is assembled, the locked holdout carved and the sidecar trained.
+   * The refusal of a pipeline without a Prediction Unit, raised before any run row is written; the reason names how to
+   * bind one (a held pipeline's Description names what to declare).
    */
-  private async trainLegacyPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
-    // Validates the evaluation settings (an unknown MajorityBaselineRule is refused) before any row is written.
-    const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
-    // A search over candidates runs under a protocol, which only a unit pipeline has: refused before any run row.
-    if (input.candidates && input.candidates.length > 0) {
-      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why: 'a search over several candidates needs a Prediction Unit' } });
-    }
-    const run = await this.createRunRow(resolved, input, deps);
-
-    try {
-      if (resolved.asOf.Mode !== 'none') {
-        const why = "point-in-time assembly now lives in a Prediction Unit; this pipeline's AsOfStrategy has no effect without one";
-        throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why } });
-      }
-      const assembly = await this.assemble(resolved, input, deps);
-      const targetIdx = assembly.matrix.columns.indexOf(resolved.targetVariable);
-      const cleanRows = targetIdx >= 0
-        ? assembly.matrix.rows.filter((r) => r[targetIdx] !== null && r[targetIdx] !== undefined)
-        : assembly.matrix.rows;
-      const cleanMatrix: MatrixData = { columns: assembly.matrix.columns, rows: cleanRows };
-      const split = this.carveLockedHoldout(cleanMatrix, resolved, DEFAULT_SPLIT_SEED);
-      const trainRequest = TrainRequestBuilder.Build({
-        Algorithm: resolved.algorithmDriverKey,
-        ProblemType: resolved.problemType,
-        Hyperparameters: resolved.hyperparameters,
-        Validation: this.buildValidationConfig(resolved.validation),
-        FeatureSchema: assembly.featureSchema,
-        Preprocessing: assembly.preprocessing,
-        Target: resolved.targetVariable,
-        Data: split.Training,
-      });
-
-      const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
-      TrainingEngine.recordCompute(run, response, usdPerSecond);
-      const evaluation = EvaluationLineage.Build(resolved.validation, {
-        ValidationOutOfSample: response.validation_out_of_sample === true,
-        ImportanceKind: response.feature_importance_kind || null,
-        MajorityBaselineRule: majorityBaselineRule,
-      });
-
-      const dominance = this.checkLeakage(response.feature_importance || {}, resolved.leakageGuard);
-      const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation);
-      return { model, run };
-    } catch (err) {
-      await this.recordRunError(run, err, deps);
-      throw err;
-    }
+  public static UnitRequired(pipelineId: string): TrainingRefusedError {
+    return new TrainingRefusedError({
+      stage: 'pipeline',
+      reason: { kind: 'unit-required', pipelineId, why: 'this pipeline has no Prediction Unit; run the "Migrate Pipelines to Prediction Units and Evaluation Protocols" Action or bind a unit (a held pipeline names what to declare in its Description)' },
+    });
   }
 
   /** Record a run that ended in an error: a refusal as the `refused` envelope, any other error as a failure. */
@@ -533,7 +453,6 @@ export class TrainingEngine {
     const run = x.Run;
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
-      legacy: null, legacyRequest: null,
       trainer: TrainerContract.ToStoredTrainerResult(outcome.Result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
       carve: x.Carve, gate,
     };
@@ -999,40 +918,6 @@ export class TrainingEngine {
     return run;
   }
 
-  /** Mark the run `Completed`, attach the model + results, and record observations. */
-  private async finalizeRunSuccess(
-    run: MJMLTrainingRunEntity,
-    model: MJMLModelEntity,
-    assembly: FeatureAssemblyResult,
-    resolved: ResolvedPipeline,
-    response: TrainResponse,
-    dominance: DominanceResult,
-    evaluation: EvaluationRecord,
-  ): Promise<void> {
-    run.ResultingModelID = model.ID;
-    run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
-    run.Hyperparameters = JSON.stringify(resolved.hyperparameters);
-    run.ValidationResults = JSON.stringify({
-      metrics: response.metrics,
-      holdoutMetrics: response.holdout_metrics ?? null,
-      validationStrategy: resolved.validation,
-    });
-    run.Status = 'Completed';
-    run.CompletedAt = new Date();
-    run.Notes = this.buildRunNotes(dominance, evaluation, true);
-    await this.saveOrThrow(run, 'finalize ML Training Run');
-  }
-
-  /**
-   * Record the compute a run really used: the sidecar's measured wall-clock training seconds, priced at the configured
-   * rate (NULL when no rate is configured), never a constant. Called as soon as the sidecar returns, so a run that
-   * fails afterwards (a model row that does not save) still records the compute it spent.
-   */
-  private static recordCompute(run: MJMLTrainingRunEntity, response: TrainResponse, usdPerSecond: number | null): void {
-    run.ComputeSeconds = ComputePricing.RoundSeconds(response.duration_sec);
-    run.ComputeCost = ComputePricing.ComputeCostFor(response.duration_sec, usdPerSecond);
-  }
-
   /** Record a failed run (best-effort — never masks the original error). */
   private async finalizeRunFailure(run: MJMLTrainingRunEntity, err: unknown, _deps: TrainingDeps): Promise<void> {
     try {
@@ -1064,63 +949,6 @@ export class TrainingEngine {
     );
   }
 
-  // region: assembly ------------------------------------------------------------
-
-  /** Assemble the raw matrix + schema + preprocessing recipe (train context). */
-  private async assemble(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<FeatureAssemblyResult> {
-    return this.assembler.assemble({
-      targetEntityName: resolved.targetEntityName,
-      recordSet: { EntityName: resolved.targetEntityName, OrderBy: this.primaryKeyOrder(resolved.targetEntityName, deps), MaxRows: input.maxRows },
-      sources: resolved.sourceBindings,
-      steps: resolved.featureSteps,
-      asOf: resolved.asOf,
-      leakageGuard: resolved.leakageGuard,
-      targetVariable: resolved.targetVariable,
-      labelEventDates: input.labelEventDates,
-      primaryKeyField: input.primaryKeyField,
-      context: 'train',
-      contextUser: deps.contextUser,
-      provider: deps.provider,
-    });
-  }
-
-  /**
-   * The ORDER BY for the training read: the target entity's primary-key columns. Without it an uncapped read (the
-   * default) has no ORDER BY at all, so the database may return rows in any order and the seeded holdout carve would
-   * pick different rows between runs.
-   */
-  private primaryKeyOrder(targetEntityName: string, deps: TrainingDeps): string {
-    const entity = deps.provider.EntityByName(targetEntityName);
-    if (!entity || entity.PrimaryKeys.length === 0) {
-      throw new Error(`TrainingEngine: target entity '${targetEntityName}' has no primary key in metadata, so its rows cannot be read in a fixed order.`);
-    }
-    return entity.PrimaryKeys.map((pk) => pk.Name).join(', ');
-  }
-
-  // region: validation + holdout ------------------------------------------------
-
-  /**
-   * Carve the locked holdout FIRST (§8.2), before any train/test split: a seeded sample of
-   * `LockedHoldoutFraction` of the rows, stratified on the label for classification. The holdout
-   * rows are never sent in the training `data`.
-   */
-  private carveLockedHoldout(matrix: MatrixData, resolved: ResolvedPipeline, seed: number): LockedHoldoutSplit {
-    return LockedHoldoutSplitter.Carve(matrix, resolved.validation.LockedHoldoutFraction, resolved.targetVariable, resolved.problemType, seed);
-  }
-
-  /**
-   * Translate the pipeline's {@link ValidationStrategy} into a sidecar {@link ValidationConfig}. The seed is sent
-   * explicitly so the sidecar's splits use the same seed as the locked-holdout carve.
-   */
-  private buildValidationConfig(validation: ValidationStrategy): ValidationConfig {
-    return {
-      strategy: validation.Strategy,
-      test_size: validation.TestSize,
-      k: validation.K,
-      random_state: DEFAULT_SPLIT_SEED,
-    };
-  }
-
   // region: leakage -------------------------------------------------------------
 
   /** Run the single-feature-dominance check against the leakage threshold (§6.4). */
@@ -1128,49 +956,7 @@ export class TrainingEngine {
     return detectSingleFeatureDominance(importance, guard.SingleFeatureDominanceThreshold);
   }
 
-  // region: model persistence ---------------------------------------------------
-
-  /**
-   * Persist the artifact, then create the immutable `MJ: ML Models` row in
-   * `Draft` (never auto-promoted, even when leakage is clean — promotion is a
-   * separate human/agent gate, §6.4 / PS-AGENT-7).
-   */
-  private async createModelRow(
-    resolved: ResolvedPipeline,
-    input: TrainModelInput,
-    assembly: FeatureAssemblyResult,
-    split: LockedHoldoutSplit,
-    response: TrainResponse,
-    evaluation: EvaluationRecord,
-    deps: TrainingDeps,
-  ): Promise<MJMLModelEntity> {
-    const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
-    const artifactName = `model-${resolved.pipeline.ID}-v${version}.bin`;
-    const artifactFileId = await deps.artifactStore.save(decodeArtifact(response.artifact_b64), artifactName, deps.contextUser);
-
-    const model = await deps.entityFactory.getEntityObject<MJMLModelEntity>('MJ: ML Models', deps.contextUser);
-    model.PipelineID = resolved.pipeline.ID;
-    model.Version = version;
-    model.AlgorithmID = resolved.pipeline.AlgorithmID;
-    model.ArtifactFileID = artifactFileId;
-    model.FittedPreprocessing = JSON.stringify(response.fitted_preprocessing ?? ({} as FittedPreprocessing));
-    model.FeatureSchema = JSON.stringify(assembly.featureSchema);
-    model.TargetVariable = resolved.targetVariable;
-    model.ProblemType = resolved.problemType;
-    model.Metrics = JSON.stringify(response.metrics ?? {});
-    if (response.holdout_metrics) {
-      model.HoldoutMetrics = JSON.stringify(response.holdout_metrics);
-    }
-    model.FeatureImportance = JSON.stringify(response.feature_importance ?? {});
-    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation, null));
-    model.TrainedAt = new Date();
-    model.TrainingDurationSec = Math.round(response.duration_sec ?? 0);
-    model.TrainingRowCount = response.training_row_count ?? split.TrainingRowCount;
-    model.Status = 'Draft';
-
-    await this.saveOrThrow(model, 'create ML Model');
-    return model;
-  }
+  // region: model lineage ----------------------------------------------------------
 
   /**
    * Assemble the model lineage blob (provenance, §4.3). This blob must be

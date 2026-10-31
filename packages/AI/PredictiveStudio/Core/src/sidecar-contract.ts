@@ -6,10 +6,9 @@
  * (see plan §3). MJ assembles the feature matrix and exchanges it with the
  * sidecar over HTTP/gRPC using the request/response shapes defined here.
  *
- * The sidecar **fits** preprocessing during `/train` and returns the fitted
- * parameters; `/predict` only **applies** them. This fit-once / apply-everywhere
- * split is the anti-skew payload (plan §6.2) — `FeatureSchema` alone is
- * insufficient because the fitted pipeline must travel with the model.
+ * Training runs through the trainer contract (`trainer-contract.ts`). `/predict` still **applies** the fitted
+ * preprocessing a model trained before Prediction Units carries — it never re-fits — so models trained that way keep
+ * scoring.
  */
 
 /**
@@ -24,8 +23,8 @@ export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived
  * deliberately opinionated (plan §1.2) — classification (yes/no, multiclass) and
  * regression (predict a number) cover the canonical use cases.
  *
- * @deprecated The declared task is `TaskType` on the Prediction Unit; this two-valued type remains only for the
- * legacy `TrainRequest` and the `ProblemType` columns, and is removed together with `TrainRequest`.
+ * The declared task is `TaskType` on the Prediction Unit; this two-valued type stays for the `ProblemType` columns
+ * and the scoring path of models trained before Prediction Units, which reads it.
  */
 export type ProblemType = 'classification' | 'regression';
 
@@ -54,8 +53,8 @@ export interface FeatureSchemaEntry {
 
 /**
  * A single preprocessing operation in the train-time preprocessing list. These
- * are *declarations* of what the sidecar should fit; the fitted parameters come
- * back in {@link TrainResponse.FittedPreprocessing}. Mirrors the sklearn
+ * are *declarations* of what was fitted; the fitted parameters travel with the
+ * model as its fitted preprocessing. Mirrors the sklearn
  * fit/transform split executed in the sidecar (plan §6.2).
  */
 export interface PreprocessingOp {
@@ -80,34 +79,6 @@ export interface PreprocessingOp {
 }
 
 /**
- * Validation configuration sent to the sidecar at train time (plan §3.2 / §8.2).
- * The default is a single train/test split. `holdout` uses the same
- * out-of-sample split (it reads `test_size` too); `kfold` scores pooled
- * out-of-fold predictions. Every strategy reports out-of-sample `metrics`.
- */
-export interface ValidationConfig {
-  /** Validation strategy the sidecar should apply during `/train`. */
-  strategy: 'train_test_split' | 'kfold' | 'holdout';
-  /** Validation fraction for the split that `train_test_split` and `holdout` both use (e.g. `0.2`). */
-  test_size?: number;
-  /** Number of folds for `kfold`. */
-  k?: number;
-  /**
-   * Locked-holdout fraction the **sidecar** should re-carve from the training
-   * `data` and score exactly once (plan §8.2). This is the *fallback* path used
-   * when the orchestrator does not forward an explicit {@link TrainRequest.holdout}
-   * matrix — e.g. the sidecar's own pytest fixtures. The production
-   * orchestrator carves the locked holdout in TypeScript and forwards the exact
-   * rows via `TrainRequest.holdout` instead (which takes precedence), so the
-   * holdout is auditable and the carve is deterministic. Omitted ⇒ no
-   * sidecar-side re-carve.
-   */
-  holdout_size?: number;
-  /** Random seed for the sidecar's holdout / train-test splits (default 42). */
-  random_state?: number;
-}
-
-/**
  * Deterministic, comparable model metrics returned by the sidecar. The concrete
  * keys depend on `ProblemType` (e.g. `auc`/`f1`/`accuracy` for classification,
  * `rmse`/`mae`/`r2` for regression), so this is a numeric map. These drive the
@@ -126,8 +97,8 @@ export type FeatureImportance = Record<string, number>;
 /**
  * Every kind of number a `FeatureImportance` map can hold: |coefficient|, tree split/impurity counts, the held-out
  * permutation share per source column (the increase of the held-out loss when the column is permuted), or none. The
- * one TS list of the kinds: `ImportanceKind` is derived from it, and a Core test holds it to the sidecar's
- * `ImportanceKind` literal in `schemas.py`.
+ * one TS list of the kinds: `ImportanceKind` is derived from it, and a Core test holds it to the kinds
+ * `TrainerContract.ImportanceKindOf` writes.
  */
 export const IMPORTANCE_KINDS = ['coefficient', 'split_or_impurity', 'held_out_permutation', 'none'] as const;
 
@@ -145,77 +116,6 @@ export interface MatrixData {
   columns: string[];
   /** Row-major data: each inner array is one record's values, column-aligned. */
   rows: Array<Array<string | number | boolean | null>>;
-}
-
-/**
- * `POST /train` request body. MJ assembles the matrix via the FeatureAssembly
- * executor (plan §6) and sends it here. Either {@link TrainRequest.data} (inline)
- * or {@link TrainRequest.data_ref} (shared-storage handle) is provided.
- */
-export interface TrainRequest {
-  /** Sidecar algorithm driver key (e.g. `xgboost`, `lightgbm`, `logistic_regression`). */
-  algorithm: string;
-  /** Classification or regression. */
-  problem_type: ProblemType;
-  /** Algorithm-specific hyperparameters (validated against the catalog schema). */
-  hyperparameters: Record<string, unknown>;
-  /** How to validate during training. */
-  validation: ValidationConfig;
-  /** Ordered feature schema describing each input column. */
-  feature_schema: FeatureSchemaEntry[];
-  /** Ordered preprocessing ops to fit + apply at train time. */
-  preprocessing: PreprocessingOp[];
-  /** Target/label column name. */
-  target: string;
-  /** Inline matrix data (mutually exclusive with `data_ref`). */
-  data?: MatrixData;
-  /** Shared-storage handle to the matrix (Parquet/Arrow), used for very large sets. */
-  data_ref?: string;
-  /**
-   * The **locked holdout** matrix (plan §8.2), carved off the assembled data by
-   * the orchestrator *before* any train/test split and never present in
-   * {@link TrainRequest.data}. Same columns as `data` (it includes the `target`
-   * column). When supplied, the sidecar scores these rows **exactly once** using
-   * the preprocessing fitted on the training `data` (frozen fitted transform,
-   * **never re-fit** — the anti-skew guarantee, plan §6.2) and returns the result
-   * as {@link TrainResponse.holdout_metrics}.
-   *
-   * This is the honest, deterministic holdout: the orchestrator carves the exact
-   * rows in TypeScript (auditable) and forwards them here, rather than asking the
-   * sidecar to re-derive a holdout via {@link ValidationConfig.holdout_size}.
-   * When both `holdout` and `validation.holdout_size` are set, `holdout` wins.
-   */
-  holdout?: MatrixData;
-}
-
-/**
- * `POST /train` response. Carries the serialized model plus the **fitted**
- * preprocessing parameters (the anti-skew payload) and the deterministic metrics
- * used to grade and rank the run.
- */
-export interface TrainResponse {
-  /** Base64-encoded serialized model artifact. */
-  artifact_b64: string;
-  /**
-   * Fitted preprocessing parameters (means/stds, vocabularies, bin edges, fill
-   * values) learned during `/train`. Travels with the model and is replayed at
-   * inference — never re-fit (plan §6.2).
-   */
-  fitted_preprocessing: FittedPreprocessing;
-  /** Train + validation metrics. */
-  metrics: ModelMetrics;
-  /** Feature importance shares; see `FeatureImportance`. */
-  feature_importance: FeatureImportance;
-  /** Which kind of number `feature_importance` holds. Absent on sidecars that predate it. */
-  feature_importance_kind?: ImportanceKind;
-  /** Number of training rows the model was fit on (excludes any locked holdout, forwarded or sidecar-carved). */
-  training_row_count: number;
-  /** Wall-clock training time in seconds. */
-  duration_sec: number;
-  /** Honest metrics on the locked holdout, scored exactly once (plan §8.2). */
-  holdout_metrics?: ModelMetrics;
-  /** True when the sidecar computed `metrics` strictly out-of-sample (fit on train fold/split only, scored on held-out fold/split); set per run from the validation path taken. Absent on pre-C5 sidecars. */
-  validation_out_of_sample?: boolean;
 }
 
 /**
@@ -288,7 +188,7 @@ export interface PredictResponse {
 
 /**
  * Serialized fitted-transform parameters (means/stds, one-hot vocabularies, bin
- * edges, imputation fill values) produced by the sidecar at `/train` and
+ * edges, imputation fill values) a model trained before Prediction Units carries,
  * replayed at `/predict`. The concrete shape is sidecar-defined and opaque to
  * the orchestrator — it is stored verbatim on the trained model
  * (`MLModel.FittedPreprocessing`, plan §4.3) and round-tripped unchanged.

@@ -20,7 +20,7 @@ const stored = (outcome: 'model' | 'keep-simple-baseline' | 'no-signal'): string
   return JSON.stringify({
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 500, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 500, dataCutoff: '2026-07-30' },
-    legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate,
+    trainer: null, trainerRequest: null, carve: null, gate,
   });
 };
 

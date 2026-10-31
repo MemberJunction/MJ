@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, EntityInfo, UserInfo } from '@memberjunction/core';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import { TRAINING_RUN_RESULTS_SCHEMA, TrustVerdicts, ImportanceDisplay, type GateDecision, type ModelingPlanSpec, type StoredGateRecord } from '@memberjunction/predictive-studio-core';
+import { TRAINING_RUN_RESULTS_SCHEMA, TrustVerdicts, ImportanceDisplay, type GateDecision, type ModelingPlanSpec, type StoredGateRecord, type TrustComparison } from '@memberjunction/predictive-studio-core';
 import {
   SummarizeBuildResult,
   BuildOutcomeMessage,
@@ -37,7 +37,7 @@ function storedRun(decision: GateDecision, reason: string): string {
   return JSON.stringify({
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 500, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 500, dataCutoff: '2026-07-30' },
-    legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate,
+    trainer: null, trainerRequest: null, carve: null, gate,
   });
 }
 const shippedTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null }, 'The model beats the flat guess.'), Lineage: null });
@@ -308,12 +308,21 @@ function unmeasuredModel(id: string): MJMLModelEntity {
   } as unknown as MJMLModelEntity;
 }
 
-/** A builder stub that "trains" one model whose run stores no gate decision, reported the way the real builder does without a search. */
+/** A one-row leaderboard over the run's stored comparison with the flat guess (null when the run stores none). */
+function oneRowLeaderboard(model: MJMLModelEntity, comparison: TrustComparison | null): MLLeaderboardEntryPayload[] {
+  const score = comparison === null ? null : comparison.Value;
+  return [{
+    IterationID: 'run-1', Metric: score, ModelID: model.ID, rank: 1, algorithm: 'XGBoost', featureSet: 'Pipeline feature set', score,
+    metricName: comparison === null ? null : comparison.Metric, innerLower: null, innerUpper: null, optimistic: false, modelId: model.ID, isWinner: score !== null,
+  }];
+}
+
+/** A builder stub that "trains" one model whose run stores no gate decision. */
 class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const model = unmeasuredModel('model-unmeasured');
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null });
-    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard('run-1', model, trust.Comparison, 'XGBoost');
+    const leaderboard = oneRowLeaderboard(model, trust.Comparison);
     return {
       success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, leakageFlagged: false,
       heldReason: trust.Reason, errorMessage: null, leaderboard,
@@ -325,7 +334,7 @@ class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
 class ShippedBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const model = unmeasuredModel('model-shipped');
-    const leaderboard = PredictiveStudioPipelineBuilder.SingleModelLeaderboard('run-1', model, shippedTrust.Comparison, 'XGBoost');
+    const leaderboard = oneRowLeaderboard(model, shippedTrust.Comparison);
     return {
       success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: true, leakageFlagged: false,
       heldReason: null, errorMessage: null, leaderboard,

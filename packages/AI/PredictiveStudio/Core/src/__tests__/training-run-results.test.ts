@@ -5,7 +5,7 @@ const counts = { rowsRead: 10, censoredRowsExcluded: 1, labelKnownRowsExcluded: 
 
 describe('TrainingRunResultsParser', () => {
   it('reads a completed and a refused envelope', () => {
-    expect(TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null })).Ok).toBe(true);
+    expect(TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts })).Ok).toBe(true);
     const refused = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } } }));
     expect(refused.Ok && refused.Value.status === 'refused' ? refused.Value.refusal.reason.kind : null).toBe('protocol-required');
   });
@@ -28,20 +28,12 @@ describe('TrainingRunResultsParser', () => {
     expect(badHoldout.Ok ? null : badHoldout.Errors.join('\n')).toMatch(/refusal\.reason\.holdout/);
   });
   it('refuses an envelope whose members have the wrong shape, naming the path', () => {
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' }, legacy: null, legacyRequest: null }));
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' } }));
     expect(r.Ok ? null : r.Errors.join('\n')).toMatch(/unitResolution\.resolvedRows/);
     expect(TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'made-up' } } })).Ok).toBe(false);
   });
-  it('reads back a stored legacy request and refuses one with a wrong-typed member', () => {
-    const legacyRequest = { algorithm: 'xgboost', problemType: 'classification', hyperparameters: { max_depth: 3 }, validation: { strategy: 'train_test_split', test_size: 0.2 } };
-    const envelope = (lr: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: lr });
-    const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(legacyRequest));
-    expect(ok.Ok && ok.Value.status === 'completed' ? ok.Value.legacyRequest?.algorithm : null).toBe('xgboost');
-    const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...legacyRequest, problemType: 'sequence' }));
-    expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/legacyRequest\.problemType/);
-  });
   it('reads an envelope written before trainer results were stored with trainer and trainerRequest as null', () => {
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null }));
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts }));
     expect(r.Ok && r.Value.status === 'completed' ? [r.Value.trainer, r.Value.trainerRequest] : 'not read').toEqual([null, null]);
   });
   it('reads a trainer refusal and refuses one at an unknown trainer stage', () => {
@@ -52,14 +44,14 @@ describe('TrainingRunResultsParser', () => {
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.stage/);
   });
   it('reads a completed envelope written before the carve was stored with carve as null', () => {
-    // The shape a unit run stored before the carve member existed (legacy and trainer members, no carve key).
-    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: { metrics: { auc: 0.71 }, holdoutMetrics: null, trainingRowCount: 8, holdoutRowCount: 1 }, legacyRequest: null, trainer: null, trainerRequest: null });
+    // The shape a unit run stored before the carve member existed (trainer members, no carve key).
+    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null });
     const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
     expect(r.Ok && r.Value.status === 'completed' ? r.Value.carve : 'not read').toBeNull();
   });
   it('reads a completed envelope written before the gate record was stored with gate as null', () => {
     // The shape a unit run stored before the gate member existed (trainer, request and carve members, no gate key).
-    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null });
+    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null, carve: null });
     const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
     expect(r.Ok && r.Value.status === 'completed' ? r.Value.gate : 'not read').toBeNull();
   });
@@ -72,7 +64,7 @@ describe('TrainingRunResultsParser', () => {
         heldGroupKeysSha256: 'a'.repeat(64), trainingGroupKeysSha256: 'b'.repeat(64),
       },
     };
-    const envelope = (c: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: c });
+    const envelope = (c: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null, carve: c });
     const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(carve));
     expect(ok.Ok && ok.Value.status === 'completed' ? ok.Value.carve : null).toEqual(carve);
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, kind: 'trailing-fraction' }));
@@ -88,7 +80,7 @@ describe('TrainingRunResultsParser', () => {
       holdoutClassCounts: null, holdoutPeriods: ['2024-01-01'],
       newEntity: { holdoutEntityKeys: 3, trainingRowCount: 12, holdoutRowCount: 3, excludedRowCount: 5, sharedEntityKeys: 0 },
     };
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: older }));
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null, carve: older }));
     const ne = r.Ok && r.Value.status === 'completed' ? r.Value.carve?.newEntity : undefined;
     expect(ne).toEqual({ ...older.newEntity, heldGroupKeysSha256: null, trainingGroupKeysSha256: null });
   });

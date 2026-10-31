@@ -33,7 +33,6 @@ import {
   type FeatureStepWarning,
   type HyperparameterValue,
   type ModelingPlanSpec,
-  type TrustComparison,
   type TrustVerdict,
 } from '@memberjunction/predictive-studio-core';
 
@@ -309,20 +308,6 @@ export class PredictiveStudioPipelineBuilder {
   /** A scalar or null: the values a candidate's hyperparameter can hold. */
   private static isHyperparameterValue(value: unknown): value is HyperparameterValue {
     return value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
-  }
-
-  /**
-   * The one leaderboard row of a pipeline trained without a search: the stored comparison with the flat guess its trust
-   * verdict quotes (`TrustVerdict.Comparison`), the winner only when there is one. A run that stores no gate decision
-   * passes null: score null, never an invented number.
-   */
-  public static SingleModelLeaderboard(runId: string, model: MJMLModelEntity, comparison: TrustComparison | null, algorithm: string): MLLeaderboardEntryPayload[] {
-    const score = comparison === null ? null : comparison.Value;
-    return [{
-      IterationID: runId, Metric: score, ModelID: model.ID, rank: 1, algorithm, featureSet: 'Pipeline feature set', score,
-      metricName: comparison === null ? null : comparison.Metric, innerLower: null, innerUpper: null, optimistic: false,
-      modelId: model.ID, isWinner: score !== null,
-    }];
   }
 
   /**

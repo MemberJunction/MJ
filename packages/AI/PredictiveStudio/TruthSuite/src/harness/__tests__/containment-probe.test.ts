@@ -77,7 +77,7 @@ function storedRun(decision: GateDecision): string {
   return JSON.stringify({
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 120, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 120, dataCutoff: '2026-07-30' },
-    legacy: null, legacyRequest: null, trainer: null, trainerRequest: null, carve: null, gate,
+    trainer: null, trainerRequest: null, carve: null, gate,
   });
 }
 const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };

@@ -3,7 +3,7 @@ import { TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrainingRunResultsParser 
 import { TrainerResultFixtures } from './fixtures/trainer-result';
 
 const counts = { rowsRead: 10, censoredRowsExcluded: 1, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 9, dataCutoff: '2026-01-01' };
-const envelope = (trainer: object): string => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null, trainer, trainerRequest: null });
+const envelope = (trainer: object): string => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer, trainerRequest: null });
 const RUN_ID = '00000000-0000-0000-0000-0000000000a1';
 
 describe('stored trainer results (ValidationResults.trainer)', () => {

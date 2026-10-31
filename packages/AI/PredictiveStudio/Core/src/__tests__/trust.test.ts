@@ -32,7 +32,7 @@ const NO_SIGNAL: StoredGateRecord['decision'] = { outcome: 'no-signal', branch: 
 const record = (over: Partial<StoredGateRecord>, candidates: ReadonlyArray<{ name: string; driverKey: string }> = []): string => JSON.stringify({
   schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
   unitResolution: { rowsRead: 1205, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1205, dataCutoff: '2026-07-30' },
-  legacy: null, legacyRequest: null, trainer: null, carve: null,
+  trainer: null, carve: null,
   trainerRequest: candidates.length === 0 ? null : {
     evaluationProtocolId: gate.evaluationProtocolId, seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
     candidates: candidates.map((c) => ({ name: c.name, algorithmId: 'A-1', driverKey: c.driverKey, hyperparameters: {} })),

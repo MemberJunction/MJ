@@ -3,8 +3,8 @@
  *
  * Dependency-injection seams and input/output shapes for the
  * {@link TrainingEngine} (plan §3 / §4.3 / §4.4 / §8.2 / §11). Every external
- * dependency the engine touches — entity creation, record loading, the Python
- * sidecar, and artifact storage — is expressed as a narrow interface here so the
+ * dependency the engine touches — entity creation, record loading, the trainer
+ * (the Python sidecar's trainer/evaluator), and artifact storage — is expressed as a narrow interface here so the
  * orchestrator is unit-testable with no live database and no live sidecar.
  *
  * The production implementations of these seams (`MetadataEntityFactory`,
@@ -15,10 +15,7 @@
 
 import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type {
-  TrainRequest,
-  TrainResponse,
   ProblemType,
-  MatrixData,
   SourceBinding,
   FeatureStepGraph,
   AsOfStrategy,
@@ -119,8 +116,7 @@ export interface IRecordLoader {
 
 /**
  * The protocol-driven training seam: one Training Run over one immutable Training Snapshot per call, answered with a
- * {@link TrainerResult}. Kept apart from {@link ISidecarTrainer} so the legacy `train` seam and its test doubles stay
- * untouched while the legacy path exists.
+ * {@link TrainerResult}. Every pipeline trains through it.
  */
 export interface ITrainerEvaluator {
   /**
@@ -128,32 +124,6 @@ export interface ITrainerEvaluator {
    * or a malformed answer throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
    */
   RunTrainer(req: TrainerRequest): Promise<TrainerResult>;
-}
-
-/**
- * Sidecar seam — the `/train` call. Wraps {@link MLSidecar} from
- * `@memberjunction/predictive-studio-sidecar` in production; tests inject a fake
- * that returns a canned {@link TrainResponse} and captures the request so the
- * test can assert the matrix/preprocessing/holdout shape sent to the sidecar.
- */
-export interface ISidecarTrainer {
-  /**
-   * Train a model from an assembled feature matrix. The implementation is
-   * responsible for sidecar lifecycle (start/connect); the engine only calls
-   * this method.
-   *
-   * The engine carves the **locked holdout** (plan §8.2) in TypeScript before
-   * calling this — `req.data` contains ONLY the training portion (the rows the
-   * model may train and tune on). The locked-holdout rows travel separately in
-   * the optional second argument so the sidecar scores them **exactly once** and
-   * returns `holdout_metrics`; they never enter `req.data`. Keeping the holdout
-   * out of the public {@link TrainRequest} shape preserves that contract while
-   * making the carve auditable and deterministic on the orchestrator side.
-   *
-   * @param req the fully-built train request (training matrix + schema + preprocessing + validation)
-   * @param lockedHoldout the carved-off holdout matrix to score exactly once (optional)
-   */
-  train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -200,13 +170,12 @@ export interface TrainModelInput {
   experimentSessionIterationId?: string;
   /**
    * Optional per-record label-event dates (keyed by record primary key). Decision dates come from the pipeline's
-   * Prediction Unit, so a unit pipeline refuses them (`input-not-accepted`) and a pipeline without a unit, which
-   * refuses every point-in-time as-of mode (`unit-required`), never reads them.
+   * Prediction Unit, so training refuses them (`input-not-accepted`).
    */
   labelEventDates?: Record<string, Date>;
-  /** Optional primary-key field on the target entity (defaults to `ID`). */
+  /** No longer read: every pipeline reads its rows through its Prediction Unit, keyed by the row entity's primary key. */
   primaryKeyField?: string;
-  /** Optional cap on training rows pulled from the target entity. */
+  /** A cap on training rows; training refuses it (`input-not-accepted`), since a unit run reads every unit row. */
   maxRows?: number;
   /** Sidecar version string recorded in model lineage (provenance). */
   sidecarVersion?: string;
@@ -233,8 +202,6 @@ export interface TrainingDeps {
   entityFactory: IEntityFactory;
   /** Record-loading seam (pipeline + next-version). */
   recordLoader: IRecordLoader;
-  /** Sidecar `/train` seam. */
-  sidecar: ISidecarTrainer;
   /** Artifact-storage seam. */
   artifactStore: IArtifactStore;
   /** Request user — threaded through every entity op for isolation/audit. */
@@ -261,8 +228,7 @@ export interface TrainingDeps {
   snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /**
    * The trainer every Prediction Unit pipeline trains through. Required on that path: a unit run without one fails
-   * before anything is read. Production wiring passes the same `MJSidecarTrainer` it uses for `sidecar`, so both reach
-   * one sidecar process.
+   * before anything is read. Production wiring passes an `MJSidecarTrainer` over the process-shared sidecar.
    */
   trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */

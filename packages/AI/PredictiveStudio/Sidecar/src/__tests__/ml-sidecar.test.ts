@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import {
-  type TrainRequest,
-  type TrainResponse,
   type PredictRequest,
   type PredictResponse,
   type TrainerFailed,
@@ -74,19 +72,6 @@ function queue(statusCode: number, body: unknown) {
   responseQueue.push({ statusCode, body: typeof body === 'string' ? body : JSON.stringify(body) });
 }
 
-function buildTrainRequest(): TrainRequest {
-  return {
-    algorithm: 'xgboost',
-    problem_type: 'classification',
-    hyperparameters: { max_depth: 4 },
-    validation: { strategy: 'train_test_split', test_size: 0.2 },
-    feature_schema: [{ Name: 'tenure', Kind: 'numeric' }],
-    preprocessing: [{ op: 'standardize', cols: ['tenure'] }],
-    target: 'Renewed',
-    data: { columns: ['tenure', 'Renewed'], rows: [[12, 1], [3, 0]] },
-  };
-}
-
 function buildPredictRequest(): PredictRequest {
   return {
     artifact_b64: 'YWJj',
@@ -128,26 +113,6 @@ describe('MLSidecar (remote mode)', () => {
     expect(requestLog[0].path).toBe('/health');
   });
 
-  it('Train() POSTs the body to /train and returns the parsed TrainResponse', async () => {
-    const expected: TrainResponse = {
-      artifact_b64: 'bW9kZWw=',
-      fitted_preprocessing: { 'tenure.mean': 7.5 },
-      metrics: { auc: 0.91 },
-      feature_importance: { tenure: 1 },
-      training_row_count: 2,
-      duration_sec: 0.42,
-    };
-    queue(200, expected);
-    const s = new MLSidecar({ url: URL_BASE });
-    const req = buildTrainRequest();
-    const result = await s.Train(req);
-
-    expect(result).toEqual(expected);
-    expect(requestLog[0].method).toBe('POST');
-    expect(requestLog[0].path).toBe('/train');
-    expect(JSON.parse(requestLog[0].body!)).toEqual(req);
-  });
-
   it('Predict() POSTs the body to /predict and returns the parsed PredictResponse', async () => {
     const expected: PredictResponse = { predictions: [{ score: 0.8, class: 'yes' }] };
     queue(200, expected);
@@ -173,7 +138,7 @@ describe('MLSidecar (remote mode)', () => {
   it('throws SidecarError carrying status and body on a non-2xx response', async () => {
     queue(422, '{"detail":"bad schema"}');
     const s = new MLSidecar({ url: URL_BASE });
-    await expect(s.Train(buildTrainRequest())).rejects.toMatchObject({
+    await expect(s.Predict(buildPredictRequest())).rejects.toMatchObject({
       name: 'SidecarError',
       Status: 422,
       Body: '{"detail":"bad schema"}',

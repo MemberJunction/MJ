@@ -40,7 +40,6 @@ function inertDeps(): TrainingDeps {
   return {
     entityFactory: {} as TrainingDeps['entityFactory'],
     recordLoader: {} as TrainingDeps['recordLoader'],
-    sidecar: {} as TrainingDeps['sidecar'],
     artifactStore: {} as TrainingDeps['artifactStore'],
     contextUser: {} as TrainingDeps['contextUser'],
     provider: {} as TrainingDeps['provider'],

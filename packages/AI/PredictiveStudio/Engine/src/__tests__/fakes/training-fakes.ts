@@ -1,6 +1,6 @@
 /**
  * In-memory training fakes shared by the training-engine and snapshot-retrainer tests: field-bag entity fakes served by
- * an entity-factory fake, a record loader, a capturing sidecar, a trainer and a protocol store, a snapshot store over
+ * an entity-factory fake, a record loader, a trainer and a protocol store, a snapshot store over
  * the saved fakes, and the harness for a pipeline that points at the `UnitYearsWorld` Prediction Unit and is bound to
  * the `ProtocolRowFixture` protocol. No live database, no live sidecar.
  */
@@ -13,9 +13,6 @@ import type {
   MJTrainingSnapshotEntity,
 } from '@memberjunction/core-entities';
 import type {
-  TrainRequest,
-  TrainResponse,
-  MatrixData,
   FeatureStepGraph,
   SourceBinding,
   AsOfStrategy,
@@ -30,7 +27,7 @@ import type {
 import { EvaluationProtocol } from '@memberjunction/predictive-studio-core';
 import { TrainingEngine } from '../../training/training-engine';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
-import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator, TrainModelResult, TrainingDeps } from '../../training/types';
+import type { IEntityFactory, IRecordLoader, ITrainerEvaluator, TrainModelResult, TrainingDeps } from '../../training/types';
 import type { IEvaluationProtocolStore, StoredEvaluationProtocol } from '../../training/evaluation-protocol-store';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
@@ -246,34 +243,6 @@ export class FakeRecordLoader implements IRecordLoader {
   }
 }
 
-/** Sidecar fake — captures the request + holdout, returns a canned response. */
-export class FakeSidecar implements ISidecarTrainer {
-  public LastRequest: TrainRequest | null = null;
-  public LastHoldout: MatrixData | null = null;
-  public CallCount = 0;
-
-  constructor(private readonly response: TrainResponse) {}
-
-  async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
-    this.CallCount++;
-    this.LastRequest = req;
-    this.LastHoldout = lockedHoldout ?? null;
-    return this.response;
-  }
-}
-
-export const cleanResponse: TrainResponse = {
-  artifact_b64: Buffer.from('fake-model-bytes').toString('base64'),
-  fitted_preprocessing: { 'standardize.tenure': { mean: 5, std: 2.5 } },
-  metrics: { auc: 0.82, f1: 0.78 },
-  feature_importance: { tenure: 0.3, events_at_signup: 0.25, city: 0.2, emb_0: 0.25 },
-  feature_importance_kind: 'split_or_impurity',
-  training_row_count: 8,
-  duration_sec: 1.4,
-  holdout_metrics: { auc: 0.79 },
-  validation_out_of_sample: true,
-};
-
 /**
  * The provider slice training uses: `EntityByName` for the target's primary key (the training read is ordered by it).
  * Handed to the engine through one deliberate test-double cast at the seam boundary.
@@ -345,26 +314,23 @@ export class TrainingHarness {
     return ProtocolRowFixture.Row({ MinMinorityClassRows: 1 });
   }
 
-  /** Deps over the fakes: a pipeline (default `FakeMLPipeline`, `null` for none), a canned legacy answer and an in-memory artifact store. */
-  public static BuildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeline | null; response?: TrainResponse }): {
+  /** Deps over the fakes: a pipeline (default `FakeMLPipeline`, `null` for none) and an in-memory artifact store. */
+  public static BuildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeline | null }): {
     deps: TrainingDeps;
     factory: FakeEntityFactory;
-    sidecar: FakeSidecar;
     store: InMemoryArtifactStore;
   } {
     const factory = (overrides?.entityFactory as FakeEntityFactory) || new FakeEntityFactory();
-    const sidecar = new FakeSidecar(overrides?.response || cleanResponse);
     const store = new InMemoryArtifactStore();
     const pipeline = overrides?.pipeline === undefined ? new FakeMLPipeline() : overrides.pipeline;
     const deps: TrainingDeps = {
       entityFactory: factory,
       recordLoader: new FakeRecordLoader(pipeline),
-      sidecar,
       artifactStore: store,
       contextUser: fakeUser,
       provider: fakeProvider,
     };
-    return { deps, factory, sidecar, store };
+    return { deps, factory, store };
   }
 
   /**
@@ -381,7 +347,6 @@ export class TrainingHarness {
   ): {
     engine: TrainingEngine;
     deps: TrainingDeps;
-    sidecar: FakeSidecar;
     trainer: FakeTrainer;
     protocols: FakeEvaluationProtocolStore;
     pipeline: FakeMLPipeline;
@@ -397,7 +362,7 @@ export class TrainingHarness {
     pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
     pipeline.FeatureSteps = JSON.stringify(featureSteps);
     pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
-    const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
+    const { deps, factory } = TrainingHarness.BuildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
     const trainer = new FakeTrainer((r) => TrainerAnswers.CannedFor(r));
     const protocols = new FakeEvaluationProtocolStore([TrainingHarness.UnitProtocolRow()]);
     deps.trainer = trainer;
@@ -409,7 +374,7 @@ export class TrainingHarness {
     deps.snapshotFiles = files;
     const snapshotStore = new FakeTrainingSnapshotStore(factory);
     deps.snapshots = snapshotStore;
-    return { engine: new TrainingEngine(), deps, sidecar, trainer, protocols, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
+    return { engine: new TrainingEngine(), deps, trainer, protocols, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
   }
 }
 

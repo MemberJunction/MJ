@@ -6,8 +6,6 @@ import { fileURLToPath } from 'node:url';
 import {
   TrainerContract,
   type JsonValue,
-  type TrainRequest,
-  type TrainResponse,
   type PredictRequest,
   type PredictResponse,
   type TrainerRequest,
@@ -145,7 +143,7 @@ const DEFAULT_SERVER_PATH = resolveServerPath();
  * ```ts
  * const s = new MLSidecar();
  * await s.Start();
- * const trained = await s.Train(trainRequest);
+ * const result = await s.RunTrainer(trainerRequest);
  * const predictions = await s.Predict(predictRequest);
  * await s.Stop();
  * ```
@@ -347,15 +345,6 @@ export class MLSidecar {
 
       proc.kill('SIGTERM');
     });
-  }
-
-  /**
-   * Train a model by POSTing the assembled feature matrix to `/train`.
-   * @throws {SidecarError} when the sidecar responds with a non-2xx status
-   */
-  async Train(req: TrainRequest): Promise<TrainResponse> {
-    this.assertRunning();
-    return this.httpPost<TrainRequest, TrainResponse>('/train', req);
   }
 
   /**

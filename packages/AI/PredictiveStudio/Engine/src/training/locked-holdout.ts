@@ -14,8 +14,9 @@ import type { MatrixData, ProblemType } from '@memberjunction/predictive-studio-
 import type { SnapshotContent } from '../snapshot/snapshot-serialization';
 
 /**
- * The seed for every training split: the engine's locked-holdout carve and the sidecar's train/test and k-fold splits
- * (sent as `ValidationConfig.random_state`). 42 is the sidecar's own default, so the two sides always agree.
+ * The default seed of a seeded locked-holdout carve (42, the sidecar's own default). The engine no longer carves with
+ * this module — a run's locked holdout is the one its Evaluation Protocol declares — and it stays exported for callers
+ * that carve a matrix directly.
  */
 export const DEFAULT_SPLIT_SEED = 42;
 

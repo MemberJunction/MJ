@@ -14,8 +14,6 @@ import {
   type TrainerCompleted,
   type TrainerRequest,
   type TrainingRunResults,
-  type TrainResponse,
-  type MatrixData,
   type FeatureStepGraph,
   type AsOfStrategy,
   type ValidationStrategy,
@@ -30,8 +28,6 @@ import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
 import { InMemoryArtifactStore } from '../artifact-store';
 import { ProtocolRowFixture } from './fixtures/protocol-row';
 import { TrainerResultFixtures } from './fixtures/trainer-result';
-import { DEFAULT_SPLIT_SEED } from '../locked-holdout';
-import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import { AsOfFeatureAssembler } from '../../feature-assembly/as-of/as-of-assembler';
 import type {
   IFeatureDataAccess,
@@ -53,11 +49,9 @@ import {
   FakeMLModel,
   FakeMLPipeline,
   FakeMLRun,
-  FakeSidecar,
   FakeTrainer,
   FakeTrainingSnapshot,
   TrainingHarness,
-  cleanResponse,
   fakeProvider,
   fakeUser,
 } from '../../__tests__/fakes/training-fakes';
@@ -66,11 +60,9 @@ import { SnapshotFiles, type SnapshotContent } from '../../snapshot/snapshot-ser
 
 /**
  * Unit tests for the TrainingEngine. NO live DB, NO live sidecar — every seam is
- * an in-memory fake. These tests prove the orchestration flow (plan §3 / §4.3 /
- * §4.4 / §8.2 / §6.4 / §11): the assembled matrix → carved locked holdout →
- * correctly-shaped TrainRequest → immutable Draft ML Model + Completed Training
- * Run, leakage-dominance handling, and Save-failure surfacing. The fakes are shared
- * (`__tests__/fakes/training-fakes`).
+ * an in-memory fake. These tests prove the orchestration of a Prediction Unit pipeline under its Evaluation Protocol
+ * (unit rows → snapshot → trainer → gate → model row), the refusals before a run row exists, and Save-failure
+ * surfacing. The fakes are shared (`__tests__/fakes/training-fakes`).
  */
 
 // No compute rate unless a test sets one, whatever the shell exports: an unpriced run records a NULL cost.
@@ -81,335 +73,46 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** In-memory feature data access backing the assembler (no DB); records every read so tests can check its ORDER BY. */
-class InMemoryDataAccess implements IFeatureDataAccess {
-  public readonly Reads: FetchRowsParams[] = [];
-  constructor(private readonly rowsByEntity: Record<string, SourceRow[]>) {}
-  async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
-    this.Reads.push(params);
-    const rows = this.rowsByEntity[params.EntityName];
-    return rows
-      ? { Success: true, Rows: rows, TotalRowCount: rows.length }
-      : { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `no fixture ${params.EntityName}` };
-  }
-  async fetchEmbedding(): Promise<number[] | null> {
-    return null;
-  }
-}
-
-/** 10 synthetic member rows for a classification pipeline. */
-function syntheticMembers(): SourceRow[] {
-  const rows: SourceRow[] = [];
-  for (let i = 0; i < 10; i++) {
-    rows.push({
-      ID: `m${i}`,
-      tenure: i + 1,
-      events_at_signup: (i % 3) + 1,
-      city: i % 2 === 0 ? 'NYC' : 'LA',
-      Renewed: i % 2,
-    });
-  }
-  return rows;
-}
-
-
-
-/** Build a TrainingEngine wired to an assembler over the given member rows. */
-function buildEngine(dataAccess: InMemoryDataAccess = new InMemoryDataAccess({ Members: syntheticMembers() })): TrainingEngine {
-  // Inject the data-access into the assembler by wrapping assemble defaults:
-  // FeatureAssemblyExecutor reads dataAccess from params, so we pass it via a
-  // subclass that always supplies our in-memory access.
-  class TestAssembler extends FeatureAssemblyExecutor {
-    public override assemble(params: Parameters<FeatureAssemblyExecutor['assemble']>[0]) {
-      return super.assemble({ ...params, dataAccess });
+describe('TrainingEngine.trainModel — pipelines it does not train', () => {
+  it('refuses a pipeline without a Prediction Unit before any run row is written, naming how to bind one', async () => {
+    const { deps, factory } = TrainingHarness.BuildDeps();
+    const candidates = [TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb', 'xgboost', '{}')];
+    for (const input of [{ pipelineId: 'pipe-1' }, { pipelineId: 'pipe-1', candidates }]) {
+      await expect(new TrainingEngine().trainModel(input, deps)).rejects.toMatchObject({
+        Refusal: { stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1' } },
+        message: 'Refused (unit-required): pipeline pipe-1 — this pipeline has no Prediction Unit; run the "Migrate Pipelines to Prediction Units and Evaluation Protocols" Action or bind a unit (a held pipeline names what to declare in its Description)',
+      });
     }
-  }
-  return new TrainingEngine(new TestAssembler());
-}
-
-
-describe('TrainingEngine.trainModel — happy path', () => {
-  it('produces a Draft ML Model + Completed Training Run with a correctly-shaped TrainRequest', async () => {
-    const engine = buildEngine();
-    const { deps, factory, sidecar, store } = TrainingHarness.BuildDeps();
-
-    const trained = await engine.trainModel({ pipelineId: 'pipe-1', sidecarVersion: 'sidecar-1.0' }, deps);
-    const model = TrainingHarness.ModelOf(trained);
-    const run = trained.run;
-
-    // --- Model is an immutable Draft with all the payloads (§4.3) ---
-    expect(model.Status).toBe('Draft');
-    expect(model.Version).toBe(5); // from FakeRecordLoader.nextModelVersion
-    expect(model.PipelineID).toBe('pipe-1');
-    expect(model.AlgorithmID).toBe('algo-xgb');
-    expect(model.TargetVariable).toBe('Renewed');
-    expect(model.ProblemType).toBe('classification');
-    expect(JSON.parse(model.FittedPreprocessing!)).toEqual(cleanResponse.fitted_preprocessing);
-    expect(JSON.parse(model.Metrics!)).toEqual(cleanResponse.metrics);
-    expect(JSON.parse(model.HoldoutMetrics!)).toEqual(cleanResponse.holdout_metrics);
-    expect(JSON.parse(model.FeatureImportance!)).toEqual(cleanResponse.feature_importance);
-    // FeatureSchema = select cols (city stays a single raw col — preprocessing not applied)
-    expect(JSON.parse(model.FeatureSchema!).map((s: { Name: string }) => s.Name)).toEqual([
-      'tenure',
-      'events_at_signup',
-      'city',
-    ]);
-    // Lineage provenance present
-    const lineage = JSON.parse(model.Lineage!);
-    expect(lineage.pipelineId).toBe('pipe-1');
-    expect(lineage.sidecarVersion).toBe('sidecar-1.0');
-    expect(model.ArtifactFileID).toBeTruthy();
-
-    // --- Artifact persisted to the (in-memory) store ---
-    expect(store.Saved.size).toBe(1);
-    const savedFile = store.Saved.get(model.ArtifactFileID!);
-    expect(savedFile?.Name).toBe('model-pipe-1-v5.bin');
-    expect(Buffer.from(savedFile!.Bytes).toString()).toBe('fake-model-bytes');
-
-    // --- Run points at the model, Completed, no dominance note ---
-    expect(run.Status).toBe('Completed');
-    expect(run.ResultingModelID).toBe(model.ID);
-    expect(run.PipelineID).toBe('pipe-1');
-    expect(run.StartedAt).toBeInstanceOf(Date);
-    expect(run.CompletedAt).toBeInstanceOf(Date);
-    expect(JSON.parse(run.FeaturesUsed!)).toEqual(['tenure', 'events_at_signup', 'city']);
-    expect(run.Notes).toContain('No single-feature dominance');
-    expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec); // real compute, never 0
-    expect(run.ComputeCost).toBeNull(); // no PS_COMPUTE_USD_PER_SECOND rate in unit tests: cost unknown
-
-    // --- TrainRequest shape: preprocessing ops present, holdout fraction respected ---
-    const req = sidecar.LastRequest!;
-    expect(req.algorithm).toBe('xgboost');
-    expect(req.problem_type).toBe('classification');
-    expect(req.target).toBe('Renewed');
-    expect(req.hyperparameters).toEqual({ max_depth: 4 });
-    // The split seed is sent explicitly so the sidecar's splits share the locked-holdout carve's seed.
-    expect(req.validation).toEqual({ strategy: 'train_test_split', test_size: 0.2, k: undefined, random_state: DEFAULT_SPLIT_SEED });
-    // preprocessing ops carried through (impute/standardize/onehot)
-    expect(req.preprocessing).toEqual([
-      { op: 'impute', col: 'tenure', strategy: 'mean', fillValue: undefined },
-      { op: 'standardize', cols: ['tenure', 'events_at_signup'] },
-      { op: 'onehot', col: 'city' },
-    ]);
-    // 10 rows, 20% locked holdout → 8 train / 2 holdout
-    expect(req.data!.rows.length).toBe(8);
-    expect(sidecar.LastHoldout!.rows.length).toBe(2);
-    // both factories used exactly once
-    expect(factory.Models.length).toBe(1);
-    expect(factory.Runs.length).toBe(1);
-  });
-});
-
-describe('TrainingEngine.trainModel — locked holdout (§8.2)', () => {
-  it('excludes the locked holdout from the training data and scores it once into HoldoutMetrics', async () => {
-    const engine = buildEngine();
-    const { deps, sidecar } = TrainingHarness.BuildDeps();
-
-    const model = TrainingHarness.ModelOf(await engine.trainModel({ pipelineId: 'pipe-1' }, deps));
-
-    // Training data and holdout are disjoint and together cover all 10 rows.
-    const trainRows = sidecar.LastRequest!.data!.rows;
-    const holdoutRows = sidecar.LastHoldout!.rows;
-    expect(trainRows.length + holdoutRows.length).toBe(10);
-
-    // The holdout rows are DISJOINT from training (synthetic `tenure` is unique per row) — the holdout never leaks
-    // into train — and the seeded stratified carve keeps both Renewed classes in the 2-row holdout.
-    const trainTenures = new Set(trainRows.map((r) => r[0]));
-    for (const hr of holdoutRows) {
-      expect(trainTenures.has(hr[0])).toBe(false);
-    }
-    expect(trainRows.length).toBe(8);
-    expect(holdoutRows.length).toBe(2);
-    const renewedIdx = sidecar.LastHoldout!.columns.indexOf('Renewed');
-    expect(new Set(holdoutRows.map((r) => r[renewedIdx]))).toEqual(new Set([0, 1]));
-
-    // HoldoutMetrics scored exactly once (from the single sidecar response).
-    expect(JSON.parse(model.HoldoutMetrics!)).toEqual({ auc: 0.79 });
-    expect(sidecar.LastHoldout).not.toBeNull();
-  });
-});
-
-describe('TrainingEngine.trainModel — leakage dominance (§6.4)', () => {
-  it('flags dominance, keeps the model Draft, and writes a plain-language note — never auto-promotes', async () => {
-    const leaky: TrainResponse = {
-      ...cleanResponse,
-      feature_importance: { cancelled_flag: 0.92, tenure: 0.05, city: 0.03 },
-    };
-    const engine = buildEngine();
-    const { deps } = TrainingHarness.BuildDeps({ response: leaky });
-
-    const trained = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
-    const model = TrainingHarness.ModelOf(trained);
-    const run = trained.run;
-
-    expect(model.Status).toBe('Draft'); // never auto-promoted
-    expect(run.Status).toBe('Completed');
-    expect(run.Notes).toContain('LEAKAGE WARNING');
-    expect(run.Notes).toContain('cancelled_flag');
-    expect(run.Notes).toContain('Draft');
-  });
-});
-
-describe('TrainingEngine.trainModel — failures', () => {
-  it('surfaces the Save-failure CompleteMessage when the model fails to save', async () => {
-    const engine = buildEngine();
-    const factory = new FakeEntityFactory(() => {
-      const m = new FakeMLModel('model-x');
-      m.failNextSaveWith('FK violation on PipelineID');
-      return m;
-    });
-    const { deps } = TrainingHarness.BuildDeps({ entityFactory: factory });
-
-    await expect(engine.trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/FK violation on PipelineID/);
-    // The run was created (Running) then marked Failed by the catch path.
-    expect(factory.Runs[0].Status).toBe('Failed');
-    expect(factory.Runs[0].Notes).toContain('Training failed');
+    expect([factory.Runs.length, factory.Models.length]).toEqual([0, 0]);
   });
 
   it('throws when the pipeline is not found', async () => {
-    const engine = buildEngine();
-    const { deps } = TrainingHarness.BuildDeps({ pipeline: null });
-    await expect(engine.trainModel({ pipelineId: 'missing' }, deps)).rejects.toThrow(/not found/);
-  });
-});
-
-describe('TrainingEngine.trainModel — experiment session iteration linkage (§4.4)', () => {
-  it('hangs the run off an ExperimentSessionIteration when provided', async () => {
-    const engine = buildEngine();
-    const { deps, factory } = TrainingHarness.BuildDeps();
-    await engine.trainModel({ pipelineId: 'pipe-1', experimentSessionIterationId: 'iter-7' }, deps);
-    expect(factory.Runs[0].ExperimentSessionIterationID).toBe('iter-7');
-  });
-});
-
-describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time as-of strategy is refused', () => {
-  const pointInTime: ReadonlyArray<AsOfStrategy> = [{ Mode: 'column', Column: 'StartDate' }, { Mode: 'offset', OffsetDays: 30 }];
-  for (const asOf of pointInTime) {
-    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' with unit-required, records it on the run, and never calls the sidecar`, async () => {
-      const pipeline = new FakeMLPipeline();
-      pipeline.AsOfStrategy = JSON.stringify(asOf);
-      const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline });
-      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toMatchObject({
-        name: 'TrainingRefusedError',
-        Refusal: { stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1' } },
-      });
-      expect(factory.Runs).toHaveLength(1);
-      expect(factory.Runs[0].Status).toBe('Failed');
-      expect(JSON.parse(factory.Runs[0].ValidationResults!)).toMatchObject({ status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'unit-required' } } });
-      expect(factory.Models).toHaveLength(0);
-      expect(sidecar.LastRequest).toBeNull();
-    });
-  }
-
-  it("still trains Mode='none'", async () => {
-    const { deps } = TrainingHarness.BuildDeps();
-    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
-    expect(model.Status).toBe('Draft');
-  });
-
-  it("trains a stored AsOfStrategy of {} as Mode='none'", async () => {
-    const pipeline = new FakeMLPipeline();
-    pipeline.AsOfStrategy = '{}';
-    const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
-    expect(model.Status).toBe('Draft');
-    expect(JSON.parse(model.Lineage!).asOfStrategy).toEqual({ Mode: 'none' });
-  });
-});
-
-describe('TrainingEngine — evaluation record and the time-index containment', () => {
-  it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
-    const { deps } = TrainingHarness.BuildDeps();
-    const trained = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
-    const model = TrainingHarness.ModelOf(trained);
-    const run = trained.run;
-    expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: 'split_or_impurity' });
-    expect(run.Notes).not.toContain('Trust withheld');
-  });
-
-  it("records the pipeline's majority-baseline rule in Lineage.evaluation (D2-C5d)", async () => {
-    const pipeline = new FakeMLPipeline();
-    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' });
-    const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
-    expect(EvaluationLineage.Read(model.Lineage)?.MajorityBaselineRule).toBe('warn');
-  });
-
-  it('refuses an unknown majority-baseline rule before any row is written', async () => {
-    const pipeline = new FakeMLPipeline();
-    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'off' });
-    const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline });
-    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(InvalidMajorityBaselineRuleError);
+    const { deps, factory } = TrainingHarness.BuildDeps({ pipeline: null });
+    await expect(new TrainingEngine().trainModel({ pipelineId: 'missing' }, deps)).rejects.toThrow("ML Training Pipeline 'missing' not found");
     expect(factory.Runs).toHaveLength(0);
-    expect(factory.Models).toHaveLength(0);
-    expect(sidecar.LastRequest).toBeNull();
-  });
-
-  it('withholds trust for a pipeline that declares a time index, and stores the reason on the model and the run', async () => {
-    const pipeline = new FakeMLPipeline();
-    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
-    const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const trained = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
-    const model = TrainingHarness.ModelOf(trained);
-    const run = trained.run;
-    expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
-    expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
-    // A legacy run stores no gate decision, so its verdict is not evaluated and cannot be acted on.
-    expect(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults, Lineage: null })).toMatchObject({ Kind: 'not-evaluated', CanAct: false });
-  });
-
-  it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {
-    const legacySidecarResponse: TrainResponse = { ...cleanResponse, validation_out_of_sample: undefined };
-    const { deps } = TrainingHarness.BuildDeps({ response: legacySidecarResponse });
-    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
-    expect(EvaluationLineage.Read(model.Lineage)?.ValidationOutOfSample).toBe(false);
   });
 });
 
-describe('TrainingEngine — deterministic training read and locked holdout (I1)', () => {
-  it("orders the target read by the entity's primary key, with or without maxRows", async () => {
-    for (const maxRows of [undefined, 1000]) {
-      const dataAccess = new InMemoryDataAccess({ Members: syntheticMembers() });
-      const { deps } = TrainingHarness.BuildDeps();
-      await buildEngine(dataAccess).trainModel({ pipelineId: 'pipe-1', maxRows }, deps);
-      expect(dataAccess.Reads[0]).toMatchObject({ EntityName: 'Members', OrderBy: 'ID', MaxRows: maxRows });
-    }
+describe('TrainingEngine — the evaluation record of a unit run', () => {
+  it("records the pipeline's majority-baseline rule in Lineage.evaluation and refuses an unknown one before any row is written", async () => {
+    const warned = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    warned.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' });
+    const model = TrainingHarness.ModelOf(await warned.engine.trainModel({ pipelineId: warned.pipeline.ID }, warned.deps));
+    expect(EvaluationLineage.Read(model.Lineage)?.MajorityBaselineRule).toBe('warn');
+    const refused = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    refused.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'off' });
+    await expect(refused.engine.trainModel({ pipelineId: refused.pipeline.ID }, refused.deps)).rejects.toBeInstanceOf(InvalidMajorityBaselineRuleError);
+    expect([refused.runs.length, refused.trainer.Requests.length]).toEqual([0, 0]);
   });
 
-  it('refuses before reading when the target entity has no primary key in metadata', async () => {
-    const pipeline = new FakeMLPipeline();
-    pipeline.TargetEntity = 'Unknown Entity';
-    const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/no primary key/);
-  });
-
-  it('holds out the same rows on every run of the same data', async () => {
-    const first = TrainingHarness.BuildDeps();
-    const second = TrainingHarness.BuildDeps();
-    await buildEngine().trainModel({ pipelineId: 'pipe-1' }, first.deps);
-    await buildEngine().trainModel({ pipelineId: 'pipe-1' }, second.deps);
-    expect(second.sidecar.LastHoldout!.rows).toEqual(first.sidecar.LastHoldout!.rows);
-  });
-
-  it('writes the locked holdout class counts into the model Lineage next to lockedHoldoutRowCount', async () => {
-    const { deps } = TrainingHarness.BuildDeps();
-    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
-    const lineage = JSON.parse(model.Lineage!);
-    expect(lineage.lockedHoldoutRowCount).toBe(2);
-    expect(lineage.lockedHoldoutClassCounts).toEqual({ '0': 1, '1': 1 });
-  });
-
-  it('writes empty locked holdout class counts for a regression model', async () => {
-    const pipeline = new FakeMLPipeline();
-    pipeline.ProblemType = 'regression';
-    const { deps } = TrainingHarness.BuildDeps({ pipeline });
-    const model = TrainingHarness.ModelOf(await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps));
-    expect(JSON.parse(model.Lineage!).lockedHoldoutClassCounts).toEqual({});
+  it('withholds trust on the model of a pipeline that declares a time index, with the reason in its Lineage', async () => {
+    const h = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    h.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'StartDate' });
+    const model = TrainingHarness.ModelOf(await h.engine.trainModel({ pipelineId: h.pipeline.ID }, h.deps));
+    expect(EvaluationLineage.Read(model.Lineage)).toMatchObject({ TimeIndexColumn: 'StartDate', WithheldReason: EvaluationLineage.NotEvaluatedAsForecast });
   });
 });
 
-
-/** The stored snapshot's content, read back from the in-memory file store. */
 async function storedContent(files: InMemorySnapshotFileStore, s: FakeTrainingSnapshot): Promise<SnapshotContent> {
   return SnapshotFiles.ParseSnapshotFiles(await files.Get(s.MatrixFileID), await files.Get(s.RowManifestFileID), await files.Get(s.ProvenanceFileID));
 }
@@ -602,11 +305,11 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(run.ComputeCost).toBeNull();
   });
 
-  it("copies the pipeline's EvaluationProtocolID onto the run and never calls the legacy /train", async () => {
-    const { engine, deps, sidecar, trainer, pipeline, runs } = TrainingHarness.ForUnit(years, unitColumns);
+  it("copies the pipeline's EvaluationProtocolID onto the run and trains through the trainer once", async () => {
+    const { engine, deps, trainer, pipeline, runs } = TrainingHarness.ForUnit(years, unitColumns);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(runs[0].EvaluationProtocolID).toBe(ProtocolRowFixture.ID);
-    expect([sidecar.CallCount, trainer.Requests.length]).toEqual([0, 1]);
+    expect(trainer.Requests.length).toBe(1);
   });
 
   it('freezes the unit rows into one Training Snapshot and sends the trainer its files', async () => {
@@ -624,7 +327,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const request = trainer.Requests[0];
     expect([request.snapshot.id, request.snapshot.matrix.fileId, request.snapshot.rowManifest.fileId]).toEqual([s.ID, s.MatrixFileID, s.RowManifestFileID]);
     const results = storedResults(runs[0].ValidationResults);
-    expect(results.status === 'completed' ? [results.legacy, results.legacyRequest] : 'not completed').toEqual([null, null]);
+    expect(results.status === 'completed' ? results.trainerRequest !== null : 'not completed').toBe(true);
   });
 
   it('reuses the snapshot for a second training of identical data: one snapshot row, two runs pointing at it', async () => {
@@ -845,7 +548,7 @@ describe("TrainingEngine — the protocol's locked holdout", () => {
 
 describe('TrainingEngine — a unit pipeline trains through the trainer', () => {
   it('trains a unit pipeline through /trainer', async () => {
-    const { engine, deps, sidecar, pipeline, trainer, artifacts, files, snapshots } = protocolHarness(cannedFor);
+    const { engine, deps, pipeline, trainer, artifacts, files, snapshots } = protocolHarness(cannedFor);
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     // The protocol reached the snapshot: its subgroup field is a slice column of the frozen matrix.
     const content = await storedContent(files, snapshots[0]);
@@ -864,7 +567,6 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     expect(results.trainer?.artifacts.map((a) => a.fileId).every((id) => id.length > 0)).toBe(true);
     expect(run.ValidationResults).not.toContain('bytesBase64');
     expect(results.trainerRequest?.evaluationProtocolId).toBe(ProtocolRowFixture.ID);
-    expect(results.legacy).toBeNull();
     // The protocol's date carve: the 2024 cycle develops the model, the 2025 cycle is the locked holdout.
     expect(results.carve).toEqual({
       kind: 'date-carved', cutoff: '2025-01-01', holdoutEnd: null, developmentRowCount: 4, holdoutRowCount: 4, excludedAfterHoldoutEnd: 0,
@@ -877,7 +579,6 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     expect(model?.ArtifactFileID).toBe(glmFile);
     expect(run.ResultingModelID).toBe(model?.ID);
     expect(JSON.parse(model?.Lineage || '{}')).toMatchObject({ evaluationProtocolId: ProtocolRowFixture.ID, artifactFormat: 'ps-predictor/v2', trainingSnapshotId: run.TrainingSnapshotID, shippedMember: 'glm', shippedDriver: 'logistic_regression' });
-    expect(sidecar.CallCount).toBe(0);
   });
 
   it("stores the trainer's held-out permutation importance as the legacy share map and its kind in the evaluation record", async () => {
@@ -1046,30 +747,7 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
   });
 });
 
-describe('TrainingEngine — a pipeline without a Prediction Unit', () => {
-  it('refuses a search over candidates before any run row is written (unit-required)', async () => {
-    const { deps, factory, sidecar } = TrainingHarness.BuildDeps();
-    const candidates = [TrainerRequestBuilder.CandidateFromPipeline('xgb', 'algo-xgb', 'xgboost', '{}')];
-    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1', candidates }, deps)).rejects.toMatchObject({
-      Refusal: { stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1', why: 'a search over several candidates needs a Prediction Unit' } },
-      message: 'Refused (unit-required): pipeline pipe-1 — a search over several candidates needs a Prediction Unit',
-    });
-    expect([factory.Runs.length, sidecar.CallCount]).toEqual([0, 0]);
-    // An empty candidate list asks for no search: the pipeline trains as before.
-    const { deps: plain } = TrainingHarness.BuildDeps();
-    expect((await buildEngine().trainModel({ pipelineId: 'pipe-1', candidates: [] }, plain)).run.Status).toBe('Completed');
-  });
-});
-
 describe('TrainingEngine — compute pricing on the run', () => {
-  it('prices the measured seconds at the configured rate per second', async () => {
-    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.5');
-    const { deps } = TrainingHarness.BuildDeps();
-    const { run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
-    expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec);
-    expect(run.ComputeCost).toBeCloseTo(cleanResponse.duration_sec * 0.5, 12);
-  });
-
   it('prices a Prediction Unit run by the same rule', async () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0');
     const { engine, deps, pipeline } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
@@ -1077,26 +755,11 @@ describe('TrainingEngine — compute pricing on the run', () => {
     expect([run.ComputeSeconds, run.ComputeCost]).toEqual([12.5, 0]);
   });
 
-  it('keeps the measured compute on a run that fails after the sidecar returned', async () => {
-    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.5');
-    const factory = new FakeEntityFactory(() => {
-      const m = new FakeMLModel('model-x');
-      m.failNextSaveWith('FK violation on PipelineID');
-      return m;
-    });
-    const { deps } = TrainingHarness.BuildDeps({ entityFactory: factory });
-    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/FK violation on PipelineID/);
-    expect(factory.Runs[0].Status).toBe('Failed');
-    expect([factory.Runs[0].ComputeSeconds, factory.Runs[0].ComputeCost]).toEqual([cleanResponse.duration_sec, cleanResponse.duration_sec * 0.5]);
-  });
-
   it('refuses a malformed rate before any row is written or any model is trained', async () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', 'cheap');
-    const { deps, factory, sidecar } = TrainingHarness.BuildDeps();
-    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(RangeError);
-    expect(sidecar.CallCount).toBe(0);
-    expect(factory.Runs.length).toBe(0);
-    expect(factory.Models.length).toBe(0);
+    const { engine, deps, pipeline, runs, models, trainer } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(RangeError);
+    expect([trainer.Requests.length, runs.length, models.length]).toEqual([0, 0, 0]);
   });
 });
 

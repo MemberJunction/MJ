@@ -391,7 +391,6 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     return {
       entityFactory: { getEntityObject: unused },
       recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, ResolveAlgorithmIdForDriver: async () => null },
-      sidecar: { train: unused },
       artifactStore: { save: unused, Delete: unused },
       contextUser: user,
       provider,

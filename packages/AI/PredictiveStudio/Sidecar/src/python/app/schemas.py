@@ -7,13 +7,13 @@ orchestrator) and this sidecar (the server side of the contract) without any
 key translation.
 
 Notably the TS contract uses **PascalCase** for the ordered feature-schema
-entry (``Name`` / ``Kind``) and **snake_case** for everything else (``problem_type``,
+entry (``Name`` / ``Kind``) and **snake_case** for everything else (``artifact_b64``,
 ``feature_schema``, ``fitted_preprocessing`` ...). We honor that split here.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -21,9 +21,6 @@ from pydantic import BaseModel, Field
 Cell = Union[str, float, int, bool, None]
 
 FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived'
-# Which kind of number a feature-importance map holds.
-ImportanceKind = Literal["coefficient", "split_or_impurity", "held_out_permutation", "none"]
-ProblemType = str  # 'classification' | 'regression'
 
 
 class FeatureSchemaEntry(BaseModel):
@@ -38,7 +35,7 @@ class FeatureSchemaEntry(BaseModel):
 
 
 class PreprocessingOp(BaseModel):
-    """A single preprocessing operation declaration (fit at /train, apply at /predict)."""
+    """A single preprocessing operation declaration (applied at /predict to a legacy envelope's fitted preprocessing)."""
 
     op: str
     col: Optional[str] = None
@@ -49,68 +46,6 @@ class PreprocessingOp(BaseModel):
     bins: Optional[int] = None
     # impute-specific: also emit a `<col>__missing` indicator column before filling
     indicator: bool = False
-
-
-class ValidationConfig(BaseModel):
-    """Validation configuration sent at train time."""
-
-    strategy: Literal["train_test_split", "kfold", "holdout"] = "train_test_split"
-    # Validation fraction for the out-of-sample split that both `train_test_split` and `holdout` use.
-    test_size: Optional[float] = 0.2
-    k: Optional[int] = None
-    # Locked-holdout fraction (plan §8.2). Scored exactly once, separate from
-    # the train/test split. Optional — when omitted no holdout_metrics returned.
-    holdout_size: Optional[float] = None
-    random_state: Optional[int] = 42
-
-
-class MatrixData(BaseModel):
-    """Inline columnar-header + row-array feature matrix."""
-
-    columns: List[str]
-    rows: List[List[Cell]]
-
-
-class TrainRequest(BaseModel):
-    """``POST /train`` request body."""
-
-    algorithm: str
-    problem_type: ProblemType
-    hyperparameters: Dict[str, Any] = Field(default_factory=dict)
-    validation: ValidationConfig = Field(default_factory=ValidationConfig)
-    feature_schema: List[FeatureSchemaEntry] = Field(default_factory=list)
-    preprocessing: List[PreprocessingOp] = Field(default_factory=list)
-    target: str
-    data: Optional[MatrixData] = None
-    data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
-    # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE
-    # any train/test split and absent from `data`. Same columns as `data` (it
-    # includes the target). When present, preprocessing fitted on `data` is
-    # APPLIED (never re-fit) to these rows and they are scored exactly once. Takes
-    # precedence over `validation.holdout_size` (the sidecar-side re-carve).
-    holdout: Optional[MatrixData] = None
-
-
-class TrainResponse(BaseModel):
-    """``POST /train`` response body."""
-
-    artifact_b64: str
-    fitted_preprocessing: Dict[str, Any]
-    metrics: Dict[str, float]
-    feature_importance: Dict[str, float]
-    feature_importance_kind: ImportanceKind = "none"
-    training_row_count: int
-    duration_sec: float
-    holdout_metrics: Optional[Dict[str, float]] = None
-    # Required (no default) so every /train path must state it; a future in-sample path cannot inherit True.
-    validation_out_of_sample: bool
-    # Opaque id callers may pass back on /predict to hit the warm model cache
-    # without re-sending the (potentially large) artifact_b64.
-    model_id: Optional[str] = None
-
-    # `model_id` collides with pydantic's protected `model_` namespace; we use it
-    # intentionally as a cache key, so disable the namespace guard here.
-    model_config = {"protected_namespaces": ()}
 
 
 class PredictRequest(BaseModel):
