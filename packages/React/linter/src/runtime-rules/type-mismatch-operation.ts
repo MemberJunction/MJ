@@ -4,6 +4,7 @@ import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { TypeInferenceEngine } from '../type-inference-engine';
+import { IsArrayMethodMisuse } from '../type-context';
 import { ControlFlowAnalyzer } from '../control-flow-analyzer';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -98,23 +99,11 @@ export class TypeMismatchOperationRule extends BaseLintRule {
         if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
           const methodName = node.callee.property.name;
 
-          // Array-specific methods. Excludes `slice` and `concat` because
-          // both exist on String.prototype with identical signatures/semantics
-          // — flagging them on inferred-string types produces false positives
-          // (e.g. `someString.slice(1)`). The remaining names are genuinely
-          // array-only.
-          const arrayOnlyMethods = [
-            'push', 'pop', 'shift', 'unshift', 'splice',
-            'map', 'filter', 'reduce', 'reduceRight', 'forEach',
-            'find', 'findIndex', 'some', 'every', 'flat', 'flatMap',
-            'sort', 'reverse', 'join', 'fill', 'copyWithin',
-          ];
-
-          if (arrayOnlyMethods.includes(methodName)) {
+          // Array methods on a value known not to be an array, unless that type has the
+          // method too (Map#forEach, String#slice) — see IsArrayMethodMisuse
+          {
             const objectType = typeEngine.inferExpressionType(node.callee.object, path);
-
-            // Only flag if we know it's definitely not an array
-            if (objectType.type !== 'unknown' && objectType.type !== 'array') {
+            if (IsArrayMethodMisuse(methodName, objectType)) {
               violations.push({
                 rule: 'type-mismatch-operation',
                 severity: 'high',
