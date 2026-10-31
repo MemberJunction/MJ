@@ -47,3 +47,4 @@ export * from './selection';
 export * from './protocol-rows';
 export * from './protocol-edit';
 export * from './unit-edit';
+export * from './legacy-pipeline';
