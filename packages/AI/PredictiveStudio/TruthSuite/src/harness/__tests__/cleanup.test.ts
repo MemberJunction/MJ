@@ -43,7 +43,7 @@ function trainerResults(): string {
   const results: TrainingRunResults = {
     schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
     unitResolution: { rowsRead: 1, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1, dataCutoff: '2026-01-01' },
-    legacy: null, legacyRequest: null, trainer, trainerRequest: null, carve: null,
+    legacy: null, legacyRequest: null, trainer, trainerRequest: null, carve: null, gate: null,
   };
   return JSON.stringify(results);
 }
