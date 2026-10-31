@@ -29,6 +29,7 @@ import {
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { PipelineWizardBindings } from './ps-pipeline-wizard.bindings';
 
 export interface FieldSelectionItem {
   field: EntityFieldInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -1073,8 +1074,10 @@ export class PSPipelineWizardComponent implements OnInit {
       };
       p.ValidationStrategy = JSON.stringify(valStrategy);
 
-      if (!(await p.Save())) {
-        throw new Error(p.LatestResult?.CompleteMessage ?? 'Failed to save pipeline record.');
+      // Saved already bound to version 1 of its Prediction Unit and Evaluation Protocol: a pipeline without them cannot train.
+      const saved = await PipelineWizardBindings.SaveWithBindings(p, this.SelectedEntity?.Name || '', prov, this.CurrentUser || undefined);
+      if (saved.Ok === false) {
+        throw new Error(saved.Reason);
       }
 
       this.notifications.CreateSimpleNotification(
