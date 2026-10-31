@@ -103,6 +103,13 @@ import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.check
 import { SqlPipeExtractionFixtureChecks } from '../checks/sqlpipe-extraction-fixtures.checks';
 import { AgentExecutionPrimitivesChecks } from '../checks/agent-execution-primitives.checks';
 import { AgentExecutionPrimitivesLiveChecks } from '../checks/agent-execution-primitives-live.checks';
+import { AgentConsultChecks } from '../checks/agent-consult.checks';
+import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
+import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
+import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
+import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
+import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
+import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -243,6 +250,13 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
+        ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT153)
+        ['agent-handoff', AgentHandoffChecks, 6], // AH1-AH6 top-level peer-to-peer handoff, FollowHandoffs, preset precedence, continuity, refusals, and non-handoff host guard (IT125)
+        ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT154)
+        ['video-generation-cost', VideoGenerationCostChecks, 2], // VGC1-VGC2 AIVideoRunner.RunGenerateVideo server-calculated Per Second cost and driver-reported cost preservation (IT155)
+        ['video-studio-handoff', VideoStudioHandoffChecks, 3], // VSH1-VSH3 top-level transfer to shipped Video Studio agent, preset resolution (Standard/High), and conversation continuity (IT150)
+        ['video-studio-production', VideoStudioProductionChecks, 5], // VSP1-VSP5 end-to-end Video Studio production pipeline with fakes (IT151)
+        ['video-studio-live-smoke', VideoStudioLiveSmokeChecks, 1], // VSLS1 live Draft 15s Social Short smoke test (IT152)
         ['query-extraction', QueryExtractionChecks, 15], // QE1-QE15 exact fields, entities, parameters, doc comments and dependencies a query save extracts, both platforms (IT138)
         ['query-refresh', QueryRefreshChecks, 16], // QR1-QR16 refresh and re-bind against a fixture schema the checks alter, dry run, order, drift, nullability, field deletes, authorization (IT139)
         ['metadata-sync-queries', MetadataSyncQueriesChecks, 10], // MSQ1-MSQ10 declared query children through PushService, re-push, pull and shipped-tree no-ops (IT140)
@@ -309,10 +323,12 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-consult': 1,
         'agent-decisions-switch': 9,
         'agent-execution-primitives': 6,
         'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
+        'agent-handoff': 6,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
         'agent-memory-guards': 5,
@@ -470,6 +486,11 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups-batched': 5,
         'user-elevation': 4,
         'user-routines': 18,
+        'video-data-snapshot': 3,
+        'video-generation-cost': 2,
+        'video-studio-handoff': 3,
+        'video-studio-live-smoke': 1,
+        'video-studio-production': 5,
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
@@ -498,7 +519,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(170);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(177);
     });
 });
 
@@ -988,6 +1009,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',
         'shipped-agents-live.SA4',
+        'video-studio-live-smoke.VSLS1',
     ];
 
     it('the mutation-gated (RequiresMutation) set is exactly the pinned snapshot', () => {

@@ -1,0 +1,609 @@
+<title>Sage Handoff Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a faithful slice of the Explorer chat area (left) beside build notes for the developer (right).
+   Tokens mirror MJ's semantic tokens (_tokens.scss) so the mockup reads like the real product.
+   --source = the agent handing off (Sage, brand blue); --target = the agent receiving the turn. */
+:root {
+  --bg-page: #f8fafc;
+  --surface: #ffffff;
+  --surface-card: #f8fafc;
+  --sunken: #f1f5f9;
+  --text: #1e293b;
+  --text-2: #475569;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --source: #0076b6;
+  --target: #7c3aed;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --on-accent: #ffffff;
+  --poster-bg: #1e1b4b;
+  --poster-fg: #f5f3ff;
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-page: #0f172a; --surface: #1e293b; --surface-card: #243045; --sunken: #020617;
+    --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8; --border: #334155; --border-subtle: #1e293b;
+    --source: #2699cc; --target: #a78bfa; --success: #4ade80; --danger: #f87171; --on-accent: #0f172a;
+    --poster-bg: #1e1b4b; --poster-fg: #f5f3ff;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg-page: #0f172a; --surface: #1e293b; --surface-card: #243045; --sunken: #020617;
+  --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8; --border: #334155; --border-subtle: #1e293b;
+  --source: #2699cc; --target: #a78bfa; --success: #4ade80; --danger: #f87171; --on-accent: #0f172a;
+  --poster-bg: #1e1b4b; --poster-fg: #f5f3ff;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg-page);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 28px 48px;
+  display: grid;
+  gap: 24px;
+}
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+
+/* ---------- Document header ---------- */
+.doc-head { display: grid; gap: 10px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.doc-head h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 700; text-wrap: balance; }
+.doc-head p { margin: 0; max-width: 68ch; color: var(--text-2); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg {
+  display: inline-flex; flex-wrap: wrap; padding: 3px; gap: 2px;
+  background: var(--sunken); border: 1px solid var(--border); border-radius: 999px;
+}
+.seg button {
+  font: inherit; font-size: 13px; font-weight: 500; color: var(--text-2);
+  background: transparent; border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600; border-radius: var(--radius-md);
+  padding: 7px 14px; cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); display: inline-flex; align-items: center; gap: 6px;
+}
+.btn--primary { background: var(--source); border-color: var(--source); color: var(--on-accent); }
+.btn--target { background: var(--target); border-color: var(--target); color: var(--on-accent); }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--source); outline-offset: 2px; }
+
+/* ---------- Two-column layout ---------- */
+.layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Mock chat surface ---------- */
+.device {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md); overflow: hidden; display: flex; flex-direction: column; min-width: 0;
+}
+.chat-bar {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.chat-bar .title { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.with-chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px 3px 4px; background: var(--surface-card);
+  transition: border-color .3s;
+}
+.with-chip .dot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); }
+.with-chip .dot svg { width: 11px; height: 11px; }
+
+.thread { padding: 20px 16px 8px; display: grid; gap: 4px; }
+
+.msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 10px 8px; border-radius: var(--radius-md); }
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--on-accent); font-weight: 600; font-size: 13px; position: relative; z-index: 1;
+}
+.avatar svg { width: 18px; height: 18px; }
+.av-user { background: var(--text); color: var(--surface); }
+.av-sage { background: var(--source); }
+.av-vs { background: var(--target); }
+.msg-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+.sender { font-weight: 600; }
+.time { font-size: 12px; color: var(--muted); }
+.msg-body { color: var(--text); max-width: 68ch; }
+.msg-body p { margin: 0; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 500;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2);
+  background: var(--surface-card); font-variant-numeric: tabular-nums;
+}
+.pill--target { border-color: color-mix(in srgb, var(--target) 35%, var(--border)); color: var(--target); background: color-mix(in srgb, var(--target) 8%, var(--surface)); }
+.pill--live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--target); animation: blink 1.4s ease-in-out infinite; }
+.via { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.via .mini { width: 14px; height: 14px; border-radius: 50%; background: var(--source); display: inline-grid; place-items: center; color: var(--on-accent); }
+.via .mini svg { width: 8px; height: 8px; }
+
+/* Sage's message settles into a quieter, compact form once the turn has moved on */
+.msg--handed { opacity: 1; transition: opacity .4s; }
+.device:not([data-state="failed"]) .msg--handed .msg-body { color: var(--text-2); }
+
+/* ---------- The handoff card ---------- */
+.handoff-wrap { position: relative; padding-left: 56px; padding-right: 8px; }
+.handoff {
+  position: relative; border-radius: var(--radius-lg); padding: 14px 16px 12px;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(100deg, var(--source), var(--target)) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: var(--shadow-md);
+  display: grid; gap: 10px;
+}
+.handoff::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--source) 7%, transparent), color-mix(in srgb, var(--target) 9%, transparent));
+}
+.baton { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.baton .end { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.baton .end .avatar { width: 30px; height: 30px; }
+.baton .end .avatar svg { width: 15px; height: 15px; }
+.baton .end .name { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.track { position: relative; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--source), var(--target)); opacity: .55; min-width: 40px; }
+.track .spark {
+  position: absolute; top: 50%; left: 0; width: 10px; height: 10px; margin-top: -5px; margin-left: -5px;
+  border-radius: 50%; background: var(--target);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--target) 22%, transparent), 0 0 18px 2px color-mix(in srgb, var(--target) 55%, transparent);
+  opacity: 0;
+}
+.track .arrow { position: absolute; right: -2px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-top: 2px solid var(--target); border-right: 2px solid var(--target); transform: rotate(45deg); }
+.device[data-state="transferring"] .track .spark { animation: travel 1.25s cubic-bezier(.6, 0, .25, 1) infinite; }
+.device[data-state="transferring"] .baton .end--to .avatar { animation: arrive 1.25s ease-out infinite; }
+
+.handoff-title { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.handoff-title strong { font-size: 14.5px; }
+.handoff-title .sub { font-size: 12.5px; color: var(--text-2); }
+.handoff-meta { position: relative; display: flex; flex-wrap: wrap; gap: 6px; }
+.handoff details { position: relative; font-size: 13px; }
+.handoff summary { cursor: pointer; color: var(--text-2); font-weight: 500; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+.handoff summary::-webkit-details-marker { display: none; }
+.handoff summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .2s; }
+.handoff details[open] summary::before { transform: rotate(45deg); }
+.brief { margin-top: 8px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--sunken); color: var(--text-2); display: grid; gap: 6px; }
+.brief dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; }
+.brief dt { color: var(--muted); font-size: 12px; }
+.brief dd { margin: 0; color: var(--text); }
+
+.state-transferring, .state-working, .state-delivered, .state-failed, .state-joined { display: none; }
+.device[data-state="transferring"] .state-transferring,
+.device[data-state="working"] .state-working,
+.device[data-state="delivered"] .state-delivered,
+.device[data-state="failed"] .state-failed { display: revert; }
+.device[data-state="working"] .state-joined,
+.device[data-state="delivered"] .state-joined { display: revert; }
+
+/* Failure treatment: the card stays, the gradient gives way to a danger stripe */
+.device[data-state="failed"] .handoff {
+  background: linear-gradient(var(--surface), var(--surface)) padding-box, linear-gradient(var(--danger), var(--danger)) border-box;
+}
+.device[data-state="failed"] .handoff::before { background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.device[data-state="failed"] .track { background: var(--border); opacity: 1; }
+.device[data-state="failed"] .track .arrow { border-color: var(--danger); }
+.device[data-state="failed"] .baton .end--to .avatar { filter: grayscale(1); opacity: .55; }
+.err { color: var(--danger); font-weight: 600; }
+
+/* ---------- Rail: joins the card to the receiving agent's message ---------- */
+.target-block { position: relative; }
+.target-block::before {
+  content: ""; position: absolute; left: 25px; top: -14px; height: 36px; width: 2px; border-radius: 2px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--target) 25%, transparent), var(--target));
+}
+.device[data-state="failed"] .target-block { display: none; }
+
+/* ---------- Target agent's run ---------- */
+.joining { display: flex; align-items: center; gap: 10px; color: var(--text-2); }
+.skeleton { height: 10px; border-radius: 6px; background: linear-gradient(90deg, var(--sunken), color-mix(in srgb, var(--target) 14%, var(--sunken)), var(--sunken)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+
+.stages { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.stages li { display: grid; gap: 6px; font-size: 11.5px; color: var(--muted); min-width: 0; }
+.stages .bar { height: 4px; border-radius: 4px; background: var(--sunken); position: relative; overflow: hidden; }
+.stages li.done { color: var(--text-2); }
+.stages li.done .bar { background: var(--target); }
+.stages li.now { color: var(--target); font-weight: 600; }
+.stages li.now .bar { background: color-mix(in srgb, var(--target) 25%, var(--sunken)); }
+.stages li.now .bar::after { content: ""; position: absolute; inset: 0; width: 45%; border-radius: 4px; background: var(--target); animation: progress 1.6s ease-in-out infinite; }
+.stages span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) {
+  .stages { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 10px; }
+}
+.live { margin-top: 10px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- Video Production artifact card ---------- */
+.artifact {
+  margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+  background: var(--surface); max-width: 520px; box-shadow: var(--shadow-sm);
+}
+.poster {
+  position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: var(--poster-bg); color: var(--poster-fg);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 16px; padding: 18px 20px;
+  overflow: hidden;
+}
+.poster::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--target) 55%, transparent), transparent 60%);
+}
+.poster .kpi { position: relative; display: grid; gap: 2px; }
+.poster .kpi small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+.poster .kpi b { font-size: clamp(28px, 6vw, 44px); line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.poster .kpi em { font-style: normal; font-size: 12px; opacity: .8; }
+.poster .bars { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 70%; }
+.poster .bars i { flex: 1; border-radius: 3px 3px 0 0; background: color-mix(in srgb, var(--poster-fg) 30%, transparent); }
+.poster .bars i:last-child { background: var(--poster-fg); }
+.poster .asof { position: absolute; left: 20px; top: 14px; font-size: 10.5px; opacity: .7; }
+.play {
+  position: absolute; inset: 0; margin: auto; width: 54px; height: 54px; border-radius: 50%;
+  background: color-mix(in srgb, var(--poster-fg) 92%, transparent); display: grid; place-items: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .35); border: 0; cursor: pointer;
+}
+.play svg { width: 20px; height: 20px; margin-left: 3px; color: var(--poster-bg); }
+.artifact-foot { display: grid; gap: 10px; padding: 12px 14px; }
+.artifact-foot .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.artifact-foot .name { font-weight: 600; }
+
+/* ---------- Composer ---------- */
+.composer { margin: 8px 16px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px 12px; display: grid; gap: 8px; }
+.composer .route { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+.route .to { display: inline-flex; align-items: center; gap: 6px; }
+.route .to b { color: var(--text); font-weight: 600; }
+.route .to .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--target); }
+.device[data-state="failed"] .route .to .dot { background: var(--source); }
+.linkish { font: inherit; font-size: 12.5px; color: var(--source); background: none; border: 0; padding: 0; cursor: pointer; font-weight: 500; }
+.composer .input { display: flex; align-items: center; gap: 8px; }
+.composer .field { flex: 1; min-width: 0; color: var(--muted); padding: 6px 2px; }
+.send { width: 32px; height: 32px; border-radius: 8px; border: 0; display: grid; place-items: center; background: var(--target); color: var(--on-accent); }
+.device[data-state="failed"] .send { background: var(--source); }
+.send svg { width: 15px; height: 15px; }
+
+/* ---------- Build notes ---------- */
+.notes { display: grid; gap: 18px; min-width: 0; }
+.note { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; display: grid; gap: 10px; }
+.note h2 { margin: 0; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note ol, .note ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--text-2); }
+.note li b { color: var(--text); font-weight: 600; }
+.spec { display: grid; gap: 10px; }
+.spec div { display: grid; gap: 2px; }
+.spec dt { font-family: var(--mono); font-size: 12px; color: var(--target); }
+.spec dd { margin: 0; color: var(--text-2); font-size: 13px; }
+.note p { margin: 0; color: var(--text-2); }
+
+@keyframes travel { 0% { left: 0; opacity: 0; } 12% { opacity: 1; } 85% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+@keyframes arrive { 0%, 70% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--target) 50%, transparent); } 100% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--target) 0%, transparent); } }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(230%); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .device[data-state="transferring"] .track .spark { opacity: 1; left: 60%; }
+}
+</style>
+
+<div class="page">
+  <header class="doc-head">
+    <span class="eyebrow">MemberJunction · Video Studio plan · §6A Sage transfers</span>
+    <h1>Sage hands the conversation to Video Studio</h1>
+    <p>When Sage transfers a request, the user sees Sage step aside and the new agent take over in the same thread. The hand-off is one card that carries the brief, the agent's power level, and where the next message will go. Switch states to see each moment.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Mockup state">
+        <button type="button" id="st-transferring" data-state="transferring" aria-pressed="false">Transferring</button>
+        <button type="button" id="st-working" data-state="working" aria-pressed="false">Working</button>
+        <button type="button" id="st-delivered" data-state="delivered" aria-pressed="true">Delivered</button>
+        <button type="button" id="st-failed" data-state="failed" aria-pressed="false">Can't transfer</button>
+      </div>
+      <button type="button" class="btn" id="replay">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        Replay transfer
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ================= Mock chat surface ================= -->
+    <section class="device" id="device" data-state="delivered" aria-label="Conversation mockup">
+      <div class="chat-bar">
+        <span class="title">Q3 board video</span>
+        <span class="with-chip" id="withChip">
+          <span class="dot" id="withDot" style="background: var(--target)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="m3 8 3-5h4l-3 5M10 8l3-5h4l-3 5"/></svg>
+          </span>
+          <span id="withName">Video Studio</span>
+        </span>
+      </div>
+
+      <div class="thread">
+        <!-- User -->
+        <article class="msg">
+          <div class="avatar av-user" aria-hidden="true">DW</div>
+          <div>
+            <div class="msg-head"><span class="sender">Dana Whitfield</span><span class="time">9:41 AM</span></div>
+            <div class="msg-body"><p>Can you make a one-minute video for Thursday's board meeting on our Q3 member renewals? Use our brand.</p></div>
+          </div>
+        </article>
+
+        <!-- Sage -->
+        <article class="msg msg--handed">
+          <div class="avatar av-sage" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" opacity=".7"/></svg>
+          </div>
+          <div>
+            <div class="msg-head"><span class="sender">Sage</span><span class="time">9:41 AM</span><span class="pill">0:03</span></div>
+            <div class="msg-body">
+              <p class="state-transferring">Video Studio produces data-bound videos in your brand. I'm passing your request and a brief to it now.</p>
+              <p class="state-joined">Video Studio produces data-bound videos in your brand. I passed it your request and a brief.</p>
+              <p class="state-failed">I couldn't bring in Video Studio for you, so I'll help here. I can draft a storyboard and a script for the board video now.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- The handoff card -->
+        <div class="handoff-wrap">
+          <div class="handoff" role="status" aria-live="polite">
+            <div class="baton">
+              <div class="end">
+                <div class="avatar av-sage" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9z"/></svg>
+                </div>
+                <span class="name">Sage</span>
+              </div>
+              <div class="track" aria-hidden="true"><span class="spark"></span><span class="arrow"></span></div>
+              <div class="end end--to">
+                <span class="name">Video Studio</span>
+                <div class="avatar av-vs" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="m3 8 3-5h4l-3 5M10 8l3-5h4l-3 5"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="handoff-title">
+              <strong class="state-transferring">Transferring to Video Studio…</strong>
+              <strong class="state-joined">Transferred to Video Studio</strong>
+              <strong class="state-failed err">Couldn't transfer to Video Studio</strong>
+              <span class="sub state-transferring">Starting its own run with your request</span>
+              <span class="sub state-joined">It now owns this request</span>
+              <span class="sub state-failed">You don't have permission to run this agent. Sage will continue.</span>
+            </div>
+
+            <div class="handoff-meta">
+              <span class="pill pill--target">Power level · High</span>
+              <span class="pill">Brief handed over</span>
+              <span class="pill state-joined">Next messages go to Video Studio</span>
+              <span class="pill state-failed">Ask an admin for access to Video Studio</span>
+            </div>
+
+            <details>
+              <summary>Brief from Sage</summary>
+              <div class="brief">
+                <dl>
+                  <dt>Goal</dt><dd>One-minute board briefing on Q3 member renewals</dd>
+                  <dt>Archetype</dt><dd>KPI Briefing · 16:9</dd>
+                  <dt>Brand kit</dt><dd>Organization default</dd>
+                  <dt>Data</dt><dd>Query "Renewal Rate by Month", Jul–Sep</dd>
+                  <dt>Why</dt><dd>Request is video production; Sage has no video tools</dd>
+                </dl>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- Receiving agent's run -->
+        <div class="target-block">
+          <article class="msg">
+            <div class="avatar av-vs" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="m3 8 3-5h4l-3 5M10 8l3-5h4l-3 5"/></svg>
+            </div>
+            <div>
+              <div class="msg-head">
+                <span class="sender">Video Studio</span>
+                <span class="via"><span class="mini"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9z"/></svg></span>via Sage</span>
+                <span class="pill pill--target">High · Claude Opus 5.5</span>
+                <span class="pill pill--live state-transferring">starting</span>
+                <span class="pill pill--live state-working" id="clock">2:14</span>
+                <span class="pill state-delivered">4:52</span>
+              </div>
+
+              <div class="msg-body state-transferring">
+                <div class="joining">
+                  <span>Joining the conversation…</span>
+                </div>
+                <div style="display:grid; gap:8px; margin-top:10px; max-width: 420px;">
+                  <div class="skeleton" style="width: 92%"></div>
+                  <div class="skeleton" style="width: 70%"></div>
+                </div>
+              </div>
+
+              <div class="msg-body state-working">
+                <p>I've got the brief. I'm building a 58-second KPI briefing from your renewal data, using the organization brand kit.</p>
+              </div>
+
+              <div class="msg-body state-delivered">
+                <p>Your board briefing is ready: 58 seconds, 16:9, built from renewal data as of October 1. The critic flagged one item for a human check: the September label sits close to the title-safe edge on small screens.</p>
+              </div>
+
+              <ol class="stages" id="stages" aria-label="Production stages">
+                <li><div class="bar"></div><span>Brief</span></li>
+                <li><div class="bar"></div><span>Style</span></li>
+                <li><div class="bar"></div><span>Storyboard</span></li>
+                <li><div class="bar"></div><span>Pre-production</span></li>
+                <li><div class="bar"></div><span>Render</span></li>
+                <li><div class="bar"></div><span>Review</span></li>
+                <li><div class="bar"></div><span>Deliver</span></li>
+              </ol>
+              <div class="live state-working" id="liveLine">Rendering 16:9 · frame 912 of 1,740</div>
+
+              <div class="artifact state-delivered">
+                <div class="poster">
+                  <span class="asof">Data as of Oct 1, 2026</span>
+                  <div class="kpi"><small>Q3 member renewals</small><b>87.4%</b><em>+3.1 pts vs Q2</em></div>
+                  <div class="bars" aria-hidden="true"><i style="height:52%"></i><i style="height:61%"></i><i style="height:58%"></i><i style="height:70%"></i><i style="height:76%"></i><i style="height:88%"></i></div>
+                  <button type="button" class="play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></button>
+                </div>
+                <div class="artifact-foot">
+                  <div class="row"><span class="name">Q3 Renewals Board Briefing</span><span class="pill">v1</span></div>
+                  <div class="row">
+                    <span class="pill">Video Production</span><span class="pill">KPI Briefing</span><span class="pill">0:58</span><span class="pill">16:9</span><span class="pill">1 note for review</span>
+                  </div>
+                  <div class="row">
+                    <button type="button" class="btn btn--target">Open production</button>
+                    <button type="button" class="btn">Iterate</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="route">
+          <span class="to"><span class="dot"></span>Replying to <b id="routeName">Video Studio</b></span>
+          <button type="button" class="linkish state-joined">Return to Sage</button>
+          <button type="button" class="linkish state-transferring">Return to Sage</button>
+        </div>
+        <div class="input">
+          <span class="field" id="fieldText">Ask Video Studio for changes, like "make the opening faster"</span>
+          <button type="button" class="send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Build notes ================= -->
+    <aside class="notes" aria-label="Build notes">
+      <section class="note">
+        <h2>Sequence</h2>
+        <ol>
+          <li><b>Sage ends its turn with a Handoff step.</b> Its message shrinks to one or two plain sentences and the transfer card renders under it.</li>
+          <li><b>The server starts the target as a top-level run</b> on a new detail (<code>ParentID</code> = Sage's detail, <code>AgentID</code> = target). While it spins up, the card animates and the target shows a "Joining" skeleton.</li>
+          <li><b>The target's reply streams below the card</b>, joined to it by a short rail in the target's color, with "via Sage", its own power level, and its own run clock.</li>
+          <li><b>The composer re-targets.</b> "Replying to Video Studio" until the user picks Return to Sage, @mentions Sage, or the target hands back.</li>
+        </ol>
+      </section>
+
+      <section class="note">
+        <h2>Components</h2>
+        <dl class="spec">
+          <div><dt>mj-agent-handoff-card</dt><dd>New, in <code>Generic/conversations</code> (L2, no Router). Inputs: <code>SourceAgent</code>, <code>TargetAgent</code>, <code>PresetName</code>, <code>Brief</code>, <code>Reason</code>, <code>Status</code> ('Transferring' | 'Transferred' | 'Failed'), <code>HopChain</code>. Brief is collapsed by default.</dd></div>
+          <div><dt>message-item</dt><dd>Gains a <code>HandedOffFrom</code> agent: renders "via Sage" and the rail. Sage's handed-off message renders in secondary text.</dd></div>
+          <div><dt>Composer routing chip</dt><dd>Makes the existing continuity routing visible. "Return to Sage" sets the next message's agent back to Sage.</dd></div>
+          <div><dt>Chat header chip</dt><dd>Shows who you're talking to now; animates its color when ownership changes.</dd></div>
+        </dl>
+      </section>
+
+      <section class="note">
+        <h2>States</h2>
+        <ul>
+          <li><b>Transferring:</b> a spark travels Sage → target along the gradient track (1.25 s ease); target avatar pulses on arrival.</li>
+          <li><b>Transferred:</b> the track is static; the card stays in the thread as a permanent record of the hand-off.</li>
+          <li><b>Failed:</b> danger stripe replaces the gradient, the reason is stated (permission, not discoverable, not allowed in this app, hop limit), and Sage continues in the same turn.</li>
+          <li><b>Multi-hop:</b> the card shows a chain, e.g. Sage → Research Agent → Video Studio, collapsed to the last two hops with a "+1" count.</li>
+        </ul>
+      </section>
+
+      <section class="note">
+        <h2>Tokens, motion, access</h2>
+        <ul>
+          <li>Colors only from <code>--mj-*</code> tokens. Source and target accents come from each agent's color, falling back to <code>--mj-brand-primary</code>; the gradient border uses <code>color-mix()</code> on both.</li>
+          <li><code>prefers-reduced-motion</code>: no travel or pulse; a static spark marks the direction.</li>
+          <li>The card is <code>role="status"</code> with <code>aria-live="polite"</code>, so screen readers hear "Transferred to Video Studio".</li>
+          <li>Works in Slack/Teams as text: "Sage transferred you to Video Studio (High)", then the target's reply.</li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  var device = document.getElementById('device');
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.seg button'));
+  var stageItems = Array.prototype.slice.call(document.querySelectorAll('#stages li'));
+  var liveLine = document.getElementById('liveLine');
+  var clock = document.getElementById('clock');
+  var withDot = document.getElementById('withDot');
+  var withName = document.getElementById('withName');
+  var routeName = document.getElementById('routeName');
+  var fieldText = document.getElementById('fieldText');
+  var timers = [];
+  var liveText = [
+    'Reading the brief and your brand kit',
+    'Writing the style guide from your brand kit',
+    'Laying out 6 beats across 58 seconds',
+    'Snapshotting renewal data · narrating 6 lines',
+    'Rendering 16:9 · frame 912 of 1,740',
+    'Critic reviewing 7 stills from the rough cut',
+    'Packaging the production'
+  ];
+
+  function setStage(index) {
+    stageItems.forEach(function (li, i) {
+      li.className = i < index ? 'done' : (i === index ? 'now' : '');
+    });
+    if (liveText[index]) liveLine.textContent = liveText[index];
+  }
+
+  function setOwner(failed) {
+    withDot.style.background = failed ? 'var(--source)' : 'var(--target)';
+    withName.textContent = failed ? 'Sage' : 'Video Studio';
+    routeName.textContent = failed ? 'Sage' : 'Video Studio';
+    fieldText.textContent = failed ? 'Message Sage' : 'Ask Video Studio for changes, like "make the opening faster"';
+  }
+
+  function setState(state) {
+    device.setAttribute('data-state', state);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-state') === state)); });
+    setOwner(state === 'failed');
+    if (state === 'transferring') setStage(-1);
+    if (state === 'working') setStage(4);
+    if (state === 'delivered') setStage(7);
+    if (state === 'failed') setStage(-1);
+  }
+
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () { clearTimers(); setState(b.getAttribute('data-state')); });
+  });
+
+  document.getElementById('replay').addEventListener('click', function () {
+    clearTimers();
+    setState('transferring');
+    timers.push(setTimeout(function () {
+      setState('working');
+      setStage(0);
+      for (var i = 1; i < 7; i++) {
+        (function (n) { timers.push(setTimeout(function () { setStage(n); clock.textContent = '0:' + String(n * 7).padStart(2, '0'); }, n * 750)); })(i);
+      }
+      timers.push(setTimeout(function () { setState('delivered'); }, 7 * 750 + 300));
+    }, 2600));
+  });
+
+  setState('delivered');
+})();
+</script>
