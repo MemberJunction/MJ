@@ -6,7 +6,7 @@
  * unit's label window, and points the pipeline at it. The model then references the exact version it was trained under.
  */
 import type { UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PredictionUnit, UtcDay, type Actor, type PredictionUnitSpec, type UnitDraft } from '@memberjunction/predictive-studio-core';
 import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
@@ -45,8 +45,9 @@ export class DecisionDateAdvance {
   /**
    * Advances the pipeline's bound unit when due and returns the unit ID to train under (null when the pipeline has
    * none). Only the newest version of a lineage advances: a pipeline bound to an older version keeps it (that binding
-   * is deliberate). A missing or unparsable unit is left to the engine's own refusal. When binding the pipeline to the
-   * new version fails, the new version is deleted and the pipeline's columns are put back, so nothing is left orphaned.
+   * is deliberate). A missing or unparsable unit is left to the engine's own refusal. Everything after the new version
+   * is saved (parsing it, applying it to the pipeline, saving the pipeline) is one step: when any part fails, by a
+   * refusal or a throw, the new version is deleted and the pipeline's columns are put back, so nothing is orphaned.
    */
   public static async AdvanceFixedDecisionDate(pipeline: MJMLTrainingPipelineEntity, deps: DecisionDateAdvanceDeps): Promise<string | null> {
     const unitId = pipeline.PredictionUnitID;
@@ -59,14 +60,24 @@ export class DecisionDateAdvance {
     const latest = await deps.Store.LatestVersion(row.LineageRootID);
     if (latest === null || !UUIDsEqual(latest.ID, row.ID)) return unitId;
     const next = await PredictionUnitVersioning.CreateNextPredictionUnitVersion(row, changes, DECISION_DATE_ADVANCE_ACTOR, deps.EntityFactory, deps.ContextUser);
-    const nextSpec = PredictionUnit.ParsePredictionUnitRow(next);
-    if (nextSpec.Ok === false) throw new Error(`Advanced unit ${next.ID} does not parse: ${nextSpec.Errors.join('; ')}`);
     const prior = { PredictionUnitID: pipeline.PredictionUnitID, TargetEntityID: pipeline.TargetEntityID, TargetVariable: pipeline.TargetVariable, ProblemType: pipeline.ProblemType };
-    RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, next.ID, nextSpec.Value, deps.Metadata);
-    if (await pipeline.Save()) return next.ID;
-    const why = `Binding pipeline ${pipeline.ID} to unit ${next.ID} failed: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`;
+    const why = await DecisionDateAdvance.bindPipeline(pipeline, next, deps.Metadata);
+    if (why === null) return next.ID;
     Object.assign(pipeline, prior);
     if (await next.Delete()) throw new Error(why);
     throw new Error(`${why}; deleting the unbound unit version ${next.ID} also failed: ${next.LatestResult?.CompleteMessage || 'delete failed'}`);
+  }
+
+  /** Points the pipeline at the new version and saves it: null when bound, else why not (a throw is reported, not raised). */
+  private static async bindPipeline(pipeline: MJMLTrainingPipelineEntity, next: MJPredictionUnitEntity, metadata: IAssemblyMetadata): Promise<string | null> {
+    try {
+      const nextSpec = PredictionUnit.ParsePredictionUnitRow(next);
+      if (nextSpec.Ok === false) return `Advanced unit ${next.ID} does not parse: ${nextSpec.Errors.join('; ')}`;
+      RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, next.ID, nextSpec.Value, metadata);
+      if (await pipeline.Save()) return null;
+      return `Binding pipeline ${pipeline.ID} to unit ${next.ID} failed: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`;
+    } catch (e) {
+      return `Binding pipeline ${pipeline.ID} to unit ${next.ID} failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
 }

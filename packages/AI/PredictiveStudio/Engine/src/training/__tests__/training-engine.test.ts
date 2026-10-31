@@ -346,11 +346,9 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   it('refuses to train a unit pipeline without a snapshot file store, before calling the trainer', async () => {
     const { engine, deps, trainer, pipeline, snapshots, runs } = TrainingHarness.ForUnit(years, unitColumns);
     delete deps.snapshotFiles;
-    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/snapshot file store/);
-    expect(trainer.Requests).toHaveLength(0);
-    expect(snapshots).toHaveLength(0);
-    expect(runs[0].Status).toBe('Failed');
-    expect(runs[0].Notes).toMatch(/^Training failed: .*training deps are incomplete.*snapshot file store/);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/training deps are incomplete.*snapshot file store/);
+    // A wiring error fails before anything is written: no run row, no snapshot, no trainer call.
+    expect([trainer.Requests.length, snapshots.length, runs.length]).toEqual([0, 0, 0]);
   });
 
   it("sends the pipeline's own algorithm as the single candidate and records the finalist's hyperparameters on the run", async () => {
@@ -431,6 +429,30 @@ describe('TrainingEngine — an advancing fixed decision date', () => {
     harness.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'Year' });
     await expect(harness.engine.trainModel({ pipelineId: harness.pipeline.ID }, harness.deps)).rejects.toMatchObject({ Refusal: { reason: { kind: 'time-index-needs-time-holdout' } } });
     expect([units.Rows.length, harness.runs.length]).toEqual([1, 0]);
+  });
+
+  it('saves no new version for a pipeline refused for a unit override (maxRows) or failed for incomplete deps (no trainer)', async () => {
+    const advancing = (): { readonly harness: ReturnType<typeof TrainingHarness.ForUnit>; readonly units: InMemoryUnitVersions } => {
+      const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+      const units = new InMemoryUnitVersions();
+      units.Seed({
+        ...UnitYearsWorld.UnitColumns(), LabelWindowDays: 1,
+        UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: '2026-10-20', advance: 'each-run' }, filter: [] }),
+        Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-10-21' } }),
+      });
+      harness.deps.predictionUnits = units;
+      harness.deps.entityFactory = new UnitVersionFactory(units, harness.deps.entityFactory);
+      harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ MinMinorityClassRows: 1, Holdout: JSON.stringify({ kind: 'seeded-random', fraction: 0.25 }) })]);
+      harness.deps.now = () => new Date('2026-11-02T09:00:00Z');
+      return { harness, units };
+    };
+    const capped = advancing();
+    await expect(capped.harness.engine.trainModel({ pipelineId: capped.harness.pipeline.ID, maxRows: 5 }, capped.harness.deps)).rejects.toMatchObject({ Refusal: { reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
+    expect([capped.units.Rows.length, capped.harness.runs.length]).toEqual([1, 0]);
+    const unwired = advancing();
+    delete unwired.harness.deps.trainer;
+    await expect(unwired.harness.engine.trainModel({ pipelineId: unwired.harness.pipeline.ID }, unwired.harness.deps)).rejects.toThrow(/no trainer \(trainer\) was supplied/);
+    expect([unwired.units.Rows.length, unwired.harness.runs.length]).toEqual([1, 0]);
   });
 });
 
@@ -759,8 +781,7 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     const { engine, deps, pipeline, runs, snapshots } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
     delete deps.trainer;
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/no trainer \(trainer\) was supplied/);
-    expect(snapshots).toHaveLength(0);
-    expect(runs[0].Status).toBe('Failed');
+    expect([snapshots.length, runs.length]).toEqual([0, 0]);
   });
 });
 

@@ -11,7 +11,9 @@
  * protocol row, a row that does not parse, or more candidates than the protocol's budget allows are
  * refused before any run row is written, and so is a pipeline that declares a time index
  * (`ValidationStrategy.TimeIndexColumn`) under a protocol whose holdout does not respect time (seeded-random:
- * `time-index-needs-time-holdout`). The protocol row must predate the run row, and a protocol
+ * `time-index-needs-time-holdout`), and so are inputs the unit overrides (`input-not-accepted`); deps without a snapshot
+ * file store or a trainer fail there too. Only then does an advancing fixed decision date move to the run's day (a new
+ * unit version). The protocol row must predate the run row, and a protocol
  * that does not fit the unit is refused on the run. The unit row reader then reads every unit row
  * (censored and label-known rows excluded and counted), the target is validated, and the matrix is
  * assembled as of each row's decision date by {@link TrainingEngine.AssembleForTraining} — the same
@@ -232,9 +234,10 @@ export class TrainingEngine {
   }
 
   /**
-   * Moves an advancing fixed decision date to the run's UTC day after the pipeline-stage refusals and before the run
-   * row (a new unit version, the pipeline bound to it), so the run reads features as they stand on its own day and its
-   * lineage names that version, and a refused pipeline gets no new version. Returns the unit to train under.
+   * Moves an advancing fixed decision date to the run's UTC day after every pipeline-stage refusal and deps check
+   * (protocol, budget, time index, unit overrides, snapshot file store, trainer) and before the run row (a new unit
+   * version, the pipeline bound to it), so the run reads features as they stand on its own day, its lineage names that
+   * version, and a refused pipeline never mints a version. Returns the unit to train under.
    */
   private async advanceDecisionDate(pipeline: MJMLTrainingPipelineEntity, deps: TrainingDeps): Promise<string | null> {
     return DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline, {
@@ -273,12 +276,13 @@ export class TrainingEngine {
    * missing protocol, more candidates than its budget allows, or a pipeline that declares a time index under a holdout
    * that does not respect time (`time-index-needs-time-holdout`) is refused before any run row is written. The unit
    * decides the rows, their decision dates and their labels: inputs that would override them (`maxRows`,
-   * `labelEventDates`, a point-in-time AsOfStrategy) are refused, censored and label-known rows are excluded and
+   * `labelEventDates`, a point-in-time AsOfStrategy) are refused, and deps without a snapshot file store or a trainer
+   * fail (a wiring error), both before anything is written. Only then does an advancing fixed decision date move to the
+   * run's day (a new unit version), and the run row is written. Censored and label-known rows are excluded and
    * counted, and a protocol that does not fit the unit or a target that cannot train a model is refused before anything
    * is assembled. The matrix is assembled as of each decision date ({@link AssembleForTraining}), frozen into a
    * Training Snapshot the run references, and trained through the protocol trainer. A refusal after the run row exists
-   * is recorded on it as a `refused` envelope. Deps without a snapshot file store or a trainer are incomplete and the
-   * run fails before anything is read.
+   * is recorded on it as a `refused` envelope.
    */
   private async trainUnitPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
@@ -286,14 +290,15 @@ export class TrainingEngine {
     // A time-indexed pipeline under a holdout that does not respect time is refused before any run row exists.
     const timeIndex = ProtocolSearchGuard.CheckTimeIndexHoldout(protocol, resolved.pipeline.ID, resolved.validation.TimeIndexColumn);
     if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
-    // The refusals above write nothing; only a pipeline that passes them advances its decision date.
+    TrainingEngine.refuseUnitOverrides(input, resolved);
+    const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
+    const training: ProtocolTraining = { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) };
+    // Every pipeline-stage refusal and deps check above writes nothing; only a pipeline that passes them all advances
+    // its decision date (a new unit version), and the run row follows.
     const unitId = (await this.advanceDecisionDate(resolved.pipeline, deps)) || resolved.pipeline.PredictionUnitID;
     const run = await this.createRunRow(resolved, input, deps);
     try {
       TrainingEngine.refuseProtocolNewerThanRun(protocol, run);
-      TrainingEngine.refuseUnitOverrides(input, resolved);
-      const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
-      const training: ProtocolTraining = { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) };
       const unit = await this.loadUnitSpec(unitId, deps);
       // A protocol that does not fit the unit is refused before any row is read or assembled.
       const mismatch = ProtocolSearchGuard.CheckProtocolForUnit(protocol, unit);
@@ -356,7 +361,8 @@ export class TrainingEngine {
 
   /**
    * The deps' snapshot file store. A unit run trains only from a Training Snapshot, so deps without one are incomplete
-   * (a wiring error, not a refusal of the pipeline) and the run fails rather than training from rows nothing recorded.
+   * (a wiring error, not a refusal of the pipeline) and training fails before anything is written, rather than training
+   * from rows nothing recorded.
    */
   private static requireSnapshotFiles(deps: TrainingDeps): ISnapshotFileStore {
     if (!deps.snapshotFiles) {
@@ -367,7 +373,7 @@ export class TrainingEngine {
 
   /**
    * The deps' trainer. Every unit run trains only through it, so deps without one are incomplete (a wiring error) and
-   * the run fails before anything is read.
+   * training fails before anything is written.
    */
   private static requireTrainer(deps: TrainingDeps): ITrainerEvaluator {
     if (!deps.trainer) {
@@ -969,17 +975,17 @@ export class TrainingEngine {
    * `asOfStrategy` when the pipeline row isn't separately loaded. Omitting
    * `targetEntityName` or `featureSteps` here would leave the model unable to
    * produce any feature columns at inference (train/serve break), so both are
-   * persisted alongside the other provenance fields. A unit model adds its {@link UnitModelLineage}.
+   * persisted alongside the other provenance fields, after the model's {@link UnitModelLineage} (every model is trained on a unit).
    */
   private buildLineage(
     resolved: ResolvedPipeline,
     input: TrainModelInput,
     split: LockedHoldoutSplit,
     evaluation: EvaluationRecord,
-    unitLineage: UnitModelLineage | null,
-  ): ModelTrainingLineage & Partial<UnitModelLineage> {
+    unitLineage: UnitModelLineage,
+  ): ModelTrainingLineage & UnitModelLineage {
     return {
-      ...(unitLineage || {}),
+      ...unitLineage,
       pipelineId: resolved.pipeline.ID,
       pipelineVersion: resolved.pipeline.Version,
       targetEntityName: resolved.targetEntityName,

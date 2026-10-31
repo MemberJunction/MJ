@@ -33,7 +33,7 @@ export class FakeUnitRow implements PredictionUnitColumns {
   public LatestResult: { CompleteMessage: string } | null = null;
   public Deleted = false;
 
-  constructor(private readonly store: InMemoryUnitVersions, private readonly saveOk = true) {}
+  constructor(private readonly store: InMemoryUnitVersions, private readonly saveOk = true, private readonly afterSave: ((row: FakeUnitRow) => void) | null = null) {}
 
   public async Save(): Promise<boolean> {
     if (!this.saveOk) {
@@ -42,6 +42,7 @@ export class FakeUnitRow implements PredictionUnitColumns {
     }
     if (!this.ID) this.ID = `U-${this.store.Rows.length + 1}`;
     this.store.Rows.push(this);
+    if (this.afterSave !== null) this.afterSave(this);
     return true;
   }
 
@@ -76,10 +77,11 @@ export class InMemoryUnitVersions implements IPredictionUnitStore {
 
 /** Serves new unit rows saved into `units`; every other entity comes from `inner`. */
 export class UnitVersionFactory implements IEntityFactory {
-  constructor(private readonly units: InMemoryUnitVersions, private readonly inner: IEntityFactory | null = null) {}
+  /** `afterSave` runs on each new unit row once it is saved (a test can corrupt what was stored). */
+  constructor(private readonly units: InMemoryUnitVersions, private readonly inner: IEntityFactory | null = null, private readonly afterSave: ((row: FakeUnitRow) => void) | null = null) {}
 
   public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
-    if (entityName === 'MJ: Prediction Units') return new FakeUnitRow(this.units) as unknown as T;
+    if (entityName === 'MJ: Prediction Units') return new FakeUnitRow(this.units, true, this.afterSave) as unknown as T;
     if (this.inner === null) throw new Error(`UnitVersionFactory: unexpected entity ${entityName}`);
     return this.inner.getEntityObject<T>(entityName, contextUser);
   }

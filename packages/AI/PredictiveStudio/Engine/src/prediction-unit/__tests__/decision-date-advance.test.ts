@@ -4,6 +4,7 @@ import type { DecisionDateRule, PredictionUnitColumns, PredictionUnitSpec } from
 import { DecisionDateAdvance } from '../decision-date-advance';
 import { InMemoryUnitVersions, UnitVersionFactory } from './unit-version-fakes';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import type { IAssemblyMetadata } from '../../feature-assembly/assembly-metadata';
 
 const unit = (decisionDate: DecisionDateRule, windowDays = 1, gapDays = 0): PredictionUnitSpec => ({
   id: 'U1', lineageRootId: 'U1', version: 1, name: 'migrated',
@@ -84,6 +85,25 @@ describe('AdvanceFixedDecisionDate', () => {
     const deps = { Store: units, RunDay: '2026-11-02', Metadata: UnitYearsWorld.Metadata(), EntityFactory: new UnitVersionFactory(units) };
     await expect(DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline.Entity, deps)).rejects.toThrow(/Binding pipeline P-1 to unit .* failed: pipeline save refused$/);
     expect([units.Rows.map((r) => r.ID), pipeline.PredictionUnitID, pipeline.TargetEntityID, pipeline.TargetVariable]).toEqual([['V1'], 'V1', '', 'Renewed']);
+  });
+  it('deletes the new version and puts the pipeline back when the unit row entity is not registered (a throw while applying it)', async () => {
+    const units = new InMemoryUnitVersions();
+    units.Seed(v1Columns('2026-10-20', true));
+    const pipeline = new AdvancePipeline();
+    pipeline.TargetVariable = 'Renewed';
+    const unregistered: IAssemblyMetadata = { Entity: () => null };
+    const deps = { Store: units, RunDay: '2026-11-02', Metadata: unregistered, EntityFactory: new UnitVersionFactory(units) };
+    await expect(DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline.Entity, deps)).rejects.toThrow(/Binding pipeline P-1 to unit .* failed: Prediction Unit row entity "Years" is not registered/);
+    expect([units.Rows.map((r) => r.ID), pipeline.PredictionUnitID, pipeline.TargetVariable, pipeline.Saves]).toEqual([['V1'], 'V1', 'Renewed', 0]);
+  });
+  it('deletes the new version and puts the pipeline back when the saved version does not parse', async () => {
+    const units = new InMemoryUnitVersions();
+    units.Seed(v1Columns('2026-10-20', true));
+    const pipeline = new AdvancePipeline();
+    const corrupt = new UnitVersionFactory(units, null, (row) => { row.UnitRows = '{not json'; });
+    const deps = { Store: units, RunDay: '2026-11-02', Metadata: UnitYearsWorld.Metadata(), EntityFactory: corrupt };
+    await expect(DecisionDateAdvance.AdvanceFixedDecisionDate(pipeline.Entity, deps)).rejects.toThrow(/Advanced unit .* does not parse/);
+    expect([units.Rows.map((r) => r.ID), pipeline.PredictionUnitID, pipeline.Saves]).toEqual([['V1'], 'V1', 0]);
   });
   it('keeps a pipeline bound to an older version of the lineage, and a date that does not advance', async () => {
     const units = new InMemoryUnitVersions();
