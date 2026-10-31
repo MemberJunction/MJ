@@ -17,7 +17,7 @@
  */
 import type { DatabasePlatform } from '@memberjunction/core';
 import { CompositionByKey, COMPOSITIONS } from './sqlpipe-composition';
-import { GeneratePairwise } from './sqlpipe-pairwise';
+import { CrossProduct, GeneratePairwise } from './sqlpipe-pairwise';
 import type { Assignment, Dimension, DimensionValue, PairFilter, PairwiseResult } from './sqlpipe-pairwise';
 import { MAX_ROWS, START_ROWS, ValidPoint } from './sqlpipe-scenarios';
 import { SHAPES } from './sqlpipe-shapes';
@@ -93,4 +93,49 @@ export const PullRequestPairs: PairFilter = (a: DimensionValue, b: DimensionValu
 export function ClientAssignments(platform: DatabasePlatform, scope: MatrixScope): PairwiseResult {
     const valid = (a: Assignment): boolean => ValidPoint(platform, a);
     return scope === 'pr' ? GeneratePairwise(ClientDimensions(), valid, PullRequestPairs) : GeneratePairwise(ClientDimensions(), valid);
+}
+
+const REFUSED_COMPOSITIONS = new Set(COMPOSITIONS.filter(c => c.Refusal).map(c => c.Key));
+const SPM2_FIXED: Assignment = { Schema: 'mock', Shape: 'cte', Values: 'provided', Path: 'saved' };
+
+/** The four dimensions of SPM2 (`Composition × Templating × MaxRows × StartRow`, non-refused compositions). */
+export function Spm2Dimensions(): Dimension[] {
+    return [
+        { Name: 'Composition', Values: keys(COMPOSITIONS).filter(k => !REFUSED_COMPOSITIONS.has(k)) },
+        { Name: 'Templating', Values: keys(TEMPLATING) },
+        { Name: 'MaxRows', Values: Object.keys(MAX_ROWS) },
+        { Name: 'StartRow', Values: Object.keys(START_ROWS) },
+    ];
+}
+
+/**
+ * The SPM2 assignments (`Composition × Templating × MaxRows × StartRow` on the mock schema's CTE
+ * shape) for a scope:
+ *  - `full`: the full 4-way cross product (every query run under all 12 `MaxRows × StartRow` pairs);
+ *  - `pr`: every valid `Composition × Templating` query (so all 221/208 distinct queries are still
+ *    saved, run, and checked by SPM5), with `(MaxRows, StartRow)` stepped by `(i + j) mod 12` so
+ *    every `(Composition, MaxRows, StartRow)` triple, every `(Templating, MaxRows, StartRow)`
+ *    triple, and every 2-way pair across the four dimensions is covered in 1/12th the runs.
+ */
+export function Spm2Assignments(platform: DatabasePlatform, scope: MatrixScope): Assignment[] {
+    const space = Spm2Dimensions();
+    const valid = (a: Assignment): boolean => ValidPoint(platform, { ...a, ...SPM2_FIXED });
+    if (scope === 'full') {
+        return CrossProduct(space, valid).map(a => ({ ...a, ...SPM2_FIXED }));
+    }
+    const [compositions, templatings, maxRows, startRows] = space;
+    const validCompositions = compositions.Values.filter(c => valid({ Composition: c }));
+    const validTemplatings = templatings.Values.filter(t => valid({ Templating: t }));
+    const pagings = CrossProduct([maxRows, startRows], valid);
+    const assignments: Assignment[] = [];
+    for (const [i, composition] of validCompositions.entries()) {
+        for (const [j, templating] of validTemplatings.entries()) {
+            const paging = pagings[(i + j) % pagings.length];
+            const candidate: Assignment = { Composition: composition, Templating: templating, ...paging, ...SPM2_FIXED };
+            if (ValidPoint(platform, candidate)) {
+                assignments.push(candidate);
+            }
+        }
+    }
+    return assignments;
 }
