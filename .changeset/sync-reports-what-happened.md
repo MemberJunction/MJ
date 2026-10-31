@@ -1,0 +1,6 @@
+---
+"@memberjunction/integration-engine": patch
+"@memberjunction/server": patch
+---
+
+A sync's numbers, warnings and successes now correspond to what the run did: `RecordsSynced` counts records written (not created+updated+skipped+errored) and is finalised after the loop, so an object that completes in one page no longer sits at 0 forever; a field map whose destination column does not exist is deactivated as well as warned about, instead of silently dropping its value on every later run; a discovery re-checks its connection before persisting and refuses when it has been deleted (which on the shared catalog used to succeed and overwrite the declared floor); discovery completion messages name the field counts, so a run that created 69 fields no longer reports "0 objects created, 0 updated"; repeated warnings are rolled up by code instead of burying a run under one cause; the batch apply and the schema evolution surface the declared-but-deactivated row warnings the single apply already had; the single apply reads `APIRestarted` from the pipeline, filters its fallback describe, and invalidates the catalog caches the batch always did; and the record-map read streams to its caller rather than holding every row of the table in memory.
