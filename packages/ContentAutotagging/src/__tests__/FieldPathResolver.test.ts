@@ -272,6 +272,94 @@ describe('FieldPathResolver', () => {
             const values = await resolver.ResolveForItems([makeItem('item-1', 'src-1')], 'ContentSourceID.OrganizationID');
             expect(values.get('item-1')).toBe('org-queried');
         });
+
+        // ── A KEY THE CACHE DOES NOT HOLD IS UNKNOWN, NOT ABSENT ───────────────────────────────
+        // A BaseEngine full-set cache is complete only as of its load; nothing tells it about a row
+        // another PROCESS inserted. Treating its filtered subset as the whole answer made every
+        // record created after the reader booted resolve to nothing — and because these values route
+        // a record to its tenant partition, a driver that requires one then fails closed, so the
+        // symptom is a silent refusal to write rather than a visibly missing field.
+        it('queries for a key the cache has never seen instead of reporting it absent', async () => {
+            // The engine cached the sources that existed when it loaded. 'src-new' was created after.
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources' ? [makeCachedRow('src-old', { OrganizationID: 'org-old' })] : null
+            );
+            stubRows({
+                'MJ: Content Sources': [{ ID: 'src-new', OrganizationID: 'org-new' }],
+                'Client Content Sources': [],
+            });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems([makeItem('item-1', 'src-new')], 'ContentSourceID.OrganizationID');
+
+            expect(values.get('item-1')).toBe('org-new');
+            // And it asked only for the key it was missing, rather than reloading the whole set.
+            const baseCall = mockRunView.mock.calls.find(c => c[0].EntityName === 'MJ: Content Sources');
+            expect(baseCall).toBeDefined();
+            expect(baseCall![0].ExtraFilter).toContain('src-new');
+            expect(baseCall![0].ExtraFilter).not.toContain('src-old');
+        });
+
+        it('mixes cached and queried rows in one pass, querying only the uncached key', async () => {
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources' ? [makeCachedRow('src-1', { OrganizationID: 'org-cached' })] : null
+            );
+            stubRows({
+                'MJ: Content Sources': [{ ID: 'src-2', OrganizationID: 'org-queried' }],
+                'Client Content Sources': [],
+            });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(
+                [makeItem('item-1', 'src-1'), makeItem('item-2', 'src-2')],
+                'ContentSourceID.OrganizationID'
+            );
+
+            expect(values.get('item-1')).toBe('org-cached');
+            expect(values.get('item-2')).toBe('org-queried');
+            const baseCall = mockRunView.mock.calls.find(c => c[0].EntityName === 'MJ: Content Sources');
+            expect(baseCall![0].ExtraFilter).toContain('src-2');
+            expect(baseCall![0].ExtraFilter).not.toContain('src-1');
+        });
+
+        it('still serves the cached rows when the query for the missing keys fails', async () => {
+            // Partial beats nothing: the cached record resolves, and only the key the failed query
+            // would have answered stays unresolved.
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources' ? [makeCachedRow('src-1', { OrganizationID: 'org-cached' })] : null
+            );
+            stubRows({ 'MJ: Content Sources': 'FAIL', 'Client Content Sources': [] });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(
+                [makeItem('item-1', 'src-1'), makeItem('item-2', 'src-missing')],
+                'ContentSourceID.OrganizationID'
+            );
+
+            expect(values.get('item-1')).toBe('org-cached');
+            expect(values.get('item-2')).toBeUndefined();
+            expect(mockLogError).toHaveBeenCalled();
+        });
+
+        it('does not query at all when the cache covers every requested key', async () => {
+            // The fast path this cache exists for must survive the fix.
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources'
+                    ? [makeCachedRow('src-1', { OrganizationID: 'org-a' }), makeCachedRow('src-2', { OrganizationID: 'org-b' })]
+                    : null
+            );
+            stubRows({ 'Client Content Sources': [] });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(
+                [makeItem('item-1', 'src-1'), makeItem('item-2', 'src-2')],
+                'ContentSourceID.OrganizationID'
+            );
+
+            expect(values.get('item-1')).toBe('org-a');
+            expect(values.get('item-2')).toBe('org-b');
+            expect(mockRunView.mock.calls.some(c => c[0].EntityName === 'MJ: Content Sources')).toBe(false);
+        });
     });
 
     describe('batching and per-pass caching', () => {
