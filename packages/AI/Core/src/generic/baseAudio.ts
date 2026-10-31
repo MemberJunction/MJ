@@ -70,6 +70,117 @@ export abstract class BaseAudioGenerator extends BaseModel implements BaseTextTo
 }
 
 /**
+ * Character-level timing alignment returned by a text-to-speech provider when
+ * `TextToSpeechParams.IncludeTimestamps` is requested and supported by the driver.
+ *
+ * All three arrays are parallel and indexed by character position:
+ * `Characters[i]` is spoken from `StartSeconds[i]` to `EndSeconds[i]`.
+ */
+export interface SpeechAlignment {
+    /** Characters in the synthesized text, in spoken order. */
+    Characters: string[];
+    /** Start timestamp (in seconds from clip start) for each entry in `Characters`. */
+    StartSeconds: number[];
+    /** End timestamp (in seconds from clip start) for each entry in `Characters`. */
+    EndSeconds: number[];
+}
+
+/**
+ * Word-level timing derived from character-level {@link SpeechAlignment}.
+ */
+export interface WordTiming {
+    /** Non-whitespace token (with adjacent punctuation preserved). */
+    Word: string;
+    /** Start time in seconds of the first character in `Word`. */
+    StartSeconds: number;
+    /** End time in seconds of the last character in `Word`. */
+    EndSeconds: number;
+}
+
+/**
+ * Aggregates character-level {@link SpeechAlignment} into word-level timings.
+ *
+ * A "word" is defined as a contiguous run of non-whitespace characters (`!/^\s+$/`),
+ * so punctuation attached to a token remains part of that word (for example, `"Hello,"`
+ * or `"world!"`). Any whitespace entry (`' '`, `'\t'`, `'\n'`, `'\r'`, etc.) acts as a
+ * word boundary and is not emitted as a token.
+ *
+ * Edge cases:
+ * - Null, undefined, or empty `Characters` returns `[]`.
+ * - Leading, trailing, or consecutive whitespace characters are skipped cleanly.
+ * - Mismatched array lengths (`Characters.length !== StartSeconds.length` or
+ *   `Characters.length !== EndSeconds.length`) return `[]` rather than throwing or
+ *   emitting partial timings.
+ *
+ * @param alignment Character-level alignment from `SpeechResult.Alignment`
+ * @returns Ordered word timings with start and end seconds
+ */
+export function DeriveWordTimings(alignment: SpeechAlignment | null | undefined): WordTiming[] {
+    if (
+        !alignment ||
+        !Array.isArray(alignment.Characters) ||
+        !Array.isArray(alignment.StartSeconds) ||
+        !Array.isArray(alignment.EndSeconds)
+    ) {
+        return [];
+    }
+
+    const { Characters, StartSeconds, EndSeconds } = alignment;
+    if (
+        Characters.length === 0 ||
+        Characters.length !== StartSeconds.length ||
+        Characters.length !== EndSeconds.length
+    ) {
+        return [];
+    }
+
+    const words: WordTiming[] = [];
+    let currentWord = '';
+    let currentStart = 0;
+    let currentEnd = 0;
+    let inWord = false;
+
+    for (let i = 0; i < Characters.length; i++) {
+        const ch = Characters[i];
+        const start = StartSeconds[i];
+        const end = EndSeconds[i];
+
+        if (ch.length === 0 || /^\s+$/.test(ch)) {
+            if (inWord) {
+                words.push({
+                    Word: currentWord,
+                    StartSeconds: currentStart,
+                    EndSeconds: currentEnd,
+                });
+                currentWord = '';
+                inWord = false;
+            }
+            continue;
+        }
+
+        if (!inWord) {
+            inWord = true;
+            currentWord = ch;
+            currentStart = start;
+            currentEnd = end;
+        } else {
+            currentWord += ch;
+            currentEnd = end;
+        }
+    }
+
+    if (inWord) {
+        words.push({
+            Word: currentWord,
+            StartSeconds: currentStart,
+            EndSeconds: currentEnd,
+        });
+    }
+
+    return words;
+}
+
+/**
  * Return payload for each CreateSpeech request
  */
 export class SpeechResult {
@@ -107,6 +218,13 @@ export class SpeechResult {
      * `errorMessage`.
      */
     errorInfo?: AIErrorInfo;  // case-violation-ok-legacy-back-compat: named as BaseResult.errorInfo, which the failover loop reads
+
+    /**
+     * Optional character-level timestamp alignment for synthesized speech when
+     * `TextToSpeechParams.IncludeTimestamps` was set and the driver supports alignment.
+     * Drivers that do not support timestamp alignment leave this `undefined`.
+     */
+    Alignment?: SpeechAlignment;
 }
 
 export class SpeechToTextParams extends BaseParams {
@@ -231,6 +349,13 @@ export interface TextToSpeechParams {
      * classified as `Cancelled` (see `BuildCancellationErrorInfo`), which is never failed over.
      */
     CancellationToken?: AbortSignal;
+
+    /**
+     * When `true`, requests character-level timestamp alignment alongside the synthesized audio
+     * (`SpeechResult.Alignment`). Drivers that do not support timestamp alignment ignore this flag
+     * and leave `SpeechResult.Alignment` `undefined`.
+     */
+    IncludeTimestamps?: boolean;
 }
 
 /**

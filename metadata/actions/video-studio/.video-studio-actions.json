@@ -1,0 +1,302 @@
+[
+  {
+    "_comments": [
+      "Produce Video — runs a complete Video Studio multi-agent production in Autonomous mode and creates a standalone Video Production artifact.",
+      "Type='Custom' + DriverClass='Produce Video' binds to @RegisterClass(BaseAction, 'Produce Video')."
+    ],
+    "fields": {
+      "Name": "Produce Video",
+      "Description": "Runs a full multi-stage Video Studio production (Director, Art Director, Storyboard, Pre-Production data snapshot and narration, Motion Engineer HTML/CSS/JS composition, deterministic HyperFrames render, and Critic review) and persists a standalone Video Production artifact plus MP4 and poster files in MJ: Files. Unlike Generate Video (which calls a generative video vendor to create a single raw video clip without composition, narration, or data bindings), Produce Video orchestrates an entire composed, brand-governed, data-bound video deliverable.",
+      "Type": "Custom",
+      "DriverClass": "Produce Video",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clapperboard",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Video Studio?create&Description=Actions for MemberJunction Video Studio — full multi-agent video productions and deliverables."
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Topic",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The video brief or topic in plain words; becomes the user message passed to the Video Studio agent."
+          },
+          "primaryKey": {
+            "ID": "B133C1D5-421F-4BB3-9C4B-D53DDE024203"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Archetype",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional name or ID of an Active MJ: Video Archetypes record (for example, 'KPI Briefing', 'Product Launch', 'Social Short')."
+          },
+          "primaryKey": {
+            "ID": "FD432906-EE63-409D-9356-2A3E95CB2E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BrandKit",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional name or ID of an Active MJ: Brand Kits record. Defaults to the company's or org-wide default brand kit."
+          },
+          "primaryKey": {
+            "ID": "A6B2B7B1-4A1C-4360-A7E6-26BC1CEA04B7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Formats",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional comma-separated aspect ratios to render (for example, '16:9,9:16'). Defaults to the archetype's DefaultFormats."
+          },
+          "primaryKey": {
+            "ID": "E9F3C1AD-EC36-4F12-A974-3FEE0E48BC26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationSeconds",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional target runtime in seconds. Defaults to the archetype's DefaultDurationSeconds."
+          },
+          "primaryKey": {
+            "ID": "132A2B20-5E71-4C90-922D-70DAA04A4D77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional MJ: Companies ID scoping archetype selection, brand kit selection, data bindings, and provenance."
+          },
+          "primaryKey": {
+            "ID": "C691AB52-DD6E-4F07-BA62-8D848FCF62C6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PowerLevel",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional agent configuration preset name or display name ('Draft', 'Standard', or 'High'). Defaults to the Video Studio agent's IsDefault preset."
+          },
+          "primaryKey": {
+            "ID": "13597CBC-A41F-4520-B503-6555D2F5DBB5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DataRefs",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Optional array of authoritative data references ({ Key, Kind: 'Query'|'View'|'Artifact', QueryID?, QueryName?, Parameters?, EntityName?, ExtraFilter?, Fields?, ArtifactVersionID?, Shape, Format?, Label? }) mapped to VideoDataBinding entries. Inline is refused; callers pass data by reference."
+          },
+          "primaryKey": {
+            "ID": "BEF8906E-AB11-4CFB-8CBD-87B396B9647C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentRunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the MJ: AI Agent Runs row for the Video Studio execution."
+          },
+          "primaryKey": {
+            "ID": "0776EEB0-8036-47B2-B35F-61E8E17EE91C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the standalone Video Production (MJ: Artifacts) record created on completion."
+          },
+          "primaryKey": {
+            "ID": "55B1C5C9-2566-4105-BA10-51A749BDA2E2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArtifactVersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the MJ: Artifact Versions row containing the delivered VideoGenerationSpec JSON."
+          },
+          "primaryKey": {
+            "ID": "F1FCEADC-3D48-4875-A831-0D96E9723446"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Final VideoProductionStatus of the specification (for example, 'Delivered')."
+          },
+          "primaryKey": {
+            "ID": "DE7D5333-B379-4FAD-B213-FCF62E4F9278"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VideoFileIDs",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Object keyed by format ('16:9', '9:16', '1:1') mapping each rendered deliverable to its MJ: Files ID."
+          },
+          "primaryKey": {
+            "ID": "20DD4FB2-58B1-4B79-86E2-90DE04720F21"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PosterFileID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "MJ: Files ID of the captured poster still frame."
+          },
+          "primaryKey": {
+            "ID": "3DDAA627-8108-45EC-B815-CB063726B83C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HumanReviewNotes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Summary of deferred defects, inline storage warnings, and AI-generated asset disclosures from Review.HumanReviewNotes."
+          },
+          "primaryKey": {
+            "ID": "022148AA-F2EB-4BE5-8B36-255BC3E37407"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Video production completed, rendered deliverables stored in MJ: Files, and Video Production artifact persisted."
+          },
+          "primaryKey": {
+            "ID": "9E8E0DD8-0A3C-4A50-857E-261A5FA55670"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NEEDS_INPUT",
+            "IsSuccess": false,
+            "Description": "The run ended with FinalStep = 'Chat' because a required fact or asset was missing; Message contains the agent's question."
+          },
+          "primaryKey": {
+            "ID": "1C3F8A58-FEAE-4CF3-B9DD-290033BD7BDE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMS",
+            "IsSuccess": false,
+            "Description": "Invalid parameter (missing Topic, unsupported format/kind/shape, company scope mismatch, Inline data ref, or unknown PowerLevel preset)."
+          },
+          "primaryKey": {
+            "ID": "D7D0A9F2-41F2-49A6-9C67-345E92CCAE87"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Referenced archetype, brand kit, query, or Video Studio agent was not found or is not Active."
+          },
+          "primaryKey": {
+            "ID": "A7402A91-F8A7-4CAE-B05A-3E5050E088A8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RUN_FAILED",
+            "IsSuccess": false,
+            "Description": "The Video Studio agent run failed before delivering the production."
+          },
+          "primaryKey": {
+            "ID": "81573DF6-9971-4A42-8672-9ECBCB9165CD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unhandled exception occurred while executing Produce Video."
+          },
+          "primaryKey": {
+            "ID": "0B2E6494-00B9-4E21-9CB4-FD8709BD36DB"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B78B72B9-8FED-4782-AF36-A642E4DB1774"
+    }
+  }
+]

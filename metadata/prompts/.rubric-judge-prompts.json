@@ -286,5 +286,19 @@
       "lastModified": "2026-10-06T20:21:53.413Z",
       "checksum": "c5cf86bd1486cf2ab0797dda526aab68f56fda3725d7444e1a894de6aa5b2032"
     }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Video Studio",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/video-studio.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Video Studio runs: judges the delivered VideoGenerationSpec (Review.Rounds, Scores, HumanReviewNotes, Output, DataSnapshot, generated-asset provenance) against the Video Production Quality rubric, never the run's intentions."
+    },
+    "primaryKey": {
+      "ID": "35557F28-5169-4FB7-8ACE-563DA8444B3F"
+    }
   }
 ]
