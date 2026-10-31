@@ -45,6 +45,7 @@ export type SyncLogEvent =
     | 'sync.entity-map.start'
     | 'sync.entity-map.exclusions'
     | 'sync.entity-map.skipped'
+    | 'sync.entity-map.filtered'
     | 'sync.resume.keyset'
     | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'

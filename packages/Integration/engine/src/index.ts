@@ -132,6 +132,10 @@ export { CUSTOM_OVERFLOW_COLUMN, ComputeUnmappedFields, computeUnmappedFields, H
 export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirective, ComputeExcludedSourceNames, StripExcludedFields } from './SyncDirectives.js';
 export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
+export { RECORD_FILTER_CONFIG_KEY, ParseRecordFilter, RecordPassesFilter, ApplyRecordFilter } from './RecordFilter.js';
+export type { RecordFilterCondition, ParsedRecordFilter, RecordFilterResult } from './RecordFilter.js';
+export { RESOLVE_REFERENCES_CONFIG_KEY, ParseReferenceFields, CollectReferenceValues, ApplyResolvedReferences, DescribeUnresolvedReference, LoadReferenceLookups } from './ReferenceResolver.js';
+export type { ReferenceField, ReferenceLookups, UnresolvedReference, ReferenceResolution } from './ReferenceResolver.js';
 export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
 export type { HasExternalID, BatchIdentityResult } from './BatchIdentity.js';
