@@ -73,6 +73,8 @@ const stubEngine = (
   GetSharedByInfo: () => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
+  GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
   GetConversation: (id: string) => conversations.find(c => c.ID === id),
   ...overrides
 });
@@ -338,9 +340,10 @@ describe('ConversationListComponent (DOM) — bulk move and pin', () => {
   });
 
   it('moves selected conversations out of their folders when "No folder" is chosen', async () => {
-    const { f, engine } = renderSelected(['U1']);
+    const { f, engine } = renderSelected(['A1', 'U1']);
     await f.componentInstance.BulkMoveToFolder(null);
-    expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1'], null, currentUser);
+    // U1 is in no folder already, so only A1 moves.
+    expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['A1'], null, currentUser);
   });
 
   it('keeps the selection after a move so a second bulk action can follow', async () => {

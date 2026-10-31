@@ -1,8 +1,17 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJProjectEntity, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import {
+  MJConversationEntity,
+  MJProjectEntity,
+  ConversationEngine,
+  UserInfoEngine,
+  ResourcePermissionEngine,
+  PROJECTS_RESOURCE_TYPE_ID,
+  IsInheritingFolderAccess
+} from '@memberjunction/core-entities';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
+import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ProjectFormModalComponent } from '../project/project-form-modal.component';
@@ -90,8 +99,8 @@ interface ListContextMenu {
               </button>
               <button class="selection-bar-btn"
                       (click)="BarOpenMoveMenu($event)"
-                      [disabled]="!CanChangeAny(SelectedIds)"
-                      [title]="CanChangeAny(SelectedIds) ? 'Move to folder' : ChangeRefusedReason"
+                      [disabled]="!CanMoveAny(SelectedIds)"
+                      [title]="CanMoveAny(SelectedIds) ? 'Move to folder' : MoveRefusedReason"
                       aria-label="Move to folder">
                 <i class="fas fa-folder-tree"></i>
               </button>
@@ -319,9 +328,15 @@ interface ListContextMenu {
                role, an aria-label is not reliably exposed, and the <i> carrying the glyph
                is aria-hidden. -->
           <span class="folder-shared" role="img"
-                title="Shared — everyone can see this folder and its name, but not the conversations in it"
-                aria-label="Shared folder">
+                title="Public — everyone can see this folder and view the conversations in it"
+                aria-label="Public folder">
             <i class="fas fa-users" aria-hidden="true"></i>
+          </span>
+        } @else if (GetProjectVisibilityTier(node.project) === 'Shared') {
+          <span class="folder-shared" role="img"
+                title="Shared — people and roles granted access can see this folder and its conversations"
+                aria-label="Shared folder">
+            <i class="fas fa-user-group" aria-hidden="true"></i>
           </span>
         }
         <span class="folder-spacer"></span>
@@ -352,7 +367,7 @@ interface ListContextMenu {
            [class.renamed]="IsConversationRenamed(conversation)"
            [class.dragging]="IsConversationDragging(conversation)"
            [style.paddingLeft.px]="depth ? 16 + depth * 14 : 16"
-           [draggable]="CanChange(conversation)"
+           [draggable]="CanMove(conversation)"
            (dragstart)="OnConversationDragStart(conversation, $event)"
            (dragend)="OnConversationDragEnd()"
            (dragover)="OnConversationRowDragOver(conversation, $event)"
@@ -390,6 +405,10 @@ interface ListContextMenu {
               <i class="fas fa-share-nodes shared-indicator"
                  [title]="SharedWithMeTooltip(conversation)"></i>
             }
+            @if (conversation.ProjectID && !IsConversationInheritingFolderAccess(conversation)) {
+              <i class="fas fa-lock shared-indicator restricted-indicator"
+                 title="Not shown to folder members: does not inherit folder access"></i>
+            }
           </div>
           <div class="conversation-preview">{{ conversation.Description }}</div>
         </div>
@@ -406,7 +425,7 @@ interface ListContextMenu {
       [Contexts]="ShareContexts"
       [Adapter]="ShareAdapter"
       [Notice]="ShareNotice"
-      ResourceLabel="conversation"
+      [ResourceLabel]="ShareResourceLabel"
       (Result)="OnShareDialogResult($event)">
     </mj-resource-share-dialog>
 
@@ -471,8 +490,8 @@ interface ListContextMenu {
                 </button>
               }
               <button class="menu-item" (click)="OpenMoveSubmenu($event)"
-                      [disabled]="!CanChangeAny(ContextMenu.targets)"
-                      [attr.title]="CanChangeAny(ContextMenu.targets) ? null : ChangeRefusedReason">
+                      [disabled]="!CanMoveAny(ContextMenu.targets)"
+                      [attr.title]="CanMoveAny(ContextMenu.targets) ? null : MoveRefusedReason">
                 <i class="fas fa-folder-tree"></i>
                 <span>Move to folder</span>
                 <i class="fas fa-chevron-right submenu-arrow"></i>
@@ -484,6 +503,15 @@ interface ListContextMenu {
                 <i class="fas fa-user-plus"></i>
                 <span>{{ ContextMenu.targets.length > 1 ? 'Share ' + ContextMenu.targets.length + ' conversations' : 'Share' }}</span>
               </button>
+              @if (ContextMenu.targets.length === 1 && ContextMenu.conversation?.ProjectID) {
+                <button class="menu-item"
+                        (click)="ContextToggleFolderInheritance()"
+                        [disabled]="!CanMoveAny(ContextMenu.targets)"
+                        [attr.title]="CanMoveAny(ContextMenu.targets) ? null : MoveRefusedReason">
+                  <i class="fas" [ngClass]="IsConversationInheritingFolderAccess(ContextMenu.conversation) ? 'fa-lock' : 'fa-folder-open'"></i>
+                  <span>{{ IsConversationInheritingFolderAccess(ContextMenu.conversation) ? 'Restrict folder access' : 'Inherit folder access' }}</span>
+                </button>
+              }
               @if (ContextMenu.targets.length === 1) {
                 <button class="menu-item" (click)="ContextRename()">
                   <i class="fas fa-edit"></i>
@@ -501,6 +529,13 @@ interface ListContextMenu {
             <button class="menu-item" (click)="ContextCreateSubfolder($event)">
               <i class="fas fa-folder-plus"></i>
               <span>New Subfolder</span>
+            </button>
+            <button class="menu-item"
+                    (click)="ContextShareFolder($event)"
+                    [disabled]="!CanShareFolder(ContextMenu.folder)"
+                    [attr.title]="CanShareFolder(ContextMenu.folder) ? null : FolderShareRefusedReason">
+              <i class="fas fa-user-plus"></i>
+              <span>Share</span>
             </button>
             <button class="menu-item" (click)="ContextEditFolder($event)">
               <i class="fas fa-pen"></i>
@@ -1362,11 +1397,15 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** True while the open conversation menu is showing its folder picker. */
   public IsMoveSubmenuOpen: boolean = false;
 
-  /** Resources the share dialog is currently offering, one per conversation. */
+  /** Resources the share dialog is currently offering, one per conversation or folder. */
   public ShareContexts: ResourceShareContext[] = [];
   public ShareNotice: string | null = null;
   public IsShareDialogOpen: boolean = false;
-  public ShareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
+  private conversationShareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
+  private folderShareAdapter = new MJResourcePermissionShareAdapter(PROJECTS_RESOURCE_TYPE_ID);
+  public ShareAdapter = this.conversationShareAdapter;
+  public ShareResourceLabel: string = 'conversation';
+  private isSharingFolder: boolean = false;
   public ConversationIdsWithTasks = new Set<string>();
   public IsSelectionMode: boolean = false;
   public SelectedConversationIds = new Set<string>();
@@ -1377,8 +1416,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** Why Share is unavailable, shown on its disabled button. */
   public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
 
+  /** Why Folder Share is unavailable, shown on its disabled button. */
+  public readonly FolderShareRefusedReason = 'Only the folder owner, or someone with Owner access, can share a folder';
+
   /** Why Move and Pin are unavailable, shown on their disabled buttons. */
-  public readonly ChangeRefusedReason = 'You need Edit access to move or pin a conversation shared with you';
+  public readonly ChangeRefusedReason = 'You need Edit access to pin a conversation shared with you';
+
+  /** Why moving a conversation, or changing its folder access, is refused. */
+  public readonly MoveRefusedReason = "Only the conversation's owner can move it or change its folder access";
 
   /** How long a touch must rest on a row before it selects the row. */
   private static readonly longPressDelayMs = 500;
@@ -2013,8 +2058,20 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   private async moveConversations(conversationIds: string[], projectId: string | null): Promise<void> {
     // Dropping onto a folder's own contents is easy to do by accident — skip the
     // conversations that already live there rather than re-saving them.
-    const toMove = conversationIds.filter(id => !this.isInProject(id, projectId));
-    if (toMove.length === 0) return;
+    const notThere = conversationIds.filter(id => !this.isInProject(id, projectId));
+    // Only an owner can move a conversation; the server refuses anyone else.
+    const toMove = notThere.filter(id => {
+      const conversation = this.engine.GetConversation(id);
+      return !!conversation && this.CanMove(conversation);
+    });
+    if (toMove.length === 0) {
+      if (notThere.length > 0) {
+        await this.dialogService.alert('Cannot Move', `${this.MoveRefusedReason}.`);
+      }
+      return;
+    }
+    // A Shared or Public folder shows the conversations in it to everyone it is shared with.
+    if (!(await ConfirmMoveIntoFolder(this.dialogService, this.engine, projectId, toMove.length))) return;
 
     try {
       const result = await this.engine.MoveMultipleConversationsToProject(toMove, projectId, this.CurrentUser);
@@ -2234,6 +2291,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
 
     const skipped = conversations.length - shareable.length;
+    this.isSharingFolder = false;
+    this.ShareAdapter = this.conversationShareAdapter;
+    this.ShareResourceLabel = 'conversation';
     this.ShareContexts = shareable.map(c => ({
       ResourceID: c.ID,
       ResourceName: c.Name ?? 'Conversation',
@@ -2257,6 +2317,66 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return this.engine.CanShareConversation(conversation, this.CurrentUser.ID);
   }
 
+  /** True when the current user owns the folder or holds Owner permission on it. */
+  public CanShareFolder(folder: MJProjectEntity | null | undefined): boolean {
+    if (!folder || !this.CurrentUser) return false;
+    if (!folder.OwnerUserID) return true;
+    if (UUIDsEqual(folder.OwnerUserID, this.CurrentUser.ID)) return true;
+    return this.engine.GetEffectiveProjectPermission?.(folder.ID, this.CurrentUser)?.Level === 'Owner';
+  }
+
+  /** Opens the resource share dialog for the right-clicked folder. */
+  public ContextShareFolder(event?: Event): void {
+    if (event) event.stopPropagation();
+    const folder = this.ContextMenu?.folder;
+    this.CloseContextMenu();
+    if (!folder) return;
+    if (!this.CanShareFolder(folder)) {
+      void this.dialogService.alert('Cannot Share', `${this.FolderShareRefusedReason}.`);
+      return;
+    }
+
+    this.isSharingFolder = true;
+    this.ShareAdapter = this.folderShareAdapter;
+    this.ShareResourceLabel = 'folder';
+    this.ShareContexts = [{
+      ResourceID: folder.ID,
+      ResourceName: folder.Name ?? 'Folder',
+      OwnerUserID: folder.OwnerUserID ?? this.CurrentUser?.ID ?? null,
+      OwnerDisplayName: folder.OwnerUser ?? 'You',
+      CurrentUserID: this.CurrentUser?.ID ?? null
+    }];
+    this.ShareNotice = null;
+    this.IsShareDialogOpen = true;
+  }
+
+  /** True when the conversation inherits permissions from its parent folder. */
+  public IsConversationInheritingFolderAccess(conversation: MJConversationEntity | null | undefined): boolean {
+    if (!conversation) return true;
+    return IsInheritingFolderAccess(conversation);
+  }
+
+  /** Narrows or restores folder permission inheritance for the right-clicked conversation. */
+  public async ContextToggleFolderInheritance(): Promise<void> {
+    const conversation = this.ContextMenu?.conversation;
+    this.CloseContextMenu();
+    if (!conversation || !conversation.ProjectID) return;
+    if (!this.CanMove(conversation)) {
+      await this.dialogService.alert('Cannot Change Access', `${this.MoveRefusedReason}.`);
+      return;
+    }
+
+    const nextInherit = !IsInheritingFolderAccess(conversation);
+    try {
+      await this.engine.SetConversationFolderInheritance?.(conversation.ID, nextInherit, this.CurrentUser);
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error updating folder access inheritance:', error);
+      await this.dialogService.alert('Error', 'Failed to update folder access inheritance. Please try again.');
+    }
+  }
+
   /** True when at least one of the conversations can be moved or pinned by the current user. */
   public CanChangeAny(ids: string[]): boolean {
     return ids.some(id => {
@@ -2265,16 +2385,48 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** True when the user may move or pin the conversation: they own it, or hold Edit or Owner access. */
+  /** True when at least one of the conversations can be moved by the current user (its owner). */
+  public CanMoveAny(ids: string[]): boolean {
+    return ids.some(id => {
+      const conversation = this.engine.GetConversation(id);
+      return !!conversation && this.CanMove(conversation);
+    });
+  }
+
+  /** True when the user may move the conversation or change its folder access: only its owner. */
+  public CanMove(conversation: MJConversationEntity): boolean {
+    if (!this.CurrentUser) return false;
+    return this.engine.CanMoveConversation(conversation, this.CurrentUser.ID);
+  }
+
+  /** True when the user may pin the conversation: they own it, or hold Edit or Owner access. */
   public CanChange(conversation: MJConversationEntity): boolean {
     if (!this.CurrentUser) return false;
     return this.engine.CanEditConversation(conversation, this.CurrentUser.ID);
   }
 
-  public OnShareDialogResult(_result: ResourceShareDialogResult): void {
+  public OnShareDialogResult(result: ResourceShareDialogResult): void {
+    const sharedFolder = this.isSharingFolder;
+    this.isSharingFolder = false;
     this.IsShareDialogOpen = false;
     this.ShareContexts = [];
     this.ShareNotice = null;
+    this.ShareAdapter = this.conversationShareAdapter;
+    this.ShareResourceLabel = 'conversation';
+    if (sharedFolder && result?.Action === 'save') {
+      void this.refreshAfterFolderShareSave();
+    }
+    this.cdr.detectChanges();
+  }
+
+  private async refreshAfterFolderShareSave(): Promise<void> {
+    try {
+      await ResourcePermissionEngine.Instance.Config(true, this.CurrentUser);
+      await this.engine.LoadConversations?.(this.EnvironmentId, this.CurrentUser, true);
+    } catch {
+      // Best-effort refresh in test or offline environments
+    }
+    this.rebuildGroups();
     this.cdr.detectChanges();
   }
 
@@ -2690,14 +2842,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   async BulkMoveToFolder(projectId: string | null, ids: string[] = this.actionTargetIds()): Promise<void> {
     this.CloseContextMenu();
     if (ids.length === 0) return;
-
-    try {
-      const result = await this.engine.MoveMultipleConversationsToProject(ids, projectId, this.CurrentUser);
-      await this.reportBulkOutcome(result, 'moved');
-    } catch (error) {
-      console.error('Error moving conversations:', error);
-      await this.dialogService.alert('Error', 'Failed to move the selected conversations. Please try again.');
-    }
+    // One move path for menus, drag and drop and the bar: owner-only, and it asks before sharing.
+    await this.moveConversations(ids, projectId);
     this.cdr.detectChanges();
   }
 
@@ -3429,5 +3575,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** @deprecated Use {@link HandleConversationClick}. */
   public handleConversationClick(conversation: MJConversationEntity, event?: MouseEvent): void {
     return this.HandleConversationClick(conversation, event);
+  }
+
+  public GetProjectVisibilityTier(project: MJProjectEntity): 'Private' | 'Shared' | 'Public' {
+    return this.engine.GetProjectVisibilityTier?.(project) ?? (project.OwnerUserID ? 'Private' : 'Public');
   }
 }

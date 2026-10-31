@@ -66,6 +66,8 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   GetSharedByInfo: (_id: string): SharedByInfo | null => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
+  GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -546,11 +548,47 @@ describe('ConversationListComponent (DOM) — who can move and pin', () => {
     expect(findItem(f, 'Move to folder').disabled).toBe(true);
   });
 
-  it('offers Pin and Move for a conversation shared with you at Edit level', () => {
+  it('offers Pin but not Move for a conversation shared with you at Edit level: only its owner moves it', () => {
     const { f } = renderWithGrant('Edit');
     rightClickOn(f, rowFor(f, 'Loose Two'));
     expect(findItem(f, 'Pin').disabled).toBe(false);
-    expect(findItem(f, 'Move to folder').disabled).toBe(false);
+    expect(findItem(f, 'Move to folder').disabled).toBe(true);
+  });
+
+  it('moves only the conversations you own from a mixed selection', async () => {
+    const { f, engine } = renderWithGrant('Edit', (c) => selectRows(c, ['U1', 'U2']));
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
+    f.detectChanges();
+    findItem(f, 'Work').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1'], 'proj1', currentUser);
+  });
+
+  it('asks before moving into a shared folder, and moves nothing when you cancel', async () => {
+    const { f, engine } = render(undefined, { GetProjectVisibilityTier: () => 'Shared' });
+    const confirm = f.debugElement.injector.get(DialogService).confirm as unknown as ReturnType<typeof vi.fn>;
+    confirm.mockResolvedValueOnce(false);
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
+    f.detectChanges();
+    findItem(f, 'Work').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(String(confirm.mock.calls[0][0].message)).toContain('People with access to "Work" will see this conversation');
+    expect(engine['MoveMultipleConversationsToProject']).not.toHaveBeenCalled();
+  });
+
+  it('moves into a private folder without asking', async () => {
+    const { f, engine } = render();
+    const confirm = f.debugElement.injector.get(DialogService).confirm as unknown as ReturnType<typeof vi.fn>;
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
+    f.detectChanges();
+    findItem(f, 'Work').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1'], 'proj1', currentUser);
   });
 
   it('offers Pin and Move for a selection when any row in it can be changed', () => {
@@ -583,3 +621,72 @@ describe('ConversationListComponent (DOM) — who can move and pin', () => {
     expect(message).toContain('View access only');
   });
 });
+
+describe('ConversationListComponent (DOM) — folder sharing and conversation folder access inheritance', () => {
+  beforeEach(() => {
+    vi.spyOn(ConversationListComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+  });
+
+  it('opens the share dialog for a folder when Share is clicked on a folder row', () => {
+    const { f } = render();
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    const shareBtn = findItem(f, 'Share');
+    expect(shareBtn).toBeTruthy();
+    shareBtn.click();
+    f.detectChanges();
+    expect(f.componentInstance.IsShareDialogOpen).toBe(true);
+    expect(f.componentInstance.ShareResourceLabel).toBe('folder');
+    expect(f.componentInstance.ShareContexts.map(c => c.ResourceID)).toEqual(['proj1']);
+  });
+
+  it('disables Share on a folder owned by someone else without Owner permission', () => {
+    const { f } = render((c) => {
+      const engine = (c as unknown as { engine: { Projects: MJProjectEntity[] } }).engine;
+      engine.Projects = [
+        { ID: 'proj1', Name: 'Work', ParentID: null, Icon: null, Color: null, OwnerUserID: 'someone-else' } as unknown as MJProjectEntity
+      ];
+      (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
+    }, {
+      GetEffectiveProjectPermission: () => ({ Level: 'View', SharedByUserID: 'someone-else', SharedByUser: 'Someone' })
+    });
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    expect(findItem(f, 'Share').disabled).toBe(true);
+  });
+
+  it('offers Restrict folder access for a conversation inside a folder and calls SetConversationFolderInheritance(false)', async () => {
+    const setInheritSpy = vi.fn().mockResolvedValue(true);
+    const { f } = render(undefined, {
+      SetConversationFolderInheritance: setInheritSpy
+    });
+    rightClickOn(f, rowFor(f, 'Work One'));
+    const restrictBtn = findItem(f, 'Restrict folder access');
+    expect(restrictBtn).toBeTruthy();
+    restrictBtn.click();
+    await Promise.resolve();
+    expect(setInheritSpy).toHaveBeenCalledWith('A1', false, currentUser);
+  });
+
+  it('offers Inherit folder access and renders a lock badge when inheritFolderAccess is false', async () => {
+    const setInheritSpy = vi.fn().mockResolvedValue(true);
+    const { f } = render((c) => {
+      const engine = (c as unknown as { engine: { Conversations: MJConversationEntity[] } }).engine;
+      engine.Conversations = [
+        conv('A1', 'Work One', { ProjectID: 'proj1', AdditionalData: JSON.stringify({ inheritFolderAccess: false }) }),
+        conv('U1', 'Loose One')
+      ];
+      (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
+    }, {
+      SetConversationFolderInheritance: setInheritSpy
+    });
+    f.detectChanges();
+    expect(query(f, '.restricted-indicator')).not.toBeNull();
+
+    rightClickOn(f, rowFor(f, 'Work One'));
+    const inheritBtn = findItem(f, 'Inherit folder access');
+    expect(inheritBtn).toBeTruthy();
+    inheritBtn.click();
+    await Promise.resolve();
+    expect(setInheritSpy).toHaveBeenCalledWith('A1', true, currentUser);
+  });
+});
+
