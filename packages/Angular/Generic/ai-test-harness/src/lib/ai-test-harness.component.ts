@@ -3586,8 +3586,18 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         // Italic
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="markdown-link">$1</a>');
+        // Links — this HTML is marked trusted below, so Angular will NOT strip dangerous hrefs.
+        // Only http(s)/mailto (or scheme-less relative) URLs become anchors; javascript:, data:
+        // and every other scheme renders as plain text to block link-based script injection
+        // from model output.
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
+            const trimmedUrl = url.trim();
+            const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmedUrl);
+            const isSafeScheme = /^(https?:|mailto:)/i.test(trimmedUrl);
+            return !hasScheme || isSafeScheme
+                ? `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer" class="markdown-link">${text}</a>`
+                : text;
+        });
         
         // Unordered lists
         html = html.replace(/^[*-+] (.+)$/gm, '<li>$1</li>');
