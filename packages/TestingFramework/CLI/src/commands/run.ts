@@ -257,7 +257,7 @@ export class RunCommand {
      * Validate that a test is ready to execute without actually running it.
      * Catches misconfigured oracles, malformed JSON, and missing drivers.
      */
-    private dryRunValidation(test: { Name: string; ID: string; Type: string; Status: string; TypeID: string; Configuration?: string | null; InputDefinition?: string | null; ExpectedOutcomes?: string | null }, engine: TestEngine): { errors: string[]; warnings: string[]; info: string[] } {
+    private dryRunValidation(test: { Name: string; ID: string; Type: string | null; Status: string; TypeID: string; Configuration?: string | null; InputDefinition?: string | null; ExpectedOutcomes?: string | null }, engine: TestEngine): { errors: string[]; warnings: string[]; info: string[] } {
         const errors: string[] = [];
         const warnings: string[] = [];
         const info: string[] = [];

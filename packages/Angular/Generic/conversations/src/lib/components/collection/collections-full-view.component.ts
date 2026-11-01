@@ -3177,7 +3177,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         description: item.artifact.Description || undefined,
         icon: this.GetArtifactIcon(item.artifact),
         versionNumber: item.version.VersionNumber,
-        artifactType: item.artifact.Type,
+        artifactType: item.artifact.Type ?? undefined,
         lastModified: item.version.__mj_UpdatedAt,
         selected: this.SelectedItems.has(item.version.ID),
         artifact: item.artifact,

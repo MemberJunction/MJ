@@ -784,7 +784,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         binding: MJDomainAuthBinding
     ): Promise<DomainAuthBinding> {
         const credential = binding.Credential!;
-        const credTypeName = credential.CredentialType;
+        const credTypeName = credential.CredentialType ?? '';
         const values = this.parseCredentialValues(credential);
         const method = this.mapCredentialToAuthMethod(credTypeName, values);
 

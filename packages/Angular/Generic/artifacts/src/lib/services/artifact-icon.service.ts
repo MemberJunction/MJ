@@ -61,7 +61,7 @@ export class ArtifactIconService {
         try {
             // MJConversationArtifactEntity has ArtifactType field, MJArtifactEntity has Type field
             const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
-            const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName);
+            const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName ?? '');
             if (artifactType?.Icon) {
                 return this.NormalizeMetadataIcon(artifactType.Icon);
             }

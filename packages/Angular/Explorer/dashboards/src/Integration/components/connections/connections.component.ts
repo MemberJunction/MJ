@@ -959,7 +959,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     const term = this.DetailSearchTerm.toLowerCase();
     return this.DetailEntityMaps.filter(m =>
       (m.ExternalObjectLabel ?? m.ExternalObjectName).toLowerCase().includes(term) ||
-      m.Entity.toLowerCase().includes(term)
+      (m.Entity ?? '').toLowerCase().includes(term)
     );
   }
 

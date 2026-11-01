@@ -972,7 +972,7 @@ export class ExecutionNodeComponent {
     
     GetActionName(): string | undefined {
         if (this.Step.StepType === 'Actions' && this.Step.ActionExecutionLog) {
-            return this.Step.ActionExecutionLog.Action;
+            return this.Step.ActionExecutionLog.Action ?? undefined;
         }
         return this.parseMetadata('actionName');
     }

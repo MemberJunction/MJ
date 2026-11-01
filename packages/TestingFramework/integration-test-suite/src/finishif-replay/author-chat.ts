@@ -40,7 +40,7 @@ export type AuthorDriverFactory = (candidate: AuthorCandidate) => AuthorDriver |
 export function SelectAuthorCandidates(vendors: readonly AuthorVendorRow[], hasKey: (driverClass: string) => boolean): AuthorCandidate[] {
     return vendors
         .filter(v => v.Status === 'Active' && !!v.DriverClass && !!v.APIName && hasKey(v.DriverClass))
-        .map(v => ({ DriverClass: v.DriverClass ?? '', APIName: v.APIName ?? '', Vendor: v.Vendor, Priority: v.Priority }))
+        .map(v => ({ DriverClass: v.DriverClass ?? '', APIName: v.APIName ?? '', Vendor: v.Vendor ?? v.DriverClass ?? '', Priority: v.Priority }))
         .sort((a, b) => b.Priority - a.Priority);
 }
 
