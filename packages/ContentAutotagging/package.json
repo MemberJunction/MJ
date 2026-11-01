@@ -45,7 +45,7 @@
     "dotenv": "^17.2.4",
     "officeparser": "^6.0.4",
     "openai": "^6.18.0",
-    "pdf-parse": "^1.1.1",
+    "pdf-parse": "^1.1.4",
     "rss-parser": "^3.13.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",

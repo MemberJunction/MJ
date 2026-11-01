@@ -38,6 +38,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
+import { TagToNpmVersion } from './DependencyPhase.js';
 import { ClassifyTurboFailures } from '../util/turboOutput.js';
 
 /**
@@ -301,7 +302,7 @@ export class CodeGenPhase {
     // Fall back to the package manager's remote-exec with version pinning
     // (distribution layout): `npx <spec>` / `pnpm dlx <spec>`.
     const cliPackage = versionTag
-      ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
+      ? `@memberjunction/cli@${TagToNpmVersion(versionTag)}`
       : '@memberjunction/cli';
 
     const dlx = pm.Dlx(cliPackage, cliArgs);

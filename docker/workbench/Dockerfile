@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     gnupg2 \
     apt-transport-https \
     xvfb \
+    python3-venv \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
