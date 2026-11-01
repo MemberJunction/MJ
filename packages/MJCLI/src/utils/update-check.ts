@@ -21,6 +21,17 @@ export type LatestVersionLookup = (
   subpath?: string
 ) => Promise<string | null | undefined>;
 
+/**
+ * Explains why no version was found for an app. Production passes the engine's
+ * `DescribeUnresolvedVersion`, which tells "no versions published" apart from "this repository is
+ * private and the credential cannot see it" — GitHub answers 404 for both, and the version listings
+ * turn that 404 into an empty result.
+ */
+export type UnresolvedReasonLookup = (
+  repositoryUrl: string,
+  subpath?: string
+) => Promise<string>;
+
 export type AvailableUpdate = { Name: string; Current: string; Latest: string };
 export type UpdateCheckFailure = { Name: string; Message: string };
 export type UnresolvedApp = { Name: string; Current: string; Reason: string };
@@ -61,7 +72,8 @@ export type UpdateCheckReport = {
  */
 export async function CheckAppsForUpdates(
   apps: readonly UpdateCheckApp[],
-  lookupLatestVersion: LatestVersionLookup
+  lookupLatestVersion: LatestVersionLookup,
+  describeUnresolved?: UnresolvedReasonLookup
 ): Promise<UpdateCheckReport> {
   const updates: AvailableUpdate[] = [];
   const failures: UpdateCheckFailure[] = [];
@@ -75,9 +87,11 @@ export async function CheckAppsForUpdates(
         unresolved.push({
           Name: app.Name,
           Current: app.Version,
-          Reason: subpath
-            ? `no '${subpath}@<version>' tags found in ${app.RepositoryURL}`
-            : `no version tags or releases found in ${app.RepositoryURL}`,
+          Reason: describeUnresolved
+            ? await describeUnresolved(app.RepositoryURL, subpath)
+            : subpath
+              ? `no '${subpath}@<version>' tags found in ${app.RepositoryURL}`
+              : `no version tags or releases found in ${app.RepositoryURL}`,
         });
       } else if (latest !== app.Version) {
         updates.push({ Name: app.Name, Current: app.Version, Latest: latest });

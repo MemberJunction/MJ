@@ -300,3 +300,35 @@ describe('FormatUpdateCheckReport — the reassuring line is a positive claim', 
             .toBe('connector-orcid (installed 1.1.2): no scoped tags found');
     });
 });
+
+describe('CheckAppsForUpdates — the unresolved reason comes from the describer when given (#4520)', () => {
+    it('asks the describer why no version was found, with the app\'s repository and subpath', async () => {
+        const describe = vi.fn(async () => 'Cannot read acme/apps. The repository is private or does not exist.');
+        const report = await CheckAppsForUpdates(
+            [app({ Subpath: 'CRM/HubSpot' })],
+            async () => null,
+            describe
+        );
+
+        expect(describe).toHaveBeenCalledWith('https://github.com/acme/apps', 'CRM/HubSpot');
+        expect(report.Unresolved[0].Reason).toBe('Cannot read acme/apps. The repository is private or does not exist.');
+    });
+
+    it('does not call the describer for an app that resolved', async () => {
+        const describe = vi.fn(async () => 'unused');
+        await CheckAppsForUpdates([app()], async () => '1.0.0', describe);
+
+        expect(describe).not.toHaveBeenCalled();
+    });
+
+    it('records a describer failure as a Failure, not as up to date', async () => {
+        const report = await CheckAppsForUpdates(
+            [app()],
+            async () => null,
+            async () => { throw new Error('rate limited'); }
+        );
+
+        expect(report.Unresolved).toEqual([]);
+        expect(report.Failures).toEqual([{ Name: 'App One', Message: 'rate limited' }]);
+    });
+});

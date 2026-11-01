@@ -9,6 +9,7 @@ import { VerifyDatabaseConnection } from '../../lib/db-preflight';
 import { ReadCurrentDbVersion } from '../../lib/db-version';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
 import { ClearSharedCacheAfterWrite, MigrationChangedDatabase, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache';
+import { FindAppManifestSchema } from '../../lib/app-manifest-schema';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
@@ -28,7 +29,10 @@ export default class Migrate extends Command {
   static flags = {
     verbose: Flags.boolean({ char: 'v', description: 'Enable additional logging' }),
     tag: Flags.string({ char: 't', description: 'Version tag to use for running remote migrations' }),
-    schema: Flags.string({ char: 's', description: 'Target schema (overrides coreSchema from config)' }),
+    schema: Flags.string({
+      char: 's',
+      description: 'Target schema (overrides coreSchema from config). When omitted for local migrations, the schema declared by an mj-app.json in --dir (or its parents) or the current directory is used',
+    }),
     dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
     'check-connection': Flags.boolean({
       description: 'Verify the database connection (including TLS) and exit without migrating',
@@ -58,16 +62,38 @@ export default class Migrate extends Command {
     // override (without --tag) keeps using the local filesystem and skips fetching, so
     // monorepo developers are unaffected.
     const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
-    const fetched = ref ? await this.fetchSliceForRef(config, ref, flags.schema) : null;
+    // A remote ref fetches core MJ migrations from mjRepoUrl, so only a local run takes its schema
+    // from an Open App manifest.
+    const schema = flags.schema ?? (ref ? undefined : this.schemaFromAppManifest(flags.dir));
+    const fetched = ref ? await this.fetchSliceForRef(config, ref, schema) : null;
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
-      const skywayConfig = await GetSkywayConfig(config, undefined, flags.schema, sourceDir);
+      const skywayConfig = await GetSkywayConfig(config, undefined, schema, sourceDir);
       this.logFetchSummary(flags.verbose, fetched);
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
       if (fetched) await fetched.Cleanup();
     }
+  }
+
+  /**
+   * The schema an Open App's `mj-app.json` declares, used when `--schema` is omitted (#4771).
+   * Without it, migrating an app's migrations validates them against the core schema's history,
+   * where none of them appear, and reports every one as unapplied.
+   */
+  private schemaFromAppManifest(dir: string | undefined): string | undefined {
+    let found: ReturnType<typeof FindAppManifestSchema>;
+    try {
+      found = FindAppManifestSchema(dir, process.cwd());
+    } catch (error: unknown) {
+      this.error(error instanceof Error ? error.message : String(error));
+    }
+    if (!found?.SchemaName) {
+      return undefined;
+    }
+    this.log(`Using schema ${found.SchemaName} from ${found.ManifestPath} (pass --schema to override).`);
+    return found.SchemaName;
   }
 
   /**
