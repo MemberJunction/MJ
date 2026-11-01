@@ -28,6 +28,7 @@ import type { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentMemoryGuardsFixture } from '@memberjunction/testing-integration';
+import { RequireRows } from './agent-live-shared';
 
 const SETTLE_MS = Number(process.env.AGENT_SETTLE_MS ?? 5000);
 
@@ -100,29 +101,91 @@ interface DispositionRow {
   finalScope?: string;
   reason?: string;
 }
-/** The OutputData dispositions of every 'Memory Write' step of a run (one per attempted write). */
-async function memoryWriteDispositions(ctx: IntegrationCheckContext, runId: string): Promise<DispositionRow[]> {
-  const r = await new RunView().RunView<{ StepType: string; StepName: string; OutputData: string | null }>(
+
+/** One attempted memory write: the type the model requested (step InputData) and its outcome (OutputData). */
+export interface MemoryWriteAttempt extends DispositionRow {
+  /** The `type` the model emitted for this write; undefined when it emitted none. */
+  type?: string;
+}
+
+/** A 'Memory Write' step row as read from MJ: AI Agent Run Steps. */
+export interface MemoryWriteStepRow {
+  ID: string;
+  InputData: string | null;
+  OutputData: string | null;
+}
+
+/**
+ * Parse one 'Memory Write' step. The requested type comes from InputData, which base-agent always
+ * writes for this step ({ note, type, scopeHint }); a missing or unreadable InputData is a harness
+ * or product fault, not model variance, so it throws naming the step.
+ */
+export function ParseMemoryWriteStep(row: MemoryWriteStepRow): MemoryWriteAttempt {
+  if (!row.InputData) {
+    throw new Error(`Memory Write step ${row.ID} has no InputData, so the requested memory type cannot be read`);
+  }
+  let input: { type?: unknown };
+  try {
+    input = JSON.parse(row.InputData) as { type?: unknown };
+  } catch (e) {
+    throw new Error(`Memory Write step ${row.ID} has unreadable InputData: ${(e as Error).message}`);
+  }
+  let output: DispositionRow = {};
+  try {
+    output = JSON.parse(row.OutputData ?? '{}') as DispositionRow;
+  } catch {
+    output = {};
+  }
+  return { ...output, type: typeof input.type === 'string' ? input.type : undefined };
+}
+
+/** How many writes of one memory type the instructed run must contain. */
+export interface MemoryWriteTypeRule {
+  Type: string;
+  /** Exactly this many writes of the type. */
+  Exactly?: number;
+  /** At least this many writes of the type. */
+  AtLeast?: number;
+}
+
+/**
+ * Phase-P predicate: did the model emit the instructed memory types? Returns a non-compliance
+ * message naming every rule that failed and the types actually emitted, or undefined when every
+ * rule holds. Types compare exactly: the in-flight type guard is case-sensitive.
+ */
+export function MemoryWriteTypeMismatch(types: ReadonlyArray<string | undefined>, rules: readonly MemoryWriteTypeRule[]): string | undefined {
+  const misses: string[] = [];
+  for (const rule of rules) {
+    const got = types.filter((t) => t === rule.Type).length;
+    if (rule.Exactly !== undefined && got !== rule.Exactly) {
+      misses.push(`exactly ${rule.Exactly} '${rule.Type}' (got ${got})`);
+    }
+    if (rule.AtLeast !== undefined && got < rule.AtLeast) {
+      misses.push(`at least ${rule.AtLeast} '${rule.Type}' (got ${got})`);
+    }
+  }
+  if (misses.length === 0) {
+    return undefined;
+  }
+  return `IT: Memory Writer did not emit the instructed types: expected ${misses.join(', ')}; emitted ${JSON.stringify(types.map((t) => t ?? '(none)'))}`;
+}
+
+/** Every 'Memory Write' step of a run (one per attempted write), with its requested type and disposition. */
+async function memoryWriteAttempts(ctx: IntegrationCheckContext, runId: string): Promise<MemoryWriteAttempt[]> {
+  const r = await new RunView().RunView<MemoryWriteStepRow & { StepType: string; StepName: string }>(
     {
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${runId}'`,
       OrderBy: 'StepNumber',
-      Fields: ['StepType', 'StepName', 'OutputData'],
+      Fields: ['ID', 'StepType', 'StepName', 'InputData', 'OutputData'],
       ResultType: 'simple',
       BypassCache: true,
     },
     ctx.User,
   );
-  if (!r.Success) {
-    return [];
-  }
-  return r.Results.filter((s) => s.StepType === 'Tool' && s.StepName === 'Memory Write').map((s) => {
-    try {
-      return JSON.parse(s.OutputData ?? '{}') as DispositionRow;
-    } catch {
-      return {};
-    }
-  });
+  return RequireRows(r, `Memory Write step read for run ${runId}`)
+    .filter((s) => s.StepType === 'Tool' && s.StepName === 'Memory Write')
+    .map(ParseMemoryWriteStep);
 }
 
 interface NoteRow {
@@ -147,8 +210,17 @@ async function notesByMarker(ctx: IntegrationCheckContext, marker: string): Prom
     },
     ctx.User,
   );
-  return r.Success ? r.Results : [];
+  return RequireRows(r, `AI Agent Notes read for marker ${marker}`);
 }
+
+/** MG1 phase P: the disallowed Constraint write exactly once, and the allowed Preference write. */
+export const MG1_TYPE_RULES: readonly MemoryWriteTypeRule[] = [
+  { Type: 'Constraint', Exactly: 1 },
+  { Type: 'Preference', AtLeast: 1 },
+];
+
+/** MG2 phase P: enough Preference writes to exceed the per-run cap of 5 even after a near-dup collapse. */
+export const MG2_TYPE_RULES: readonly MemoryWriteTypeRule[] = [{ Type: 'Preference', AtLeast: 7 }];
 
 export const AgentMemoryGuardsChecks: NamedCheck[] = [
   {
@@ -165,8 +237,9 @@ export const AgentMemoryGuardsChecks: NamedCheck[] = [
           { type: 'Constraint', content: `${tag} disallowed constraint memory` },
           { type: 'Preference', content: `${tag} allowed preference memory` },
         ]);
-        const dispositions = await memoryWriteDispositions(ctx, run.ID);
-        assertP(dispositions.length >= 2, `IT: Memory Writer emitted ${dispositions.length} writes, expected 2`);
+        const dispositions = await memoryWriteAttempts(ctx, run.ID);
+        const mismatch = MemoryWriteTypeMismatch(dispositions.map((d) => d.type), MG1_TYPE_RULES);
+        assertP(mismatch === undefined, mismatch ?? '');
         const kinds = dispositions.map((d) => d.disposition ?? '');
         Assert(kinds.includes('rejected-type'), `the disallowed 'Constraint' write was not rejected-type (got ${JSON.stringify(kinds)})`);
         Assert(kinds.includes('written'), `the allowed 'Preference' write did not land (got ${JSON.stringify(kinds)})`);
@@ -205,8 +278,9 @@ export const AgentMemoryGuardsChecks: NamedCheck[] = [
         ];
         const writes: MemWrite[] = topics.map((topic) => ({ type: 'Preference', content: `${tag}: ${topic}` }));
         const run = await runWriter(ctx, agent, writes);
-        const dispositions = await memoryWriteDispositions(ctx, run.ID);
-        assertP(dispositions.length >= 7, `expected at least 7 attempted writes, got ${dispositions.length}`);
+        const dispositions = await memoryWriteAttempts(ctx, run.ID);
+        const mismatch = MemoryWriteTypeMismatch(dispositions.map((d) => d.type), MG2_TYPE_RULES);
+        assertP(mismatch === undefined, mismatch ?? '');
         const kinds = dispositions.map((d) => d.disposition ?? '');
         const written = kinds.filter((k) => k === 'written').length;
         const capped = kinds.filter((k) => k === 'skipped-cap').length;
@@ -256,7 +330,7 @@ export const AgentMemoryGuardsChecks: NamedCheck[] = [
           { type: 'Preference', content: identical },
           { type: 'Preference', content: identical },
         ]);
-        const dispositions = await memoryWriteDispositions(ctx, run.ID);
+        const dispositions = await memoryWriteAttempts(ctx, run.ID);
         assertP(dispositions.length >= 2, `expected 2 attempted writes, got ${dispositions.length}`);
         const written = dispositions.filter((d) => d.disposition === 'written').length;
         const dup = dispositions.filter((d) => d.disposition === 'skipped-duplicate').length;
