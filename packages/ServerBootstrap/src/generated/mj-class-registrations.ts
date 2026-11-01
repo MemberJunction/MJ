@@ -1560,7 +1560,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (166 classes)
+// @memberjunction/core-actions (168 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1628,6 +1628,7 @@ import {
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -1683,6 +1684,7 @@ import {
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2922,6 +2924,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -2977,6 +2980,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -3001,12 +3005,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ShareListAction,
     SlackWebhookAction,
     SummarizeContentAction,
-    SyncMCPToolsAction,
-    TavilySearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    SyncMCPToolsAction,
+    TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -3067,7 +3071,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1243;
+export const CLASS_REGISTRATIONS_COUNT = 1245;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

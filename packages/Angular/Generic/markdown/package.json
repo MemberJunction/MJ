@@ -36,6 +36,7 @@
     "@angular/platform-browser": "^21.2.22"
   },
   "dependencies": {
+    "@memberjunction/ai-diagrams": "6.2.0-edge.6",
     "@memberjunction/markdown-core": "6.2.0-edge.6",
     "dompurify": "^3.3.0",
     "katex": "^0.16.28",
