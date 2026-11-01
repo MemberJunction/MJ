@@ -26,6 +26,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
 import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
+import { RealtimePlatformCredentials, ResolveRealtimePlatformCredentials } from './realtime-platform-credentials';
 import { RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 /**
@@ -317,15 +318,15 @@ export interface RealtimeModelVoices {
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
- * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Defaults to the
- *   platform lookup (`AI_VENDOR_API_KEY__<driver>`); the voice-picker query has no run context and
- *   passes none, so today the list always reflects the platform's keys.
+ * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Omitted (the
+ *   voice-picker query has no run context), each vendor resolves as a session would: its platform MJ
+ *   Credential, then `AI_VENDOR_API_KEY__<driver>` — so the picker offers the models a session can mint.
  * @returns Active realtime models, each with its driver's voices.
  */
 export async function GetRealtimeModelVoices(
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
-    resolveAPIKey: AIAPIKeyResolver = MakeAIAPIKeyResolver(),
+    resolveAPIKey?: AIAPIKeyResolver,
 ): Promise<RealtimeModelVoices[]> {
     await AIEngine.Instance.Config(false, contextUser, provider);
     const isRealtime = (t: string | null | undefined): boolean =>
@@ -334,16 +335,22 @@ export async function GetRealtimeModelVoices(
         .filter((m) => m.IsActive && isRealtime(m.AIModelType))
         .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
 
+    const platform = resolveAPIKey
+        ? RealtimePlatformCredentials.None
+        : await ResolveRealtimePlatformCredentials(models.map((m) => m.ID), contextUser, 'Any');
+    const environment = MakeAIAPIKeyResolver();
+
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const selection = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+        const resolveKey = resolveAPIKey ?? platform.ResolverFor(model.ID, environment);
+        const selection = SelectRealtimeVendorForModel(model.ID, resolveKey);
         const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
 
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
+            BaseRealtimeModel, driverClass, resolveKey(driverClass),
         );
 
         // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions, and avatars where the

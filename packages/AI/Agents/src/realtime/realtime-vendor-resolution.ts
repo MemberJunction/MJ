@@ -13,8 +13,9 @@
  * @author MemberJunction.com
  */
 
-import { AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
-import { UUIDsEqual } from '@memberjunction/global';
+import { AIAPIKeyResolver, AICredentialScope, CredentialScopeAllows, MakeAIAPIKeyResolver } from '@memberjunction/ai';
+import { LogStatus } from '@memberjunction/core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /** The vendor identifiers a resolved realtime model runs under. */
@@ -55,20 +56,110 @@ const defaultAPIKeyResolver: RealtimeAPIKeyResolver = MakeAIAPIKeyResolver();
  * higher-priority vendor is skipped rather than dead-ending the resolution (a deployment that
  * configures only one provider's key must still resolve that provider).
  *
+ * When no vendor qualifies, one log line names the model and, for each vendor considered, the
+ * credential it would need ({@link DescribeRealtimeVendorKeyNeeds}) — a host whose LLM key works but
+ * whose realtime driver class has none otherwise fails with no trace of why.
+ *
  * @param modelID The `MJ: AI Models` row id to resolve a vendor for.
  * @param resolveAPIKey Key-resolution seam; defaults to the process's configured AI API keys.
+ * @param scope The run's credential scope, used only to word the log line; omitted means `'Any'`.
  * @returns The vendor identifiers, or `null` when no active vendor has a usable key.
  */
 export function SelectRealtimeVendorForModel(
     modelID: string,
-    resolveAPIKey: RealtimeAPIKeyResolver = defaultAPIKeyResolver
+    resolveAPIKey: RealtimeAPIKeyResolver = defaultAPIKeyResolver,
+    scope?: AICredentialScope
 ): RealtimeVendorSelection | null {
-    for (const v of ListRealtimeVendorsForModel(modelID)) {
+    const vendors = ListRealtimeVendorsForModel(modelID);
+    for (const v of vendors) {
         if (resolveAPIKey(v.DriverClass)) {
             return v;
         }
     }
+    LogStatus(DescribeUnkeyedRealtimeModel(modelID, vendors, scope));
     return null;
+}
+
+/**
+ * The log line for a realtime model none of whose vendors has a key: the model, then each vendor
+ * considered with what it needs.
+ *
+ * @param modelID The `MJ: AI Models` row id.
+ * @param vendors The vendors considered (the model's Active vendor rows).
+ * @param scope The run's credential scope; omitted means `'Any'`.
+ */
+export function DescribeUnkeyedRealtimeModel(modelID: string, vendors: RealtimeVendorSelection[], scope?: AICredentialScope): string {
+    const modelName = cachedName(() => AIEngine.Instance.ModelsByID.get(NormalizeUUID(modelID))?.Name) ?? modelID;
+    if (vendors.length === 0) {
+        return `[Realtime] Realtime model '${modelName}' was skipped: it has no Active AI Model Vendor row with a DriverClass.`;
+    }
+    const needs = vendors.map(v => `  - ${DescribeRealtimeVendorKeyNeeds(v, scope)}`).join('\n');
+    return `[Realtime] Realtime model '${modelName}' was skipped: none of its ${vendors.length} active vendor(s) has a usable key.\n${needs}`;
+}
+
+/**
+ * What one realtime vendor needs before a session can mint on it, tier by tier in resolution order.
+ * The environment variable is named for the vendor's REALTIME `DriverClass` (e.g.
+ * `AI_VENDOR_API_KEY__OPENAIREALTIME`), which is a different key name from the same provider's LLM
+ * driver class — the usual reason a host whose prompts work has no realtime vendor.
+ *
+ * @param vendor The vendor considered.
+ * @param scope The run's credential scope; under `'RuntimeOnly'` only the run's own keys count.
+ */
+export function DescribeRealtimeVendorKeyNeeds(vendor: RealtimeVendorSelection, scope?: AICredentialScope): string {
+    const vendorName = (vendor.VendorID && cachedName(() => AIEngine.Instance.VendorsByID.get(NormalizeUUID(vendor.VendorID))?.Name)) || vendor.VendorID || 'unnamed vendor';
+    const tiers: string[] = [];
+    if (CredentialScopeAllows(scope, 'PlatformCredential')) {
+        tiers.push(`an AI Credential Binding on the vendor '${vendorName}' or on this model's vendor row`);
+        tiers.push(`a default credential of the vendor's credential type`);
+    }
+    tiers.push(`an apiKeys entry for driver class '${vendor.DriverClass}' on the run`);
+    if (CredentialScopeAllows(scope, 'Environment')) {
+        tiers.push(`the environment variable ${RealtimeEnvKeyName(vendor.DriverClass)}`);
+    }
+    return `vendor '${vendorName}' (DriverClass ${vendor.DriverClass}) needs one of: ${tiers.join('; ')}`;
+}
+
+/**
+ * The user-facing "how to fix it" sentence for a realtime session that found no keyed vendor, worded
+ * for the run's credential scope. The per-vendor detail is in the server log
+ * ({@link DescribeUnkeyedRealtimeModel}); this names the fixes.
+ *
+ * @param scope The run's credential scope; omitted means `'Any'`.
+ */
+export function RealtimeKeyFixHint(scope?: AICredentialScope): string {
+    const logNote = 'The server log lists each vendor considered and what it needed.';
+    if (!CredentialScopeAllows(scope, 'PlatformCredential')) {
+        return (
+            "This session may use only the caller's own keys (credential scope RuntimeOnly): pass an apiKeys entry " +
+            `for the realtime vendor's driver class (e.g. 'OpenAIRealtime'). ${logNote}`
+        );
+    }
+    return (
+        'To fix it, give a realtime vendor a key: bind an MJ Credential to it (an AI Credential Binding on the AI ' +
+        "Vendor or on the model's AI Model Vendor row), mark a default credential of the vendor's credential type, or " +
+        `set the environment variable for its realtime driver class (e.g. ${RealtimeEnvKeyName('OpenAIRealtime')}, a ` +
+        `different name from the provider's LLM key). ${logNote}`
+    );
+}
+
+/** A display name from the engine's cache; `undefined` when absent or the cache is not loaded. A log line never throws. */
+function cachedName(read: () => string | null | undefined): string | undefined {
+    try {
+        return read() || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * The environment variable that keys a driver class (`AI_VENDOR_API_KEY__<DRIVERCLASS>`, matched
+ * case-insensitively by `GetAIAPIKey`).
+ *
+ * @param driverClass The vendor's `DriverClass`.
+ */
+export function RealtimeEnvKeyName(driverClass: string): string {
+    return `AI_VENDOR_API_KEY__${driverClass.toUpperCase()}`;
 }
 
 /**
