@@ -13,6 +13,8 @@
  * and schema-engine and cannot be loaded in a unit test.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CollectInactiveRowWarnings } from '../integration/InactiveRowWarnings.js';
 import type { CatalogStatusReader } from '../integration/InactiveRowWarnings.js';
 
@@ -79,5 +81,35 @@ describe('CollectInactiveRowWarnings', () => {
             Fields: [{ Name: 'ID', Status: 'Active' }],
         };
         expect(CollectInactiveRowWarnings(catalog([clean]), 'int-1', ['Clean'])).toEqual([]);
+    });
+});
+
+/**
+ * Under a per-connection catalog the engine answers [] for a connection's fields during an apply, so
+ * every caller has to hand the helper the fields it loaded itself, or field-level warnings vanish.
+ * Read from source: the callers are resolver mutations that need a provider and a pipeline to run.
+ */
+describe('every inactive-row warning caller passes the connection\'s own fields', () => {
+    const SRC = readFileSync(join(__dirname, '..', 'resolvers', 'IntegrationDiscoveryResolver.ts'), 'utf-8');
+    const calls = [...SRC.matchAll(/this\.collectInactiveRowWarnings\(([\s\S]*?)\)\)?;/g)].map(m => m[1]);
+
+    it('finds the callers', () => {
+        expect(calls.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('passes scopedFields at every call', () => {
+        for (const args of calls) expect(args).toMatch(/scopedFields\s*,?\s*$/);
+    });
+
+    it('loads the fields BEFORE the batch branch, so the prefetched path has them too', () => {
+        const at = SRC.indexOf('if (prefetchedSourceSchema) {');
+        const load = SRC.lastIndexOf('const scopedFields = await LoadScopedFieldsForBuild(', at);
+        expect(at).toBeGreaterThan(-1);
+        expect(load).toBeGreaterThan(-1);
+        expect(at - load).toBeLessThan(400);
+    });
+
+    it('refreshes the catalog caches through the provider the mutation already holds', () => {
+        expect(SRC).not.toMatch(/refreshIntegrationCatalogCaches\(user\);/);
     });
 });

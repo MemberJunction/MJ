@@ -8,7 +8,8 @@
  *
  * So the logger tallies by CODE: the first few occurrences go out verbatim (that is where an operator
  * learns WHICH objects are affected), the rest are counted, and the run's end emits one rollup line
- * carrying the count and the objects. Nothing is dropped without being counted.
+ * carrying the count, the objects and what each rolled-up occurrence reported (up to a cap). Nothing is
+ * dropped without being counted.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncLogger } from '../SyncLogger.js';
@@ -71,6 +72,34 @@ describe('SyncLogger — repeated warnings are rolled up by code', () => {
         expect(rollup.data.message).toContain('fired 90 time(s)');
         expect(rollup.data.message).toContain('across 90 object(s)');
         expect(rollup.data.message).toContain('Object1');  // a sample is named, not just a count
+    });
+
+    it('keeps what each rolled-up occurrence reported, so the later ones are not just a count', () => {
+        // FIELD_MAP_DESTINATION_MISSING's data names the exact maps that cannot bind; the stage alone
+        // does not. From the sixth object on, that was the only record of which maps they were.
+        for (let i = 1; i <= 8; i++) {
+            logger.warning(`Object${i}`, 'FIELD_MAP_DESTINATION_MISSING', `object ${i}`, {
+                fieldMaps: [{ SourceFieldName: `src${i}`, DestinationFieldName: `dest${i}`, IsKeyField: false }],
+            });
+        }
+        emitted.length = 0;
+        logger.FlushWarningRollups();
+
+        const payload = warnings(emitted)[0].data.warningData as Record<string, unknown>;
+        const kept = payload.rolledUpOccurrences as Array<{ stage: string; data: { fieldMaps: Array<{ DestinationFieldName: string }> } }>;
+        expect(kept.map(k => k.stage)).toEqual(['Object6', 'Object7', 'Object8']);
+        expect(kept.map(k => k.data.fieldMaps[0].DestinationFieldName)).toEqual(['dest6', 'dest7', 'dest8']);
+        expect(payload.rolledUpOccurrencesOmitted).toBe(0);
+    });
+
+    it('caps the kept occurrences and says how many more there were', () => {
+        for (let i = 1; i <= 250; i++) logger.warning(`Object${i}`, 'NO_CREDENTIAL', `object ${i}`, { i });
+        emitted.length = 0;
+        logger.FlushWarningRollups();
+
+        const payload = warnings(emitted)[0].data.warningData as Record<string, unknown>;
+        expect((payload.rolledUpOccurrences as unknown[]).length).toBe(100);
+        expect(payload.rolledUpOccurrencesOmitted).toBe(145);   // 245 rolled up − 100 kept
     });
 
     it('says nothing at the end when no code exceeded the limit', () => {

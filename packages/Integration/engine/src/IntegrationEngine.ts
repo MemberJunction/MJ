@@ -54,7 +54,7 @@ import { BuildContentHashPrefetchFilter, QuoteTextLiteral } from './prefetchFilt
 import { SerializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue, FoldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
 import { ComputeExcludedSourceNames } from './SyncDirectives.js';
-import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps, type UnbindableFieldMapOutcome } from './FieldMapValidation.js';
+import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
 import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
@@ -2850,7 +2850,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             watermarkType: watermark?.WatermarkType ?? null,
             fullSync: config.fullSync,
         });
-        await this.reconcileUnbindableFieldMaps(entityMap, fieldMaps, contextUser, logger);
+        this.warnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
@@ -3766,9 +3766,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // branch either, because its writes all happen after the fetch loop. One write per map per
         // run closes both cases; it runs after the watermark branches above so the row it updates
         // exists by now.
-        await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(
-            entityMapID, result.RecordsCreated + result.RecordsUpdated, contextUser,
-        ));
+        //
+        // Only for a fetch that completed cleanly. UpdateProgress also stamps LastSyncAt, and a map
+        // that was cancelled, failed mid-fetch or ended INCOMPLETE breaks out of the loop rather than
+        // returning — stamping it would show a run that stopped short as freshly synced.
+        if (fetchCompletedCleanly) {
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(
+                entityMapID, result.RecordsCreated + result.RecordsUpdated, contextUser,
+            ));
+        }
 
         await this.createRunDetail(run, entityMap, result, contextUser);
         return result;
@@ -3868,7 +3874,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.loadFieldMaps(entityMapID, contextUser);
-        await this.reconcileUnbindableFieldMaps(entityMap, fieldMaps, contextUser, logger);
+        this.warnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
         const pushWatermark = await this.watermarkService.Load(entityMapID, contextUser, 'Push');
         const lastPushAt = pushWatermark?.WatermarkValue ?? null;
 
@@ -5982,40 +5988,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * Reports — and DEACTIVATES — ACTIVE field maps whose MJ column does not exist, once per entity
-     * map per run.
+     * Reports ACTIVE field maps whose MJ column does not exist, once per entity map per run.
      *
      * `BaseEntity.Set` no-ops on an unknown field — no throw, no log, no dirty flag — so a map
      * pointing at a column that was never applied (or was renamed) drops its value for every
      * record while the run reports those records as written. Checking it here costs one metadata
      * read and happens before the first fetch, so the warning arrives before the wasted work.
-     *
-     * The warning alone left the map ACTIVE, which meant every subsequent run repeated the same
-     * silent drop and the same warning, forever: nothing anywhere reconciled a map's Status against
-     * the physical column (`decideFieldMapReconcile` is entirely source-side, and its input type
-     * cannot even express a destination column). So the map is flipped to `Inactive` here, which is
-     * the one place in the system that knows both halves — the map and the entity it binds to — at a
-     * moment when no DDL is pending. Three things follow from that:
-     *
-     *  - the drop stops being silent: the map's own Status now says it is not being applied;
-     *  - the source column becomes a CUSTOM-COLUMN CANDIDATE on the next run (an unmapped source
-     *    field is exactly what the promotion path collects), so the column can be materialized
-     *    rather than the value discarded;
-     *  - a schema refresh re-enables the map (its source field is still Active and the reconcile's
-     *    field-is-back branch flips it), so once the column exists the map heals with no operator
-     *    action. Until it exists, refresh-then-sync re-disables it and says so again — visible and
-     *    bounded, which is the opposite of the state this replaces.
-     *
-     * Deliberately NOT a refusal: this run still writes the records it can, minus those values, as
-     * it did before. Turning a hollow-row apply into a failed run changes outcomes on live tenants,
-     * and the warning has to lead the refusal by at least one release.
      */
-    private async reconcileUnbindableFieldMaps(
+    private warnOnUnbindableFieldMaps(
         entityMap: ICompanyIntegrationEntityMap,
         fieldMaps: ICompanyIntegrationFieldMap[],
-        contextUser: UserInfo,
         logger?: SyncLogger,
-    ): Promise<void> {
+    ): void {
         const entityName = entityMap.Entity ?? '';
         // Diagnostics must never be able to fail a run: an unresolvable entity/provider is reported
         // by the paths that actually need it, and here it simply means there is nothing to check.
@@ -6028,35 +6012,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
         const unbindable = FindUnbindableFieldMaps(fieldMaps, entityFieldNames);
         if (unbindable.length === 0) return;
-
-        // Flip the rows BEFORE the warning is written, so the message reports what actually
-        // happened rather than what was intended.
-        const unbindableNames = new Set(unbindable.map(u => u.SourceFieldName.toLowerCase()));
-        const outcome: UnbindableFieldMapOutcome = { Deactivated: 0, DeactivationFailed: 0 };
-        for (const fm of fieldMaps) {
-            if (!unbindableNames.has((fm.SourceFieldName ?? '').toLowerCase())) continue;
-            try {
-                if (!fm.Set || !fm.Save) { outcome.DeactivationFailed++; continue; }
-                fm.Set('Status', 'Inactive');
-                // Same class as watermark bookkeeping — one row, no provider transaction — so it is
-                // ordered against this map's other writes rather than taking the global write mutex.
-                if (await this.runWriteForMap(entityMap.ID, () => fm.Save!())) outcome.Deactivated++;
-                else outcome.DeactivationFailed++;
-            } catch (err) {
-                outcome.DeactivationFailed++;
-                console.warn(
-                    `[IntegrationEngine] Could not deactivate unbindable field map ` +
-                    `'${fm.SourceFieldName}' on ${entityMap.ExternalObjectName ?? entityMap.ID}: ` +
-                    `${err instanceof Error ? err.message : String(err)}`
-                );
-            }
-        }
-
         logger?.warning(
             entityMap.ExternalObjectName ?? entityMap.ID,
             'FIELD_MAP_DESTINATION_MISSING',
-            DescribeUnbindableFieldMaps(unbindable, entityMap.ExternalObjectName ?? entityMap.ID, entityName, outcome),
-            { fieldMaps: unbindable, deactivated: outcome.Deactivated, deactivationFailed: outcome.DeactivationFailed },
+            DescribeUnbindableFieldMaps(unbindable, entityMap.ExternalObjectName ?? entityMap.ID, entityName),
+            { fieldMaps: unbindable },
         );
     }
 

@@ -118,9 +118,15 @@ const VERBOSE_RECORD_LOGS_ENABLED = process.env.MJ_INTEGRATION_VERBOSE_RECORD_LO
 const WARNING_VERBATIM_LIMIT = 5;
 /** How many distinct stages a rollup names before it summarises the remainder as a count. */
 const WARNING_ROLLUP_STAGE_SAMPLE = 10;
+/**
+ * How many rolled-up occurrences keep their own data in the rollup. A warning's data is what names
+ * the specific thing — the field maps that cannot bind, the batch that was short — and the stage
+ * name alone does not; past this many the rollup says how many more there were.
+ */
+const WARNING_ROLLUP_DATA_LIMIT = 100;
 
-/** Per-run tally for one warning code: how often it fired and where. */
-type WarningTally = { count: number; stages: string[]; firstMessage: string };
+/** Per-run tally for one warning code: how often it fired, where, and what the rolled-up ones said. */
+type WarningTally = { count: number; stages: string[]; suppressed: Array<{ stage: string; data?: Record<string, unknown> }> };
 
 /**
  * Light wrapper that prepends an ISO timestamp + the per-run context to every
@@ -199,16 +205,21 @@ export class SyncLogger {
      *
      * ROLLED UP BY CODE. The first {@link WARNING_VERBATIM_LIMIT} occurrences of a code are emitted
      * as they happen, carrying `occurrence`; after that the code is counted and
-     * {@link FlushWarningRollups} emits ONE summary at the end of the run. Nothing is lost — the
-     * count and the affected stages survive — and one root cause can no longer bury every other
-     * warning the run raised.
+     * {@link FlushWarningRollups} emits ONE summary at the end of the run. The count, the affected
+     * stages and each rolled-up occurrence's own data survive (up to {@link WARNING_ROLLUP_DATA_LIMIT}
+     * of them), so an operator can still tell WHICH maps or batches the later ones were about — and
+     * one root cause can no longer bury every other warning the run raised.
      */
     public Warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        const tally = this.warningTallies.get(code) ?? { count: 0, stages: [], firstMessage: message };
+        const tally = this.warningTallies.get(code) ?? { count: 0, stages: [], suppressed: [] };
         tally.count++;
         if (!tally.stages.includes(stage)) tally.stages.push(stage);
         this.warningTallies.set(code, tally);
-        if (tally.count > WARNING_VERBATIM_LIMIT) return;   // counted above; reported by the rollup
+        if (tally.count > WARNING_VERBATIM_LIMIT) {
+            // Counted above and reported by the rollup, with what it said.
+            if (tally.suppressed.length < WARNING_ROLLUP_DATA_LIMIT) tally.suppressed.push({ stage, data });
+            return;
+        }
         this.Emit('sync.warning', { stage, code, message, warningData: data, occurrence: tally.count });
     }
 
@@ -246,6 +257,8 @@ export class SyncLogger {
                     reportedVerbatim: WARNING_VERBATIM_LIMIT,
                     rolledUp: suppressed,
                     stages: tally.stages,
+                    rolledUpOccurrences: tally.suppressed,
+                    rolledUpOccurrencesOmitted: suppressed - tally.suppressed.length,
                 },
             });
             emitted++;

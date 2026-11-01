@@ -322,6 +322,22 @@ describe('IntegrationEngine — RecordsSynced counts what was written', () => {
         expect((existingWatermark as unknown as { RecordsSynced: number }).RecordsSynced).toBe(3);
     });
 
+    it('does NOT stamp an object whose fetch ended INCOMPLETE as freshly synced', async () => {
+        // UpdateProgress also stamps LastSyncAt. An object that stopped short — here the source says it
+        // holds 10 and the scan returned 3 — must not show on the activity dashboard as just synced.
+        const connector = singlePageConnector([rec('ext-1', 'A'), rec('ext-2', 'B'), rec('ext-3', 'C')]);
+        (connector.FetchChanges as ReturnType<typeof vi.fn>).mockImplementation(async (): Promise<FetchBatchResult> =>
+            ({ Records: [rec('ext-1', 'A'), rec('ext-2', 'B'), rec('ext-3', 'C')], HasMore: false, NewWatermarkValue: PAGE_WATERMARK, SourceTotalRecords: 10 }));
+        const { existingWatermark, recordsSyncedWrites } = wireRun();
+
+        const result = await withEntityBehaviour({}, connector, () =>
+            engine.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: false }));
+
+        expect(result.IncompleteObjects).toEqual(['contacts']);
+        expect(recordsSyncedWrites).toEqual([]);
+        expect((existingWatermark as unknown as { LastSyncAt: Date }).LastSyncAt).toEqual(new Date(PRIOR_WATERMARK));
+    });
+
     it('excludes ERRORED records — a run that wrote two of three says two', async () => {
         const connector = singlePageConnector([
             rec('ext-1', 'A'), rec('ext-2', 'POISON'), rec('ext-3', 'C'),

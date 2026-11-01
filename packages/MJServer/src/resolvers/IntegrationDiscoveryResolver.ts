@@ -4191,7 +4191,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // procedures fire no BaseEntity change events, so no cache is invalidated) rebuilt it
             // from rows that no longer existed. The BATCH mutation has always invalidated and forced;
             // the single one is not entitled to a cheaper answer to the same question.
-            await this.refreshIntegrationCatalogCaches(user);
+            await this.refreshIntegrationCatalogCaches(user, provider);
 
             // Step 2: Reconstruct SourceSchemaInfo from the persisted IO/IOF rows
             // (already freshened by the Phase 0 v5.39.x MJCompanyIntegrationEntityServer
@@ -4826,6 +4826,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // Declared rows this apply will silently leave out (deactivated objects/fields). Collected
         // during the rebuild and surfaced on the apply's Warnings, alongside the schema-limit ones.
         const inactiveWarnings: string[] = [];
+        // Loaded once for both branches: under a per-connection catalog the engine answers [] for
+        // this connection's fields during an apply, so a field-level warning read through it is lost.
+        const scopedFields = await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user);
         if (prefetchedSourceSchema) {
             sourceSchema = prefetchedSourceSchema;
             // A prefetched schema skips the rebuild, and the rebuild used to be the only place these
@@ -4834,7 +4837,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // not depend on the rebuild: they are the catalog's own Status rows, which are exactly as
             // readable on this branch as on the other one.
             inactiveWarnings.push(...this.collectInactiveRowWarnings(
-                companyIntegration.IntegrationID, objects.map(o => o.SourceObjectName),
+                companyIntegration.IntegrationID, objects.map(o => o.SourceObjectName), scopedFields,
             ));
         } else {
             const requestedNamesForReuse = objects.map(o => o.SourceObjectName);
@@ -4842,7 +4845,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 requestedNamesForReuse,
                 inactiveWarnings,
-                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+                scopedFields,
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -6456,7 +6459,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const validatedPlatform = this.validatePlatform(platform);
 
-            await this.refreshIntegrationCatalogCaches(user);
+            await this.refreshIntegrationCatalogCaches(user, provider);
 
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
@@ -7366,7 +7369,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // SchemaBuilder directly rather than through buildSchemaForConnector, so it never carried
             // them — an operator whose selected table came back without a column had nothing to read.
             // Unshifted onto schemaOutput.Warnings, which is what every return below surfaces.
-            const inactiveWarnings = this.collectInactiveRowWarnings(companyIntegration.IntegrationID, normalizedNames);
+            const inactiveWarnings = this.collectInactiveRowWarnings(companyIntegration.IntegrationID, normalizedNames, scopedFields);
             if (inactiveWarnings.length > 0) schemaOutput.Warnings.unshift(...inactiveWarnings);
 
             if (schemaOutput.Errors.length > 0) {
