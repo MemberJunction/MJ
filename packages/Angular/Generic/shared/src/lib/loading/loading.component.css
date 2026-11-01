@@ -34,6 +34,18 @@
   fill: var(--mj-logo-color);
 }
 
+/* A brand theme's mark (--mj-loading-mark), rendered when the token is set — see
+   LoadingComponent.UsesThemeMark. Fills the same sized wrapper as the inline SVG, so the
+   size presets and the pulse/spin/bounce animations apply unchanged. */
+.mj-logo-image {
+  width: 100%;
+  height: 100%;
+  background-image: var(--mj-loading-mark);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
 /* Size presets */
 .mj-loading-logo.size-small {
   width: 40px;
