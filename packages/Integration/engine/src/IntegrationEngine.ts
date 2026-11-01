@@ -1609,11 +1609,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // so this is not a failure — but the message has to name what did not finish, or a
             // nightly sync that dies on its first page every night looks like an unbroken run of
             // clean Successes with TotalRecords=0.
-            const incomplete = result.IncompleteObjects ?? [];
-            const completionMessage = (!abortSignal?.aborted && incomplete.length > 0)
-                ? `Sync run complete — ${incomplete.length} object(s) INCOMPLETE: ` +
-                  `${incomplete.slice(0, 10).join(', ')}${incomplete.length > 10 ? ', …' : ''}`
-                : result.ErrorMessage;
+            const completionMessage = BuildRunCompletionMessage(result.IncompleteObjects ?? [], result.ErrorMessage, abortSignal?.aborted === true);
             await this.finalizeSyncProgress(progress, abortSignal?.aborted ? 'cancelled' : 'completed', completionMessage);
             console.log(`[IntegrationEngine] Sync complete:\n${summary}`);
             return result;
@@ -2775,7 +2771,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
         const resumesFrom = resumeAfterKey
             ? `resumes from ordering key '${resumeAfterKey}'`
-            : 'restarts from the beginning of the scan (no page had completed)';
+            : 'restarts from the beginning, or from the position an earlier suspended scan saved if one ' +
+              'is on record (a full sync does not clear it; the rows before it were applied by that scan)';
         const message =
             `Fetch for '${objectName}' timed out at batch ${batchIndex} and is suspended for the rest of this ` +
             `run: the page is not re-requested while the abandoned request may still be running. ` +
@@ -2794,7 +2791,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ErrorCode: 'CONNECTOR_ERROR',
             Severity: 'Warning',
         });
-        (result.IncompleteObjects ??= []).push(objectName);
+        this.markIncomplete(result, objectName);
+    }
+
+    /**
+     * Puts an object on the result's incomplete list once (MJ-RUN-4). One object can be held
+     * incomplete for more than one reason in the same run — a suspended page and overlapping pages,
+     * say — and the run summary names objects, not reasons.
+     */
+    private markIncomplete(result: SyncResult, objectName: string): void {
+        const list = (result.IncompleteObjects ??= []);
+        if (!list.includes(objectName)) list.push(objectName);
     }
 
     /**
@@ -3246,7 +3253,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // per-object warning above. A caller reading the run summary otherwise sees a clean
                 // completion and has to go mining the event stream to discover that sixteen objects
                 // ended INCOMPLETE.
-                (result.IncompleteObjects ??= []).push(entityMap.ExternalObjectName ?? entityMap.ID);
+                this.markIncomplete(result, entityMap.ExternalObjectName ?? entityMap.ID);
                 break;
             }
             logger?.emit('sync.fetch.batch.complete', {
@@ -3574,6 +3581,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const missing = sourceTotalRecords - recordsInMap;
             fetchCompletedCleanly = false;
             windowHasHole = true;
+            this.markIncomplete(result, entityMap.ExternalObjectName ?? entityMap.ID);
             logger?.warning(
                 entityMap.ExternalObjectName ?? entityMap.ID,
                 'FETCH_SHORT_OF_SOURCE_TOTAL',
@@ -3599,6 +3607,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (crossBatchRepeatCount > 0) {
             fetchCompletedCleanly = false;
             windowHasHole = true;
+            this.markIncomplete(result, entityMap.ExternalObjectName ?? entityMap.ID);
             logger?.warning(
                 entityMap.ExternalObjectName ?? entityMap.ID,
                 'FETCH_PAGES_OVERLAPPED',
@@ -3725,6 +3734,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // operator knows this object's data is INCOMPLETE this run (the per-page warnings carry the
         // offsets). The watermark was held above, so the skipped window is re-fetched on the next run.
         if (hadFetchGap) {
+            this.markIncomplete(result, entityMap.ExternalObjectName ?? entityMap.ID);
             logger?.warning(
                 entityMap.ExternalObjectName ?? entityMap.ID,
                 'FETCH_INCOMPLETE_PAGES_SKIPPED',
@@ -6664,6 +6674,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             aggregate.Errors.push(...mapResult.Errors.slice(0, room));
         }
 
+        // MJ-RUN-4: the per-map result is where an object is marked incomplete, and the run total is
+        // what the completion message reads. Without this the list never left the map that set it.
+        for (const name of mapResult.IncompleteObjects ?? []) this.markIncomplete(aggregate, name);
+
         if (mapResult.RecordsErrored > 0) {
             aggregate.Success = false;
         }
@@ -7148,6 +7162,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public static get Instance(): IntegrationEngine {
         return IntegrationEngine.getInstance<IntegrationEngine>();
     }
+}
+
+/**
+ * The message a finished sync run is finalized with.
+ *
+ * MJ-RUN-4: a run that left objects INCOMPLETE says which, after anything the run already had to
+ * say (an error count, for one), rather than in place of it. A cancelled run keeps its own message.
+ */
+export function BuildRunCompletionMessage(incomplete: ReadonlyArray<string>, errorMessage: string | undefined, aborted: boolean): string | undefined {
+    if (aborted || incomplete.length === 0) return errorMessage;
+    const names = `${incomplete.slice(0, 10).join(', ')}${incomplete.length > 10 ? ', …' : ''}`;
+    return `${errorMessage ?? 'Sync run complete'} — ${incomplete.length} object(s) INCOMPLETE: ${names}`;
 }
 
 /** What each lever is called in the one sentence a customer reads. */

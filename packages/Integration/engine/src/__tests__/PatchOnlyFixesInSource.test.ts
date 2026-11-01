@@ -63,10 +63,10 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
 
     it('refreshes the catalog before re-sampling — without it the second pass reads the same stale cache', () => {
         const i = PIPELINE.indexOf('const unsampled =');
-        const body = PIPELINE.slice(i, i + 1200);
+        const body = PIPELINE.slice(i, PIPELINE.indexOf('stagePKClassify(emitter, opts)', i));
         const refresh = body.indexOf('RefreshCatalog');
         // The heal re-runs the same streaming Introspect+Persist the first pass used.
-        const reIntrospect = body.indexOf('streamIntrospectAndPersist(emitter, opts, withDeadline)');
+        const reIntrospect = body.indexOf('streamIntrospectAndPersist(emitter, healOpts, withDeadline)');
         expect(refresh).toBeGreaterThan(-1);
         expect(reIntrospect).toBeGreaterThan(-1);
         expect(refresh, 'RefreshCatalog must precede the second Introspect').toBeLessThan(reIntrospect);
@@ -74,14 +74,24 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
 
     it('re-persists after the healing Introspect, or the sampled widths are computed and thrown away', () => {
         const i = PIPELINE.indexOf('const unsampled =');
-        expect(PIPELINE.slice(i, i + 1400)).toMatch(/persistResult = await this\.streamIntrospectAndPersist\(/);
+        const body = PIPELINE.slice(i, PIPELINE.indexOf('stagePKClassify(emitter, opts)', i));
+        expect(body).toMatch(/const healed = await this\.streamIntrospectAndPersist\(/);
+        expect(body).toMatch(/persistResult = MergeHealedPersistResult\(persistResult, healed\);/);
     });
 
-    it('is non-fatal — a failed heal leaves the state we already had', () => {
+    it('re-samples only the objects that went unsampled, and retires nothing', () => {
         const i = PIPELINE.indexOf('const unsampled =');
-        const body = PIPELINE.slice(i, i + 1600);
+        const body = PIPELINE.slice(i, PIPELINE.indexOf('stagePKClassify(emitter, opts)', i));
+        expect(body).toMatch(/IntrospectOptions: \{ \.\.\.\(opts\.IntrospectOptions \?\? \{\}\), ObjectNames: unsampled \}/);
+        expect(body).toMatch(/DeactivateAbsent: false/);
+    });
+
+    it('is non-fatal — a failed heal is a warning, not a run error', () => {
+        const i = PIPELINE.indexOf('const unsampled =');
+        const body = PIPELINE.slice(i, PIPELINE.indexOf('stagePKClassify(emitter, opts)', i));
         expect(body).toMatch(/catch \(healErr\)/);
-        expect(body).toMatch(/first-discovery-heal-failed/);
+        expect(body).toMatch(/emitter\.Warning\('Introspect', 'first-discovery-heal-failed'/);
+        expect(body).not.toMatch(/stageError/);
         expect(body).not.toMatch(/throw healErr/);
     });
 
@@ -111,7 +121,7 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
 
 describe('MJ-RUN-4 — an abandoned object reaches the run, not just the event stream', () => {
     it('records the object on the run result', () => {
-        expect(ENGINE).toMatch(/\(result\.IncompleteObjects \?\?= \[\]\)\.push\(/);
+        expect(ENGINE).toMatch(/this\.markIncomplete\(result, /);
     });
 
     it('names them in the completion message', () => {
@@ -120,7 +130,7 @@ describe('MJ-RUN-4 — an abandoned object reaches the run, not just the event s
     });
 
     it('still finalizes as completed — a held watermark is not a failed run', () => {
-        const i = ENGINE.indexOf('const incomplete = result.IncompleteObjects');
+        const i = ENGINE.indexOf('BuildRunCompletionMessage(result.IncompleteObjects');
         expect(i).toBeGreaterThan(-1);
         expect(ENGINE.slice(i, i + 900)).toMatch(/'cancelled' : 'completed'/);
     });
