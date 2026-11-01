@@ -71,12 +71,14 @@ function base64url(input: Buffer | string): string {
 /**
  * A GitHub App JWT: RS256 over `{alg,typ}.{iat,exp,iss}`.
  *
- * Issued 60 s in the past to absorb clock skew between this box and GitHub, and valid for the
- * maximum GitHub allows (10 minutes) — it is used exactly once, to mint the installation token.
+ * Issued 60 s in the past to absorb a clock behind GitHub's, and expiring 9 minutes from now: one
+ * minute inside GitHub's 10-minute maximum, so a clock AHEAD of GitHub's is not refused with
+ * "'exp' too far in the future". It is used exactly once, within seconds, to mint the
+ * installation token.
  */
 export function BuildAppJwt(appId: string, privateKey: string, nowSeconds: number = Math.floor(Date.now() / 1000)): string {
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = base64url(JSON.stringify({ iat: nowSeconds - 60, exp: nowSeconds + 600, iss: appId }));
+  const payload = base64url(JSON.stringify({ iat: nowSeconds - 60, exp: nowSeconds + 540, iss: appId }));
   const signer = createSign('RSA-SHA256');
   signer.update(`${header}.${payload}`);
   const signature = base64url(signer.sign(privateKey));
