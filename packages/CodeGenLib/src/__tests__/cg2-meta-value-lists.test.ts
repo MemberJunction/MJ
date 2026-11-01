@@ -55,7 +55,7 @@ class TestableValueLists extends ManageMetadataBase {
    }
    public async Sync(values: string[]): Promise<boolean> {
       const pool = { beginTransaction: async () => ({ commit: async () => undefined, rollback: async () => undefined }) } as unknown as CodeGenConnection;
-      return this.syncEntityFieldValues(pool, 7, values, []);
+      return this.syncEntityFieldValues(pool, 7, values, [], 'Check');
    }
    public async Warn(excludeSchemas: string[]): Promise<string[]> {
       return this.warnOnEmptyValueLists({} as CodeGenConnection, excludeSchemas);
