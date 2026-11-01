@@ -136,7 +136,7 @@ npm run typecheck          # tsc --noEmit — MUST pass before you're done
 npm run lint               # expo lint
 npm test                   # Vitest unit tests (do not edit tests as doc work)
 npm run start              # Metro bundler
-npm run ios                # build + run on the iOS Simulator (needs Xcode + MJAPI :4001)
+npm run ios                # build + run on the iOS Simulator (needs Xcode + MJAPI :4000)
 ```
 
 To exercise UI without a live conversation, deep-link the dev-harness routes:

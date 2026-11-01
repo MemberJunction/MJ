@@ -35,7 +35,7 @@ export default function EntityRecordsScreen() {
         return data.Rows.filter((r) => r.title.toLowerCase().includes(q) || r.subtitle.toLowerCase().includes(q));
     }, [data, search]);
 
-    const displayName = data?.Entity.DisplayName || entityName;
+    const displayName = data?.entity.DisplayName || entityName;
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>

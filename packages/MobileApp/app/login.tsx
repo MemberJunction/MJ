@@ -136,16 +136,18 @@ export default function LoginScreen() {
                     </View>
                 ) : null}
 
-                <Pressable onPress={() => setDevSheet(true)} hitSlop={6}>
-                    <Text style={styles.devLink}>Developer options</Text>
-                </Pressable>
+                {__DEV__ ? (
+                    <Pressable onPress={() => setDevSheet(true)} hitSlop={6}>
+                        <Text style={styles.devLink}>Developer options</Text>
+                    </Pressable>
+                ) : null}
             </View>
 
             <Text style={styles.footer}>
                 By signing in you agree to MemberJunction's Terms and Privacy Policy.
             </Text>
 
-            <DevTokenSheet open={devSheet} onClose={() => setDevSheet(false)} />
+            {__DEV__ ? <DevTokenSheet open={devSheet} onClose={() => setDevSheet(false)} /> : null}
         </SafeAreaView>
     );
 }

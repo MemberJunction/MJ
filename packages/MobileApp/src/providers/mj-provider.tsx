@@ -1,7 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
+import { LocalCacheManager } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { GraphQLDataProvider, GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
 import { Env } from '@/config/env';
+import { EndAuth0Session } from '@/auth/auth0-session';
+import { MarkFreshLoginRequired } from '@/auth/fresh-login';
 import {
     ClearAuth0Tokens,
     GetValidAuth0IdToken,
@@ -18,7 +22,51 @@ import {
     type MJAuthTokens,
 } from '@/auth/msal';
 import { ResetMentionCaches } from '@/data/mention-display';
+import { Clear as ClearOfflineQueue } from '@/data/offline-queue';
+import { ClearPendingChatHandoff } from '@/data/pending-chat-handoff';
+import { ClearUserPreferences, SyncPreferencesFromServer } from '@/data/preferences';
 import { ResetModalityCache } from '@/data/services/attachment-storage';
+import { UnregisterDeviceToken } from '@/data/services/notifications';
+import { MMKVStorageProvider } from '@/providers/mmkv-storage-provider';
+
+const mobileCacheStorage = new MMKVStorageProvider();
+
+/** Upper bound on the best-effort push-token unregistration during sign-out. */
+const SIGN_OUT_UNREGISTER_TIMEOUT_MS = 3_000;
+
+/**
+ * Make sure `UserInfoEngine` holds the user who just signed in.
+ *
+ * On a cold boot this is a no-op: `UserInfoEngine` is a `@RegisterForStartup`
+ * engine, so `setupGraphQLClient` -> `StartupManager.Startup()` already loaded it
+ * for the current user. The case this covers is a second sign-in in the same
+ * process (User A signs out, User B signs in): `StartupManager.Startup()` returns
+ * its cached result and never re-runs the engines, so without this call the
+ * engine would still hold A's settings and `SyncPreferencesFromServer` would copy
+ * them into B's local mirror. `Config()` force-refreshes when the user ID differs
+ * from the last load. Best-effort: a failure here must not block boot.
+ */
+async function loadUserSettingsForCurrentUser(): Promise<void> {
+    const currentUser = GraphQLDataProvider.Instance?.CurrentUser;
+    if (!currentUser?.ID) return;
+    try {
+        await UserInfoEngine.Instance.Config(false, currentUser);
+    } catch (e) {
+        console.warn('[MJProvider] UserInfoEngine.Config failed; server preferences unavailable this session:', e);
+    }
+}
+
+/**
+ * Best-effort push-token unregistration bounded by a timeout. `.catch()` alone
+ * covers a rejected request, not a hung one, and sign-out is the escape hatch
+ * BootGate offers when MJAPI is unreachable, so it must never block on MJAPI.
+ */
+async function unregisterPushTokenWithTimeout(): Promise<void> {
+    await Promise.race([
+        UnregisterDeviceToken().catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_UNREGISTER_TIMEOUT_MS)),
+    ]);
+}
 
 /**
  * MJ provider boot. Supports three auth paths in priority order:
@@ -139,6 +187,12 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 },
             );
 
+            if (!LocalCacheManager.Instance.IsInitialized) {
+                await LocalCacheManager.Instance.Initialize(mobileCacheStorage);
+            } else {
+                await LocalCacheManager.Instance.SetStorageProvider(mobileCacheStorage);
+            }
+
             // Hard timeout so a hung MJAPI / bad token doesn't lock us in 'loading' forever.
             const SETUP_TIMEOUT_MS = 15_000;
             await Promise.race([
@@ -147,6 +201,8 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                     setTimeout(() => reject(new Error(`Connection to ${Env.graphqlUrl} timed out after ${SETUP_TIMEOUT_MS}ms`)), SETUP_TIMEOUT_MS),
                 ),
             ]);
+            await loadUserSettingsForCurrentUser();
+            SyncPreferencesFromServer();
             setAuthMethod(method);
             setStatus('ready');
         } catch (e) {
@@ -282,28 +338,58 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
     }, [bootWith]);
 
     /**
-     * Sign out: clear all stored credentials (Auth0, MSAL, and dev-token
-     * secure-store keys) and revert to the `no-token` state so the login
-     * screen takes over. Does not itself tear down the GraphQL client.
+     * Sign out: unregister push token while authenticated, end the Auth0 browser
+     * session (so the next sign-in can be a different user), clear all stored
+     * credentials (Auth0, MSAL, and dev-token secure-store keys), purge per-user
+     * offline mutations, caches, preferences, and WebSocket subscriptions, and
+     * revert to the `no-token` state so the login screen takes over.
      */
     const signOut = useCallback(async () => {
+        // 1. Best-effort push token unregistration while the departing user's
+        //    GraphQL credentials are still active. Bounded so an unreachable
+        //    MJAPI can't wedge sign-out (BootGate relies on it as an escape hatch).
+        await unregisterPushTokenWithTimeout();
+
+        // 2. End the Auth0 SSO session. Without this the system auth session keeps
+        //    Auth0's cookie and the next "Continue with Auth0" silently re-enters
+        //    the departing user's account. Interactive (a browser sheet) and
+        //    best-effort: a dismissed sheet still proceeds with local sign-out.
+        //    Gated on Env until the tenant lists the app's logout URL; the
+        //    fresh-login flag below covers user switching either way.
+        if (authMethod === 'auth0' && Env.auth0EndSessionOnSignOut) {
+            await EndAuth0Session();
+        }
+
+        // 3. Clear stored credentials.
         await ClearAuth0Tokens();
         await clearMsalTokens();
         await SecureStore.deleteItemAsync(DEV_TOKEN_KEY).catch(() => undefined);
 
-        // Drop every per-user cache along with the credentials. These are process-wide singletons
-        // that survive a sign-out on their own, and two of them hold PERMISSION-FILTERED data: the
-        // mention engine's agent/skill rosters, and the user-settings cache. On a shared or demo
-        // device the next person to sign in would otherwise open the `@` picker and be served the
-        // previous user's run-permitted agents, because the engine short-circuits when it believes
-        // it is already initialized.
+        // 4. Purge the offline mutation queue, staged chat handoff, local MMKV/RunView
+        //    caches, and per-user preferences so User A's data never leaks to User B.
+        ClearOfflineQueue();
+        ClearPendingChatHandoff();
+        await LocalCacheManager.Instance.ClearAll().catch(() => undefined);
+        // The manager's ClearAll is a no-op until bootWith() has handed it the
+        // storage provider, and BootGate's escape buttons can call signOut()
+        // before that (token load/refresh threw, or the 6s loading escape). Wipe
+        // the MMKV store directly so the previous user's cache never survives.
+        mobileCacheStorage.ClearAll();
+        ClearUserPreferences();
+        // The next Auth0 sign-in must show the credentials form even if the tenant session
+        // teardown above could not complete (unlisted logout URL, dismissed sheet).
+        MarkFreshLoginRequired();
+
+        // 5. Drop process-wide singletons that cache permission-filtered rosters
+        //    and tear down the active GraphQL WebSocket connection.
         ResetMentionCaches();
         ResetModalityCache();
+        GraphQLDataProvider.Instance?.ForceSocketReconnect();
 
         setAuthMethod(null);
         setError(null);
         setStatus('no-token');
-    }, []);
+    }, [authMethod]);
 
     const value = useMemo<MJState>(() => ({
         status, error, authMethod,

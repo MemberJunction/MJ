@@ -8,7 +8,13 @@ import {
     SetDefaultAgent,
     GetDefaultAgentId,
     GetDefaultAgentName,
+    ClearUserPreferences,
 } from '@/data/preferences';
+import {
+    SetPendingChatHandoff,
+    ConsumePendingChatHandoff,
+    ClearPendingChatHandoff,
+} from '@/data/pending-chat-handoff';
 
 // PrefsStorage is the in-memory MMKV stub from setup.ts; reset between tests.
 beforeEach(() => {
@@ -69,6 +75,35 @@ describe('preferences (MMKV-backed)', () => {
             SetDefaultAgent('agent-456', 'Research');
             expect(GetDefaultAgentId()).toBe('agent-456');
             expect(GetDefaultAgentName()).toBe('Research');
+        });
+
+        it('clears per-user preferences on ClearUserPreferences()', () => {
+            PrefsStorage.set(PrefKeys.appearance, 'dark');
+            SetDefaultAgent('agent-123', 'Sage');
+            PrefsStorage.set('mobile.pushDeviceId', 'ios-install-1');
+            ClearUserPreferences();
+            expect(GetAppearance()).toBe('system');
+            expect(GetDefaultAgentId()).toBeUndefined();
+            expect(GetDefaultAgentName()).toBeUndefined();
+            expect(PrefsStorage.getString('mobile.pushDeviceId')).toBe('ios-install-1');
+        });
+    });
+
+    describe('pending-chat-handoff (one-time in-memory handoff)', () => {
+        beforeEach(() => {
+            ClearPendingChatHandoff();
+        });
+
+        it('consumes a matching conversation handoff exactly once', () => {
+            SetPendingChatHandoff('conv-1', 'Hello agent', null);
+            expect(ConsumePendingChatHandoff('other-conv')).toBeNull();
+            const first = ConsumePendingChatHandoff('conv-1');
+            expect(first).toEqual({
+                ConversationId: 'conv-1',
+                Prompt: 'Hello agent',
+                Attachment: null,
+            });
+            expect(ConsumePendingChatHandoff('conv-1')).toBeNull();
         });
     });
 });
