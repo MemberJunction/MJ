@@ -68,6 +68,7 @@ import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPau
 import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
 import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
 import { LookupObjectNamesByID } from "../integration/ObjectNamesByID.js";
+import { AssertTargetConfigs, NewTargetConfigDrops, type TargetConfigDrops } from "../integration/TargetConfigGuard.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -2181,7 +2182,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         objects: SchemaPreviewObjectInput[],
         sourceSchema: SourceSchemaInfo,
         platform: 'sqlserver' | 'postgresql',
-        connector?: BaseIntegrationConnector
+        connector?: BaseIntegrationConnector,
+        drops: TargetConfigDrops = NewTargetConfigDrops(),
     ): TargetTableConfig[] {
         const mapper = new TypeMapper();
 
@@ -2195,9 +2197,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // out how many selections actually made it. The picker → ApplyAll →
         // RSU pipeline already had three layers of silent O(N) drops; this
         // makes them at least summarised.
-        const droppedNotInSchema: string[] = [];
-        const droppedNoFields: string[] = [];
-        const droppedNoPrimaryKey: string[] = [];
+        // The caller's lists when it passes them, so the NO_TARGET_TABLES error can name each reason.
+        const droppedNotInSchema = drops.NotInSchema;
+        const droppedNoFields = drops.NoFields;
+        const droppedNoPrimaryKey = drops.NoPrimaryKey;
 
         const results: TargetTableConfig[] = [];
         for (const obj of objects) {
@@ -2306,27 +2309,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             console.log(`[buildTargetConfigs summary] requested=${totalRequested}, accepted=${totalAccepted} (all selections produced target configs)`);
         }
         return results;
-    }
-
-    /**
-     * Refuse to apply an empty table list. buildTargetConfigs drops a selection that is not in the
-     * source schema, has no fields or has no primary key, and logs each drop — but every execution
-     * caller then built and ran a migration anyway. With nothing accepted that migration is a
-     * header-only file: RSU wrote it, opened and merged a PR, ran CodeGen, redeployed Explorer, and
-     * the sync "completed" over zero entity maps, every signal green. Seen 2026-10-29 on a PropFuel
-     * connection: three selections requested, three dropped as notInSchema, three empty migrations
-     * committed. A caller that asked for tables and gets none has failed, and should hear so with the
-     * names it asked for. Preview is deliberately not gated: an empty preview is an honest answer.
-     */
-    private assertTargetConfigs(objects: SchemaPreviewObjectInput[], targetConfigs: TargetTableConfig[], sourceType: string): void {
-        if (objects.length > 0 && targetConfigs.length === 0) {
-            const names = objects.map(o => o.SourceObjectName).join(', ');
-            throw new Error(
-                `NO_TARGET_TABLES: none of the ${objects.length} selected object(s) for ${sourceType} produced a target table (${names}). ` +
-                `Each was dropped as not in the source schema, without fields, or without a primary key — see the ` +
-                `[buildTargetConfigs summary] line. Nothing was applied; re-run discovery for this connection and apply again.`
-            );
-        }
     }
 
     /** Builds a lookup of object name → { objectDescription, fields: fieldName → description } from the connector's static metadata. */
@@ -4049,13 +4031,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             await this.resolveObjectInputs(objects, sourceSchema, user);
 
+            // Filtered on the names AFTER resolveObjectInputs has corrected their casing, as
+            // buildSchemaForConnector does. The raw input set is case-sensitive, so a caller passing
+            // `Clicks` for a stored `clicks` selected nothing, and NO_TARGET_TABLES then told them to
+            // re-run discovery, which cannot fix a casing mismatch.
+            const resolvedNames = new Set(objects.map(o => o.SourceObjectName));
             const filteredSchema: SourceSchemaInfo = {
-                Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
+                Objects: sourceSchema.Objects.filter(o => resolvedNames.has(o.ExternalName))
             };
 
             const validatedPlatform = this.validatePlatform(platform);
-            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
-            this.assertTargetConfigs(objects, targetConfigs, companyIntegration.Integration);
+            const drops = NewTargetConfigDrops();
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector, drops);
+            AssertTargetConfigs(objects, targetConfigs, companyIntegration.Integration, drops);
 
             const input: SchemaBuilderInput = {
                 SourceSchema: filteredSchema,
@@ -4902,8 +4890,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // Caps are operator/env guardrails (MJ_INTEGRATION_MAX_TABLES / _MAX_COLUMNS_PER_TABLE).
         const limitWarnings = await this.enforceSchemaLimits(objects, filteredSchema, companyIntegration, user, provider);
 
-        const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform, connector);
-        this.assertTargetConfigs(objects, targetConfigs, companyIntegration.Integration);
+        const drops = NewTargetConfigDrops();
+        const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform, connector, drops);
+        AssertTargetConfigs(objects, targetConfigs, companyIntegration.Integration, drops);
 
         const input: SchemaBuilderInput = {
             SourceSchema: filteredSchema,
@@ -7369,8 +7358,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             };
 
             // Build target configs and SchemaBuilder input with ExistingTables
-            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
-            this.assertTargetConfigs(objects, targetConfigs, companyIntegration.Integration);
+            const drops = NewTargetConfigDrops();
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector, drops);
+            // By here Phase 1 has persisted the re-resolved catalog and Phase 3 has disabled the removed
+            // objects' maps, so "Nothing was applied" would be untrue. Failing is still right: Phase 6
+            // would otherwise reconcile field maps against an empty resolution.
+            AssertTargetConfigs(objects, targetConfigs, companyIntegration.Integration, drops,
+                `The refreshed catalog had already been saved and the removed objects' entity maps disabled; ` +
+                `no table was built and no migration ran.`);
 
             const schemaInput: SchemaBuilderInput = {
                 SourceSchema: filteredSchema,
