@@ -28507,7 +28507,7 @@
   {
     "fields": {
       "Name": "Mistral Large 4",
-      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing is 50% off for two weeks from release; the standard rates are $1.36 input / $0.14 cached input / $4.18 output per 1M tokens.",
+      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing was 50% off for two weeks from release, then $1.36 input / $0.14 cached input / $4.18 output per 1M tokens from 2026-10-20. On 2026-10-29 Mistral published the weights (Mistral Ecosystem Open-Weight License) and cut the price to $0.70 input / $0.07 cached input / $2.10 output per 1M tokens.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 22,
       "IsActive": true,
@@ -28604,7 +28604,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2026-10-20T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.36,
@@ -28613,7 +28613,8 @@
             "ProcessingType": "Realtime",
             "CacheReadPricePerUnit": 0.14,
             "CacheWritePricePerUnit": null,
-            "Comments": "Mistral Large 4 standard (post-promotion) pricing: $1.36 input / $0.14 cached input / $4.18 output per 1M tokens. These are the pre-discount list figures Mistral published at the 2026-10-06 launch and recorded first-party in MJ on 2026-10-12 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs. StartedAt is release + the changelog's \"50% off for two weeks\" term; Mistral published no explicit discount end date, so if the promotion was extended this row starts early and the expired $0.68/$2.09 row should be re-opened. Mistral's own pages were unreachable from the 2026-10-19 research session, so the date was not re-verified that week."
+            "Comments": "Mistral Large 4 standard (post-promotion) pricing: $1.36 input / $0.14 cached input / $4.18 output per 1M tokens. These are the pre-discount list figures Mistral published at the 2026-10-06 launch and recorded first-party in MJ on 2026-10-12 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs. StartedAt is release + the changelog's \"50% off for two weeks\" term; Mistral published no explicit discount end date, so if the promotion was extended this row starts early and the expired $0.68/$2.09 row should be re-opened. Mistral's own pages were unreachable from the 2026-10-19 research session, so the date was not re-verified that week. EXPIRED 2026-10-29: Mistral cut Large 4 to $0.70 input / $0.07 cached input / $2.10 output per 1M tokens when it published the open weights, effective 2026-10-29. Superseded by the row starting 2026-10-29. Row preserved for historical pricing lookups. Source: https://docs.mistral.ai/models/mistral-large-4-0 ; https://mistral.ai/news/mistral-large-4-oss/",
+            "EndedAt": "2026-10-29T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "C028672F-4B05-454F-A6EB-CDC57C5D42A8"
@@ -28621,6 +28622,26 @@
           "sync": {
             "lastModified": "2026-10-20T23:18:42.552Z",
             "checksum": "f7855827c02d92588913f20184b6970d6a88404b13a4d2913f83ac8f18f08c42"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.7,
+            "OutputPricePerUnit": 2.1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.07,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Mistral Large 4 price cut, effective 2026-10-29 alongside the open-weight release: $0.70 input / $0.07 cached input / $2.10 output per 1M tokens, with no stated end date (reported as permanent). Read first-party on 2026-11-01 from the Mistral model page; matches the Mistral-served endpoints on OpenRouter (mistralai/mistral-large-4-0, $0.70/$2.10, cached $0.07; EU-region endpoint $0.77/$2.31, not modelled). Mistral's general pricing page did not list Large 4 yet. Sources: https://docs.mistral.ai/models/mistral-large-4-0 ; https://mistral.ai/news/mistral-large-4-oss/ ; https://openrouter.ai/api/v1/models/mistralai/mistral-large-4-0/endpoints"
+          },
+          "primaryKey": {
+            "ID": "FC1B61E9-C479-4A09-BCEE-46612170F01B"
           }
         }
       ]
@@ -30053,6 +30074,25 @@
             "lastModified": "2026-10-28T00:35:14.650Z",
             "checksum": "fc45354cefb4e16f28ecec4a558646bb401bfb8299652671c5c1375d6d3a2be2"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "minimax/minimax-m3.1-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A9AB1F2F-EA8B-4EBE-BB1F-9509FCF5B528"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -30088,6 +30128,190 @@
     "sync": {
       "lastModified": "2026-10-28T00:35:14.177Z",
       "checksum": "17a457ad2f79367c5794f1af6bbd21177c52f704f4093b522c1c413858094761"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-6.1 Terra",
+      "PowerRank": 23,
+      "Description": "OpenAI's GPT-6.1 mid-tier Terra model, released October 26, 2026 as the successor to GPT-5.6 Terra; it sits below GPT-6.1 Sol in the GPT-6.1 series and is aimed at everyday agentic, coding and writing work, with strong screenshot understanding. 1,050,000-token context (922K max input), 128K max output. Text and image input, text output. Reasoning effort none, low, medium (default), high, xhigh and max (unlike GPT-6.1 Sol, it accepts none). Function calling, structured outputs and streaming supported on Chat Completions, Responses and Batch. Priced at $1/$5 per 1M, cached input $0.05, cache writes $1.25 (30-minute retention) or $2.50 (12-hour) - half of GPT-5.6 Terra and GPT-6.1 Sol. A prompt above 272K input tokens re-rates the whole request at 2x input and cache rates and 1.5x output ($2/$7.50, cached $0.10); that long-context tier is not modelled. Available on the OpenAI API, Amazon Bedrock (openai.gpt-6.1-terra, lifecycle start 2026-10-23) and OpenRouter. Microsoft Foundry availability is not confirmed and not modelled. OpenRouter's GPT-6.1 Terra Pro is the same model with reasoning mode set to pro, not a separate OpenAI model id, so it is not modelled. Sources: https://developers.openai.com/api/docs/models/gpt-6.1-terra ; https://openai.com/index/introducing-gpt-6-1-terra/",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.6-terra",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "805AC0E9-D046-4D1D-968C-B8DB05584A2B"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7BA1A5E1-1F03-461D-817B-96B47A772516"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "openai.gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "72CA6C87-A37C-4017-9D44-A6F52D76CFA6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "59B1AFCF-02F9-4F7D-BE7F-0E397C7244F9"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-10-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": 1.25,
+            "Comments": "GPT-6.1 Terra launch pricing on OpenAI direct (2026-10-26), read first-party from the OpenAI model page on 2026-11-01: $1/$5 per 1M in/out, cached input $0.05, cache write $1.25 (30-minute retention; 12-hour retention is $2.50, not modelled). Long-context tier not modelled: above 272K input tokens the whole request is billed at 2x input and cache rates and 1.5x output ($2/$7.50, cached $0.10). Flex ($0.50/$2.50) and fast ($2/$10) service tiers are not modelled. Source: https://developers.openai.com/api/docs/models/gpt-6.1-terra"
+          },
+          "primaryKey": {
+            "ID": "4BB32781-6B63-47C1-803F-B119CB5F8487"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F2E7DB51-B7EC-42C7-94FF-57BF4A93BA9C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Wonder",
+      "PowerRank": 26,
+      "Description": "Meta Superintelligence Labs' frontier reasoning model, released October 12, 2026, positioned above Muse Spark 1.3 for complex personal and professional agentic work. API id muse-wonder-1.0 on Meta's Model API (Preview), also served on OpenRouter as meta/muse-wonder, which is the route MJ uses because no Meta driver class exists. 1,048,576-token context; text, image, video, audio and PDF input, text output; reasoning effort minimal through max; tool calling supported on the OpenRouter route. Meta prices it at $4 input / $0.20 cached input / $20 output per 1M tokens with no long-context premium (web search $2.50 per 1,000 queries); no cost row is recorded because MJ does not track OpenRouter prices and has no Meta-direct route. MaxOutputTokens is omitted: Meta publishes no cap and listings disagree (16K, 131K, 943,718). The higher-tier Muse Wonder Full is only in Meta's Muse Code subscriptions and has no API id, so it is not modelled. On Meta's launch table it scores 52 on the Artificial Analysis Index (GPT-6 Astra 53, Claude Opus 5.5 58). Sources: https://openrouter.ai/meta/muse-wonder ; https://www.eesel.ai/blog/meta-muse-wonder",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 9,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7EAD0B0C-B085-4719-A389-9CC6A5EB06D0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-wonder",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D4CCEAB6-CEDF-4B80-902E-0D663E58365B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1C622FDC-9873-4171-978E-596BDF7FEFA8"
     }
   }
 ]
