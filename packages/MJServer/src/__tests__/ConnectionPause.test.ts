@@ -59,11 +59,19 @@ describe('DecidePauseWrite — the second pause must not erase the first', () =>
         expect(DecidePauseWrite(stored, [])).toBeNull();
     });
 
-    it('refuses to overwrite a stored record even when the re-pause DID move something', () => {
-        // A schedule created while paused, then moved by a second pause. The first record is
-        // still the authority on what resume owes; adding to it would over-restore.
+    it('adds what a re-pause DID move to the stored record, keeping the stored entries as they were', () => {
+        // A schedule created or switched back on while paused, or a record a resume could not
+        // clear. Dropping the newly paused job would leave it paused with nothing to restore it.
         const stored: PausedScheduleRecord[] = [{ ID: 'a', Kind: 'sync' }];
-        expect(DecidePauseWrite(stored, [{ ID: 'c', Kind: 'discovery' }])).toBeNull();
+        expect(DecidePauseWrite(stored, [{ ID: 'c', Kind: 'discovery' }])).toEqual([
+            { ID: 'a', Kind: 'sync' },
+            { ID: 'c', Kind: 'discovery' },
+        ]);
+    });
+
+    it('writes nothing when everything the re-pause moved is already recorded, whatever the id casing', () => {
+        const stored: PausedScheduleRecord[] = [{ ID: 'abc-1', Kind: 'sync' }];
+        expect(DecidePauseWrite(stored, [{ ID: 'ABC-1', Kind: 'sync' }])).toBeNull();
     });
 
     it('writes nothing when there is neither a stored record nor anything moved', () => {
