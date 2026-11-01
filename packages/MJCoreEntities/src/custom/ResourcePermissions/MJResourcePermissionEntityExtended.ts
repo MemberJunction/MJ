@@ -9,6 +9,9 @@ import { CheckShareManagePermission } from "../Permissions/BaseShareEntityExtend
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 
+/** `MJ: Resource Types.ID` for Projects (Conversation Folders). */
+const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
 /**
  * Subclass for the Resource Permissiosn entity that implements some workflow logic
  */
@@ -70,12 +73,13 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
             await engine.Config(false, user);
 
             const rt = engine.ResourceTypes.find((t) => UUIDsEqual(t.ID, this.ResourceTypeID));
+            const entityName = rt?.Entity ?? (UUIDsEqual(this.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID) ? 'MJ: Projects' : null);
             const typeFields = engine.GetResourceTypeInfoFields(this.ResourceTypeID);
-            if (!rt || !typeFields?.OwnerIDFieldName || !typeFields?.PrimaryKeyFieldName) {
+            if (!entityName || !typeFields?.OwnerIDFieldName || !typeFields?.PrimaryKeyFieldName) {
                 return false;
             }
 
-            const resourceRecord = await provider.GetEntityObject(rt.Entity, user);
+            const resourceRecord = await provider.GetEntityObject(entityName, user);
             const ck = new CompositeKey([
                 { FieldName: typeFields.PrimaryKeyFieldName, Value: this.ResourceRecordID }
             ]);
@@ -139,6 +143,12 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
             );
             return !!conv?.UserID && UUIDsEqual(conv.UserID, userId);
         }
+        if (UUIDsEqual(this.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID)) {
+            const proj = ConversationEngine.Instance.Projects.find((p) =>
+                UUIDsEqual(p.ID, this.ResourceRecordID)
+            );
+            return !!proj?.OwnerUserID && UUIDsEqual(proj.OwnerUserID, userId);
+        }
         // Additional resource-type owner lookups can be added here.
         return false;
     }
@@ -187,13 +197,14 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
             const engine = <ResourcePermissionEngine> ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(p, ResourcePermissionEngine);
             await engine.Config(false, this.ContextCurrentUser);
             const rt = engine.ResourceTypes.find((rt: any) => UUIDsEqual(rt.ID, this.ResourceTypeID));
+            const entityName = rt?.Entity ?? (UUIDsEqual(this.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID) ? 'MJ: Projects' : null);
             const rtEntityRecord = engine.ResourceTypes.find((rt: any) => rt.Name.trim().toLowerCase() === "records")
 
             // now get the field names for the given resource type based on its entity metadata with this helper method in the engine
             const resourceTypeFields = engine.GetResourceTypeInfoFields(this.ResourceTypeID);
-            if (resourceTypeFields && resourceTypeFields.NameFieldName && resourceTypeFields.OwnerIDFieldName) {
+            if (entityName && resourceTypeFields && resourceTypeFields.NameFieldName && resourceTypeFields.OwnerIDFieldName) {
                 // grab the data from the resource record itself so we have it for the notification so it is easy for the user to read
-                const resourceRecord = await p.GetEntityObject(rt.Entity, this.ContextCurrentUser);
+                const resourceRecord = await p.GetEntityObject(entityName, this.ContextCurrentUser);
                 const ck = new CompositeKey([
                     {
                         FieldName: resourceTypeFields.PrimaryKeyFieldName,
