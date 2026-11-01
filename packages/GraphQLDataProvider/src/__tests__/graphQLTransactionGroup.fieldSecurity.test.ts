@@ -61,7 +61,12 @@ function newRecord(entityInfo: EntityInfo) {
 
 async function sentPayload(roleId: string, record: object = newRecord(employees()), operation = 'Create'): Promise<Record<string, unknown>> {
     const executeGQL = vi.fn().mockResolvedValue({ ExecuteTransactionGroup: { Success: true, ErrorMessages: [], ResultsJSON: ['{}'] } });
-    const provider = { ExecuteGQL: executeGQL, CurrentUser: user(roleId) };
+    const provider = {
+        ExecuteGQL: executeGQL,
+        CurrentUser: user(roleId),
+        IsFieldDirtyOnChain: (_entity: unknown, field: { Dirty: boolean }) => field.Dirty,
+        ClearISAParentPreSaveSnapshots: () => {},
+    };
     const group = new GraphQLTransactionGroup(provider as never);
     (group as unknown as { _pendingTransactions: unknown[] })._pendingTransactions.push(
         { BaseEntity: record, OperationType: operation },

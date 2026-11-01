@@ -26,6 +26,7 @@ function createComponent(): ConversationChatAreaComponent {
   component.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   component.isArtifactPaneMaximized = false;
   open['artifactPaneWidthBeforeMaximize'] = DEFAULT_ARTIFACT_PANE_WIDTH;
+  open['handoffStepsByRunId'] = new Map();
   open['cdr'] = { detectChanges: vi.fn() };
 
   return component;

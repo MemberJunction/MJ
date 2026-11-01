@@ -65,3 +65,11 @@ This is a generic type-graphql scaling bug (not MJ-specific). Status of each hal
 
 Once MJ upgrades to a type-graphql release that contains **both** fixes (rc.4+ *and* #1813
 merged), this patch can be dropped in favor of the version bump.
+
+## `@hyperframes/engine` — Decision D15 status (`plans/video-studio.md` §7.3)
+
+`plans/video-studio.md` §7.3 (Decision D15) specifies offering `@hyperframes/engine` an additive request-interception / `onPageCreated` hook upstream with a `pnpm.patchedDependencies` fallback if needed, while explicitly requiring that security never depend on the hook.
+
+- **Current status:** No patch is applied to `@hyperframes/engine@0.8.134` (`pnpm.patchedDependencies` in the root `package.json` contains only `type-graphql`).
+- **Why security does not depend on a patch:** Network isolation for untrusted, model-written compositions is enforced by `DockerRenderDriver` (`--network=none`, `--read-only`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`), which is the only driver that reports `Driver.IsNetworkIsolated = true`. In `LocalWorker` and `Remote` modes (`Driver.IsNetworkIsolated = false`), defense-in-depth comes from the static URL / media check (`Check()`), the injected Content-Security-Policy (`COMPOSITION_CSP` with `connect-src 'none'`), and unprivileged per-render temporary directories.
+
