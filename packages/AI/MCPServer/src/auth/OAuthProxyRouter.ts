@@ -1175,7 +1175,14 @@ async function handlePostConsentEndpoint(
   const offeredScopePaths = new Set((consentRequest.availableScopes ?? []).map((s) => s.FullPath));
   const rejectedScopes = grantedScopes.filter((s) => !offeredScopePaths.has(s));
   if (rejectedScopes.length > 0) {
-    console.warn(`[OAuth Proxy] Dropping ${rejectedScopes.length} submitted scope(s) not offered on the consent screen: ${rejectedScopes.join(', ')}`);
+    // Rejected scopes are raw form input: strip line breaks before logging (CWE-117 log injection).
+    // Each scope is sanitized before the join: CodeQL's js/log-injection does not carry a replace
+    // on the joined string back through join(). U+2028/U+2029 are removed too. String() guards
+    // against non-string entries the extended urlencoded parser can produce (scopes[0][x]=1).
+    const safeRejectedScopes = rejectedScopes
+      .map((s) => String(s).replace(/\n|\r/g, '').replace(/[\u2028\u2029]/g, ''))
+      .join(', ');
+    console.warn(`[OAuth Proxy] Dropping ${rejectedScopes.length} submitted scope(s) not offered on the consent screen: ${safeRejectedScopes}`);
   }
   grantedScopes = grantedScopes.filter((s) => offeredScopePaths.has(s));
 
@@ -1184,7 +1191,11 @@ async function handlePostConsentEndpoint(
   if (grantedScopes.length === 0) {
     console.warn(`[OAuth Proxy] User ${consentRequest.user.email} granted NO SCOPES - token will have empty scopes array`);
   } else {
-    console.log(`[OAuth Proxy] User ${consentRequest.user.email} granted scopes: ${grantedScopes.join(', ')}`);
+    // Already filtered to offered scopes, but still form-derived: strip line breaks before logging.
+    const safeGrantedScopes = grantedScopes
+      .map((s) => String(s).replace(/\n|\r/g, '').replace(/[\u2028\u2029]/g, ''))
+      .join(', ');
+    console.log(`[OAuth Proxy] User ${consentRequest.user.email} granted scopes: ${safeGrantedScopes}`);
   }
 
   // Create authorization code with granted scopes
