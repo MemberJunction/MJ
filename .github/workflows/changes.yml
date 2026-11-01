@@ -207,11 +207,19 @@ jobs:
           EXPECTED_STRING="__v$TARGET_LINE"
 
           git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+            # Baselines (B<timestamp>__…) are full-schema snapshots, not incremental migrations:
+            # they carry the version of the schema they capture, which need not be the target line,
+            # and they start with B by definition. Neither rule below applies to them.
+            if [[ "$(basename "$file")" =~ ^B[0-9]{12}__ ]]; then
+              echo "↷ $(basename "$file") is a baseline — skipping the filename rules"
+              continue
+            fi
             if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
               echo "::error file=$file::Migration filename doesn't match the target line (v$TARGET_LINE)"
               exit 1
             fi
-            if [[ ! "$file" =~ "V" ]]; then
+            # On the basename: a V anywhere in the path (e.g. a folder name) used to satisfy this.
+            if [[ "$(basename "$file")" != V* ]]; then
               echo "::error file=$file::Migration filename doesn't begin with a  capital \`V\` character"
               exit 1
             fi
@@ -316,6 +324,13 @@ jobs:
           # for the same directory, so the two guards agree. Note the scan reads WHOLE files rather
           # than added lines, so without this any PR touching a fixture inherits its entire history.
           git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | grep -vE '(^|/)tests?/' | while read file; do
+            # Baselines (B<timestamp>__…) are pre-rendered full-schema snapshots: they name the
+            # schema literally and never use the Flyway placeholder, so both rules below would
+            # reject every one. Same exemption as the filename step above.
+            if [[ "$(basename "$file")" =~ ^B[0-9]{12}__ ]]; then
+              echo "↷ $(basename "$file") is a baseline — skipping the content rules"
+              continue
+            fi
             # Strip single-quoted SQL string literals before the hard-coded-schema check so that
             # seeded data (e.g. prompt/template content that legitimately shows __mj.* SQL examples)
             # doesn't trip the guard. T-SQL escapes a quote by doubling it (''); slurp mode handles

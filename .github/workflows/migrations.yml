@@ -53,3 +53,41 @@ jobs:
           CODEGEN_DB_USERNAME: sa
           CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
           DB_TRUST_SERVER_CERTIFICATE: 'true'
+
+  # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
+  # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
+  # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.
+  # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
+  # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
+  # by concurrency, so a cancel means a timeout or a manual stop.
+  backstop-alarm:
+    name: Backstop alarm
+    needs: [test-migrations]
+    if: always() && github.event_name == 'push' && github.ref_name == 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          filter: blob:none
+
+      - name: Alert on backstop failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "Test migrations"
+
+      # A cleanup failure must never turn a green run red (that would file an alarm about the
+      # alarm), so this step alone is continue-on-error; the script still logs ::error::.
+      - name: Resolve backstop alarm on green
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "Test migrations"
