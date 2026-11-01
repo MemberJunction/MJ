@@ -237,7 +237,7 @@ Two things cause it, and the workflow responds to both the same way:
 
 | Cause | What it looks like |
 |---|---|
-| **A real conflict.** `ci/back-merge.mjs` refuses to auto-resolve anything but `pnpm-lock.yaml`, because `next` accumulates hours of merges while a release builds and guessing would silently discard them. | The step log names the conflicting paths. |
+| **A real conflict.** `ci/back-merge.mjs` auto-resolves only `pnpm-lock.yaml` and a `package.json` whose `main` side is nothing but the release's version bump (it keeps `next`'s file at the new version), because `next` accumulates hours of merges while a release builds and guessing would silently discard them. | The step log names the conflicting paths. |
 | **A rejected push.** `next` is protected; the release App must hold a ruleset bypass, and that is GitHub configuration living outside this repo. | `GH013: Repository rule violations found for refs/heads/next`. |
 
 ### What the workflow already did for you

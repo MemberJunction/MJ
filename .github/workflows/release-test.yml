@@ -53,9 +53,11 @@ jobs:
     # Skip on schedule: the nightly cron is for e2e; test.yml's nightly already
     # runs the full unit backstop.
     if: github.event_name != 'schedule'
-    # 60, matching test.yml: the full suite was still running at ~27 min when a
-    # 30-min cap killed it — and this job may run with a cold turbo cache.
-    timeout-minutes: 60
+    # 90: unlike test.yml, which shards the suite, this job runs all of it in one
+    # runner, and it may start with a cold turbo cache (about 10 extra minutes of
+    # build). At 60 a release gate was cancelled at the limit with every test still
+    # passing. Sharding it the way test.yml does would bring this back down.
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
       TURBO_CACHE_DIR: .turbo/cache
