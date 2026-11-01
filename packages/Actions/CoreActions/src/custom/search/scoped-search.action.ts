@@ -336,9 +336,12 @@ export class ScopedSearchAction extends BaseAction {
             AISkillID: skill?.ID ?? null,
             PrimaryScopeRecordID: params.RunScope ? this.runTenantID(params.RunScope) ?? null : null,
         });
+        // In a host run every other ScopeID is refused, so "pass another scope" would send the model in circles
+        const advice = params.RunScope?.SearchScopeIDs?.length
+            ? "The run's host assigned this scope, and no other can be searched in this run."
+            : 'Pass a ScopeID for a scope that is bounded to the tenant.';
         return this.createErrorResult(
-            `This agent run is scoped to a tenant, and ${which} would search across every tenant. `
-                + 'Pass a ScopeID for a scope that is bounded to the tenant.',
+            `This agent run is scoped to a tenant, and ${which} would search across every tenant. ${advice}`,
             'INVALID_PARAM',
         );
     }
