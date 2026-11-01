@@ -32,6 +32,8 @@
  * Everything here is a pure function over plain values. The resolver owns the reads and writes.
  */
 
+import { UUIDSet } from '@memberjunction/global';
+
 /** The two schedule kinds a connection can own. Mirrors ScheduledJob's DriverClass split. */
 export type PausedScheduleKind = 'sync' | 'discovery';
 
@@ -82,8 +84,8 @@ export function DecidePauseWrite(
     stored: ReadonlyArray<PausedScheduleRecord>,
     newlyPaused: ReadonlyArray<PausedScheduleRecord>
 ): PausedScheduleRecord[] | null {
-    const known = new Set(stored.map(r => r.ID.toUpperCase()));
-    const added = newlyPaused.filter(r => !known.has(r.ID.toUpperCase()));
+    const known = new UUIDSet(stored.map(r => r.ID));
+    const added = newlyPaused.filter(r => !known.Has(r.ID));
     if (added.length === 0) return null;          // nothing new moved — any stored record stands as it is
     return [...stored, ...added];
 }
