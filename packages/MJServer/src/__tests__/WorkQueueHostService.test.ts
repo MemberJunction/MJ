@@ -56,9 +56,9 @@ function enabled(overrides: Partial<WorkQueueConfig> = {}): WorkQueueConfig {
 }
 
 describe('workQueue configuration', () => {
-    it('defaults to disabled, running every MJWorker subscription once enabled', () => {
+    it('defaults to enabled, running every MJWorker subscription out of the box', () => {
         expect(WorkQueueSchema.parse({})).toEqual({
-            enabled: false, systemUserEmail: 'system@memberjunction.org', subscriptions: [{ name: '*', concurrency: 4 }],
+            enabled: true, systemUserEmail: 'system@memberjunction.org', subscriptions: [{ name: '*', concurrency: 4 }],
             idlePollMinMs: 250, idlePollMaxMs: 5000, shutdownDrainMs: 8000, sweeperEnabled: true, sweeperIntervalMs: 60000,
             reconcileIntervalMs: 30000,
         });
@@ -94,7 +94,7 @@ describe('host configuration helpers', () => {
 describe('StartWorkQueueHost', () => {
     it('starts nothing when the section is disabled', async () => {
         const rec = recorder();
-        expect(await StartWorkQueueHost(WorkQueueSchema.parse({}), PROVIDER, PROVIDER_SOURCE, rec.Dependencies)).toBeNull();
+        expect(await StartWorkQueueHost(WorkQueueSchema.parse({ enabled: false }), PROVIDER, PROVIDER_SOURCE, rec.Dependencies)).toBeNull();
         expect(rec.EngineCalls).toBe(0);
     });
 
@@ -109,9 +109,18 @@ describe('StartWorkQueueHost', () => {
         await expect(StartWorkQueueHost(enabled(), PROVIDER, PROVIDER_SOURCE, rec.Dependencies)).rejects.toThrow('System user not found with email: system@memberjunction.org');
     });
 
-    it('names the setting to fix when the placeholder email from DEFAULT_SERVER_CONFIG is still in effect', async () => {
-        const rec = recorder();
-        await expect(StartWorkQueueHost(enabled({ systemUserEmail: 'not.set@nowhere.com' }), PROVIDER, PROVIDER_SOURCE, rec.Dependencies))
+    it('falls back to FindSystemUser when default systemUserEmail is not literal in UserCache', async () => {
+        const rec = recorder([]);
+        rec.Dependencies.FindSystemUser = () => SYSTEM_USER;
+        const host = await StartWorkQueueHost(WorkQueueSchema.parse({}), PROVIDER, PROVIDER_SOURCE, rec.Dependencies);
+        expect(host).not.toBeNull();
+        expect(rec.EngineCalls).toBe(1);
+    });
+
+    it('names the setting to fix when an explicit custom email is not found even if FindSystemUser exists', async () => {
+        const rec = recorder([]);
+        rec.Dependencies.FindSystemUser = () => SYSTEM_USER;
+        await expect(StartWorkQueueHost(enabled({ systemUserEmail: 'missing-worker@example.com' }), PROVIDER, PROVIDER_SOURCE, rec.Dependencies))
             .rejects.toThrow('set workQueue.systemUserEmail');
     });
 
@@ -126,7 +135,16 @@ describe('StartWorkQueueHost', () => {
 });
 
 describe('MJServerWorkQueueProviderSource', () => {
-    it('falls back to the shared server provider when there is no SQL Server pool', async () => {
+    it('mints an independent provider instance when fallback implements CreateIndependentInstance (e.g. PostgreSQL)', async () => {
+        const independent = { Name: 'independent-pg-provider' } as IMetadataProvider;
+        const createIndependent = vi.fn().mockResolvedValue(independent);
+        const pgFallback = Object.assign({}, PROVIDER, { CreateIndependentInstance: createIndependent });
+        const source = new MJServerWorkQueueProviderSource(null, pgFallback);
+        expect(await source.CreateProvider()).toBe(independent);
+        expect(createIndependent).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to the shared server provider when there is no SQL Server pool and no CreateIndependentInstance', async () => {
         const source = new MJServerWorkQueueProviderSource(null, PROVIDER);
         expect(await source.CreateProvider()).toBe(PROVIDER);
     });

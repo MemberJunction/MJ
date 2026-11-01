@@ -2,7 +2,7 @@ import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int,
 import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { NoLog } from "../logging/NoLog.js";
-import { UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { DrainResponseBody, SafeFetch } from "@memberjunction/network-utils";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -3670,22 +3670,32 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // 2. Schedules. A pause of an already-paused connection moves nothing and must not
             //    overwrite the record the FIRST pause left — DecidePauseWrite is that guard.
+            //    The record is saved BEFORE any job moves: a job paused without a saved record is
+            //    one resume can never put back, so a record that will not save pauses nothing.
             let schedulesPaused = 0;
             try {
                 const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
                 const toPause = DecideSchedulesToPause(jobs);
-                for (const rec of toPause) {
-                    if (await this.setScheduledJobStatus(rec.ID, 'Paused', user, md)) schedulesPaused++;
-                }
                 const stored = ReadPausedSchedules(ci.Configuration);
                 const write = DecidePauseWrite(stored, toPause);
                 if (write) {
                     ci.Configuration = WritePausedSchedules(ci.Configuration, write);
+                    if (!await ci.Save()) {
+                        throw new Error(`recording the schedules to pause failed: ${ci.LatestResult?.Message ?? 'unknown error'}`);
+                    }
+                }
+                for (const rec of toPause) {
+                    if (await this.setScheduledJobStatus(rec.ID, 'Paused', user, md)) schedulesPaused++;
                 }
                 // Mirror onto the connection row the way the post-restart scheduler does, so a
                 // reader that only knows about ScheduleEnabled still sees a paused connection.
-                if (schedulesPaused > 0) ci.ScheduleEnabled = false;
-                if (write || schedulesPaused > 0) await ci.Save();
+                // The record is already saved, so a failure here costs only the mirror.
+                if (schedulesPaused > 0) {
+                    ci.ScheduleEnabled = false;
+                    if (!await ci.Save()) {
+                        LogError(`IntegrationDeactivateConnection: clearing ScheduleEnabled failed — ${ci.LatestResult?.Message ?? 'unknown error'}`);
+                    }
+                }
                 notes.push(DescribePauseOutcome(toPause, stored.length > 0 && toPause.length === 0));
             } catch (schedErr) {
                 // A schedule we could not pause is worth saying out loud: the connection IS
@@ -3790,6 +3800,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // it off, and inferring would silently restart work nobody asked for. The record
             // written at pause is the only thing that can tell those apart.
             let schedulesResumed = 0;
+            let scheduleNote = '';
             try {
                 const stored = ReadPausedSchedules(ci.Configuration);
                 if (stored.length > 0) {
@@ -3799,10 +3810,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
                     // Consume the record whether or not every job came back: a job that was
                     // deleted while paused is never coming back, and keeping the record would make
-                    // the next pause a no-op via DecidePauseWrite's already-paused guard.
+                    // the next pause a no-op via DecidePauseWrite's already-paused guard. That is
+                    // also why a record that will not clear is said out loud rather than logged.
                     ci.Configuration = WritePausedSchedules(ci.Configuration, []);
                     if (schedulesResumed > 0) ci.ScheduleEnabled = true;
-                    await ci.Save();
+                    if (!await ci.Save()) {
+                        LogError(`IntegrationReactivateConnection: clearing the paused-schedule record failed — ${ci.LatestResult?.Message ?? 'unknown error'}`);
+                        scheduleNote = ' The record of paused schedules could not be cleared, so the next pause will not record the schedules it stops.';
+                    }
                 }
             } catch (resumeErr) {
                 LogError(`IntegrationReactivateConnection: restoring schedules failed — ${resumeErr}`);
@@ -3810,23 +3825,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             if (runSchemaRefresh && !awaitSchemaRefresh) {
                 const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md);
-                return { Success: true, Message: BuildReactivateMessage(detached) };
+                return { Success: true, Message: BuildReactivateMessage(detached) + scheduleNote };
             }
 
             if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(companyIntegrationID, user, md);
-                    return { Success: true, Message: BuildReactivateMessage(refreshResult) };
+                    return { Success: true, Message: BuildReactivateMessage(refreshResult) + scheduleNote };
                 } catch (refreshErr) {
                     // Refresh failure does NOT undo the reactivation — the
                     // connection is active, only discovery failed, and the
                     // operator can re-run IntegrationRefreshConnectorSchema.
                     LogError(`IntegrationReactivateConnection: pipeline error — ${refreshErr}`);
-                    return { Success: true, Message: `Reactivated (schema refresh failed: ${this.formatError(refreshErr)})` };
+                    return { Success: true, Message: `Reactivated (schema refresh failed: ${this.formatError(refreshErr)})${scheduleNote}` };
                 }
             }
 
-            return { Success: true, Message: BuildReactivateMessage(undefined) };
+            return { Success: true, Message: BuildReactivateMessage(undefined) + scheduleNote };
         } catch (e) {
             LogError(`IntegrationReactivateConnection error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -5295,12 +5310,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
-     * U7 — server-side schedule uniqueness: finds an existing (non-deleted) scheduled job of the
-     * given job type that targets the given CompanyIntegration (its Configuration JSON carries
-     * CompanyIntegrationID). Matched case-insensitively across UUID casings (SQL Server upper /
-     * PostgreSQL lower). Returns the newest match or null.
-     */
-    /**
      * Every scheduled job that targets this connection, with its kind, for pause/resume.
      *
      * Deliberately ONE view over both driver classes rather than two calls: pause has to move
@@ -5329,10 +5338,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             kindByTypeID.set(t.ID, t.DriverClass === 'IntegrationDiscoveryScheduledJobDriver' ? 'discovery' : 'sync');
         }
 
-        const esc = (s: string) => s.replace(/'/g, "''");
-        const lower = esc(companyIntegrationID.toLowerCase());
-        const upper = esc(companyIntegrationID.toUpperCase());
-        const typeList = [...kindByTypeID.keys()].map(id => `'${esc(id)}'`).join(',');
+        const validCompanyIntegrationID = sqlUuid(companyIntegrationID, 'companyIntegrationID');
+        const lower = validCompanyIntegrationID.toLowerCase();
+        const upper = validCompanyIntegrationID.toUpperCase();
+        const typeList = [...kindByTypeID.keys()].map(id => `'${EscapeSQLString(id)}'`).join(',');
         const jobs = await rv.RunView<{ ID: string; Status: string | null; JobTypeID: string }>({
             EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter:
@@ -5396,6 +5405,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * U7 — server-side schedule uniqueness: finds an existing (non-deleted) scheduled job of the
+     * given job type that targets the given CompanyIntegration (its Configuration JSON carries
+     * CompanyIntegrationID). Matched case-insensitively across UUID casings (SQL Server upper /
+     * PostgreSQL lower). Returns the newest match or null.
+     */
     private async findExistingScheduledJob(
         jobTypeID: string,
         companyIntegrationID: string,
@@ -6345,9 +6360,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     // ── CONNECTOR CAPABILITIES ──────────────────────────────────────────
 
     /**
-     * Returns the CRUD capability flags for the connector bound to a CompanyIntegration.
-     * Use this to determine which operations (Create/Update/Delete/Search) are supported
-     * before attempting point-action calls.
+     * Returns the settings the connector bound to a CompanyIntegration declares in its
+     * `SettingsSchema` — key, label, group, type, default, bounds and tier — so a client can
+     * render the connection's settings form without knowing the connector. A connector that
+     * declares none returns an empty list.
      */
     @Query(() => ConnectorSettingsSchemaOutput)
     async IntegrationGetConnectorSettingsSchema(
@@ -6386,6 +6402,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Returns the CRUD capability flags for the connector bound to a CompanyIntegration.
+     * Use this to determine which operations (Create/Update/Delete/Search) are supported
+     * before attempting point-action calls.
+     */
     @Query(() => ConnectorCapabilitiesOutput)
     async IntegrationGetConnectorCapabilities(
         @Arg("companyIntegrationID") companyIntegrationID: string,

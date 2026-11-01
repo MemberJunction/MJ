@@ -81,7 +81,7 @@ interface LoopAgentResponse {
                 /** What runs this step. Picks which `configuration` shape applies. */
                 kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'Decision';
                 configuration:
-                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }  // kind: 'Agent'
+                    | { agentName: string; message?: string; templateParameters?: Record<string, string>; presetName?: string }  // kind: 'Agent'
                     | { actionName: string; inputMapping?: string; outputMapping?: string }                  // kind: 'Action'
                     | { assignToUserID?: string; instructions?: string; expiresInHours?: number }            // kind: 'Human'
                     | { promptName: string; templateParameters?: Record<string, string> }                    // kind: 'Prompt'

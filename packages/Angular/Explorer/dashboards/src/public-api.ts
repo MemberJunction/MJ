@@ -256,6 +256,10 @@ export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.co
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';
 
+// Video Studio app — Productions, Brand Kits, and Archetypes resource tabs
+export * from './video-studio-dashboards.module';
+export * from './VideoStudio';
+
 // Chief of Staff app: one resource component per nav item
 export { BaseChiefOfStaffPage, type ChiefOfStaffClientTool } from './ChiefOfStaff/chief-of-staff-page-base';
 export { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';

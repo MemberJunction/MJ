@@ -214,6 +214,19 @@ describe('pacing and recovery', () => {
     expect(h.calls).not.toContain('release');
   });
 
+  it('says it is shedding from its first step until it has given everything back', async () => {
+    const h = hooks();
+    const c = new RunMemoryControl(h.hooks, 200);
+    expect(c.IsShedding).toBe(false);
+    resident = Math.floor(HOST * 0.95);
+    await note(c);
+    expect(c.IsShedding).toBe(true);
+    resident = Math.floor(HOST * 0.5);
+    for (let i = 0; i < 4; i++) { h.tick(); await note(c); }
+    expect(c.BatchSize).toBe(200);
+    expect(c.IsShedding).toBe(false);
+  });
+
   it('reports a new episode after a full recovery', async () => {
     const h = hooks();
     const c = new RunMemoryControl(h.hooks, 200);

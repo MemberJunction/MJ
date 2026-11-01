@@ -1,0 +1,1480 @@
+/**
+ * @fileoverview Pure helpers for the Video Studio app's AI-agent integration
+ * across all three resource surfaces:
+ *   1. Productions (`VideoStudioProductionsResource`) + right-side slide-in Production Brief (`VSProductionBriefComponent`)
+ *   2. Brand Kits (`VideoStudioBrandKitsResource`)
+ *   3. Archetypes (`VideoStudioArchetypesResource`)
+ *
+ * These functions are intentionally free of Angular / DOM dependencies so they
+ * can be unit-tested in Node via Vitest. Each Video Studio resource component
+ * supplies a plain snapshot of its current state and these helpers shape it
+ * into the key-value `AgentContext` object published via
+ * `this.navigationService.SetAgentContext(this, ...)`.
+ *
+ * 🚨 SAFETY BOUNDARY (READ / NAVIGATE / FILTER / SEARCH / REFRESH + STUDIO BRIEF FORM-FILL):
+ * Productions, Brand Kits, and Archetypes expose ONLY read, filter, search,
+ * select/open-for-viewing, and refresh operations to the AI agent — never create,
+ * edit, copy, share, upload, policy, or delete tools. Productions additionally exposes
+ * four reversible in-memory brief form-fill tools (`SelectStudioArchetype`,
+ * `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`) while deliberately
+ * excluding `StartProduction`:
+ * - Productions: no create/delete production, no share/permission grant (`ArtifactShareModal`
+ *   is user-confirm-only), no storyboard/render mutation. Brief form-fill tools only
+ *   (`SelectStudioArchetype`, `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`);
+ *   `StartProduction` spends model/render tokens and creates a conversation, so it stays
+ *   human-triggered in the UI.
+ * - Brand Kits: `OpenBrandKit` opens the `MJ: Brand Kits` entity form for viewing via
+ *   `NavigationService.OpenEntityRecord`; no create, save, delete, or asset/policy write
+ *   tool is exposed.
+ * - Archetypes: `SelectArchetype` / `OpenArchetype` selects or opens a company archetype
+ *   record for viewing; making a copy or editing an archetype (`vs-archetype-editor`) creates
+ *   or updates a database record and is gated behind the user-driven editor dialog only.
+ */
+
+import { EscapeSQLString } from '@memberjunction/global';
+import { VideoProductionStatus } from '@memberjunction/video-studio-core';
+import { AGENT_CONTEXT_NAME_LIST_CAP, BoundNameList } from '../shared/agent-tool-validation';
+
+/**
+ * Upper bound on how many names any Video Studio surface publishes in a
+ * name-list context field. Companion `*Count` fields are emitted when a list
+ * exceeds this cap.
+ */
+export const VIDEO_STUDIO_NAME_LIST_CAP = AGENT_CONTEXT_NAME_LIST_CAP;
+
+/**
+ * Cap an array of names to {@link VIDEO_STUDIO_NAME_LIST_CAP} entries without
+ * mutating the input array.
+ */
+export function CapVideoStudioNames(names: readonly string[]): string[] {
+    return BoundNameList(names, VIDEO_STUDIO_NAME_LIST_CAP);
+}
+
+
+/**
+ * Minimal identifiable item shape accepted by {@link ResolveVideoStudioItem}.
+ */
+export interface NamedVideoStudioItem {
+    ID: string;
+    Name: string;
+}
+
+/**
+ * Outcome of {@link ResolveVideoStudioItem}: a matched item, or a tolerant error
+ * message listing available names.
+ */
+export type VideoStudioItemResolution<T extends NamedVideoStudioItem> =
+    | { Ok: true; Item: T }
+    | { Ok: false; Error: string };
+
+/**
+ * Resolve an agent-supplied reference (an ID or a display name) against a list
+ * of loaded items in precedence order:
+ *   1. Exact `ID` match (case-insensitive)
+ *   2. Exact `Name` match (case-insensitive, trimmed)
+ *   3. First `Name` substring match (case-insensitive, trimmed)
+ *
+ * Returns a descriptive error listing up to {@link VIDEO_STUDIO_NAME_LIST_CAP}
+ * available names when no item matches. Never throws.
+ */
+export function ResolveVideoStudioItem<T extends NamedVideoStudioItem>(
+    reference: unknown,
+    items: readonly T[],
+    itemNoun: string,
+): VideoStudioItemResolution<T> {
+    const raw = typeof reference === 'string' ? reference.trim() : '';
+    if (!raw) {
+        return { Ok: false, Error: `A ${itemNoun} ID or name is required.` };
+    }
+    if (items.length === 0) {
+        return { Ok: false, Error: `No ${itemNoun}s are currently loaded.` };
+    }
+    const needle = raw.toLowerCase();
+
+    const byId = items.find((item) => (item.ID ?? '').trim().toLowerCase() === needle);
+    if (byId) {
+        return { Ok: true, Item: byId };
+    }
+
+    const byExactName = items.find((item) => (item.Name ?? '').trim().toLowerCase() === needle);
+    if (byExactName) {
+        return { Ok: true, Item: byExactName };
+    }
+
+    const byPartialName = items.find((item) => (item.Name ?? '').trim().toLowerCase().includes(needle));
+    if (byPartialName) {
+        return { Ok: true, Item: byPartialName };
+    }
+
+    const available = CapVideoStudioNames(
+        items.map((item) => (item.Name ?? '').trim()).filter((n) => n.length > 0),
+    );
+    const suffix = available.length > 0 ? ` Available ${itemNoun}s: ${available.join(', ')}.` : '';
+    return {
+        Ok: false,
+        Error: `No ${itemNoun} matches "${raw}".${suffix}`,
+    };
+}
+
+// ============================================================================
+// 1. PRODUCTIONS SURFACE HELPERS
+// ============================================================================
+
+/**
+ * Card status for a `Video Production` artifact: one of the canonical
+ * {@link VideoProductionStatus} values from `@memberjunction/video-studio-core`,
+ * or `'Unknown'` when the artifact version has no recognized `status` attribute.
+ */
+export type ProductionCardStatus = VideoProductionStatus | 'Unknown';
+
+/**
+ * Allowed status filter values on the Productions surface (`'all'` means unfiltered).
+ */
+export const PRODUCTION_STATUS_FILTERS = [
+    'all',
+    'Briefing',
+    'Styled',
+    'Storyboarded',
+    'Approved',
+    'PreProduced',
+    'Composed',
+    'RoughCut',
+    'Reviewed',
+    'Delivered',
+    'Blocked',
+    'Unknown',
+] as const;
+
+export type ProductionStatusFilter = (typeof PRODUCTION_STATUS_FILTERS)[number];
+
+/**
+ * Lightweight card model representing one `Video Production` artifact and its
+ * latest version's extracted attributes.
+ */
+export interface ProductionCardSnapshot extends NamedVideoStudioItem {
+    ID: string;
+    Name: string;
+    Description: string;
+    VersionID: string | null;
+    VersionNumber: number;
+    PosterFileID: string | null;
+    PosterUrl: string | null;
+    Status: ProductionCardStatus;
+    Archetype: string;
+    BrandKitID: string | null;
+    BrandKitName: string | null;
+    CompanyID: string | null;
+    CompanyName: string | null;
+    DurationSeconds: number | null;
+    AspectRatio: string | null;
+    SceneCount: number | null;
+    UpdatedAt: Date;
+}
+
+/**
+ * Active filter state on the Productions resource.
+ */
+export interface ProductionFilterState {
+    SearchQuery: string;
+    Archetype: string;
+    BrandKitID: string;
+    CompanyID: string;
+    Status: string;
+    FromDate: string;
+    ToDate: string;
+}
+
+/**
+ * Filter a list of production cards according to {@link ProductionFilterState}.
+ * Pure + deterministic; returns a new array without mutating the input.
+ */
+export function FilterProductionCards<T extends ProductionCardSnapshot>(
+    cards: readonly T[],
+    filters: ProductionFilterState,
+): T[] {
+    const query = (filters.SearchQuery ?? '').trim().toLowerCase();
+    const archetype = (filters.Archetype ?? '').trim().toLowerCase();
+    const brandKitId = (filters.BrandKitID ?? '').trim().toLowerCase();
+    const companyId = (filters.CompanyID ?? '').trim().toLowerCase();
+    const status = (filters.Status ?? '').trim().toLowerCase();
+    const fromTime = ParseFilterDateStart(filters.FromDate);
+    const toTime = ParseFilterDateEnd(filters.ToDate);
+
+    return cards.filter((card) => {
+        if (query) {
+            const haystack = [
+                card.Name,
+                card.Description,
+                card.Archetype,
+                card.BrandKitName ?? '',
+                card.CompanyName ?? '',
+                card.Status,
+            ]
+                .join(' ')
+                .toLowerCase();
+            if (!haystack.includes(query)) {
+                return false;
+            }
+        }
+        if (archetype && archetype !== 'all') {
+            if ((card.Archetype ?? '').trim().toLowerCase() !== archetype) {
+                return false;
+            }
+        }
+        if (brandKitId && brandKitId !== 'all') {
+            if ((card.BrandKitID ?? '').trim().toLowerCase() !== brandKitId) {
+                return false;
+            }
+        }
+        if (companyId && companyId !== 'all') {
+            if ((card.CompanyID ?? '').trim().toLowerCase() !== companyId) {
+                return false;
+            }
+        }
+        if (status && status !== 'all') {
+            if ((card.Status ?? '').trim().toLowerCase() !== status) {
+                return false;
+            }
+        }
+        if (fromTime !== null || toTime !== null) {
+            const cardTime = card.UpdatedAt instanceof Date ? card.UpdatedAt.getTime() : NaN;
+            if (!Number.isFinite(cardTime)) {
+                return false;
+            }
+            if (fromTime !== null && cardTime < fromTime) {
+                return false;
+            }
+            if (toTime !== null && cardTime > toTime) {
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function ParseFilterDateStart(dateStr: string): number | null {
+    const trimmed = (dateStr ?? '').trim();
+    if (!trimmed) {
+        return null;
+    }
+    const match = LOCAL_DATE_PATTERN.exec(trimmed);
+    if (match) {
+        const y = Number(match[1]);
+        const m = Number(match[2]);
+        const d = Number(match[3]);
+        const localStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+        return Number.isFinite(localStart) ? localStart : null;
+    }
+    const parsed = Date.parse(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function ParseFilterDateEnd(dateStr: string): number | null {
+    const trimmed = (dateStr ?? '').trim();
+    if (!trimmed) {
+        return null;
+    }
+    const match = LOCAL_DATE_PATTERN.exec(trimmed);
+    if (match) {
+        const y = Number(match[1]);
+        const m = Number(match[2]);
+        const d = Number(match[3]);
+        const localEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+        return Number.isFinite(localEnd) ? localEnd : null;
+    }
+    const parsed = Date.parse(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Count how many popover filters are active on the Productions surface
+ * (excluding the free-text search box).
+ */
+export function CountActiveProductionPopoverFilters(filters: ProductionFilterState): number {
+    let count = 0;
+    if (filters.Archetype && filters.Archetype !== 'all') count++;
+    if (filters.BrandKitID && filters.BrandKitID !== 'all') count++;
+    if (filters.CompanyID && filters.CompanyID !== 'all') count++;
+    if (filters.Status && filters.Status !== 'all') count++;
+    if ((filters.FromDate ?? '').trim().length > 0) count++;
+    if ((filters.ToDate ?? '').trim().length > 0) count++;
+    return count;
+}
+
+/**
+ * Input snapshot used by {@link BuildProductionsAgentContext}.
+ */
+export interface ProductionsAgentContextInput {
+    TotalCount: number;
+    FilteredCards: readonly ProductionCardSnapshot[];
+    Filters: ProductionFilterState;
+    BrandKitFilterName: string | null;
+    CompanyFilterName: string | null;
+    SelectedProduction: ProductionCardSnapshot | null;
+    AvailableArchetypes: readonly string[];
+    AvailableBrandKitNames: readonly string[];
+    AvailableCompanyNames: readonly string[];
+    IsLoading: boolean;
+}
+
+/**
+ * Build the bounded, read-only agent context object for the Productions surface.
+ */
+export function BuildProductionsAgentContext(
+    input: ProductionsAgentContextInput,
+): Record<string, unknown> {
+    const visibleNames = input.FilteredCards.map((c) => c.Name);
+    const cappedVisible = CapVideoStudioNames(visibleNames);
+    const cappedArchetypes = CapVideoStudioNames(input.AvailableArchetypes);
+    const cappedBrandKits = CapVideoStudioNames(input.AvailableBrandKitNames);
+    const cappedCompanies = CapVideoStudioNames(input.AvailableCompanyNames);
+
+    const hasSearch = (input.Filters.SearchQuery ?? '').trim().length > 0;
+    const popoverFilterCount = CountActiveProductionPopoverFilters(input.Filters);
+
+    const context: Record<string, unknown> = {
+        Surface: 'VideoStudioProductions',
+        SuppressChatOverlay: true,
+        TotalProductionCount: input.TotalCount,
+        FilteredProductionCount: input.FilteredCards.length,
+        SearchQuery: input.Filters.SearchQuery,
+        HasSearch: hasSearch,
+        ArchetypeFilter: input.Filters.Archetype || 'all',
+        BrandKitFilterId: input.Filters.BrandKitID || 'all',
+        BrandKitFilterName: input.BrandKitFilterName,
+        CompanyFilterId: input.Filters.CompanyID || 'all',
+        CompanyFilterName: input.CompanyFilterName,
+        StatusFilter: input.Filters.Status || 'all',
+        FromDateFilter: input.Filters.FromDate || null,
+        ToDateFilter: input.Filters.ToDate || null,
+        HasActiveFilters: hasSearch || popoverFilterCount > 0,
+        SelectedProductionId: input.SelectedProduction?.ID ?? null,
+        SelectedProductionName: input.SelectedProduction?.Name ?? null,
+        SelectedProductionStatus: input.SelectedProduction?.Status ?? null,
+        VisibleProductionNames: cappedVisible,
+        AvailableArchetypes: cappedArchetypes,
+        AvailableBrandKitNames: cappedBrandKits,
+        AvailableCompanyNames: cappedCompanies,
+        IsLoading: input.IsLoading,
+    };
+
+    if (visibleNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['VisibleProductionCount'] = visibleNames.length;
+    }
+    if (input.AvailableArchetypes.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['AvailableArchetypeCount'] = input.AvailableArchetypes.length;
+    }
+    if (input.AvailableBrandKitNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['AvailableBrandKitCount'] = input.AvailableBrandKitNames.length;
+    }
+    if (input.AvailableCompanyNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['AvailableCompanyCount'] = input.AvailableCompanyNames.length;
+    }
+
+    return context;
+}
+
+// ============================================================================
+// 2. BRAND KITS SURFACE HELPERS
+// ============================================================================
+
+/**
+ * Allowed status filter values on the Brand Kits surface.
+ */
+export const BRAND_KIT_STATUS_FILTERS = ['all', 'Active', 'Inactive'] as const;
+export type BrandKitStatusFilter = (typeof BRAND_KIT_STATUS_FILTERS)[number];
+
+/**
+ * Palette swatch item displayed on a Brand Kit card.
+ */
+export interface BrandKitSwatchView {
+    Name: string;
+    Value: string;
+}
+
+/**
+ * Card view-model for a single `MJ: Brand Kits` record on the Brand Kits resource.
+ */
+export interface BrandKitCardSnapshot extends NamedVideoStudioItem {
+    ID: string;
+    Name: string;
+    Description: string;
+    CompanyID: string | null;
+    CompanyName: string | null;
+    IsDefault: boolean;
+    Status: 'Active' | 'Inactive';
+    Swatches: readonly BrandKitSwatchView[];
+    PrimaryLogoFileID: string | null;
+    PrimaryLogoUrl: string | null;
+    AssetCount: number;
+}
+
+/**
+ * Minimal structural shape of an `MJ: Brand Kit Assets` row accepted by {@link MapBrandKitToCard}.
+ */
+export interface BrandKitAssetRowInput {
+    AssetType?: string | null;
+    FileID?: string | null;
+    IsPrimary?: boolean | null;
+    Sequence?: number | null;
+}
+
+/**
+ * Minimal structural shape of an `MJ: Brand Kits` entity row accepted by {@link MapBrandKitToCard}.
+ */
+export interface BrandKitEntityRowInput {
+    ID: string;
+    Name?: string | null;
+    Description?: string | null;
+    CompanyID?: string | null;
+    Company?: string | null;
+    CompanyName?: string | null;
+    IsDefault?: boolean | null;
+    Status?: string | null;
+    StyleObject?: {
+        Palette?: ReadonlyArray<{ Name?: string | null; Value?: string | null }> | null;
+    } | null;
+    Swatches?: readonly BrandKitSwatchView[] | null;
+    PrimaryLogoFileID?: string | null;
+    PrimaryLogoUrl?: string | null;
+    AssetCount?: number | null;
+}
+
+/**
+ * Shared mapper converting an `MJ: Brand Kits` entity row and its optional assets
+ * into a {@link BrandKitCardSnapshot}.
+ */
+export function MapBrandKitToCard(
+    kit: BrandKitEntityRowInput,
+    assets?: readonly BrandKitAssetRowInput[] | null,
+): BrandKitCardSnapshot {
+    const rawPalette = Array.isArray(kit.StyleObject?.Palette) ? kit.StyleObject!.Palette! : [];
+    const swatches: BrandKitSwatchView[] =
+        rawPalette.length > 0
+            ? rawPalette
+                  .filter((entry) => Boolean(entry && typeof entry.Value === 'string' && entry.Value.trim()))
+                  .map((entry) => ({
+                      Name: (entry.Name ?? '').trim() || 'Color',
+                      Value: entry.Value!.trim(),
+                  }))
+            : Array.isArray(kit.Swatches)
+              ? [...kit.Swatches]
+              : [];
+
+    const assetList = Array.isArray(assets) ? assets : [];
+    const logoAssets = assetList.filter(
+        (a) => a.AssetType === 'Logo' || a.AssetType === 'LogoMark',
+    );
+    const primaryLogoAsset =
+        logoAssets.find((a) => Boolean(a.IsPrimary)) ??
+        [...logoAssets].sort(
+            (a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER),
+        )[0] ??
+        null;
+
+    const companyId =
+        typeof kit.CompanyID === 'string' && kit.CompanyID.trim().length > 0
+            ? kit.CompanyID.trim()
+            : null;
+    const companyRaw = kit.Company ?? kit.CompanyName ?? null;
+    const companyName =
+        typeof companyRaw === 'string' && companyRaw.trim().length > 0
+            ? companyRaw.trim()
+            : null;
+
+    return {
+        ID: kit.ID,
+        Name: (kit.Name ?? '').trim() || 'Untitled Brand Kit',
+        Description: kit.Description ?? '',
+        CompanyID: companyId,
+        CompanyName: companyName,
+        IsDefault: Boolean(kit.IsDefault),
+        Status: kit.Status === 'Inactive' ? 'Inactive' : 'Active',
+        Swatches: swatches,
+        PrimaryLogoFileID: primaryLogoAsset?.FileID ?? kit.PrimaryLogoFileID ?? null,
+        PrimaryLogoUrl: kit.PrimaryLogoUrl ?? null,
+        AssetCount: assetList.length > 0 ? assetList.length : (kit.AssetCount ?? 0),
+    };
+}
+
+export const MapBrandKitEntityToCard = MapBrandKitToCard;
+
+/**
+ * Active filter state on the Brand Kits surface.
+ * `CompanyID` accepts `'all'`, `'org-wide'`, or a specific company ID.
+ */
+export interface BrandKitFilterState {
+    SearchQuery: string;
+    CompanyID: string;
+    Status: BrandKitStatusFilter;
+}
+
+/**
+ * Filter a list of Brand Kit cards according to {@link BrandKitFilterState}.
+ * Pure + deterministic; returns a new array without mutating the input.
+ */
+export function FilterBrandKitCards<T extends BrandKitCardSnapshot>(
+    cards: readonly T[],
+    filters: BrandKitFilterState,
+): T[] {
+    const query = (filters.SearchQuery ?? '').trim().toLowerCase();
+    const companyFilter = (filters.CompanyID ?? 'all').trim().toLowerCase();
+    const statusFilter = (filters.Status ?? 'all').trim().toLowerCase();
+
+    return cards.filter((card) => {
+        if (query) {
+            const haystack = [
+                card.Name,
+                card.Description,
+                card.CompanyName ?? 'Org-wide',
+                card.Status,
+            ]
+                .join(' ')
+                .toLowerCase();
+            if (!haystack.includes(query)) {
+                return false;
+            }
+        }
+        if (companyFilter && companyFilter !== 'all') {
+            if (companyFilter === 'org-wide') {
+                if (card.CompanyID !== null) {
+                    return false;
+                }
+            } else if ((card.CompanyID ?? '').trim().toLowerCase() !== companyFilter) {
+                return false;
+            }
+        }
+        if (statusFilter && statusFilter !== 'all') {
+            if ((card.Status ?? '').trim().toLowerCase() !== statusFilter) {
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+/**
+ * Input snapshot used by {@link BuildBrandKitsAgentContext}.
+ */
+export interface BrandKitsAgentContextInput {
+    AllCards: readonly BrandKitCardSnapshot[];
+    FilteredCards: readonly BrandKitCardSnapshot[];
+    Filters: BrandKitFilterState;
+    CompanyFilterName: string | null;
+    AvailableCompanyNames: readonly string[];
+    IsLoading: boolean;
+}
+
+/**
+ * Build the bounded, read-only agent context object for the Brand Kits surface.
+ */
+export function BuildBrandKitsAgentContext(
+    input: BrandKitsAgentContextInput,
+): Record<string, unknown> {
+    let activeCount = 0;
+    let inactiveCount = 0;
+    let defaultCount = 0;
+    for (const card of input.AllCards) {
+        if (card.Status === 'Active') {
+            activeCount++;
+        } else {
+            inactiveCount++;
+        }
+        if (card.IsDefault) {
+            defaultCount++;
+        }
+    }
+
+    const visibleNames = input.FilteredCards.map((c) => c.Name);
+    const cappedVisible = CapVideoStudioNames(visibleNames);
+    const cappedCompanies = CapVideoStudioNames(input.AvailableCompanyNames);
+    const hasSearch = (input.Filters.SearchQuery ?? '').trim().length > 0;
+    const hasPopoverFilter =
+        (input.Filters.CompanyID !== '' && input.Filters.CompanyID !== 'all') ||
+        (input.Filters.Status !== ('all' as BrandKitStatusFilter));
+
+    const context: Record<string, unknown> = {
+        Surface: 'VideoStudioBrandKits',
+        SuppressChatOverlay: true,
+        TotalBrandKitCount: input.AllCards.length,
+        FilteredBrandKitCount: input.FilteredCards.length,
+        ActiveBrandKitCount: activeCount,
+        InactiveBrandKitCount: inactiveCount,
+        DefaultBrandKitCount: defaultCount,
+        SearchQuery: input.Filters.SearchQuery,
+        HasSearch: hasSearch,
+        CompanyFilter: input.Filters.CompanyID || 'all',
+        CompanyFilterName: input.CompanyFilterName,
+        StatusFilter: input.Filters.Status || 'all',
+        HasActiveFilters: hasSearch || hasPopoverFilter,
+        VisibleBrandKitNames: cappedVisible,
+        AvailableCompanyNames: cappedCompanies,
+        IsLoading: input.IsLoading,
+    };
+
+    if (visibleNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['VisibleBrandKitCount'] = visibleNames.length;
+    }
+    if (input.AvailableCompanyNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['AvailableCompanyCount'] = input.AvailableCompanyNames.length;
+    }
+
+    return context;
+}
+
+// ============================================================================
+// 3. ARCHETYPES SURFACE HELPERS
+// ============================================================================
+
+/**
+ * Canonical `MJ: Video Archetypes.Category` values.
+ */
+export const ARCHETYPE_CATEGORIES = [
+    'Announcement',
+    'Briefing',
+    'DataStory',
+    'Explainer',
+    'Product',
+    'Social',
+    'Tutorial',
+] as const;
+
+export type ArchetypeCategory = (typeof ARCHETYPE_CATEGORIES)[number];
+
+/**
+ * Allowed category filter values on the Archetypes surface (`'all'` + the 7 categories).
+ */
+export const ARCHETYPE_CATEGORY_FILTERS = ['all', ...ARCHETYPE_CATEGORIES] as const;
+export type ArchetypeCategoryFilter = (typeof ARCHETYPE_CATEGORY_FILTERS)[number];
+
+/**
+ * Allowed scope filter values on the Archetypes surface.
+ */
+export const ARCHETYPE_SCOPE_FILTERS = ['all', 'shipped', 'company'] as const;
+export type ArchetypeScopeFilter = (typeof ARCHETYPE_SCOPE_FILTERS)[number];
+
+/**
+ * Raw beat entry from `MJ: Video Archetypes.BeatTemplate`.
+ */
+export interface ArchetypeBeatTemplateInput {
+    Key?: string | null;
+    Label?: string | null;
+    Purpose?: string | null;
+    Guidance?: string | null;
+    MinDurationSeconds?: number | null;
+    DefaultDurationSeconds?: number | null;
+    MaxDurationSeconds?: number | null;
+}
+
+/**
+ * Scaled beat strip item whose integer `Seconds` values sum to the archetype's
+ * target duration (`DefaultDurationSeconds`). Structurally matches `VideoBeatStripItem`
+ * from `@memberjunction/ng-artifacts`.
+ */
+export interface ScaledVideoBeatStripItem {
+    Key: string;
+    Label: string;
+    Seconds: number;
+    Detail?: string;
+}
+
+/**
+ * Convert an archetype's beat template into `VideoBeatStripItem[]` with integer
+ * `Seconds` scaled (via largest-remainder rounding) so their sum equals
+ * `targetDurationSeconds`.
+ */
+export function BuildArchetypeBeatStripItems(
+    rawBeats: readonly ArchetypeBeatTemplateInput[] | null | undefined,
+    targetDurationSeconds: number,
+): ScaledVideoBeatStripItem[] {
+    if (!Array.isArray(rawBeats) || rawBeats.length === 0) {
+        return [];
+    }
+
+    const beatCount = rawBeats.length;
+    const targetTotal =
+        Number.isFinite(targetDurationSeconds) && targetDurationSeconds > 0
+            ? Math.max(beatCount, Math.round(targetDurationSeconds))
+            : beatCount * 5;
+
+    const weights = rawBeats.map((b) => {
+        const def = b.DefaultDurationSeconds;
+        if (typeof def === 'number' && Number.isFinite(def) && def > 0) {
+            return def;
+        }
+        const min =
+            typeof b.MinDurationSeconds === 'number' &&
+            Number.isFinite(b.MinDurationSeconds) &&
+            b.MinDurationSeconds > 0
+                ? b.MinDurationSeconds
+                : 1;
+        const max =
+            typeof b.MaxDurationSeconds === 'number' &&
+            Number.isFinite(b.MaxDurationSeconds) &&
+            b.MaxDurationSeconds >= min
+                ? b.MaxDurationSeconds
+                : min;
+        return Math.max(0.1, (min + max) / 2);
+    });
+
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0) || beatCount;
+    const exactQuotas = weights.map((w) => (w / totalWeight) * targetTotal);
+    const integerSeconds = exactQuotas.map((q) => Math.max(1, Math.floor(q)));
+    let currentSum = integerSeconds.reduce((sum, s) => sum + s, 0);
+
+    if (currentSum < targetTotal) {
+        const order = exactQuotas
+            .map((q, idx) => ({ idx, remainder: q - Math.floor(q), quota: q }))
+            .sort((a, b) => {
+                if (Math.abs(b.remainder - a.remainder) > 1e-9) {
+                    return b.remainder - a.remainder;
+                }
+                if (Math.abs(b.quota - a.quota) > 1e-9) {
+                    return b.quota - a.quota;
+                }
+                return a.idx - b.idx;
+            });
+        let cursor = 0;
+        while (currentSum < targetTotal) {
+            const targetIdx = order[cursor % order.length].idx;
+            integerSeconds[targetIdx] += 1;
+            currentSum += 1;
+            cursor += 1;
+        }
+    } else if (currentSum > targetTotal) {
+        const order = exactQuotas
+            .map((q, idx) => ({ idx, remainder: q - Math.floor(q), quota: q }))
+            .sort((a, b) => a.remainder - b.remainder || a.quota - b.quota || b.idx - a.idx);
+        let cursor = 0;
+        let safety = beatCount * targetTotal;
+        while (currentSum > targetTotal && safety > 0) {
+            const targetIdx = order[cursor % order.length].idx;
+            if (integerSeconds[targetIdx] > 1) {
+                integerSeconds[targetIdx] -= 1;
+                currentSum -= 1;
+            }
+            cursor += 1;
+            safety -= 1;
+        }
+    }
+
+    return rawBeats.map((b, idx) => {
+        const key = (b.Key ?? '').trim() || `beat-${idx + 1}`;
+        const label = (b.Label ?? b.Key ?? '').trim() || `Beat ${idx + 1}`;
+        const detail = (b.Purpose ?? b.Guidance ?? '').trim();
+        return {
+            Key: key,
+            Label: label,
+            Seconds: integerSeconds[idx],
+            ...(detail ? { Detail: detail } : {}),
+        };
+    });
+}
+
+/**
+ * Card view-model for a single `MJ: Video Archetypes` record on the Archetypes resource.
+ */
+export interface ArchetypeCardSnapshot extends NamedVideoStudioItem {
+    ID: string;
+    Name: string;
+    Description: string;
+    Category: ArchetypeCategory;
+    Status: 'Active' | 'Inactive';
+    CompanyID: string | null;
+    CompanyName: string | null;
+    IsShipped: boolean;
+    DefaultDurationSeconds: number;
+    MinDurationSeconds: number;
+    MaxDurationSeconds: number;
+    DefaultFormats: string;
+    BeatCount: number;
+    BeatLabels: readonly string[];
+    BeatItems?: readonly ScaledVideoBeatStripItem[];
+}
+
+/**
+ * Minimal structural shape of an `MJ: Video Archetypes` entity row accepted by
+ * {@link MapArchetypeToCard}.
+ */
+export interface ArchetypeEntityRowInput {
+    ID: string;
+    Name?: string | null;
+    Description?: string | null;
+    Category?: string | null;
+    Status?: string | null;
+    CompanyID?: string | null;
+    Company?: string | null;
+    CompanyName?: string | null;
+    DefaultDurationSeconds?: number | null;
+    MinDurationSeconds?: number | null;
+    MaxDurationSeconds?: number | null;
+    DefaultFormats?: string | null;
+    BeatTemplate?: string | null;
+    BeatTemplateObject?: readonly ArchetypeBeatTemplateInput[] | null;
+    BeatItems?: readonly ScaledVideoBeatStripItem[] | null;
+    BeatLabels?: readonly string[] | null;
+}
+
+/**
+ * Shared mapper converting an `MJ: Video Archetypes` entity row into an
+ * {@link ArchetypeCardSnapshot}, scaling its beat template with
+ * {@link BuildArchetypeBeatStripItems} so `BeatItems` always sum to
+ * `DefaultDurationSeconds`.
+ */
+export function MapArchetypeToCard(entity: ArchetypeEntityRowInput): ArchetypeCardSnapshot {
+    const rawCategory = (entity.Category ?? 'Explainer').trim();
+    const category: ArchetypeCategory = (ARCHETYPE_CATEGORIES as readonly string[]).includes(
+        rawCategory,
+    )
+        ? (rawCategory as ArchetypeCategory)
+        : 'Explainer';
+
+    const defaultDur =
+        typeof entity.DefaultDurationSeconds === 'number' &&
+        Number.isFinite(entity.DefaultDurationSeconds) &&
+        entity.DefaultDurationSeconds > 0
+            ? entity.DefaultDurationSeconds
+            : 60;
+    const minDur =
+        typeof entity.MinDurationSeconds === 'number' &&
+        Number.isFinite(entity.MinDurationSeconds) &&
+        entity.MinDurationSeconds > 0
+            ? entity.MinDurationSeconds
+            : 30;
+    const maxDur =
+        typeof entity.MinDurationSeconds === 'number' &&
+        typeof entity.MaxDurationSeconds === 'number' &&
+        Number.isFinite(entity.MaxDurationSeconds) &&
+        entity.MaxDurationSeconds >= minDur
+            ? entity.MaxDurationSeconds
+            : typeof entity.MaxDurationSeconds === 'number' &&
+                Number.isFinite(entity.MaxDurationSeconds) &&
+                entity.MaxDurationSeconds > 0
+              ? entity.MaxDurationSeconds
+              : Math.max(defaultDur, 120);
+
+    let rawBeats: readonly ArchetypeBeatTemplateInput[] = [];
+    if (Array.isArray(entity.BeatTemplateObject)) {
+        rawBeats = entity.BeatTemplateObject;
+    } else if (typeof entity.BeatTemplate === 'string' && entity.BeatTemplate.trim().startsWith('[')) {
+        try {
+            const parsed: unknown = JSON.parse(entity.BeatTemplate);
+            if (Array.isArray(parsed)) {
+                rawBeats = parsed as ArchetypeBeatTemplateInput[];
+            }
+        } catch {
+            rawBeats = [];
+        }
+    }
+
+    const beatItems: ScaledVideoBeatStripItem[] =
+        rawBeats.length > 0
+            ? BuildArchetypeBeatStripItems(rawBeats, defaultDur)
+            : Array.isArray(entity.BeatItems)
+              ? entity.BeatItems.map((item) => ({ ...item }))
+              : [];
+    const beatLabels: string[] =
+        beatItems.length > 0
+            ? beatItems.map((b) => b.Label)
+            : Array.isArray(entity.BeatLabels)
+              ? [...entity.BeatLabels]
+              : [];
+
+    const companyId =
+        typeof entity.CompanyID === 'string' && entity.CompanyID.trim().length > 0
+            ? entity.CompanyID.trim()
+            : null;
+    const companyRaw = entity.Company ?? entity.CompanyName ?? null;
+    const companyName =
+        typeof companyRaw === 'string' && companyRaw.trim().length > 0
+            ? companyRaw.trim()
+            : null;
+
+    return {
+        ID: entity.ID,
+        Name: (entity.Name ?? '').trim() || 'Untitled Archetype',
+        Description: entity.Description ?? '',
+        Category: category,
+        Status: entity.Status === 'Inactive' ? 'Inactive' : 'Active',
+        CompanyID: companyId,
+        CompanyName: companyName,
+        IsShipped: companyId === null,
+        DefaultDurationSeconds: defaultDur,
+        MinDurationSeconds: minDur,
+        MaxDurationSeconds: maxDur,
+        DefaultFormats: (entity.DefaultFormats ?? '').trim() || '16:9',
+        BeatCount: beatItems.length || beatLabels.length,
+        BeatLabels: beatLabels,
+        BeatItems: beatItems,
+    };
+}
+
+export const MapArchetypeEntityToCard = MapArchetypeToCard;
+
+/**
+ * Derive a stable snake_case beat `Key` from its human-readable `Label`,
+ * deduplicating against `usedKeys` when provided.
+ */
+export function DeriveBeatKeyFromLabel(
+    label: string | null | undefined,
+    fallbackIndex = 1,
+    usedKeys?: Set<string>,
+): string {
+    const cleaned = (label ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_/, '')
+        .replace(/_$/, '');
+    const baseKey = cleaned || `beat_${Math.max(1, fallbackIndex)}`;
+    if (!usedKeys) {
+        return baseKey;
+    }
+    let candidate = baseKey;
+    let suffix = 2;
+    while (usedKeys.has(candidate)) {
+        candidate = `${baseKey}_${suffix}`;
+        suffix += 1;
+    }
+    usedKeys.add(candidate);
+    return candidate;
+}
+
+/**
+ * Active filter state on the Archetypes surface.
+ */
+export interface ArchetypeFilterState {
+    SearchQuery: string;
+    Category: ArchetypeCategoryFilter;
+    Scope: ArchetypeScopeFilter;
+}
+
+/**
+ * Category group displayed on the Archetypes surface.
+ */
+export interface ArchetypeCategoryGroup<T extends ArchetypeCardSnapshot = ArchetypeCardSnapshot> {
+    Category: ArchetypeCategory;
+    Archetypes: T[];
+}
+
+/**
+ * Filter a list of Archetype cards according to {@link ArchetypeFilterState}.
+ * Pure + deterministic; returns a new array without mutating the input.
+ */
+export function FilterArchetypeCards<T extends ArchetypeCardSnapshot>(
+    cards: readonly T[],
+    filters: ArchetypeFilterState,
+): T[] {
+    const query = (filters.SearchQuery ?? '').trim().toLowerCase();
+    const category = (filters.Category ?? 'all').trim().toLowerCase();
+    const scope = (filters.Scope ?? 'all').trim().toLowerCase();
+
+    return cards.filter((card) => {
+        if (query) {
+            const haystack = [
+                card.Name,
+                card.Description,
+                card.Category,
+                card.CompanyName ?? 'Shipped',
+                card.DefaultFormats,
+                ...card.BeatLabels,
+            ]
+                .join(' ')
+                .toLowerCase();
+            if (!haystack.includes(query)) {
+                return false;
+            }
+        }
+        if (category && category !== 'all') {
+            if ((card.Category ?? '').trim().toLowerCase() !== category) {
+                return false;
+            }
+        }
+        if (scope === 'shipped' && !card.IsShipped) {
+            return false;
+        }
+        if (scope === 'company' && card.IsShipped) {
+            return false;
+        }
+        return true;
+    });
+}
+
+/**
+ * Group filtered archetype cards by `Category` in canonical category order,
+ * omitting empty categories. Cards within each category are sorted alphabetically
+ * by `Name`.
+ */
+export function GroupArchetypesByCategory<T extends ArchetypeCardSnapshot>(
+    cards: readonly T[],
+): ArchetypeCategoryGroup<T>[] {
+    const byCategory = new Map<ArchetypeCategory, T[]>();
+    for (const card of cards) {
+        const list = byCategory.get(card.Category) ?? [];
+        list.push(card);
+        byCategory.set(card.Category, list);
+    }
+
+    const groups: ArchetypeCategoryGroup<T>[] = [];
+    for (const category of ARCHETYPE_CATEGORIES) {
+        const list = byCategory.get(category);
+        if (list && list.length > 0) {
+            const sorted = [...list].sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
+            groups.push({ Category: category, Archetypes: sorted });
+        }
+    }
+    return groups;
+}
+
+/**
+ * Input snapshot used by {@link BuildArchetypesAgentContext}.
+ */
+export interface ArchetypesAgentContextInput {
+    AllCards: readonly ArchetypeCardSnapshot[];
+    FilteredCards: readonly ArchetypeCardSnapshot[];
+    Filters: ArchetypeFilterState;
+    SelectedArchetype: ArchetypeCardSnapshot | null;
+    IsLoading: boolean;
+}
+
+/**
+ * Build the bounded, read-only agent context object for the Archetypes surface.
+ */
+export function BuildArchetypesAgentContext(
+    input: ArchetypesAgentContextInput,
+): Record<string, unknown> {
+    let shippedCount = 0;
+    let companyCount = 0;
+    for (const card of input.AllCards) {
+        if (card.IsShipped) {
+            shippedCount++;
+        } else {
+            companyCount++;
+        }
+    }
+
+    const visibleNames = input.FilteredCards.map((c) => c.Name);
+    const cappedVisible = CapVideoStudioNames(visibleNames);
+    const hasSearch = (input.Filters.SearchQuery ?? '').trim().length > 0;
+    const hasPopoverFilter =
+        input.Filters.Category !== 'all' || input.Filters.Scope !== 'all';
+
+    const context: Record<string, unknown> = {
+        Surface: 'VideoStudioArchetypes',
+        SuppressChatOverlay: true,
+        TotalArchetypeCount: input.AllCards.length,
+        FilteredArchetypeCount: input.FilteredCards.length,
+        ShippedArchetypeCount: shippedCount,
+        CompanyArchetypeCount: companyCount,
+        SearchQuery: input.Filters.SearchQuery,
+        HasSearch: hasSearch,
+        CategoryFilter: input.Filters.Category,
+        ScopeFilter: input.Filters.Scope,
+        HasActiveFilters: hasSearch || hasPopoverFilter,
+        SelectedArchetypeId: input.SelectedArchetype?.ID ?? null,
+        SelectedArchetypeName: input.SelectedArchetype?.Name ?? null,
+        VisibleArchetypeNames: cappedVisible,
+        AvailableCategories: [...ARCHETYPE_CATEGORIES],
+        IsLoading: input.IsLoading,
+    };
+
+    if (visibleNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['VisibleArchetypeCount'] = visibleNames.length;
+    }
+
+    return context;
+}
+
+// ============================================================================
+// 4. STUDIO SURFACE HELPERS
+// ============================================================================
+
+/**
+ * Canonical video aspect-ratio format codes selectable in the Studio Start form.
+ */
+export const STUDIO_VIDEO_FORMATS = ['16:9', '9:16', '1:1', '4:5'] as const;
+
+export type StudioVideoFormat = (typeof STUDIO_VIDEO_FORMATS)[number];
+
+/**
+ * Saved query item selectable in the Studio Start form.
+ */
+export interface StudioSavedQueryItem extends NamedVideoStudioItem {
+    ID: string;
+    Name: string;
+}
+
+/**
+ * Parse an archetype's `DefaultFormats` string (JSON array or comma-separated list)
+ * into a deduplicated array of canonical {@link StudioVideoFormat} values.
+ * Falls back to `['16:9']` when no valid format codes are present.
+ */
+export function ParseArchetypeDefaultFormats(
+    raw: string | null | undefined,
+): StudioVideoFormat[] {
+    const text = (raw ?? '').trim();
+    if (!text) {
+        return ['16:9'];
+    }
+
+    let tokens: string[] = [];
+    if (text.startsWith('[')) {
+        try {
+            const parsed: unknown = JSON.parse(text);
+            if (Array.isArray(parsed)) {
+                tokens = parsed.filter((v): v is string => typeof v === 'string');
+            }
+        } catch {
+            tokens = text.split(',');
+        }
+    } else {
+        tokens = text.split(',');
+    }
+
+    const allowed = new Set<string>(STUDIO_VIDEO_FORMATS);
+    const seen = new Set<StudioVideoFormat>();
+    const result: StudioVideoFormat[] = [];
+
+    for (const token of tokens) {
+        const cleaned = token.replace(/['"\[\]\s]/g, '').trim();
+        if (allowed.has(cleaned)) {
+            const fmt = cleaned as StudioVideoFormat;
+            if (!seen.has(fmt)) {
+                seen.add(fmt);
+                result.push(fmt);
+            }
+        }
+    }
+
+    return result.length > 0 ? result : ['16:9'];
+}
+
+/**
+ * Clamp a requested duration in seconds to an archetype's `[min, max]` bounds.
+ */
+export function ClampStudioDuration(
+    value: number,
+    minSeconds: number,
+    maxSeconds: number,
+): number {
+    const safeMin = Number.isFinite(minSeconds) && minSeconds > 0 ? Math.round(minSeconds) : 5;
+    const safeMax =
+        Number.isFinite(maxSeconds) && maxSeconds >= safeMin ? Math.round(maxSeconds) : Math.max(safeMin, 180);
+    if (!Number.isFinite(value)) {
+        return safeMin;
+    }
+    const rounded = Math.round(value);
+    return Math.min(safeMax, Math.max(safeMin, rounded));
+}
+
+/**
+ * Build the `MJ: Queries` RunView `ExtraFilter` for the Studio saved-query picker.
+ * Escapes SQL `LIKE` wildcards (`%`, `_`, `[`, `\`) with `\` + `ESCAPE '\'` and
+ * escapes single quotes via {@link EscapeSQLString} from `@memberjunction/global`.
+ */
+export function BuildSavedQuerySearchFilter(searchText: string): string {
+    const trimmed = (searchText ?? '').trim();
+    if (!trimmed) {
+        return '';
+    }
+    const likeEscaped = trimmed.replace(/[\\%_[]/g, '\\$&');
+    const sqlEscaped = EscapeSQLString(likeEscaped);
+    return `Name LIKE '%${sqlEscaped}%' ESCAPE '\\'`;
+}
+
+/**
+ * Input to {@link ComposeStudioFirstMessage}.
+ */
+export interface StudioFirstMessageInput {
+    ArchetypeName: string;
+    Topic: string;
+    DurationSeconds: number;
+    Formats: readonly string[];
+    BrandKitName?: string | null;
+    QueryNames?: readonly string[];
+    NarrationEnabled?: boolean;
+    CaptionsMode?: 'Burned' | 'Sidecar' | 'None';
+}
+
+/**
+ * Deterministic plain-text first message composer for starting a new Studio production:
+ * `"Make a <archetype> video, about <topic>, <n> seconds, formats <list>, brand kit <name>, data from <query names>."`
+ */
+export function ComposeStudioFirstMessage(input: StudioFirstMessageInput): string {
+    const archetype = (input.ArchetypeName ?? '').trim() || 'Explainer';
+    const topic = (input.Topic ?? '').trim();
+    const duration = Number.isFinite(input.DurationSeconds) && input.DurationSeconds > 0
+        ? Math.round(input.DurationSeconds)
+        : 30;
+    const formats =
+        input.Formats && input.Formats.length > 0
+            ? input.Formats.map((f) => f.trim()).filter((f) => f.length > 0).join(', ')
+            : '16:9';
+    const rawBrandKit = (input.BrandKitName ?? '').trim();
+    const brandKitClause =
+        rawBrandKit.length > 0 && rawBrandKit.toLowerCase() !== 'none'
+            ? `, brand kit ${rawBrandKit}`
+            : '';
+    const queriesList = (input.QueryNames ?? [])
+        .map((q) => q.trim())
+        .filter((q) => q.length > 0 && q.toLowerCase() !== 'none');
+    const dataClause = queriesList.length > 0 ? `, data from ${queriesList.join(', ')}` : '';
+    const narrationClause =
+        input.NarrationEnabled === false ? ', without voiceover narration' : '';
+
+    return `Make a ${archetype} video, about ${topic}, ${duration} seconds, formats ${formats}${brandKitClause}${dataClause}${narrationClause}.`;
+}
+
+/**
+ * Structured `AppContext` payload passed to `<vs-copilot-panel>` when starting a production.
+ */
+export interface StudioAppContextPayload {
+    ArchetypeID: string | null;
+    BrandKitID: string | null;
+    Formats: string[];
+    DurationSeconds: number;
+    QueryIDs: string[];
+    NarrationEnabled?: boolean;
+    CaptionsMode?: 'Burned' | 'Sidecar' | 'None';
+}
+
+/**
+ * Build the `{ VideoStudio: { ArchetypeID, BrandKitID, Formats, DurationSeconds, QueryIDs, ... } }`
+ * app context object passed into `<vs-copilot-panel>` / `<mj-conversation-chat-area>`.
+ */
+export function BuildStudioAppContext(
+    input: StudioAppContextPayload,
+): { VideoStudio: StudioAppContextPayload } {
+    return {
+        VideoStudio: {
+            ArchetypeID: input.ArchetypeID ?? null,
+            BrandKitID: input.BrandKitID ?? null,
+            Formats: [...(input.Formats ?? [])],
+            DurationSeconds: input.DurationSeconds,
+            QueryIDs: [...(input.QueryIDs ?? [])],
+            ...(input.NarrationEnabled !== undefined
+                ? { NarrationEnabled: input.NarrationEnabled }
+                : {}),
+            ...(input.CaptionsMode !== undefined
+                ? { CaptionsMode: input.CaptionsMode }
+                : {}),
+        },
+    };
+}
+
+/**
+ * Result returned by a Studio brief client tool handler.
+ */
+export interface StudioBriefClientToolResult {
+    Success: boolean;
+    Message?: string;
+    ErrorMessage?: string;
+    Data?: Record<string, unknown>;
+}
+
+/**
+ * Structural handle for `VSProductionBriefComponent` when mounted inside the slide-in.
+ */
+export interface StudioBriefComponentHandle {
+    ApplyClientToolArchetype(raw: string): StudioBriefClientToolResult;
+    ApplyClientToolBrandKit(raw: string): StudioBriefClientToolResult;
+    ApplyClientToolFormats(rawFormats: unknown): StudioBriefClientToolResult;
+    ApplyClientToolTopic(topic: string): StudioBriefClientToolResult;
+}
+
+/**
+ * Adapter passed to {@link BuildStudioBriefClientTools} so all three Video Studio
+ * pages register the same four brief form-fill client tools without duplicating
+ * handler logic.
+ */
+export interface StudioBriefClientToolAdapter {
+    GetBriefComponent?: () => StudioBriefComponentHandle | null | undefined;
+    GetArchetypes?: () => readonly ArchetypeCardSnapshot[];
+    GetBrandKits?: () => readonly BrandKitCardSnapshot[];
+    OnArchetypeSelected?: (
+        archetype: ArchetypeCardSnapshot,
+        formats: StudioVideoFormat[],
+        durationSeconds: number,
+    ) => void;
+    OnBrandKitSelected?: (brandKit: BrandKitCardSnapshot | null) => void;
+    OnFormatsSelected?: (formats: StudioVideoFormat[]) => void;
+    OnTopicChanged?: (topic: string) => void;
+}
+
+/**
+ * Client tool definition compatible with `NavigationService.SetAgentClientTools`.
+ */
+export interface StudioBriefClientToolDefinition {
+    Name: string;
+    Description: string;
+    ParameterSchema: Record<string, unknown>;
+    Handler: (params: Record<string, unknown>) => Promise<StudioBriefClientToolResult>;
+}
+
+/**
+ * Build the four reversible Studio brief form-fill client tools
+ * (`SelectStudioArchetype`, `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`)
+ * shared across Productions, Brand Kits, and Archetypes while the brief is showing.
+ */
+export function BuildStudioBriefClientTools(
+    adapter: StudioBriefClientToolAdapter,
+): StudioBriefClientToolDefinition[] {
+    return [
+        {
+            Name: 'SelectStudioArchetype',
+            Description:
+                'Select a video archetype in the Video Studio brief by ID or name. Prefills default formats and duration bounds.',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    archetype: {
+                        type: 'string',
+                        description: 'Archetype ID or name to select',
+                    },
+                },
+                required: ['archetype'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const raw = typeof params?.['archetype'] === 'string' ? params['archetype'] : '';
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolArchetype(raw);
+                }
+                const archetypes = adapter.GetArchetypes?.() ?? [];
+                const resolution = ResolveVideoStudioItem(raw, archetypes, 'archetype');
+                if (!resolution.Ok) {
+                    return { Success: false, ErrorMessage: resolution.Error };
+                }
+                const formats = ParseArchetypeDefaultFormats(resolution.Item.DefaultFormats);
+                const durationSeconds = ClampStudioDuration(
+                    resolution.Item.DefaultDurationSeconds,
+                    resolution.Item.MinDurationSeconds,
+                    resolution.Item.MaxDurationSeconds,
+                );
+                adapter.OnArchetypeSelected?.(resolution.Item, formats, durationSeconds);
+                return {
+                    Success: true,
+                    Data: {
+                        SelectedArchetypeId: resolution.Item.ID,
+                        SelectedArchetypeName: resolution.Item.Name,
+                    },
+                };
+            },
+        },
+        {
+            Name: 'SelectStudioBrandKit',
+            Description:
+                'Select a Brand Kit in the Video Studio brief by ID or name (or pass "none" to clear the selection).',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    brandKit: {
+                        type: 'string',
+                        description: 'Brand Kit ID or name to select, or "none" to clear',
+                    },
+                },
+                required: ['brandKit'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const raw = typeof params?.['brandKit'] === 'string' ? params['brandKit'].trim() : '';
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolBrandKit(raw);
+                }
+                if (!raw || raw.toLowerCase() === 'none') {
+                    adapter.OnBrandKitSelected?.(null);
+                    return { Success: true, Data: { SelectedBrandKitId: null } };
+                }
+                const kits = adapter.GetBrandKits?.() ?? [];
+                const resolution = ResolveVideoStudioItem(raw, kits, 'brand kit');
+                if (!resolution.Ok) {
+                    return { Success: false, ErrorMessage: resolution.Error };
+                }
+                adapter.OnBrandKitSelected?.(resolution.Item);
+                return {
+                    Success: true,
+                    Data: {
+                        SelectedBrandKitId: resolution.Item.ID,
+                        SelectedBrandKitName: resolution.Item.Name,
+                    },
+                };
+            },
+        },
+        {
+            Name: 'SetStudioFormats',
+            Description:
+                'Set the output video aspect-ratio formats in the Video Studio brief (e.g. ["16:9", "9:16"]).',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    formats: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Array of format codes from 16:9, 9:16, 1:1, 4:5',
+                    },
+                },
+                required: ['formats'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const rawFormats = params?.['formats'];
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolFormats(rawFormats);
+                }
+                const list: string[] = Array.isArray(rawFormats)
+                    ? rawFormats.filter((v): v is string => typeof v === 'string')
+                    : typeof rawFormats === 'string'
+                      ? rawFormats.split(',')
+                      : [];
+                const allowed = new Set<string>(STUDIO_VIDEO_FORMATS);
+                const valid: StudioVideoFormat[] = [];
+                for (const item of list) {
+                    const cleaned = item.trim() as StudioVideoFormat;
+                    if (allowed.has(cleaned) && !valid.includes(cleaned)) {
+                        valid.push(cleaned);
+                    }
+                }
+                if (valid.length === 0) {
+                    return {
+                        Success: false,
+                        ErrorMessage: `Specify at least one valid format (${STUDIO_VIDEO_FORMATS.join(', ')}).`,
+                    };
+                }
+                adapter.OnFormatsSelected?.(valid);
+                return { Success: true, Data: { SelectedFormats: [...valid] } };
+            },
+        },
+        {
+            Name: 'SetStudioTopic',
+            Description:
+                'Set the topic description in the Video Studio brief without starting production.',
+            ParameterSchema: {
+                type: 'object',
+                properties: {
+                    topic: {
+                        type: 'string',
+                        description: 'Topic or prompt description for the video',
+                    },
+                },
+                required: ['topic'],
+            },
+            Handler: async (params: Record<string, unknown>) => {
+                // SAFETY BOUNDARY: Mutates local brief form state only.
+                const topic = typeof params?.['topic'] === 'string' ? params['topic'] : '';
+                const brief = adapter.GetBriefComponent?.();
+                if (brief) {
+                    return brief.ApplyClientToolTopic(topic);
+                }
+                adapter.OnTopicChanged?.(topic);
+                return { Success: true, Data: { Topic: topic } };
+            },
+        },
+    ];
+}
+
+

@@ -101,6 +101,33 @@ describe('AdaptiveConcurrencyController', () => {
             expect(c.Cap).toBe(1);
         });
     });
+
+    describe('Hold / Release — the governor\'s zero-cost lever', () => {
+        it('a held cap does not grow on success', () => {
+            const c = new AdaptiveConcurrencyController({ start: 3, min: 1, max: 10 });
+            c.Hold();
+            for (let i = 0; i < 5; i++) c.OnSuccess();
+            expect(c.Cap).toBe(3);
+        });
+
+        it('holding never lowers the cap, and a throttle still halves it', () => {
+            const c = new AdaptiveConcurrencyController({ start: 4, min: 1, max: 10 });
+            c.Hold();
+            expect(c.Cap).toBe(4);
+            c.OnThrottleOrError();
+            expect(c.Cap).toBe(2);
+        });
+
+        it('a released cap ramps again', () => {
+            const c = new AdaptiveConcurrencyController({ start: 3, min: 1, max: 10 });
+            c.Hold();
+            c.OnSuccess();
+            c.Release();
+            c.OnSuccess();
+            c.OnSuccess();
+            expect(c.Cap).toBe(5);
+        });
+    });
 });
 
 describe('RunAdaptive', () => {
