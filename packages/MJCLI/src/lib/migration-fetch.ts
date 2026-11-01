@@ -7,14 +7,18 @@
  * The selection depends on whether the target database is fresh or existing, because
  * Skyway only ever applies baselines to a fresh (no-history) database:
  *
- *   fresh install   →  [ highest `B` baseline ] + [ every `V` after it ] + [ all `R` repeatables ]
- *   existing upgrade →  [ every `V` after the DB's current version ]      + [ all `R` repeatables ]   (no baseline)
+ *   fresh install    →  [ highest `B` baseline ] + [ every `V` after it ]                         + [ all `R` repeatables ]
+ *   existing upgrade →  [ every `V` not yet applied and above the DB's baseline floor ] + [ all `R` repeatables ]   (no baseline)
  *
- * The existing-upgrade path is what makes incremental upgrades correct: a baseline floor
- * would skip the intermediate versioned migrations a behind-the-baseline DB still needs.
- * The git ref bounds the top of the range (only migrations at/below the target are in the
- * tree). Selection uses the numeric `<timestamp>` filename token — Skyway's version key —
- * via the shared {@link parseMigrationFilename}.
+ * The existing-upgrade path selects by set difference against the history table, not by
+ * "newer than the highest applied version". Release lines make that distinction matter: a
+ * database upgraded from a patch line has applied files that are newer than migrations it
+ * has never run, and a "newer than the max" filter would drop those older files silently.
+ * The floor is the highest baseline row in history; Skyway never runs a `V` file at or
+ * below it, so fetching one would only make the CLI and Skyway disagree about what is
+ * pending. The git ref bounds the top of the range (only migrations at/below the target
+ * are in the tree). Selection uses the numeric `<timestamp>` filename token — Skyway's
+ * version key — via the shared {@link ParseMigrationFilename}.
  */
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -22,6 +26,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { SimpleGit } from 'simple-git';
 import { ParseMigrationFilename } from '../baseline/util';
+import type { AppliedMigrationState } from './db-version';
 
 export type MigrationDialect = 'sqlserver' | 'postgresql';
 
@@ -59,27 +64,29 @@ export function resolveGitRef(tagOrBranch: string): string {
  * Pure selector: given the repo-relative migration paths present at a ref, return
  * the minimal slice Skyway needs. Repeatable migrations are always included.
  *
- * Two modes, keyed on `currentVersion` (the highest migration already applied to the
- * target database, or `null` for a fresh one):
+ * Two modes, keyed on `applied` (what the target database's history says, or `null`
+ * for a fresh database):
  *
- * - **Fresh install** (`currentVersion == null`): `baseline + tail` — the highest `B`
+ * - **Fresh install** (`applied` null, or a history table with nothing successfully
+ *   applied yet — Skyway still baselines that database): `baseline + tail` — the highest `B`
  *   baseline plus every `V` after it. Skyway applies the baseline (consolidated schema)
  *   then the tail. This is the bandwidth-optimal path for a brand-new database.
- * - **Existing-DB upgrade** (`currentVersion` set): every `V` strictly after the current
- *   version, with **no baseline**. Skyway never applies a `B` file to a database that
- *   already has history, and the baseline floor would wrongly skip the intermediate
- *   versioned migrations the DB still needs (e.g. a v5.36 file below a v5.37 baseline
- *   when upgrading a v5.35 database).
+ * - **Existing-DB upgrade** (`applied` set): every `V` whose version is not in
+ *   `applied.AppliedVersions` and is strictly above `applied.BaselineFloor`, with **no
+ *   baseline**. Skyway never applies a `B` file to a database that already has history.
+ *   Files older than the highest applied version are still selected when they were never
+ *   run (a database coming from a release line); the caller decides whether Skyway may
+ *   apply them out of order.
  *
  * With no baseline present (e.g. legacy v2) the fresh path returns the full versioned history.
  */
-export function SelectMigrationSlice(paths: readonly string[], currentVersion?: string | null): string[] {
+export function SelectMigrationSlice(paths: readonly string[], applied?: AppliedMigrationState | null): string[] {
   const sqlPaths = paths.filter((p) => p.toLowerCase().endsWith('.sql'));
   const repeatables = sqlPaths.filter((p) => REPEATABLE_PATTERN.test(path.basename(p)));
 
-  if (currentVersion != null) {
-    // Existing DB: upgrade with versioned migrations after the current version only.
-    const versioned = sqlPaths.filter((p) => isVersionedAfter(p, currentVersion));
+  if (applied != null && applied.AppliedVersions.size > 0) {
+    // Existing DB: every versioned migration it has not applied, above its baseline floor.
+    const versioned = sqlPaths.filter((p) => isUnappliedAboveFloor(p, applied));
     return Array.from(new Set([...versioned, ...repeatables]));
   }
 
@@ -90,14 +97,16 @@ export function SelectMigrationSlice(paths: readonly string[], currentVersion?: 
 }
 
 /** @deprecated Use {@link SelectMigrationSlice}. */
-export function selectMigrationSlice(paths: readonly string[], currentVersion?: string | null): string[] {
-  return SelectMigrationSlice(paths, currentVersion);
+export function selectMigrationSlice(paths: readonly string[], applied?: AppliedMigrationState | null): string[] {
+  return SelectMigrationSlice(paths, applied);
 }
 
-/** True if `filePath` is a versioned (`V`) migration whose timestamp is strictly after `currentVersion`. */
-function isVersionedAfter(filePath: string, currentVersion: string): boolean {
+/** True if `filePath` is a versioned (`V`) migration the database has not applied and that lies above its baseline floor. */
+function isUnappliedAboveFloor(filePath: string, applied: AppliedMigrationState): boolean {
   const parsed = ParseMigrationFilename(path.basename(filePath));
-  return parsed?.Kind === 'V' && parsed.Timestamp > currentVersion;
+  if (parsed?.Kind !== 'V') return false;
+  if (applied.AppliedVersions.has(parsed.Timestamp)) return false;
+  return applied.BaselineFloor === null || parsed.Timestamp > applied.BaselineFloor;
 }
 
 /** Returns the timestamp of the latest `B` baseline among the paths, or null if none. */
@@ -129,8 +138,8 @@ export async function FetchMigrationSlice(opts: {
   repoUrl: string;
   ref: string;
   dialect: MigrationDialect;
-  /** Highest version already applied to the target DB; `null`/omitted = fresh install (baseline + tail). */
-  currentVersion?: string | null;
+  /** What the target DB has already applied; `null`/omitted = fresh install (baseline + tail). */
+  applied?: AppliedMigrationState | null;
 }): Promise<MigrationFetchResult> {
   const migrationsRoot = opts.dialect === 'postgresql' ? 'migrations-pg' : 'migrations';
   const dir = mkdtempSync(path.join(tmpdir(), 'mj-migrations-'));
@@ -149,7 +158,7 @@ export async function FetchMigrationSlice(opts: {
       return { Dir: dir, Selected: [], UsedFallback: true, Cleanup: cleanup };
     }
     const allPaths = await listTreePaths(git, migrationsRoot);
-    const selected = SelectMigrationSlice(allPaths, opts.currentVersion);
+    const selected = SelectMigrationSlice(allPaths, opts.applied);
     const checkoutTargets = selected.length > 0 ? selected : [migrationsRoot];
     await git.raw(['sparse-checkout', 'set', '--no-cone', ...checkoutTargets]);
     await git.raw(['checkout']);
@@ -165,8 +174,8 @@ export async function fetchMigrationSlice(opts: {
   repoUrl: string;
   ref: string;
   dialect: MigrationDialect;
-  /** Highest version already applied to the target DB; `null`/omitted = fresh install (baseline + tail). */
-  currentVersion?: string | null;
+  /** What the target DB has already applied; `null`/omitted = fresh install (baseline + tail). */
+  applied?: AppliedMigrationState | null;
 }): Promise<MigrationFetchResult> {
   return FetchMigrationSlice(opts);
 }
