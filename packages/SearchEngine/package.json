@@ -28,6 +28,7 @@
     "nunjucks": "^3.2.4"
   },
   "optionalDependencies": {
+    "@elastic/elasticsearch": "^8.19.2",
     "@huggingface/transformers": "^4.3.1"
   },
   "devDependencies": {
