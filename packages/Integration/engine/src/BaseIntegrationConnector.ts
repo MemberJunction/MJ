@@ -846,15 +846,16 @@ export abstract class BaseIntegrationConnector {
                     // — defaulting it to 450 too silently TRUNCATED long descriptions / URLs.
                     return isKey ? 450 : 4000;
                 }
-                // When m*2 exceeds the largest bucket there IS no bounded width with the headroom
-                // this comment promises, and the old `?? 4000` quietly returned one anyway — a
-                // width NARROWER than twice the observed max, and for anything past 4000
-                // characters narrower than the value already seen. Downstream that is not a
-                // truncation: a record too long for its column is SKIPPED WHOLE, so the data just
-                // stops arriving with the run still reporting success. -1 is the MAX/unbounded
-                // convention every consumer already honours (decideLengthOverlay, TypeMapper,
-                // CustomColumnPromotion) and is the only honest answer here.
-                const padded = [32, 64, 128, 256, 512, 1024, 2048, 4000].find(b => b >= m * 2) ?? -1;
+                // `m` is already doubled by the inference (generousStringBound), and is null — the
+                // branch above — once twice the observed max passes 4000. So when m*2 overflows the
+                // largest bucket, m itself still fits in 4000: the observed max was 1,001–2,000
+                // characters, and 4000 holds 2–4x it. That is the answer, not MAX: a MAX column
+                // cannot be indexed and is stored off-row, a poor trade for a description- or
+                // URL-sized value. Only an m past 4000 (a width that did not come from this
+                // inference) has no bounded bucket that holds it, and gets -1, the MAX/unbounded
+                // convention every consumer honours (decideLengthOverlay, TypeMapper,
+                // CustomColumnPromotion) — a record too long for its column is SKIPPED WHOLE.
+                const padded = [32, 64, 128, 256, 512, 1024, 2048, 4000].find(b => b >= m * 2) ?? (m <= 4000 ? 4000 : -1);
                 // A key must stay index-eligible and can never be MAX, so an unbounded padding
                 // collapses to the index-key cap rather than to Math.min(-1, 450) === -1.
                 return isKey ? (padded === -1 ? 450 : Math.min(padded, 450)) : padded;

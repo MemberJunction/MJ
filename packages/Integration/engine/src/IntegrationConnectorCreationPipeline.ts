@@ -128,6 +128,25 @@ function emptyPersistResult(): PersistSchemaResult {
     };
 }
 
+/**
+ * The first-discovery result once the healing pass has re-persisted the objects it sampled.
+ *
+ * Not a sum: the heal re-persists objects the first pass CREATED, so adding its counts would report
+ * them a second time, as updates. The first pass's object and field counts stand; what the heal adds
+ * is its provenance (the merge logs, now carrying the sampled evidence) and any field that sampling
+ * found and the declaration did not. It is scoped and never authoritative, so it retires nothing.
+ */
+export function MergeHealedPersistResult(first: PersistSchemaResult, heal: PersistSchemaResult): PersistSchemaResult {
+    return {
+        ...first,
+        FieldsCreated: first.FieldsCreated + heal.FieldsCreated,
+        ObjectMergeLog: [...first.ObjectMergeLog, ...heal.ObjectMergeLog],
+        FieldMergeLog: [...first.FieldMergeLog, ...heal.FieldMergeLog],
+        ObjectsDeactivated: [...first.ObjectsDeactivated],
+        FieldsDeactivated: [...first.FieldsDeactivated],
+    };
+}
+
 /** Folds one per-object persist into the streaming total. */
 function addPersistResult(total: PersistSchemaResult, part: PersistSchemaResult): void {
     total.ObjectsCreated += part.ObjectsCreated;
@@ -628,8 +647,14 @@ export class IntegrationConnectorCreationPipeline {
             // Introspect+Persist, which this time can sample them. Verified live 2026-09-07: a
             // manual second refresh sampled all 258 custom types cleanly.
             //
+            // Scoped to the objects that went unsampled. Re-running the whole source would double a
+            // large connector's time and API calls for a handful of objects, inside the same run
+            // deadline PKClassify still needs. A scoped introspection is never authoritative, and
+            // DeactivateAbsent is off, so the heal cannot retire anything the first pass kept.
+            //
             // Non-fatal by design — a failed heal leaves exactly the state we already had, and
-            // failing the whole discovery over it would be worse than the guessed widths.
+            // failing the whole discovery over it would be worse than the guessed widths. So it is
+            // a warning, which never fails the run, not a stage error.
             const unsampled = [...(this._firstDiscoveryFallbacks ?? [])];
             if (unsampled.length > 0) {
                 try {
@@ -640,10 +665,16 @@ export class IntegrationConnectorCreationPipeline {
                     // wrote them, so re-read it too, or the second pass samples the same empty
                     // catalog as the first (MJ-RUN-46; see RefreshCatalog).
                     await RefreshCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
-                    persistResult = await this.streamIntrospectAndPersist(emitter, opts, withDeadline);
+                    const healOpts: ConnectorCreationPipelineOptions = {
+                        ...opts,
+                        IntrospectOptions: { ...(opts.IntrospectOptions ?? {}), ObjectNames: unsampled },
+                        DeactivateAbsent: false,
+                    };
+                    const healed = await this.streamIntrospectAndPersist(emitter, healOpts, withDeadline);
+                    persistResult = MergeHealedPersistResult(persistResult, healed);
                 } catch (healErr) {
                     const hm = healErr instanceof Error ? healErr.message : String(healErr);
-                    emitter.stageError('Introspect', `First-discovery healing pass failed (run schema refresh once more to complete sampling evidence): ${hm}`, { code: 'first-discovery-heal-failed' });
+                    emitter.Warning('Introspect', 'first-discovery-heal-failed', `First-discovery healing pass failed (run schema refresh once more to complete sampling evidence): ${hm}`);
                 }
             }
 

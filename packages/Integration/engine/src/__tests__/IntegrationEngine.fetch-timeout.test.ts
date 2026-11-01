@@ -17,7 +17,7 @@ import type {
     ExternalFieldSchema,
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord } from '../types.js';
-import { IntegrationEngine, PositiveInt } from '../IntegrationEngine.js';
+import { IntegrationEngine, PositiveInt, BuildRunCompletionMessage } from '../IntegrationEngine.js';
 import { ConnectorFactory } from '../ConnectorFactory.js';
 import { WatermarkService } from '../WatermarkService.js';
 
@@ -189,25 +189,30 @@ function createMockCompanyIntegration(configuration: string): MJCompanyIntegrati
     } as unknown as MJCompanyIntegrationEntity;
 }
 
-function wireConfigMocks(companyIntegration: MJCompanyIntegrationEntity, integration: MJIntegrationEntity): void {
+function entityMapRow(id: string, entity: string, externalObjectName: string): ICompanyIntegrationEntityMap {
+    return {
+        Get: vi.fn((f: string) => f === 'ID' ? id : null),
+        ID: id,
+        CompanyIntegrationID: 'ci-1',
+        EntityID: `entity-${id}`,
+        ConflictResolution: 'SourceWins',
+        DeleteBehavior: 'SoftDelete',
+        Entity: entity,
+        ExternalObjectName: externalObjectName,
+        SyncEnabled: true,
+        Status: 'Active',
+        SyncDirection: 'Pull',
+    } as unknown as ICompanyIntegrationEntityMap;
+}
+
+function wireConfigMocks(
+    companyIntegration: MJCompanyIntegrationEntity,
+    integration: MJIntegrationEntity,
+    entityMaps: ICompanyIntegrationEntityMap[] = [entityMapRow('em-1', 'Contacts', 'contacts')],
+): void {
     mockRunViewsFn.mockResolvedValueOnce([
         { Success: true, Results: [companyIntegration] },
-        {
-            Success: true,
-            Results: [{
-                Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
-                ID: 'em-1',
-                CompanyIntegrationID: 'ci-1',
-                EntityID: 'entity-1',
-                ConflictResolution: 'SourceWins',
-                DeleteBehavior: 'SoftDelete',
-                Entity: 'Contacts',
-                ExternalObjectName: 'contacts',
-                SyncEnabled: true,
-                Status: 'Active',
-                SyncDirection: 'Pull',
-            } as unknown as ICompanyIntegrationEntityMap],
-        },
+        { Success: true, Results: entityMaps },
         { Success: true, Results: [integration] },
         { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
     ]);
@@ -423,6 +428,29 @@ describe('IntegrationEngine — an aborted, incomplete fetch is reported', () =>
         expect(warning).toContain('watermark is held');
     }, 30000);
 
+    it('names the abandoned object in the RUN result and its completion message, beside a clean one', async () => {
+        // MJ-RUN-4. Each map's result is where the object is marked; the run total is what the
+        // completion message reads. Two maps, so the fold between them is what is under test.
+        wireConfigMocks(createMockCompanyIntegration('{"fetchTimeoutMs": 40}'), buildIntegration(), [
+            entityMapRow('em-1', 'Contacts', 'contacts'),
+            entityMapRow('em-2', 'Accounts', 'accounts'),
+        ]);
+        const connector = createHangingConnector(null);
+        (connector.FetchChanges as ReturnType<typeof vi.fn>).mockImplementation((ctx: FetchContext) =>
+            ctx.ObjectName === 'contacts'
+                ? new Promise<FetchBatchResult>(() => { /* never settles — this object is abandoned */ })
+                : Promise.resolve({ Records: [], HasMore: false } as FetchBatchResult));
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+        const finalize = vi.spyOn(orchestrator as unknown as { finalizeSyncProgress: (...a: unknown[]) => Promise<void> }, 'finalizeSyncProgress');
+
+        const result = await orchestrator.RunSync('ci-1', contextUser);
+
+        expect(result.IncompleteObjects).toEqual(['contacts']);
+        const [, status, message] = finalize.mock.calls[finalize.mock.calls.length - 1];
+        expect(status).toBe('completed');
+        expect(message).toBe('Sync run complete — 1 object(s) INCOMPLETE: contacts');
+    }, 30000);
+
     it('records the abort on the run so it survives in queryable history, without failing the run', async () => {
         await runAbortingSync();
 
@@ -554,4 +582,25 @@ describe('IntegrationEngine — a timed-out keyset page suspends the object and 
         const firstCtx = fetchChanges.mock.calls[0][0] as FetchContext;
         expect(firstCtx.AfterKeyValue).toBe('2');
     }, 30000);
+});
+
+describe('BuildRunCompletionMessage — MJ-RUN-4', () => {
+    it('names the incomplete objects after the error count, not in place of it', () => {
+        expect(BuildRunCompletionMessage(['contacts'], 'Sync completed with 3 error(s)', false))
+            .toBe('Sync completed with 3 error(s) — 1 object(s) INCOMPLETE: contacts');
+    });
+
+    it('says the run completed when there is nothing else to say', () => {
+        expect(BuildRunCompletionMessage(['a', 'b'], undefined, false)).toBe('Sync run complete — 2 object(s) INCOMPLETE: a, b');
+    });
+
+    it('lists ten and elides the rest', () => {
+        const names = Array.from({ length: 12 }, (_v, i) => `o${i}`);
+        expect(BuildRunCompletionMessage(names, undefined, false)).toMatch(/12 object\(s\) INCOMPLETE: o0, .*, o9, …$/);
+    });
+
+    it('leaves a clean or cancelled run\'s message as it was', () => {
+        expect(BuildRunCompletionMessage([], 'Sync completed with 1 error(s)', false)).toBe('Sync completed with 1 error(s)');
+        expect(BuildRunCompletionMessage(['a'], undefined, true)).toBeUndefined();
+    });
 });

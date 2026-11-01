@@ -67,14 +67,20 @@ describe('sampled width ceiling', () => {
         expect(w).not.toBe(4000);
     });
 
-    it('returns UNBOUNDED when the PADDED width overflows the largest bucket', async () => {
-        // The other half of the ceiling, and it needs a specific window to reach: the inference
-        // itself hands back a doubled width (capped at 4000, null above), and this code doubles
-        // AGAIN into a bucket. So the bucket overflow is only reachable when the inference returns
-        // something above 2000 — i.e. an observed length between 1001 and 2000. 1500 observed
-        // -> inferred 3000 -> wants 6000 -> past the largest bucket.
+    it('keeps 4000 when only the SECOND doubling overflows the largest bucket', async () => {
+        // The inference hands back a doubled width (capped at 4000, null above), and this code
+        // doubles AGAIN into a bucket. So the bucket overflows for an observed length of 1001–2000,
+        // where 4000 already holds 2–4x what was seen. MAX there would cost indexability and
+        // in-row storage for an ordinary description- or URL-sized column, and buy nothing.
+        // 1500 observed -> inferred 3000 -> wants 6000 -> 4000, which holds the 3000.
         const fields = await new WidthCeilingTestConnector().Run(rows(60, 1500));
-        expect(widthOf(fields, 'body')).toBe(-1);
+        expect(widthOf(fields, 'body')).toBe(4000);
+    });
+
+    it('keeps 4000 at the top of that window too', async () => {
+        // 2000 observed -> inferred 4000 (exactly the bounded ceiling) -> 4000 holds it.
+        const fields = await new WidthCeilingTestConnector().Run(rows(60, 2000));
+        expect(widthOf(fields, 'body')).toBe(4000);
     });
 
     it('keeps a KEY index-eligible when the PADDED width overflows too', async () => {
