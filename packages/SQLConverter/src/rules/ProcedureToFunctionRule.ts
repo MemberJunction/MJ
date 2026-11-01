@@ -11,6 +11,7 @@ import {
   ConvertStringConcat, ConvertTopToLimit, ConvertCastTypes,
   ConvertIIF, ConvertConvertFunction, RemoveNPrefix, RemoveCollate,
   ConvertCommonFunctions, ConvertStuff, EmitDropOverloadsBlock,
+  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema, StripComments,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
 
@@ -53,7 +54,26 @@ export class ProcedureToFunctionRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL CREATE PROCEDURE → PG CREATE FUNCTION conversion: parameter renaming (@param → p_param), DECLARE handling, RAISERROR → RAISE EXCEPTION, INSERT...OUTPUT handling, RETURN value semantics, and SETOF return types. This is structural transformation sqlglot does not perform.';
 
-  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
+  PostProcess(sql: string, originalSQL: string, context: ConversionContext): string {
+    const normalized = sql.replace(/\bCREATE\s+OR\s+ALTER\s+PROC(EDURE)?\b/i, 'CREATE PROC$1');
+    const schema = RoutineSchema(normalized);
+    // An Open App procedure is converted through the core-schema path only when it is CodeGen
+    // CRUD output (spCreate/spUpdate/spDelete), whose shape that path is built for. A hand-written
+    // app procedure is left for a person to author rather than run through generic conversion
+    // (issue #5364 item 8).
+    if (schema && schema.toLowerCase() !== '__mj') {
+      const name = StripComments(normalized).match(/\bCREATE\s+PROC(?:EDURE)?\s+\S+?\.\s*\[?"?(\w+)/i)?.[1] ?? '';
+      if (!/^sp(?:Create|Update|Delete)\w+$/i.test(name)) {
+        return NeedsHandAuthoring('procedure', `${name} is a hand-written procedure in schema ${schema}`, originalSQL);
+      }
+      const converted = ConvertInRoutineSchema(normalized, (aliased) => this.convertCoreSchemaProcedure(aliased, context));
+      return converted ?? NeedsHandAuthoring('procedure', `${name} references the core schema by its literal name`, originalSQL);
+    }
+    return this.convertCoreSchemaProcedure(normalized, context);
+  }
+
+  /** Convert a procedure created in MJ core's `__mj` schema (the shape every pattern below assumes). */
+  private convertCoreSchemaProcedure(sql: string, context: ConversionContext): string {
     // Extract proc name via regex
     let procMatch = sql.match(
       /CREATE\s+PROC(?:EDURE)?\s+\[?__mj\]?\.\[?(\w+)\]?\s*(.*?)(?:\bAS\b)/is

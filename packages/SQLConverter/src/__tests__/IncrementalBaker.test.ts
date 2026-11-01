@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IncrementalBaker, StripVolatileHeaders, BakeApplyError } from '../IncrementalBaker.js';
+import { IncrementalBaker, StripVolatileHeaders, BakeApplyError, SelectBakeableEntities } from '../IncrementalBaker.js';
 import type { BakerWorkingDB, CapturedEntitySQL } from '../IncrementalBaker.js';
 import type { TSQLToPGTranspiler } from '../MigrationConverter.js';
 
@@ -17,6 +17,8 @@ class FakeDB implements BakerWorkingDB {
   applied: string[] = [];
   /** The full entity set returned by listBakeableEntities (baseline bake path). */
   bakeable: string[] = [];
+  /** The schema each listBakeableEntities call asked for. */
+  listedSchemas: string[] = [];
   constructor(private readonly capture: (name: string) => CapturedEntitySQL) {}
   async apply(sql: string): Promise<void> {
     this.calls.push('apply');
@@ -29,8 +31,9 @@ class FakeDB implements BakerWorkingDB {
     this.calls.push(`capture:${name}`);
     return this.capture(name);
   }
-  async listBakeableEntities(): Promise<string[]> {
+  async listBakeableEntities(schema: string): Promise<string[]> {
     this.calls.push('listBakeable');
+    this.listedSchemas.push(schema);
     return this.bakeable;
   }
 }
@@ -247,6 +250,16 @@ describe('IncrementalBaker', () => {
       expect(r.affectedEntities).toEqual(['MJ: AI Agent Runs', 'MJ: AI Prompts', 'Widgets']);
     });
 
+    it('asks the working DB only for entities in the target schema (issue #5364 item 9)', async () => {
+      const db = new FakeDB(capturedFor);
+      db.bakeable = ['Widgets'];
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db, schema: '__mj_BizAppsAccounting' });
+
+      await baker.bakeMigration(baselineSql, 'B202605281200__v0.1.x__Schema_and_Tables.sql');
+
+      expect(db.listedSchemas).toEqual(['__mj_BizAppsAccounting']);
+    });
+
     it('still assembles the transpiled hand body + baked CodeGen into a standalone .pg.sql', async () => {
       const db = new FakeDB(capturedFor);
       db.bakeable = ['Widgets'];
@@ -330,5 +343,35 @@ describe('stripVolatileHeaders', () => {
   it('removes only the `-- Generated at:` lines, leaving SQL intact', () => {
     const input = ['-- Generated at: 2026-06-18T18:30:28.355Z', 'CREATE VIEW x AS SELECT 1;', '  -- Generated at: 2026-06-18T18:30:28.368Z'].join('\n');
     expect(StripVolatileHeaders(input)).toBe('CREATE VIEW x AS SELECT 1;');
+  });
+});
+
+describe('SelectBakeableEntities (issue #5364 item 9)', () => {
+  const entities = [
+    { Name: 'MJ: Entities', SchemaName: '__mj', IncludeInAPI: true },
+    { Name: 'Common: People', SchemaName: '__mj_BizAppsCommon', IncludeInAPI: true },
+    { Name: 'Tasks: Tasks', SchemaName: '__mj_BizAppsTasks', IncludeInAPI: true },
+    { Name: 'Accounting: GL Accounts', SchemaName: '__mj_BizAppsAccounting', IncludeInAPI: true },
+    { Name: 'Accounting: Internal', SchemaName: '__mj_BizAppsAccounting', IncludeInAPI: false },
+    { Name: 'Accounting: Journal Entries', SchemaName: '__mj_BizAppsAccounting', IncludeInAPI: true },
+  ];
+
+  it('keeps only API entities in the target schema, in input order', () => {
+    expect(SelectBakeableEntities(entities, '__mj_BizAppsAccounting')).toEqual([
+      'Accounting: GL Accounts',
+      'Accounting: Journal Entries',
+    ]);
+  });
+
+  it('matches the schema case-insensitively (PostgreSQL folds the unquoted schema name)', () => {
+    expect(SelectBakeableEntities(entities, '__mj_bizappsaccounting')).toHaveLength(2);
+  });
+
+  it('still scopes MJ core to its own schema', () => {
+    expect(SelectBakeableEntities(entities, '__mj')).toEqual(['MJ: Entities']);
+  });
+
+  it('honors excludeSchemas', () => {
+    expect(SelectBakeableEntities(entities, '__mj', ['__MJ'])).toEqual([]);
   });
 });

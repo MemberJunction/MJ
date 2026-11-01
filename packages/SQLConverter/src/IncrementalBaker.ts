@@ -61,12 +61,45 @@ export interface BakerWorkingDB {
    */
   captureEntity(entityDisplayName: string): Promise<CapturedEntitySQL>;
   /**
-   * Every entity CodeGen generates objects for, in generation order — the full set
-   * `mj codegen` would process (`IncludeInAPI`, minus excluded schemas). A baseline has
-   * NO CodeGen banners, so `MigrationSplitter.extractAffectedEntities` yields `[]`; baking
-   * a baseline instead captures native CodeGen for THIS full set (see `bakeMigration`).
+   * Every entity in `schema` that CodeGen generates objects for, in generation order — the set
+   * `mj codegen` would process for that schema (`IncludeInAPI`, minus excluded schemas). A
+   * baseline has NO CodeGen banners, so `MigrationSplitter.extractAffectedEntities` yields `[]`;
+   * baking a baseline instead captures native CodeGen for THIS set (see `bakeMigration`).
+   *
+   * `schema` is the baker's target schema. The working database also holds MJ core and every
+   * dependency app, and a baseline owns only its own schema's objects: without the filter an Open
+   * App's baseline baked all of core's and its dependencies' views and routines (issue #5364).
+   * {@link SelectBakeableEntities} implements the selection over the provider's entity list.
    */
-  listBakeableEntities(): Promise<string[]>;
+  listBakeableEntities(schema: string): Promise<string[]>;
+}
+
+/** The entity fields {@link SelectBakeableEntities} reads (a structural subset of `EntityInfo`). */
+export interface BakeableEntityCandidate {
+  Name: string;
+  SchemaName: string;
+  IncludeInAPI: boolean;
+}
+
+/**
+ * Select the entities a baseline bake captures: those CodeGen generates objects for
+ * (`IncludeInAPI`, schema not in `excludeSchemas`) that live in `schema`, in input order.
+ * Schema names compare case-insensitively, because PostgreSQL folds the unquoted schema an
+ * Open App creates (`__mj_BizAppsAccounting` → `__mj_bizappsaccounting`) while entity metadata
+ * keeps the mixed-case spelling.
+ */
+export function SelectBakeableEntities(
+  entities: ReadonlyArray<BakeableEntityCandidate>,
+  schema: string,
+  excludeSchemas: ReadonlyArray<string> = [],
+): string[] {
+  const target = schema.toLowerCase();
+  const excluded = new Set(excludeSchemas.map((s) => s.toLowerCase()));
+  return entities
+    .filter((e) => e.IncludeInAPI)
+    .filter((e) => !excluded.has(e.SchemaName.toLowerCase()))
+    .filter((e) => e.SchemaName.toLowerCase() === target)
+    .map((e) => e.Name);
 }
 
 export interface IncrementalBakerOptions {
@@ -188,7 +221,7 @@ export class IncrementalBaker {
     if (isBaselineFile(fileName)) {
       return this.applyAndCapture(fileName, transpiledArtifact, async () => {
         await this.opts.db.refreshMetadata(); // read the pre-seeded metadata
-        const allEntities = await this.opts.db.listBakeableEntities();
+        const allEntities = await this.opts.db.listBakeableEntities(this.schema);
         const captured = await this.captureEntities(allEntities);
         return { ...base, affectedEntities: allEntities, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
       });
