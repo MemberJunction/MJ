@@ -59,8 +59,31 @@ export class AdaptiveConcurrencyController {
         return this.maxCap;
     }
 
+    /**
+     * Whether ramp-up is currently suppressed. See {@link Hold}.
+     */
+    private held = false;
+
+    /**
+     * Stop the cap from GROWING, without lowering it.
+     *
+     * The cheapest possible response to memory pressure: everything already in flight keeps
+     * running at full speed and nothing new is admitted, so it costs no throughput at all. Without
+     * it the only options are "carry on" and "halve", and halving work that is already succeeding
+     * is a real cost paid for a problem that holding would have solved.
+     */
+    public Hold(): void {
+        this.held = true;
+    }
+
+    /** Allow ramp-up again once pressure has cleared. */
+    public Release(): void {
+        this.held = false;
+    }
+
     /** Additive increase: a healthy outcome nudges the cap up by 1, clamped to Max. */
     public OnSuccess(): void {
+        if (this.held) return;
         this.cap = Math.min(this.maxCap, this.cap + 1);
     }
 

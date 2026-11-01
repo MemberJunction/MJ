@@ -383,13 +383,19 @@ export class IntegrationProgressEmitter {
     public stageStart(stage: string, message?: string): void {
         return this.StageStart(stage, message);
     }
-    public StageComplete(stage: string, counts?: IntegrationProgressEvent['counts']): void {
-        this.Emit('stage.complete', { stage, counts, level: 'info' });
+    /**
+     * `counts` is the canonical quartet the reader aggregates. `data` carries anything a specific
+     * stage needs to survive that is not part of it — notably the CREATED vs UPDATED split, which
+     * the quartet folds into `succeeded` and which history has to show separately
+     * (plan.md: "Synced is different between created and updated").
+     */
+    public StageComplete(stage: string, counts?: IntegrationProgressEvent['counts'], data?: Record<string, unknown>): void {
+        this.Emit('stage.complete', { stage, counts, data, level: 'info' });
     }
 
     /** @deprecated Use {@link StageComplete}. */
-    public stageComplete(stage: string, counts?: IntegrationProgressEvent['counts']): void {
-        return this.StageComplete(stage, counts);
+    public stageComplete(stage: string, counts?: IntegrationProgressEvent['counts'], data?: Record<string, unknown>): void {
+        return this.StageComplete(stage, counts, data);
     }
     public StageError(stage: string, message: string, data?: Record<string, unknown>): void {
         this.Emit('stage.error', { stage, message, level: 'error', data });

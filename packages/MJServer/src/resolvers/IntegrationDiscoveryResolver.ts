@@ -2,7 +2,7 @@ import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int,
 import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { NoLog } from "../logging/NoLog.js";
-import { UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { DrainResponseBody, SafeFetch } from "@memberjunction/network-utils";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -60,9 +60,13 @@ import type { RunArtifactAuthorizationResult } from "../integration/RunArtifactA
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { CatalogIdentityKey, ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { DecidePauseWrite, DecideSchedulesToPause, DecideSchedulesToResume, DescribeCancelOutcome, DescribeCancelScope, DescribePauseOutcome, ReadPausedSchedules, WritePausedSchedules } from "../integration/ConnectionPause.js";
+import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPause.js";
+import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
 import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
+import { LookupObjectNamesByID } from "../integration/ObjectNamesByID.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -196,7 +200,11 @@ class ApplyAllBatchConnectorInput {
 class ApplyAllBatchInput {
     @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
-    @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
+    // NO defaultValue. It must stay UNDEFINED when the caller says nothing, so the resolver can
+    // tell "not specified" from "explicitly incremental" and apply the first-apply rule
+    // (everything.txt: "always full generally as the default" for a connector's first RSU).
+    // A defaultValue of false made that determination dead code on this path for its whole life.
+    @Field(() => Boolean, { nullable: true, description: 'Ignore watermarks and do a full re-fetch. Omit to let the server choose: FULL on a connection first apply, incremental after.' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
     @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
@@ -262,9 +270,59 @@ class SchemaEvolutionOutput {
     @Field(() => [String], { nullable: true }) ChangedObjects?: string[];
     /** U10 — objects whose Pull watermark was reset so the next sync backfills the schema change. */
     @Field(() => [String], { nullable: true }) WatermarksReset?: string[];
+    /**
+     * Objects whose stored rows were CLEARED because the connector changed what identifies a row.
+     * Reported separately from WatermarksReset: a reset means "fetch it all again", this means
+     * "what was here could not be reconciled with the source and has been rebuilt from it".
+     */
+    @Field(() => [String], { nullable: true }) RekeyedObjects?: string[];
+    /**
+     * Custom columns the source has been sending that are still sitting in the overflow JSON,
+     * offered here so a schema refresh is where you see them.
+     *
+     * everything.txt: promoting one "requires that the user accepts" it, so this is REPORT-ONLY.
+     * Pass the column names back in `acceptCustomColumns` to actually materialise them — in the
+     * same migration and the same restart as the refresh's own DDL.
+     */
+    @Field(() => [CustomColumnCandidate], { nullable: true }) CustomColumnCandidates?: CustomColumnCandidate[];
+    /** The accepted columns that were folded into this run's migration. */
+    @Field(() => [PromotedColumn], { nullable: true }) PromotedColumns?: PromotedColumn[];
 }
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
+
+/**
+ * One tunable setting, described by the connector.
+ *
+ * Exists so a surface can render the settings for a connection it knows nothing about, and so the
+ * DEFAULT it shows is the engine's real one. The alternative — a hardcoded list per surface — is
+ * how a sample size of 500 came to be shown and stamped against an engine whose default is 50.
+ */
+@ObjectType()
+class ConnectorSettingOutput {
+    @Field() Key: string;
+    @Field() Label: string;
+    @Field() Group: string;
+    @Field() Type: string;
+    @Field(() => [String], { nullable: true }) Options?: string[];
+    /** JSON-encoded: the value is polymorphic per setting, and Type says how to read it. */
+    @Field({ nullable: true }) DefaultJSON?: string;
+    @Field(() => Float, { nullable: true }) Min?: number;
+    @Field(() => Float, { nullable: true }) Max?: number;
+    /** 'basic' | 'advanced' | 'expert' — how a surface decides what to show. */
+    @Field() Tier: string;
+    /** 'connection' | 'object' */
+    @Field() AppliesTo: string;
+    @Field() Description: string;
+    @Field() Sensitive: boolean;
+}
+
+@ObjectType()
+class ConnectorSettingsSchemaOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ConnectorSettingOutput]) Settings: ConnectorSettingOutput[];
+}
 
 @ObjectType()
 class ConnectorCapabilitiesOutput {
@@ -428,6 +486,22 @@ class RefreshConnectorSchemaOutput {
     @Field(() => [RefreshConnectorSchemaPKVerdictOutput], { nullable: true }) PKVerdicts?: RefreshConnectorSchemaPKVerdictOutput[];
     @Field(() => [String], { nullable: true }) UnresolvedObjects?: string[];
     @Field({ nullable: true }) FailureMessage?: string;
+}
+
+/**
+ * The reply to a DETACHED discovery start. Deliberately a different shape from
+ * RefreshConnectorSchemaOutput: that one reports real counts because it waited, and handing back
+ * placeholder zeros from a run that has not begun is exactly the confusion this type avoids.
+ */
+@ObjectType()
+class StartSchemaRefreshOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    /** Tail this with IntegrationTailRunEvents. 'not-started' when Success is false. */
+    @Field() RunID: string;
+    @Field() InProgress: boolean;
+    /** Set when the refusal was a lock: names what is holding it, so the UI can say why. */
+    @Field({ nullable: true }) BlockedBy?: string;
 }
 
 // ─── Generate Integration Action (on-demand Integration-as-Actions) ─────────
@@ -641,6 +715,28 @@ class CreateConnectionOutput {
 class MutationResultOutput {
     @Field() Success: boolean;
     @Field() Message: string;
+}
+
+/**
+ * Deactivate returns more than a boolean because pausing a connection is not one act.
+ *
+ * A caller has to be able to tell "paused, and the sync you were watching is stopping" from
+ * "paused, and the sync you were watching will run to completion in a process I cannot reach".
+ * Both are successful pauses. Only one of them means the work has stopped, and a UI that says
+ * "stopping" for the second is lying to the operator about the state of their data.
+ */
+@ObjectType()
+class DeactivateConnectionOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    /** How many scheduled jobs this pause actually moved from Active to Paused. */
+    @Field(() => Int) SchedulesPaused: number;
+    /** The live sync run at the moment of pause, when there was one. */
+    @Field({ nullable: true }) InFlightSyncRunID?: string;
+    /** True when a live run existed AND a cancel was signalled for it. */
+    @Field() CancelRequested: boolean;
+    /** 'durable' | 'this-process' | 'unknown' | 'none' — see ConnectionPause.DescribeCancelScope. */
+    @Field() CancelScope: string;
 }
 
 // ─── Typed sync-config (rate-limit / concurrency / time-budget as STRUCTURED fields, not a raw
@@ -885,6 +981,10 @@ class SyncHistoryOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [SyncRunSummaryOutput], { nullable: true }) Runs?: SyncRunSummaryOutput[];
+    /** Total runs for this connection, so a pager can size itself without fetching every row. */
+    @Field({ nullable: true }) TotalKnown?: number;
+    /** True when rows exist beyond this page. */
+    @Field({ nullable: true }) HasMore?: boolean;
 }
 
 @ObjectType()
@@ -900,6 +1000,8 @@ class OperationProgressOutput {
     @Field({ nullable: true }) RecordsCreated?: number;
     @Field({ nullable: true }) RecordsUpdated?: number;
     @Field({ nullable: true }) RecordsErrored?: number;
+    /** Records the sync chose not to write because the content hash matched. */
+    @Field({ nullable: true }) RecordsSkipped?: number;
     @Field({ nullable: true }) RSUStep?: string;
     @Field({ nullable: true }) RSURunning?: boolean;
     /** U11 — 1-based index of the current RSU step (determinate stepper). */
@@ -908,6 +1010,73 @@ class OperationProgressOutput {
     @Field(() => Int, { nullable: true }) RSUStepTotal?: number;
     @Field({ nullable: true }) ElapsedMs?: number;
     @Field({ nullable: true }) StartedAt?: string;
+}
+
+@ObjectType()
+class ActiveOperationOutput {
+    /** 'sync' | 'rsu' | 'discovery' | 'maintenance' */
+    @Field() Kind: string;
+    /**
+     * 'connection' when this operation provably belongs to the requested connection;
+     * 'workspace' when it is process-wide and cannot be attributed to one. The UI must not claim a
+     * workspace-scoped RSU belongs to the connector being viewed - that mislabelling is why an
+     * unrelated schema update read as "your connector is building".
+     */
+    @Field() Scope: string;
+    @Field() Label: string;
+    @Field({ nullable: true }) RunID?: string;
+    @Field({ nullable: true }) StartedAt?: Date;
+    @Field({ nullable: true }) StepLabel?: string;
+    @Field(() => Int, { nullable: true }) StepIndex?: number;
+    @Field(() => Int, { nullable: true }) StepTotal?: number;
+    @Field(() => Int, { nullable: true }) RecordsCreated?: number;
+    @Field(() => Int, { nullable: true }) RecordsUpdated?: number;
+    @Field(() => Int, { nullable: true }) RecordsSkipped?: number;
+    @Field(() => Int, { nullable: true }) RecordsErrored?: number;
+    /** Only a sync can be cancelled, and only from the process running it. */
+    @Field() Cancellable: boolean;
+}
+
+@ObjectType()
+class ActiveOperationsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ActiveOperationOutput], { nullable: true }) Operations?: ActiveOperationOutput[];
+    /** What holds this connection's maintenance lock, if anything. */
+    @Field({ nullable: true }) MaintenanceLockReason?: string;
+}
+
+@ObjectType()
+class ResourcePressureFindingOutput {
+    @Field() Code: string;
+    @Field() Message: string;
+}
+
+@ObjectType()
+class ResourcePressureOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => Float, { nullable: true }) HeapUsedFraction?: number;
+    @Field(() => Float, { nullable: true }) HeapUsedMB?: number;
+    @Field(() => Float, { nullable: true }) HeapLimitMB?: number;
+    @Field(() => Float, { nullable: true }) ResidentMB?: number;
+    /**
+     * Resident set as a fraction of HOST memory, plus the host totals it is derived from.
+     *
+     * ResidentMB alone is a number with no denominator: a client cannot tell whether 3,478 MB is
+     * comfortable or one step from a SIGKILL without knowing the box. It was the latter on the
+     * sandbox on 2026-09-14 — 3,478 MB of 3,830 MB, killed by the kernel, while HeapUsedFraction
+     * (the only judgeable number this type exposed) sat unremarkable because `--max-old-space-size`
+     * bounds V8's old space and not the response buffers that actually filled the machine.
+     */
+    @Field(() => Float, { nullable: true }) ResidentFraction?: number;
+    @Field(() => Float, { nullable: true }) HostMemTotalMB?: number;
+    @Field(() => Float, { nullable: true }) HostMemAvailableMB?: number;
+    @Field(() => Float, { nullable: true }) ArtifactDiskFreeMB?: number;
+    @Field(() => Float, { nullable: true }) WorkDirFreeMB?: number;
+    @Field(() => Int, { nullable: true }) ActiveSyncCount?: number;
+    /** Empty when nothing is under pressure. Ordered most severe first. */
+    @Field(() => [ResourcePressureFindingOutput], { nullable: true }) Findings?: ResourcePressureFindingOutput[];
 }
 
 // ── STRUCTURED RUN ARTIFACTS (durable JSONL progress streams) ─────────
@@ -976,6 +1145,10 @@ class IntegrationListRunsOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [IntegrationRunSummaryArtifactOutput], { nullable: true }) Runs?: IntegrationRunSummaryArtifactOutput[];
+    /** Feed back as `offset` for the next page. Absent when there is no next page. */
+    @Field({ nullable: true }) NextOffset?: number;
+    /** True when the store holds more runs past this page. */
+    @Field({ nullable: true }) HasMore?: boolean;
 }
 
 @ObjectType()
@@ -1362,6 +1535,192 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Tests credentials that have NOT been saved anywhere.
+     *
+     * ── Why this exists ───────────────────────────────────────────────────────
+     *
+     * `IntegrationTestConnection` takes a `companyIntegrationID`, so it can only test a
+     * connection that already exists. That forces every setup wizard into create-then-test:
+     * the workspace writes a Credential and a CompanyIntegration, THEN finds out the
+     * password was wrong, and something has to go back and delete them. Two cases escape
+     * that cleanup — a credential test that outlives the caller's gateway (most likely
+     * precisely when a host or tenant id is wrong, because that is what makes a vendor call
+     * hang rather than refuse), and a test that passes before a later step fails. Both leave
+     * a connection that answers every listing and syncs nothing.
+     *
+     * This inverts the order. Nothing is written, so there is nothing to clean up.
+     *
+     * ── How it can work without persisting ────────────────────────────────────
+     *
+     * The connector is resolved from the INTEGRATION row, not from a connection —
+     * `ConnectorFactory.Resolve` already only needs the former. The credentials then ride in
+     * on a transient CompanyIntegration that is constructed with `NewRecord()` and
+     * DELIBERATELY NEVER SAVED, carrying the values in `Configuration`.
+     *
+     * That works because every connector resolves its auth material the same way: prefer the
+     * linked Credential when `CredentialID` is set, otherwise fall back to the
+     * `Configuration` JSON. It is a de-facto framework convention rather than a documented
+     * one — verified across all seven connectors this was written for (NetSuite, Totara,
+     * Nimble AMS, OpenWater, PheedLoop, PropFuel, Elevate), each of which reads
+     * `CredentialID` first and `Configuration` second. A connector that reads ONLY
+     * `CredentialID` would report missing credentials here rather than misbehave, which is
+     * the safe direction to fail: the caller learns the probe cannot help and falls back to
+     * create-then-test, exactly as before.
+     *
+     * ── Rules this endpoint holds itself to ───────────────────────────────────
+     *
+     *  - NOTHING IS PERSISTED. No Credential, no CompanyIntegration, no Company. The
+     *    transient entity is a local and never leaves this method.
+     *  - THE VALUES ARE NEVER LOGGED. Not on success, not on failure, not inside an error
+     *    message. Only the integration id and the outcome are ever written down.
+     *  - IT CANNOT HANG. A hard deadline applies regardless of what the connector does,
+     *    because a probe that inherits the gateway-timeout problem solves nothing. A
+     *    timeout is reported as a timeout, which is itself the diagnosis for an unreachable
+     *    host.
+     *  - IT IS RATE LIMITED per (user, integration). The endpoint turns caller-supplied
+     *    input into an outbound vendor request, so an unbounded one is a request amplifier.
+     */
+    @Query(() => ConnectionTestOutput)
+    async IntegrationProbeCredentials(
+        @Arg("integrationID") integrationID: string,
+        @Arg("credentialValues") credentialValues: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ConnectionTestOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+
+            const limited = IntegrationDiscoveryResolver.probeRateLimited(user.ID, integrationID, Date.now());
+            if (limited) {
+                return { Success: false, Message: limited };
+            }
+
+            // Must be a JSON OBJECT. A connector's parser is entitled to assume that much, and
+            // handing it a bare string or an array is a way to reach a parse path nobody tests.
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(credentialValues);
+            } catch {
+                return { Success: false, Message: 'The credentials could not be read as JSON.' };
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return { Success: false, Message: 'The credentials must be a JSON object of field names to values.' };
+            }
+
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+
+            const integration = await provider.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', user);
+            if (!(await integration.Load(integrationID))) {
+                return { Success: false, Message: `Integration with ID "${integrationID}" not found` };
+            }
+            const connector = ConnectorFactory.Resolve(integration);
+
+            // The transient carrier. NewRecord() and never Save() — see the header.
+            const probeCI = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            probeCI.NewRecord();
+            probeCI.Set('IntegrationID', integrationID);
+            probeCI.Set('Configuration', credentialValues);
+
+            const testConnection = connector.TestConnection.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<ConnectionTestResult>;
+
+            const result = await IntegrationDiscoveryResolver.withProbeDeadline(
+                testConnection(probeCI, user),
+                integration.Name
+            );
+
+            return {
+                Success: result.Success,
+                Message: result.Message,
+                ServerVersion: result.ServerVersion
+            };
+        } catch (e) {
+            // formatError only ever sees the thrown message. The credential values are not in
+            // scope of anything logged here, and must never be added to it.
+            LogError(`IntegrationProbeCredentials error for integration ${integrationID}: ${this.formatError(e)}`);
+            return {
+                Success: false,
+                Message: `Error: ${this.formatError(e)}`
+            };
+        }
+    }
+
+    /**
+     * The probe's hard deadline.
+     *
+     * `TestConnectionMs` exists on the connector config but is advisory — an implementation
+     * that does not consult it can block for as long as the vendor's socket does, which is
+     * the whole failure this endpoint exists to avoid. So the bound is applied here, where it
+     * cannot be opted out of.
+     *
+     * 20 seconds: comfortably longer than any healthy handshake, comfortably shorter than the
+     * ~240s gateway ceiling that create-then-test keeps running into.
+     */
+    private static readonly PROBE_DEADLINE_MS = 20_000;
+
+    private static withProbeDeadline(
+        work: Promise<ConnectionTestResult>,
+        vendorName: string
+    ): Promise<ConnectionTestResult> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<ConnectionTestResult>(resolve => {
+            timer = setTimeout(
+                () =>
+                    resolve({
+                        Success: false,
+                        // A timeout IS the diagnosis for an unreachable host or a wrong
+                        // tenant path, so it says that rather than "unknown error".
+                        Message:
+                            `${vendorName} did not respond within ` +
+                            `${Math.round(IntegrationDiscoveryResolver.PROBE_DEADLINE_MS / 1000)} seconds. ` +
+                            `Check the host and any account or organization identifier in the values above.`
+                    }),
+                IntegrationDiscoveryResolver.PROBE_DEADLINE_MS
+            );
+            timer.unref?.();
+        });
+        return Promise.race([work, deadline]).finally(() => {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        });
+    }
+
+    /**
+     * Per (user, integration) rate limit.
+     *
+     * This endpoint converts caller-supplied input into an outbound request to a third party,
+     * which makes an unbounded version a request amplifier pointed at somebody else's API —
+     * and the fastest way to get a tenant's key rate-limited by its own vendor. In-process
+     * and per-instance on purpose: it is a courtesy bound on a human typing into a form, not
+     * a security boundary, and giving it a durable store would buy nothing a form's own pace
+     * does not already provide.
+     */
+    private static readonly PROBE_WINDOW_MS = 60_000;
+    private static readonly PROBE_MAX_PER_WINDOW = 10;
+    private static readonly probeHits = new Map<string, number[]>();
+
+    private static probeRateLimited(userID: string, integrationID: string, now: number): string | null {
+        const key = `${userID}:${integrationID}`.toLowerCase();
+        const window = now - IntegrationDiscoveryResolver.PROBE_WINDOW_MS;
+        const hits = (IntegrationDiscoveryResolver.probeHits.get(key) ?? []).filter(t => t > window);
+        if (hits.length >= IntegrationDiscoveryResolver.PROBE_MAX_PER_WINDOW) {
+            return 'Too many credential checks in the last minute — wait a moment and try again.';
+        }
+        hits.push(now);
+        IntegrationDiscoveryResolver.probeHits.set(key, hits);
+        // Bound the map so a long-lived process cannot accumulate a key per (user, integration)
+        // pair forever. Anything with no hits inside the window is already spent.
+        if (IntegrationDiscoveryResolver.probeHits.size > 500) {
+            for (const [k, v] of IntegrationDiscoveryResolver.probeHits) {
+                if (!v.some(t => t > window)) {
+                    IntegrationDiscoveryResolver.probeHits.delete(k);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Tests connectivity to the external system.
      */
     @Query(() => ConnectionTestOutput)
@@ -1409,6 +1768,59 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * both on stdout (visible in the MJAPI log file) and in a per-run
      * `<cwd>/logs/integration-runs/<runID>/progress.jsonl` artifact.
      */
+    /**
+     * Start discovery and return immediately with a tailable RunID.
+     *
+     * plan.md is emphatic that this must exist: "going to a page should NEVER, NEVER trigger such
+     * things automatically, it must in a very clean way tell the user to click a button to start
+     * discovery of tables". A button needs a call that returns at once; the synchronous mutation
+     * runs the whole pipeline inline and times out at the gateway on a large catalog, which is why
+     * both surfaces ended up auto-triggering on page entry and adopting whatever run they found.
+     *
+     * A DISTINCT mutation rather than a flag on the synchronous one: that reply promises real
+     * counts because it waited, and a detached launch can only offer placeholder zeros.
+     *
+     * The lock is PROBED here so a second click is refused with a reason the UI can show. The
+     * pipeline still acquires it for real - this probe is not the guard, it is the clean answer in
+     * the common case. Losing the race just means the launch fails on the run stream instead.
+     */
+    @Mutation(() => StartSchemaRefreshOutput)
+    @RequireSystemUser()
+    async IntegrationStartSchemaRefresh(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<StartSchemaRefreshOutput> {
+        const user = this.GetUserFromPayload(ctx.userPayload);
+        // The pipeline WRITES the catalog, so it needs the read-write provider - the same one the
+        // synchronous refresh mutation uses. A read-only provider here would fail at the first save.
+        const md = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+
+        const paused = await this.describeIfPaused(companyIntegrationID, user, md);
+        if (paused) {
+            return { Success: false, InProgress: false, RunID: 'not-started', BlockedBy: 'connection paused', Message: `Discovery not started: ${paused}` };
+        }
+
+        const held = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+        if (held) {
+            return {
+                Success: false,
+                InProgress: false,
+                RunID: 'not-started',
+                BlockedBy: held.Reason,
+                Message: `Discovery not started: ${held.Reason} is already running for this connection. It will be available when that finishes.`,
+            };
+        }
+
+        const summary = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md, universalPKConvention);
+        return {
+            Success: true,
+            InProgress: true,
+            RunID: summary.RunID,
+            Message: 'Discovery started.',
+        };
+    }
+
     @Mutation(() => RefreshConnectorSchemaOutput)
     @RequireSystemUser()
     async IntegrationRefreshConnectorSchema(
@@ -1418,6 +1830,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
         return WithCatalogScope(companyIntegrationID, async () => {
+        // Checked BEFORE the lock is taken, so a refusal owes no release.
+        {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const paused = await this.describeIfPaused(companyIntegrationID, user, md);
+            if (paused) return { Success: false, RunID: 'not-started', Message: `Refresh not started: ${paused}` };
+        }
         // sync lock: a metadata refresh rewrites the IO/IOF rows a sync reads.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'metadata refresh')) {
             return {
@@ -2002,21 +2421,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             .filter(so => !so.SourceObjectName && so.SourceObjectID)
             .map(so => so.SourceObjectID!);
 
-        const idToName = new Map<string, string>();
-        if (idsToLookup.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToLookup.map(id => `ID='${sqlUuid(id, 'ID')}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                for (const row of result.Results) {
-                    idToName.set(row.ID.toUpperCase(), row.Name);
-                }
-            }
-        }
+        // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
+        const idToName = await LookupObjectNamesByID(idsToLookup.map(id => sqlUuid(id, 'ID')), user);
 
         const plan: Array<{ Name: string; Fields?: string[] }> = [];
         for (const so of sourceObjects) {
@@ -2055,16 +2461,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // newly-discovered objects with no persisted row).
         void integrationID;
         if (ids && ids.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: ids.map(id => `ID='${sqlUuid(id, 'ID')}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                return result.Results.map(r => r.Name);
-            }
+            // Through the connection's catalog first, and in INPUT order: the batch flow zips these
+            // names back onto its id cursor, which a database-ordered result did not match.
+            const idToName = await LookupObjectNamesByID(ids.map(id => sqlUuid(id, 'ID')), user);
+            return ids
+                .map(id => idToName.get(String(id).toUpperCase()))
+                .filter((n): n is string => !!n);
         }
         if (names && names.length > 0) {
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
@@ -2106,19 +2508,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const idsToLookup = sourceObjects
             .map(so => so.SourceObjectID)
             .filter((id): id is string => typeof id === 'string' && id.length > 0);
-        const idToName = new Map<string, string>();
-        if (idsToLookup.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToLookup.map(id => `ID='${sqlUuid(id, 'ID')}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                for (const r of result.Results) idToName.set(r.ID, r.Name);
-            }
-        }
+        // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
+        const idToName = await LookupObjectNamesByID(idsToLookup.map(id => sqlUuid(id, 'ID')), user);
 
         const schemaNameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
         const resolvedNames: string[] = [];
@@ -2126,8 +2517,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const dropped: SourceObjectInput[] = [];
         for (const so of sourceObjects) {
             let name: string | undefined;
-            if (so.SourceObjectID && idToName.has(so.SourceObjectID)) {
-                name = idToName.get(so.SourceObjectID);
+            if (so.SourceObjectID && idToName.has(so.SourceObjectID.toUpperCase())) {
+                name = idToName.get(so.SourceObjectID.toUpperCase());
             } else if (so.SourceObjectName) {
                 // Normalize case against the schema when the connector reports it
                 name = schemaNameMap.get(so.SourceObjectName.toLowerCase()) ?? so.SourceObjectName;
@@ -2161,20 +2552,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<void> {
         const idsToResolve = objects.filter(o => o.SourceObjectID && !o.SourceObjectName).map(o => o.SourceObjectID!);
         if (idsToResolve.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToResolve.map(id => `ID='${sqlUuid(id, 'ID')}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                const idToName = new Map(result.Results.map(r => [r.ID.toUpperCase(), r.Name]));
-                for (const obj of objects) {
-                    if (obj.SourceObjectID) {
-                        const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
-                        if (resolved) obj.SourceObjectName = resolved;
-                    }
+            const idToName = await LookupObjectNamesByID(idsToResolve.map(id => sqlUuid(id, 'ID')), user);
+            for (const obj of objects) {
+                if (obj.SourceObjectID) {
+                    const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
+                    if (resolved) obj.SourceObjectName = resolved;
                 }
             }
         }
@@ -3202,25 +3584,114 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
-     * Soft-deletes a CompanyIntegration by setting IsActive=false.
+     * Pauses a connection: IsActive=false, both scheduled jobs paused, and a stop requested for
+     * any sync already in flight.
+     *
+     * It used to be the first of those three only. The engine checks IsActive before a sync, so
+     * manual syncs did stop — but the CRON jobs kept firing (a sync schedule woke, was refused,
+     * and wrote a failed run, every tick, for as long as the connection stayed paused), the
+     * DISCOVERY schedule kept firing and was not refused at all (a paused connection went on
+     * rescanning the vendor on a timer, spending rate budget and rewriting the catalog the pause
+     * was meant to freeze), and an in-flight sync ran to completion.
+     *
+     * ORDER IS DELIBERATE. IsActive is written FIRST, because it is the flag every other actor
+     * reads: once it is false, nothing new can start, so a failure in any later step degrades the
+     * pause rather than voiding it. The schedules come next. The cancel is last and is
+     * best-effort by nature — a running sync belongs to whichever process owns it.
+     *
+     * WHAT PAUSE DOES NOT TOUCH: entity maps. Their Status is the user's own selection of which
+     * tables sync, and a pause that silently deselected tables would be undone wrong on resume.
+     *
+     * The reply distinguishes a stop that will happen from one that will not — see
+     * {@link DeactivateConnectionOutput}.
      */
-    @Mutation(() => MutationResultOutput)
+    @Mutation(() => DeactivateConnectionOutput)
     async IntegrationDeactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
-    ): Promise<MutationResultOutput> {
+    ): Promise<DeactivateConnectionOutput> {
+        const empty = { SchedulesPaused: 0, CancelRequested: false, CancelScope: 'none' as CancelScope };
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
-            if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
+            if (!loaded) return { Success: false, Message: 'CompanyIntegration not found', ...empty };
+
+            // 1. The flag first — see ORDER IS DELIBERATE above.
             ci.IsActive = false;
-            if (!await ci.Save()) return { Success: false, Message: 'Failed to deactivate' };
-            return { Success: true, Message: 'Deactivated' };
+            if (!await ci.Save()) return { Success: false, Message: 'Failed to deactivate', ...empty };
+
+            const notes: string[] = [];
+
+            // 2. Schedules. A pause of an already-paused connection moves nothing and must not
+            //    overwrite the record the FIRST pause left — DecidePauseWrite is that guard.
+            //    The record is saved BEFORE any job moves: a job paused without a saved record is
+            //    one resume can never put back, so a record that will not save pauses nothing.
+            let schedulesPaused = 0;
+            try {
+                const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
+                const toPause = DecideSchedulesToPause(jobs);
+                const stored = ReadPausedSchedules(ci.Configuration);
+                const write = DecidePauseWrite(stored, toPause);
+                if (write) {
+                    ci.Configuration = WritePausedSchedules(ci.Configuration, write);
+                    if (!await ci.Save()) {
+                        throw new Error(`recording the schedules to pause failed: ${ci.LatestResult?.Message ?? 'unknown error'}`);
+                    }
+                }
+                for (const rec of toPause) {
+                    if (await this.setScheduledJobStatus(rec.ID, 'Paused', user, md)) schedulesPaused++;
+                }
+                // Mirror onto the connection row the way the post-restart scheduler does, so a
+                // reader that only knows about ScheduleEnabled still sees a paused connection.
+                // The record is already saved, so a failure here costs only the mirror.
+                if (schedulesPaused > 0) {
+                    ci.ScheduleEnabled = false;
+                    if (!await ci.Save()) {
+                        LogError(`IntegrationDeactivateConnection: clearing ScheduleEnabled failed — ${ci.LatestResult?.Message ?? 'unknown error'}`);
+                    }
+                }
+                notes.push(DescribePauseOutcome(toPause, stored.length > 0 && toPause.length === 0));
+            } catch (schedErr) {
+                // A schedule we could not pause is worth saying out loud: the connection IS
+                // paused, but a cron may still wake it and write refused runs.
+                LogError(`IntegrationDeactivateConnection: pausing schedules failed — ${schedErr}`);
+                notes.push('Could not pause the schedules — a scheduled run may still fire and be refused.');
+            }
+
+            // 3. Cancel whatever is running, and report how far the request actually reached.
+            let inFlightRunID: string | undefined;
+            let scope: CancelScope = 'none';
+            try {
+                const live = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user, md);
+                if (live) {
+                    inFlightRunID = live.RunID ?? undefined;
+                    const durable = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, md);
+                    scope = DescribeCancelScope({
+                        liveRunPresent: true,
+                        durableRequestRecorded: durable,
+                        runningInThisProcess: IntegrationEngine.IsSyncRunningInThisProcess(companyIntegrationID),
+                    });
+                    const sentence = DescribeCancelOutcome(scope);
+                    if (sentence) notes.push(sentence);
+                }
+            } catch (cancelErr) {
+                LogError(`IntegrationDeactivateConnection: cancel request failed — ${cancelErr}`);
+                notes.push('A sync may still be running; no new sync will start.');
+            }
+
+            return {
+                Success: true,
+                Message: ['Deactivated.', ...notes.filter(Boolean)].join(' '),
+                SchedulesPaused: schedulesPaused,
+                InFlightSyncRunID: inFlightRunID,
+                CancelRequested: scope === 'durable' || scope === 'this-process',
+                CancelScope: scope,
+            };
         } catch (e) {
             LogError(`IntegrationDeactivateConnection error: ${e}`);
-            return { Success: false, Message: this.formatError(e) };
+            return { Success: false, Message: this.formatError(e), ...empty };
         }
     }
 
@@ -3280,25 +3751,53 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ci.IsActive = true;
             if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
 
+            // Put back EXACTLY what the pause took. Not "set every schedule Active": a connection
+            // can be paused while one of its schedules was already off because the operator turned
+            // it off, and inferring would silently restart work nobody asked for. The record
+            // written at pause is the only thing that can tell those apart.
+            let schedulesResumed = 0;
+            let scheduleNote = '';
+            try {
+                const stored = ReadPausedSchedules(ci.Configuration);
+                if (stored.length > 0) {
+                    const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
+                    for (const id of DecideSchedulesToResume(stored, jobs)) {
+                        if (await this.setScheduledJobStatus(id, 'Active', user, md)) schedulesResumed++;
+                    }
+                    // Consume the record whether or not every job came back: a job that was
+                    // deleted while paused is never coming back, and keeping the record would make
+                    // the next pause a no-op via DecidePauseWrite's already-paused guard. That is
+                    // also why a record that will not clear is said out loud rather than logged.
+                    ci.Configuration = WritePausedSchedules(ci.Configuration, []);
+                    if (schedulesResumed > 0) ci.ScheduleEnabled = true;
+                    if (!await ci.Save()) {
+                        LogError(`IntegrationReactivateConnection: clearing the paused-schedule record failed — ${ci.LatestResult?.Message ?? 'unknown error'}`);
+                        scheduleNote = ' The record of paused schedules could not be cleared, so the next pause will not record the schedules it stops.';
+                    }
+                }
+            } catch (resumeErr) {
+                LogError(`IntegrationReactivateConnection: restoring schedules failed — ${resumeErr}`);
+            }
+
             if (runSchemaRefresh && !awaitSchemaRefresh) {
                 const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md);
-                return { Success: true, Message: BuildReactivateMessage(detached) };
+                return { Success: true, Message: BuildReactivateMessage(detached) + scheduleNote };
             }
 
             if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(companyIntegrationID, user, md);
-                    return { Success: true, Message: BuildReactivateMessage(refreshResult) };
+                    return { Success: true, Message: BuildReactivateMessage(refreshResult) + scheduleNote };
                 } catch (refreshErr) {
                     // Refresh failure does NOT undo the reactivation — the
                     // connection is active, only discovery failed, and the
                     // operator can re-run IntegrationRefreshConnectorSchema.
                     LogError(`IntegrationReactivateConnection: pipeline error — ${refreshErr}`);
-                    return { Success: true, Message: `Reactivated (schema refresh failed: ${this.formatError(refreshErr)})` };
+                    return { Success: true, Message: `Reactivated (schema refresh failed: ${this.formatError(refreshErr)})${scheduleNote}` };
                 }
             }
 
-            return { Success: true, Message: BuildReactivateMessage(undefined) };
+            return { Success: true, Message: BuildReactivateMessage(undefined) + scheduleNote };
         } catch (e) {
             LogError(`IntegrationReactivateConnection error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -3720,6 +4219,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const resolved = await this.resolveSourceObjectsToNames(input.SourceObjects, sourceSchema, user);
             const resolvedNames = resolved.names;
+            // An apply that resolved nothing builds nothing: refuse it here, before the migration,
+            // CodeGen and the restart, which otherwise all run for a Success with 0 tables.
+            if (input.SourceObjects.length > 0 && resolvedNames.length === 0) {
+                return {
+                    Success: false,
+                    Message: `Apply refused: none of the ${input.SourceObjects.length} selected object(s) resolved to this ` +
+                        `connection's catalog (${resolved.droppedCount} dropped) — nothing was built. Re-open the table ` +
+                        `picker and select the tables again.`,
+                };
+            }
 
             // Build SchemaPreviewObjectInput with Fields from the matching
             // SourceObjectInput (resolved.sourceObjects is order-aligned with names).
@@ -4722,6 +5231,102 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Every scheduled job that targets this connection, with its kind, for pause/resume.
+     *
+     * Deliberately ONE view over both driver classes rather than two calls: pause has to move
+     * the pair together, and a partial failure that pauses the sync job but leaves the discovery
+     * job running is the exact defect this whole change exists to remove.
+     *
+     * Uses the same structured `"CompanyIntegrationID":"<uuid>"` predicate as
+     * {@link findExistingScheduledJob} — a bare-UUID substring would false-match the same id
+     * appearing under a different config key and pause an unrelated connection's job.
+     */
+    private async findScheduledJobsForConnection(
+        companyIntegrationID: string,
+        user: UserInfo
+    ): Promise<ScheduleJobState[]> {
+        const rv = new RunView();
+        const types = await rv.RunView<MJScheduledJobTypeEntity>({
+            EntityName: 'MJ: Scheduled Job Types',
+            ExtraFilter: `DriverClass IN ('IntegrationSyncScheduledJobDriver','IntegrationDiscoveryScheduledJobDriver')`,
+            Fields: ['ID', 'DriverClass'],
+            ResultType: 'simple',
+        }, user);
+        if (!types.Success || types.Results.length === 0) return [];
+
+        const kindByTypeID = new Map<string, 'sync' | 'discovery'>();
+        for (const t of types.Results) {
+            kindByTypeID.set(t.ID, t.DriverClass === 'IntegrationDiscoveryScheduledJobDriver' ? 'discovery' : 'sync');
+        }
+
+        const validCompanyIntegrationID = sqlUuid(companyIntegrationID, 'companyIntegrationID');
+        const lower = validCompanyIntegrationID.toLowerCase();
+        const upper = validCompanyIntegrationID.toUpperCase();
+        const typeList = [...kindByTypeID.keys()].map(id => `'${EscapeSQLString(id)}'`).join(',');
+        const jobs = await rv.RunView<{ ID: string; Status: string | null; JobTypeID: string }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter:
+                `JobTypeID IN (${typeList}) AND ` +
+                `(Configuration LIKE '%"CompanyIntegrationID":"${lower}"%' OR Configuration LIKE '%"CompanyIntegrationID":"${upper}"%')`,
+            Fields: ['ID', 'Status', 'JobTypeID'],
+            ResultType: 'simple',
+            BypassCache: true, // pause must see committed status, not a stale filtered cache
+        }, user);
+        if (!jobs.Success) return [];
+        return jobs.Results.map(j => ({
+            ID: j.ID,
+            Status: j.Status,
+            Kind: kindByTypeID.get(j.JobTypeID) ?? 'sync',
+        }));
+    }
+
+    /**
+     * A refusal reason when this connection is paused, or null when it is not.
+     *
+     * everything.txt C6 makes deactivation mean "stop touching the source". Syncs already honoured
+     * that — the engine checks IsActive before RunSync — but DISCOVERY never did. A paused
+     * connection could still be re-scanned by hand or by a cron that outlived the pause, which
+     * spends the customer's rate budget and rewrites the very catalog the pause was meant to
+     * freeze. Pausing the schedules stops the timer; this stops everything else.
+     *
+     * Fails OPEN: a connection we cannot read is not declared paused. The gate exists to honour an
+     * explicit pause, not to become a new way for discovery to be unavailable.
+     */
+    private async describeIfPaused(
+        companyIntegrationID: string,
+        user: UserInfo,
+        md: IMetadataProvider
+    ): Promise<string | null> {
+        try {
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (!await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID))) return null;
+            if (ci.IsActive) return null;
+            return 'This connection is paused. Resume it first — a paused connection is not scanned, so that its saved schema stays as it was.';
+        } catch (e) {
+            LogError(`describeIfPaused(${companyIntegrationID}) failed, treating as active: ${e}`);
+            return null;
+        }
+    }
+
+    /** Moves one scheduled job to a status. Returns false on any failure; the caller reports honestly. */
+    private async setScheduledJobStatus(
+        scheduledJobID: string,
+        status: 'Active' | 'Paused',
+        user: UserInfo,
+        md: IMetadataProvider
+    ): Promise<boolean> {
+        try {
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
+            if (!await job.InnerLoad(CompositeKey.FromID(scheduledJobID))) return false;
+            job.Status = status;
+            return await job.Save();
+        } catch (e) {
+            LogError(`setScheduledJobStatus(${scheduledJobID}, ${status}) failed: ${e}`);
+            return false;
+        }
+    }
+
+    /**
      * U7 — server-side schedule uniqueness: finds an existing (non-deleted) scheduled job of the
      * given job type that targets the given CompanyIntegration (its Configuration JSON carries
      * CompanyIntegrationID). Matched case-insensitively across UUID casings (SQL Server upper /
@@ -5156,6 +5761,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     RecordsCreated: syncProgress.RecordsCreated,
                     RecordsUpdated: syncProgress.RecordsUpdated,
                     RecordsErrored: syncProgress.RecordsErrored,
+                    RecordsSkipped: syncProgress.RecordsSkipped,
                     StartedAt: syncProgress.StartedAt.toISOString(),
                     ElapsedMs: Date.now() - syncProgress.StartedAt.getTime(),
                 };
@@ -5236,29 +5842,221 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Paged run history, newest first.
+     *
+     * plan.md: "history must show a paginated list with all runs (25 per page) in the history, it
+     * should not shwo just aprt of it". Both surfaces used to fake paging by re-fetching with a
+     * DOUBLED limit and slicing client-side, which cannot reach past the cap and re-transfers
+     * everything already shown.
+     *
+     * `offset` maps to RunView's StartRow. TotalKnown comes from a separate count so a pager can
+     * size itself without fetching every row.
+     */
+    /**
+     * Everything running for a connection, in one call.
+     *
+     * plan.md: "In the UI for the integration ... there shouldbe an area that shows thigns that are
+     * running actively, this can be syncs, rsu, discovery, etc." and "Let us say i clear browser
+     * cache and then i go to that integration page, i should see the same steps i mentioned
+     * hapepning there to". Every field here is derived SERVER-side, so a cleared browser sees the
+     * same thing — nothing depends on client state.
+     *
+     * Previously a surface had to fan out to four queries and stitch them, and each got the
+     * attribution wrong in its own way. The two rules that fan-out kept breaking are encoded here:
+     *
+     *  - RSU status from GetStatus is PROCESS-WIDE. It is only attributed to this connection when
+     *    an RSU run artifact actually names it; otherwise it is reported Scope='workspace'.
+     *  - A ConnectorCreation run is discovery, never a sync. Narrating it as a sync is what made a
+     *    first-time setup claim it was syncing records it had not fetched.
+     */
+    @Query(() => ActiveOperationsOutput)
+    async IntegrationGetActiveOperations(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ActiveOperationsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const authCache = new Map<string, boolean>();
+            if (!(await this.userCanReadCompanyIntegration(companyIntegrationID, user, authCache))) {
+                return { Success: false, Message: this.notAuthorizedForCompanyIntegrationMessage(companyIntegrationID) };
+            }
+
+            const ops: ActiveOperationOutput[] = [];
+
+            // ── the sync, from the DURABLE snapshot so any process can answer ──
+            // GetSyncProgressAsync prefers the durable run-row snapshot and falls back to this
+            // process's own — necessary because the ProgressJSON column arrives in MJ 6.1.x and
+            // every tenant here is 5.51, where the durable read silently finds nothing.
+            const syncProgress = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user);
+            if (syncProgress) {
+                ops.push({
+                    Kind: 'sync',
+                    Scope: 'connection',
+                    Label: `Syncing ${syncProgress.CurrentEntity || 'data'}`,
+                    StartedAt: syncProgress.StartedAt,
+                    StepLabel: syncProgress.CurrentEntity || undefined,
+                    StepIndex: syncProgress.EntityMapsCompleted,
+                    StepTotal: syncProgress.EntityMapsTotal,
+                    RecordsCreated: syncProgress.RecordsCreated,
+                    RecordsUpdated: syncProgress.RecordsUpdated,
+                    RecordsSkipped: syncProgress.RecordsSkipped,
+                    RecordsErrored: syncProgress.RecordsErrored,
+                    Cancellable: true,
+                });
+            }
+
+            // ── in-flight run artifacts for THIS connection ──
+            const reader = new IntegrationProgressReader();
+            const inFlight = await reader.ListRuns({ companyIntegrationID, inFlightOnly: true }, 25);
+            let rsuNamesThisConnection = false;
+            for (const snap of inFlight) {
+                const kind = snap.manifest.runKind;
+                // 'SyncRun' is already reported above from the durable snapshot. Everything else
+                // that is not RSU is a discovery-shaped run - ConnectorCreation especially, which
+                // must NEVER be narrated as a sync: it fetches nothing.
+                if (kind === 'SyncRun') continue;
+                if (kind === 'RSU') rsuNamesThisConnection = true;
+                ops.push({
+                    Kind: kind === 'RSU' ? 'rsu' : 'discovery',
+                    Scope: 'connection',
+                    Label: kind === 'RSU' ? 'Updating your workspace schema' : 'Discovering tables and columns',
+                    RunID: snap.manifest.runID,
+                    StartedAt: new Date(snap.manifest.startedAt),
+                    StepLabel: snap.latestEvent?.message ?? undefined,
+                    Cancellable: false,
+                });
+            }
+
+            // ── RSU reported by the process, when no artifact tied it to this connection ──
+            const rsu = RuntimeSchemaManager.Instance.GetStatus();
+            if (rsu?.Running && !rsuNamesThisConnection) {
+                ops.push({
+                    Kind: 'rsu',
+                    Scope: 'workspace',
+                    Label: 'Your workspace is updating',
+                    StepLabel: rsu.CurrentStepName ?? undefined,
+                    StepIndex: rsu.CurrentStepIndex ?? undefined,
+                    StepTotal: rsu.StepTotal ?? undefined,
+                    Cancellable: false,
+                });
+            }
+
+            const lock = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+            return {
+                Success: true,
+                Message: `${ops.length} active operation(s)`,
+                Operations: ops,
+                MaintenanceLockReason: lock?.Reason,
+            };
+        } catch (e) {
+            LogError(`IntegrationGetActiveOperations error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * What the tenant can see about its own resource headroom.
+     *
+     * plan.md line 158: "what happens if we run out of storage when we sync, how do we alert the
+     * user, OOM (MJC should handle)". The tenant MEASURES - it is the process that fills the heap
+     * and the disk - and the control plane decides. Before this there was no measurement at all,
+     * so a sync that died of OOM or a full disk did so with no warning ahead of it and no
+     * explanation after.
+     *
+     * Deliberately not authorized per connection: this is a property of the workspace, not of any
+     * one connector, and the control plane polls it to decide admission.
+     */
+    @Query(() => ResourcePressureOutput)
+    @RequireSystemUser()
+    async IntegrationGetResourcePressure(
+        @Ctx() _ctx: AppContext
+    ): Promise<ResourcePressureOutput> {
+        try {
+            let runDirCount: number | null = null;
+            try {
+                runDirCount = (await new IntegrationProgressReader().ListRuns({}, 100000)).length;
+            } catch { /* the artifact dir may not exist yet on a fresh workspace */ }
+
+            const reading = await ReadResourcePressure({ runDirCount });
+            const findings = EvaluatePressure(reading);
+            const mb = (b: number | null) => (b === null ? undefined : Math.round(b / (1024 * 1024)));
+            return {
+                Success: true,
+                Message: findings.length === 0 ? 'No resource pressure' : findings[0].Message,
+                HeapUsedFraction: reading.HeapUsedFraction,
+                HeapUsedMB: mb(reading.HeapUsedBytes),
+                HeapLimitMB: mb(reading.HeapLimitBytes),
+                ResidentMB: mb(reading.ResidentBytes),
+                ResidentFraction: reading.ResidentFraction ?? undefined,
+                HostMemTotalMB: mb(reading.HostMemTotalBytes),
+                HostMemAvailableMB: mb(reading.HostMemAvailableBytes),
+                ArtifactDiskFreeMB: mb(reading.ArtifactDiskFreeBytes),
+                WorkDirFreeMB: mb(reading.WorkDirFreeBytes),
+                ActiveSyncCount: reading.ActiveSyncCount,
+                Findings: findings.map(f => ({ Code: f.Code, Message: f.Message })),
+            };
+        } catch (e) {
+            LogError(`IntegrationGetResourcePressure error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     @Query(() => SyncHistoryOutput)
     async IntegrationGetSyncHistory(
         @Arg("companyIntegrationID") companyIntegrationID: string,
-        @Arg("limit", { defaultValue: 20 }) limit: number,
+        @Arg("limit", { defaultValue: 25 }) limit: number,
+        @Arg("offset", { nullable: true, defaultValue: 0, description: 'Rows to skip. With limit, this is the page.' }) offset: number,
         @Ctx() ctx: AppContext
     ): Promise<SyncHistoryOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
+            const filter = `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`;
             const rv = new RunView();
             const result = await rv.RunView<SyncRunSummaryOutput>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${sqlUuid(companyIntegrationID, 'companyIntegrationID')}'`,
+                ExtraFilter: filter,
                 OrderBy: 'StartedAt DESC',
                 MaxRows: limit,
+                StartRow: Math.max(0, offset ?? 0),
                 ResultType: 'simple',
                 Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords', 'RunByUserID']
             }, user);
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+
+            // A separate count, not result.TotalRowCount: the row query is capped by MaxRows, so its
+            // count reflects the PAGE. A pager needs the whole set.
+            let totalKnown: number | undefined;
+            const countRes = await new RunView().RunView({
+                EntityName: 'MJ: Company Integration Runs',
+                ExtraFilter: filter,
+                ResultType: 'count_only',
+            }, user);
+            if (countRes?.Success) totalKnown = countRes.TotalRowCount;
+
+            // Per-entity created / updated / skipped / errored, recovered from each run's artifact.
+            // The run ROW carries only TotalRecords, so EntityDetails existed on this type and was
+            // never populated — the empty breakdown thing.txt reports. Artifacts are pruned by the
+            // retention cap and are node-local, so an old run yields nothing; that is left ABSENT
+            // rather than zeroed, so the UI can say "not recorded" instead of claiming zero.
+            const reader = new IntegrationProgressReader();
+            await Promise.all(result.Results.map(async (run) => {
+                try {
+                    const outcomes = await reader.EntityOutcomes(run.ID);
+                    if (outcomes.length > 0) run.EntityDetails = outcomes;
+                } catch { /* a missing or pruned artifact is not an error */ }
+            }));
+
+            const start = Math.max(0, offset ?? 0);
             return {
                 Success: true,
                 Message: `${result.Results.length} runs`,
-                Runs: result.Results
+                Runs: result.Results,
+                TotalKnown: totalKnown,
+                HasMore: totalKnown === undefined
+                    ? result.Results.length === limit
+                    : start + result.Results.length < totalKnown,
             };
         } catch (e) {
             LogError(`IntegrationGetSyncHistory error: ${e}`);
@@ -5281,6 +6079,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("runKind", { nullable: true }) runKind?: string,
         @Arg("inFlightOnly", { nullable: true }) inFlightOnly?: boolean,
         @Arg("limit", { defaultValue: 50 }) limit?: number,
+        @Arg("offset", { nullable: true, defaultValue: 0, description: 'Runs to skip in the underlying store. Use NextOffset from the previous page.' }) offset?: number,
     ): Promise<IntegrationListRunsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
@@ -5296,18 +6095,43 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             const reader = new IntegrationProgressReader();
-            const snaps = await reader.ListRuns({
+            const want = limit ?? 50;
+            const filter = {
                 companyIntegrationID,
                 runKind: runKind as IntegrationRunKind | undefined,
                 inFlightOnly: inFlightOnly ?? false,
-            }, limit ?? 50);
+            };
 
-            // Filter to only the runs the caller is authorized to read. When
-            // scoped to a single (already-authorized) connector this is a no-op;
-            // for the cross-connector listing it prevents one tenant from seeing
-            // another tenant's runs.
-            const authorizedSnaps = await this.filterAuthorizedRuns(snaps, user, authCache);
-            return { Success: true, Message: `${authorizedSnaps.length} run(s)`, Runs: authorizedSnaps.map(s => this.toRunSummaryArtifact(s)) };
+            // AUTHORIZE-THEN-PAGE. Authorization happens after the store returns, so a page can
+            // come back short because the caller could not read some of it — not because the store
+            // ran out. Returning that short page as if it were the end is what made "load older
+            // runs" stop early. So refill from the next offset until the page is full or the store
+            // is genuinely exhausted.
+            //
+            // The refill is BOUNDED: an unauthorized caller would otherwise walk the entire store
+            // one page at a time on a single request.
+            const MAX_REFILLS = 5;
+            let cursor = Math.max(0, offset ?? 0);
+            let exhausted = false;
+            const authorizedSnaps: IntegrationRunSnapshot[] = [];
+            for (let round = 0; round <= MAX_REFILLS && authorizedSnaps.length < want; round++) {
+                const batch = await reader.ListRuns(filter, want, cursor);
+                if (batch.length === 0) { exhausted = true; break; }
+                cursor += batch.length;
+                if (batch.length < want) exhausted = true;
+                const ok = await this.filterAuthorizedRuns(batch, user, authCache);
+                authorizedSnaps.push(...ok);
+                if (exhausted) break;
+            }
+            const page = authorizedSnaps.slice(0, want);
+            const hasMore = !exhausted || authorizedSnaps.length > want;
+            return {
+                Success: true,
+                Message: `${page.length} run(s)`,
+                Runs: page.map(s => this.toRunSummaryArtifact(s)),
+                NextOffset: hasMore ? cursor : undefined,
+                HasMore: hasMore,
+            };
         } catch (e) {
             LogError(`IntegrationListRuns error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -5455,6 +6279,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     // ── CONNECTOR CAPABILITIES ──────────────────────────────────────────
+
+    /**
+     * Returns the settings the connector bound to a CompanyIntegration declares in its
+     * `SettingsSchema` — key, label, group, type, default, bounds and tier — so a client can
+     * render the connection's settings form without knowing the connector. A connector that
+     * declares none returns an empty list.
+     */
+    @Query(() => ConnectorSettingsSchemaOutput)
+    async IntegrationGetConnectorSettingsSchema(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ConnectorSettingsSchemaOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector } = await this.resolveConnector(companyIntegrationID, user, provider);
+            const schema = connector.SettingsSchema ?? [];
+            return {
+                Success: true,
+                Message: `${schema.length} setting(s)`,
+                Settings: schema.map(s => ({
+                    Key: s.Key,
+                    Label: s.Label,
+                    Group: s.Group,
+                    Type: s.Type,
+                    Options: s.Options,
+                    // Serialized because the value is genuinely polymorphic per setting and a
+                    // typed union here would be a schema change every time one is added. The
+                    // renderer already knows the Type, so it knows how to read this.
+                    DefaultJSON: s.Default === undefined ? undefined : JSON.stringify(s.Default),
+                    Min: s.Min,
+                    Max: s.Max,
+                    Tier: s.Tier,
+                    AppliesTo: s.AppliesTo,
+                    Description: s.Description,
+                    Sensitive: s.Sensitive,
+                })),
+            };
+        } catch (e) {
+            LogError(`IntegrationGetConnectorSettingsSchema error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Settings: [] };
+        }
+    }
 
     /**
      * Returns the CRUD capability flags for the connector bound to a CompanyIntegration.
@@ -5657,6 +6524,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         for (let i = 0; i < resolvedNames.length; i++) {
                             fieldsByName.set(resolvedNames[i].toLowerCase(), orderedSources[i].Fields);
                         }
+                        // Mirror the filtered flow: nothing resolved means nothing to build.
+                        if (connInput.SourceObjects.length > 0 && resolvedNames.length === 0) {
+                            throw new Error(
+                                `No source objects resolved — none of the ${connInput.SourceObjects.length} selection(s) ` +
+                                `matched this connection's catalog or the shared catalog; nothing was built`
+                            );
+                        }
                     }
 
                     const objects = resolvedNames.map(name => {
@@ -5680,6 +6554,26 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
 
                     // Inject post-restart pending work payload
+                    // everything.txt: "for the very first RSU of a connector, the sync afterwards
+                    // should be chosen to be full/incremental, but always full generally as the
+                    // default." The single-connector path has always done this; the batch path did
+                    // not, and its input default of false made the null-coalesce below dead. So a
+                    // re-apply that the caller left unspecified ran INCREMENTAL against objects
+                    // whose watermark had just been reset by the schema change.
+                    const priorMapsResult = await new RunView().RunView<{ ID: string }>({
+                        EntityName: 'MJ: Company Integration Entity Maps',
+                        ExtraFilter: `CompanyIntegrationID='${sqlUuid(connInput.CompanyIntegrationID, 'CompanyIntegrationID')}'`,
+                        Fields: ['ID'],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                        SkipTotalRowCount: true,
+                    }, user);
+                    const hadPriorMaps = priorMapsResult.Success && priorMapsResult.Results.length > 0;
+                    // One value for both ways the sync starts: the restart path queues it below, and
+                    // the skipRestart branch starts the sync itself from the build it is handed.
+                    const fullSync = input.FullSync ?? !hadPriorMaps;
+
                     const pendingPayload: RSUPendingWork = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
                         SourceObjectNames: resolvedNames,
@@ -5688,7 +6582,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         CronExpression: connInput.CronExpression,
                         ScheduleTimezone: connInput.ScheduleTimezone,
                         StartSync: input.StartSync,
-                        FullSync: input.FullSync ?? false,
+                        FullSync: fullSync,
                         SyncScope: input.SyncScope === 'all' ? 'all' : 'created',
                         // Unrecognized directions fall back to undefined = "use the entity map's own SyncDirection"
                         SyncDirection: input.SyncDirection && isValidSyncDirection(input.SyncDirection) ? input.SyncDirection : undefined,
@@ -5707,6 +6601,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         objects,
                         schemaOutput,
                         rsuInput,
+                        // carried so the skipRestart branch can apply remove-as-disable
+                        resolvedNames,
+                        // carried so the skipRestart branch starts the sync the restart path queues
+                        fullSync,
                     };
                 }))
             );
@@ -5716,6 +6614,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 connInput: ApplyAllBatchConnectorInput;
                 connector: BaseIntegrationConnector;
                 companyIntegration: MJCompanyIntegrationEntity;
+                resolvedNames: string[];
+                fullSync: boolean;
                 schemaName: string;
                 objects: SchemaPreviewObjectInput[];
                 schemaOutput: SchemaBuilderOutput;
@@ -5796,6 +6696,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
 
+                    // Remove-as-disable, same rule the single-connector path applies. Without this
+                    // the batch path silently ignored UnselectedAction: a user who deselected a
+                    // table and applied with skipRestart kept syncing it. Not reachable while the
+                    // surfaces used different mutations; it becomes reachable the moment one of
+                    // them moves onto the batch path, which is exactly what the shared adapter does.
+                    if ((input.UnselectedAction ?? 'disable') !== 'ignore') {
+                        const disabledObjects = await DisableUnselectedEntityMaps(
+                            build.connInput.CompanyIntegrationID, build.resolvedNames, user, provider
+                        );
+                        if (disabledObjects.length > 0) {
+                            console.log(`[IntegrationApplyAllBatch] Disabled ${disabledObjects.length} unselected entity map(s): ${disabledObjects.join(', ')}`);
+                        }
+                    }
+
                     const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                     const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
 
@@ -5808,7 +6722,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     const shouldStartSync = input.StartSync !== false &&
                         (input.SyncScope === 'all' || createdMapIDs.length > 0);
                     const syncRunID = shouldStartSync
-                        ? await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
+                        ? await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user, scopedMapIDs, build.fullSync)
                         : null;
                     if (syncRunID) connResult.SyncRunID = syncRunID;
 
@@ -6193,9 +7107,25 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("autoEnableNewColumns", { defaultValue: false, description: 'newly-appeared COLUMNS on an enabled object get their field maps created DISABLED, matching autoEnableNewObjects. Pass true to auto-enable instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
+        // everything.txt: a custom column the source started sending is CAPTURED automatically but
+        // materialising it "requires that the user accepts" it. So candidates are always REPORTED
+        // (CustomColumnCandidates on the output) and this list is how they come back accepted.
+        // Empty default = report and promote nothing, which is the contract.
+        //
+        // Accepted columns ride THIS run's migration rather than starting their own. Promoting in a
+        // second batch would restart the workspace twice for one user action, and back-to-back RSU
+        // restarts are their own incident class here.
+        @Arg("acceptCustomColumns", () => [String], { defaultValue: [], description: 'Column names from a previous run\'s CustomColumnCandidates to materialise as part of THIS refresh — one migration, one restart. Default empty: candidates are reported and nothing is promoted.' }) acceptCustomColumns: string[],
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
         return WithCatalogScope(companyIntegrationID, async () => {
+        // Checked BEFORE the lock is taken, so a refusal owes no release.
+        {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const paused = await this.describeIfPaused(companyIntegrationID, user, md);
+            if (paused) return { Success: false, HasChanges: false, Message: `Schema evolution not started: ${paused}` };
+        }
         // sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
         // reads — data syncs (manual + scheduled) must not run while this is in flight.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema evolution')) {
@@ -6207,7 +7137,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
-            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true });
+            const md = provider as unknown as IMetadataProvider;
             const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, md);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
             const rv = new RunView();
@@ -6439,6 +7370,58 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
+            // ── Phase 6b — RE-KEYED objects: the identity of every stored row just changed ──
+            //
+            // A connector upgrade can change an object's primary key (PheedLoop 1.4.6 makes
+            // Attendees `code + eventCode`, because it is fetched once per event and an attendee at
+            // two events returns twice with the same `code`). `ToExternalRecord` joins every
+            // IsPrimaryKey field with '|' in Sequence order, so changing the key — its members OR
+            // their order — re-identifies every record the source will send from now on. Nothing can
+            // match a stored row again: the RecordMap is keyed `EntityID|ExternalID`, and
+            // `MatchEngine.FindByKeyFields` queries the destination table by key fields that are
+            // NULL on rows written before the change. Left alone, the next sync inserts the entire
+            // source ALONGSIDE what is there.
+            //
+            // Compared against the key the TABLES were built with (the entity's registered fields),
+            // not against the previous catalog — the built key is what the stored rows were actually
+            // written under, and it is the only side that cannot drift from them.
+            //
+            // The catalog side reads the same field rows as the build and Phase 6. A cold
+            // per-connection object answers `[]` from the engine, and an empty key against a real
+            // built key reads as a re-key, which deletes the object's record maps and rows.
+            const rekeyTargets: Array<{
+                ExternalObjectName: string; EntityMapID: string; EntityID: string;
+                SchemaName: string; BaseTable: string;
+            }> = [];
+            for (const em of continuingMaps) {
+                const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
+                if (!io || !em.EntityID) continue;
+                const entity = md.EntityByID(em.EntityID);
+                if (!entity) continue;
+                const builtKey = IdentityKeyFields(entity.Fields.map(ef => ({
+                    Name: ef.Name, IsPrimaryKey: ef.IsPrimaryKey, Sequence: ef.Sequence,
+                })));
+                const catalogKey = CatalogIdentityKey(
+                    FieldsForBuild(io.ID, scopedFields, IntegrationEngineBase.Instance)
+                );
+                if (!DecideRekeyed(builtKey, catalogKey)) continue;
+                rekeyTargets.push({
+                    ExternalObjectName: em.ExternalObjectName as string,
+                    EntityMapID: em.ID,
+                    EntityID: em.EntityID,
+                    SchemaName: entity.SchemaName,
+                    BaseTable: entity.BaseTable,
+                });
+                // A re-key is a change even when no column moved — a pure reorder alters no DDL,
+                // and without this the object would not reach the watermark reset below.
+                if (em.ExternalObjectName && !changedObjects.includes(em.ExternalObjectName)) {
+                    changedObjects.push(em.ExternalObjectName);
+                }
+            }
+            const rekeyedObjects = await ClearRekeyedObjectData(
+                rekeyTargets, companyIntegrationID, user, provider
+            );
+
             // ── Phase 7 — U10: reset the Pull watermark of every CHANGED object so the next sync
             // full-fetches + backfills the schema change (content-hash bounds the rewrite cost).
             const changedLower = new Set(changedObjects.map(n => n.toLowerCase()));
@@ -6465,6 +7448,46 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             let pipelineSteps: RSUStepOutput[] | undefined;
             let gitCommitSuccess: boolean | undefined;
             let apiRestarted: boolean | undefined;
+            // ── Overflow columns: always report, promote only what came back accepted. ──
+            //
+            // A refresh is where an operator asks "what has changed on the source?", and columns
+            // the connector has been quietly capturing into the overflow JSON are part of that
+            // answer. Reporting is free and read-only. Promoting is not, so it needs the explicit
+            // acceptance everything.txt asks for.
+            let customColumnCandidates: CustomColumnCandidate[] = [];
+            let promotionInputs: RSUPipelineInput[] = [];
+            let promotedColumns: PromotedColumn[] = [];
+            try {
+                const promoter = new IntegrationCustomColumnPromoter(user, md);
+                const mapped = await this.getMappedEntityNames(companyIntegrationID, user);
+                for (const en of mapped) {
+                    customColumnCandidates.push(...await promoter.ListCandidates(companyIntegrationID, en));
+                }
+                const accepted = new Set((acceptCustomColumns ?? []).map(c => c.toLowerCase()));
+                if (accepted.size > 0) {
+                    // Only entities that actually own an accepted column — planning an entity with
+                    // nothing accepted would promote its OTHER candidates too, which is precisely
+                    // the un-asked-for materialisation the acceptance gate exists to prevent.
+                    const entitiesWithAccepted = Array.from(new Set(
+                        customColumnCandidates.filter(c => accepted.has(c.ColumnName.toLowerCase())).map(c => c.EntityName)
+                    ));
+                    if (entitiesWithAccepted.length > 0) {
+                        const plan = await promoter.PlanPromotion(companyIntegrationID, entitiesWithAccepted);
+                        if (plan) {
+                            promotionInputs = plan.BatchInputs;
+                            promotedColumns = plan.Plans.flatMap(p => p.work.map(w => ({ EntityName: p.entityName, ColumnName: w.columnName })));
+                        }
+                    }
+                }
+            } catch (candErr) {
+                // Neither reporting nor promoting overflow columns is what a refresh is FOR. A
+                // failure here must not fail the refresh — it costs the offer, not the evolution.
+                LogError(`IntegrationSchemaEvolution: custom-column candidates unavailable — ${candErr}`);
+                customColumnCandidates = [];
+                promotionInputs = [];
+                promotedColumns = [];
+            }
+
             if (hasDDLChanges) {
                 const rsuInput = builder.BuildRSUInput(schemaOutput, schemaInput, {
                     SkipGitCommit: skipGitCommit,
@@ -6505,7 +7528,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 // metadata already re-resolved and the DDL not applied — the half-state an operator
                 // then has to diagnose. Replay happens only while nothing was applied.
                 const rsm = RuntimeSchemaManager.Instance;
-                const batchResult = await rsm.RunPipelineBatchWithRetry([rsuInput]);
+                // ONE batch: the refresh's own DDL plus any accepted overflow columns. RSU
+                // registers PendingWork from EVERY input, so the promoter's post-restart
+                // completion survives being appended here rather than run as its own batch.
+                const batchResult = await rsm.RunPipelineBatchWithRetry([rsuInput, ...promotionInputs]);
                 const pipelineResult = batchResult.Results[0];
                 pipelineSteps = pipelineResult?.Steps.map((s: RSUPipelineStep) => ({
                     Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
@@ -6541,19 +7567,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         }
                     }
                 }
+            } else if (promotionInputs.length > 0) {
+                // The source's own shape is unchanged, but the operator accepted overflow columns.
+                // They still need a migration; there is simply no evolution DDL to share it with.
+                // Retrying variant, as above: it replays only while nothing was applied.
+                const rsm = RuntimeSchemaManager.Instance;
+                const batchResult = await rsm.RunPipelineBatchWithRetry(promotionInputs);
+                const first = batchResult.Results[0];
+                pipelineSteps = first?.Steps.map((s: RSUPipelineStep) => ({
+                    Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
+                }));
+                gitCommitSuccess = first?.GitCommitSuccess;
+                apiRestarted = first?.APIRestarted;
+                if (!first?.Success) {
+                    return {
+                        Success: false,
+                        Message: `Column promotion failed: ${first?.ErrorMessage ?? 'unknown error'}`,
+                        HasChanges: false,
+                        Steps: pipelineSteps,
+                        CustomColumnCandidates: customColumnCandidates.length > 0 ? customColumnCandidates : undefined,
+                    };
+                }
             }
+
+            // Report only what is STILL outstanding: a column accepted this run is being created
+            // right now, so leaving it in the offer would invite the operator to accept it twice.
+            const acceptedNames = new Set(promotedColumns.map(c => c.ColumnName.toLowerCase()));
+            const outstandingCandidates = customColumnCandidates.filter(c => !acceptedNames.has(c.ColumnName.toLowerCase()));
 
             const summary = [
                 newObjects.length > 0 ? `${newObjects.length} new object(s) (${autoEnableNewObjects ? 'enabled' : 'created disabled'})` : null,
                 removedObjects.length > 0 ? `${removedObjects.length} removed object(s) disabled` : null,
                 changedObjects.length > 0 ? `${changedObjects.length} changed object(s), ${addedColumns} column(s) added (${autoEnableNewColumns ? 'enabled' : 'created disabled'}), ${modifiedColumns} modified` : null,
                 watermarksReset.length > 0 ? `${watermarksReset.length} watermark(s) reset for backfill` : null,
+                promotedColumns.length > 0 ? `${promotedColumns.length} accepted custom column(s) materialised` : null,
+                outstandingCandidates.length > 0 ? `${outstandingCandidates.length} custom column(s) awaiting your acceptance` : null,
             ].filter(Boolean).join('; ');
 
             return {
                 Success: true,
                 Message: `Schema evolution applied — ${summary || 'no per-object deltas'}`,
                 HasChanges: true,
+                CustomColumnCandidates: outstandingCandidates.length > 0 ? outstandingCandidates : undefined,
+                PromotedColumns: promotedColumns.length > 0 ? promotedColumns : undefined,
                 AddedColumns: addedColumns,
                 ModifiedColumns: modifiedColumns,
                 Steps: pipelineSteps,
@@ -6564,6 +7620,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 CascadeRemovedObjects: cascadeRemoved.length > 0 ? cascadeRemoved : undefined,
                 ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
                 WatermarksReset: watermarksReset.length > 0 ? watermarksReset : undefined,
+                RekeyedObjects: rekeyedObjects.length > 0 ? rekeyedObjects : undefined,
                 Warnings: (dagRemovalWarnings.length + schemaOutput.Warnings.length) > 0
                     ? [...dagRemovalWarnings, ...schemaOutput.Warnings]
                     : undefined,
@@ -6604,7 +7661,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         integrationObjectID: string,
         user: UserInfo,
         md: IMetadataProvider,
-        autoEnableNewColumns = true,
+        // see decideFieldMapReconcile — an omitted argument must not silently adopt
+        autoEnableNewColumns = false,
         scopedFields?: ScopedBuildFields | null,
     ): Promise<{ Added: number; Disabled: number }> {
         const result = { Added: 0, Disabled: 0 };

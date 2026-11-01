@@ -232,6 +232,15 @@ export interface SyncResult {
     Success: boolean;
     /** Summary error message when the sync fails or completes with errors */
     ErrorMessage?: string;
+    /**
+     * Objects whose fetch stopped early, so their result set for this run is INCOMPLETE.
+     *
+     * Not a failure — the watermark is held and the unfetched window retries next run — but the
+     * run cannot be reported as an unqualified success either. Without this, a nightly sync that
+     * abandons sixteen objects reads as a clean Success with a small TotalRecords, and the only
+     * evidence is a warning buried in the event stream.
+     */
+    IncompleteObjects?: string[];
     /** The CompanyIntegrationRun ID created for this sync */
     RunID?: string;
     /** Total records processed */
@@ -385,7 +394,23 @@ export interface SyncProgressSnapshot {
     RecordsCreated: number;
     RecordsUpdated: number;
     RecordsErrored: number;
+    /**
+     * Records the sync decided not to write because the content hash matched. plan.md wants this
+     * next to created and updated: "it must show the number of NEW records or update records are
+     * being done ... and also how many are skipped, it must be clear. Synced is different between
+     * created and updated."
+     */
+    RecordsSkipped: number;
     TriggerType: string;
+    /**
+     * The run this progress belongs to, when it is known.
+     *
+     * Optional because the in-process fallback snapshot predates the durable run row and a
+     * pre-6.1.x tenant has no ProgressJSON to read an id back out of. A caller that wants to
+     * TAIL the run (or name it in a message) needs the id, and re-deriving it from a second
+     * query races the run ending between the two reads.
+     */
+    RunID?: string;
 }
 
 /** Notification event type — what triggered the notification */
