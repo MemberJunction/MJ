@@ -36,7 +36,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional. Specific SearchScope ID to use. When omitted, the calling agent's default scope (IsDefault=1) is used, falling back to Global when SearchScopeAccess='All'.",
+            "Description": "Optional. Specific SearchScope ID to use. When the run's host assigned search scopes, only those can be searched: omit this to use the host's first scope, and any other scope is refused. Otherwise, when omitted, the calling agent's default scope (IsDefault=1) is used, falling back to Global when SearchScopeAccess='All'.",
             "IsRequired": false
           },
           "primaryKey": {

@@ -1,0 +1,7 @@
+:host {
+  display: block;
+}
+
+.mj-bkgpp-container {
+  padding: var(--mj-space-2) var(--mj-space-0);
+}

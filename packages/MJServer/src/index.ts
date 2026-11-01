@@ -13,6 +13,7 @@ import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromote
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
+import { IntrospectInCatalogScope } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -69,7 +70,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
 import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
+import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
   HANDOFF_OFFER_FANOUT_CHANNEL,
   HANDOFF_OFFER_TOPIC,
@@ -85,6 +86,7 @@ import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResol
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
+import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -99,7 +101,20 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import {
+  ServerExtensionLoader,
+  ServerExtensionConfig,
+  SERVER_EXTENSION_CORE_SERVICE_KEYS,
+  type IServerExtensionHostRuntimeService,
+  mergeServerExtensionConfigs,
+  prepareServerExtensionConfigs,
+  describeServerExtensionMount,
+  InstallMediaUpgradeDispatcher,
+  IsGraphQLWsPath,
+  GetCorsOwningServerExtensionRoots,
+} from '@memberjunction/server-extensions-core';
+import { CreateIsolatedProvider } from './isolatedProvider.js';
+import { ResolveConfiguredPrincipal } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -342,8 +357,6 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
-/** How often to re-check for conversation details left behind by finished runs. */
-const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -615,10 +628,19 @@ const setupComplete$ = new ReplaySubject(1);
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // so boot does not pay a second full metadata load. The refresh interval stays non-zero on
+        // PostgreSQL on purpose: PostgreSQLDataProvider.AllowRefresh is `CheckRefreshIntervalSeconds > 0`,
+        // so an interval of 0 would make every later codegenPgProvider.Refresh() — the one RSU CodeGen
+        // issues after DDL — return without reloading, leaving this provider frozen at the boot catalog.
+        // (SQL Server's AllowRefresh is independent of the interval, so its codegen provider can use 0.)
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
           codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
+          undefined,
+          undefined,
+          false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
         await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
@@ -766,8 +788,18 @@ const setupComplete$ = new ReplaySubject(1);
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenProvider.Refresh() after DDL still reloads from the DB
+        // (SQLServerDataProvider.AllowRefresh does not depend on the interval; PostgreSQL's does — see above).
+        const codegenConfig = new SQLServerProviderConfigData(
+          codegenPool,
+          mj_core_schema,
+          0,
+          undefined,
+          undefined,
+          false,
+        );
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -1324,7 +1356,7 @@ const setupComplete$ = new ReplaySubject(1);
     },
     // High compression level (good balance between CPU and compression ratio)
     level: 6
-  }));
+  }) as object as express.RequestHandler);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
@@ -1347,6 +1379,19 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
   _currentExtensionLoader = extensionLoader;
+
+  const hostRuntimeService: IServerExtensionHostRuntimeService = {
+    CreateIsolatedProvider,
+    GetSystemUser: () => getSystemUser(),
+    ResolvePrincipal: (configuredEmailOrId, subsystemLabel) => ResolveConfiguredPrincipal(configuredEmailOrId, subsystemLabel),
+  };
+  extensionLoader.Services.RegisterService(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime, hostRuntimeService);
+  if (coreAuthenticatedRouters.MagicLinkService) {
+    extensionLoader.Services.RegisterService(
+      SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink,
+      coreAuthenticatedRouters.MagicLinkService,
+    );
+  }
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
@@ -1603,6 +1648,11 @@ const setupComplete$ = new ReplaySubject(1);
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
 
+  // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
+  AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
+  ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
+
   // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
   //
   // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
@@ -1702,23 +1752,15 @@ const setupComplete$ = new ReplaySubject(1);
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       const sweepUser = resumeUser;
       const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser, configInfo.agentRunWatchdog)
         .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
 
       // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
       // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
       // beside a message that still claims to be generating, and it spins forever for anyone who
-      // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
-      // mirroring the watchdog's own two-phase shape.
-      const reconcileOrphans = () =>
-        ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
-          .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
-      void reconcileOrphans();
-      const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
-      ShutdownRegistry.Instance.Register({
-        ShutdownName: 'OrphanDetailReconciler',
-        Shutdown: () => { clearInterval(orphanDetailTimer); },
-      });
+      // opens it. Runs at boot (closes restart orphans) and, unless `conversationDetailReconciler.enabled`
+      // is false, on a timer (closes mid-life orphans), mirroring the watchdog's own two-phase shape.
+      StartOrphanedConversationDetailReconciler(sweepProvider, sweepUser, configInfo.conversationDetailReconciler);
     }
 
     // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
@@ -1726,11 +1768,12 @@ const setupComplete$ = new ReplaySubject(1);
     // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
     // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
     if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-      SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      // `agentSessions.janitor.enabled: false` keeps the boot recovery and shutdown drain but schedules no tick.
+      SessionJanitor.Instance.StartWithSettings(configInfo.agentSessions.janitor, Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
         .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
       // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
       // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
-      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser, configInfo.agentSessions.bridgeReconciler); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
     }
   }
 
@@ -2014,10 +2057,25 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object
+      // Introspect schema ONCE for the entire connector, then reuse per object.
+      //
+      // IN THE CONNECTION'S CATALOG SCOPE. This runs at process start, outside any request, so
+      // nothing upstream has entered a scope for it — and an unscoped catalog read falls back to
+      // the SHARED catalog by design. That would build these field maps from the connector's
+      // declared fields alone: every column this connection's own discovery sampled would get a
+      // table column from the RSU (built in scope, from the per-connection rows) but no field map,
+      // and its values would land in the overflow JSON instead of the column. Observed on the
+      // sandbox 2026-09-11: 487 declared fields, 556 per-connection — 69 columns that this read
+      // would have silently left unmapped. Entering the scope is not enough on a fresh process:
+      // IntrospectInCatalogScope loads the catalog and warms each object's fields first.
       const introspect = connector.IntrospectSchema.bind(connector) as
         (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await introspect(companyIntegration, systemUser);
+      const schema = await IntrospectInCatalogScope(
+        item.CompanyIntegrationID,
+        item.SourceObjectNames,
+        () => introspect(companyIntegration, systemUser),
+        systemUser,
+      );
 
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);
@@ -2214,6 +2272,7 @@ async function processRSUPendingWork(): Promise<void> {
               EntityName: 'MJ: Scheduled Job Types',
               ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               ResultType: 'simple',
               Fields: ['ID']
             }, systemUser);
@@ -2307,6 +2366,7 @@ async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: Us
       ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
       Fields: ['ID'],
     }, systemUser);

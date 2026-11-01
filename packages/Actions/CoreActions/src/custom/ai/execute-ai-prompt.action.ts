@@ -249,6 +249,7 @@ export class ExecuteAIPromptAction extends BaseAction {
             EntityName: 'MJ: AI Prompts',
             ExtraFilter: `Name = '${promptName.replace(/'/g, "''")}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
 

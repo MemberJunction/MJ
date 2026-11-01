@@ -134,7 +134,7 @@ import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
+import { ActionResult, BuildEntityChangeContext, DurableEntityActionRegistry } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
@@ -628,6 +628,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         before: boolean,
         user: UserInfo,
         originatingEntityActionIDs?: string[],
+        runModeFilter?: 'DurableOnly' | 'NonDurableOnly',
     ): Promise<ActionResult[]> {
         const engine = EntityActionEngineServer.Instance;
         if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
@@ -662,6 +663,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
             const results: ActionResult[] = [];
             for (const a of activeActions) {
+                if (runModeFilter === 'DurableOnly' && a.RunMode !== 'Durable') {
+                    continue;
+                }
+                if (runModeFilter === 'NonDurableOnly' && a.RunMode === 'Durable') {
+                    continue;
+                }
                 if (guarded && originatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID))) {
                     // The caller declared this save IS this action's write-back. Used by work that
                     // detached from the async context the guard tracks — see
@@ -818,11 +825,58 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
     }
 
-    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, _context: SaveContext): void {
+    protected override async ShouldEnlistSaveInTransaction(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        isNewRecord: boolean,
+    ): Promise<boolean> {
+        if (options.SkipEntityActions === true || options.ReplayOnly === true) {
+            return false;
+        }
+        if (DurableEntityActionRegistry.Instance.Submitter === null) {
+            return false;
+        }
+        const engine = EntityActionEngineServer.Instance;
+        if (!engine.Loaded) {
+            await engine.Config(false, user);
+        }
+        const invocationType = isNewRecord ? 'AfterCreate' : 'AfterUpdate';
+        const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
+        const originatingSet =
+            options.OriginatingEntityActionIDs && options.OriginatingEntityActionIDs.length > 0
+                ? new UUIDSet(options.OriginatingEntityActionIDs)
+                : null;
+        return activeActions.some((a) => a.RunMode === 'Durable' && !originatingSet?.Has(a.ID));
+    }
+
+    protected override async OnDurableAfterSaveExecute(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        context: SaveContext,
+    ): Promise<void> {
+        if (options.SkipEntityActions === true) {
+            return;
+        }
+        context.State['durableActionsEnlistedInTx'] = true;
+        await this.HandleEntityActions(
+            entity,
+            'save',
+            false,
+            user,
+            options.OriginatingEntityActionIDs,
+            'DurableOnly',
+        );
+    }
+
+    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): void {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-        if (options.SkipEntityActions !== true)
-            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs); // NO AWAIT INTENTIONALLY
+        if (options.SkipEntityActions !== true) {
+            const filter = context.State['durableActionsEnlistedInTx'] === true ? 'NonDurableOnly' : undefined;
+            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs, filter); // NO AWAIT INTENTIONALLY
+        }
     }
 
     protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
@@ -943,6 +997,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     /**
+     * Tracks pre-decryption normalized row arrays (binary -> base64, datetime adjusted, ciphertext
+     * preserved) keyed by the post-decryption array returned from {@link PostProcessRows}.
+     * Used by {@link PrepareRowsForCacheStorage} so local/Redis caches store ciphertext at rest.
+     */
+    private static readonly _preDecryptionRowsByResult = new WeakMap<readonly unknown[], Record<string, unknown>[]>();
+
+    /**
      * Post-processes rows: first applies platform-specific datetime adjustments
      * via the virtual `AdjustDatetimeFields` hook, then handles field-level
      * decryption for encrypted fields.
@@ -954,6 +1015,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         rows: Record<string, unknown>[],
         entityInfo: EntityInfo,
         user: UserInfo,
+        options?: { preserveRestrictedApiCiphertext?: boolean },
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
@@ -978,13 +1040,49 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const encryptedFields = GenericDatabaseProvider.getEncryptedFields(entityInfo);
         if (encryptedFields.length === 0) return processedRows;
 
+        // Preserve ciphertext-bearing normalized rows for cache storage BEFORE decrypting any fields.
+        const ciphertextRowsForCache = processedRows.map(r => ({ ...r }));
+        const decryptedRows = await this.decryptRowsForConsumer(
+            processedRows,
+            entityInfo,
+            encryptedFields,
+            user,
+            Boolean(options?.preserveRestrictedApiCiphertext),
+        );
+        GenericDatabaseProvider._preDecryptionRowsByResult.set(decryptedRows, ciphertextRowsForCache);
+        return decryptedRows;
+    }
+
+    /**
+     * Decrypts encrypted fields on shallow row copies for an in-process or API consumer.
+     * When `preserveRestrictedApiCiphertext` is `true`, fields with `AllowDecryptInAPI === false`
+     * remain in their stored ciphertext form so API layers never decrypt-then-re-encrypt or
+     * needlessly decrypt values destined for sentinel redaction.
+     */
+    private async decryptRowsForConsumer(
+        rows: Record<string, unknown>[],
+        entityInfo: EntityInfo,
+        encryptedFields: EntityFieldInfo[],
+        user: UserInfo | undefined,
+        preserveRestrictedApiCiphertext: boolean,
+    ): Promise<Record<string, unknown>[]> {
+        if (!rows || rows.length === 0 || encryptedFields.length === 0) {
+            return rows;
+        }
+        const fieldsToDecrypt = preserveRestrictedApiCiphertext
+            ? encryptedFields.filter(f => f.AllowDecryptInAPI)
+            : encryptedFields;
+        if (fieldsToDecrypt.length === 0) {
+            return rows.map(r => ({ ...r }));
+        }
+
         const encryptionEngine = EncryptionEngine.Instance;
         await encryptionEngine.Config(false, user);
 
-        return Promise.all(processedRows.map(async (row) => {
+        return Promise.all(rows.map(async (row) => {
             const processedRow = { ...row };
 
-            for (const field of encryptedFields) {
+            for (const field of fieldsToDecrypt) {
                 const fieldValue = processedRow[field.Name];
                 if (fieldValue === null || fieldValue === undefined || fieldValue === '') continue;
 
@@ -1011,6 +1109,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             return processedRow;
         }));
+    }
+
+    protected override PrepareRowsForCacheStorage(rows: unknown[], entityInfo?: EntityInfo): unknown[] {
+        if (!rows || rows.length === 0) return rows;
+        const preDecrypted = GenericDatabaseProvider._preDecryptionRowsByResult.get(rows);
+        if (preDecrypted) {
+            return preDecrypted;
+        }
+        if (entityInfo && GenericDatabaseProvider.getEncryptedFields(entityInfo).length > 0) {
+            // Rows passed directly without PostProcessRows: returned as-is (LocalCacheManager's
+            // server write gate rejects any row carrying plaintext on an encrypted column).
+            return rows;
+        }
+        return rows;
+    }
+
+    protected override async MaterializeCachedRowsForCaller(
+        rows: Record<string, unknown>[],
+        entityInfo?: EntityInfo,
+        contextUser?: UserInfo,
+        preserveRestrictedApiCiphertext?: boolean,
+    ): Promise<Record<string, unknown>[]> {
+        if (!rows || rows.length === 0 || !entityInfo) {
+            return rows;
+        }
+        const encryptedFields = GenericDatabaseProvider.getEncryptedFields(entityInfo);
+        if (encryptedFields.length === 0) {
+            return rows;
+        }
+        return this.decryptRowsForConsumer(
+            rows,
+            entityInfo,
+            encryptedFields,
+            contextUser ?? this.CurrentUser,
+            Boolean(preserveRestrictedApiCiphertext),
+        );
     }
 
     private static _encryptedFieldsCache = new WeakMap<EntityInfo, { fieldCount: number; fields: EntityFieldInfo[] }>();
@@ -2020,6 +2154,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['Status', 'ViewName'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 BypassCache: true,
             },
             contextUser,
@@ -2649,7 +2784,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     // Generic-erasure boundary: PostProcessRows operates on Record<string,unknown>[]
                     // but Results is typed T[]; the double-cast bridges that erasure (not a lazy `any`).
                     const rows = externalResult.Results as unknown as Record<string, unknown>[];
-                    const processed = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                    const processed = (await this.PostProcessRows(rows, entityInfo, user, {
+                        preserveRestrictedApiCiphertext: Boolean(params.PreserveRestrictedApiCiphertext),
+                    })) as unknown as T[];
                     externalResult.Results = this.projectExternalRowsForCaller(processed, entityInfo, externalParams, user);
                 }
                 return externalResult;
@@ -2752,13 +2889,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
                 }
+                // The filter builder saves WhereClauses in SQL Server syntax (`[Field] LIKE ...`), so the
+                // rendered clause gets the same platform rewrite as ExtraFilter. Without it PostgreSQL
+                // rejects every filtered saved view run here: `syntax error at or near "["`.
+                const viewWhereSQL = this.TransformExternalSQLClause(renderedWhere, entityInfo);
                 // CustomWhereClause views too: an unbalanced clause would take row-level security
                 // out of force for everyone who runs the view. Only their admin-written text may
-                // carry comments.
-                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
+                // carry comments. Checked after the rewrite, since that is the text that runs.
+                this.AssertClauseBalanced(viewWhereSQL, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
                     AllowComments: isCustomWhereClause,
                 });
-                whereSQL = `(${renderedWhere})`;
+                whereSQL = `(${viewWhereSQL})`;
                 bHasWhere = true;
             }
 
@@ -3011,7 +3152,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // ── Process data rows ──
             let retData = (resultMap['data'] as Record<string, unknown>[]) || [];
             if (retData.length > 0 && params.ResultType !== 'count_only') {
-                retData = await this.PostProcessRows(retData, entityInfo, user);
+                retData = await this.PostProcessRows(retData, entityInfo, user, {
+                    preserveRestrictedApiCiphertext: Boolean(params.PreserveRestrictedApiCiphertext),
+                });
             }
 
             // ── Process count ──
@@ -3019,34 +3162,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed && !skipCount) {
+            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed && !skipCount) {
                 // A row-limited read that came back FULL may have been truncated, so the total is
                 // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
-                // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
-                // probe. Those callers ask "does a row exist / give me the one row" — a
-                // record-map lookup, a single-key resolve — and never read TotalRowCount. The
-                // count they triggered was pure cost, and SEQUENTIAL cost: it runs after the data
-                // query has already resolved, so it is a full extra round trip on the critical
-                // path, not a parallel one.
                 //
-                // Measured on a live tenant over a 120-second census: 1,000 record-map lookups
-                // fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round
-                // trips totalling 9,760 ms, 11.4% of ALL SQL time in the window. Nothing read a
-                // single one of the results.
-                //
-                // Everything with `maxRowsUsed > 1` is untouched, so the "100 of 299" behaviour
-                // is preserved exactly; only the degenerate single-row probe changes.
-                //
-                // What DOES change for `MaxRows:1`, stated plainly: with no `rowCount`, the return
-                // below falls back to `rowCount ?? retData.length`, so a hit now reports
-                // `TotalRowCount: 1` instead of the whole view's row count. That is the entire
-                // observable difference, and it is confined to a limit of exactly one row — a shape
-                // no caller asks for in order to learn a total, because a total is the one thing a
-                // single-row limit cannot tell it anything about.
-                //
-                // `!skipCount`: a caller that never reads TotalRowCount can also opt out of this count
-                // on a full multi-row page (RunViewParams.SkipTotalRowCount); the pagination count
-                // above honours the same flag.
+                // That round trip is SEQUENTIAL: it runs after the data query has already resolved,
+                // so it is a full extra trip on the critical path, not a parallel one. For a
+                // single-row probe it fires on every hit. Measured on a live tenant over a
+                // 120-second census: 1,000 record-map lookups fired 721 of these counts and 800 row
+                // lookups fired 600 — 1,321 extra round trips totalling 9,760 ms, 11.4% of ALL SQL
+                // time in the window, with nothing reading a single result. Callers that only read
+                // `Results` opt out explicitly with RunViewParams.SkipTotalRowCount; the provider
+                // never infers that from the value of MaxRows.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
@@ -3092,7 +3219,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             return {
                 RowCount: params.ResultType === 'count_only' ? rowCount : retData.length,
-                TotalRowCount: rowCount ?? retData.length,
+                TotalRowCount: skipCount ? undefined : rowCount ?? retData.length,
                 Results: retData as T[],
                 UserViewRunID: userViewRunID,
                 ExecutionTime: stopTime.getTime() - startTime.getTime(),
@@ -4171,7 +4298,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             serverCached: resolved.serverCached,
                             fingerprint: resolved.fingerprint,
                         });
+                    } else if (entityInfo.TrackRecordChanges) {
+                        // The client's copy is older and the entity tracks record changes: Phase 2 reads
+                        // the DB status and sends only the changed rows, not the full cached copy.
+                        serverCacheMissItems.push({ index, item, entityInfo });
                     } else {
+                        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${resolved.serverCached!.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
                         serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
                     }
                 } else {
@@ -4186,6 +4318,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
+            /** Queues a differential reply: the rows changed since the client's copy, and the deleted IDs. */
+            const queueDifferential = (
+                index: number,
+                item: RunViewWithCacheCheckParams,
+                entityInfo: EntityInfo,
+                whereSQL: string,
+                serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+            ): void => {
+                LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${item.params.EntityName || 'unknown'}" — sending only changed rows (from DB)`, verboseOnly: true });
+                differentialItems.push({
+                    index, params: item.params, entityInfo, whereSQL,
+                    clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+                    clientRowCount: item.cacheStatus!.rowCount,
+                    serverStatus,
+                });
+            };
 
             if (serverCacheMissItems.length > 0) {
                 // Build WHERE clauses and run batched DB status check only for cache misses / TTL-expired slots
@@ -4229,6 +4377,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
+                            } else if (entityInfo.TrackRecordChanges) {
+                                queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
                             } else {
                                 LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-VERIFIED-CACHE] "${entityLabel}" — server cache verified against DB, serving ${serverCached.rowCount} rows without full SQL query`, verboseOnly: true });
                                 serverCacheStaleItems.push({ index, item, entityInfo, serverCached });
@@ -4252,13 +4402,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
                     } else if (entityInfo.TrackRecordChanges) {
-                        LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`, verboseOnly: true });
-                        differentialItems.push({
-                            index, params: item.params, entityInfo, whereSQL,
-                            clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
-                            clientRowCount: item.cacheStatus!.rowCount,
-                            serverStatus,
-                        });
+                        queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
                     } else {
                         LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
@@ -4267,7 +4411,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: CachedRunViewResult }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; params: RunViewParams; serverCached: CachedRunViewResult }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -4292,7 +4436,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
                         LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — client has no cache, serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
-                        noCacheStatusServedFromCache.push({ index: entry.index, serverCached: cached });
+                        noCacheStatusServedFromCache.push({ index: entry.index, params: entry.item.params, serverCached: cached });
                         continue;
                     }
                 }
@@ -4305,16 +4449,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // permission class may read.
             const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
                 // Items without cache check — served from server cache
-                ...noCacheStatusServedFromCache.map(({ index, serverCached }) =>
-                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
+                ...noCacheStatusServedFromCache.map(({ index, params: viewParams, serverCached }) =>
+                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null, viewParams, user),
                 ),
                 // Items without cache check — server cache miss, must hit DB
                 ...noCacheStatusNeedsDB.map(({ index, item }) =>
                     this.runFullQueryAndCacheResult<T>(item.params, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
-                // Server cache stale — serve from server's cached data (zero DB)
-                ...serverCacheStaleItems.map(({ index, serverCached }) =>
-                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
+                // Server cache newer than the client, no change tracking — serve from server's cached data (zero DB)
+                ...serverCacheStaleItems.map(({ index, item, serverCached }) =>
+                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null, item.params, user),
                 ),
                 // DB-validated stale items (no change tracking)
                 ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
@@ -4532,7 +4676,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): Promise<RunViewWithCacheCheckResult<T>> {
         let result: RunViewResult<T>;
         try {
-            result = await this.InternalRunView<T>(params, contextUser);
+            result = await this.InternalRunView<T>(
+                { ...params, PreserveRestrictedApiCiphertext: true },
+                contextUser,
+            );
         } catch (e: unknown) {
             // A field-security refusal fails this item only, as the up-front gate does on this path.
             if (e instanceof Error && e.name === FieldSecurityError.ErrorName) {
@@ -4576,13 +4723,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (ttlMs !== 0) {
                     const fingerprint = this.ComputeRunViewCacheFingerprint(params, contextUser);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+                    const cacheEntity = this.resolveEntityForRunViewParams(params);
                     // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
                     // InternalRunView's normal PostRunView path WITH aggregates — two writers,
                     // one slot, and this one dropped them. Whichever write landed last won, so a
                     // later server-cache hit served rows with or without aggregates depending on
                     // a write race. That is exactly the standalone-passes / aggregator-fails
                     // flake client-cache C13 exhibited.
-                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, result.aggregateResults, result.rowCount, this, ttlMs);
+                    await LocalCacheManager.Instance.SetRunViewResult(
+                        fingerprint,
+                        params,
+                        this.PrepareRowsForCacheStorage(result.results, cacheEntity),
+                        maxUpdatedAt,
+                        result.aggregateResults,
+                        result.rowCount,
+                        this,
+                        ttlMs,
+                    );
                 }
             }
             // Project the response down to the caller's requested shape AFTER the
@@ -4705,7 +4862,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * them: the entity resolved here is named explicitly.
      */
     protected projectExternalRowsForCaller<T>(rows: T[], entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): T[] {
-        return this.ApplyFieldSecurityProjection(rows, { ...params, EntityName: entityInfo.Name }, user);
+        const entityParams: RunViewParams = { ...params, EntityName: entityInfo.Name };
+        const projected = this.ApplyFieldSecurityProjection(rows, entityParams, user);
+        this.carryCiphertextRowsForCache(rows, projected, entityParams, user);
+        return projected;
+    }
+
+    /**
+     * Keys the ciphertext copy that {@link PostProcessRows} kept for `rows` to their projection,
+     * narrowed the same way, so {@link PrepareRowsForCacheStorage} stores ciphertext at the
+     * caller's width instead of finding no copy and falling back to the decrypted rows.
+     */
+    private carryCiphertextRowsForCache<T>(rows: T[], projected: T[], params: RunViewParams, user: UserInfo): void {
+        if (projected === rows) return;
+        const ciphertextRows = GenericDatabaseProvider._preDecryptionRowsByResult.get(rows);
+        if (ciphertextRows) {
+            GenericDatabaseProvider._preDecryptionRowsByResult.set(projected, this.ApplyFieldSecurityProjection(ciphertextRows, params, user));
+        }
     }
 
     /**
@@ -4763,7 +4936,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Checks the server's LocalCacheManager for cached data matching the client's request.
-     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
+     * Returns the resolution if found ('current', 'stale' when the server slot is newer than the client's copy, or
      * 'needs_verification' when the server slot's freshness window has elapsed),
      * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
      */
@@ -4830,8 +5003,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return { status: 'current', result: { viewIndex: index, status: 'current' } };
         }
 
-        // Server has newer data than client — we can serve it directly from cache
-        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+        // Server has newer data than the client; the caller decides between the cached copy and a differential
         return { status: 'stale', serverCached: cached };
     }
 
@@ -4842,17 +5014,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         viewIndex: number,
         serverCached: CachedRunViewResult,
         callerFields: string[] | null = null,
+        viewParams?: RunViewParams,
+        contextUser?: UserInfo,
     ): Promise<RunViewWithCacheCheckResult<T>> {
-        // The server cache stores every field the slot's permission class may read —
+        // The server cache stores every field the slot's permission class may read (with encrypted
+        // fields stored as ciphertext at rest). Materialize allowed API decryptions first, then
         // project down to the caller's requested fields (∪ PK) before returning, exactly like the
-        // ProviderBase hit path. Serving unprojected rows here previously leaked
-        // whatever shape happened to be cached to every subsequent caller.
-        //
-        // `serverCached.results` are the cache's shared, deep-frozen rows — the runtime freeze
-        // is what actually protects the cache. See ProviderBase's hit path.
+        // ProviderBase hit path.
+        const cacheEntity = viewParams ? this.resolveEntityForRunViewParams(viewParams) : undefined;
+        const materialized = await this.MaterializeCachedRowsForCaller(
+            serverCached.results as Record<string, unknown>[],
+            cacheEntity,
+            contextUser,
+            true,
+        );
         const results = callerFields
-            ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
-            : serverCached.results;
+            ? ProjectRowsToFields(materialized, callerFields)
+            : materialized;
         return {
             viewIndex,
             status: 'stale',
@@ -4870,7 +5048,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Runs a differential query and returns only changes since the client's cached state.
      * Includes updated/created rows and deleted record IDs.
-     * Falls back to full query if hidden deletes are detected.
+     * Falls back to full query if the client timestamp is not a date or hidden deletes are detected.
      */
     protected async runDifferentialQueryAndReturn<T = unknown>(
         params: RunViewParams,
@@ -4884,16 +5062,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
-            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
-            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
-
-            // Validation: detect hidden deletes not tracked in RecordChanges
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
                 // Unparseable client timestamp — can't trust the differential math; fall
                 // back to a full refresh (cached wide + projected, like every other leg).
                 return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
+            const since = clientMaxUpdatedDate.toISOString();
+            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, since, whereSQL, contextUser);
+            const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, since, contextUser);
+
+            // Validation: detect hidden deletes not tracked in RecordChanges
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
                 if (!createdAt) return false;
@@ -4966,8 +5145,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Formats a client timestamp as ISO 8601 for a SQL literal.
+     * Throws when the value is not a date.
+     */
+    private toSQLTimestamp(raw: string): string {
+        const date = this.parseClientTimestamp(raw);
+        if (!date) throw new Error('Client timestamp is not a valid date');
+        return date.toISOString();
+    }
+
+    /**
      * Gets IDs of records deleted since a given timestamp.
-     * Uses dialect-neutral quoting. Subclasses can override for parameterized queries.
+     * Uses dialect-neutral quoting and sends the timestamp in ISO 8601 form.
+     * Subclasses can override for parameterized queries.
      */
     protected async getDeletedRecordIDsSince(
         entityID: string,
@@ -4975,7 +5165,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
     ): Promise<string[]> {
         try {
-            const sql = `SELECT DISTINCT ${this.QuoteIdentifier('RecordID')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('EntityID')} = '${entityID}' AND ${this.QuoteIdentifier('Type')} = 'Delete' AND ${this.QuoteIdentifier('ChangedAt')} > '${sinceTimestamp}'`;
+            const since = this.toSQLTimestamp(sinceTimestamp);
+            const sql = `SELECT DISTINCT ${this.QuoteIdentifier('RecordID')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${this.QuoteIdentifier('EntityID')} = '${entityID}' AND ${this.QuoteIdentifier('Type')} = 'Delete' AND (${this.QuoteIdentifier('ChangedAt')} > '${since}')`;
             const results = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
             return results.map(r => String(r['RecordID']));
         } catch (e) {
@@ -4986,7 +5177,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Gets rows updated/created since a given timestamp.
-     * Uses dialect-neutral quoting and TransformExternalSQLClause for OrderBy.
+     * Uses dialect-neutral quoting and TransformExternalSQLClause for OrderBy, and sends the
+     * timestamp in ISO 8601 form as its own predicate group.
      */
     protected async getUpdatedRowsSince<T = unknown>(
         params: RunViewParams,
@@ -4996,7 +5188,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
     ): Promise<T[]> {
         try {
-            const timestampFilter = `${this.QuoteIdentifier('__mj_UpdatedAt')} > '${sinceTimestamp}'`;
+            const timestampFilter = `(${this.QuoteIdentifier('__mj_UpdatedAt')} > '${this.toSQLTimestamp(sinceTimestamp)}')`;
             const combinedWhere = whereSQL
                 ? `(${whereSQL}) AND ${timestampFilter}`
                 : timestampFilter;
@@ -5016,7 +5208,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 sql += ` ORDER BY ${orderBy}`;
             }
 
-            return await this.ExecuteSQL<T>(sql, undefined, undefined, contextUser);
+            const rawRows = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const processed = await this.PostProcessRows(
+                rawRows,
+                entityInfo,
+                (contextUser ?? this.CurrentUser) as UserInfo,
+                { preserveRestrictedApiCiphertext: true },
+            );
+            return processed as unknown as T[];
         } catch (e) {
             LogError(e);
             return [];
@@ -5973,6 +6172,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['MaterializedResultID'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -6010,6 +6210,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName', 'LastRefreshedAt'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 BypassCache: true,
             },
             contextUser,
@@ -7784,11 +7985,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                 if (cached) {
                     cacheHitCount++;
+                    const materializedDatasetRows = await provider.MaterializeCachedRowsForCaller(
+                        cached.results as Record<string, unknown>[],
+                        itemEntity,
+                        contextUser,
+                        false,
+                    );
                     cachedResults.push({
                         EntityID: entityID,
                         EntityName: entityName,
                         Code: code,
-                        Results: this.projectDatasetRowsForCaller(datasetName, itemEntity, cached.results as Record<string, unknown>[], contextUser),
+                        Results: this.projectDatasetRowsForCaller(datasetName, itemEntity, materializedDatasetRows, contextUser),
                         LatestUpdateDate: latestUpdateDate,
                         Success: true,
                     });
@@ -7903,8 +8110,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // item.Results — these very arrays — to every engine subclass), so those slots
                 // must stay under the defensive deep-freeze like any RunView result.
                 const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
+                const rowsForCache = isMetadataScaffolding
+                    ? itemData
+                    : provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName));
                 await cache.SetRunViewResult(
-                    uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt,
+                    uncachedFingerprints[i], syntheticParams, rowsForCache, maxUpdatedAt,
                     undefined, undefined, this, undefined,
                     isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
                 );

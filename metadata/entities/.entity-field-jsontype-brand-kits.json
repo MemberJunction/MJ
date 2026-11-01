@@ -1,0 +1,70 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Style, Voice, GenerationPolicy, and NeverInvent (MJ: Brand Kits entity)",
+      "so CodeGen emits typed StyleObject, VoiceObject, GenerationPolicyObject, and NeverInventObject accessors."
+    ],
+    "fields": {
+      "Name": "MJ: Brand Kits"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IBrandStyle",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "Style field — visual and motion style tokens for the brand kit"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=Style"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IBrandVoice",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "Voice field — default TTS voice configuration for the brand kit"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=Voice"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IBrandGenerationPolicy",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "GenerationPolicy field — media generation permissions and guardrails for the brand kit"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=GenerationPolicy"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "BrandNeverInventItem",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "NeverInvent field — array of facts or claims that must never be fabricated"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=NeverInvent"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Brand Kits"
+    }
+  }
+]

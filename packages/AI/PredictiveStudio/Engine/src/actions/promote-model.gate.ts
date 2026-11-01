@@ -104,6 +104,7 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
         ExtraFilter: `ID='${modelId}'`,
         ResultType: 'entity_object',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );
@@ -150,6 +151,7 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
         Fields: ['LeakageGuard'],
         ResultType: 'simple',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );

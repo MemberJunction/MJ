@@ -142,7 +142,7 @@ async function countRows(provider: IMetadataProvider, entityName: string, filter
         BypassCache: true,
     });
     Assert(res.Success, `counting ${entityName} failed: ${res.ErrorMessage}`);
-    return res.TotalRowCount;
+    return res.TotalRowCount ?? 0;
 }
 
 /** Plans over the wire and returns the plan. The operation itself must succeed; the plan may still be blocked. */

@@ -46,6 +46,8 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
+import { ReadResourcePressure, EvaluatePressure } from './ResourcePressure.js';
+import { RunMemoryControl } from './RunMemoryControl.js';
 import { CONTENT_HASH_COLUMN, ComputeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
 import { BuildContentHashPrefetchFilter, QuoteTextLiteral } from './prefetchFilter.js';
@@ -580,6 +582,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
     /**
+     * Live progress for runs owned by THIS process, keyed like activeSyncs.
+     *
+     * Progress moved to the run row's ProgressJSON so any process could read it — but that column
+     * arrives in MJ 6.1.x, and the in-process map was deleted at the same time. On every earlier
+     * tenant that left NO source at all: the async reader silently finds nothing (RunView drops the
+     * unknown field) and the synchronous accessor was left returning undefined by contract. A sync
+     * could run for an hour with the UI showing nothing running.
+     *
+     * This is the floor. GetSyncProgressAsync prefers the durable row and falls back here, so a
+     * single-process tenant answers correctly today and a multi-process one still answers from the
+     * row once the column exists.
+     */
+    private static readonly liveProgress = new Map<string, SyncProgressSnapshot>();
+
+    /**
      * Maintenance locks: while a metadata refresh / schema evolution / RSU pipeline is
      * running for a CompanyIntegration, data syncs MUST NOT start ("locks of sync and scheduled
      * sync must occur" — the refresh is rewriting the very metadata, field maps and DDL the sync
@@ -599,6 +616,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (IntegrationEngine.maintenanceLocks.has(key)) return false; // refresh already running
         IntegrationEngine.maintenanceLocks.set(key, { Reason: reason, AcquiredAt: new Date() });
         return true;
+    }
+
+    /**
+     * Whether a sync for this connection is executing IN THIS PROCESS right now.
+     *
+     * Exists so a caller can tell an operator the truth about a cancel. The durable cancel needs
+     * a run-row column that only newer tenants have; where it is absent, the in-process registry
+     * is the only signal there is, and "we signalled the sync" versus "a sync is running
+     * somewhere we cannot reach" are different things to tell someone who just hit pause.
+     *
+     * Reads the same map RunSync reserves, so it cannot drift from what is actually running.
+     */
+    public static IsSyncRunningInThisProcess(companyIntegrationID: string): boolean {
+        return IntegrationEngine.activeSyncs.has(companyIntegrationID.toLowerCase());
     }
 
     /** Releases the maintenance lock (idempotent — safe in a finally). */
@@ -751,24 +782,33 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Server-side providers are DatabaseProviderBase (which implements IRunViewProvider);
         // same narrowing the engine uses for the ownership sprocs.
         const rv = new RunView(provider as DatabaseProviderBase | undefined);
-        const result = await rv.RunView<{ ProgressJSON: string | null; LeaseExpiresAt: string | Date | null; StartedAt: string | Date }>({
+        const result = await rv.RunView<{ ID: string; ProgressJSON: string | null; LeaseExpiresAt: string | Date | null; StartedAt: string | Date }>({
             EntityName: 'MJ: Company Integration Runs',
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status IN ('In Progress','Queued')`,
             OrderBy: 'StartedAt DESC',
-            Fields: ['ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
+            Fields: ['ID', 'ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // live liveness/progress read — must see the current row
         }, contextUser);
         const row = result.Success ? result.Results?.[0] : undefined;
-        if (!row) return undefined;
+        // No readable row is not proof there is no sync: before MJ 6.1.x the run row has no
+        // ProgressJSON column at all, and RunView drops the unknown field silently rather than
+        // failing. Fall back to this process's own snapshot.
+        if (!row) return IntegrationEngine.liveProgress.get(companyIntegrationID.toLowerCase());
         if (row.LeaseExpiresAt != null && new Date(row.LeaseExpiresAt).getTime() < Date.now()) {
             return undefined; // owner's lease lapsed — not live progress
         }
-        if (!row.ProgressJSON) return undefined;
+        if (!row.ProgressJSON) {
+            const local = IntegrationEngine.liveProgress.get(companyIntegrationID.toLowerCase());
+            // The row is readable even when the column is not, so the id is known here even on a
+            // tenant whose snapshot came from this process rather than the database.
+            return local ? { ...local, RunID: local.RunID ?? row.ID } : undefined;
+        }
         try {
             const snapshot = JSON.parse(row.ProgressJSON) as SyncProgressSnapshot & { StartedAt: string | Date };
-            return { ...snapshot, StartedAt: new Date(snapshot.StartedAt) };
+            return { ...snapshot, StartedAt: new Date(snapshot.StartedAt), RunID: snapshot.RunID ?? row.ID };
         } catch {
             return undefined; // corrupt snapshot — treat as no progress rather than throwing at a poller
         }
@@ -1061,11 +1101,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 RecordsCreated: 0,
                 RecordsUpdated: 0,
                 RecordsErrored: 0,
+                RecordsSkipped: 0,
                 // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
                 // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
                 // hardcoded value mislabels every adopted run.
                 TriggerType: resumeTriggerType,
             };
+            // Same reason as the main path: without this a resumed run reports no progress at all
+            // on any tenant whose run row has no ProgressJSON column.
+            IntegrationEngine.liveProgress.set(lockKey, progressSnapshot);
             const runCtx: EngineRunContext = {
                 provider: prov,
                 ownership,
@@ -1116,6 +1160,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // `existing`). Resolve with the real result when we have one, else a benign empty result so no
             // waiter hangs. Promise resolve is idempotent and the early-exit `return`s also land here.
             IntegrationEngine.activeSyncs.delete(lockKey);
+            IntegrationEngine.liveProgress.delete(lockKey);
             resolveResumeLock(resumeResult ?? {
                 Success: false, ErrorMessage: 'Resume produced no result', RecordsProcessed: 0,
                 RecordsCreated: 0, RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0,
@@ -1308,6 +1353,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             RecordsCreated: 0,
             RecordsUpdated: 0,
             RecordsErrored: 0,
+            RecordsSkipped: 0,
             TriggerType: triggerType,
         };
         const runCtx: EngineRunContext = {
@@ -1335,10 +1381,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal, existingRun
         ));
         IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
+        IntegrationEngine.liveProgress.set(lockKey, progressSnapshot);
         try {
             return await syncPromise;
         } finally {
             IntegrationEngine.activeSyncs.delete(lockKey);
+            IntegrationEngine.liveProgress.delete(lockKey);
             runCtx.ownership?.StopHeartbeat();
         }
     }
@@ -1671,6 +1719,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ID='${companyIntegrationID}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
@@ -1839,6 +1888,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const totalMaps = config.entityMaps.length;
         let globalIndex = 0;
+        /** Pressure codes already reported on this run, so each is said once and not per map. */
+        const pressureWarned = new Set<string>();
 
         // Per-map processing. Extracted so it can run sequentially OR concurrently within a
         // dependency layer. Aggregate mutations run when each promise resolves — atomic under
@@ -1867,7 +1918,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const mapResult = await this.processSingleEntityMap(
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
+                const governorShedding = config.memoryControl?.IsShedding === true;
                 this.mergeResult(aggregate, mapResult);
+                const memoryPressure = await this.warnOnResourcePressure(logger, pressureWarned, governorShedding);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
                 logger?.emit('sync.entity-map.complete', {
                     externalObjectName: entityMap.ExternalObjectName,
@@ -1883,7 +1936,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     recordsErrored: mapResult.RecordsErrored,
                 });
                 this.checkSecondLayerEmpty(entityMap, mapResult, depGraph, processedByIoId, ioNameById, ioCategoryById, logger);
-                return { ok: mapResult.Success, throttled: mapResult.Throttled === true };
+                // Host memory pressure enters the SAME AIMD signal a source throttle uses, so it
+                // halves the in-flight cap and ramps back only once maps complete cleanly. That is
+                // the whole adaptive answer to OOM: no per-connector tuning, no advance knowledge of
+                // which connector misbehaves - a connector that returns 10x the requested batch
+                // costs 10x the memory, the reading notices, and the cap follows. Floor is 1, so a
+                // sync always makes progress rather than deadlocking on a full box.
+                // Except while the run's governor is shedding: it has already chosen a lever by
+                // cost and escalates itself if the host stays above the line, so halving here too
+                // would override a hold (no throughput cost) with a halve (half of it). This check
+                // remains the answer when the governor has nothing to act on.
+                return { ok: mapResult.Success, throttled: mapResult.Throttled === true || (memoryPressure && !governorShedding) };
             } catch (err) {
                 // Ownership loss is NOT a per-map failure to record-and-continue: continuing to the
                 // next map would keep writing after another process claimed the run — the exact
@@ -1943,6 +2006,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Configuration override (IntegrationSetSyncConfig) wins over the connector's MaxConcurrencyHint constant.
         const maxConcurrency = Math.max(concurrency, this.getConfigOverrides(config).maxConcurrency ?? config.connector.MaxConcurrencyHint ?? concurrency);
         const concController = new AdaptiveConcurrencyController({ start: concurrency, min: 1, max: maxConcurrency });
+
+        // The governor, scoped to THIS run. Created here because this is the only frame that can
+        // see the concurrency controller; handed down on the config because the decision has to be
+        // taken where a batch lands, several frames below.
+        config.memoryControl = new RunMemoryControl(
+            {
+                HoldAdmissions: () => concController.Hold(),
+                ReleaseAdmissions: () => concController.Release(),
+                ReduceConcurrency: () => concController.OnThrottleOrError(),
+                CurrentInFlight: () => concController.Cap,
+                Report: plan =>
+                    logger?.warning(
+                        'sync',
+                        plan.Exhausted ? 'HOST_MEMORY_EXHAUSTED' : 'HOST_MEMORY_PRESSURE',
+                        plan.Exhausted
+                            ? `This workspace ran short of memory and there was nothing left to slow down — ${plan.Reason}. It needs a larger size for this amount of data.`
+                            : `This workspace is short of memory, so the sync is ${plan.Levers.map(l => LEVER_COPY[l.Code] ?? 'easing off').join(' and ')} to keep going — ${plan.Reason}.`,
+                        { reason: plan.Reason, levers: plan.Levers.map(l => l.Code), exhausted: plan.Exhausted }
+                    )
+            },
+            this.MaxBatchSize
+        );
 
         // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
         // record count + the FK dependency graph, so an association/dependent object that fetches
@@ -2790,11 +2875,40 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
         let hadFetchGap = false;          // ≥1 page was skipped after a persistent fetch error (offset/page paging)
+        // A HOLE behind the max watermark seen, from a cause other than a skipped page.
+        //
+        // The early-stop branch below persists the max watermark on the reasoning that whole
+        // batches completed, so nothing unwritten lies past it. That reasoning fails when records
+        // were never HANDED to us at all: a shortfall against the source's own total, or pages that
+        // overlapped and therefore skipped. Those missing records can carry timestamps BELOW the max
+        // we saw, so advancing past them skips them permanently — the same reason that branch already
+        // refuses to run when `hadFetchGap`, which its own comment calls 'a HOLE behind this
+        // watermark'. Clearing `fetchCompletedCleanly` alone is NOT enough: it only moves us out of
+        // the clean branch and into this one.
+        let windowHasHole = false;
         let watermarkFloorSaved: string | null = null; // §8a durability floor last persisted mid-run (null = none)
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
+        // MJ-RUN-35: the total the SOURCE stated for this object, when it states one.
+        let sourceTotalRecords: number | undefined;
+        // MJ-RUN-36: identities a LATER batch repeated from an EARLIER one. Only meaningful for
+        // position-based paging, where it is evidence the page boundaries moved under us.
+        let crossBatchRepeatCount = 0;
+        const crossBatchRepeatSamples: string[] = [];
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
         let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
         let oversizeBatchWarned = false;  // pagination rule: warn ONCE per object that the connector ignored BatchSize
+        // Whether this connector respects the page size it is given. Assumed true until a batch
+        // proves otherwise, because that verdict decides whether asking for smaller pages is the
+        // cheapest lever available under memory pressure or a wasted round trip that frees nothing.
+        let honoursBatchSize = true;
+        /**
+         * The page size THIS run asks for, which the governor may shrink between batches.
+         *
+         * Read fresh per fetch, and captured into a local for the duration of that fetch: the
+         * error-skip path advances the offset by what was REQUESTED, so reading it again after the
+         * governor moved it would skip or re-read a page.
+         */
+        const askedBatchSize = (): number => config.memoryControl?.BatchSize ?? this.MaxBatchSize;
         const MAX_BATCHES_PER_MAP = 5000;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
@@ -2840,6 +2954,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 fetchCompletedCleanly = false;
                 break;
             }
+            // Captured ONCE per iteration. The governor may shrink the run's page size while this
+            // fetch is in flight, and the error-skip path below advances the offset by what was
+            // asked for — re-reading it there would skip or re-read a page.
+            const requestedThisBatch = askedBatchSize();
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
@@ -2853,7 +2971,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // to 707 of 23,558 rows — an id-ascending-AND-modstamp-ascending subsequence — with
                 // the run still reporting success. `currentWatermark` remains persistence bookkeeping.
                 WatermarkValue: initialWatermark,
-                BatchSize: this.MaxBatchSize,
+                BatchSize: requestedThisBatch,
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
                 CurrentOffset: currentOffset,
@@ -2875,7 +2993,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 page: currentPage ?? null,
                 offset: currentOffset ?? null,
                 cursor: currentCursor ?? null,
-                batchSize: this.MaxBatchSize,
+                batchSize: requestedThisBatch,
             });
             let batch: FetchBatchResult;
             const fetchStart = Date.now();
@@ -3001,7 +3119,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         `watermark is held so the window is re-fetched next run. Error: ${errMsg}`,
                         { offset: currentOffset ?? null, page: currentPage ?? null, batchIndex: batchCount, error: errMsg },
                     );
-                    if (currentOffset != null) currentOffset += this.MaxBatchSize;
+                    if (currentOffset != null) currentOffset += requestedThisBatch;
                     else if (currentPage != null) currentPage += 1;
                     continue;
                 }
@@ -3067,9 +3185,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // run-event stream, not buried in a console.log nobody reads. Warned ONCE per object (the
             // CONSECUTIVE_EMPTY_BATCHES pattern) so a paginating-but-over-size connector doesn't flood
             // the artifact with one warning per page.
-            if (batch.Records.length > this.MaxBatchSize && !oversizeBatchWarned) {
-                oversizeBatchWarned = true;
-                this.warnOversizedBatch(entityMap, batch, batchCount, logger);
+            if (batch.Records.length > requestedThisBatch) {
+                // The verdict the governor needs: a connector that overshoots its page size cannot
+                // be asked to use less memory by asking for a smaller page.
+                honoursBatchSize = false;
+                if (!oversizeBatchWarned) {
+                    oversizeBatchWarned = true;
+                    this.warnOversizedBatch(entityMap, batch, batchCount, logger);
+                }
+            }
+
+            // Decide what to give up, HERE — at the batch, not between tables. A table that fetches
+            // twelve consecutive 2,000-record pages allocates all of it without ever reaching a
+            // between-tables checkpoint, which is how the sandbox reached 3,478 MB of 3,830 MB on
+            // 2026-09-14 with the old check never getting a turn. Never awaited for its answer's
+            // sake and never able to throw: a governor that can fail a run trades an occasional
+            // memory problem for a constant availability one.
+            if (config.memoryControl && batch.Records.length > 0) {
+                await config.memoryControl.NoteBatch({
+                    EntityMapID: entityMap.ID,
+                    ObservedRecords: batch.Records.length,
+                    SampleRecord: batch.Records[0],
+                    HonoursBatchSize: honoursBatchSize
+                });
             }
 
             if (batch.Records.length > 0) {
@@ -3275,6 +3413,64 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
+        // MJ-RUN-35 — check our work against the number the source gave us.
+        //
+        // The cheapest self-check available, and it was never wired: the source states its own total
+        // on every page (Django REST returns `count`), connectors parsed it, and it had nowhere to
+        // go. Comparing it to what a CLEAN fetch produced turns a silently short scan into a failed
+        // one, on every connector that states a total, without knowing anything about the vendor.
+        //
+        // Only on a clean fetch: one that already skipped pages or aborted is KNOWN to be short and
+        // has said so. Only when a total was actually stated — absent means "it did not say", never
+        // zero. And deliberately not an equality check: a total that moves while we page is normal,
+        // and fetching MORE than claimed is not a fault. Fetching FEWER is.
+        if (
+            fetchCompletedCleanly &&
+            typeof sourceTotalRecords === 'number' &&
+            recordsInMap < sourceTotalRecords
+        ) {
+            const missing = sourceTotalRecords - recordsInMap;
+            fetchCompletedCleanly = false;
+            windowHasHole = true;
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'FETCH_SHORT_OF_SOURCE_TOTAL',
+                `'${entityMap.ExternalObjectName}': the source reports ${sourceTotalRecords} record(s) and the scan ` +
+                `finished with ${recordsInMap}, so ${missing} were never returned to us. No request failed, which ` +
+                `means the shortfall is in how the source paged rather than in any one response — most often a page ` +
+                `boundary that moved mid-scan. This result set is INCOMPLETE; the watermark is held so the window is ` +
+                `re-fetched next run.`,
+                { sourceTotal: sourceTotalRecords, fetched: recordsInMap, missing, batches: batchCount },
+            );
+        }
+
+        // MJ-RUN-36 — pages that overlapped also skipped, so this result set is INCOMPLETE.
+        //
+        // Reported and marked incomplete rather than logged as a curiosity: the repeat is the only
+        // visible symptom of an invisible omission, and the run would otherwise finish Success with a
+        // row count that understates the source.
+        //
+        // `fetchCompletedCleanly = false` is what withholds every consequence of "we saw the complete
+        // set" — the watermark is held, orphan detection is skipped (rows absent from an incomplete
+        // fetch are not proof they are gone at the source), and the partition rollup is not
+        // overwritten.
+        if (crossBatchRepeatCount > 0) {
+            fetchCompletedCleanly = false;
+            windowHasHole = true;
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'FETCH_PAGES_OVERLAPPED',
+                `'${entityMap.ExternalObjectName}': ${crossBatchRepeatCount} record(s) were served again by a later ` +
+                `page after an earlier page had already returned them, so the page boundaries moved during the scan. ` +
+                `A boundary that moves back to repeat a row has also moved forward past another, which means records ` +
+                `were MISSED — this result set is INCOMPLETE and its row count understates the source. The watermark ` +
+                `is held so the window is re-fetched next run. This object needs a guaranteed sort order from the ` +
+                `source, or a page size large enough that the scan fits one page. ` +
+                `Sample: ${crossBatchRepeatSamples.join(', ')}`,
+                { repeated: crossBatchRepeatCount, sample: crossBatchRepeatSamples, batches: batchCount },
+            );
+        }
+
         // Partition (Merkle) reconcile: the full set is now accumulated — diff it against last sync's
         // rollups and deep-apply ONLY the changed/added partitions; the new rollup snapshot is persisted
         // inside. Runs only on a CLEAN fetch (a partial set would mis-skip partitions and lose updates).
@@ -3353,7 +3549,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Deliberately NOT wall-clock "now", even for a full sync: coverage is partial, so advancing
             // past the point actually reached would skip the (reached, now] window permanently. And
             // deliberately NOT when hadFetchGap — a skipped page leaves a HOLE behind this watermark,
-            // which is why that path holds it for a full re-fetch next run.
+            // which is why that path holds it for a full re-fetch next run. `windowHasHole` is the
+            // same refusal for the two holes that are not skipped pages: a scan that finished short
+            // of the total the source stated, and one whose pages overlapped (and therefore skipped).
+            // In both, records we never received can sit BELOW this value.
             const partialWatermark = currentWatermark;
             await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
             result.WatermarkAfter = partialWatermark;
@@ -3797,6 +3996,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.ID}'`,
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // write-back targets the committed external-id mapping
         }, contextUser);
@@ -6051,6 +6251,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
             Fields: ['ID', 'EntityRecordID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
             BypassCache: true, // upsert-by-identity: a stale miss here re-creates a duplicate record map
         }, contextUser);
@@ -6128,6 +6329,49 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Merges an entity-map-level result into the aggregate result.
      */
+    /**
+     * Warn on the run's own stream when the host is running out of memory or disk, and report
+     * whether memory pressure is present so the caller can shed load.
+     *
+     * plan.md line 158 wants the user told, and the only moment that is useful is BEFORE the
+     * failure. Emitted at an entity-map boundary because that is a natural checkpoint - the
+     * measurement is cheap but not free, and per-record would be absurd.
+     *
+     * The WARNING is once per code per run - repeating it every map would bury the run's real
+     * events, and the condition does not become more true by being restated. The RETURN VALUE is
+     * not: it reports the CURRENT reading every time, because the AIMD cap has to keep being told.
+     * Telling it once would cut concurrency a single step and then ramp straight back up into the
+     * same wall.
+     *
+     * Measured even with no logger. A sync with nowhere to write warnings is still a sync that can
+     * be killed, and the throttle is what keeps it alive.
+     */
+    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>, governorShedding = false): Promise<boolean> {
+        try {
+            const findings = EvaluatePressure(await ReadResourcePressure());
+            let memoryPressure = false;
+            for (const f of findings) {
+                const isMemory = f.Code === 'HOST_MEMORY_PRESSURE';
+                if (isMemory) memoryPressure = true;
+                if (!logger || warned.has(f.Code)) continue;
+                warned.add(f.Code);
+                // Carry what we DID, not only what we saw: a customer watching a sync get slower
+                // should be able to tell that the slowdown and the warning are one event, not two
+                // problems. Deliberately a field on the existing warning rather than a new event
+                // type - SyncLogEvent is a closed union every client matches on.
+                logger.warning('sync', f.Code, f.Message, {
+                    fraction: f.Fraction,
+                    ...(isMemory && !governorShedding ? { action: 'reduced-concurrency' } : {}),
+                });
+            }
+            return memoryPressure;
+        } catch {
+            // Measuring headroom must never be the thing that ends a sync - and must never be the
+            // thing that throttles it either, so an unreadable measurement reports no pressure.
+            return false;
+        }
+    }
+
     private mergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
         aggregate.RecordsProcessed += mapResult.RecordsProcessed;
         aggregate.RecordsCreated += mapResult.RecordsCreated;
@@ -6138,6 +6382,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Bound the retained error SAMPLE: only the first MAX_AGGREGATE_ERRORS are ever persisted
         // (FinalizeRun slices to 100). Accumulating every per-record error across a multi-million-row
         // failing run would hold the whole set in RAM for no gain — RecordsErrored already has the count.
+        // Feed the LIVE snapshot from the same accumulation.
+        //
+        // These four fields existed on the snapshot and on OperationProgressOutput, and the
+        // resolver returned them, but NOTHING ever wrote them — they were initialised to 0 and
+        // stayed 0 for the whole run. That is why the UI showed a bare "+" for created and "~"
+        // for updated with no breakdown: the numbers were always zero, not mis-rendered.
+        //
+        // Here rather than on the progress tick because SyncProgress carries no outcome counts at
+        // all; it only knows position. This is the one place a map's real outcome is folded, and
+        // the aggregate is already monotonic, so the snapshot inherits that for free.
+        const snap = this.currentRunContext?.progressSnapshot;
+        if (snap) {
+            snap.RecordsProcessed = aggregate.RecordsProcessed;
+            snap.RecordsCreated = aggregate.RecordsCreated;
+            snap.RecordsUpdated = aggregate.RecordsUpdated;
+            snap.RecordsErrored = aggregate.RecordsErrored;
+            snap.RecordsSkipped = aggregate.RecordsSkipped;
+            // Persist now as well as on the next tick: the final map has no tick after it, so
+            // without this the run's last counts never reach a reader in another process.
+            void this.currentRunContext?.ownership?.WriteProgress(JSON.stringify(snap));
+        }
+
         if (aggregate.Errors.length < MAX_AGGREGATE_ERRORS && mapResult.Errors.length > 0) {
             const room = MAX_AGGREGATE_ERRORS - aggregate.Errors.length;
             aggregate.Errors.push(...mapResult.Errors.slice(0, room));
@@ -6300,8 +6566,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!detailInfo?.SchemaName || !detailInfo.BaseTable || !ciId) return;
 
             // Cutoff = StartedAt of the Nth-most-recent run for this CI. If there aren't MORE than
-            // `keep` runs, there's nothing to prune. Reads `keep + 1` rows and counts them rather than
-            // reading TotalRowCount, which a `MaxRows: 1` read (keep = 1) no longer fills (#6000).
+            // `keep` runs, there's nothing to prune. Reads `keep + 1` rows and counts them.
             const recent = await new RunView().RunView<{ StartedAt: Date | string }>({
                 EntityName: runInfo.Name,
                 ExtraFilter: `CompanyIntegrationID='${String(ciId).replace(/'/g, "''")}'`,
@@ -6533,10 +6798,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return this.Base.EntityMaps;
     }
 
-    public get FieldMaps(): MJCompanyIntegrationFieldMapEntity[] {
-        return this.Base.FieldMaps;
-    }
-
     public get Watermarks(): MJCompanyIntegrationSyncWatermarkEntity[] {
         return this.Base.Watermarks;
     }
@@ -6563,8 +6824,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return this.Base.GetEntityMapsForCompanyIntegration(companyIntegrationID);
     }
 
-    public GetFieldMapsForEntityMap(entityMapID: string): MJCompanyIntegrationFieldMapEntity[] {
-        return this.Base.GetFieldMapsForEntityMap(entityMapID);
+    public LoadFieldMapsForEntityMap(entityMapID: string, contextUser?: UserInfo): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+        return this.Base.LoadFieldMapsForEntityMap(entityMapID, contextUser);
     }
 
     public GetEnabledEntityMaps(companyIntegrationID: string): MJCompanyIntegrationEntityMapEntity[] {
@@ -6634,6 +6895,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 }
 
+/** What each lever is called in the one sentence a customer reads. */
+const LEVER_COPY: Record<string, string> = {
+    HOLD_ADMISSIONS: 'not starting more tables for now',
+    REDUCE_CONCURRENCY: 'syncing fewer tables at once',
+    SHRINK_BATCH: 'reading smaller pages from your source',
+    FLUSH_ACCUMULATOR: 'saving more often',
+    DROP_HASH_PREFETCH: 'skipping an optimisation',
+    PAUSE_OTHER_SYNC: 'pausing another sync'
+};
+
 /** Internal configuration bundle for a sync run */
 interface RunConfiguration {
     companyIntegration: MJCompanyIntegrationEntity;
@@ -6643,6 +6914,14 @@ interface RunConfiguration {
     fullSync: boolean;
     /** When set, overrides each entity map's own SyncDirection for this run. */
     syncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+    /**
+     * This run's memory governor, when one is active.
+     *
+     * Threaded on the config because the batch loop is several frames below the layer runner that
+     * owns the concurrency controller, and the decision has to be made where the batch is — a
+     * table fetching twelve consecutive pages never reaches a between-tables checkpoint.
+     */
+    memoryControl?: RunMemoryControl;
 }
 
 /** Shape of a validation result from BaseEntity.Validate() */

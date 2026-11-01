@@ -13,7 +13,8 @@ import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { CanonicalPrimaryKeyValue } from "./util";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, EscapeSQLString } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -521,6 +522,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     protected abstract BuildChildDiscoverySQL(childEntities: EntityInfo[], recordPKValue: string): string;
 
     /**
+     * Builds a batched UNION ALL query probing all `childEntities`' `BaseView`s for a set
+     * of parent primary-key values (`WHERE pk IN (...)`), returning `(EntityName, RecordPK, Priority)`.
+     * Dialect providers override this to use platform-native string-literal and CAST syntax.
+     */
+    protected BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const escapedKeys = recordPKValues
+            .map(v => `'${EscapeSQLString(String(v))}'`)
+            .join(', ');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+                const sourceRef = this.QuoteSchemaAndView(schema, child.BaseView);
+                const pkRef = this.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A children share the parent's single key
+                const escapedName = `'${EscapeSQLString(child.Name)}'`;
+                return `SELECT ${escapedName} AS ${this.QuoteIdentifier('EntityName')}, CAST(${pkRef} AS VARCHAR(255)) AS ${this.QuoteIdentifier('RecordPK')}, ${idx + 1} AS ${this.QuoteIdentifier('Priority')} FROM ${sourceRef} WHERE ${pkRef} IN (${escapedKeys})`;
+            });
+        return unionParts.length > 0 ? unionParts.join(' UNION ALL ') : '';
+    }
+
+    /**
      * Builds SQL for hard-link (foreign key) dependency queries.
      * Returns a UNION ALL query across all dependent entities.
      * @param entityDependencies The entity-level dependency metadata (or entity name to resolve dependencies for)
@@ -890,6 +913,122 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 .map((r) => ({ ChildEntityName: r.EntityName }));
         }
         return [];
+    }
+
+    private static readonly DEFAULT_ISA_DISCOVERY_BATCH_CHUNK_SIZE = 500;
+
+    /**
+     * Maximum number of parent primary keys included in a single `BuildChildDiscoveryBatchSQL`
+     * `WHERE PK IN (...)` statement inside {@link FindISAChildEntitiesBatch}.
+     */
+    protected get ISADiscoveryBatchChunkSize(): number {
+        return DatabaseProviderBase.DEFAULT_ISA_DISCOVERY_BATCH_CHUNK_SIZE;
+    }
+
+    /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked at {@link ISADiscoveryBatchChunkSize} keys per statement to
+     * stay well within SQL limits).
+     */
+    public async FindISAChildEntitiesBatch(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>> {
+        const resultMap = new Map<string, string[]>();
+        const childEntities = entityInfo.ChildEntities;
+        if (childEntities.length === 0 || recordPKValues.length === 0) {
+            return resultMap;
+        }
+
+        // IS-A children share the parent's single key, so the parent's key type decides how values
+        // are canonicalized (UUIDs case-insensitively, anything else by exact text).
+        const pkIsUuid = Boolean(entityInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
+        const uniquePKs = this.deduplicateCanonicalPKs(recordPKValues, pkIsUuid);
+        if (uniquePKs.length === 0) {
+            return resultMap;
+        }
+
+        const priorityByChildName = new Map<string, number>();
+        for (let i = 0; i < childEntities.length; i++) {
+            priorityByChildName.set(childEntities[i].Name.toLowerCase(), i + 1);
+        }
+
+        const chunkSize = this.ISADiscoveryBatchChunkSize;
+        const collected = new Map<string, Array<{ name: string; priority: number }>>();
+        for (let start = 0; start < uniquePKs.length; start += chunkSize) {
+            const chunk = uniquePKs.slice(start, start + chunkSize);
+            await this.collectISAChildBatchChunk(
+                childEntities,
+                chunk,
+                pkIsUuid,
+                priorityByChildName,
+                collected,
+                contextUser
+            );
+        }
+
+        for (const [pkKey, entries] of collected) {
+            entries.sort((a, b) => a.priority - b.priority);
+            const names: string[] = [];
+            for (const entry of entries) {
+                if (!names.includes(entry.name)) {
+                    names.push(entry.name);
+                }
+            }
+            resultMap.set(pkKey, names);
+        }
+        return resultMap;
+    }
+
+    private deduplicateCanonicalPKs(recordPKValues: ReadonlyArray<string>, pkIsUuid: boolean): string[] {
+        const uniquePKs: string[] = [];
+        const seen = new Set<string>();
+        for (const rawPk of recordPKValues) {
+            if (!rawPk) continue;
+            const norm = CanonicalPrimaryKeyValue(String(rawPk), pkIsUuid);
+            if (!seen.has(norm)) {
+                seen.add(norm);
+                uniquePKs.push(String(rawPk).trim());
+            }
+        }
+        return uniquePKs;
+    }
+
+    private async collectISAChildBatchChunk(
+        childEntities: EntityInfo[],
+        chunk: string[],
+        pkIsUuid: boolean,
+        priorityByChildName: ReadonlyMap<string, number>,
+        collected: Map<string, Array<{ name: string; priority: number }>>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        const batchSQL = this.BuildChildDiscoveryBatchSQL(childEntities, chunk);
+        if (!batchSQL) return;
+
+        const rows = await this.ExecuteSQL<{ EntityName?: string; ChildEntityName?: string; RecordPK?: string; Priority?: number }>(
+            batchSQL,
+            undefined,
+            undefined,
+            contextUser
+        );
+        if (!rows || rows.length === 0) return;
+
+        for (const row of rows) {
+            const entityName = row.EntityName ?? row.ChildEntityName;
+            if (!entityName || row.RecordPK == null) continue;
+            const pkKey = CanonicalPrimaryKeyValue(String(row.RecordPK), pkIsUuid);
+            const priority =
+                typeof row.Priority === 'number'
+                    ? row.Priority
+                    : (priorityByChildName.get(entityName.toLowerCase()) ?? Number.MAX_SAFE_INTEGER);
+            let bucket = collected.get(pkKey);
+            if (!bucket) {
+                bucket = [];
+                collected.set(pkKey, bucket);
+            }
+            bucket.push({ name: entityName, priority });
+        }
     }
 
     /**
@@ -1314,6 +1453,39 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * SQL Server overrides this to fire before-save entity actions and AI actions.
      */
     protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
+        /* no-op by default */
+    }
+
+    /**
+     * Returns true when `Save()` must enlist {@link OnDurableAfterSaveExecute} transactionally
+     * (wrapping direct saves in an {@link EntityTransactionScope}, and awaiting durable action
+     * submission inside `TransactionGroup` save callbacks before group completion).
+     *
+     * Default: `false` (zero extra transaction overhead on ordinary entity saves).
+     */
+    protected async ShouldEnlistSaveInTransaction(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _isNewRecord: boolean,
+    ): Promise<boolean> {
+        return false;
+    }
+
+    /**
+     * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
+     * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
+     * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
+     * {@link ShouldEnlistSaveInTransaction} returned `true`.
+     * Used by `GenericDatabaseProvider` to enlist durable after-save entity actions atomically in the
+     * same SQL transaction as the entity write.
+     */
+    protected async OnDurableAfterSaveExecute(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _context: SaveContext,
+    ): Promise<void> {
         /* no-op by default */
     }
 
@@ -2057,6 +2229,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     });
                     extraData.entityName = entity.EntityInfo.Name;
 
+                    type TransactionRowValue = string | number | boolean | Date | Uint8Array | object | null | undefined;
                     entity.TransactionGroup.AddTransaction(
                         new TransactionItem(
                             entity,
@@ -2064,19 +2237,43 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.literalSQL ?? sqlDetails.fullSQL,
                             sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                             extraData,
-                            (transactionResult: Record<string, unknown>, success: boolean) => {
+                            async (transactionResult: Record<string, TransactionRowValue>, success: boolean) => {
                                 resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
+                                    if (bNewRecord) {
+                                        let hydratedPk = false;
+                                        for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                            const fieldObj = entity.Fields.find((f) => f.Name === pkField.Name);
+                                            if (
+                                                fieldObj &&
+                                                (fieldObj.Value === null || fieldObj.Value === undefined) &&
+                                                transactionResult[pkField.Name] != null
+                                            ) {
+                                                fieldObj.Value = transactionResult[pkField.Name];
+                                                hydratedPk = true;
+                                            }
+                                        }
+                                        if (hydratedPk) {
+                                            entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                        }
+                                    }
+                                    if (await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord)) {
+                                        await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                                    }
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    const mergedResult: Record<string, unknown> = preSaveValues
-                                        ? { ...preSaveValues, ...transactionResult }
+                                    const mergedResult: Record<string, TransactionRowValue> = preSaveValues
+                                        ? { ...(preSaveValues as Record<string, TransactionRowValue>), ...transactionResult }
                                         : transactionResult;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
                                 } else {
                                     entityResult.Success = false;
-                                    entityResult.Message = 'Transaction Failed';
+                                    if (!entityResult.Message) {
+                                        entityResult.Message = transactionResult instanceof Error
+                                            ? transactionResult.message
+                                            : 'Transaction Failed';
+                                    }
                                 }
                             },
                         ),
@@ -2084,60 +2281,92 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     return true;
                 } else {
                     // ---- Direct execution path ----
+                    const enlistInTx = !bReplay && await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord);
+                    const saveTxScope = enlistInTx ? await this.BeginEntityTransaction() : null;
+                    let saveTxCommitted = false;
                     suspendRefresh();
 
-                    let result: Record<string, unknown>[];
-                    if (bReplay) {
-                        result = [entity.GetAll()];
-                    } else {
-                        const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
-                        const rawResult = await this.ExecuteSQL<Record<string, unknown>>(
-                            sqlDetails.fullSQL,
-                            sqlDetails.parameters ?? undefined,
-                            execOptions,
-                            user,
-                        );
-                        result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
-                    }
-
-                    resumeRefresh();
-                    entityResult.EndedAt = new Date();
-
-                    if (result && result.length > 0) {
-                        this.OnAfterSaveExecute(entity, user, options, saveContext);
-                        entityResult.Success = true;
-
-                        // In 'datestamps_only' mode, the SP/query returned only the PK and
-                        // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
-                        // onto the pre-save snapshot so caller-set fields remain intact without
-                        // falsely marking concurrent in-flight mutations as clean.
-                        let mergedRow: Record<string, unknown>;
-                        if (preSaveValues) {
-                            mergedRow = { ...preSaveValues, ...result[0] };
-                            Object.defineProperty(mergedRow, '__mj_preMerged', {
-                                value: true,
-                                enumerable: false,
-                                configurable: true,
-                            });
+                    type SaveRowList = Awaited<ReturnType<typeof this.PostProcessRows>>;
+                    let result: SaveRowList;
+                    try {
+                        if (bReplay) {
+                            result = [entity.GetAll()];
                         } else {
-                            mergedRow = result[0];
+                            const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
+                            const rawResult = await this.ExecuteSQL<SaveRowList[number]>(
+                                sqlDetails.fullSQL,
+                                sqlDetails.parameters ?? undefined,
+                                execOptions,
+                                user,
+                            );
+                            result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
                         }
 
-                        // OnSaveCompleted may return patch fields (e.g., updated lat/lng
-                        // from geocoding) that need to be merged onto the SP result before
-                        // the entity loads the data via finalizeSave().
-                        const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
-                        if (patches) {
-                            Object.assign(mergedRow, patches);
-                        }
+                        resumeRefresh();
+                        entityResult.EndedAt = new Date();
 
-                        return mergedRow;
-                    } else {
-                        if (bNewRecord)
-                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
-                        else
-                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                        if (result && result.length > 0) {
+                            if (bNewRecord) {
+                                let hydratedPk = false;
+                                for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                    const fieldObj = entity.Fields.find(f => f.Name === pkField.Name);
+                                    if (fieldObj && (fieldObj.Value === null || fieldObj.Value === undefined) && result[0][pkField.Name] != null) {
+                                        fieldObj.Value = result[0][pkField.Name];
+                                        hydratedPk = true;
+                                    }
+                                }
+                                if (hydratedPk) {
+                                    entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                }
+                            }
+                            if (enlistInTx) {
+                                await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                            }
+                            if (saveTxScope) {
+                                await saveTxScope.Commit();
+                                saveTxCommitted = true;
+                            }
+                        } else {
+                            if (bNewRecord)
+                                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                            else
+                                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                        }
+                    } catch (innerErr) {
+                        if (saveTxScope && !saveTxCommitted) {
+                            await saveTxScope.Rollback();
+                        }
+                        throw innerErr;
                     }
+
+                    this.OnAfterSaveExecute(entity, user, options, saveContext);
+                    entityResult.Success = true;
+
+                    // In 'datestamps_only' mode, the SP/query returned only the PK and
+                    // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
+                    // onto the pre-save snapshot so caller-set fields remain intact without
+                    // falsely marking concurrent in-flight mutations as clean.
+                    let mergedRow: SaveRowList[number];
+                    if (preSaveValues) {
+                        mergedRow = { ...preSaveValues, ...result[0] };
+                        Object.defineProperty(mergedRow, '__mj_preMerged', {
+                            value: true,
+                            enumerable: false,
+                            configurable: true,
+                        });
+                    } else {
+                        mergedRow = result[0];
+                    }
+
+                    // OnSaveCompleted may return patch fields (e.g., updated lat/lng
+                    // from geocoding) that need to be merged onto the SP result before
+                    // the entity loads the data via finalizeSave().
+                    const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                    if (patches) {
+                        Object.assign(mergedRow, patches);
+                    }
+
+                    return mergedRow;
                 }
             } else {
                 return entity.GetAll(); // nothing to save

@@ -1,6 +1,6 @@
 import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
-import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserRoutineEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -68,6 +68,17 @@ interface ConversationResourceConfig {
 interface AgentRequestResourceConfig {
   type: 'agent-request';
   requestId: string;
+}
+
+/**
+ * Configuration written by the User Routine dispatcher for a routine run. `conversationId` is
+ * the routine's own conversation, where the run's reply lives; older notifications lack it.
+ */
+interface UserRoutineResourceConfig {
+  type: 'UserRoutine';
+  routineId: string;
+  runId?: string;
+  conversationId?: string;
 }
 
 /**
@@ -448,6 +459,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (typeName === 'meet-room') {
         return true;
       }
+      if (this.parseUserRoutineConfig(notification)) {
+        return true;
+      }
     }
 
     const info = this.NotificationUrl(notification);
@@ -651,6 +665,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
         return;
       }
       if (this.navigateToMeetRoom(notification)) {
+        return;
+      }
+      if (this.navigateToUserRoutine(notification)) {
         return;
       }
       if (this.navigateToHandoffConsole(notification)) {
@@ -860,12 +877,71 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
     if (config.taskId) navConfig['taskId'] = config.taskId;
 
+    // The Chat tab is usually already open and gets reused; a reused tab reads its configuration
+    // only at init, so the same values go in the query params, which it does react to.
     this.navigationService.OpenNavItemByName(
       'Conversations',
       navConfig,
-      chatApp.ID
+      chatApp.ID,
+      { queryParams: { ...navConfig } }
     );
     return true;
+  }
+
+  /** The routine-run config of a notification, or null when it is not one (or names no routine). */
+  private parseUserRoutineConfig(notification: MJUserNotificationEntity): UserRoutineResourceConfig | null {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return null;
+    }
+    const config = SafeJSONParse<UserRoutineResourceConfig>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'userroutine' || !config.routineId) {
+      return null;
+    }
+    return config;
+  }
+
+  /**
+   * Opens what a routine run produced: its reply, in the routine's own conversation (the
+   * `{ type:'UserRoutine', routineId, runId, conversationId? }` ResourceConfiguration). That
+   * conversation is application-scoped, so the chat sidebar never lists it; the click deep-links
+   * into the Chat app's Conversations item. A notification written before the config carried the
+   * conversation reads it off the routine; a routine with no conversation opens in the Routines
+   * app. Returns false (not handled) when the notification is not a routine run.
+   */
+  private navigateToUserRoutine(notification: MJUserNotificationEntity): boolean {
+    const config = this.parseUserRoutineConfig(notification);
+    if (!config) {
+      return false;
+    }
+    void this.openUserRoutineOutput(config);
+    return true;
+  }
+
+  private async openUserRoutineOutput(config: UserRoutineResourceConfig): Promise<void> {
+    const conversationId = config.conversationId ?? await this.loadRoutineConversationId(config.routineId);
+    const chatApp = conversationId ? this.appManager.GetAppByName('Chat') : null;
+    if (conversationId && chatApp) {
+      // Query params as well as configuration: an already-open Chat tab is reused and reacts
+      // only to a query-param change (its configuration is read once, at init).
+      await this.navigationService.OpenNavItemByName('Conversations', { conversationId }, chatApp.ID, { queryParams: { conversationId } });
+      return;
+    }
+    const routinesApp = this.appManager.GetAppByName('Routines');
+    if (routinesApp) {
+      await this.navigationService.OpenNavItemByName('My Routines', { routine: config.routineId }, routinesApp.ID);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('The Routines app is not installed, so this routine cannot be opened', 'error', 4000);
+  }
+
+  /** The routine's ConversationID, or null when the routine cannot be read or has none. */
+  private async loadRoutineConversationId(routineId: string): Promise<string | null> {
+    const p = this.ProviderToUse;
+    const routine = await p.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', p.CurrentUser);
+    if (!await routine.Load(routineId)) {
+      return null;
+    }
+    return routine.ConversationID ?? null;
   }
 
   public GetNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {

@@ -321,7 +321,9 @@ jobs:
             echo "  ${TREE} = ${HASH}"
             TREES="${TREES}${HASH}"
           done
-          KEY="mj-ci-db-v1-$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+          # v2: every v1 entry saved after a restore holds the OLDER snapshot it restored (see
+          # "Save the snapshot" below), so none of them may be read again.
+          KEY="mj-ci-db-v2-$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
           echo "key=${KEY}" >> "$GITHUB_OUTPUT"
           echo "Snapshot key: ${KEY}"
 
@@ -336,7 +338,7 @@ jobs:
           # Prefix fallback to the newest `next` snapshot. `cache-hit` is 'true' ONLY on an
           # exact key match, which is what gates the sync-push skip below; a prefix match
           # leaves it 'false', so the full metadata reconcile still runs.
-          restore-keys: mj-ci-db-v1-
+          restore-keys: mj-ci-db-v2-
 
       - name: Load the snapshot into SQL Server
         id: dbload
@@ -478,26 +480,49 @@ jobs:
       #
       # Both steps are best-effort throughout: a merge that provisioned and tested cleanly must
       # not go red because a cache upload failed.
+      #
+      # A failed backup must never be saved. After a prefix restore, /tmp/mjdb still holds the
+      # OLDER snapshot that was just loaded, so a save after a failed backup uploads that older
+      # database under this run's exact key. The next run with the same trees then exact-hits it,
+      # skips both sync pushes, and tests against metadata that predates its own commit (the
+      # IT: Permission Grant Fixture agent went missing this way and APM6 skipped). Hence: clear
+      # /tmp/mjdb first, back up to a file nothing else writes, and save only on the backup
+      # step's real `outcome` (continue-on-error makes its `conclusion` success either way).
+      #
+      # The backup file is NOT /var/opt/mssql/test.bak: the restore above `docker cp`s the
+      # snapshot there as the host uid with mode 0644, which SQL Server (uid 10001) can read but
+      # not overwrite, so BACKUP to that path failed with "Operating system error 5(Access is
+      # denied.)" on every run that had restored first.
       - name: Snapshot the provisioned DB
+        id: dbsnapshot
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true'
         continue-on-error: true
         run: |
+          rm -rf /tmp/mjdb
           mkdir -p /tmp/mjdb
           docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
             /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
-            -Q "BACKUP DATABASE [test] TO DISK='/var/opt/mssql/test.bak' WITH COMPRESSION, INIT, FORMAT;"
-          docker cp sql:/var/opt/mssql/test.bak /tmp/mjdb/test.bak
+            -Q "BACKUP DATABASE [test] TO DISK='/var/opt/mssql/snapshot.bak' WITH COMPRESSION, INIT, FORMAT;"
+          docker cp sql:/var/opt/mssql/snapshot.bak /tmp/mjdb/test.bak
           # Printed so the size trend is visible in the log; it is the one figure the cache
           # budget depends on.
           ls -lh /tmp/mjdb/test.bak
 
       - name: Save the provisioned-DB snapshot
-        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true' && steps.dbsnapshot.outcome == 'success'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
+
+      # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
+      # processes that write them: MJAPI (IT160 over the wire) and the mj test process (IT161
+      # in-process). Without one the save is refused and those bundles can only skip. A per-run
+      # throwaway is enough — the database was provisioned for this run, so there is no earlier
+      # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
+      - name: Generate a throwaway encryption key for this run
+        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
 
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
@@ -553,6 +578,10 @@ jobs:
           # shape/templating/composition variant on every client run path, ~22% of the points.
           # The content-only pairs it drops run in full on every PR in the server bundles
           # IT143/IT146. The nightly cron, merges to next/lts and manual dispatch run 'full'.
+          # At full scope 900 s was too tight to be a hang guard: 7 of the 10 merges to next
+          # measured on 2026-10-30 ran into it, with SPC1 passing and SPC2 either still running at the limit
+          # or passing with no time left for teardown. IT145's MaxExecutionTimeMS is therefore
+          # 1,500 s (the worst full run above plus ~35%).
           SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
           # live-model is DEFAULT-ON since 2026-07-20 (tiers.ts: only an explicit '0'
           # disables). This lane has no LLM credentials, so pin it off explicitly —
@@ -787,6 +816,11 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # One definition for both MJAPI processes AND the rig: the servers swap to
+      # RedisLocalStorageProvider from REDIS_URL, and the rig's XS10/XS11 subscribe to the same
+      # Redis + key prefix to assert what the servers broadcast. Defined here so the two cannot drift.
+      REDIS_URL: redis://localhost:6379
+      REDIS_KEY_PREFIX: mj
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
@@ -879,7 +913,6 @@ jobs:
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
-          REDIS_URL: redis://localhost:6379
         run: |
           (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
           (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)

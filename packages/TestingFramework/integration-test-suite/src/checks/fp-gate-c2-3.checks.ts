@@ -89,7 +89,7 @@ class SecondRunSteps {
                 OR (EntityID IN ('${entityID('MJ_BizApps_Common: Person Job Functions')}', '${entityID('MJ: Feature Values')}') AND RecordID IN (${ids})))`,
         }, ctx.User);
         Assert(res.Success, `counting Record Changes: ${res.ErrorMessage}`);
-        return res.TotalRowCount;
+        return res.TotalRowCount ?? 0;
     }
 }
 

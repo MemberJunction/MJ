@@ -182,6 +182,60 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'Needs the prompt-eval corpus in the database; CI pushes only metadata and metadata-optional/integration-test, '
             + 'and the corpus stays out on purpose as a measurement fixture (#4438).'
     },
+    {
+        CheckId: 'encrypted-read-client.ER1',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'encrypted-read-client.ER2',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'encrypted-read-client.ER3',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'encrypted-read-client.ER4',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'ciphertext-cache.CT0',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'ciphertext-cache.CT1',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'ciphertext-cache.CT2',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'ciphertext-cache.CT3',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'ciphertext-cache.CT4',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
 ];
 
 for (const entry of SKIP_ALLOWLIST) {
