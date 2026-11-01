@@ -134,14 +134,16 @@ describe('every schema build reads its fields through the loader', () => {
         // ApplySchema, ApplyAll, buildSchemaForConnector, ApplyAllBatch, SchemaEvolution.
         expect(calls.length).toBe(5);
         const inline = /await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\)/;
-        // SchemaEvolution loads once into `scopedFields`, because its field-map reconcile reads the same rows.
+        // SchemaEvolution and buildSchemaForConnector load once into `scopedFields`: evolution's
+        // field-map reconcile reads the same rows, and buildSchemaForConnector's prefetched (batch)
+        // branch needs them for its inactive-row warnings without running the rebuild at all.
         const hoisted = /scopedFields,?\s*\)/;
         for (const call of calls) {
             expect(inline.test(call) || hoisted.test(call)).toBe(true);
         }
         const hoistedCalls = calls.filter(c => !inline.test(c));
-        expect(hoistedCalls).toHaveLength(1);
-        expect(SRC).toMatch(/const scopedFields = await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\);/);
+        expect(hoistedCalls).toHaveLength(2);
+        expect(SRC.match(/const scopedFields = await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\);/g)).toHaveLength(2);
     });
 
     it('the rebuild reads fields only through FieldsForBuild, never the engine directly', () => {

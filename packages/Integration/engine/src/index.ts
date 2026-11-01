@@ -133,6 +133,8 @@ export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirect
 export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
 export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
+export { DescribePersistCounts } from './SchemaPersistCounts.js';
+export type { PersistCountsLike } from './SchemaPersistCounts.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
 export type { HasExternalID, BatchIdentityResult } from './BatchIdentity.js';
 export { PlanPromotions, planPromotions, PlanColumnReclamations, planColumnReclamations, InferColumnTypeFromSamples, inferColumnTypeFromSamples, InferColumnTypeFromStats, inferColumnTypeFromStats, BuildOverflowStats, buildOverflowStats, SanitizeColumnName, sanitizeColumnName } from './CustomColumnPromotion.js';
