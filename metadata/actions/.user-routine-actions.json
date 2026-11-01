@@ -24,6 +24,10 @@
           },
           "primaryKey": {
             "ID": "5F00E3E5-CFB9-44EE-AF1E-A040BE763D85"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:27.376Z",
+            "checksum": "0dee7c375f64b9074aed7e9d36ffc4fa08c9f106fb25bef8dc2e99c3f86eb063"
           }
         }
       ],
@@ -37,6 +41,10 @@
           },
           "primaryKey": {
             "ID": "CF94B69E-51BF-4249-A193-A1C75E682C80"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:27.385Z",
+            "checksum": "749bf1991553206151a14cd0294c08716183986879082597620686e4a5ada5d6"
           }
         },
         {
@@ -48,6 +56,10 @@
           },
           "primaryKey": {
             "ID": "959EFAC2-7612-47E9-B5F9-E8EDDC642D26"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:27.394Z",
+            "checksum": "ea632b48f10d0791c691b72d8056f8732370043eef63be255b74a67208f556d7"
           }
         },
         {
@@ -59,6 +71,10 @@
           },
           "primaryKey": {
             "ID": "9645FE3E-729D-4271-B533-723FBD8C783B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:27.403Z",
+            "checksum": "8a37dfc956c985c52f13cb71f89558a1de512d497ba7cb8b594ec334f2879181"
           }
         },
         {
@@ -70,6 +86,10 @@
           },
           "primaryKey": {
             "ID": "F44AF4E5-7CB0-438F-9B0B-1C86FCD7706F"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:27.413Z",
+            "checksum": "8a3e995249e994641346cff23315e678b0b66e680c4d6626b6c0037b87f4344c"
           }
         },
         {
@@ -81,12 +101,20 @@
           },
           "primaryKey": {
             "ID": "7B549941-F879-41B9-A87F-65684F34FCDF"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:27.422Z",
+            "checksum": "22acd129f45ec113a516d13e83c76283d84b0997ecf08f5ae78e89058296d2b2"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "FAA47BCA-D805-473E-B556-4FFE9D4BE644"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:27.359Z",
+      "checksum": "02eb8c5afe4c91de0c67fd1aac88bcb47a01b0754344db6476343009da25df9c"
     }
   }
 ]
