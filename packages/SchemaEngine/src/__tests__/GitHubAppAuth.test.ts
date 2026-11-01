@@ -40,11 +40,11 @@ describe('ReadGitHubAppCredentials — the names the deploy writes', () => {
 });
 
 describe('BuildAppJwt', () => {
-  it('is an RS256 JWT issued by the App, 60 s in the past and valid for 10 minutes', () => {
+  it('is an RS256 JWT issued by the App, 60 s in the past and expiring a minute inside GitHub\'s 10-minute maximum', () => {
     const jwt = BuildAppJwt('123', PEM, 1_700_000_000);
     const [h, p, s] = jwt.split('.');
     expect(b64urlToJson(h)).toEqual({ alg: 'RS256', typ: 'JWT' });
-    expect(b64urlToJson(p)).toEqual({ iat: 1_700_000_000 - 60, exp: 1_700_000_000 + 600, iss: '123' });
+    expect(b64urlToJson(p)).toEqual({ iat: 1_700_000_000 - 60, exp: 1_700_000_000 + 540, iss: '123' });
     const verifier = createVerify('RSA-SHA256');
     verifier.update(`${h}.${p}`);
     const sig = Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');

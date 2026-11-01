@@ -26,7 +26,8 @@
  * connection finds every job already Paused, so the set it "moved" is empty. Writing that empty
  * set over the real record is the bug that loses the state — resume would then restore nothing
  * and both schedules would stay off forever, with no error anywhere. {@link DecidePauseWrite}
- * is the guard: the FIRST pause's record stands until a resume consumes it.
+ * is the guard: the FIRST pause's record stands until a resume consumes it, and a later pause only
+ * ever adds to it.
  *
  * Everything here is a pure function over plain values. The resolver owns the reads and writes.
  */
@@ -71,14 +72,20 @@ export function DecideSchedulesToPause(jobs: ReadonlyArray<ScheduleJobState>): P
  * Returns the record to persist, or `null` to leave the stored one untouched. A second pause of
  * an already-paused connection moves nothing, and must not overwrite the first pause's record
  * with its own empty one — see the class comment.
+ *
+ * A pause that DOES move jobs while a record is stored adds them to it: the stored entries stay
+ * exactly as they were, and the new ones are appended by job ID. That happens when a job was
+ * created or switched back on while the connection was paused, or when a resume could not clear
+ * its record. A job paused here but left out of the record is one resume can never put back.
  */
 export function DecidePauseWrite(
     stored: ReadonlyArray<PausedScheduleRecord>,
     newlyPaused: ReadonlyArray<PausedScheduleRecord>
 ): PausedScheduleRecord[] | null {
-    if (stored.length > 0) return null;           // already paused; the first record is authoritative
-    if (newlyPaused.length === 0) return null;    // nothing moved and nothing stored — write nothing
-    return [...newlyPaused];
+    const known = new Set(stored.map(r => r.ID.toUpperCase()));
+    const added = newlyPaused.filter(r => !known.has(r.ID.toUpperCase()));
+    if (added.length === 0) return null;          // nothing new moved — any stored record stands as it is
+    return [...stored, ...added];
 }
 
 /**
