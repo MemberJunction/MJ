@@ -233,6 +233,19 @@ export interface FetchBatchResult {
     NextAfterKeyValue?: string;
     /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
     NextCursor?: string;
+    /**
+     * MJ-RUN-35 — the total the SOURCE says it holds for this object, when it says so.
+     *
+     * Many APIs state it on every page (Django REST returns `{count, next, previous, results}`), and
+     * it is the cheapest self-check available: comparing it against what a clean fetch actually
+     * produced turns a silently incomplete scan into a failed one. Before this it went nowhere — the
+     * REST base parsed `count` into its internal pagination state and had no field to carry it out
+     * on, so every connector that read it discarded it and the engine had nothing to check against.
+     *
+     * Absent means "the source did not say", which is NOT the same as zero and must never be
+     * compared as if it were.
+     */
+    SourceTotalRecords?: number;
 }
 
 /** Configurable timeout values for connector operations */
@@ -819,13 +832,33 @@ export abstract class BaseIntegrationConnector {
             field.MaxLength = (() => {
                 const m = c.Inferred.MaxLength;
                 if (m == null || m <= 0) {
-                    // Unknown length (#A5): a KEY must stay within the index-key limit (≤450, never MAX) so it
-                    // remains PK-eligible. But a NON-key field of unknown length must size GENEROUSLY — defaulting
-                    // it to 450 too silently TRUNCATED long descriptions / URLs / blobs. Err large + bounded.
+                    // A null length from a STRING inference is not "unknown" — it is the inference
+                    // saying it looked and no bounded width is safe (inferColumnTypeFromStats
+                    // returns null exactly when twice the longest observed value exceeds the
+                    // bounded ceiling). Collapsing that to 4000 here is how a 5,000-character value
+                    // ended up in a 4,000-wide column: too long for the column it was measured
+                    // from, and a record that does not fit is SKIPPED WHOLE rather than truncated,
+                    // so the data stops arriving with the run still reporting success.
+                    if (c.Inferred.SchemaFieldType === 'string') return isKey ? 450 : -1;
+                    // Genuinely unknown (a non-string type carries its width in the type, and an
+                    // all-null column proved nothing). A KEY must stay within the index-key limit
+                    // (≤450, never MAX) so it remains PK-eligible. A NON-key field sizes GENEROUSLY
+                    // — defaulting it to 450 too silently TRUNCATED long descriptions / URLs.
                     return isKey ? 450 : 4000;
                 }
-                const padded = [32, 64, 128, 256, 512, 1024, 2048, 4000].find(b => b >= m * 2) ?? 4000;
-                return isKey ? Math.min(padded, 450) : padded;
+                // `m` is already doubled by the inference (generousStringBound), and is null — the
+                // branch above — once twice the observed max passes 4000. So when m*2 overflows the
+                // largest bucket, m itself still fits in 4000: the observed max was 1,001–2,000
+                // characters, and 4000 holds 2–4x it. That is the answer, not MAX: a MAX column
+                // cannot be indexed and is stored off-row, a poor trade for a description- or
+                // URL-sized value. Only an m past 4000 (a width that did not come from this
+                // inference) has no bounded bucket that holds it, and gets -1, the MAX/unbounded
+                // convention every consumer honours (decideLengthOverlay, TypeMapper,
+                // CustomColumnPromotion) — a record too long for its column is SKIPPED WHOLE.
+                const padded = [32, 64, 128, 256, 512, 1024, 2048, 4000].find(b => b >= m * 2) ?? (m <= 4000 ? 4000 : -1);
+                // A key must stay index-eligible and can never be MAX, so an unbounded padding
+                // collapses to the index-key cap rather than to Math.min(-1, 450) === -1.
+                return isKey ? (padded === -1 ? 450 : Math.min(padded, 450)) : padded;
             })();
             return field;
         });
@@ -929,6 +962,17 @@ export abstract class BaseIntegrationConnector {
                 ),
                 { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
             );
+            // NOTE — the fleet patch adds a describe-surface fallback here when the stream yields
+            // zero fields, because an EMPTY table was persisted FIELDLESS ("No fields found for this
+            // table") even though the describe surface knows its columns. It is deliberately NOT
+            // ported into source: zero fields is also the CORRECT answer when the sampler ADJOURNED
+            // — a multi-var object whose parents cannot be paired must yield nothing rather than
+            // guess — and two tests in DagDiscoveryABCDE pin exactly that. Falling back
+            // unconditionally overrides the adjourn.
+            //
+            // The version that belongs upstream distinguishes the two: "the source returned zero
+            // records" is a fallback case, "the sampler declined to run" is not. Neither side has
+            // that signal today, so the divergence stays in the patch.
             const tookMs = Date.now() - startedMs;
             const seen = watchdog.Peek(watchKey);
             console.log(
