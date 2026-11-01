@@ -48,7 +48,6 @@ describe('RSUProgressBridge', () => {
         CompanyIntegrationIDs: ['CI-1'],
     };
 
-    /** The emitter's writes are chained promises; let them drain before reading from disk. */
     /**
      * Waits for the emitter's append chain to quiesce.
      *

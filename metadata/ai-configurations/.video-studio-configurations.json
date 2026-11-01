@@ -1,0 +1,302 @@
+[
+  {
+    "fields": {
+      "Name": "Video Studio Draft",
+      "Description": "Fast draft configuration for Video Studio: Gemini 3.8 Flash at low effort, 0 repair rounds, 24 fps draft render of the first format only, up to 20s of generated footage.",
+      "ParentID": "@lookup:MJ: AI Configurations.Name=Fast",
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: AI Configuration Params": [
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxRepairRounds",
+            "Type": "number",
+            "Value": "0",
+            "Description": "Maximum Critic-to-Motion-Engineer repair rounds after initial render (0 in Draft)."
+          },
+          "primaryKey": {
+            "ID": "142E8A6F-F55C-4E34-9C47-643160DE60CE"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.RenderQuality",
+            "Type": "string",
+            "Value": "draft",
+            "Description": "HyperFrames render quality tier (draft | standard | high)."
+          },
+          "primaryKey": {
+            "ID": "2C878170-630B-4AAA-BFC9-C0CEE25C9280"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.Fps",
+            "Type": "number",
+            "Value": "24",
+            "Description": "Frames per second for rendered deliverables."
+          },
+          "primaryKey": {
+            "ID": "CEC41C9E-9FE7-46E8-9CE8-F712AEFA66F0"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.Formats",
+            "Type": "string",
+            "Value": "First",
+            "Description": "Whether to render only Film.Formats[0] ('First') or every requested format ('All')."
+          },
+          "primaryKey": {
+            "ID": "16CC7661-0AB9-4B29-95F6-975222402852"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.GenerationQuality",
+            "Type": "string",
+            "Value": "draft",
+            "Description": "Model quality tier for generative image and video clips (draft | standard | high)."
+          },
+          "primaryKey": {
+            "ID": "159749ED-05A6-4841-86F9-68489424B2F1"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxGeneratedVideoSeconds",
+            "Type": "number",
+            "Value": "20",
+            "Description": "Run-wide cap on total generated video seconds across all Assets.Generate video requests."
+          },
+          "primaryKey": {
+            "ID": "8F6B5352-88CD-42FD-9063-51F251479ACF"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxRegenerations",
+            "Type": "number",
+            "Value": "1",
+            "Description": "Maximum times a single generated asset may be regenerated during Critic repair."
+          },
+          "primaryKey": {
+            "ID": "95FFC223-142E-42FF-AD91-138A799FAB13"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6791A2B6-B58F-4E40-8EEB-5A2F624DBD45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio Standard",
+      "Description": "Default balanced configuration for Video Studio: Gemini 3.8 Flash, up to 2 repair rounds, 30 fps standard render across all formats, up to 40s of generated footage.",
+      "ParentID": "@lookup:MJ: AI Configurations.Name=Standard",
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: AI Configuration Params": [
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxRepairRounds",
+            "Type": "number",
+            "Value": "2",
+            "Description": "Maximum Critic-to-Motion-Engineer repair rounds after initial render (2 in Standard)."
+          },
+          "primaryKey": {
+            "ID": "31902E7F-29E9-41C7-A518-0B8EDCEFC2B9"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.RenderQuality",
+            "Type": "string",
+            "Value": "standard",
+            "Description": "HyperFrames render quality tier (draft | standard | high)."
+          },
+          "primaryKey": {
+            "ID": "9263E791-F471-4790-91D1-788C6D246611"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.Fps",
+            "Type": "number",
+            "Value": "30",
+            "Description": "Frames per second for rendered deliverables."
+          },
+          "primaryKey": {
+            "ID": "D67F1DB9-E98B-4E5A-BB1F-84B3B6A05BC8"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.Formats",
+            "Type": "string",
+            "Value": "All",
+            "Description": "Whether to render only Film.Formats[0] ('First') or every requested format ('All')."
+          },
+          "primaryKey": {
+            "ID": "01C98EE4-691C-4A1D-AE5A-8B68DD19B05C"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.GenerationQuality",
+            "Type": "string",
+            "Value": "standard",
+            "Description": "Model quality tier for generative image and video clips (draft | standard | high)."
+          },
+          "primaryKey": {
+            "ID": "95D63F2C-4567-45D3-B5B7-5B05AA36ADD1"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxGeneratedVideoSeconds",
+            "Type": "number",
+            "Value": "40",
+            "Description": "Run-wide cap on total generated video seconds across all Assets.Generate video requests."
+          },
+          "primaryKey": {
+            "ID": "97142EE7-5A08-402F-B5BC-6A13BC8C236C"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxRegenerations",
+            "Type": "number",
+            "Value": "1",
+            "Description": "Maximum times a single generated asset may be regenerated during Critic repair."
+          },
+          "primaryKey": {
+            "ID": "5ADD9B8D-B0D9-42D6-B2CA-88CA62E1BBCB"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2144CA24-5FD1-4C07-A4F5-FF0685DE32A1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio High",
+      "Description": "High-power production configuration for Video Studio: Claude Opus 5.5, up to 3 repair rounds, 30 fps high-quality render across all formats, up to 60s of generated footage.",
+      "ParentID": "@lookup:MJ: AI Configurations.Name=High Power",
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: AI Configuration Params": [
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxRepairRounds",
+            "Type": "number",
+            "Value": "3",
+            "Description": "Maximum Critic-to-Motion-Engineer repair rounds after initial render (3 in High)."
+          },
+          "primaryKey": {
+            "ID": "19F7466C-1EF8-4F1D-AD21-F95180918DA8"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.RenderQuality",
+            "Type": "string",
+            "Value": "high",
+            "Description": "HyperFrames render quality tier (draft | standard | high)."
+          },
+          "primaryKey": {
+            "ID": "29769A0F-D972-4CF4-8962-4BDE9AF86E11"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.Fps",
+            "Type": "number",
+            "Value": "30",
+            "Description": "Frames per second for rendered deliverables."
+          },
+          "primaryKey": {
+            "ID": "4511C780-9D71-41CC-AC11-69E4A207AFE5"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.Formats",
+            "Type": "string",
+            "Value": "All",
+            "Description": "Whether to render only Film.Formats[0] ('First') or every requested format ('All')."
+          },
+          "primaryKey": {
+            "ID": "BEA7419D-70E3-492D-9A8F-69EC92C8A484"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.GenerationQuality",
+            "Type": "string",
+            "Value": "high",
+            "Description": "Model quality tier for generative image and video clips (draft | standard | high)."
+          },
+          "primaryKey": {
+            "ID": "DA7EBF1B-C60A-4B97-8BBC-0972BA44539A"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxGeneratedVideoSeconds",
+            "Type": "number",
+            "Value": "60",
+            "Description": "Run-wide cap on total generated video seconds across all Assets.Generate video requests."
+          },
+          "primaryKey": {
+            "ID": "15536696-42D6-4F73-A2D9-65CABEA9A9FA"
+          }
+        },
+        {
+          "fields": {
+            "ConfigurationID": "@parent:ID",
+            "Name": "VideoStudio.MaxRegenerations",
+            "Type": "number",
+            "Value": "1",
+            "Description": "Maximum times a single generated asset may be regenerated during Critic repair."
+          },
+          "primaryKey": {
+            "ID": "D52B58A8-33C5-4896-ABB5-75BC4126744A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5F7A39BE-9726-429B-AD55-67B8709485CF"
+    }
+  }
+]

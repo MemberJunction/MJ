@@ -10,6 +10,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { AgentResponseForm } from '@memberjunction/ai-core-plus';
+import { FormatResponseFormSummary } from '../sub-agent-consult';
 
 // ============================================================================
 // Lightweight types mirroring the entity shapes used by the formatters
@@ -544,8 +546,11 @@ interface MockActionResultSummary {
 interface MockExecuteAgentResult {
     success: boolean;
     payload?: unknown;
+    responseForm?: AgentResponseForm;
     agentRun?: {
         Status?: string;
+        FinalStep?: string;
+        Message?: string;
         ErrorMessage?: string;
     };
 }
@@ -600,6 +605,19 @@ function formatSubAgentResultAsMarkdown(subAgentName: string, result: MockExecut
 
     const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
     lines.push(`**Status:** ${status}`);
+
+    if (result.agentRun?.FinalStep) {
+        lines.push(`**Final step:** ${result.agentRun.FinalStep}`);
+    }
+
+    if (result.agentRun?.Message && result.agentRun.Message.trim().length > 0) {
+        lines.push(`**Message:** ${result.agentRun.Message}`);
+    }
+
+    const formSummary = FormatResponseFormSummary(result.responseForm);
+    if (formSummary) {
+        lines.push(`**Form:**\n${formSummary}`);
+    }
 
     if (!result.success && result.agentRun?.ErrorMessage) {
         lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
@@ -898,5 +916,31 @@ describe('formatSubAgentResultAsMarkdown', () => {
         expect(result).toContain('**Payload:**');
         expect(result).not.toContain('(truncated)');
         expect(result).not.toContain('…');
+    });
+
+    it('should include Final step, Message, and Form summary when present', () => {
+        const result = formatSubAgentResultAsMarkdown('Agent', {
+            success: true,
+            agentRun: {
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Message: 'All done'
+            },
+            responseForm: {
+                title: 'Next Action',
+                questions: [
+                    {
+                        id: 'next',
+                        label: 'Proceed?',
+                        type: { type: 'text' },
+                        required: false
+                    }
+                ]
+            }
+        });
+        expect(result).toContain('**Final step:** Success');
+        expect(result).toContain('**Message:** All done');
+        expect(result).toContain('**Form:**');
+        expect(result).toContain('- Proceed? (text, optional)');
     });
 });

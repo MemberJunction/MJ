@@ -13,9 +13,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   EvaluatePressure, IsOutOfSpaceError, ReadResourcePressure,
-  HEAP_WARN_FRACTION, DISK_WARN_FREE_BYTES, RESIDENT_WARN_FRACTION,
+  HEAP_WARN_FRACTION, DISK_WARN_FREE_BYTES,
   type ResourcePressureReading,
 } from '../ResourcePressure.js';
+import { ResolveThresholds } from '../MemoryGovernor.js';
 
 const GB = 1024 * 1024 * 1024;
 const base = (over: Partial<ResourcePressureReading> = {}): ResourcePressureReading => ({
@@ -121,7 +122,15 @@ describe('the sync loop emits pressure warnings', () => {
     // The load-bearing line. Without it the reading is a message and nothing else, which is exactly
     // the state that let the sandbox run to a SIGKILL on 2026-09-14 with the measurement already in
     // the process. `|| memoryPressure` is what makes the AIMD controller halve the in-flight cap.
-    expect(SRC).toMatch(/throttled: mapResult\.Throttled === true \|\| memoryPressure/);
+    expect(SRC).toMatch(/throttled: mapResult\.Throttled === true \|\| \(memoryPressure && !governorShedding\)/);
+  });
+
+  it('defers to the run\'s governor while it is shedding, so a halve never overrides its hold', () => {
+    // The governor ranks Hold first because it costs no throughput. A per-map halve at the same
+    // line would undo that choice on every map that completes under pressure.
+    expect(SRC).toMatch(/const governorShedding = config\.memoryControl\?\.IsShedding === true;/);
+    const body = SRC.slice(SRC.indexOf('private async warnOnResourcePressure'));
+    expect(body).toMatch(/isMemory && !governorShedding \? \{ action: 'reduced-concurrency' \}/);
   });
 
   it('keeps measuring when there is no logger — the throttle outlives the warning', () => {
@@ -191,6 +200,7 @@ describe('EvaluatePressure — host memory, not just heap', () => {
   });
 
   it('is silent just below the resident threshold, and fires just above it', () => {
+    const RESIDENT_WARN_FRACTION = ResolveThresholds().ShedAbove;
     const under = base({ HostMemAvailableBytes: (1 - (RESIDENT_WARN_FRACTION - 0.01)) * 8 * GB });
     const over = base({ HostMemAvailableBytes: (1 - (RESIDENT_WARN_FRACTION + 0.01)) * 8 * GB });
     expect(EvaluatePressure(under).filter(f => f.Code === 'HOST_MEMORY_PRESSURE')).toHaveLength(0);

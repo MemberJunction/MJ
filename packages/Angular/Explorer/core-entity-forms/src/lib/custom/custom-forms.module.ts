@@ -119,6 +119,9 @@ import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, 
 import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
 import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
+import { BrandKitsModule } from "@memberjunction/ng-brand-kits";
+import { BrandKitAssetsPanelComponent } from "../panels/brand-kits/brand-kit-assets.panel";
+import { BrandKitGenerationPolicyPanelComponent } from "../panels/brand-kits/brand-kit-generation-policy.panel";
 
 @NgModule({
     declarations: [
@@ -196,9 +199,12 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
+        BrandKitAssetsPanelComponent,
+        BrandKitGenerationPolicyPanelComponent,
     ],
     imports: [
     ArtifactsModule,
+        BrandKitsModule,
         CommonModule,
         RubricsModule,
         RubricAuthorPanel,
@@ -307,7 +313,9 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         ActionsModule,
         RecordProcessFormComponentExtended,
         MLModelFormComponentExtended,
-        PSModelDetailComponent
+        PSModelDetailComponent,
+        BrandKitAssetsPanelComponent,
+        BrandKitGenerationPolicyPanelComponent,
     ],
     providers: [
         NewAgentDialogService,
