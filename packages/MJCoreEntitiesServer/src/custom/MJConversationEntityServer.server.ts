@@ -18,8 +18,8 @@ import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './
  * `MJAIAgentSessionEntityServer`.
  *
  * Saves `AdditionalData` as compact JSON when it holds an object, so the stored text always uses the spelling
- * the conversation list's SQL filter matches (`INHERIT_FOLDER_ACCESS_SQL_CLAUSE`): the filter and the parser
- * cannot then disagree about whether a conversation inherits its folder's access.
+ * the conversation list's SQL filter matches (`INHERIT_FOLDER_ACCESS_SQL_CLAUSE`), and refuses a value the filter
+ * and the parser would still read differently: see {@link checkInheritanceReadingsAgree}.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntityServer extends MJConversationEntity {
@@ -36,7 +36,11 @@ export class MJConversationEntityServer extends MJConversationEntity {
 
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        for (const violation of [CheckAnonymousOwnershipKeyChange(this, 'ExternalID'), checkOwnerOnlyChange(this)]) {
+        for (const violation of [
+            CheckAnonymousOwnershipKeyChange(this, 'ExternalID'),
+            checkOwnerOnlyChange(this),
+            checkInheritanceReadingsAgree(this),
+        ]) {
             if (violation) {
                 result.Errors.push(violation);
                 result.Success = false;
@@ -47,12 +51,36 @@ export class MJConversationEntityServer extends MJConversationEntity {
 }
 
 /**
+ * Refuses `AdditionalData` that the conversation list's SQL filter and the parser would read differently, from
+ * anyone, the owner and the server included. The `LIKE` filter also matches the key nested in another object,
+ * or in another letter case, where the parser sees no opt-in: search, which filters with the SQL alone, would
+ * then show the conversation to its folder's audience while the list and the owner's menu say it is not shared.
+ * Checks the compact form the save stores.
+ */
+function checkInheritanceReadingsAgree(entity: MJConversationEntity): ValidationErrorInfo | null {
+    const additionalData = entity.GetFieldByName('AdditionalData');
+    if (!additionalData?.Dirty) {
+        return null;
+    }
+    const stored = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
+    if (IsInheritingFolderAccess({ AdditionalData: stored }) === IsInheritingFolderAccessInSQL(stored)) {
+        return null;
+    }
+    return new ValidationErrorInfo(
+        'AdditionalData',
+        'Set folder inheritance only as a top-level "inheritFolderAccess": true, so every reader agrees on whether this conversation is shared.',
+        null,
+        ValidationErrorType.Failure,
+    );
+}
+
+/**
  * Refuses a change to an existing conversation's folder (`ProjectID`), owner (`UserID`) or folder
  * inheritance (`AdditionalData.inheritFolderAccess`) by anyone but its owner.
  *
- * Those three decide who else can see the conversation: moving it into a Shared or Public folder shares it,
- * and turning inheritance back on re-shares it. An Edit grant lets someone work in a conversation, not
- * publish it. The server itself (no context user, or the system user) is exempt, as is a conversation with
+ * Those three decide who else can see the conversation: turning inheritance on shows it to everyone its folder
+ * is shared with, and moving an inheriting conversation into a Shared or Public folder shows it to that folder's
+ * audience. An Edit grant lets someone work in a conversation, not publish it. The server itself (no context user, or the system user) is exempt, as is a conversation with
  * no owner on record. A transaction variable that sets one of these fields, or `ID`, counts as a change:
  * it is applied at submit, after this check has run.
  */

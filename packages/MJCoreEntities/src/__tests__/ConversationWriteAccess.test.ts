@@ -44,6 +44,8 @@ function provider(
     } as never;
 }
 const user = { ID: 'u1' } as never;
+/** `AdditionalData` of a conversation whose owner turned on folder inheritance (it is off by default). */
+const INHERITS = '{"inheritFolderAccess":true}';
 
 describe('UserMayWriteConversation', () => {
     beforeEach(() => {
@@ -69,7 +71,7 @@ describe('UserMayWriteConversation', () => {
     it('denies with view-only reason when conversation is inside a shared folder and user has no explicit grant', async () => {
         grants = [];
         const denied = await UserMayWriteConversation(
-            provider('other', true, { projectId: 'proj-shared', ownerUserId: null }),
+            provider('other', true, { projectId: 'proj-shared', ownerUserId: null, additionalData: INHERITS }),
             user,
             'c1'
         );
@@ -79,7 +81,7 @@ describe('UserMayWriteConversation', () => {
     it('allows write when user has Edit or Owner ACL grant on the parent folder and conversation inherits', async () => {
         folderGrantLevels = { 'proj-acl': 'Edit' };
         const allowed = await UserMayWriteConversation(
-            provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other' }),
+            provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: INHERITS }),
             user,
             'c1'
         );
@@ -89,26 +91,24 @@ describe('UserMayWriteConversation', () => {
     it('denies with view-only reason when user has View ACL grant on the parent folder', async () => {
         folderGrantLevels = { 'proj-acl': 'View' };
         const denied = await UserMayWriteConversation(
-            provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other' }),
+            provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: INHERITS }),
             user,
             'c1'
         );
         expect(denied.Allowed).toBe(false);
         expect(denied.Reason).toBe('You have view-only access to this conversation.');
     });
-    it('blocks inherited folder access when conversation has inheritFolderAccess=false', async () => {
+    it('gives no folder access unless the conversation opted in to inheriting it', async () => {
         folderGrantLevels = { 'proj-acl': 'Edit' };
-        const denied = await UserMayWriteConversation(
-            provider('other', true, {
-                projectId: 'proj-acl',
-                ownerUserId: null,
-                additionalData: '{"inheritFolderAccess":false}',
-            }),
-            user,
-            'c1'
-        );
-        expect(denied.Allowed).toBe(false);
-        expect(denied.Reason).toBe('You do not have access to this conversation.');
+        for (const additionalData of [null, '{"inheritFolderAccess":false}']) {
+            const denied = await UserMayWriteConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: null, additionalData }),
+                user,
+                'c1'
+            );
+            expect(denied.Allowed).toBe(false);
+            expect(denied.Reason).toBe('You do not have access to this conversation.');
+        }
     });
     it('denies with no-access reason when conversation is inside a personal folder and user has no grant', async () => {
         grants = [];

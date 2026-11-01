@@ -7247,13 +7247,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   async OnProjectSelected(project: any): Promise<void> {
     if (!this.Conversation) return;
     const projectId: string | null = project?.ID ?? null;
-    // Only the owner moves a conversation (the server refuses anyone else), and a move into a Shared or
-    // Public folder shares it, so it asks first: the same rules as the conversation list.
+    // Only the owner moves a conversation (the server refuses anyone else), and a move of an inheriting
+    // conversation into a Shared or Public folder shares it, so it asks first: the same rules as the list.
     if (!this.CurrentUser || !this.engine.CanMoveConversation(this.Conversation, this.CurrentUser.ID)) {
       await this.confirmDialog.alert('Cannot Move', "Only the conversation's owner can move it to another folder.");
       return;
     }
-    if (!(await ConfirmMoveIntoFolder(this.confirmDialog, this.engine, projectId, 1))) return;
+    if (!(await ConfirmMoveIntoFolder(this.confirmDialog, this.engine, projectId, [this.Conversation]))) return;
     try {
       await this.engine.SaveConversation(this.Conversation.ID, { ProjectID: projectId }, this.CurrentUser);
       this.ShowProjectSelector = false;

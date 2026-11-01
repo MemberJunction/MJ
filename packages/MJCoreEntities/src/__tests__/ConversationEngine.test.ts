@@ -3001,6 +3001,9 @@ describe('ConversationEngine', () => {
     });
 
     describe('Shared folder automatic conversation sharing (View-only)', () => {
+        /** `AdditionalData` of a conversation whose owner turned on folder inheritance (it is off by default). */
+        const INHERITS = '{"inheritFolderAccess":true}';
+
         function createSharedOrPersonalProject(overrides: Record<string, unknown> = {}) {
             return {
                 ID: overrides['ID'] ?? 'proj-shared-1',
@@ -3045,6 +3048,7 @@ describe('ConversationEngine', () => {
                 UserID: 'user-2',
                 User: 'Colleague Two',
                 ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
             });
 
             // 1. Initial MJ: Conversations query (before LoadProjects runs)
@@ -3114,6 +3118,7 @@ describe('ConversationEngine', () => {
                 UserID: 'user-2',
                 User: 'Colleague Two',
                 ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
             });
             runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
             runViewResultQueue.push({
@@ -3139,6 +3144,7 @@ describe('ConversationEngine', () => {
                 UserID: 'user-2',
                 User: 'Colleague Two',
                 ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
             });
             runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
             runViewResultQueue.push({ Success: true, Results: [] });
@@ -3160,6 +3166,7 @@ describe('ConversationEngine', () => {
                         ID: 'c-colleague',
                         UserID: 'user-2',
                         ProjectID: null,
+                        AdditionalData: INHERITS,
                         EnvironmentID: 'env-1',
                         IsArchived: false,
                     }),
@@ -3182,6 +3189,7 @@ describe('ConversationEngine', () => {
                 UserID: 'user-2',
                 User: 'Colleague Two',
                 ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
             });
             runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
             runViewResultQueue.push({ Success: true, Results: [] });
@@ -3203,6 +3211,7 @@ describe('ConversationEngine', () => {
                         Name: 'Renamed by colleague',
                         UserID: 'user-2',
                         ProjectID: 'proj-shared-1',
+                        AdditionalData: INHERITS,
                         EnvironmentID: 'env-1',
                         IsArchived: false,
                     }),
@@ -3211,6 +3220,50 @@ describe('ConversationEngine', () => {
 
             expect(engine.Conversations.map((c) => c.ID)).toEqual(['c-colleague']);
             expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('View');
+        });
+
+        it('drops another user\'s folder-shared conversation when its owner turns inheritance off', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+
+            // Remote event: the owner turns inheritance off; the conversation stays in the shared folder
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                entityName: 'MJ: Conversations',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'c-colleague' }]),
+                    recordData: JSON.stringify({
+                        ID: 'c-colleague',
+                        UserID: 'user-2',
+                        ProjectID: 'proj-shared-1',
+                        AdditionalData: null,
+                        EnvironmentID: 'env-1',
+                        IsArchived: false,
+                    }),
+                },
+            });
+
+            expect(engine.Conversations).toHaveLength(0);
+            expect(engine.GetSharedByInfo('c-colleague')).toBeNull();
         });
 
         describe('folders shared through a User or a Role grant', () => {
@@ -3255,8 +3308,8 @@ describe('ConversationEngine', () => {
                 runViewResultQueue.push({
                     Success: true,
                     Results: [
-                        createMockConversation({ ID: 'c-user', UserID: 'user-2', ProjectID: 'proj-user' }),
-                        createMockConversation({ ID: 'c-role', UserID: 'user-3', ProjectID: 'proj-role' }),
+                        createMockConversation({ ID: 'c-user', UserID: 'user-2', ProjectID: 'proj-user', AdditionalData: INHERITS }),
+                        createMockConversation({ ID: 'c-role', UserID: 'user-3', ProjectID: 'proj-role', AdditionalData: INHERITS }),
                     ],
                 });
                 runViewResultQueue.push({ Success: true, Results: [] });
@@ -3286,7 +3339,7 @@ describe('ConversationEngine', () => {
                 runViewResultQueue.push({ Success: true, Results: [] });
                 await engine.LoadConversations('env-1', viewer);
 
-                const row = { ID: 'c-new', UserID: 'user-3', ProjectID: 'proj-role', EnvironmentID: 'env-1', IsArchived: false };
+                const row = { ID: 'c-new', UserID: 'user-3', ProjectID: 'proj-role', AdditionalData: INHERITS, EnvironmentID: 'env-1', IsArchived: false };
                 const conversation = createMockConversation(row);
                 engineHandlers().handleConversationEntityEvent({ baseEntity: conversation }, 'save', row);
 
@@ -3363,6 +3416,7 @@ describe('ConversationEngine', () => {
                 UserID: 'user-2',
                 User: 'Colleague Two',
                 ProjectID: 'proj-acl',
+                AdditionalData: INHERITS,
             });
             runViewResultQueue.push({ Success: true, Results: [colleagueConvoInSharedFolder] });
             runViewResultQueue.push({
@@ -3378,27 +3432,29 @@ describe('ConversationEngine', () => {
             expect(engine.CanMoveConversation(colleagueConvoInSharedFolder as never, 'user-2')).toBe(true);
         });
 
-        it('narrows conversation access inside a Shared or Public folder when InheritFolderAccess is disabled', async () => {
-            expect(IsInheritingFolderAccess({ AdditionalData: null })).toBe(true);
-            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess":true}' })).toBe(true);
+        it('keeps a conversation in a Shared or Public folder private unless its owner turns on InheritFolderAccess', async () => {
+            expect(IsInheritingFolderAccess({ AdditionalData: null })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"x":1}' })).toBe(false);
             expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess":false}' })).toBe(false);
-            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": false}' })).toBe(false);
-            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": false, broken' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"x":{"inheritFolderAccess":true}}' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: INHERITS })).toBe(true);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": true}' })).toBe(true);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": true, broken' })).toBe(true);
 
             // The SQL clause the conversation list filters on agrees with the parser on both spellings.
             // A LIKE '%x%' pattern with no other wildcards is a substring test.
-            const likePatterns = [...INHERIT_FOLDER_ACCESS_SQL_CLAUSE.matchAll(/NOT LIKE '%([^%']+)%'/g)].map((m) => m[1]);
-            const clauseInherits = (data: string) => likePatterns.every((pattern) => !data.includes(pattern));
-            for (const data of ['{"inheritFolderAccess":false}', '{"x":1,"inheritFolderAccess": false}']) {
+            const likePatterns = [...INHERIT_FOLDER_ACCESS_SQL_CLAUSE.matchAll(/LIKE '%([^%']+)%'/g)].map((m) => m[1]);
+            expect(likePatterns).toHaveLength(2);
+            const clauseInherits = (data: string) => likePatterns.some((pattern) => data.includes(pattern));
+            for (const data of [INHERITS, '{"x":1,"inheritFolderAccess": true}', '{"inheritFolderAccess":false}', '{"x":1}']) {
                 expect(clauseInherits(data)).toBe(IsInheritingFolderAccess({ AdditionalData: data }));
             }
-            expect(clauseInherits('{"x":1}')).toBe(true);
 
-            const disabledJson = BuildUpdatedAdditionalDataForFolderInheritance('{"customKey":1}', false);
-            expect(JSON.parse(disabledJson!)).toEqual({ customKey: 1, inheritFolderAccess: false });
-
-            const reenabledJson = BuildUpdatedAdditionalDataForFolderInheritance(disabledJson, true);
-            expect(JSON.parse(reenabledJson!)).toEqual({ customKey: 1 });
+            const enabledJson = BuildUpdatedAdditionalDataForFolderInheritance('{"customKey":1}', true);
+            expect(JSON.parse(enabledJson!)).toEqual({ customKey: 1, inheritFolderAccess: true });
+            const disabledJson = BuildUpdatedAdditionalDataForFolderInheritance(enabledJson, false);
+            expect(JSON.parse(disabledJson!)).toEqual({ customKey: 1 });
+            expect(BuildUpdatedAdditionalDataForFolderInheritance(INHERITS, false)).toBeNull();
 
             runViewResultQueue.push({
                 Success: true,
@@ -3406,20 +3462,21 @@ describe('ConversationEngine', () => {
             });
             await engine.LoadProjects('env-1', contextUser);
 
-            const narrowedConvo = createMockConversation({
-                ID: 'c-narrowed',
+            const notInheriting = createMockConversation({
+                ID: 'c-private',
                 UserID: 'user-2',
                 User: 'Colleague Two',
                 ProjectID: 'proj-pub',
-                AdditionalData: '{"inheritFolderAccess":false}',
+                AdditionalData: null,
             });
-            runViewResultQueue.push({ Success: true, Results: [narrowedConvo] });
+            runViewResultQueue.push({ Success: true, Results: [notInheriting] });
 
             await engine.LoadConversations('env-1', contextUser);
 
-            // Narrowed conversation does NOT inherit folder View access without an explicit conversation grant
-            expect(engine.GetSharedByInfo('c-narrowed')).toBeNull();
-            expect(engine.CanEditConversation(narrowedConvo as never, 'user-1')).toBe(false);
+            // Without the opt-in, a folder's audience gets no access, and the list drops the row.
+            expect(engine.Conversations).toHaveLength(0);
+            expect(engine.GetSharedByInfo('c-private')).toBeNull();
+            expect(engine.CanEditConversation(notInheriting as never, 'user-1')).toBe(false);
         });
     });
 });

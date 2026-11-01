@@ -6,11 +6,11 @@
 -- folder only shared the folder's name while conversations inside it remained
 -- private to their creator.
 --
--- Shared folders (`OwnerUserID IS NULL`) now automatically share the
--- conversations placed inside them (View-only by default), and new folders
--- default to private (`OwnerUserID = <currentUser.ID>`). Leaving legacy folders
--- with `OwnerUserID = NULL` on upgrade would unintentionally share every
--- conversation inside those pre-existing folders with the entire environment.
+-- A folder with `OwnerUserID IS NULL` is now Public: a conversation in it whose
+-- owner turns on folder inheritance is shown to the entire environment. New
+-- folders default to private (`OwnerUserID = <currentUser.ID>`). Leaving legacy
+-- folders with `OwnerUserID = NULL` on upgrade would make every pre-existing
+-- folder Public, though its users never chose that.
 --
 -- WHAT. Backfill `OwnerUserID` on legacy `Project` rows where `OwnerUserID IS NULL`
 -- and the folder was not explicitly converted from personal to shared (no Update
@@ -21,9 +21,8 @@
 --   4. Earliest other `RecordChange` audit entry for the folder
 --   5. Nearest ancestor folder's `OwnerUserID` (for empty nested subfolders)
 --
--- Then every existing conversation that sits in a Public folder, or in a folder
--- owned by someone else, is stamped `"inheritFolderAccess": false` so the upgrade
--- shows no conversation to anyone who could not see it before (Pass 3).
+-- Conversations are not touched: folder inheritance is opt-in, so every existing
+-- conversation stays visible only to its owner and the people it is shared with.
 -- ============================================================================
 
 DECLARE @ProjectEntityID UNIQUEIDENTIFIER = 'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A';
@@ -181,35 +180,6 @@ WHERE p.OwnerUserID IS NULL
         AND rcSwitch.Type = N'Update'
         AND rcSwitch.ChangesJSON LIKE N'%"OwnerUserID"%'
   );
-GO
-
--- Pass 3: Keep every existing conversation exactly as visible as it was.
---         Before v6.2.x a folder shared only its name; the conversations in it
---         stayed private to their creators. Folders now share their conversations
---         (a Public folder with everyone, a Shared folder with its grantees, and a
---         folder's owner sees the conversations in it). So an existing conversation
---         in a Public folder, or in a folder someone else owns, keeps its old
---         visibility by opting out of folder inheritance. Conversations created after
---         the upgrade inherit by default. Re-running sets the same value again.
---         AdditionalData that is not a JSON object is kept, not overwritten: it moves
---         under "previousAdditionalData" as a JSON string. Empty or NULL becomes a new
---         object. The object check trims tabs, CR and LF as well as spaces, so a
---         newline-led object is updated in place (TRIM ... FROM needs SQL Server 2017+).
-UPDATE c
-SET
-    c.AdditionalData = CASE
-        WHEN ISJSON(c.AdditionalData) = 1 AND LEFT(TRIM(CHAR(9) + CHAR(10) + CHAR(13) + N' ' FROM c.AdditionalData), 1) = N'{'
-            THEN JSON_MODIFY(c.AdditionalData, '$.inheritFolderAccess', CAST(0 AS BIT))
-        WHEN c.AdditionalData IS NULL OR TRIM(CHAR(9) + CHAR(10) + CHAR(13) + N' ' FROM c.AdditionalData) = N''
-            THEN N'{"inheritFolderAccess":false}'
-        ELSE N'{"inheritFolderAccess":false,"previousAdditionalData":"' + STRING_ESCAPE(c.AdditionalData, 'json') + N'"}'
-    END,
-    c.__mj_UpdatedAt = GETUTCDATE()
-FROM ${flyway:defaultSchema}.Conversation c
-INNER JOIN ${flyway:defaultSchema}.Project p ON p.ID = c.ProjectID
-WHERE p.OwnerUserID IS NULL
-   OR c.UserID IS NULL
-   OR p.OwnerUserID <> c.UserID;
 GO
 
 -- ============================================================================

@@ -74,8 +74,9 @@ export class MJProjectEntityServer extends MJProjectEntityExtended {
  * Refuses a change to an existing folder's owner (`OwnerUserID`) or parent (`ParentID`) by anyone but its
  * stored owner.
  *
- * `OwnerUserID` decides who sees the folder: clearing it makes the folder Public, which lists the owner's
- * conversations in it for everyone, and setting it to yourself lets you share someone else's folder. So only
+ * `OwnerUserID` decides who sees the folder: clearing it makes the folder Public, which lists it, and the
+ * conversations in it that inherit its access, for everyone, and setting it to yourself lets you share someone
+ * else's folder. So only
  * the owner may change it, including making it Public. A Public folder has no owner, so nobody may claim it;
  * its `ParentID` stays open, since a parent grants no access. The server itself (no context user, or the
  * system user) is exempt. A transaction variable that sets one of these fields, or `ID`, counts as a change:

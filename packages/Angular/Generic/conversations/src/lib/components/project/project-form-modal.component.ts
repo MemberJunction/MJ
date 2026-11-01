@@ -782,10 +782,10 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
   public get VisibilityHint(): string {
     const tier = this.VisibilityTier;
     if (tier === 'Public') {
-      return "Everyone sees this folder and the conversations in it in their lists. Once shared, a folder can't be made private again.";
+      return "Everyone sees this folder in their lists, and any conversation in it whose owner turns on folder access. Once shared, a folder can't be made private again.";
     }
     if (tier === 'Shared') {
-      return 'People and roles you add below see this folder and the conversations in it in their lists.';
+      return 'People and roles you add below see this folder in their lists, and any conversation in it whose owner turns on folder access.';
     }
     return 'This folder appears only in your list.';
   }

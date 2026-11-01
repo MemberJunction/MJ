@@ -328,13 +328,13 @@ interface ListContextMenu {
                role, an aria-label is not reliably exposed, and the <i> carrying the glyph
                is aria-hidden. -->
           <span class="folder-shared" role="img"
-                title="Public — everyone can see this folder and view the conversations in it"
+                title="Public — everyone can see this folder, and the conversations in it whose owners turn on folder access"
                 aria-label="Public folder">
             <i class="fas fa-users" aria-hidden="true"></i>
           </span>
         } @else if (GetProjectVisibilityTier(node.project) === 'Shared') {
           <span class="folder-shared" role="img"
-                title="Shared — people and roles granted access can see this folder and its conversations"
+                title="Shared — people and roles granted access can see this folder, and the conversations in it whose owners turn on folder access"
                 aria-label="Shared folder">
             <i class="fas fa-user-group" aria-hidden="true"></i>
           </span>
@@ -405,9 +405,9 @@ interface ListContextMenu {
               <i class="fas fa-share-nodes shared-indicator"
                  [title]="SharedWithMeTooltip(conversation)"></i>
             }
-            @if (conversation.ProjectID && !IsConversationInheritingFolderAccess(conversation)) {
-              <i class="fas fa-lock shared-indicator restricted-indicator"
-                 title="Not shown to folder members: does not inherit folder access"></i>
+            @if (conversation.ProjectID && IsConversationInheritingFolderAccess(conversation)) {
+              <i class="fas fa-folder-open shared-indicator inherits-indicator"
+                 title="Shown to people with access to its folder: inherits folder access"></i>
             }
           </div>
           <div class="conversation-preview">{{ conversation.Description }}</div>
@@ -2070,8 +2070,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       }
       return;
     }
-    // A Shared or Public folder shows the conversations in it to everyone it is shared with.
-    if (!(await ConfirmMoveIntoFolder(this.dialogService, this.engine, projectId, toMove.length))) return;
+    // A Shared or Public folder shows the conversations in it that inherit its access to everyone it is shared with.
+    if (!(await ConfirmMoveIntoFolder(this.dialogService, this.engine, projectId, toMove.map(id => this.engine.GetConversation(id))))) return;
 
     try {
       const result = await this.engine.MoveMultipleConversationsToProject(toMove, projectId, this.CurrentUser);
@@ -2352,11 +2352,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   /** True when the conversation inherits permissions from its parent folder. */
   public IsConversationInheritingFolderAccess(conversation: MJConversationEntity | null | undefined): boolean {
-    if (!conversation) return true;
     return IsInheritingFolderAccess(conversation);
   }
 
-  /** Narrows or restores folder permission inheritance for the right-clicked conversation. */
+  /** Turns folder permission inheritance on or off for the right-clicked conversation. */
   public async ContextToggleFolderInheritance(): Promise<void> {
     const conversation = this.ContextMenu?.conversation;
     this.CloseContextMenu();

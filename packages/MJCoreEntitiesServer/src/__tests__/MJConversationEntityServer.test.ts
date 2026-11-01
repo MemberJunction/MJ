@@ -114,7 +114,7 @@ describe("MJConversationEntityServer — only the owner moves, re-owns or re-sha
         return entity;
     }
     const colleague = { ID: 'colleague-2', IsMagicLinkAnonymous: false };
-    const restricted = '{"inheritFolderAccess":false}';
+    const inheriting = '{"inheritFolderAccess":true}';
 
     it('refuses a non-owner moving the conversation to another folder', () => {
         const result = owned(colleague, { ProjectID: { Dirty: true, OldValue: 'p1', Value: 'p-public' } }).Validate();
@@ -128,8 +128,8 @@ describe("MJConversationEntityServer — only the owner moves, re-owns or re-sha
         expect(entity.Validate().Success).toBe(false);
     });
 
-    it('refuses a non-owner turning folder inheritance back on', () => {
-        const result = owned(colleague, { AdditionalData: { Dirty: true, OldValue: restricted, Value: null } }).Validate();
+    it('refuses a non-owner turning folder inheritance on', () => {
+        const result = owned(colleague, { AdditionalData: { Dirty: true, OldValue: null, Value: inheriting } }).Validate();
         expect(result.Success).toBe(false);
         expect(JSON.stringify(result.Errors)).toContain('AdditionalData');
     });
@@ -141,14 +141,14 @@ describe("MJConversationEntityServer — only the owner moves, re-owns or re-sha
     });
 
     it('allows a non-owner changing other AdditionalData keys without touching inheritance', () => {
-        const fields = { AdditionalData: { Dirty: true, OldValue: restricted, Value: '{"inheritFolderAccess": false,"pinnedBy":"x"}' } };
+        const fields = { AdditionalData: { Dirty: true, OldValue: inheriting, Value: '{"inheritFolderAccess": true,"pinnedBy":"x"}' } };
         expect(owned(colleague, fields).Validate().Success).toBe(true);
     });
 
     it('allows the owner to move, re-own and re-share', () => {
         const fields = {
             ProjectID: { Dirty: true, OldValue: 'p1', Value: 'p2' },
-            AdditionalData: { Dirty: true, OldValue: restricted, Value: null },
+            AdditionalData: { Dirty: true, OldValue: null, Value: inheriting },
         };
         expect(owned({ ID: OWNER }, fields).Validate().Success).toBe(true);
     });
@@ -170,23 +170,38 @@ describe('MJConversationEntityServer — AdditionalData is stored in the spellin
     const stored = (entity: MJConversationEntityServer) => (entity as unknown as Stub).Fields.get('AdditionalData')?.Value;
 
     it.each([
-        ['a space before the colon', '{"inheritFolderAccess" :false}'],
-        ['two spaces', '{"inheritFolderAccess":  false}'],
-        ['a tab', '{"inheritFolderAccess":\tfalse}'],
-        ['a newline', '{\n  "inheritFolderAccess": false\n}'],
+        ['a space before the colon', '{"inheritFolderAccess" :true}'],
+        ['two spaces', '{"inheritFolderAccess":  true}'],
+        ['a tab', '{"inheritFolderAccess":\ttrue}'],
+        ['a newline', '{\n  "inheritFolderAccess": true\n}'],
     ])('rewrites %s compactly on save', async (_label, value) => {
         const entity = writing(value);
         await entity.Save();
-        expect(stored(entity)).toBe('{"inheritFolderAccess":false}');
+        expect(stored(entity)).toBe('{"inheritFolderAccess":true}');
     });
 
     it('keeps other keys, and leaves text that is not a JSON object alone', async () => {
-        const object = writing('{ "pinnedBy": "x", "inheritFolderAccess" : false }');
+        const object = writing('{ "pinnedBy": "x", "inheritFolderAccess" : true }');
         await object.Save();
-        expect(stored(object)).toBe('{"pinnedBy":"x","inheritFolderAccess":false}');
+        expect(stored(object)).toBe('{"pinnedBy":"x","inheritFolderAccess":true}');
         const notJson = writing('not json');
         await notJson.Save();
         expect(stored(notJson)).toBe('not json');
+    });
+
+    it.each([
+        ['the key nested in another object', '{"x":{"inheritFolderAccess":true}}'],
+        ['the key in another letter case', '{"InheritFolderAccess":true}'],
+        ['an array', '[{"inheritFolderAccess":true}]'],
+    ])('refuses %s from anyone, since search would list what the parser hides', (_label, value) => {
+        const result = writing(value).Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('AdditionalData');
+    });
+
+    it('accepts an opt-in in any spelling the save makes compact', () => {
+        expect(writing('{ "pinnedBy": "x", "inheritFolderAccess" : true }').Validate().Success).toBe(true);
+        expect(writing('{"inheritFolderAccess":false}').Validate().Success).toBe(true);
     });
 
     it('refuses a non-owner rewriting AdditionalData so the SQL filter reads it differently', () => {
@@ -194,12 +209,12 @@ describe('MJConversationEntityServer — AdditionalData is stored in the spellin
         const stub = entity as unknown as Stub;
         stub.ContextCurrentUser = { ID: 'colleague-2' };
         stub.Fields.set('UserID', { Dirty: false, OldValue: 'owner-1', Value: 'owner-1' });
-        // Not valid JSON, so the save cannot canonicalize it. The parser's fallback still reads false;
-        // the SQL LIKE no longer matches, which would list the conversation to folder members.
+        // The key nested inside another object: the parser reads no opt-in, but the SQL LIKE matches,
+        // which would list the conversation to folder members.
         stub.Fields.set('AdditionalData', {
             Dirty: true,
-            OldValue: '{"inheritFolderAccess":false}',
-            Value: '{"inheritFolderAccess" :false, broken',
+            OldValue: null,
+            Value: '{"x":{"inheritFolderAccess":true}}',
         });
         const result = entity.Validate();
         expect(result.Success).toBe(false);

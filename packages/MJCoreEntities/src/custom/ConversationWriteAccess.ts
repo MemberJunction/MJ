@@ -11,7 +11,7 @@ const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
 
 /**
  * Returns whether a conversation inherits access from its folder (`ProjectID`).
- * Defaults to `true` unless `AdditionalData` explicitly sets `"inheritFolderAccess": false`.
+ * Inheritance is opt-in: it is on only when `AdditionalData` sets `"inheritFolderAccess": true`.
  * A local copy of the engine's `IsInheritingFolderAccess`: importing the engine module here would pull it
  * into every entity subclass that checks write access.
  */
@@ -19,12 +19,12 @@ function IsInheritingFolderAccess(
     conversation: { AdditionalData?: string | null } | null | undefined
 ): boolean {
     const raw = conversation?.AdditionalData;
-    if (!raw || typeof raw !== 'string') return true;
+    if (!raw || typeof raw !== 'string') return false;
     try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
-        return parsed?.['inheritFolderAccess'] !== false;
+        return parsed?.['inheritFolderAccess'] === true;
     } catch {
-        return !/"inheritFolderAccess"\s*:\s*false/.test(raw);
+        return /"inheritFolderAccess"\s*:\s*true/.test(raw);
     }
 }
 

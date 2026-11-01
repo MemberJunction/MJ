@@ -40,24 +40,9 @@ describe('V202610310943 conversation-folder migration', () => {
         expect(creator).toBeLessThan(firstConversation);
     });
 
-    it('opts existing conversations in Public or other-owned folders out of folder inheritance', () => {
-        const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
-        expect(pass3).toContain("JSON_MODIFY(c.AdditionalData, '$.inheritFolderAccess', CAST(0 AS BIT))");
-        expect(pass3).toMatch(/WHERE p\.OwnerUserID IS NULL\s+OR c\.UserID IS NULL\s+OR p\.OwnerUserID <> c\.UserID/);
-        // Pass 3 must run after both owner backfills, or a folder Pass 1/2 assigns would be judged on NULL.
-        expect(migration.indexOf('-- Pass 3')).toBeGreaterThan(migration.indexOf('-- Pass 2'));
-    });
-
-    it('keeps AdditionalData that is not a JSON object instead of overwriting it', () => {
-        const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
-        expect(pass3).toContain(`N'{"inheritFolderAccess":false,"previousAdditionalData":"' + STRING_ESCAPE(c.AdditionalData, 'json') + N'"}'`);
-        expect(pass3).toMatch(/WHEN c\.AdditionalData IS NULL OR TRIM\(CHAR\(9\) \+ CHAR\(10\) \+ CHAR\(13\) \+ N' ' FROM c\.AdditionalData\) = N''\s+THEN N'\{"inheritFolderAccess":false\}'/);
-    });
-
-    it('updates a newline- or tab-led JSON object in place instead of keeping it as a string', () => {
-        const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
-        // A plain LTRIM strips only spaces, so "\n{...}" missed the object branch and fell to the ELSE.
-        expect(pass3).toContain("LEFT(TRIM(CHAR(9) + CHAR(10) + CHAR(13) + N' ' FROM c.AdditionalData), 1) = N'{'");
+    it('leaves conversations alone, since folder inheritance is opt-in', () => {
+        expect(migration).not.toContain('inheritFolderAccess');
+        expect(migration).not.toMatch(/UPDATE\s+c\b|UPDATE\s+\$\{flyway:defaultSchema\}\.\[?Conversation\b/);
     });
 
     it('replaces the read filter only while it still holds the text V202609260053 installed', () => {

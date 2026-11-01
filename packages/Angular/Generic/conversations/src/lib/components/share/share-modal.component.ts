@@ -46,7 +46,7 @@ interface SharePermission {
               <p class="folder-inheritance-hint">
                 {{ InheritFolderAccess
                     ? 'People with access to this folder see this conversation in their list.'
-                    : 'People with access to this folder no longer see this conversation in their list. People added below still do.' }}
+                    : 'People with access to this folder do not see this conversation in their list. People added below do.' }}
               </p>
             </div>
           }
@@ -249,7 +249,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     this.ShareLink = value;
   }
 
-  public InheritFolderAccess: boolean = true;
+  public InheritFolderAccess: boolean = false;
 
   public AccessLevels = [
     { label: 'Can View', value: 'View' },

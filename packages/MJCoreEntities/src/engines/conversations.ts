@@ -43,23 +43,24 @@ export const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
 export type ProjectVisibilityTier = 'Private' | 'Shared' | 'Public';
 
 /**
- * The spellings of `"inheritFolderAccess": false` the SQL filter recognises: the compact one every MJ writer
- * produces (`JSON.stringify`, `JSON_MODIFY`, and the server's save, which rewrites `AdditionalData` compactly)
- * and the one-space one. {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} and {@link IsInheritingFolderAccessInSQL}
- * are both built from this list, so they cannot drift apart.
+ * The spellings of `"inheritFolderAccess": true` the SQL filter recognises: the compact one every MJ writer
+ * produces (`JSON.stringify` and the server's save, which rewrites `AdditionalData` compactly) and the
+ * one-space one. {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} and {@link IsInheritingFolderAccessInSQL} are both
+ * built from this list, so they cannot drift apart.
  */
-export const INHERIT_FOLDER_ACCESS_FALSE_SPELLINGS: readonly string[] = ['"inheritFolderAccess":false', '"inheritFolderAccess": false'];
+export const INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS: readonly string[] = ['"inheritFolderAccess":true', '"inheritFolderAccess": true'];
 
 /**
- * SQL predicate matching conversations that inherit access from their folder (the default).
- * Turning off folder inheritance writes `"inheritFolderAccess":false` into `Conversation.AdditionalData`.
+ * SQL predicate matching conversations that inherit access from their folder. Inheritance is opt-in: turning
+ * it on writes `"inheritFolderAccess":true` into `Conversation.AdditionalData`.
  *
  * `LIKE`, not `JSON_VALUE`: this filter runs on PostgreSQL too, which translates no SQL Server JSON
- * functions in a runtime filter. A `LIKE` also matches the key nested inside another object; that only ever
- * hides a conversation the parser would list (it never lists one the parser would hide), so it is left as is.
+ * functions in a runtime filter. A `LIKE` also matches the key nested inside another object, which the parser
+ * does not count; `MJConversationEntityServer` refuses to save a value the two read differently, so they agree on
+ * every row the entity layer writes.
  */
 export const INHERIT_FOLDER_ACCESS_SQL_CLAUSE =
-    `(AdditionalData IS NULL OR (${INHERIT_FOLDER_ACCESS_FALSE_SPELLINGS.map((s) => `AdditionalData NOT LIKE '%${s}%'`).join(' AND ')}))`;
+    `(${INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS.map((s) => `AdditionalData LIKE '%${s}%'`).join(' OR ')})`;
 
 /**
  * What {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} decides for this `AdditionalData`: true when the SQL filter
@@ -69,10 +70,10 @@ export const INHERIT_FOLDER_ACCESS_SQL_CLAUSE =
  */
 export function IsInheritingFolderAccessInSQL(additionalData: string | null | undefined): boolean {
     if (!additionalData) {
-        return true;
+        return false;
     }
     const lower = additionalData.toLowerCase();
-    return !INHERIT_FOLDER_ACCESS_FALSE_SPELLINGS.some((s) => lower.includes(s.toLowerCase()));
+    return INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS.some((s) => lower.includes(s.toLowerCase()));
 }
 
 /**
@@ -96,36 +97,33 @@ export function CanonicalizeConversationAdditionalData(additionalData: string | 
     return additionalData;
 }
 
-/** Spots `"inheritFolderAccess": false` in AdditionalData that is not valid JSON. */
-const INHERIT_FALSE_PATTERN = /"inheritFolderAccess"\s*:\s*false/;
+/** Spots `"inheritFolderAccess": true` in AdditionalData that is not valid JSON. */
+const INHERIT_TRUE_PATTERN = /"inheritFolderAccess"\s*:\s*true/;
 
 /**
  * Returns true when `conversation` inherits permissions from its parent folder (`ProjectID`).
- * Defaults to `true` for all conversations unless `"inheritFolderAccess": false` is stored
- * in `conversation.AdditionalData`.
+ * Inheritance is opt-in: it is on only when `conversation.AdditionalData` stores
+ * `"inheritFolderAccess": true`.
  */
 export function IsInheritingFolderAccess(
     conversation: { AdditionalData?: string | null } | null | undefined
 ): boolean {
     const raw = conversation?.AdditionalData;
     if (!raw || raw.trim().length === 0) {
-        return true;
+        return false;
     }
     try {
         const parsed = JSON.parse(raw) as Record<string, unknown> | null;
-        if (parsed && typeof parsed === 'object' && parsed['inheritFolderAccess'] === false) {
-            return false;
-        }
-        return true;
+        return !!parsed && typeof parsed === 'object' && parsed['inheritFolderAccess'] === true;
     } catch {
-        return !INHERIT_FALSE_PATTERN.test(raw);
+        return INHERIT_TRUE_PATTERN.test(raw);
     }
 }
 
 /**
  * Returns the updated `AdditionalData` JSON string after setting or clearing `inheritFolderAccess`.
  * Preserves any other keys already present in `existingAdditionalData`. When `inheritFolderAccess`
- * is `true` (the default) and no other keys exist, returns `null`.
+ * is `false` (the default) and no other keys exist, returns `null`.
  */
 export function BuildUpdatedAdditionalDataForFolderInheritance(
     existingAdditionalData: string | null | undefined,
@@ -143,9 +141,9 @@ export function BuildUpdatedAdditionalDataForFolderInheritance(
         }
     }
     if (inheritFolderAccess) {
-        delete dataObj['inheritFolderAccess'];
+        dataObj['inheritFolderAccess'] = true;
     } else {
-        dataObj['inheritFolderAccess'] = false;
+        delete dataObj['inheritFolderAccess'];
     }
     return Object.keys(dataObj).length === 0 ? null : JSON.stringify(dataObj);
 }
@@ -1313,8 +1311,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * is true).
      *
      * Explicit grants and folder-inherited grants combine via {@link ComparePermissionLevels}
-     * (`Owner > Edit > View`), while conversations with `inheritFolderAccess: false` do not
-     * inherit folder access and are only visible to their owner or explicit conversation grantees.
+     * (`Owner > Edit > View`), while conversations whose owner has not turned on `inheritFolderAccess`
+     * do not inherit folder access and are only visible to their owner or explicit conversation grantees.
      *
      * Side effect: when any loaded conversation turns out not to be visible to the user, it is
      * dropped and the remaining list is re-emitted on {@link _conversations$}.
@@ -1784,7 +1782,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Enables or disables folder permission inheritance for a conversation (`inheritFolderAccess`
-     * in `Conversation.AdditionalData`). When disabled (`false`), the conversation is restricted
+     * in `Conversation.AdditionalData`). It is off by default; while off, the conversation is restricted
      * to its owner and explicit conversation-level `MJ: Resource Permissions` grantees even when
      * placed inside a Shared or Public folder.
      */

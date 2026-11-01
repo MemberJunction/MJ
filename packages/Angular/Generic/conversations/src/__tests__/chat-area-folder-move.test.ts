@@ -7,18 +7,23 @@ import { ConversationChatAreaComponent } from '../lib/components/conversation/co
 
 /**
  * The chat header's folder picker moves a conversation through the same rules as the conversation list:
- * only the owner moves it, and a move into a Shared or Public folder asks first. Calls the real method on a
+ * only the owner moves it, and a move of an inheriting conversation into a Shared or Public folder asks first. Calls the real method on a
  * prototype instance, like readonly-guards.test.ts.
  */
 type Open = Record<string, unknown>;
 
-function chatArea(opts: { currentUserId: string; tier: 'Private' | 'Shared'; confirmed: boolean }) {
+function chatArea(opts: { currentUserId: string; tier: 'Private' | 'Shared'; confirmed: boolean; inherits?: boolean }) {
   const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
   const open = component as unknown as Open;
   const saveConversation = vi.fn().mockResolvedValue(true);
   const confirm = vi.fn().mockResolvedValue(opts.confirmed);
   const alert = vi.fn().mockResolvedValue(undefined);
-  open['Conversation'] = { ID: 'c1', UserID: 'owner-1', ProjectID: null };
+  open['Conversation'] = {
+    ID: 'c1',
+    UserID: 'owner-1',
+    ProjectID: null,
+    AdditionalData: opts.inherits ? '{"inheritFolderAccess":true}' : null,
+  };
   open['CurrentUser'] = { ID: opts.currentUserId };
   open['ShowProjectSelector'] = true;
   open['engine'] = {
@@ -32,11 +37,18 @@ function chatArea(opts: { currentUserId: string; tier: 'Private' | 'Shared'; con
 }
 
 describe('ConversationChatAreaComponent — folder picker', () => {
-  it('asks before moving into a shared folder, and moves nothing when cancelled', async () => {
-    const { component, saveConversation, confirm } = chatArea({ currentUserId: 'owner-1', tier: 'Shared', confirmed: false });
+  it('asks before moving an inheriting conversation into a shared folder, and moves nothing when cancelled', async () => {
+    const { component, saveConversation, confirm } = chatArea({ currentUserId: 'owner-1', tier: 'Shared', confirmed: false, inherits: true });
     await component.OnProjectSelected({ ID: 'p1' });
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(saveConversation).not.toHaveBeenCalled();
+  });
+
+  it('moves a conversation that does not inherit into a shared folder without asking', async () => {
+    const { component, saveConversation, confirm } = chatArea({ currentUserId: 'owner-1', tier: 'Shared', confirmed: false });
+    await component.OnProjectSelected({ ID: 'p1' });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(saveConversation).toHaveBeenCalledWith('c1', { ProjectID: 'p1' }, { ID: 'owner-1' });
   });
 
   it('refuses a move by someone who does not own the conversation', async () => {
