@@ -1918,8 +1918,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const mapResult = await this.processSingleEntityMap(
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
+                const governorShedding = config.memoryControl?.IsShedding === true;
                 this.mergeResult(aggregate, mapResult);
-                const memoryPressure = await this.warnOnResourcePressure(logger, pressureWarned);
+                const memoryPressure = await this.warnOnResourcePressure(logger, pressureWarned, governorShedding);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
                 logger?.emit('sync.entity-map.complete', {
                     externalObjectName: entityMap.ExternalObjectName,
@@ -1941,7 +1942,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // which connector misbehaves - a connector that returns 10x the requested batch
                 // costs 10x the memory, the reading notices, and the cap follows. Floor is 1, so a
                 // sync always makes progress rather than deadlocking on a full box.
-                return { ok: mapResult.Success, throttled: mapResult.Throttled === true || memoryPressure };
+                // Except while the run's governor is shedding: it has already chosen a lever by
+                // cost and escalates itself if the host stays above the line, so halving here too
+                // would override a hold (no throughput cost) with a halve (half of it). This check
+                // remains the answer when the governor has nothing to act on.
+                return { ok: mapResult.Success, throttled: mapResult.Throttled === true || (memoryPressure && !governorShedding) };
             } catch (err) {
                 // Ownership loss is NOT a per-map failure to record-and-continue: continuing to the
                 // next map would keep writing after another process claimed the run — the exact
@@ -6341,7 +6346,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Measured even with no logger. A sync with nowhere to write warnings is still a sync that can
      * be killed, and the throttle is what keeps it alive.
      */
-    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>): Promise<boolean> {
+    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>, governorShedding = false): Promise<boolean> {
         try {
             const findings = EvaluatePressure(await ReadResourcePressure());
             let memoryPressure = false;
@@ -6356,7 +6361,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // type - SyncLogEvent is a closed union every client matches on.
                 logger.warning('sync', f.Code, f.Message, {
                     fraction: f.Fraction,
-                    ...(isMemory ? { action: 'reduced-concurrency' } : {}),
+                    ...(isMemory && !governorShedding ? { action: 'reduced-concurrency' } : {}),
                 });
             }
             return memoryPressure;
@@ -6890,7 +6895,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 }
 
-/** Internal configuration bundle for a sync run */
 /** What each lever is called in the one sentence a customer reads. */
 const LEVER_COPY: Record<string, string> = {
     HOLD_ADMISSIONS: 'not starting more tables for now',
@@ -6901,6 +6905,7 @@ const LEVER_COPY: Record<string, string> = {
     PAUSE_OTHER_SYNC: 'pausing another sync'
 };
 
+/** Internal configuration bundle for a sync run */
 interface RunConfiguration {
     companyIntegration: MJCompanyIntegrationEntity;
     entityMaps: ICompanyIntegrationEntityMap[];

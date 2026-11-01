@@ -128,6 +128,18 @@ export class RunMemoryControl {
     }
 
     /**
+     * Whether something this control took is still outstanding — the hold, or a page below the
+     * configured size.
+     *
+     * While it is, this control owns the run's response to memory pressure: it chose its levers
+     * by cost and escalates on its own if the host stays above the line. The engine's per-map
+     * pressure check defers to it, so a second, unranked halving does not override a hold.
+     */
+    public get IsShedding(): boolean {
+        return this.shedding;
+    }
+
+    /**
      * Called after every fetched batch.
      *
      * Never throws and never blocks the sync: a governor that can fail a run is worse than no

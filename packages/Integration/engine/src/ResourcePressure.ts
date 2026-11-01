@@ -13,7 +13,7 @@
 import { readFile, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import v8 from 'node:v8';
-import { PressureBytes, ResolveThresholds, SHED_ABOVE_FRACTION } from './MemoryGovernor.js';
+import { PressureBytes, ResolveThresholds } from './MemoryGovernor.js';
 
 export interface ResourcePressureReading {
     /** V8 heap in use, bytes. */
@@ -130,19 +130,19 @@ export interface PressureFinding {
 export const HEAP_WARN_FRACTION = 0.85;
 export const DISK_WARN_FREE_BYTES = 500 * 1024 * 1024;
 /**
- * Resident set as a fraction of host RAM, above which a sync is heading for an OOM kill.
+ * Findings for one reading. The memory line is host RAM in use as a fraction of host RAM, above
+ * which a sync is heading for an OOM kill.
  *
  * Lower than the heap threshold on purpose. The heap ceiling is a wall V8 enforces, so 0.85 of it
  * still leaves the process alive to checkpoint. The host has no such wall — crossing it is a
  * SIGKILL with no stack, no run record and no chance to save a watermark, so the warning has to
  * arrive with enough headroom left to actually shed load.
  *
- * It is the governor's line (`SHED_ABOVE_FRACTION`, or the operator override), judged on the same
- * reading — memory in use on the host. It used to be 0.70 of this process's RSS, which a workspace
- * whose heap is sized at (RAM - 1 GB) x 0.70 crosses just by booting.
+ * It is the governor's line (`SHED_ABOVE_FRACTION`, or the operator override), read at call time
+ * from `ResolveThresholds` so the two cannot diverge, and judged on the same reading — memory in
+ * use on the host. It used to be 0.70 of this process's RSS, which a workspace whose heap is sized
+ * at (RAM - 1 GB) x 0.70 crosses just by booting.
  */
-export const RESIDENT_WARN_FRACTION = SHED_ABOVE_FRACTION;
-
 export function EvaluatePressure(
     r: ResourcePressureReading,
     heapWarnFraction = HEAP_WARN_FRACTION,
