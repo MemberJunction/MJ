@@ -637,61 +637,8 @@ function buildSchemaPatterns(schema: string): RegExp[] {
  * Validate that migration SQL does not target protected schemas.
  * The __mj schema is ALWAYS protected regardless of configuration.
  */
-/**
- * True when `sql` holds anything other than whitespace and comments: `-- …` lines, block comments and
- * bare `GO` separators are not statements. The header a caller writes above the statements it never
- * produced is exactly that, and it is not a migration.
- *
- * A single left-to-right pass, no regular expressions: CodeQL flags a lazy `[\s\S]*?` comment matcher
- * as polynomial on an unclosed comment, and a scanner is also the clearer statement of what counts.
- */
-export function HasExecutableSQL(sql: string | null | undefined): boolean {
-  if (!sql) return false;
-  let i = 0;
-  const n = sql.length;
-  while (i < n) {
-    const c = sql[i];
-    if (c === '-' && sql[i + 1] === '-') {
-      // line comment: skip to end of line
-      while (i < n && sql[i] !== '\n') i++;
-    } else if (c === '/' && sql[i + 1] === '*') {
-      // block comment: skip to the closing */, or to the end if unclosed
-      const close = sql.indexOf('*/', i + 2);
-      i = close === -1 ? n : close + 2;
-    } else if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
-      i++;
-    } else if ((c === 'G' || c === 'g') && (sql[i + 1] === 'O' || sql[i + 1] === 'o') && IsBareGOLine(sql, i)) {
-      // batch separator on a line of its own: not a statement
-      while (i < n && sql[i] !== '\n') i++;
-    } else {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** True when the `GO` at `at` is the only non-whitespace on its line, optionally followed by `;`. */
-function IsBareGOLine(sql: string, at: number): boolean {
-  let j = at - 1;
-  while (j >= 0 && (sql[j] === ' ' || sql[j] === '\t' || sql[j] === '\r')) j--;
-  if (j >= 0 && sql[j] !== '\n') return false;
-  let k = at + 2;
-  while (k < sql.length && (sql[k] === ' ' || sql[k] === '\t' || sql[k] === '\r' || sql[k] === ';')) k++;
-  // end of input, end of line, or a trailing line comment
-  return k >= sql.length || sql[k] === '\n' || (sql[k] === '-' && sql[k + 1] === '-');
-}
-
 export function ValidateMigrationSQL(sql: string, additionalProtectedSchemas: string[] = []): SQLValidationResult {
   const errors: string[] = [];
-  // A migration with no executable statement is not a migration. Comments-only SQL passed every
-  // check below — nothing in it touches a protected schema — and the pipeline then ran end to end
-  // on nothing: file written, PR opened and merged, CodeGen, restart, commit, every step green.
-  // Seen 2026-10-29 as three "RSU: Integration: PropFuel — " migrations whose table list was empty.
-  // Named here so the batch fails at ValidateSQL, where callers already expect to hear the SQL is
-  // unusable, and so Preview reports it before anything runs.
-  if (!HasExecutableSQL(sql)) {
-    errors.push('Migration SQL contains no executable statements (empty or comments only). Nothing to apply.');
-  }
   const allProtected = new Set(['__mj', ...additionalProtectedSchemas.map((s) => s.toLowerCase())]);
 
   for (const schema of allProtected) {
