@@ -1574,4 +1574,83 @@ describe('BaseMessagingAdapter', () => {
             expect(allTexts.some(t => t.includes('Pinned agent direct response.'))).toBe(true);
         });
     });
+
+    describe('same-thread serialization', () => {
+        beforeEach(async () => {
+            await adapter.Initialize();
+        });
+
+        it('serializes three concurrent messages on one thread and reuses a single ConversationID', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const observedConversationIds: Array<string | undefined> = [];
+            const executionOrder: string[] = [];
+            let activeInFlight = 0;
+            let maxConcurrent = 0;
+            let createdConversations = 0;
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(
+                    async (_params: Record<string, unknown>, options: { conversationId?: string; userMessage?: string }) => {
+                        activeInFlight++;
+                        maxConcurrent = Math.max(maxConcurrent, activeInFlight);
+                        executionOrder.push(options.userMessage ?? '');
+                        observedConversationIds.push(options.conversationId);
+
+                        await new Promise(resolve => setTimeout(resolve, 15));
+
+                        const resolvedConvoId = options.conversationId ?? `convo-created-${++createdConversations}`;
+                        activeInFlight--;
+                        return {
+                            agentResult: {
+                                success: true,
+                                agentRun: { Message: `Reply to: ${options.userMessage}`, Steps: [] },
+                            },
+                            conversationId: resolvedConvoId,
+                            userMessageDetailId: `user-detail-${executionOrder.length}`,
+                            agentResponseDetailId: `agent-detail-${executionOrder.length}`,
+                            artifactInfo: undefined,
+                        };
+                    }
+                ),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg1 = createMessage({
+                MessageID: 'thread-root-1',
+                ThreadID: null,
+                ChannelID: 'C-THREAD',
+                IsBotMention: true,
+                Text: '<@BOT123> Hey',
+            });
+            const msg2 = createMessage({
+                MessageID: 'reply-2',
+                ThreadID: 'thread-root-1',
+                ChannelID: 'C-THREAD',
+                IsBotMention: true,
+                Text: '<@BOT123> Check Q3 pipeline',
+            });
+            const msg3 = createMessage({
+                MessageID: 'reply-3',
+                ThreadID: 'thread-root-1',
+                ChannelID: 'C-THREAD',
+                IsBotMention: true,
+                Text: '<@BOT123> Only for EMEA',
+            });
+
+            await Promise.all([
+                adapter.HandleMessage(msg1),
+                adapter.HandleMessage(msg2),
+                adapter.HandleMessage(msg3),
+            ]);
+
+            expect(maxConcurrent).toBe(1);
+            expect(executionOrder).toEqual(['Hey', 'Check Q3 pipeline', 'Only for EMEA']);
+            expect(createdConversations).toBe(1);
+            expect(observedConversationIds).toEqual([
+                undefined,
+                'convo-created-1',
+                'convo-created-1',
+            ]);
+        });
+    });
 });
