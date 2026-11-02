@@ -55,6 +55,11 @@ describe('ParsePredictionUnitRow', () => {
       expect(lagInside.Errors).toContain('TemporalSpec rolling window endLag 2 is inside the horizon of 3 periods (rolling-window-inside-horizon)');
     }
   });
+  it('refuses a Temporal Spec on a task that is not a forecast (its series history reads numeric labels)', () => {
+    const r = PredictionUnit.ParsePredictionUnitRow(c1Row({ TemporalSpec: JSON.stringify({ timeColumn: 'OrderDate', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'month', seasonality: null }) }));
+    expect(r.Ok).toBe(false);
+    if (!r.Ok) expect(r.Errors).toContain('A TemporalSpec requires a forecast task (this unit is binary)');
+  });
   it('refuses a version-1 row whose lineage root is not itself, and a LabelVersion above Version', () => {
     const r = PredictionUnit.ParsePredictionUnitRow(c1Row({ LineageRootID: '00000000-0000-0000-0000-000000000009', LabelVersion: 2 }));
     expect(r.Ok).toBe(false);

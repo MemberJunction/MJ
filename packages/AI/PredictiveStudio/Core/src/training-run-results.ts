@@ -101,6 +101,7 @@ const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('task-type-mismatch'), declared: z.enum(TASK_KINDS), observed: z.string() }),
   z.object({ kind: z.literal('unresolved-reference'), entity: z.string(), field: z.string().nullable() }),
   z.object({ kind: z.literal('missing-decision-date'), entity: z.string(), rows: z.number() }),
+  z.object({ kind: z.literal('missing-period'), entity: z.string(), field: z.string(), rows: z.number() }),
   z.object({ kind: z.literal('no-resolved-rows'), censored: z.number(), labelKnown: z.number(), emptyLabel: z.number() }),
 ]);
 const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('kind', [

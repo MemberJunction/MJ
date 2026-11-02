@@ -21,6 +21,7 @@ export class TrainingRefusedError extends Error {
       case 'task-type-mismatch': return `Refused (task-type-mismatch): the unit declares ${reason.declared} but the outcome is ${reason.observed}.`;
       case 'unresolved-reference': return `Refused (unresolved-reference): ${reason.entity}${reason.field ? `.${reason.field}` : ''} is not registered.`;
       case 'missing-decision-date': return `Refused (missing-decision-date): ${reason.rows} rows of ${reason.entity} have no decision date; filter them out in the unit.`;
+      case 'missing-period': return `Refused (missing-period): ${reason.rows} rows of ${reason.entity} have no ${reason.field}, the Temporal Spec's time column, so they have no period in the series; filter them out in the unit.`;
       case 'no-resolved-rows': return `Refused (no-resolved-rows): no row is resolved (${reason.censored} censored, ${reason.labelKnown} label known at decision, ${reason.emptyLabel} empty).`;
       case 'unit-required': return `Refused (unit-required): pipeline ${reason.pipelineId} — ${reason.why}`;
       case 'protocol-required': return `Refused (protocol-required): pipeline ${reason.pipelineId} has no Evaluation Protocol.`;

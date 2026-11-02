@@ -152,6 +152,8 @@ export type UnitRefusal =
   | { readonly kind: 'task-type-mismatch'; readonly declared: TaskKind; readonly observed: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | { readonly kind: 'unresolved-reference'; readonly entity: string; readonly field: string | null }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | { readonly kind: 'missing-decision-date'; readonly entity: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  /** Rows of a unit with a Temporal Spec whose time column is empty: they have no period in the series. */
+  | { readonly kind: 'missing-period'; readonly entity: string; readonly field: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | { readonly kind: 'no-resolved-rows'; readonly censored: number; readonly labelKnown: number; readonly emptyLabel: number };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
 /** The outcome of validating a unit's target before training. */
@@ -507,10 +509,14 @@ export class PredictionUnit {
     return r.Value;
   }
 
-  /** The rules that span two columns: next-period labels need period rows, a forecast needs a Temporal Spec. */
+  /**
+   * The rules that span two columns: next-period labels need period rows; a forecast needs a Temporal Spec, and a
+   * Temporal Spec needs a forecast (its lags and rolling windows are built from the rows' numeric labels).
+   */
   private static checkCrossFields(rows: UnitRows | null, rule: LabelRule | null, task: TaskType | null, temporal: TemporalSpec | null, errors: string[]): void {
     if (rule?.kind === 'next-period' && rows !== null && rows.kind !== 'grain-x-periods') errors.push('LabelRule next-period requires UnitRows kind grain-x-periods');
     if (task?.kind === 'forecast' && temporal === null) errors.push('A forecast task requires a TemporalSpec');
+    if (task !== null && task.kind !== 'forecast' && temporal !== null) errors.push(`A TemporalSpec requires a forecast task (this unit is ${task.kind})`);
   }
 
   /** The typed unit from a row's scalar columns and its parsed JSON columns. */

@@ -77,6 +77,24 @@ describe('PredictionUnitRowReader', () => {
       delete entities.Grain;
     }
   });
+  it('refuses a forecast unit whose rows have no period in the Temporal Spec\'s time column, counting them, before any series is built', async () => {
+    tables.Series = [{ ID: 's1', T: '2024-01-01', Y: 3 }, { ID: 's2', T: null, Y: 4 }, { ID: 's3', T: '2024-03-01', Y: 5 }];
+    entities.Series = { ID: 'E-S', Name: 'Series', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('T', 'Date'), field('Y', 'number')] };
+    try {
+      const forecast: PredictionUnitSpec = {
+        ...unit,
+        rows: { kind: 'grain', grainEntity: 'Series', decisionDate: { kind: 'fixed', date: '2024-06-01' }, filter: [] },
+        label: { ...unit.label, rule: { kind: 'column', column: 'Y' }, windowDays: 1, outcome: { kind: 'forecast', valueKind: 'continuous' } },
+        censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
+        temporal: { timeColumn: 'T', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'month', seasonality: null },
+      };
+      const out = await new PredictionUnitRowReader().Read(forecast, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
+      expect(out).toEqual({ Status: 'refused', Refusal: { stage: 'unit', reason: { kind: 'missing-period', entity: 'Series', field: 'T', rows: 1 } } });
+    } finally {
+      delete tables.Series;
+      delete entities.Series;
+    }
+  });
   it('fails on a period row with no foreign key instead of keying it as "undefined"', async () => {
     tables.Periods.push({ ID: 'x1', PeriodIndex: 1, OrderDate: '2022-02-01' });
     try {

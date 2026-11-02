@@ -138,6 +138,10 @@ export class PredictionUnitRowReader {
     const candidates = read.Rows.filter((r) => PredictionUnitRowReader.MatchesRowFilters(r, unit.rows.filter));
     const undated = candidates.filter((r) => this.decisionDate(unit, r) === null).length;
     if (undated > 0) return PredictionUnitRowReader.unitRefusal({ kind: 'missing-decision-date', entity: rowEntity.Name, rows: undated });
+    // A grain row's series period is its time column (a grain × periods row's is its period date, checked above).
+    const timeColumn = unit.temporal && unit.rows.kind === 'grain' ? unit.temporal.timeColumn : null;
+    const unperiodic = timeColumn === null ? 0 : candidates.filter((r) => UtcDay.ToUtcDay(r[timeColumn]) === null).length;
+    if (timeColumn !== null && unperiodic > 0) return PredictionUnitRowReader.unitRefusal({ kind: 'missing-period', entity: rowEntity.Name, field: timeColumn, rows: unperiodic });
 
     const resolved = this.resolveRows(unit, rowEntity, candidates, cutoff, labeler);
     const rows = this.removeDuplicates(resolved.Rows);
