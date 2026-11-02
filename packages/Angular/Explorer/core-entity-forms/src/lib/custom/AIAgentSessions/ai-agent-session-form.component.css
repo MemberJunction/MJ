@@ -716,3 +716,17 @@
     max-width: 90%;
   }
 }
+
+/* Phone (375px): the tab strip scrolls sideways instead of spilling past the edge. */
+@media (max-width: 768px) {
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

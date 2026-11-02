@@ -21,7 +21,7 @@
                 
                 <!-- Header Section -->
                 <div class="action-header" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-card); border-bottom: 2px solid var(--mj-border-default);">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                    <div class="hero-header-row">
                         
                         <!-- Left: Action Info -->
                         <div style="flex: 1; min-width: 0;">
@@ -155,7 +155,7 @@
                         </div>
                         
                         <!-- Right: Action Buttons -->
-                        <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <div class="action-buttons">
                             <div style="display: flex; gap: 8px;">
                                 @if (record.ID && !EditMode) {
                                     <button mjButton variant="primary" size="lg"

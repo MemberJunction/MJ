@@ -371,6 +371,16 @@
 
 /* Responsive adjustments */
 @media (max-width: 640px) {
+    .message-header {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+    }
+
+    .content-stats {
+        margin-left: 0;
+        flex-basis: 100%;
+    }
+
     .filter-controls {
         flex-wrap: wrap;
         gap: 0.75rem;

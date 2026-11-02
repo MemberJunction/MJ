@@ -1101,3 +1101,14 @@ mj-accordion-panel {
     display: block;
     height: 100%;
 }
+
+/* Phone (375px): the Re-Run / Refresh row drops under the title instead of overflowing. */
+@media (max-width: 768px) {
+  .header-content {
+    flex-wrap: wrap;
+  }
+
+  .run-actions {
+    flex-basis: 100%;
+  }
+}

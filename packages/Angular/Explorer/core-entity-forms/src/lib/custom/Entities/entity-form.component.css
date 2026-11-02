@@ -2561,3 +2561,34 @@
   font-size: var(--mj-text-xs);
   color: var(--mj-status-error);
 }
+
+/* Phone (375px): the header stacks and the stat tiles wrap two per row. */
+@media (max-width: 768px) {
+    .explorer-header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .entity-identity {
+        flex-basis: 100%;
+    }
+
+    .entity-subtitle {
+        flex-wrap: wrap;
+    }
+
+    .entity-description {
+        flex-basis: 100%;
+        white-space: normal;
+    }
+
+    .header-stats {
+        flex-basis: 100%;
+        flex-wrap: wrap;
+    }
+
+    .stat-item {
+        flex: 1 1 40%;
+    }
+}

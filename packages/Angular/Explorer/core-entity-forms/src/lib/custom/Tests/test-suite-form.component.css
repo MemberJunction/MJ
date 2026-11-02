@@ -3556,3 +3556,27 @@
   }
 }
 
+/* Phone (375px): the action row wraps instead of running past the edge, the SHOW
+   toggle takes its own line, the breadcrumb wraps, and the tab strip keeps a visible
+   scrollbar so the clipped tab reads as "more to the right". */
+@media (max-width: 768px) {
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .header-actions app-evaluation-mode-toggle {
+    flex-basis: 100%;
+  }
+
+  .breadcrumb ol {
+    flex-wrap: wrap;
+  }
+
+  .breadcrumb li {
+    min-width: 0;
+  }
+
+  .tabs {
+    scrollbar-width: thin;
+  }
+}

@@ -850,3 +850,11 @@
 .query-header button.refresh-metadata-btn:hover {
   background: color-mix(in srgb, var(--mj-text-inverse) 15%, transparent);
 }
+
+/* Phone (375px): the metadata rows wrap instead of clipping their trailing button. */
+@media (max-width: 768px) {
+  .query-meta-item,
+  .meta-dropdown-row {
+    flex-wrap: wrap;
+  }
+}

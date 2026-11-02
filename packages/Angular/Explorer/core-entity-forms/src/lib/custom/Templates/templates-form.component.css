@@ -180,3 +180,38 @@
 .badge {
     transition: all 0.2s ease;
 }
+
+/* Hero header row: title block left, actions right; on a phone the actions drop under the title. */
+.hero-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+@media (max-width: 768px) {
+    .hero-header-row {
+        flex-direction: column;
+    }
+
+    .action-buttons {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .action-buttons > div {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-buttons > button {
+        width: 100%;
+    }
+}

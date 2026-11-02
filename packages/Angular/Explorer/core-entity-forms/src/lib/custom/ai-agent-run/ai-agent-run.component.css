@@ -1055,3 +1055,30 @@
   border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
   white-space: nowrap;
 }
+
+/* Phone (375px): the tab strip scrolls sideways instead of spilling past the edge. */
+@media (max-width: 768px) {
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .header-left,
+  .header-info {
+    min-width: 0;
+  }
+
+  .meta-info {
+    flex-wrap: wrap;
+  }
+
+  .run-id {
+    overflow-wrap: anywhere;
+  }
+}

@@ -14,7 +14,7 @@
       <div class="prompt-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
         <!-- Header Section -->
         <div class="prompt-header" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-sunken); border-bottom: 2px solid var(--mj-border-default);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+          <div class="hero-header-row">
             <!-- Left: Prompt Info -->
             <div style="flex: 1; min-width: 0;">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
@@ -113,7 +113,7 @@
               </div>
             </div>
             <!-- Right: Action Buttons -->
-            <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+            <div class="action-buttons">
               <div style="display: flex; gap: 8px;">
                 @if (record.ID) {
                   <button mjButton variant="primary" size="lg"
@@ -541,7 +541,7 @@
             </ng-template>
             <!-- Direct Content Projection -->
             <div style="padding: 16px 0;">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div class="related-grid-pair" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Left Column -->
                 <div>
                   <mj-form-field
@@ -655,7 +655,7 @@
               <p style="margin: 0 0 12px 0; font-size: 0.85em; color: var(--mj-text-muted);">
                 Assistant prefill seeds the model's response with an initial string, guiding output format and content. Stop sequences terminate generation when encountered.
               </p>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div class="related-grid-pair" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Left Column -->
                 <div>
                   <mj-form-field
@@ -1035,7 +1035,7 @@
               </ng-template>
               <!-- Direct Content Projection -->
               <div style="padding: 16px 0;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="related-grid-pair" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                   <!-- AI Agents -->
                   <div>
                     <h6 style="margin: 0 0 12px 0; color: var(--mj-text-secondary);">AI Agents Using This Prompt</h6>

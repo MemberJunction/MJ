@@ -14,7 +14,7 @@
 
             <!-- Header Section -->
             <div class="template-header-area">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                <div class="hero-header-row">
 
                     <!-- Left: Template Info -->
                     <div style="flex: 1; min-width: 0;">
@@ -94,7 +94,7 @@
                     </div>
 
                     <!-- Right: Action Buttons -->
-                    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                    <div class="action-buttons">
                         @if (record.IsSaved) {
                             <button class="run-template-btn"
                                     (click)="runTemplate()"

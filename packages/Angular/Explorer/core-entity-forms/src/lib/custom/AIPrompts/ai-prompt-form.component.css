@@ -192,3 +192,52 @@ mj-empty-state.invalid-template-state {
         font-size: 0.7em !important;
     }
 }
+
+/* Hero header row: title block left, actions right; on a phone the actions drop under the title. */
+.hero-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+@media (max-width: 768px) {
+    .hero-header-row {
+        flex-direction: column;
+    }
+
+    .action-buttons {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .action-buttons > div {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-buttons > div > button {
+        flex: 1;
+    }
+}
+
+/* Phone (375px): the two related grids stack. */
+@media (max-width: 768px) {
+    .related-grid-pair {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Phone (375px): side-by-side grids stack. */
+@media (max-width: 768px) {
+    .related-grid-pair {
+        grid-template-columns: 1fr !important;
+    }
+}
