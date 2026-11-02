@@ -127,7 +127,7 @@ Unified governance platform for managing committees, memberships, meetings, acti
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsCommittees`
 - **Builds on:** [Common](#common), [Tasks](#tasks)
-- **Packages:** `@mj-biz-apps/committees-server` (server), `@mj-biz-apps/committees-ng` (client), `@mj-biz-apps/committees-entities` (shared), `@mj-biz-apps/committees-core-entities-server` (shared), `@mj-biz-apps/committees-core` (shared), `@mj-biz-apps/committees-actions` (shared)
+- **Packages:** `@mj-biz-apps/committees-server` (server), `@mj-biz-apps/committees-core-entities-server` (server), `@mj-biz-apps/committees-actions` (server), `@mj-biz-apps/committees-ng` (client), `@mj-biz-apps/committees-entities` (shared), `@mj-biz-apps/committees-core` (shared)
 
 ### Common
 
@@ -179,7 +179,7 @@ Reusable case / issue / ticket primitives — Issue, IssueType, IssueStatus, Iss
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsIssues`
 - **Builds on:** [Common](#common), [Tasks](#tasks)
-- **Packages:** `@mj-biz-apps/issues-server` (server), `@mj-biz-apps/issues-core-entities-server` (server), `@mj-biz-apps/issues-ng` (client), `@mj-biz-apps/issues-entities` (shared), `@mj-biz-apps/issues-actions` (shared), `@mj-biz-apps/issues-core` (shared)
+- **Packages:** `@mj-biz-apps/issues-server` (server), `@mj-biz-apps/issues-core-entities-server` (server), `@mj-biz-apps/issues-actions` (server), `@mj-biz-apps/issues-core` (server), `@mj-biz-apps/issues-ng` (client), `@mj-biz-apps/issues-entities` (shared)
 
 ### Orders
 
