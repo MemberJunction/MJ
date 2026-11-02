@@ -175,12 +175,34 @@ complete. That is "released, not yet recorded", the same posture as every other 
 here; finish the remaining steps by hand from the run log, do not re-run (a re-dispatch
 refuses, because npm has 6.1.0).
 
-If the publish step failed **before anything reached npm** (`npm view @memberjunction/core@6.1.0`
-is empty and no other `@memberjunction/*@6.1.0` exists), delete the pushed `v6.1.0` tag and
-re-dispatch. Otherwise finish forward.
+The tag step runs after the publish on any outcome, including a failed, cancelled or
+timed-out publish, so `v6.1.0` on origin is the commit npm was built from. Find where the
+run stopped, then:
 
-If it stopped at or after "Merge v6.1.0 into next" (the tag, `lts/6.1` and the GitHub Release
-exist; `next` is untouched until "Push next" succeeds). First check whether `next` already
+1. **Publish failed before anything reached npm** (`npm view @memberjunction/core@6.1.0`
+   is empty and no other `@memberjunction/*@6.1.0` exists): delete the pushed `v6.1.0` tag
+   and re-dispatch.
+2. **Partial publish** (some packages at 6.1.0, the run red or cancelled in Publish):
+   finish the publish from the tag, with the same npm publishing identity the workflow uses.
+   `changeset publish` skips what is already on npm:
+
+   ```bash
+   git fetch origin --tags && git checkout --detach v6.1.0
+   pnpm install --frozen-lockfile && pnpm run build && node .github/scripts/stage-package-licenses.mjs
+   pnpm exec changeset publish --tag lts-6.1
+   ```
+
+   Then continue with 3.
+3. **Verify failed or timed out**: check npm yourself with a fresh cache
+   (`npm view --cache "$(mktemp -d)" @memberjunction/core@lts-6.1 version` is 6.1.0, and
+   `dist-tags.latest` is what it was before the run). If `latest` moved, stop and restore it
+   with `ci/dist-tag-all.mjs`. If npm is fine, continue with 4.
+4. **Stopped at "Create lts/6.1" or the GitHub Release**: create whatever is missing.
+   `git push origin refs/tags/v6.1.0:refs/heads/lts/6.1`, then
+   `gh release create v6.1.0 --title "v6.1.0 (LTS candidate)" --generate-notes --latest=false --target lts/6.1`.
+   Continue with 5.
+5. **Stopped at or after "Merge v6.1.0 into next"**, or you got here from 2–4 (the tag,
+   `lts/6.1` and the GitHub Release exist; `next` is untouched until "Push next" succeeds). First check whether `next` already
 contains the candidate (`git merge-base --is-ancestor v6.1.0 origin/next`). If it does, only
 the ledger step is left: skip to the last command below. If it does not, redo the job's own
 steps locally, so nothing is rewritten by hand:
@@ -194,6 +216,10 @@ node /tmp/candidate-cut.mjs merge-into-next --line 6.1 --edge-tag v6.1.0-edge.N
 node /tmp/candidate-cut.mjs reenter --line 6.1
 git push origin HEAD:refs/heads/fix/cut-6.1-next   # then open a PR into next (it is protected)
 ```
+
+Merge that PR with a **merge commit, never squash or rebase**: `next` must contain `v6.1.0`
+as an ancestor (the `--is-ancestor` check above and
+`git describe` all depend on it), and a squash drops that ancestry.
 
 `merge-into-next` asserts the changeset partition and the fixed group itself. After the PR
 merges, append the ledger by hand from a checkout of `next`:

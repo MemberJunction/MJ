@@ -557,25 +557,34 @@ jobs:
             exit 1
           fi
           CUT="${BASH_REMATCH[1]}.0"
-          if git ls-remote --exit-code --tags origin "refs/tags/v$CUT" >/dev/null; then
-            echo "::error::v$CUT already exists: line ${BASH_REMATCH[1]} was cut, so $VERSION belongs to a closed stream. Nothing was published. Rebase this release onto next (now on the next stream) instead."
+          LINE="${BASH_REMATCH[1]}"
+          # --exit-code: 0 = the tag exists, 2 = no such ref; anything else (network, auth)
+          # fails closed rather than reading as "not cut".
+          RC=0
+          git ls-remote --exit-code --tags origin "refs/tags/v$CUT" >/dev/null || RC=$?
+          if [ "$RC" -eq 0 ]; then
+            echo "::error::v$CUT already exists: line $LINE was cut, so $VERSION belongs to a closed stream. Nothing was published. Rebase this release onto next (now on the next stream) instead."
+            exit 1
+          elif [ "$RC" -ne 2 ]; then
+            echo "::error::git ls-remote for v$CUT failed (exit $RC); cannot prove line $LINE is still open. Nothing was published; re-run."
             exit 1
           fi
           # A version npm does not have is E404 (absent); any other npm failure fails the
           # step, closed: a release that cannot prove its line is open does not publish.
-          if NPM_OUT=$(npm view "@memberjunction/core@$CUT" version 2>&1); then
-            ON_NPM=$NPM_OUT
-          elif grep -q E404 <<<"$NPM_OUT"; then
+          NPM_ERR=$(mktemp)
+          if ON_NPM=$(npm view "@memberjunction/core@$CUT" version 2>"$NPM_ERR"); then
+            : # stdout alone: the version string when it exists, nothing otherwise
+          elif grep -q E404 "$NPM_ERR"; then
             ON_NPM=''
           else
-            echo "::error::npm view @memberjunction/core@$CUT failed: $NPM_OUT"
+            echo "::error::npm view @memberjunction/core@$CUT failed: $(cat "$NPM_ERR"). Cannot prove line $LINE is still open. Nothing was published; re-run."
             exit 1
           fi
           if [ -n "$ON_NPM" ]; then
-            echo "::error::@memberjunction/core@$CUT is on npm: line ${BASH_REMATCH[1]} was cut (tag not pushed yet?), so $VERSION belongs to a closed stream. Nothing was published."
+            echo "::error::@memberjunction/core@$CUT is on npm: line $LINE was cut (tag not pushed yet?), so $VERSION belongs to a closed stream. Nothing was published."
             exit 1
           fi
-          echo "::notice::$VERSION: line ${BASH_REMATCH[1]} not cut yet; Edge release allowed"
+          echo "::notice::$VERSION: line $LINE not cut yet; Edge release allowed"
 
       # `pnpm run version` above rewrote ~300 manifests and nothing regenerated
       # pnpm-lock.yaml, so every edge release since the pnpm cutover pushed a main
@@ -1810,15 +1819,18 @@ jobs:
             exit 1
           fi
 
-      # Runs right after the publish, whatever its outcome (only a cancelled run or a
-      # publish that never started skips it), BEFORE Verify: a publish that half-failed or
+      # Runs right after the publish, whatever its outcome, BEFORE Verify. Only a publish
+      # step that never started (skipped) skips it; a failed, cancelled or timed-out publish
+      # still runs it. A job killed mid-`changeset publish` is the destructive case
+      # (v6.1.0-edge.1, see build-and-publish's timeout note), and it reports as cancelled,
+      # which is why this is always(), not !cancelled(). A publish that half-failed or
       # a Verify that timed out must still leave the commit npm was built from on origin,
       # or nothing can rebuild it and re-dispatch refuses once any X.Y.0 package is live.
       # One code path, no failure-only rescue step to rot. Tags are outside next-protect,
       # so the PAT remote is enough. If npm turns out to hold nothing of this version
       # (the publish died before uploading), delete the tag and re-dispatch (runbook §2).
       - name: Commit post-release generated files, tag ${{ steps.cut.outputs.TAG }} and push the tag
-        if: ${{ !cancelled() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure') }}
+        if: ${{ always() && steps.publish.outcome != 'skipped' }}
         env:
           TAG: ${{ steps.cut.outputs.TAG }}
         run: |
