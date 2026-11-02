@@ -622,7 +622,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             if (result.Success) {
                 this.Stats = {
                     ...this.Stats,
-                    rowCount: result.TotalRowCount
+                    rowCount: result.TotalRowCount ?? 0
                 };
             }
         } catch (err) {

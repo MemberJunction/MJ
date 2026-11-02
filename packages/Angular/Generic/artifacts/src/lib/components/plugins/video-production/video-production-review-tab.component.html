@@ -1,0 +1,216 @@
+<div class="vp-review-tab">
+  <!-- Gates Table -->
+  <section class="vp-review-section">
+    <h3 class="vp-section-title">Quality gates</h3>
+    @if (Gates.length > 0) {
+      <div class="vp-table-wrapper">
+        <table class="vp-table vp-gates-table">
+          <thead>
+            <tr>
+              <th>Gate</th>
+              <th>Status</th>
+              <th>Notes</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (gate of Gates; track gate.Gate) {
+              <tr class="vp-gate-row">
+                <td class="vp-cell-strong">{{ gate.Gate }}</td>
+                <td>
+                  <span
+                    [class]="'vp-status-badge vp-status-badge--' + BadgeVariant(gate.Status)"
+                    [attr.data-status]="gate.Status"
+                  >
+                    {{ gate.Status }}
+                  </span>
+                </td>
+                <td>{{ gate.Notes || '—' }}</td>
+                <td class="vp-cell-mono">{{ gate.Timestamp }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="vp-empty-text">No gate results recorded.</p>
+    }
+  </section>
+
+  <!-- Critic Rounds -->
+  <section class="vp-review-section">
+    <h3 class="vp-section-title">Critic rounds</h3>
+    @if (Rounds.length > 0) {
+      @for (round of Rounds; track round.Round) {
+        <div class="vp-round-card">
+          <div class="vp-round-header">
+            <span class="vp-round-title">Round {{ round.Round }}</span>
+            <span class="vp-round-meta">{{ round.Timestamp }}</span>
+          </div>
+          @if (round.Summary) {
+            <p class="vp-round-summary">{{ round.Summary }}</p>
+          }
+          @if (round.Defects && round.Defects.length > 0) {
+            <div class="vp-table-wrapper">
+              <table class="vp-table vp-defects-table">
+                <thead>
+                  <tr>
+                    <th>Severity</th>
+                    <th>Format</th>
+                    <th>Time</th>
+                    <th>Beat</th>
+                    <th>Criterion</th>
+                    <th>Evidence</th>
+                    <th>Fix</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (defect of round.Defects; track $index) {
+                    <tr class="vp-defect-row">
+                      <td>
+                        <span
+                          [class]="'vp-severity-badge vp-status-badge--' + BadgeVariant(defect.Severity)"
+                          [attr.data-severity]="defect.Severity"
+                        >
+                          {{ defect.Severity }}
+                        </span>
+                      </td>
+                      <td>
+                        @if (defect.Format) {
+                          <mj-video-format-glyph [Format]="defect.Format" Size="sm"></mj-video-format-glyph>
+                        } @else {
+                          <span>—</span>
+                        }
+                      </td>
+                      <td class="vp-cell-mono">
+                        {{ FormatSeconds(defect.Timestamp) }}
+                      </td>
+                      <td>{{ defect.Beat || '—' }}</td>
+                      <td>{{ defect.Criterion || '—' }}</td>
+                      <td>{{ defect.Evidence }}</td>
+                      <td>{{ defect.Fix }}</td>
+                      <td>
+                        <span
+                          [class]="'vp-status-badge vp-status-badge--' + BadgeVariant(defect.Status)"
+                          [attr.data-status]="defect.Status"
+                        >
+                          {{ defect.Status }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="vp-empty-text">No defects reported in Round {{ round.Round }}.</p>
+          }
+        </div>
+      }
+    } @else {
+      <p class="vp-empty-text">No critic rounds recorded.</p>
+    }
+  </section>
+
+  <!-- Rubric Scores -->
+  <section class="vp-review-section">
+    <h3 class="vp-section-title">Rubric scores</h3>
+    @if (Review?.Scores; as scores) {
+      <div class="vp-scores-summary">
+        <span class="vp-overall-score">
+          Overall score: <strong>{{ scores.OverallScore }} / {{ scores.MaxScore }}</strong>
+        </span>
+        <span
+          [class]="'vp-status-badge vp-status-badge--' + BadgeVariant(scores.Passed ? 'Passed' : 'Failed')"
+          [attr.data-status]="scores.Passed ? 'Passed' : 'Failed'"
+        >
+          {{ scores.Passed ? 'Passed' : 'Failed' }}
+        </span>
+      </div>
+      @if (CriteriaScores.length > 0) {
+        <div class="vp-table-wrapper">
+          <table class="vp-table vp-scores-table">
+            <thead>
+              <tr>
+                <th>Criterion</th>
+                <th>Score</th>
+                <th>Result</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of CriteriaScores; track item.Criterion) {
+                <tr class="vp-criterion-row">
+                  <td class="vp-cell-strong">{{ item.Criterion }}</td>
+                  <td class="vp-cell-mono">{{ item.Score }} / {{ item.MaxScore }}</td>
+                  <td>
+                    <span
+                      [class]="'vp-status-badge vp-status-badge--' + BadgeVariant(item.Passed ? 'Passed' : 'Failed')"
+                      [attr.data-status]="item.Passed ? 'Passed' : 'Failed'"
+                    >
+                      {{ item.Passed ? 'Passed' : 'Failed' }}
+                    </span>
+                  </td>
+                  <td>{{ item.Notes || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    } @else {
+      <p class="vp-empty-text">No rubric scores recorded.</p>
+    }
+  </section>
+
+  <!-- Generated Assets Provenance -->
+  @if (GeneratedAssets.length > 0) {
+    <section class="vp-review-section vp-generated-assets-section">
+      <h3 class="vp-section-title">Generated assets</h3>
+      <div class="vp-table-wrapper">
+        <table class="vp-table vp-generated-assets-table">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Kind</th>
+              <th>Beats</th>
+              <th>Duration</th>
+              <th>Model</th>
+              <th>Cost</th>
+              <th>C2PA</th>
+              <th>Prompt</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of GeneratedAssets; track item.Key) {
+              <tr class="vp-generated-asset-row">
+                <td class="vp-cell-strong">{{ item.Key }}</td>
+                <td>{{ item.Kind }}</td>
+                <td>{{ FormatBeats(item) }}</td>
+                <td class="vp-cell-mono">{{ FormatDuration(item) }}</td>
+                <td>{{ GetModelLabel(item.ModelID) }}</td>
+                <td class="vp-cell-mono">{{ FormatCost(item) }}</td>
+                <td>{{ item.C2PA ? 'kept' : 'none' }}</td>
+                <td>
+                  <details class="vp-prompt-details">
+                    <summary>Prompt</summary>
+                    <div class="vp-prompt-text">{{ item.Prompt }}</div>
+                  </details>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- Human Review Notes -->
+  @if (Review?.HumanReviewNotes) {
+    <section class="vp-review-section">
+      <h3 class="vp-section-title">Human review notes</h3>
+      <div class="vp-human-notes">{{ Review?.HumanReviewNotes }}</div>
+    </section>
+  }
+</div>

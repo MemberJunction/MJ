@@ -10,6 +10,8 @@
  * @since 2.112.0
  */
 
+import type { LoopBodyActionStep } from './foreach-operation';
+
 /**
  * Universal While loop configuration used by all agent types.
  * Flow agents convert AIAgentStep configuration to this format.
@@ -41,6 +43,13 @@ export interface WhileOperation {
         params: Record<string, unknown>;
         outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
     };
+
+    /**
+     * Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
+     * Mutually exclusive with `action`, `subAgent`, and `prompt`.
+     * @since 6.2.0
+     */
+    steps?: LoopBodyActionStep[];
 
     /** Execute sub-agent per iteration */
     subAgent?: {

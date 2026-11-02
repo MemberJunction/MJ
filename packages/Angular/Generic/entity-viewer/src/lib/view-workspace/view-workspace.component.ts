@@ -699,6 +699,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Controls the workspace-level export dialog (the same generic dialog the grid uses). */
   public ShowExportDialog: boolean = false;
 
+  /**
+   * True only when the active view type does NOT provide its own toolbar Export button (e.g. Cards,
+   * Map, Timeline). When Grid is active, the grid toolbar already renders Export, so the top
+   * selector bar suppresses its duplicate Export icon.
+   */
+  public ShowFallbackExportButton: boolean = false;
+
+  /** Recomputes {@link ShowFallbackExportButton} when the inner viewer resolves or switches view types. */
+  public OnActiveViewTypeResolved(): void {
+    const next = !!this.entityViewerRef && !this.entityViewerRef.ActiveViewTypeHasOwnExport;
+    if (next !== this.ShowFallbackExportButton) {
+      this.ShowFallbackExportButton = next;
+      this.cdr.detectChanges();
+    }
+  }
+
   /** @deprecated Use {@link ShowExportDialog}. */
   public get showExportDialog(): boolean {
     return this.ShowExportDialog;
@@ -980,6 +996,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Track loaded records so the config panel has sample data, and re-emit the full event. */
   public OnDataLoaded(event: DataLoadedEvent): void {
     this.LoadedRecords = event.records;
+    this.OnActiveViewTypeResolved();
     this.DataLoaded.emit(event);
   }
 

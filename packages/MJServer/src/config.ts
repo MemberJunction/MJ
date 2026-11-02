@@ -6,6 +6,14 @@ import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import {
+  AgentRunWatchdogDefaultsFromEnv,
+  AgentRunWatchdogSchema,
+  AgentSessionsDefaultsFromEnv,
+  AgentSessionsSchema,
+  ConversationDetailReconcilerDefaultsFromEnv,
+  ConversationDetailReconcilerSchema,
+} from './backgroundSweepConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -506,6 +514,13 @@ const magicLinkSchema = z.object({
    * returns the token as JSON. Append `?format=json` to force JSON regardless.
    */
   explorerUrl: z.string().optional(),
+  /**
+   * Explicit frontend origins permitted for per-invite `RedirectUrl` targets (in addition to
+   * `explorerUrl` and concrete non-wildcard entries in `cors.allowedOrigins`). Wildcard `'*'`
+   * entries are always ignored so deployments using the default `cors.allowedOrigins: ['*']`
+   * never expose an open redirect carrying session tokens.
+   */
+  allowedRedirectOrigins: z.array(z.string()).optional(),
 }).passthrough();
 
 /**
@@ -944,6 +959,9 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  agentSessions: AgentSessionsSchema.optional().default({}),
+  agentRunWatchdog: AgentRunWatchdogSchema.optional().default({}),
+  conversationDetailReconciler: ConversationDetailReconcilerSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
@@ -1154,6 +1172,16 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     defaultLockTimeout: 600000,
     staleLockCleanupInterval: 300000
   },
+
+  // Background sweeps that query the database on a timer (session janitor, bridge and conversation-
+  // detail reconcilers, agent-run watchdog). Defaults are the values MJAPI always used; each has an
+  // env override (MJ_SESSION_JANITOR_*, MJ_BRIDGE_RECONCILER_*, MJ_CONVERSATION_DETAIL_RECONCILER_*,
+  // MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS), read here rather than in the schema because this object
+  // is the merge base (see the telemetry note below). A bad value fails startup, naming the variable.
+  // guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md lists every switch.
+  agentSessions: AgentSessionsDefaultsFromEnv(process.env),
+  conversationDetailReconciler: ConversationDetailReconcilerDefaultsFromEnv(process.env),
+  agentRunWatchdog: AgentRunWatchdogDefaultsFromEnv(process.env),
 
   // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
   integrationSyncWorker: {

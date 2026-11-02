@@ -128,6 +128,19 @@ describe('CloseAgentSession close reason (MJ#6013)', () => {
         expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'Explicit');
     });
 
+    it('a client may stamp TimeLimit (CloseSession verifies it); Janitor, Shutdown and Idle are still refused', async () => {
+        const resolver = new AgentSessionResolver();
+        const provider = makeProvider(true, 'visitor-1');
+        const ctx = makeCtx(guest('visitor-1'), provider);
+        await expect(resolver.CloseAgentSession(SESSION, ctx, 'TimeLimit')).resolves.toBe(true);
+        expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'TimeLimit');
+        closeSessionMock.mockClear();
+        for (const reason of ['Janitor', 'Shutdown', 'Idle']) {
+            await expect(resolver.CloseAgentSession(SESSION, ctx, reason)).rejects.toThrow(/Unsupported close reason/);
+        }
+        expect(closeSessionMock).not.toHaveBeenCalled();
+    });
+
     it('refuses a reason only the server may stamp', async () => {
         const resolver = new AgentSessionResolver();
         const provider = makeProvider(true, 'visitor-1');

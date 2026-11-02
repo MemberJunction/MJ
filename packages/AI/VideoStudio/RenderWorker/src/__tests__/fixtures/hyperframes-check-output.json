@@ -1,0 +1,278 @@
+{
+  "ok": false,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 1
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": false,
+    "errorCount": 1,
+    "warningCount": 1,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "text_box_overflow",
+        "severity": "error",
+        "time": 0.111,
+        "selector": "#overflow-box",
+        "message": "Text extends outside its nearest visual/container box.",
+        "rect": {
+          "left": 1150,
+          "top": 200,
+          "right": 1534.22,
+          "bottom": 283,
+          "width": 384.22,
+          "height": 83
+        },
+        "containerSelector": "#root",
+        "text": "Overflowing box outside viewport",
+        "fixHint": "Text is 384px x 83px inside 1280px x 720px and overflows by up to 254px; widen the container to at least ~1534px, or allow wrapping with max-width/fitTextFontSize.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "width": 1280,
+          "height": 720
+        },
+        "overflow": {
+          "right": 254.22
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1150,
+          "y": 200,
+          "width": 384.22,
+          "height": 83
+        },
+        "firstSeen": 0.111,
+        "lastSeen": 1.889,
+        "occurrences": 9,
+        "heldMs": 1778
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "warning",
+        "time": 0.111,
+        "selector": "#overflow-box",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 1150,
+          "top": 200,
+          "right": 1534.22,
+          "bottom": 283,
+          "width": 384.22,
+          "height": 83
+        },
+        "containerSelector": "#root",
+        "text": "Overflowing box outside viewport",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1280,
+          "bottom": 720,
+          "width": 1280,
+          "height": 720
+        },
+        "overflow": {
+          "right": 254.22
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1150,
+          "y": 200,
+          "width": 384.22,
+          "height": 83
+        },
+        "firstSeen": 0.111,
+        "lastSeen": 1.889,
+        "occurrences": 9,
+        "heldMs": 1778
+      }
+    ],
+    "duration": 2,
+    "samples": [
+      0.111,
+      0.333,
+      0.556,
+      0.778,
+      1,
+      1.222,
+      1.444,
+      1.667,
+      1.889
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 2,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": false,
+    "errorCount": 5,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "contrast_aa_failure",
+        "severity": "error",
+        "message": "Contrast is 1.13:1; WCAG AA requires 3:1.",
+        "text": "Low contrast text",
+        "fg": "rgb(38,50,68)",
+        "bg": "rgb(30,41,59)",
+        "ratio": 1.13,
+        "requiredRatio": 3,
+        "suggestedColor": "rgb(105,114,126)",
+        "large": true,
+        "selector": "#low-contrast",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 100,
+          "y": 100,
+          "width": 272.140625,
+          "height": 42
+        },
+        "time": 0.111
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "error",
+        "message": "Contrast is 1.13:1; WCAG AA requires 3:1.",
+        "text": "Low contrast text",
+        "fg": "rgb(38,50,68)",
+        "bg": "rgb(30,41,59)",
+        "ratio": 1.13,
+        "requiredRatio": 3,
+        "suggestedColor": "rgb(105,114,126)",
+        "large": true,
+        "selector": "#low-contrast",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 100,
+          "y": 100,
+          "width": 272.140625,
+          "height": 42
+        },
+        "time": 0.556
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "error",
+        "message": "Contrast is 1.13:1; WCAG AA requires 3:1.",
+        "text": "Low contrast text",
+        "fg": "rgb(38,50,68)",
+        "bg": "rgb(30,41,59)",
+        "ratio": 1.13,
+        "requiredRatio": 3,
+        "suggestedColor": "rgb(105,114,126)",
+        "large": true,
+        "selector": "#low-contrast",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 100,
+          "y": 100,
+          "width": 272.140625,
+          "height": 42
+        },
+        "time": 1
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "error",
+        "message": "Contrast is 1.13:1; WCAG AA requires 3:1.",
+        "text": "Low contrast text",
+        "fg": "rgb(38,50,68)",
+        "bg": "rgb(30,41,59)",
+        "ratio": 1.13,
+        "requiredRatio": 3,
+        "suggestedColor": "rgb(105,114,126)",
+        "large": true,
+        "selector": "#low-contrast",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 100,
+          "y": 100,
+          "width": 272.140625,
+          "height": 42
+        },
+        "time": 1.444
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "error",
+        "message": "Contrast is 1.13:1; WCAG AA requires 3:1.",
+        "text": "Low contrast text",
+        "fg": "rgb(38,50,68)",
+        "bg": "rgb(30,41,59)",
+        "ratio": 1.13,
+        "requiredRatio": 3,
+        "suggestedColor": "rgb(105,114,126)",
+        "large": true,
+        "selector": "#low-contrast",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 100,
+          "y": 100,
+          "width": 272.140625,
+          "height": 42
+        },
+        "time": 1.889
+      }
+    ],
+    "enabled": true,
+    "samples": [
+      0.111,
+      0.556,
+      1,
+      1.444,
+      1.889
+    ],
+    "checked": 10,
+    "passed": 5
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.134",
+    "updateAvailable": false
+  }
+}

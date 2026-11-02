@@ -494,19 +494,63 @@ export class SQLServerDataProvider
    * `sys.columns` scan in {@link loadViewColumnOrderCache} ran once or twice on EVERY request
    * (issue #3102 — ~9.6k scans/day in production vs the ~2 needed).
    *
-   * Keyed by the `ConnectionPool` object (NOT by `schema.view` alone) because one process can hold
-   * providers to different databases (RW + RO datasources, multi-DB tooling) where the same
-   * `schema.view` has different physical column orders — a process-global map would serve one
-   * database's column order to another's provider and silently reintroduce the positional
-   * `@ResultTable` mis-routing this cache exists to prevent. A WeakMap lets pools (and their cache)
-   * be collected if a pool is discarded.
+   * Keyed by normalized database target AND login (`user@server:port[/instance]/database`) when
+   * `ConnectionPool.config` exposes them — so pools opened with the same login against the SAME
+   * database (per-request RW providers around the boot-time pool) share one `sys.columns` scan and
+   * one cross-pool invalidation domain, while pools pointing to DIFFERENT databases, or using a
+   * different login (read-only, CodeGen), stay isolated: `sys.columns` only lists objects the login
+   * can see, so one login's scan must never stand in for another's. Pools without `config.user`
+   * (token/integrated auth) share by target alone. Falls back to `_viewColumnOrderCacheByPool`
+   * (`WeakMap`) when a pool object does not expose `config.server` + `config.database` (e.g.
+   * lightweight test doubles).
    *
    * The value is the load PROMISE (not the resolved Map) so concurrent per-request Config() calls
    * de-duplicate onto a single in-flight scan. Invalidated on metadata refresh (see
    * {@link Refresh} / {@link InvalidateViewColumnOrderCache}) so view changes from
-   * migrations/CodeGen are picked up without a server restart.
+   * migrations/CodeGen are picked up across all pools targeting that database without a server restart.
    */
   private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
+  private static readonly _viewColumnOrderCacheByDbKey = new Map<string, Promise<Map<string, string[]>>>();
+  private static readonly DEFAULT_SQL_SERVER_PORT = 1433;
+
+  private static viewColumnOrderDbKey(pool: sql.ConnectionPool): string | null {
+    const cfg = (
+      pool as {
+        config?: {
+          server?: string;
+          port?: number;
+          database?: string;
+          user?: string;
+          options?: { instanceName?: string };
+        };
+      } | null | undefined
+    )?.config;
+    if (
+      typeof cfg?.server === 'string' &&
+      cfg.server.trim().length > 0 &&
+      typeof cfg?.database === 'string' &&
+      cfg.database.trim().length > 0
+    ) {
+      const host = cfg.server.trim().toLowerCase();
+      const port =
+        typeof cfg.port === 'number' && cfg.port > 0
+          ? cfg.port
+          : SQLServerDataProvider.DEFAULT_SQL_SERVER_PORT;
+      const instance =
+        typeof cfg.options?.instanceName === 'string' && cfg.options.instanceName.trim().length > 0
+          ? `/${cfg.options.instanceName.trim().toLowerCase()}`
+          : '';
+      const db = cfg.database.trim().toLowerCase();
+      // The login is part of the identity: sys.columns only lists objects the login can see, so a
+      // scan made through the read-only or CodeGen login must never be served to the read-write
+      // pool (or vice versa) — a view missing from the map falls back to metadata order, the very
+      // misrouting this cache exists to prevent (#3102). Pools sharing server, database AND login
+      // still share one scan.
+      const user = typeof cfg.user === 'string' && cfg.user.trim().length > 0 ? cfg.user.trim().toLowerCase() : '';
+      return `mssql://${user}@${host}:${port}${instance}/${db}`;
+    }
+    return null;
+  }
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -687,17 +731,29 @@ export class SQLServerDataProvider
    */
   private async loadViewColumnOrderCache(): Promise<void> {
     const pool = this._pool;
-    let scanPromise = SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    let scanPromise =
+      dbKey !== null
+        ? SQLServerDataProvider._viewColumnOrderCacheByDbKey.get(dbKey)
+        : SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
     if (!scanPromise) {
       scanPromise = this.scanViewColumnOrder();
-      SQLServerDataProvider._viewColumnOrderCacheByPool.set(pool, scanPromise);
+      if (dbKey !== null) {
+        SQLServerDataProvider._viewColumnOrderCacheByDbKey.set(dbKey, scanPromise);
+      } else {
+        SQLServerDataProvider._viewColumnOrderCacheByPool.set(pool, scanPromise);
+      }
     }
     try {
       this._viewColumnOrderCache = await scanPromise;
     } catch (e) {
       // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order.
       // Drop the shared entry (only if it's still OUR failed promise) so a later Config() can retry.
-      if (SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool) === scanPromise) {
+      if (dbKey !== null) {
+        if (SQLServerDataProvider._viewColumnOrderCacheByDbKey.get(dbKey) === scanPromise) {
+          SQLServerDataProvider._viewColumnOrderCacheByDbKey.delete(dbKey);
+        }
+      } else if (SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool) === scanPromise) {
         SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
       }
       this._viewColumnOrderCache = new Map();
@@ -746,6 +802,10 @@ export class SQLServerDataProvider
    */
   public static InvalidateViewColumnOrderCache(pool: sql.ConnectionPool): void {
     SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    if (dbKey !== null) {
+      SQLServerDataProvider._viewColumnOrderCacheByDbKey.delete(dbKey);
+    }
   }
 
   /**
@@ -3058,11 +3118,36 @@ export class SQLServerDataProvider
     const unionParts = childEntities
       .filter(child => child.PrimaryKeys.length > 0)
       .map(child => {
-        const schema = child.SchemaName || '__mj';
+        const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
         const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
         const nameLit = dialect.QuoteStringLiteral(child.Name);
         return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
+      });
+
+    if (unionParts.length === 0) return '';
+    return unionParts.join(' UNION ALL ');
+  }
+
+  protected override BuildChildDiscoveryBatchSQL(
+    childEntities: EntityInfo[],
+    recordPKValues: string[]
+  ): string {
+    if (recordPKValues.length === 0) return '';
+    const dialect = this.getDialect();
+    const inList = recordPKValues.map(v => dialect.QuoteStringLiteral(v)).join(', ');
+    const aliasEntityName = dialect.QuoteColumnAlias('EntityName');
+    const aliasRecordPK = dialect.QuoteColumnAlias('RecordPK');
+    const aliasPriority = dialect.QuoteColumnAlias('Priority');
+
+    const unionParts = childEntities
+      .filter(child => child.PrimaryKeys.length > 0)
+      .map((child, idx) => {
+        const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+        const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
+        const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
+        const nameLit = dialect.QuoteStringLiteral(child.Name);
+        return `SELECT ${nameLit} AS ${aliasEntityName}, CAST(${pkRef} AS NVARCHAR(255)) AS ${aliasRecordPK}, ${idx + 1} AS ${aliasPriority} FROM ${sourceRef} WHERE ${pkRef} IN (${inList})`;
       });
 
     if (unionParts.length === 0) return '';

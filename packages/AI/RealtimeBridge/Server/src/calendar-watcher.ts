@@ -320,6 +320,7 @@ export class CalendarWatcher {
                 ExtraFilter: `ExternalConnectionID='${escaped}' AND JoinMethod='Invite'`,
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             this.contextUser,
         );
