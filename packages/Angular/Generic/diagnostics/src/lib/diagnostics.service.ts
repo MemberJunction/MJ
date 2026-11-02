@@ -44,6 +44,7 @@ export interface ClientBundleBuildOptions {
     scrubberProfile?: DiagnosticScrubberProfile;
     includeHar?: boolean;
     note?: string;
+    reason?: string;
     ticketNumber?: string;
     createdByUserId?: string;
     mjVersion?: string;

@@ -4027,7 +4027,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (!this.diagnosticsService) return;
     this.diagnosticsService.Initialize();
     const bundle = await this.diagnosticsService.BuildClientBundle({
-      reason: 'Stuck startup screen (pre-reset diagnostic snapshot)'
+      note: 'Stuck startup screen (pre-reset diagnostic snapshot)'
     });
     this.diagnosticsService.DownloadClientBundle(bundle);
   }
