@@ -436,6 +436,60 @@ describe('GraphQLDataProvider Save — IS-A promotion carries the shared primary
         expect(input).not.toHaveProperty('Name');
     });
 
+    it('invalidating one mismatched parent field in _isaParentPreSaveSnapshot preserves other dirty parent fields on the same entity', async () => {
+        const animal = existingAnimal();
+        const dog = new TestIsaEntity(dogInfo, provider);
+        dog.WireParent(animal);
+        dog.LoadFromData({
+            ID: EXISTING_ANIMAL_ID,
+            Name: 'Biscuit',
+            MicrochipNumber: '985112000000001',
+            IsHouseTrained: false,
+            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+
+        // Dirty two parent-owned fields and simulate IsParentEntitySave + parent.finalizeSave()
+        animal.Set('Name', 'Biscuit IV');
+        animal.Set('MicrochipNumber', '985112000000999');
+
+        const parentOpts = new EntitySaveOptions();
+        parentOpts.IsParentEntitySave = true;
+        const parentSaved = await animal.Save(parentOpts);
+        expect(parentSaved).toBe(true);
+        expect(animal.Dirty).toBe(false);
+
+        // Mutate/revert only MicrochipNumber back to its original value so its current value
+        // no longer matches the snapshot, then reset its Dirty flag to simulate a clean baseline
+        animal.GetFieldByName('MicrochipNumber')!.Value = '985112000000001';
+        animal.GetFieldByName('MicrochipNumber')!.ResetOldValue();
+        expect(animal.GetFieldByName('MicrochipNumber')!.Dirty).toBe(false);
+
+        GraphQLWire.EnqueueResponse({
+            UpdateShelterDog: {
+                ID: EXISTING_ANIMAL_ID,
+                Name: 'Biscuit IV',
+                _mj__CreatedAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+                _mj__UpdatedAt: new Date('2026-01-02T00:00:00Z').toISOString(),
+            },
+        });
+
+        const leafOpts = new EntitySaveOptions();
+        leafOpts.SkipOldValuesCheck = false;
+        await provider.Save(dog, user, leafOpts);
+
+        const input = lastInputRecord();
+        expect(input['ID']).toBe(EXISTING_ANIMAL_ID);
+        expect(input['Name']).toBe('Biscuit IV');
+        expect(input).not.toHaveProperty('MicrochipNumber');
+
+        const oldValues = input['OldValues___'] as Array<{ Key: string; Value: unknown }>;
+        expect(oldValues).toEqual([
+            { Key: 'ID', Value: EXISTING_ANIMAL_ID },
+            { Key: 'Name', Value: 'Biscuit' },
+        ]);
+    });
+
     it('preserves dirty IS-A parent fields when saved inside a GraphQLTransactionGroup', async () => {
         const animal = existingAnimal();
         const dog = new TestIsaEntity(dogInfo, provider);

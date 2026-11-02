@@ -1,4 +1,4 @@
-import type { HeartbeatMode, HostType, PartitionMode } from '@memberjunction/work-queue-core';
+import type { ExhaustionBehavior, HeartbeatMode, HostType, PartitionMode } from '@memberjunction/work-queue-core';
 
 /** Structural views of the topology entities. The generated entity classes satisfy them directly. */
 export interface TransportRow {
@@ -39,5 +39,6 @@ export interface SubscriptionRow {
     HandlerKey: string | null;
     ExternalRef: string | null;
     BindingConfig: string | null;
+    ExhaustionBehavior?: ExhaustionBehavior;
     Status: 'Active' | 'Paused' | 'Disabled';
 }

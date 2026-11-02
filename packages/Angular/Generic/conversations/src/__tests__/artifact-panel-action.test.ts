@@ -199,6 +199,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
     open['SystemArtifactsByDetailId'] = new Map();
     open['RatingsByDetailId'] = new Map();
     open['AttachmentsByDetailId'] = new Map();
+    open['handoffStepsByRunId'] = new Map();
     open['ArtifactViewerRefresh$'] = new Subject();
     open['messages'] = [];
     open['cdr'] = { detectChanges: vi.fn(), markForCheck: vi.fn() };

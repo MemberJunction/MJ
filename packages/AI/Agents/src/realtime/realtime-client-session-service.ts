@@ -357,7 +357,11 @@ export interface PrepareClientSessionInput {
 export interface RealtimeClientSessionPrepResult {
     /** Whether the client session config was minted successfully. */
     Success: boolean;
-    /** The minted client-direct session config (token + provider session config). Present on success. */
+    /**
+     * The minted client-direct session config (token + provider session config). Present on success.
+     * Returned whole, exactly as the driver minted it: `ClientConfig.MaxSessionSeconds` (the effective, clamped
+     * session cap) is passed through unchanged and stays `undefined` when the driver did not set it.
+     */
     ClientConfig?: ClientRealtimeSessionConfig;
     /** The session params the server built (system prompt, model, tools). Present on success. */
     SessionParams?: RealtimeSessionParams;
