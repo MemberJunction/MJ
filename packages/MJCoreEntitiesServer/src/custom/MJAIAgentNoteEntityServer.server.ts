@@ -1,7 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
 import { MJAIAgentNoteEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
-import { EmbedTextLocalHelper } from "./util";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import { AIEngine } from "@memberjunction/aiengine";
 
 /**
@@ -25,13 +25,16 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
 
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
-            // 1. Generate/refresh the embedding if the Note text is new or dirty.
-            const noteField = this.GetFieldByName('Note');
-            const shouldGenerateEmbedding = !this.IsSaved || noteField.Dirty;
-
-            if (shouldGenerateEmbedding && this.Note && this.Note.trim().length > 0) {
+            // 1. Generate/refresh the embedding. GenerateEmbedding skips it unless the Note is new or
+            //    dirty, or its stored vector is from another model (IsEmbeddingStale).
+            if (this.Note && this.Note.trim().length > 0) {
                 await this.GenerateEmbeddingByFieldName("Note", "EmbeddingVector", "EmbeddingModelID", "EmbeddingVectorBinary");
             } else if (!this.Note || this.Note.trim().length === 0) {
                 this.EmbeddingVector = null;

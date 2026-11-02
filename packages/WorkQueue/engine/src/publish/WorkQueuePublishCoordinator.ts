@@ -92,7 +92,19 @@ export class WorkQueuePublishCoordinator {
             await this.deliver(resolved, prepared, options, results);
         }
         if (results.some(r => r.Status === 'Accepted')) {
-            this.deps.NotifyPublished(resolved.Topic.Name);
+            const topicToNotify = resolved.Topic.Name;
+            if (
+                resolved.Transport.DriverClass === DATABASE_DRIVER_CLASS &&
+                options.CallerExecutor &&
+                typeof options.CallerExecutor.RunAfterCommit === 'function'
+            ) {
+                options.CallerExecutor.RunAfterCommit(
+                    () => { this.deps.NotifyPublished(topicToNotify); },
+                    `WorkQueue NotifyPublished(${topicToNotify})`,
+                );
+            } else {
+                this.deps.NotifyPublished(topicToNotify);
+            }
         }
         return results;
     }

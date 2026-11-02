@@ -331,6 +331,7 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 - **The step returned to the framework is `'Chat'`, not `'Plan'`.** `'Plan'` is only an intermediate classification and the `AIAgentRunStep.StepType` audit value the UI keys on. The *terminal* step must stay within `AIAgentRun.FinalStep`'s DB-CHECK-constrained vocabulary, which deliberately excludes `Plan`/`Skill`/`ClientTools` (same reason as §1.3). So a plan-approval pause is represented with the same terminal shape `executeChatStep` uses.
 - **Rejection forces a re-plan** because `resumeAgent` re-enables `planMode` **only** when the resume originated from a `Plan` run-step. Without that, the gate would be off on the resumed run and a rejected plan would silently execute anyway. Regular Chat-clarification resumes are unaffected — they leave `planMode` off.
+- **Plan Mode is root-only (`depth === 0`).** Sub-agents never enter Plan Mode (`resolvePlanModeGate` requires `this._depth === 0`). When a sub-agent needs a human or parent sign-off before acting, its approval point is a regular `Chat` step carrying a `responseForm` — which a parent configured with `ChatHandlingOption = 'Consult'` can either answer itself (via `resumeRunId`) or escalate to its own caller.
 
 `resolvePlanModeGate`, `validatePlanNextStep`, `executePlanStep`, and `buildPlanApprovalForm` are all `protected` — override to change eligibility rules, plan-quality validation, or the approval card's layout.
 

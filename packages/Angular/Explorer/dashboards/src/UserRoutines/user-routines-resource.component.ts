@@ -1,10 +1,13 @@
 import { Component, ViewChild, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ResourceData, UserRoutineEngine } from '@memberjunction/core-entities';
 import { CompositeKey } from '@memberjunction/core';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import {
+    ConversationOpenedEventArgs,
     HistoryRecordOpenedEventArgs,
     RoutineCounts,
     RoutineStatusFilter,
@@ -37,6 +40,7 @@ import { BuildUserRoutinesAgentContext, ResolveRoutineByIDOrName, RoutineSummary
 })
 export class UserRoutinesResourceComponent extends BaseResourceComponent {
     protected override navigationService = inject(NavigationService);
+    private appManager = inject(ApplicationManager);
 
     @ViewChild('commandCenter') private commandCenter?: UserRoutinesCommandCenterComponent;
 
@@ -113,6 +117,27 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
         this.TotalCount = counts.Total;
         this.FilteredCount = counts.Filtered;
         this.publishAgentContext();
+    }
+
+    /**
+     * Opens the routine's conversation, where every run's reply lives. It is application-scoped,
+     * so the chat sidebar never lists it: the only way in is a deep link into the Chat app's
+     * Conversations item with the conversation ID.
+     */
+    public OnConversationOpened(args: ConversationOpenedEventArgs): void {
+        const chatApp = this.appManager.GetAppByName('Chat');
+        if (!chatApp) {
+            MJNotificationService.Instance.CreateSimpleNotification('The Chat app is not installed, so this conversation cannot be opened here', 'error', 4000);
+            return;
+        }
+        // Query params as well as configuration: an already-open Chat tab is reused and reacts only
+        // to a query-param change (its configuration is read once, at init).
+        void this.navigationService.OpenNavItemByName(
+            'Conversations',
+            { conversationId: args.ConversationID },
+            chatApp.ID,
+            { queryParams: { conversationId: args.ConversationID } },
+        );
     }
 
     /** Opens the linked execution record (Agent Run / Prompt Run / Action Log) in a tab. */

@@ -8,7 +8,7 @@ import { CollectWorkspaceStatus, RenderStatus } from '../../../lib/dev-workspace
  * CLI command: `mj dev workspace status`.
  *
  * Reports the state of a generated cross-repo workspace at the parent
- * directory: which of the four generated files exist, whether a lockfile and
+ * directory: which of the three generated files exist, whether a lockfile and
  * node_modules exist, whether the sentinel manifest is present, the member list
  * versus the candidates detected on disk, how `--dir` was resolved, and whether
  * the active pnpm version matches the generated pin. Read-only — writes nothing.

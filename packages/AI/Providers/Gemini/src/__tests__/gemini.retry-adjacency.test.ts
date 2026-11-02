@@ -73,7 +73,10 @@ describe('Gemini history — a Retry on a native tool-call turn', () => {
         const history = new Probe('test-key').History([task, callTurn, resultTurn(['fc_a', 'fc_b'], 'Not executed.'), retryMessage]);
 
         expect(adjacencyViolations(history)).toEqual([]);
-        expect(history.map((c) => c.role)).toEqual(['user', 'model', 'user']);
+        // The retry text is a user turn of its own after the responses: Vertex AI rejects a
+        // function-response turn with text after the responses.
+        expect(history.map((c) => c.role)).toEqual(['user', 'model', 'user', 'user']);
+        expect(history[2].parts?.every((p) => !!p.functionResponse)).toBe(true);
     });
 
     it('flags the retry text ahead of the responses in the order the loop used to produce', () => {

@@ -18,11 +18,11 @@
  *
  * @module lib/dev-workspace/clean
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
 import { SENTINEL_MARKER } from './build.js';
-import { AssertParentDirSafe, GENERATED_FILE_NAMES, SENTINEL_FILE_NAME, WORKSPACE_FILE_NAMES } from './write.js';
+import { AssertParentDirSafe, GENERATED_FILE_NAMES, LEGACY_WORKSPACE_FILE_NAMES, SENTINEL_FILE_NAME, WORKSPACE_FILE_NAMES } from './write.js';
 import type { CleanPlan, CleanResult, CleanTarget, SentinelReadResult, WorkspaceSentinel } from './types.js';
 
 /** Lockfile `pnpm install` produces at the parent. */
@@ -38,9 +38,10 @@ const MAX_SENTINEL_BYTES = 100_000;
 const RM_MAX_RETRIES = 3;
 
 /**
- * Number of paths clean owns: the four workspace files, the lockfile, the
- * node_modules tree, and the sentinel. Asserted in {@link PlanClean} so editing a
- * file-name constant can never silently widen or narrow what clean deletes.
+ * Number of paths clean always owns: the three workspace files, the lockfile, the
+ * node_modules tree, and the sentinel. Asserted in {@link PlanClean} (plus any
+ * {@link OwnedLegacyFiles}) so editing a file-name constant can never silently
+ * widen or narrow what clean deletes.
  */
 export const CLEAN_TARGET_COUNT = WORKSPACE_FILE_NAMES.length + 3;
 
@@ -86,6 +87,32 @@ export function ReadSentinel(parentDir: string): SentinelReadResult {
   return parseSentinel(raw);
 }
 
+/**
+ * The {@link LEGACY_WORKSPACE_FILE_NAMES} a valid sentinel lists — files an earlier generator version
+ * provably wrote. Only names from that constant can come back, so a sentinel can never widen what is
+ * removed. Pure.
+ */
+export function OwnedLegacyFiles(sentinel: SentinelReadResult): string[] {
+  if (sentinel.Kind !== 'valid') return [];
+  return LEGACY_WORKSPACE_FILE_NAMES.filter((name) => sentinel.Sentinel.files.includes(name));
+}
+
+/**
+ * Moves each {@link OwnedLegacyFiles} entry that still exists at the parent to `<name>.bak`, so a
+ * regenerated workspace does not keep a stale file the generator no longer writes. Call with the
+ * sentinel read BEFORE the new one was written. Returns the names moved.
+ */
+export function RetireLegacyFiles(parentDir: string, previousSentinel: SentinelReadResult): string[] {
+  const retired: string[] = [];
+  for (const name of OwnedLegacyFiles(previousSentinel)) {
+    const target = path.join(parentDir, name);
+    if (!existsSync(target)) continue;
+    renameSync(target, `${target}.bak`);
+    retired.push(name);
+  }
+  return retired;
+}
+
 /** Refusal text for a clean with no valid sentinel and no `--force`. */
 function refusalMessage(parentDir: string, sentinel: SentinelReadResult): string {
   const escapeHatch =
@@ -118,9 +145,10 @@ export function AssertCleanAllowed(parentDir: string, force: boolean): SentinelR
  * removal fails part-way, the sentinel is still there and a re-run is allowed to
  * finish the job without `--force`.
  */
-function ownedPaths(): Array<Omit<CleanTarget, 'Exists'>> {
+function ownedPaths(legacyFiles: readonly string[]): Array<Omit<CleanTarget, 'Exists'>> {
   return [
     ...WORKSPACE_FILE_NAMES.map((Name) => ({ Name, Kind: 'file' as const })),
+    ...legacyFiles.map((Name) => ({ Name, Kind: 'file' as const })),
     { Name: LOCKFILE_NAME, Kind: 'file' as const },
     { Name: NODE_MODULES_NAME, Kind: 'directory' as const },
     { Name: SENTINEL_FILE_NAME, Kind: 'file' as const },
@@ -129,23 +157,27 @@ function ownedPaths(): Array<Omit<CleanTarget, 'Exists'>> {
 
 /** `<name>.bak` copies the generator's `--force` path leaves behind. Clean never removes these. */
 function findBackups(parentDir: string): string[] {
-  return GENERATED_FILE_NAMES.map((name) => `${name}.bak`).filter((name) => existsSync(path.join(parentDir, name)));
+  return [...GENERATED_FILE_NAMES, ...LEGACY_WORKSPACE_FILE_NAMES]
+    .map((name) => `${name}.bak`)
+    .filter((name) => existsSync(path.join(parentDir, name)));
 }
 
 /**
  * Builds the removal plan for a parent directory: every owned path with whether it
- * exists right now, plus the `.bak` files that will be left alone. Read-only.
+ * exists right now, plus the `.bak` files that will be left alone. A legacy file
+ * ({@link OwnedLegacyFiles}) is planned only when the given sentinel lists it. Read-only.
  */
-export function PlanClean(parentDir: string): CleanPlan {
+export function PlanClean(parentDir: string, sentinel?: SentinelReadResult): CleanPlan {
   if (!path.isAbsolute(parentDir)) {
     throw new Error(`PlanClean requires an absolute path, got: ${parentDir}`);
   }
-  const targets: CleanTarget[] = ownedPaths().map((owned) => ({
+  const legacyFiles = sentinel === undefined ? [] : OwnedLegacyFiles(sentinel);
+  const targets: CleanTarget[] = ownedPaths(legacyFiles).map((owned) => ({
     ...owned,
     Exists: existsSync(path.join(parentDir, owned.Name)),
   }));
-  if (targets.length !== CLEAN_TARGET_COUNT) {
-    throw new Error(`clean plan has ${targets.length} targets, expected ${CLEAN_TARGET_COUNT}`);
+  if (targets.length !== CLEAN_TARGET_COUNT + legacyFiles.length) {
+    throw new Error(`clean plan has ${targets.length} targets, expected ${CLEAN_TARGET_COUNT + legacyFiles.length}`);
   }
   return { ParentDir: parentDir, Targets: targets, PreservedBackups: findBackups(parentDir) };
 }

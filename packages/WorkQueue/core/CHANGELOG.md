@@ -1,5 +1,11 @@
 # @memberjunction/work-queue-core
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- f65fec7: Enable durable `WorkQueue` Database transport by default in `MJServer`, defer `NotifyPublished` and `KickTaskGraphDispatchers` onto `RunAfterCommit`, add `ExhaustionBehavior: 'DeadLetter' | 'Discard'` for ordered partitions, and enlist `DurableEntityActionRegistry` submissions atomically inside `entity.Save()`'s SQL transaction.
+
 ## 6.2.0-edge.6
 
 ## 6.2.0-edge.5
