@@ -398,7 +398,23 @@
                  [class.fa-plus]="!MoreExpanded"
                  aria-hidden="true"></i>
             </div>
-            @if (MoreExpanded) {
+            @if (IsPhoneRail) {
+              <!-- Phone strip: the folder opens a sheet; only the active More section sits inline. -->
+              @if (ActiveMoreItem; as current) {
+                <div class="mj-forms-chrome-rail-item is-more-child is-active"
+                     role="button"
+                     tabindex="0"
+                     aria-current="page"
+                     [class.has-errors]="ChromeGroupIndicators(current).ErrorCount > 0"
+                     [class.is-dirty]="ChromeGroupIndicators(current).DirtyCount > 0"
+                     (click)="OpenMoreSheet()"
+                     (keydown.enter)="OpenMoreSheet()"
+                     (keydown.space)="$event.preventDefault(); OpenMoreSheet()">
+                  <i [class]="current.Icon"></i>
+                  <span class="mj-forms-chrome-rail-label">{{ current.Title }}</span>
+                </div>
+              }
+            } @else if (MoreExpanded) {
               <div class="mj-forms-chrome-rail-more-tree">
               @for (child of ChromeMoreItems; track child.Key) {
                 <div class="mj-forms-chrome-rail-item is-more-child"
@@ -478,6 +494,51 @@
           </div>
           }
         </nav>
+        @if (IsPhoneRail && ChromeMoreFolder; as more) {
+          <!-- Phone: the More folder's contents as a vertical, searchable sheet. The strip is
+               for the handful of first-class sections; an open-ended list needs a list. -->
+          <mj-bottom-sheet [Visible]="MoreSheetOpen"
+                           (VisibleChange)="OnMoreSheetVisibleChange($event)"
+                           [Title]="more.Title + ' sections'">
+            <div class="mj-forms-more-sheet">
+              <input type="text"
+                     class="mj-input mj-forms-more-sheet-search"
+                     [value]="EffectiveSearchFilter"
+                     (input)="OnMoreSheetSearch($event)"
+                     placeholder="Search sections..."
+                     aria-label="Search sections">
+              <div class="mj-forms-more-sheet-list" role="list">
+                @for (child of ChromeMoreItems; track child.Key) {
+                  @let sheetIndicators = ChromeGroupIndicators(child);
+                  <button type="button"
+                          class="mj-forms-more-sheet-item"
+                          role="listitem"
+                          [class.is-active]="ChromeActiveGroupKey === child.Key"
+                          [attr.aria-current]="ChromeActiveGroupKey === child.Key ? 'page' : null"
+                          (click)="OnMoreSheetSelect(child.Key)">
+                    <i [class]="child.Icon" aria-hidden="true"></i>
+                    <span class="mj-forms-more-sheet-label">{{ child.Title }}</span>
+                    @if (sheetIndicators.ErrorCount > 0) {
+                      <span class="mj-forms-chrome-rail-error" role="img"
+                            [attr.aria-label]="RailErrorTitle(sheetIndicators.ErrorCount, child.Title)">
+                        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ sheetIndicators.ErrorCount }}
+                      </span>
+                    } @else if (sheetIndicators.DirtyCount > 0) {
+                      <span class="mj-forms-chrome-rail-dirty" role="img"
+                            [attr.aria-label]="RailDirtyTitle(sheetIndicators.DirtyCount, child.Title)"></span>
+                    }
+                    @let sheetCount = ChromeGroupRowCount(child);
+                    @if (sheetCount != null && sheetCount > 0) {
+                      <span class="mj-forms-chrome-rail-count">{{ sheetCount }}</span>
+                    }
+                  </button>
+                } @empty {
+                  <div class="mj-forms-more-sheet-empty">No sections match.</div>
+                }
+              </div>
+            </div>
+          </mj-bottom-sheet>
+        }
       }
       <!-- All panels in a single flex container — CSS order drives sequencing -->
       <div class="mj-forms-all-panels">

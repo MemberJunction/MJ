@@ -119,7 +119,10 @@ class ListMgmtStub { @Input() visible = false; @Input() config: unknown; }
 @Component({ standalone: true, selector: 'mj-form-contributions', template: '' })
 class FormContributionsStub { @Input() Record: unknown; @Input() FormComponent: unknown; @Input() FormContext: unknown; @Input() BakedSectionKeys: unknown; @Input() ShowRelatedEntities = true; }
 
-const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordLinksStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
+@Component({ standalone: true, selector: 'mj-bottom-sheet', template: '@if (Visible) { <ng-content></ng-content> }' })
+class BottomSheetStub { @Input() Visible = false; @Input() Title = ''; @Output() VisibleChange = new EventEmitter<boolean>(); @Output() Closed = new EventEmitter<void>(); }
+
+const CHILD_STUBS = [BottomSheetStub, ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordLinksStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
 
 const RECORD = { EntityInfo: { Name: 'Accounts' } } as unknown as BaseEntity;
 
@@ -1273,9 +1276,62 @@ describe('MjRecordFormContainerComponent (DOM) — mobile rail', () => {
     expect(moreChildren(f).length).toBe(0);
   });
 
-  it('still opens the More folder on a phone when the active section lives inside it', () => {
+  it('shows only the active More section as a pill on a phone, never the whole tree', () => {
     const f = renderMobile({ mobile: true, moreExpandedPref: '0', activeGroup: 'audit' });
+    const pills = moreChildren(f);
+    expect(pills.length).toBe(1);
+    expect(pills[0].classList.contains('is-active')).toBe(true);
+    expect(f.componentInstance.MoreExpanded).toBe(true);
+  });
+
+  it('tapping More on a phone opens a sheet listing the More sections instead of inlining them', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    expect(f.componentInstance.MoreSheetOpen).toBe(false);
+    (f.nativeElement.querySelector('.mj-forms-chrome-rail-item.is-more-folder') as HTMLElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.MoreSheetOpen).toBe(true);
+    expect(f.nativeElement.querySelectorAll('.mj-forms-more-sheet-item').length).toBe(2);
+    expect(moreChildren(f).length).toBe(0);
+  });
+
+  it('choosing a section in the sheet activates it and closes the sheet', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    (f.nativeElement.querySelector('.mj-forms-chrome-rail-item.is-more-folder') as HTMLElement).click();
+    f.detectChanges();
+    const rows = Array.from(f.nativeElement.querySelectorAll('.mj-forms-more-sheet-item')) as HTMLElement[];
+    rows[1].click();
+    f.detectChanges();
+    expect(f.componentInstance.ChromeActiveGroupKey).toBe('logs');
+    expect(f.componentInstance.MoreSheetOpen).toBe(false);
+    expect(moreChildren(f).length).toBe(1);
+    expect(moreChildren(f)[0].classList.contains('is-active')).toBe(true);
+  });
+
+  it('choosing a section in the sheet clears the search used to find it', () => {
+    const filters: string[] = [];
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    const form = { searchFilter: '', onFilterChange: (v: string) => { filters.push(v); form.searchFilter = v; } };
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    (f.nativeElement.querySelector('.mj-forms-chrome-rail-item.is-more-folder') as HTMLElement).click();
+    f.detectChanges();
+    const search = f.nativeElement.querySelector('.mj-forms-more-sheet-search') as HTMLInputElement;
+    search.value = 'log';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(filters).toEqual(['log']);
+    (f.nativeElement.querySelector('.mj-forms-more-sheet-item') as HTMLElement).click();
+    f.detectChanges();
+    expect(filters).toEqual(['log', '']);
+    expect(f.componentInstance.MoreSheetOpen).toBe(false);
+  });
+
+  it('clicking More on desktop still expands the inline tree and opens no sheet', () => {
+    const f = renderMobile({ mobile: false, moreExpandedPref: '0', activeGroup: 'details' });
+    (f.nativeElement.querySelector('.mj-forms-chrome-rail-item.is-more-folder') as HTMLElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.MoreSheetOpen).toBe(false);
     expect(moreChildren(f).length).toBe(2);
+    expect(f.nativeElement.querySelector('.mj-forms-more-sheet-item')).toBeNull();
   });
 
   it('scrolls the newly active rail pill into view on a phone', () => {

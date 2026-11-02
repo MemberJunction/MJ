@@ -52,6 +52,7 @@ const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction];
 void _BUILTIN_TOOLBAR_ACTIONS;
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { IsPhoneViewport, WatchPhoneViewport } from '../chrome/phone-viewport';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, DefaultContributionChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
@@ -845,6 +846,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     this.restoreChromePrefs();
     this.scheduleChromeResolve();
+    this.stopWatchingPhoneViewport = WatchPhoneViewport(() => {
+      this.MoreSheetOpen = false;
+      this.cdr.markForCheck();
+    });
 
     // Watch for changes to record dirty state
     this.watchRecordChanges();
@@ -896,6 +901,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.stopWatchingPhoneViewport?.();
+    this.stopWatchingPhoneViewport = null;
     this.destroyToolbarActions();
     // A count or chrome-rule result still in flight then matches nothing and is dropped.
     this.countRequestToken++;
@@ -916,6 +923,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   public OnMoreFolderToggle(): void {
+    if (this.isMobileRailViewport()) {
+      this.OpenMoreSheet();
+      return;
+    }
     this.chrome.ToggleMoreFolder();
     this.persistChromePrefs();
     this.cdr.detectChanges();
@@ -1039,9 +1050,55 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private isMobileRailViewport(): boolean {
-    return typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(max-width: 768px)').matches;
+    return IsPhoneViewport();
+  }
+
+  /** Template-facing: the rail is the phone strip, so More opens as a sheet, not inline. */
+  public get IsPhoneRail(): boolean {
+    return this.isMobileRailViewport();
+  }
+
+  // ---- Phone More sheet ----
+
+  /** Whether the phone's More sheet (the vertical list of More sections) is open. */
+  public MoreSheetOpen = false;
+
+  private stopWatchingPhoneViewport: (() => void) | null = null;
+
+  /**
+   * On a phone the strip shows the active More section as one pill after the folder, so
+   * the user sees where they are without the folder's whole contents inline.
+   */
+  public get ActiveMoreItem(): FormChromeGroup | null {
+    const active = this.chrome.ActiveGroupKey;
+    if (!active) return null;
+    return this.ChromeMoreItems.find((item) => item.Key === active) ?? null;
+  }
+
+  public OpenMoreSheet(): void {
+    this.MoreSheetOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  public OnMoreSheetVisibleChange(visible: boolean): void {
+    this.MoreSheetOpen = visible;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * A row in the phone's More sheet was tapped: go there and put the sheet away. The sheet's
+   * search was a way to find the row, not a standing filter, so it is cleared too; left in
+   * place it would hide every other pill in the strip and hold the toolbar open for its chip.
+   */
+  public OnMoreSheetSelect(groupKey: string): void {
+    this.MoreSheetOpen = false;
+    if (this.EffectiveSearchFilter.trim()) this.OnFilterChange('');
+    this.OnChromeGroupActivate(groupKey);
+  }
+
+  public OnMoreSheetSearch(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    this.OnFilterChange(input?.value ?? '');
   }
 
   private activeGroupIsInMore(): boolean {

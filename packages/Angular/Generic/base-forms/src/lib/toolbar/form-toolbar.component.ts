@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, Templa
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { IsPhoneViewport, WatchPhoneViewport } from '../chrome/phone-viewport';
 import { BaseEntity, EntityInfo, CompositeKey, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -1169,31 +1170,23 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.IsGlobalToolbarPinned;
   }
 
-  /** Media query under which Read Mode auto-hides the toolbar behind the [Edit | ...] pill. */
-  public static readonly AUTO_HIDE_MEDIA_QUERY = '(max-width: 768px)';
-
-  private autoHideMedia: MediaQueryList | null = null;
-  private readonly onAutoHideMediaChange = (): void => this.cdr.markForCheck();
+  private stopWatchingPhoneViewport: (() => void) | null = null;
 
   /**
    * True at phone width, where pixels matter enough to hide the toolbar by default. Desktop
    * always shows the full toolbar; the pin and hide controls exist only here.
    */
   public get IsAutoHideViewport(): boolean {
-    return typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia(MjFormToolbarComponent.AUTO_HIDE_MEDIA_QUERY).matches;
+    return IsPhoneViewport();
   }
 
   private watchAutoHideViewport(): void {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    this.autoHideMedia = window.matchMedia(MjFormToolbarComponent.AUTO_HIDE_MEDIA_QUERY);
-    this.autoHideMedia.addEventListener?.('change', this.onAutoHideMediaChange);
+    this.stopWatchingPhoneViewport = WatchPhoneViewport(() => this.cdr.markForCheck());
   }
 
   private unwatchAutoHideViewport(): void {
-    this.autoHideMedia?.removeEventListener?.('change', this.onAutoHideMediaChange);
-    this.autoHideMedia = null;
+    this.stopWatchingPhoneViewport?.();
+    this.stopWatchingPhoneViewport = null;
   }
 
   /**

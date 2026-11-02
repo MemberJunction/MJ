@@ -859,17 +859,90 @@ mj-collapsible-panel.mj-form-role-more {
     display: none;
   }
 
-  /* When More is expanded on mobile, keep children in the horizontal pill flow */
-  .mj-forms-chrome-rail-more-tree {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 6px;
-    margin-left: 0;
-    padding-left: 6px;
-    border-left: 2px solid var(--mj-border-default);
+  /* The active More section rides along after the folder pill as one chip. */
+  .mj-forms-chrome-rail-item.is-more-child {
+    margin-left: -2px;
   }
+}
+
+/* ============================================
+   PHONE MORE SHEET — the folder's contents as a vertical list
+   ============================================ */
+.mj-forms-more-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3, 12px);
+  padding: 0 var(--mj-space-4, 16px) var(--mj-space-4, 16px);
+}
+
+.mj-forms-more-sheet-search {
+  width: 100%;
+}
+
+.mj-forms-more-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.mj-forms-more-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-primary);
+  font: inherit;
+  font-size: var(--mj-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mj-forms-more-sheet-item > i {
+  width: 1.15em;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.mj-forms-more-sheet-item:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-forms-more-sheet-item:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.mj-forms-more-sheet-item.is-active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-forms-more-sheet-item.is-active > i {
+  color: inherit;
+}
+
+.mj-forms-more-sheet-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-forms-more-sheet-empty {
+  padding: var(--mj-space-4, 16px);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  text-align: center;
 }
 
 /* ============================================
