@@ -68,6 +68,23 @@ function errorText(err: unknown): string {
                     </select>
                 </div>
 
+                <div class="mj-diag-field">
+                    <span class="mj-diag-field-label">Live Recording</span>
+                    <div class="mj-diag-recording-row">
+                        @if (IsRecording) {
+                            <button type="button" mjButton Variant="danger" Size="sm" [disabled]="IsBuilding" (click)="OnStopRecording()">
+                                Stop &amp; Package Recording
+                            </button>
+                            <span class="mj-diag-hint">Recording. Reproduce the problem, then stop to package it.</span>
+                        } @else {
+                            <button type="button" mjButton Variant="secondary" Size="sm" (click)="OnStartRecording()">
+                                Start Live Recording
+                            </button>
+                            <span class="mj-diag-hint">Records requests and logs while you reproduce the problem.</span>
+                        }
+                    </div>
+                </div>
+
                 @if (ErrorMessage) {
                     <mj-alert Variant="error" Role="alert" [Message]="ErrorMessage"></mj-alert>
                 }
@@ -119,17 +136,8 @@ function errorText(err: unknown): string {
                     Size="md"
                     [disabled]="IsBuilding"
                     (click)="OnBuildSnapshot()">
-                    {{ IsBuilding ? 'Building...' : 'Download Client Snapshot (.mjdiag)' }}
+                    {{ IsBuilding ? 'Building...' : 'Download Client Snapshot' }}
                 </button>
-                @if (IsRecording) {
-                    <button type="button" mjButton Variant="danger" Size="md" [disabled]="IsBuilding" (click)="OnStopRecording()">
-                        Stop &amp; Package Recording
-                    </button>
-                } @else {
-                    <button type="button" mjButton Variant="secondary" Size="md" (click)="OnStartRecording()">
-                        Start Live Recording
-                    </button>
-                }
                 <button type="button" mjButton Variant="outline" Size="md" (click)="OnClose()">
                     Cancel
                 </button>
@@ -147,6 +155,16 @@ function errorText(err: unknown): string {
             flex-direction: column;
             gap: var(--mj-space-1);
             font-size: 13px;
+        }
+        .mj-diag-recording-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--mj-space-2);
+        }
+        .mj-diag-hint {
+            font-size: 12px;
+            color: var(--mj-text-secondary);
         }
         .mj-diag-summary-box {
             padding: var(--mj-space-2-5) var(--mj-space-3);

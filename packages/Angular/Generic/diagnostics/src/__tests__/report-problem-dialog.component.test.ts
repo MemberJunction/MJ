@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChangeDetectorRef, Injector, runInInjectionContext } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { MJDiagnosticsService } from '../lib/diagnostics.service';
 import { MJDiagnosticReportProblemDialogComponent } from '../lib/report-problem-dialog.component';
 import { MJDiagnosticRecordingBannerComponent } from '../lib/recording-banner.component';
@@ -104,5 +106,15 @@ describe('MJDiagnosticReportProblemDialogComponent', () => {
         expect(dialog.IsClientOnlyRecording).toBe(true);
         service.StopRecording();
         dialog.ngOnDestroy();
+    });
+    it('keeps the action row to Submit, Download and Cancel so it fits a medium dialog', () => {
+        const source = readFileSync(fileURLToPath(new URL('../lib/report-problem-dialog.component.ts', import.meta.url)), 'utf8');
+        const actions = source.slice(source.indexOf('<mj-dialog-actions>'), source.indexOf('</mj-dialog-actions>'));
+
+        expect((actions.match(/<button/g) ?? []).length).toBe(3);
+        expect(actions).not.toContain('OnStartRecording');
+        expect(actions).not.toContain('OnStopRecording');
+        expect(source).toContain('OnStartRecording()');
+        expect(source).toContain('OnStopRecording()');
     });
 });
