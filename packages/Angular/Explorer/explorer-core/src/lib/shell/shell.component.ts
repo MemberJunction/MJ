@@ -36,6 +36,7 @@ import { MJUserEntity, InstanceConfigEngine, InteractiveFormsEngine, UserInfoEng
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { MJDiagnosticsService } from '@memberjunction/ng-diagnostics';
 import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -757,6 +758,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   /** Warms the React runtime (CDN scripts) after login; see InitializeShell(). Field-injected so the constructor signature is unchanged. */
   private reactAdapter = inject(AngularAdapterService);
+  private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
+  public DiagnosticDialogOpen = false;
 
   constructor(
     private appManager: ApplicationManager,
@@ -836,6 +839,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   async ngOnInit(): Promise<void> {
     try {
+      this.diagnosticsService?.Initialize();
       let loggedIn = false;
       let shellInitialized = false;
       const initShellOnce = async (): Promise<void> => {
@@ -3288,11 +3292,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return;
     }
 
+    if (result.message === 'diagnostic-bundle') {
+      this.UserMenuVisible = false;
+      this.ShowDiagnosticBundleDialog();
+      return;
+    }
+
     if (result.message === 'about') {
       this.UserMenuVisible = false;
       this.aboutDialogService.open(this.viewContainerRef, {
         avatarUrl: this.UserImageURL || null,
-        avatarIconClass: this.UserIconClass || null
+        avatarIconClass: this.UserIconClass || null,
+        onReportProblem: () => this.ShowDiagnosticBundleDialog()
       });
       return;
     }
@@ -3997,6 +4008,28 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       },
       IsPinned: false
     });
+  }
+
+  /**
+   * Open the Diagnostic Bundle ("Report a Problem") dialog.
+   */
+  public ShowDiagnosticBundleDialog(): void {
+    this.diagnosticsService?.Initialize();
+    this.DiagnosticDialogOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Download a pre-reset client diagnostic bundle (.mjdiag) from the stuck-loading screen
+   * before ResetApplication() clears browser caches.
+   */
+  public async DownloadPreResetDiagnostics(): Promise<void> {
+    if (!this.diagnosticsService) return;
+    this.diagnosticsService.Initialize();
+    const bundle = await this.diagnosticsService.BuildClientBundle({
+      reason: 'Stuck startup screen (pre-reset diagnostic snapshot)'
+    });
+    this.diagnosticsService.DownloadClientBundle(bundle);
   }
 
   /**
