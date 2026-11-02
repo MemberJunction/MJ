@@ -53,6 +53,7 @@ import { RecordMapBatch } from './RecordMapBatch.js';
 import { BuildContentHashPrefetchFilter, QuoteTextLiteral } from './prefetchFilter.js';
 import { SerializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue, FoldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
+import { DetachString } from './DetachedString.js';
 import { ComputeExcludedSourceNames } from './SyncDirectives.js';
 import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
 import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from './HashDiff.js';
@@ -3364,7 +3365,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     }
                 }
                 for (const rec of batch.Records) {
-                    fetchedExternalIDs.add(rec.ExternalID);
+                    fetchedExternalIDs.add(DetachString(rec.ExternalID));
                 }
                 // OOM guard: a multi-million-row full sync would grow this set without bound. Past the
                 // ceiling, drop it + flag so orphan detection is skipped (a SyncWarning is emitted below)

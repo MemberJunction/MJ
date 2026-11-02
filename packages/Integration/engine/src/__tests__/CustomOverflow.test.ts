@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ComputeUnmappedFields, HasUnmappedFields, ReconcileOverflowValue, CUSTOM_OVERFLOW_COLUMN } from '../CustomOverflow.js';
+import { ExternalTextMB, PAGE_MB, ParseFirstValue, ResponsePage } from './helpers/retainedText.js';
 
 describe('CustomOverflow', () => {
     describe('CUSTOM_OVERFLOW_COLUMN', () => {
@@ -121,5 +122,21 @@ describe('foldCustomKeyStats (candidates exist even when every row is skipped)',
         FoldCustomKeyStats([{ k: 'much-longer-value' }], agg);
         expect(agg.get('k')!.occurrences).toBe(2);
         expect(agg.get('k')!.maxLength).toBe('much-longer-value'.length);
+    });
+
+    it('keeps sampled values without keeping the response pages they were parsed from', async () => {
+        // A connector that parses response text with a regex hands over values that point into the
+        // page. The run keeps these samples until it ends, so each one must not keep its page.
+        const pages = 10;
+        const agg = new Map<string, CustomKeyAccumulator>();
+        const before = await ExternalTextMB();
+        // Parsed inside a helper so the test's own frame never holds a parsed value.
+        const foldPage = (page: number) =>
+            FoldCustomKeyStats([{ [`column${page}`]: ParseFirstValue(ResponsePage(`sampled value from page ${page}`)) }], agg);
+        for (let page = 0; page < pages; page++) foldPage(page);
+        const kept = (await ExternalTextMB()) - before;
+
+        expect(agg.get('column3')!.samples).toEqual(['sampled value from page 3']);
+        expect(kept).toBeLessThan(PAGE_MB);
     });
 });

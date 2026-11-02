@@ -1,3 +1,5 @@
+import { DetachString } from './DetachedString.js';
+
 /**
  * Name of the per-record custom-overflow column. Written on every integration table
  * alongside the other `__mj_integration_*` columns when present. Holds a JSON object of
@@ -130,7 +132,9 @@ export function FoldCustomKeyStats(
                 ? value
                 : typeof value === 'object' ? JSON.stringify(value) : String(value);
             if (serialized.length > entry.maxLength) entry.maxLength = serialized.length;
-            if (entry.samples.length < CUSTOM_KEY_SAMPLE_CAP) entry.samples.push(value);
+            if (entry.samples.length < CUSTOM_KEY_SAMPLE_CAP) {
+                entry.samples.push(typeof value === 'string' ? DetachString(value) : value);
+            }
         }
     }
 }
