@@ -93,7 +93,7 @@ type DrainedChunk = ReturnType<DiagnosticSessionManager['DrainPendingBuffersForS
 const diagnosticAls = new AsyncLocalStorage<DiagnosticContext>();
 
 class ServerDiagnosticContextProvider implements IDiagnosticContextProvider {
-  public getContext(): DiagnosticContext | undefined {
+  public GetContext(): DiagnosticContext | undefined {
     return this.GetCurrentContext();
   }
 
@@ -111,7 +111,7 @@ class ServerDiagnosticContextProvider implements IDiagnosticContextProvider {
     return ctx;
   }
 
-  public runWithContext<T>(ctx: DiagnosticContext | undefined, fn: () => T): T {
+  public RunWithContext<T>(ctx: DiagnosticContext | undefined, fn: () => T): T {
     if (ctx === undefined) {
       return diagnosticAls.exit(fn);
     }

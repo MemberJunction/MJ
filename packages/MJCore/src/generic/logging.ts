@@ -40,9 +40,9 @@ export interface DiagnosticContext {
  * Registered by `@memberjunction/diagnostics-server` on Node.js.
  */
 export interface IDiagnosticContextProvider {
-    getContext?(): DiagnosticContext | undefined;
+    GetContext?(): DiagnosticContext | undefined;
     GetCurrentContext?(): DiagnosticContext | undefined;
-    runWithContext?<T>(ctx: DiagnosticContext | undefined, fn: () => T): T;
+    RunWithContext?<T>(ctx: DiagnosticContext | undefined, fn: () => T): T;
     WithoutDiagnosticCapture?<T>(fn: () => T): T;
     RunDetached?<T>(fn: () => T): T;
 }
@@ -98,7 +98,7 @@ export function SetDiagnosticContextProvider(provider: IDiagnosticContextProvide
  * Returns the active DiagnosticContext for the current async execution chain, if any.
  */
 export function GetDiagnosticContext(): DiagnosticContext | undefined {
-    return _diagnosticContextProvider?.getContext?.() ?? _diagnosticContextProvider?.GetCurrentContext?.();
+    return _diagnosticContextProvider?.GetContext?.() ?? _diagnosticContextProvider?.GetCurrentContext?.();
 }
 
 /**
@@ -139,9 +139,9 @@ export function WithoutDiagnosticCapture<T>(fn: () => T): T {
     if (_diagnosticContextProvider?.WithoutDiagnosticCapture) {
         return _diagnosticContextProvider.WithoutDiagnosticCapture(execute);
     }
-    if (_diagnosticContextProvider?.runWithContext) {
+    if (_diagnosticContextProvider?.RunWithContext) {
         const current = GetDiagnosticContext();
-        return _diagnosticContextProvider.runWithContext(
+        return _diagnosticContextProvider.RunWithContext(
             { ...(current ?? {}), suppressCapture: true, SuppressCapture: true, IsCaptured: false },
             execute
         );
@@ -158,8 +158,8 @@ export function RunDetachedFromDiagnosticContext<T>(fn: () => T): T {
     if (_diagnosticContextProvider?.RunDetached) {
         return _diagnosticContextProvider.RunDetached(fn);
     }
-    if (_diagnosticContextProvider?.runWithContext) {
-        return _diagnosticContextProvider.runWithContext(undefined, fn);
+    if (_diagnosticContextProvider?.RunWithContext) {
+        return _diagnosticContextProvider.RunWithContext(undefined, fn);
     }
     return fn();
 }

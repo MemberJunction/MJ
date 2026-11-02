@@ -337,8 +337,8 @@ Instance Configurations (category `Diagnostics`), seeded with defaults via `meta
 - `mj.config.cjs` kill switch `diagnostics.allowExternal: false` overrides the database, for operators who must guarantee nothing leaves.
 - Destination and intake secrets (customer collector API keys, MJC support token, receiver X25519 private key) live in `MJ: Credentials`, never in Instance Configurations, which cache to clients.
 - **Install ID**: `Instance.InstallID`, a random UUID minted on first boot by `diagnostics-server` (insert if absent, then re-read so concurrent first boots converge on one value). Never seeded by migration or metadata. Phone Home reuses it.
-- **Authorizations** (`metadata/authorizations`, role mapping in `metadata/authorization-roles`): `Diagnostics: Run Sessions` and `Diagnostics: Send Externally`, deliberately separate; the Owner user type is a fallback. Default role mapping to the administrator role; confirm role names during implementation.
-- **API scopes** (`metadata/api-scopes`): `diagnostics:read`, `diagnostics:manage`, `diagnostics:send`, `diagnostics:ingest` (used by sender instances authenticating to a receiver MJAPI's intake endpoint with an `mj_sk_*` User API Key).
+- **Authorizations** (`metadata/authorizations`, role mapping in `metadata/authorization-roles`): `Diagnostics: Run Sessions`, `Diagnostics: Send Externally` and `Diagnostics: Manage Intake` (registration codes, received bundles), deliberately separate; the Owner user type is a fallback. Default role mapping to the administrator role; confirm role names during implementation.
+- **API scopes** (`metadata/api-scopes`): `diagnostics:read`, `diagnostics:manage`, `diagnostics:send`. Sender instances do not use API keys at the intake endpoint: they enrol once with a registration code and sign each request with `MJDiag-Ed25519` (see the guide, §3 and §4).
 - Refuse scope-limited principals (magic-link and widget guest sessions) on every diagnostics operation (`IsScopeLimitedPrincipal`).
 - **Audit Log types** (`metadata/audit-log-types`): Diagnostics Session Started, Session Stopped, Bundle Built, Bundle Previewed, Bundle Downloaded, Bundle Sent, Bundle Send Failed, Bundle Received, Sharing Settings Changed.
 
@@ -377,7 +377,7 @@ Instead of building a bespoke, MJC-only intake service outside the repo, **recei
 1. **`GET /public-key`**
    - Returns `{ keyId, publicKey, algorithm: 'X25519', signature? }` from the receiver's configured intake keypair (`MJ: Credentials`).
 2. **`POST /bundles`**
-   - **Auth**: Sender authenticates with a scoped MJ User API Key (`X-API-Key: mj_sk_*` carrying scope `diagnostics:ingest`) or, on MJC, an MJC-issued tenant/support token validated by middleware.
+   - **Auth**: `Authorization: MJDiag-Ed25519 …`, signed with the Ed25519 key of an `Active` `MJ: Diagnostic Sender Registrations` row. The sender gets that row by enrolment (`POST /enroll` with a one-time registration code). See the guide, §3 and §4.
    - **Body**: `{ installId, bundleId, formatVersion, mjVersion, scrubLiterals, sizeBytes, plaintextSha256, encryptedSha256, keyId, summary?, contact? }`.
    - **Validation**: Enforces rate limits (per `installId` and IP), verifies `sizeBytes <= 26_214_400` (25 MB), creates a `DiagnosticBundle` row with `Direction = 'Received'`, `Status = 'Receiving'`, `SenderInstallID = installId`, `SenderMJVersion = mjVersion`, `ContactInfo = contact`, and returns `201 { referenceId, uploadUrl, uploadExpiresAt }`.
    - **Upload target**: When `Diagnostics.Intake.StorageProviderID` is configured and supports pre-authenticated uploads, `uploadUrl` can be an `MJStorage` presigned PUT URL; otherwise it points to `PUT ${ApiRoute('/diagnostics/intake/v1/bundles/:referenceId/payload')}` with a short-lived signed upload token.
@@ -420,7 +420,7 @@ Instead of building a bespoke, MJC-only intake service outside the repo, **recei
     - Follow the mandatory 4-step sequence in `migrations/CLAUDE.md` so JSONType lookups and Remote Operations do not fail or wipe `remote_operations.ts`:
       1. `mj migrate`
       2. `mj codegen --skipfiles` (creates `Entity` and `EntityField` rows and emits `CodeGen_Run_*.sql` to append after 50 blank lines)
-      3. `mj sync push --dir=metadata --ci` (pushes `JSONTypeDefinition` metadata, Instance Configurations, Authorizations, role mappings, API scopes including `diagnostics:ingest`, Audit Log types, Remote Operation category and rows)
+      3. `mj sync push --dir=metadata --ci` (pushes `JSONTypeDefinition` metadata, Instance Configurations, Authorizations, role mappings, API scopes, credential types, Audit Log types, Remote Operation category and rows)
       4. `mj codegen --skipdb` (regenerates TypeScript entity subclasses, `remote_operations.ts`, MJServer resolvers, and Explorer forms)
       5. Revert `sync` block write-backs in `metadata/**/*.json` and verify with `npm run check:codegen-tail`.
     - Add `MJ: Diagnostic Session Chunks` to `DEFAULT_HIGH_CHURN_SYSTEM_ENTITIES`.
@@ -449,7 +449,7 @@ Instead of building a bespoke, MJC-only intake service outside the repo, **recei
 11. `BaseDiagnosticContributor` + CI test.
 
 ### Phase 3: Standard MJAPI intake, outbound send, and analysis (edge.8 if ready, else backport to `lts/6.2`)
-1. **Standard MJAPI Intake** (`${ApiRoute('/diagnostics/intake/v1')}` in `@memberjunction/diagnostics-server`): `GET /public-key`, `POST /bundles`, `PUT /bundles/:referenceId/payload`, `POST /bundles/:referenceId/complete`; `diagnostics:ingest` scope check and rate limiting; streaming SHA-256 verification and X25519/AES-256-GCM decryption via `MJ: Credentials`; `MJStorage` persistence; `Diagnostics.Intake.OnBundleReceivedActionID` post-intake hook.
+1. **Standard MJAPI Intake** (`${ApiRoute('/diagnostics/intake/v1')}` in `@memberjunction/diagnostics-server`): `GET /public-key`, `POST /bundles`, `PUT /bundles/:referenceId/payload`, `POST /bundles/:referenceId/complete`; `POST /enroll`, `MJDiag-Ed25519` signed-request check against `MJ: Diagnostic Sender Registrations`, and rate limiting; streaming SHA-256 verification and X25519/AES-256-GCM decryption via `MJ: Credentials`; `MJStorage` persistence; `Diagnostics.Intake.OnBundleReceivedActionID` post-intake hook.
 2. **`SendBundle`**: settings gate, kill switch, X25519/AES-256-GCM encryption with AAD and Ed25519 key-signature check, three-step upload to `MJC` or `CustomerCollector` with retries, status and `ExternalReferenceID` update (without loading/re-saving the `Data` blob), audit rows.
 3. Findings rules v1.
 4. Bundle viewer (L2) used by the Diagnostics dashboard for both local and received bundles; open local `.mjdiag` files from disk.
@@ -566,7 +566,7 @@ Entity & binary storage rules (via `metadata/`, not migration inserts):
 - **Receive-side architecture.** Resolved: build bundle intake (`/diagnostics/intake/v1`) as standard MJAPI functionality in `@memberjunction/diagnostics-server` (off by default via `Diagnostics.Intake.Enabled`). MJC enables it with its `MJStorage` provider and `bizapps-issues` post-intake Action; enterprise customers can enable it on their own central MJ collector instance.
 - **Chunk table growth & binary bloat.** Mitigation: per-session byte caps, direct parameterized streaming for bundle binary data (no `BaseEntity` `SELECT *` echo on status updates), retention purge scheduled job, excluded from Record Changes and browser cache fan-out.
 - **Multi-tenant leakage.** Mitigation: `CompanyID` on both `DiagnosticSession` and `DiagnosticBundle`; enforced at request-matching time so two tenants never share a session or chunk.
-- **Open: MJC intake authentication** for self-hosted customers: standard MJAPI intake supports scoped `mj_sk_*` API keys (`diagnostics:ingest`); MJC team to confirm whether self-hosted instances use an MJC-issued `mj_sk_*` key or an MJC support token.
+- **Open: MJC sender registration** for self-hosted customers: standard MJAPI intake accepts only enrolled senders (registration code, then `MJDiag-Ed25519` signed requests; guide §3 and §4). MJC team to confirm how it issues registration codes to self-hosted customers.
 - **Open: retention period and data-processing terms** MJ publishes for bundles sent to MJC (default intake retention is 30 days via `Diagnostics.Intake.RetentionDays`).
 - **Open: two-person approval** before an external send for regulated customers (Phase 3 enhancement if requested).
 
@@ -607,7 +607,7 @@ Entity & binary storage rules (via `metadata/`, not migration inserts):
 | `migrations/v6/V<ts>__v6.2.x__Diagnostic_Bundles.sql` | Three tables + 50 blank lines + CodeGen output |
 | `metadata/instance-configurations/` | `Diagnostics.*` and `Diagnostics.Intake.*` defaults |
 | `metadata/authorizations/`, `metadata/authorization-roles/` | Two authorizations and role mappings |
-| `metadata/api-scopes/` | `diagnostics:read`, `diagnostics:manage`, `diagnostics:send`, `diagnostics:ingest` scopes |
+| `metadata/api-scopes/` | `diagnostics:read`, `diagnostics:manage`, `diagnostics:send` scopes |
 | `metadata/audit-log-types/` | Diagnostics audit types (including `Bundle Downloaded` and `Bundle Received`) |
 | `metadata/remote-operation-categories/`, `metadata/remote-operations/` | Category, seven operations, type files |
 | `.claude/skills/analyze-diagnostic-bundle/` | Maintainer skill |

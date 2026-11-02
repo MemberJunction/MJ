@@ -35,7 +35,7 @@ export default class DiagExport extends Command {
         const { args, flags } = await this.parse(DiagExport);
         const format: 'perfetto' | 'otlp' = flags.otlp ? 'otlp' : 'perfetto';
         const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
-        const exportedJson = ExportBundleTraces(loaded.data, format);
+        const exportedJson = ExportBundleTraces(loaded.Data, format);
         fs.writeFileSync(flags.output, exportedJson, 'utf8');
         this.log(`Exported ${format.toUpperCase()} trace to ${flags.output}`);
     }

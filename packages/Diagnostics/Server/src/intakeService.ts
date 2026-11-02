@@ -1,6 +1,6 @@
 import * as crypto from 'node:crypto';
 import { BaseSingleton, SanitizeForLog, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, UserInfo, WithoutDiagnosticCapture } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunDetachedFromDiagnosticContext, UserInfo, WithoutDiagnosticCapture } from '@memberjunction/core';
 import { MJDiagnosticBundleEntity } from '@memberjunction/core-entities';
 import {
   GenerateDiagnosticKeyPair,
@@ -45,6 +45,22 @@ import {
 } from './receivedBundleRows.js';
 
 export const MAX_INTAKE_BUNDLE_BYTES = 26_214_400; // 25 MiB hard ceiling
+
+const UPLOAD_WINDOW_MS = 10 * 60_000;
+const SWEEP_INTERVAL_MS = 60_000;
+
+/** Thrown by `InitiateBundleIntake` when the intake holds as many records as it may. Routes answer 429. */
+export class IntakeCapacityError extends Error {}
+
+/** Throws when `value` is set and is not a positive integer. */
+function assertPositiveInteger(name: string, value: number | undefined): void {
+  if (value !== undefined && !(Number.isInteger(value) && value > 0)) {
+    throw new Error(`Diagnostics intake option ${name} must be a positive integer.`);
+  }
+}
+
+/** Reason code of a complete call made after the record's complete deadline. */
+export const COMPLETE_EXPIRED_REASON = 'COMPLETE_EXPIRED';
 
 /** Reason code of a payload or complete call whose sender is not the one that created the record. */
 export const SENDER_MISMATCH_REASON = 'SENDER_MISMATCH';
@@ -98,6 +114,10 @@ export interface StoredIntakeBundleRecord {
   status: 'Receiving' | 'Quarantined' | 'Ready' | 'Failed';
   createdAtMs: number;
   uploadExpiresAtMs: number;
+  /** After this time an uploaded record that was not completed is rejected and removed. */
+  completeDeadlineMs: number;
+  /** True while `CompleteBundleIntake` runs for the record; the sweep skips it. */
+  completing?: boolean;
   /** The authenticated sender, or undefined for an in-process (local loopback) record. */
   sender?: SenderIdentity;
   encryptedPayload?: Uint8Array;
@@ -206,6 +226,9 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
   private _replayCache = new ReplayCache();
   private _senderRequests = new RateCounter(60_000, 30);
   private _ipFailures = new RateCounter(60_000, 60);
+  private _maxRecordsInMemory = 200;
+  private _maxOpenIntakesPerSender = 5;
+  private _sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   public constructor() {
     super();
@@ -240,11 +263,17 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
     this._replayCache.Clear();
     this._senderRequests.Clear();
     this._ipFailures.Clear();
+    this._maxRecordsInMemory = 200;
+    this._maxOpenIntakesPerSender = 5;
+    if (this._sweepTimer) clearInterval(this._sweepTimer);
+    this._sweepTimer = null;
   }
 
   /**
    * Sets intake options. `contextUser` with `provider` (or the default provider) lets the intake
-   * read sender registrations and save received bundle rows.
+   * read sender registrations and save received bundle rows. `maxRecordsInMemory` (default 200)
+   * caps the records kept in memory; `maxOpenIntakesPerSender` (default 5) caps the `Receiving`
+   * records of one install. The four limit options must be positive integers, otherwise it throws.
    */
   public Configure(options: {
     enabled?: boolean;
@@ -255,21 +284,39 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
     onBundleReceivedHook?: OnBundleReceivedHook | null;
     maxRequestsPerMinute?: number;
     maxFailedAttemptsPerMinute?: number;
+    maxRecordsInMemory?: number;
+    maxOpenIntakesPerSender?: number;
     contextUser?: UserInfo;
     provider?: IMetadataProvider;
   }): void {
+    this.applyLimits(options);
     if (options.enabled !== undefined) this._enabled = options.enabled;
     if (options.decryptOnIngest !== undefined) this._decryptOnIngest = options.decryptOnIngest;
     if (options.retentionDays !== undefined) this._retentionDays = options.retentionDays;
     if (options.malwareScanner) this._malwareScanner = options.malwareScanner;
     if (options.storageBridge !== undefined) this._storageBridge = options.storageBridge;
     if (options.onBundleReceivedHook !== undefined) this._onBundleReceivedHook = options.onBundleReceivedHook;
-    if (options.maxRequestsPerMinute !== undefined) this._senderRequests.Max = options.maxRequestsPerMinute;
-    if (options.maxFailedAttemptsPerMinute !== undefined) this._ipFailures.Max = options.maxFailedAttemptsPerMinute;
     if (options.contextUser) {
       const provider = options.provider ?? Metadata.Provider;
       this._dataContext = provider ? { ContextUser: options.contextUser, Provider: provider } : null;
     }
+  }
+
+  /** Validates all four limit options first, then applies the ones that are set. */
+  private applyLimits(options: {
+    maxRequestsPerMinute?: number;
+    maxFailedAttemptsPerMinute?: number;
+    maxRecordsInMemory?: number;
+    maxOpenIntakesPerSender?: number;
+  }): void {
+    assertPositiveInteger('maxRequestsPerMinute', options.maxRequestsPerMinute);
+    assertPositiveInteger('maxFailedAttemptsPerMinute', options.maxFailedAttemptsPerMinute);
+    assertPositiveInteger('maxRecordsInMemory', options.maxRecordsInMemory);
+    assertPositiveInteger('maxOpenIntakesPerSender', options.maxOpenIntakesPerSender);
+    if (options.maxRequestsPerMinute !== undefined) this._senderRequests.Max = options.maxRequestsPerMinute;
+    if (options.maxFailedAttemptsPerMinute !== undefined) this._ipFailures.Max = options.maxFailedAttemptsPerMinute;
+    if (options.maxRecordsInMemory !== undefined) this._maxRecordsInMemory = options.maxRecordsInMemory;
+    if (options.maxOpenIntakesPerSender !== undefined) this._maxOpenIntakesPerSender = options.maxOpenIntakesPerSender;
   }
 
   public RegisterKeyPair(keyPair: DiagnosticKeyPair, signatureBase64?: string, makeActive: boolean = true): void {
@@ -383,12 +430,12 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
     return this._senderRequests.Hit(callerKey);
   }
 
-  /** True when `ip` has used its budget of failed pre-signature attempts in this window. */
+  /** True when `ip` has used its budget of failed attempts in this window. */
   public IpFailureLimitReached(ip: string): boolean {
     return this._ipFailures.IsOver(ip);
   }
 
-  /** Counts one failed pre-signature attempt (bad header, unknown install, failed enrolment) for `ip`. */
+  /** Counts one failed attempt (bad header, unknown install, failed signature check, failed enrolment) for `ip`. */
   public RecordIpFailure(ip: string): void {
     this._ipFailures.Hit(ip);
   }
@@ -396,22 +443,93 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
   /**
    * Creates an intake record. With `sender` (an authenticated HTTP request) the record is bound to
    * that `(installId, keyId)` and a body naming another install is refused. Without `sender` the
-   * call is an in-process submission (local loopback). Throws on invalid input.
+   * call is an in-process submission (local loopback). Throws on invalid input, and throws
+   * `IntakeCapacityError` when the install has too many open intakes or the map is full of open ones.
    */
   public InitiateBundleIntake(req: IntakeCreateBundleRequest, sender?: SenderIdentity): IntakeCreateBundleResponse {
     this.assertValidCreateRequest(req);
     if (sender && (!UUID_PATTERN.test(req.installId) || !UUIDsEqual(req.installId, sender.InstallID))) {
       throw new Error('installId does not match the authenticated sender.');
     }
-    const referenceId = `diagref_${crypto.randomUUID()}`;
     const now = Date.now();
-    const uploadExpiresAtMs = now + 10 * 60_000;
-    this._records.set(referenceId, { referenceId, request: req, status: 'Receiving', createdAtMs: now, uploadExpiresAtMs, sender });
+    this.ensureSweepTimer();
+    this.sweepInBackground(now);
+    this.assertSenderCanOpen(sender?.InstallID ?? req.installId);
+    this.makeRoomForRecord();
+    const referenceId = `diagref_${crypto.randomUUID()}`;
+    const uploadExpiresAtMs = now + UPLOAD_WINDOW_MS;
+    const completeDeadlineMs = uploadExpiresAtMs + UPLOAD_WINDOW_MS;
+    this._records.set(referenceId, { referenceId, request: req, status: 'Receiving', createdAtMs: now, uploadExpiresAtMs, completeDeadlineMs, sender });
     return {
       referenceId,
       uploadUrl: uploadPath(referenceId),
       uploadExpiresAt: new Date(uploadExpiresAtMs).toISOString()
     };
+  }
+
+  /**
+   * Removes `Receiving` records whose upload window has passed, and rejects and removes
+   * `Quarantined` records past their complete deadline (quarantine object deleted, row marked
+   * `Failed`). A record whose complete is running is skipped. The records leave the map at once.
+   */
+  public async SweepExpiredIntakes(nowMs = Date.now()): Promise<void> {
+    const abandoned: StoredIntakeBundleRecord[] = [];
+    for (const [referenceId, rec] of this._records) {
+      if (rec.status === 'Receiving' && rec.uploadExpiresAtMs < nowMs) {
+        this._records.delete(referenceId);
+      } else if (this.isAbandonedUpload(rec, nowMs)) {
+        this._records.delete(referenceId);
+        abandoned.push(rec);
+      }
+    }
+    await Promise.all(abandoned.map((rec) => this.rejectAndCleanup(rec, COMPLETE_EXPIRED_REASON, 'The bundle was not completed in time')));
+  }
+
+  private isAbandonedUpload(rec: StoredIntakeBundleRecord, nowMs: number): boolean {
+    return rec.status === 'Quarantined' && !rec.completing && rec.completeDeadlineMs < nowMs;
+  }
+
+  private sweepInBackground(nowMs = Date.now()): void {
+    this.SweepExpiredIntakes(nowMs).catch((err: unknown) => {
+      LogError(`Diagnostics intake: the expired-intake sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+
+  /** Sweeps on a timer that never keeps the process alive and holds no request's diagnostic context. */
+  private ensureSweepTimer(): void {
+    if (this._sweepTimer) return;
+    this._sweepTimer = RunDetachedFromDiagnosticContext(() => setInterval(() => this.sweepInBackground(), SWEEP_INTERVAL_MS));
+    this._sweepTimer.unref();
+  }
+
+  private assertSenderCanOpen(installId: string): void {
+    let open = 0;
+    for (const rec of this._records.values()) {
+      const isOpen = rec.status === 'Receiving' || rec.status === 'Quarantined';
+      if (isOpen && UUIDsEqual(rec.sender?.InstallID ?? rec.request.installId, installId)) open++;
+    }
+    if (open >= this._maxOpenIntakesPerSender) {
+      throw new IntakeCapacityError(`This install already has ${open} open bundle intakes; complete or wait for them before starting another.`);
+    }
+  }
+
+  /** Evicts the oldest completed (`Ready` or `Failed`) records while the map is full. Throws when none can go. */
+  private makeRoomForRecord(): void {
+    while (this._records.size >= this._maxRecordsInMemory) {
+      const oldest = this.oldestCompletedReferenceId();
+      if (!oldest) {
+        throw new IntakeCapacityError('The diagnostic intake is at capacity; try again later.');
+      }
+      this._records.delete(oldest);
+    }
+  }
+
+  private oldestCompletedReferenceId(): string | undefined {
+    let oldest: StoredIntakeBundleRecord | undefined;
+    for (const rec of this._records.values()) {
+      if ((rec.status === 'Ready' || rec.status === 'Failed') && (!oldest || rec.createdAtMs < oldest.createdAtMs)) oldest = rec;
+    }
+    return oldest?.referenceId;
   }
 
   private assertValidCreateRequest(req: IntakeCreateBundleRequest): void {
@@ -533,12 +651,25 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
       if (!rec || !rec.encryptedPayload || rec.status !== 'Quarantined') {
         return this.rejectedResponse(referenceId, rec?.request.bundleId ?? 'unknown', 'MISSING_PAYLOAD', 'No quarantined payload found for referenceId');
       }
+      if (this.isAbandonedUpload(rec, Date.now())) {
+        this._records.delete(referenceId);
+        return this.rejectAndCleanup(rec, COMPLETE_EXPIRED_REASON, 'The complete deadline has passed');
+      }
+      return this.verifyAndFinish(rec, completeReq);
+    });
+  }
+
+  private async verifyAndFinish(rec: StoredIntakeBundleRecord, completeReq: IntakeCompleteRequest): Promise<IntakeCompleteResponse> {
+    rec.completing = true;
+    try {
       const verified = await this.verifyPayload(rec, completeReq);
       if (verified.ok === false) {
-        return this.rejectAndCleanup(rec, verified.reasonCode, verified.reason, verified.malwareScan);
+        return await this.rejectAndCleanup(rec, verified.reasonCode, verified.reason, verified.malwareScan);
       }
-      return this.acceptBundle(rec, verified.value);
-    });
+      return await this.acceptBundle(rec, verified.value);
+    } finally {
+      rec.completing = false;
+    }
   }
 
   private rejectedResponse(referenceId: string, bundleId: string, reasonCode: string, reason: string): IntakeCompleteResponse {
@@ -558,6 +689,7 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
       await this._storageBridge.DeleteQuarantineObject(rec.quarantinePath).catch(() => {});
     }
     rec.encryptedPayload = undefined;
+    rec.decryptedZipBytes = undefined;
     if (rec.row) {
       await MarkReceivedBundleFailed(rec.row, `${reasonCode}: ${reason}`);
     }
@@ -673,7 +805,9 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
 
   private async acceptBundle(rec: StoredIntakeBundleRecord, verified: VerifiedPayload): Promise<IntakeCompleteResponse> {
     const fileId = await this.promote(rec, verified);
-    rec.decryptedZipBytes = verified.decryptedZipBytes;
+    // Memory-only mode (no storage bridge) keeps the decrypted bytes so they can be downloaded.
+    rec.decryptedZipBytes = this._storageBridge ? undefined : verified.decryptedZipBytes;
+    rec.encryptedPayload = undefined;
     rec.parsedBundleData = verified.parsedData;
     rec.status = 'Ready';
     const findings = verified.parsedData?.findings;
@@ -687,7 +821,7 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
       });
     }
     if (rec.sender) {
-      await TouchSenderLastSeen(rec.sender.Registration);
+      await TouchSenderLastSeen(rec.sender.Registration, this._dataContext);
     }
     this.runOnBundleReceivedHook(rec, findings?.length ?? 0);
     return {

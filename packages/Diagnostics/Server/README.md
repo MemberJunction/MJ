@@ -71,10 +71,10 @@ Each bundle request then carries `Authorization: MJDiag-Ed25519 keyId,installId,
 - the registered key;
 - `|now − ts| ≤ 300 s`;
 - `aud` = `ApiRoute('/diagnostics/intake/v1', { absolute: true })` without the trailing slash;
-- the signature over `mjdiag-http-v1:METHOD:path:aud:installId:ts:nonce:bodySha256` (`path` is the full request path, base path included, without the query);
+- the signature over `mjdiag-http-v1:METHOD:path:aud:installId:ts:nonce:bodySha256` (`path` is the path of the public URL, `MJAPI_PUBLIC_URL`'s path included, followed by the route subpath, without the query);
 - a fresh nonce.
 
-Each failure answers 401. The rest of the flow:
+Each failure answers 401 and counts toward the per-IP failure budget. The rest of the flow:
 
 - The intake record is bound to the authenticated sender. Another sender gets 403, and the envelope must be signed by the same key.
 - `MaxBundlesPerDay` counts the sender's `Received` bundle rows from the last 24 hours.

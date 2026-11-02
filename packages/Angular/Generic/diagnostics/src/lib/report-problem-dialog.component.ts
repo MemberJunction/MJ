@@ -178,6 +178,7 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
     public ngOnDestroy(): void {
         this.packageSub?.unsubscribe();
         this.packageSub = null;
+        this.queuedPackage = null;
     }
 
     public OnTicketInput(event: Event): void {

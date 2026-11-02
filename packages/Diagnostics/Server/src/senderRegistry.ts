@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogDebug, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJDiagnosticSenderRegistrationEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, SanitizeForLog, UUIDMap } from '@memberjunction/global';
 
@@ -122,14 +122,31 @@ export async function CountReceivedBundlesLastDay(installId: string, data: Intak
   return result.TotalRowCount;
 }
 
-/** Sets `LastSeenAt` on a database registration. A failed save is logged. */
-export async function TouchSenderLastSeen(registration: SenderRegistration, now = new Date()): Promise<void> {
-  const row = registration.Row;
-  if (!row) {
+/**
+ * Sets `LastSeenAt` on a database registration. The row is loaded fresh by ID so no other field is
+ * written back, and the save is skipped when the row is no longer `Active`. A failed save is logged.
+ */
+export async function TouchSenderLastSeen(
+  registration: SenderRegistration,
+  data: IntakeDataContext | null,
+  now = new Date()
+): Promise<void> {
+  const loaded = registration.Row;
+  if (!loaded || !data) {
+    return;
+  }
+  const row = await data.Provider.GetEntityObject<MJDiagnosticSenderRegistrationEntity>(SENDER_REGISTRATION_ENTITY, data.ContextUser);
+  const who = SanitizeForLog(loaded.InstallID, 200);
+  if (!(await row.Load(loaded.ID))) {
+    LogError(`Diagnostics intake: could not load the registration of '${who}' to update LastSeenAt.`);
+    return;
+  }
+  if (row.Status !== 'Active') {
+    LogDebug(`Diagnostics intake: LastSeenAt not updated for '${who}': the registration is ${row.Status}.`);
     return;
   }
   row.LastSeenAt = now;
   if (!(await row.Save())) {
-    LogError(`Diagnostics intake: could not update LastSeenAt for '${SanitizeForLog(row.InstallID, 200)}': ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    LogError(`Diagnostics intake: could not update LastSeenAt for '${who}': ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
 }

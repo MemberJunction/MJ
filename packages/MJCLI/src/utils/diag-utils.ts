@@ -14,9 +14,9 @@ import {
 } from '@memberjunction/diagnostics';
 
 export interface LoadedDiagnosticBundle {
-    wasEncrypted: boolean;
-    manifest: DiagnosticBundleManifest;
-    data: DiagnosticBundleData;
+    WasEncrypted: boolean;
+    Manifest: DiagnosticBundleManifest;
+    Data: DiagnosticBundleData;
 }
 
 export async function LoadAndVerifyDiagnosticBundle(
@@ -54,9 +54,9 @@ export async function LoadAndVerifyDiagnosticBundle(
 
     const data = ParseBundleDataFromArchive(verification);
     return {
-        wasEncrypted,
-        manifest: verification.manifest,
-        data,
+        WasEncrypted: wasEncrypted,
+        Manifest: verification.manifest,
+        Data: data,
     };
 }
 
@@ -76,10 +76,10 @@ export async function RescrubDiagnosticBundle(
 }
 
 export interface TimelineRow {
-    timestampUnixMs: number;
-    source: 'client-span' | 'server-span' | 'sql';
-    durationMs: number;
-    label: string;
+    TimestampUnixMs: number;
+    Source: 'client-span' | 'server-span' | 'sql';
+    DurationMs: number;
+    Label: string;
 }
 
 export function BuildBundleTimeline(data: DiagnosticBundleData, limit = 50): TimelineRow[] {
@@ -87,31 +87,31 @@ export function BuildBundleTimeline(data: DiagnosticBundleData, limit = 50): Tim
 
     for (const wf of data.clientWaterfall) {
         rows.push({
-            timestampUnixMs: wf.startTimeUnixMs,
-            source: 'client-span',
-            durationMs: wf.durationMs,
-            label: `[${wf.operationKind}] ${wf.operationName}`,
+            TimestampUnixMs: wf.startTimeUnixMs,
+            Source: 'client-span',
+            DurationMs: wf.durationMs,
+            Label: `[${wf.operationKind}] ${wf.operationName}`,
         });
     }
     for (const s of data.serverTraces) {
         rows.push({
-            timestampUnixMs: s.startTimeUnixMs,
-            source: 'server-span',
-            durationMs: s.durationMs,
-            label: `[${s.layer}] ${s.name}`,
+            TimestampUnixMs: s.startTimeUnixMs,
+            Source: 'server-span',
+            DurationMs: s.durationMs,
+            Label: `[${s.layer}] ${s.name}`,
         });
     }
     for (const q of data.serverSql) {
         const parsedMs = Date.parse(q.timestamp);
         rows.push({
-            timestampUnixMs: Number.isNaN(parsedMs) ? 0 : parsedMs,
-            source: 'sql',
-            durationMs: q.durationMs,
-            label: q.sql,
+            TimestampUnixMs: Number.isNaN(parsedMs) ? 0 : parsedMs,
+            Source: 'sql',
+            DurationMs: q.durationMs,
+            Label: q.sql,
         });
     }
 
-    rows.sort((a, b) => a.timestampUnixMs - b.timestampUnixMs);
+    rows.sort((a, b) => a.TimestampUnixMs - b.TimestampUnixMs);
     return rows.slice(0, limit);
 }
 
@@ -121,8 +121,8 @@ export function FindSlowBundleOperations(
 ): TimelineRow[] {
     const all = BuildBundleTimeline(data, Number.MAX_SAFE_INTEGER);
     return all
-        .filter((r) => r.durationMs >= thresholdMs)
-        .sort((a, b) => b.durationMs - a.durationMs);
+        .filter((r) => r.DurationMs >= thresholdMs)
+        .sort((a, b) => b.DurationMs - a.DurationMs);
 }
 
 export function ExportBundleTraces(

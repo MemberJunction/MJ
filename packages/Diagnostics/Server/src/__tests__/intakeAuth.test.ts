@@ -15,7 +15,7 @@ import {
     VerifyRecipientPublicKeySignature,
 } from '@memberjunction/diagnostics';
 import { DiagnosticIntakeService } from '../intakeService.js';
-import { RateCounter } from '../intakeAuth.js';
+import { RateCounter, ReplayCache } from '../intakeAuth.js';
 import { DiagnosticsServerMiddleware } from '../middleware.js';
 import { ConfigureIntakeFromSettings } from '../intakeStartup.js';
 import { DiagnosticsSettings } from '../settings.js';
@@ -106,11 +106,11 @@ function parseJsonOrUndefined(raw: Uint8Array): Record<string, unknown> | undefi
 type RouteHandler = (req: FakeRequest, res: FakeResponse) => void | Promise<void>;
 
 /** Registers the middleware's routes on a recorder and returns the handlers by method and path. */
-function registerRoutes(): Map<string, RouteHandler> {
+function registerRoutes(route = apiRoute): Map<string, RouteHandler> {
     const handlers = new Map<string, RouteHandler>();
     const recorder = (method: string) => (path: string, handler: RouteHandler) => { handlers.set(`${method} ${path}`, handler); };
     const fake = { get: recorder('GET'), post: recorder('POST'), put: recorder('PUT') };
-    new DiagnosticsServerMiddleware().ConfigureExpressApp(fake as unknown as ExpressAppParam, { ApiRoute: apiRoute });
+    new DiagnosticsServerMiddleware().ConfigureExpressApp(fake as unknown as ExpressAppParam, { ApiRoute: route });
     return handlers;
 }
 
@@ -118,6 +118,7 @@ interface CallOptions {
     headers?: Record<string, string>;
     params?: Record<string, string>;
     body?: Uint8Array | string;
+    ip?: string;
 }
 
 async function callRoute(
@@ -131,6 +132,7 @@ async function callRoute(
     if (!handler) throw new Error(`No route ${method} ${routePath}`);
     const raw = typeof options.body === 'string' ? new TextEncoder().encode(options.body) : options.body ?? new Uint8Array();
     const req = new FakeRequest(method, requestPath, options.headers ?? {}, raw, options.params ?? {});
+    if (options.ip) req.ip = options.ip;
     const res = createFakeResponse();
     res.Request = req;
     await handler(req, res);
@@ -828,6 +830,7 @@ describe('diagnostics intake sender authentication', () => {
         });
 
         it('never IP-limits signed requests', async () => {
+            DiagnosticIntakeService.Instance.Configure({ maxOpenIntakesPerSender: 20 });
             const senders: SenderKeys[] = [];
             for (let i = 0; i < 4; i++) {
                 const extra = await newSender(crypto.randomUUID().toUpperCase(), `sender-key-${i}`);
@@ -926,6 +929,278 @@ describe('diagnostics intake sender authentication', () => {
             for (let i = 0; i < 50; i++) counter.Hit(`ip:${i}`, 0);
             counter.Sweep(5_000);
             expect(counter.Size).toBe(0);
+        });
+    });
+
+    describe('final fix A: LastSeenAt save', () => {
+        let store: FakeStore;
+        let sender: SenderKeys;
+        let fixture: EncryptedFixture;
+
+        beforeEach(async () => {
+            store = createFakeStore();
+            DiagnosticIntakeService.Instance.Configure({ contextUser: systemUser, provider: store.Provider });
+            sender = await newSender();
+            fixture = await encryptBundle(collectorKey, { KeyID: sender.Key.keyId, PrivateKeyBase64: sender.Key.privateKeyBase64 });
+        });
+
+        async function runSignedFlow(): Promise<FakeResponse> {
+            const created = await postCreate(handlers, sender, createBody(fixture, collectorKey));
+            const referenceId = String(created.Body?.referenceId);
+            await putPayload(handlers, sender, referenceId, fixture.Encrypted);
+            return postComplete(handlers, sender, referenceId, fixture);
+        }
+
+        it('keeps a revocation made while the bundle completes', async () => {
+            const id = seedRegistration(store, sender);
+            const revokedAt = new Date('2026-11-02T10:00:00.000Z');
+            DiagnosticIntakeService.Instance.Configure({
+                malwareScanner: {
+                    Name: 'RevokesDuringScan',
+                    ScanBundle: async () => {
+                        Object.assign(store.Tables.get(REGISTRATION_ENTITY)!.get(id)!, { Status: 'Revoked', RevokedAt: revokedAt });
+                        return { verdict: 'Clean', engineName: 'test', scannedAt: new Date().toISOString(), durationMs: 0 };
+                    },
+                },
+            });
+            await runSignedFlow();
+            const stored = store.Tables.get(REGISTRATION_ENTITY)!.get(id)!;
+            expect(stored.Status).toBe('Revoked');
+            expect(stored.RevokedAt).toEqual(revokedAt);
+        });
+
+        it('keeps a registration code issued after the bundle was created', async () => {
+            const id = seedRegistration(store, sender);
+            const created = await postCreate(handlers, sender, createBody(fixture, collectorKey));
+            const referenceId = String(created.Body?.referenceId);
+            Object.assign(store.Tables.get(REGISTRATION_ENTITY)!.get(id)!, { RegistrationCodeHash: 'a'.repeat(64), RegistrationCodeExpiresAt: new Date() });
+            await putPayload(handlers, sender, referenceId, fixture.Encrypted);
+            const completed = await postComplete(handlers, sender, referenceId, fixture);
+            expect(completed.StatusCode).toBe(200);
+            const stored = store.Tables.get(REGISTRATION_ENTITY)!.get(id)!;
+            expect(stored.RegistrationCodeHash).toBe('a'.repeat(64));
+            expect(stored.LastSeenAt).toBeInstanceOf(Date);
+        });
+    });
+
+    describe('final fix A: intake records in memory', () => {
+        let sender: SenderKeys;
+        let fixture: EncryptedFixture;
+
+        beforeEach(async () => {
+            sender = await newSender();
+            DiagnosticIntakeService.Instance.RegisterSenderPublicKey(sender.InstallID, sender.Key.keyId, sender.Key.publicKeyBase64);
+            fixture = await encryptBundle(collectorKey, { KeyID: sender.Key.keyId, PrivateKeyBase64: sender.Key.privateKeyBase64 });
+        });
+
+        const bridge = {
+            WriteQuarantineObject: async (ref: string) => `quarantine/${ref}`,
+            PromoteToVerifiedStorage: async (ref: string) => `verified/${ref}`,
+            DeleteQuarantineObject: async () => undefined,
+        };
+
+        it('drops the payload bytes of a bundle stored through a storage bridge', async () => {
+            const intake = DiagnosticIntakeService.Instance;
+            intake.Configure({ storageBridge: bridge });
+            const completed = await runInProcessIntake(intake, fixture, collectorKey);
+            expect(completed.status).toBe('received');
+            const record = intake.GetReceivedBundle(completed.referenceId);
+            expect(record?.encryptedPayload).toBeUndefined();
+            expect(record?.decryptedZipBytes).toBeUndefined();
+        });
+
+        it('keeps only the decrypted bytes in memory-only mode', async () => {
+            const intake = DiagnosticIntakeService.Instance;
+            const completed = await runInProcessIntake(intake, fixture, collectorKey);
+            const record = intake.GetReceivedBundle(completed.referenceId);
+            expect(record?.encryptedPayload).toBeUndefined();
+            expect(record?.decryptedZipBytes).toBeInstanceOf(Uint8Array);
+        });
+
+        it('removes a receiving record whose upload window has passed', () => {
+            const intake = DiagnosticIntakeService.Instance;
+            const now = Date.now();
+            const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+            const stale = intake.InitiateBundleIntake(JSON.parse(createBody(fixture, collectorKey)));
+            nowSpy.mockReturnValue(now + 11 * 60_000);
+            intake.InitiateBundleIntake(JSON.parse(createBody(fixture, collectorKey)));
+            expect(intake.GetReceivedBundle(stale.referenceId)).toBeUndefined();
+        });
+
+        it('refuses a sixth open intake for one sender with 429', async () => {
+            const statuses: number[] = [];
+            for (let i = 0; i < 6; i++) {
+                statuses.push((await postCreate(handlers, sender, createBody(fixture, collectorKey))).StatusCode);
+            }
+            expect(statuses.slice(0, 5)).toEqual([201, 201, 201, 201, 201]);
+            expect(statuses[5]).toBe(429);
+        });
+
+        it('evicts the oldest completed record when the map is full', async () => {
+            const intake = DiagnosticIntakeService.Instance;
+            intake.Configure({ maxRecordsInMemory: 2 });
+            const first = await runInProcessIntake(intake, fixture, collectorKey);
+            const second = await runInProcessIntake(intake, fixture, collectorKey);
+            const third = intake.InitiateBundleIntake(JSON.parse(createBody(fixture, collectorKey)));
+            expect(intake.GetReceivedBundle(first.referenceId)).toBeUndefined();
+            expect(intake.GetReceivedBundle(second.referenceId)).toBeDefined();
+            expect(intake.GetReceivedBundle(third.referenceId)).toBeDefined();
+            expect(intake.ListReceivedBundles()).toHaveLength(2);
+        });
+
+        it('refuses invalid limit options', () => {
+            const intake = DiagnosticIntakeService.Instance;
+            expect(() => intake.Configure({ maxRecordsInMemory: 0 })).toThrow(/maxRecordsInMemory/);
+            expect(() => intake.Configure({ maxOpenIntakesPerSender: 1.5 })).toThrow(/maxOpenIntakesPerSender/);
+            expect(() => intake.Configure({ maxRequestsPerMinute: -1 })).toThrow(/maxRequestsPerMinute/);
+            expect(() => intake.Configure({ maxFailedAttemptsPerMinute: Number.NaN })).toThrow(/maxFailedAttemptsPerMinute/);
+        });
+    });
+
+    describe('final fix A: signed path and failure budget', () => {
+        let sender: SenderKeys;
+        let fixture: EncryptedFixture;
+
+        beforeEach(async () => {
+            sender = await newSender();
+            DiagnosticIntakeService.Instance.RegisterSenderPublicKey(sender.InstallID, sender.Key.keyId, sender.Key.publicKeyBase64);
+            fixture = await encryptBundle(collectorKey, { KeyID: sender.Key.keyId, PrivateKeyBase64: sender.Key.privateKeyBase64 });
+        });
+
+        it('verifies the public URL path behind a proxy that strips the path prefix', async () => {
+            const proxyRoute = (subpath: string, options?: { absolute?: boolean }): string =>
+                options?.absolute ? `https://x/api${subpath}` : subpath;
+            const proxied = registerRoutes(proxyRoute);
+            const localPath = '/diagnostics/intake/v1/bundles';
+            const audience = 'https://x/api/diagnostics/intake/v1';
+            const body = createBody(fixture, collectorKey);
+
+            const publicHeaders = await signedHeaders(sender, 'POST', `/api${localPath}`, body, { Audience: audience });
+            const accepted = await callRoute(proxied, 'POST', localPath, localPath, { headers: publicHeaders, body });
+            expect(accepted.StatusCode).toBe(201);
+
+            const localHeaders = await signedHeaders(sender, 'POST', localPath, body, { Audience: audience });
+            const refused = await callRoute(proxied, 'POST', localPath, localPath, { headers: localHeaders, body });
+            expect(refused.StatusCode).toBe(401);
+        });
+
+        it('counts failed signature checks toward the per-IP failure budget', async () => {
+            const impostor = await GenerateDiagnosticKeyPair('Ed25519', sender.Key.keyId);
+            const body = createBody(fixture, collectorKey);
+            const statuses: number[] = [];
+            for (let i = 0; i < 61; i++) {
+                statuses.push((await postCreate(handlers, sender, body, { Key: impostor })).StatusCode);
+            }
+            expect(statuses.slice(0, 60).every((code) => code === 401)).toBe(true);
+            expect(statuses[60]).toBe(429);
+            const headers = await signedHeaders(sender, 'POST', BUNDLES_PATH, body);
+            const signed = await callRoute(handlers, 'POST', BUNDLES_PATH, BUNDLES_PATH, { headers, body, ip: '198.51.100.9' });
+            expect(signed.StatusCode).toBe(201);
+        });
+    });
+
+    describe('final fix A2: abandoned uploads', () => {
+        let store: FakeStore;
+        let sender: SenderKeys;
+        let fixture: EncryptedFixture;
+        const deleted: string[] = [];
+        const bridge = {
+            WriteQuarantineObject: async (ref: string) => `quarantine/${ref}`,
+            PromoteToVerifiedStorage: async (ref: string) => `verified/${ref}`,
+            DeleteQuarantineObject: async (path: string) => { deleted.push(path); },
+        };
+
+        beforeEach(async () => {
+            deleted.length = 0;
+            store = createFakeStore();
+            DiagnosticIntakeService.Instance.Configure({ contextUser: systemUser, provider: store.Provider, storageBridge: bridge });
+            sender = await newSender();
+            DiagnosticIntakeService.Instance.RegisterSenderPublicKey(sender.InstallID, sender.Key.keyId, sender.Key.publicKeyBase64);
+            fixture = await encryptBundle(collectorKey, { KeyID: sender.Key.keyId, PrivateKeyBase64: sender.Key.privateKeyBase64 });
+        });
+
+        async function uploadInProcess(): Promise<string> {
+            const intake = DiagnosticIntakeService.Instance;
+            const initiated = intake.InitiateBundleIntake(JSON.parse(createBody(fixture, collectorKey)));
+            expect((await intake.UploadEncryptedPayload(initiated.referenceId, fixture.Encrypted)).accepted).toBe(true);
+            return initiated.referenceId;
+        }
+
+        it('sweeps a quarantined record past its complete deadline and marks its row Failed', async () => {
+            const intake = DiagnosticIntakeService.Instance;
+            const referenceId = await uploadInProcess();
+            await intake.SweepExpiredIntakes(Date.now() + 15 * 60_000);
+            expect(intake.GetReceivedBundle(referenceId)).toBeDefined();
+            await intake.SweepExpiredIntakes(Date.now() + 21 * 60_000);
+            expect(intake.GetReceivedBundle(referenceId)).toBeUndefined();
+            expect(store.Rows('MJ: Diagnostic Bundles')[0].Status).toBe('Failed');
+            expect(deleted).toEqual([`quarantine/${referenceId}`]);
+        });
+
+        it('does not sweep a record whose complete is running', async () => {
+            const intake = DiagnosticIntakeService.Instance;
+            let release: () => void = () => undefined;
+            const scanning = new Promise<void>((resolve) => { release = resolve; });
+            let sweep: Promise<void> | undefined;
+            intake.Configure({
+                malwareScanner: {
+                    Name: 'Slow',
+                    ScanBundle: async () => {
+                        sweep = intake.SweepExpiredIntakes(Date.now() + 21 * 60_000);
+                        await scanning;
+                        return { verdict: 'Clean', engineName: 'test', scannedAt: new Date().toISOString(), durationMs: 0 };
+                    },
+                },
+            });
+            const referenceId = await uploadInProcess();
+            const completing = intake.CompleteBundleIntake(referenceId, { encryptedSha256: fixture.EncryptedSha256, plaintextSha256: fixture.PlaintextSha256 });
+            await vi.waitFor(() => expect(sweep).toBeDefined());
+            await sweep;
+            expect(intake.GetReceivedBundle(referenceId)).toBeDefined();
+            expect(deleted).toEqual([]);
+            release();
+            expect((await completing).status).toBe('received');
+            expect(store.Rows('MJ: Diagnostic Bundles')[0].Status).toBe('Ready');
+        });
+
+        it('refuses a complete after its deadline with 410', async () => {
+            const created = await postCreate(handlers, sender, createBody(fixture, collectorKey));
+            const referenceId = String(created.Body?.referenceId);
+            expect((await putPayload(handlers, sender, referenceId, fixture.Encrypted)).StatusCode).toBe(200);
+            vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 21 * 60_000);
+            const completed = await postComplete(handlers, sender, referenceId, fixture);
+            expect(completed.StatusCode).toBe(410);
+            expect(completed.Body?.reasonCode).toBe('COMPLETE_EXPIRED');
+        });
+
+        it('counts quarantined records as open intakes', async () => {
+            const refs: string[] = [];
+            for (let i = 0; i < 5; i++) {
+                const created = await postCreate(handlers, sender, createBody(fixture, collectorKey));
+                refs.push(String(created.Body?.referenceId));
+            }
+            for (const ref of refs.slice(0, 3)) {
+                expect((await putPayload(handlers, sender, ref, fixture.Encrypted)).StatusCode).toBe(200);
+            }
+            expect((await postCreate(handlers, sender, createBody(fixture, collectorKey))).StatusCode).toBe(429);
+        });
+
+        it('answers 401 when the public URL has no scheme', async () => {
+            const badRoute = (subpath: string, options?: { absolute?: boolean }): string => (options?.absolute ? `x/api${subpath}` : subpath);
+            const routes = registerRoutes(badRoute);
+            const localPath = '/diagnostics/intake/v1/bundles';
+            const body = createBody(fixture, collectorKey);
+            const headers = await signedHeaders(sender, 'POST', `/api${localPath}`, body, { Audience: 'x/api/diagnostics/intake/v1' });
+            const res = await callRoute(routes, 'POST', localPath, localPath, { headers, body });
+            expect(res.StatusCode).toBe(401);
+        });
+    });
+
+    describe('final fix A: replay window', () => {
+        it('refuses a nonce replayed in the last second of the skew window', () => {
+            const cache = new ReplayCache();
+            expect(cache.CheckAndRemember('install', 'nonce', 0)).toBe(true);
+            expect(cache.CheckAndRemember('install', 'nonce', 601_000)).toBe(false);
         });
     });
 });

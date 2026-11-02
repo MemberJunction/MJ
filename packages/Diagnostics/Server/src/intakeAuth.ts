@@ -63,8 +63,9 @@ export interface ResolvedSender {
 }
 
 /**
- * Remembers `(installId, nonce)` pairs and refuses a repeat. Each entry lives 600 s by default,
- * which covers the ±300 s clock-skew window. Entries expire after that; expired entries are swept when the cache grows.
+ * Remembers `(installId, nonce)` pairs and refuses a repeat. Each entry lives 602 s by default:
+ * the ±300 s clock-skew window plus 2 s, because the skew check compares whole seconds.
+ * Expired entries are swept when the cache grows.
  * When full of live entries it refuses new nonces (fail closed).
  *
  * The cache is per process. A collector that runs more than one instance needs a shared store
@@ -75,7 +76,7 @@ export class ReplayCache {
   private readonly ttlMs: number;
   private readonly maxEntries: number;
 
-  public constructor(ttlSeconds = MJDIAG_MAX_CLOCK_SKEW_SECONDS * 2, maxEntries = 100_000) {
+  public constructor(ttlSeconds = MJDIAG_MAX_CLOCK_SKEW_SECONDS * 2 + 2, maxEntries = 100_000) {
     this.ttlMs = ttlSeconds * 1000;
     this.maxEntries = maxEntries;
   }

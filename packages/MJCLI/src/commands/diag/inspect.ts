@@ -24,13 +24,13 @@ export default class DiagInspect extends Command {
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagInspect);
         const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
-        const { manifest, data } = loaded;
+        const { Manifest: manifest, Data: data } = loaded;
 
         if (flags.json) {
             this.log(
                 JSON.stringify(
                     {
-                        wasEncrypted: loaded.wasEncrypted,
+                        wasEncrypted: loaded.WasEncrypted,
                         manifest,
                         findings: data.findings,
                     },
@@ -45,7 +45,7 @@ export default class DiagInspect extends Command {
         this.log(`Created At:       ${manifest.createdAt}`);
         this.log(`Reason / Scrub:   ${manifest.captureReason} / ${manifest.scrubberProfile}`);
         this.log(`MJ Version:       ${data.environment.mjVersion}`);
-        this.log(`Encrypted:        ${loaded.wasEncrypted ? 'Yes (MJDB v1 verified)' : 'No'}`);
+        this.log(`Encrypted:        ${loaded.WasEncrypted ? 'Yes (MJDB v1 verified)' : 'No'}`);
         this.log(
             `Counts:           clientWaterfall=${data.clientWaterfall.length}, serverSpans=${data.serverTraces.length}, sqlEvents=${data.serverSql.length}, findings=${data.findings.length}`,
         );

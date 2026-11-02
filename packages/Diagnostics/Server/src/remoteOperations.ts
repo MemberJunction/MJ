@@ -7,7 +7,7 @@ import {
   RemoteOpServerContext,
   UserInfo
 } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
   DiagnosticsStartSessionOperation,
   DiagnosticsStartSessionInput,
@@ -132,6 +132,13 @@ function isSelfOnlyScope(scopeType: DiagnosticsStartSessionInput['ScopeType'], s
   return userIds.length === 0 || userIds.every((id) => UUIDsEqual(id, user.ID));
 }
 
+/** The scope to save for a new session. A `Users` scope that names no user names the caller. */
+function resolveSessionScope(input: DiagnosticsStartSessionInput, user: UserInfo): ActiveDiagnosticSession['scope'] {
+  const scope = input.Scope ?? {};
+  if (input.ScopeType !== 'Users' || (scope.userIds?.length ?? 0) > 0) return scope;
+  return { ...scope, userIds: [user.ID] };
+}
+
 /** True when the user started the session and its scope is the user alone. */
 function isOwnSelfServiceSession(session: ActiveDiagnosticSession, user: UserInfo): boolean {
   return UUIDsEqual(session.createdByUserId, user.ID) && isSelfOnlyScope(session.scopeType, session.scope, user);
@@ -213,7 +220,7 @@ export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSess
       reason: input.Reason,
       status: 'Active',
       scopeType: input.ScopeType,
-      scope: input.Scope ?? (input.ScopeType === 'Users' ? { userIds: [user.ID] } : {}),
+      scope: resolveSessionScope(input, user),
       level: input.Level ?? 'Standard',
       categories: input.Categories ?? ['Logs', 'SQL', 'Spans', 'Network', 'Telemetry'],
       scrubLiterals: settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false),
@@ -274,18 +281,9 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
     const settings = await DiagnosticsSettings.Load(user, provider);
     const selfServiceAllowed = settings.CaptureEnabled && settings.SelfServiceRecording;
     const activeSessions = DiagnosticSessionManager.Instance.GetAllActiveSessions();
-    const matched = activeSessions.find((s) => {
-      if (s.scopeType === 'Instance') return true;
-      if (s.scopeType === 'Users' && s.scope.userIds?.includes(user.ID)) return true;
-      if (
-        s.scopeType === 'BrowserSession' &&
-        input.BrowserSessionID &&
-        s.scope.browserSessionId === input.BrowserSessionID
-      ) {
-        return true;
-      }
-      return false;
-    });
+    const matched = activeSessions.find(
+      (s) => s.scopeType === 'Instance' || SessionTargetsCaller(s, user.ID, input.BrowserSessionID)
+    );
 
     if (!matched) {
       return {
@@ -413,7 +411,10 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
 
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.BuildBundle')
 export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundleOperation {
-  /** The session `Authorize` loaded; `InternalExecute` of the same call reuses it. */
+  /**
+   * The session `Authorize` loaded; `InternalExecute` of the same call reuses it.
+   * This works because `ExecuteServer` runs both steps on one instance.
+   */
   private session: ActiveDiagnosticSession | undefined;
 
   protected override async Authorize(
@@ -506,6 +507,12 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
   }
 }
 
+/** True when the preview would show a bundle received from another installation (customer data). */
+function isReceivedBundle(bundleId: string, local: InMemoryBundleStoreItem | undefined): boolean {
+  if (local) return local.direction === 'Received';
+  return DiagnosticIntakeService.Instance.GetReceivedBundle(bundleId) !== undefined;
+}
+
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.GetBundlePreview')
 export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBundlePreviewOperation {
   protected override async Authorize(
@@ -513,8 +520,11 @@ export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBu
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) return true;
     const local = inMemoryBundles.get(input.BundleID);
+    if (isReceivedBundle(input.BundleID, local)) {
+      return AuthorizeDiagnosticsUser(user, 'Diagnostics: Manage Intake', context?.provider);
+    }
+    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) return true;
     return local ? authorizeSessionAccess(user, local.sessionId, context?.provider) : false;
   }
 
@@ -751,8 +761,8 @@ export class DiagnosticsIssueSenderRegistrationCodeServerOperation extends Diagn
     provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsIssueSenderRegistrationCodeOutput> {
-    if (!input.RegistrationID) {
-      throw new Error('RegistrationID is required.');
+    if (!input.RegistrationID || !IsValidUUID(input.RegistrationID)) {
+      throw new Error('RegistrationID must be a UUID.');
     }
     const issued = await IssueSenderRegistrationCode(input.RegistrationID, { ContextUser: user, Provider: provider });
     return { Code: issued.Code, ExpiresAt: issued.ExpiresAt.toISOString() };

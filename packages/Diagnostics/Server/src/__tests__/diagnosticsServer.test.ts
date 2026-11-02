@@ -20,6 +20,8 @@ import {
     DiagnosticsUploadClientCaptureServerOperation,
     DiagnosticsBuildBundleServerOperation,
     DiagnosticsSendBundleServerOperation,
+    DiagnosticsGetMySessionStatusServerOperation,
+    DiagnosticsIssueSenderRegistrationCodeServerOperation,
     GetInMemoryDiagnosticBundle,
 } from '../remoteOperations.js';
 import {
@@ -1365,6 +1367,118 @@ describe('@memberjunction/diagnostics-server', () => {
             const targetCtx: DiagnosticContext = {};
             manager.MatchPreAuth(targetCtx, 'users-session');
             expect(manager.MatchPostAuth(targetCtx, targetUserId)?.id).toBe('users-session');
+        });
+    });
+
+    describe('Remote operation scoping', () => {
+        const caller = {
+            ID: 'DDDDDDDD-4444-4444-8444-000000000004',
+            IsActive: true,
+            Type: 'User',
+            UserRoles: [],
+        } as unknown as UserInfo;
+
+        /** A provider whose authorizations grant only the named ones to every user. */
+        function providerGranting(names: string[]): IMetadataProvider {
+            const authorizations = names.map((Name) => ({ Name, UserCanExecute: () => true }));
+            return { ...fake.Provider, Authorizations: authorizations } as unknown as IMetadataProvider;
+        }
+
+        function registerUsersSession(id: string, userIds: string[], browserSessionId?: string): void {
+            manager.RegisterActiveSession({
+                id,
+                name: id,
+                status: 'Active',
+                scopeType: 'Users',
+                scope: browserSessionId ? { userIds, browserSessionId } : { userIds },
+                level: 'Standard',
+                categories: ['Logs'],
+                scrubLiterals: false,
+                startedAtMs: Date.now(),
+                endsAtMs: Date.now() + 60_000,
+                maxBytes: 10_000_000,
+                createdByUserId: ownerUser.ID,
+                bytesWritten: 0,
+            });
+        }
+
+        it('GetMySessionStatus reports a Users session that names the caller in another letter case', async () => {
+            registerUsersSession('lower-case-session', [caller.ID.toLowerCase()]);
+
+            const status = await new DiagnosticsGetMySessionStatusServerOperation().ExecuteServer(
+                {},
+                { provider: fake.Provider, user: caller }
+            );
+
+            expect(status.Output?.Active).toBe(true);
+            expect(status.Output?.SessionID).toBe('lower-case-session');
+        });
+
+        it('GetMySessionStatus ignores a Users session narrowed to another browser session', async () => {
+            registerUsersSession('other-browser-session', [caller.ID], 'browser-a');
+
+            const status = await new DiagnosticsGetMySessionStatusServerOperation().ExecuteServer(
+                { BrowserSessionID: 'browser-b' },
+                { provider: fake.Provider, user: caller }
+            );
+
+            expect(status.Output?.Active).toBe(false);
+        });
+
+        it('StartSession scopes a Users session with an empty scope to the caller', async () => {
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: 'Empty scope', ScopeType: 'Users', Scope: {} },
+                { provider: fake.Provider, user: ownerUser }
+            );
+
+            expect(started.Success).toBe(true);
+            const session = manager.GetActiveSession(started.Output!.SessionID);
+            expect(session?.scope.userIds).toEqual([ownerUser.ID]);
+        });
+
+        it('GetBundlePreview needs Diagnostics: Manage Intake for a received bundle, not for a local one', async () => {
+            const runSessionsOnly = { provider: providerGranting(['Diagnostics: Run Sessions']), user: caller };
+            const received = { referenceId: 'diagref_received', status: 'Ready', request: { bundleId: 'b', sizeBytes: 1, plaintextSha256: 'x', scrubLiterals: true, installId: 'i' } };
+            vi.spyOn(DiagnosticIntakeService.Instance, 'GetReceivedBundle').mockImplementation((id: string) =>
+                id === received.referenceId ? (received as unknown as ReturnType<DiagnosticIntakeService['GetReceivedBundle']>) : undefined
+            );
+
+            const refused = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer({ BundleID: received.referenceId }, runSessionsOnly);
+            expect(refused.Success).toBe(false);
+            expect(refused.ErrorMessage).toMatch(/Not authorized/);
+
+            const intakeManager = { provider: providerGranting(['Diagnostics: Run Sessions', 'Diagnostics: Manage Intake']), user: caller };
+            const allowed = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer({ BundleID: received.referenceId }, intakeManager);
+            expect(allowed.Success).toBe(true);
+
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'L', ScopeType: 'Users' }, runSessionsOnly);
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: started.Output!.SessionID }, runSessionsOnly);
+            const local = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer({ BundleID: built.Output!.BundleID }, runSessionsOnly);
+            expect(local.Success).toBe(true);
+        });
+
+        it('IssueSenderRegistrationCode refuses a registration ID that is not a UUID without loading a row', async () => {
+            const loads: string[] = [];
+            const recordingProvider = {
+                ...providerGranting(['Diagnostics: Manage Intake']),
+                GetEntityObject: async (entityName: string) => {
+                    const row = (await fake.Provider.GetEntityObject(entityName)) as unknown as FakeRow;
+                    row.Load = async (id: string) => {
+                        loads.push(id);
+                        throw new Error('Conversion failed when converting from a character string to uniqueidentifier.');
+                    };
+                    return row;
+                },
+            } as unknown as IMetadataProvider;
+
+            const issued = await new DiagnosticsIssueSenderRegistrationCodeServerOperation().ExecuteServer(
+                { RegistrationID: 'not-a-uuid' },
+                { provider: recordingProvider, user: caller }
+            );
+
+            expect(issued.Success).toBe(false);
+            expect(issued.ErrorMessage).toMatch(/RegistrationID/);
+            expect(loads).toEqual([]);
         });
     });
 });

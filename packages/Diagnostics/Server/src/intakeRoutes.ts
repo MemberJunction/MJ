@@ -4,13 +4,15 @@ import { SanitizeForLog } from '@memberjunction/global';
 import { ParseSenderAuthorizationHeader } from '@memberjunction/diagnostics';
 import type { BaseServerMiddleware } from '@memberjunction/server/middleware/BaseServerMiddleware';
 import {
+  COMPLETE_EXPIRED_REASON,
   DiagnosticIntakeService,
   IntakeCompleteRequest,
+  IntakeCapacityError,
   IntakeCreateBundleRequest,
   MAX_INTAKE_BUNDLE_BYTES,
   SENDER_MISMATCH_REASON
 } from './intakeService.js';
-import { ResolvedSender, SenderIdentity } from './intakeAuth.js';
+import { INTAKE_BASE_SUBPATH, IntakeAudience, ResolvedSender, SenderIdentity } from './intakeAuth.js';
 import { ParseEnrolRequestBody } from './intakeEnrolment.js';
 
 type MiddlewareList = ReturnType<NonNullable<BaseServerMiddleware['GetPreAuthMiddleware']>>;
@@ -73,9 +75,32 @@ function routeParam(req: ExpressReq, name: string): string {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
 }
 
-/** The path the sender signed: the full URL path including the API base path, without the query string. */
-function signedPath(req: ExpressReq): string {
-  return (req.originalUrl || req.url || '').split('?')[0];
+let loggedBadPublicUrl = false;
+
+/** The path of the collector's public URL, or null (logged once) when that URL cannot be parsed. */
+function publicBasePath(): string | null {
+  try {
+    return new URL(IntakeAudience()).pathname.replace(/\/+$/, '');
+  } catch (err) {
+    if (!loggedBadPublicUrl) {
+      loggedBadPublicUrl = true;
+      LogError(`Diagnostics intake: the public URL is not an absolute URL, so no signature can be verified: ${SanitizeForLog(err instanceof Error ? err.message : String(err), 500)}`);
+    }
+    return null;
+  }
+}
+
+/**
+ * The path the sender signed: the path of the collector's public URL (`IntakeAudience()`) followed
+ * by the route subpath after the intake base, without the query string. A proxy that strips a path
+ * prefix therefore does not change the verified path. Null when the public URL cannot be parsed.
+ */
+function signedPath(req: ExpressReq): string | null {
+  const seen = (req.originalUrl || req.url || '').split('?')[0];
+  const baseAt = seen.indexOf(INTAKE_BASE_SUBPATH);
+  if (baseAt < 0) return seen;
+  const publicBase = publicBasePath();
+  return publicBase === null ? null : publicBase + seen.slice(baseAt + INTAKE_BASE_SUBPATH.length);
 }
 
 function authorizationHeader(req: ExpressReq): string | undefined {
@@ -89,8 +114,11 @@ function clientIp(req: ExpressReq): string {
 
 const RATE_LIMITED = { error: 'Diagnostic intake rate limit exceeded.' };
 
-/** Sends 429 when the IP is over its failure budget, otherwise counts the failure and sends `status`. */
-function rejectPreSignatureFailure(req: ExpressReq, res: ExpressRes, status: number, body: object): void {
+/**
+ * Sends 429 when the IP is over its failure budget, otherwise counts the failure and sends `status`.
+ * Used for every failed authentication or enrolment attempt, including a failed signature check.
+ */
+function rejectAuthFailure(req: ExpressReq, res: ExpressRes, status: number, body: object): void {
   const intake = DiagnosticIntakeService.Instance;
   const ip = clientIp(req);
   if (intake.IpFailureLimitReached(ip)) {
@@ -114,7 +142,7 @@ async function authenticate(
   const intake = DiagnosticIntakeService.Instance;
   const resolved = await intake.ResolveSender(authorizationHeader(req));
   if (resolved.Ok === false) {
-    rejectPreSignatureFailure(req, res, 401, UNAUTHORIZED);
+    rejectAuthFailure(req, res, 401, UNAUTHORIZED);
     return null;
   }
   const body = await readRawBody(req, maxBytes(resolved));
@@ -123,9 +151,14 @@ async function authenticate(
     req.destroy();
     return null;
   }
-  const verified = await intake.VerifySender(resolved, { Method: req.method, Path: signedPath(req), BodySha256Hex: body.Sha256Hex });
-  if (verified.Ok === false) {
+  const path = signedPath(req);
+  if (path === null) {
     res.status(401).json(UNAUTHORIZED);
+    return null;
+  }
+  const verified = await intake.VerifySender(resolved, { Method: req.method, Path: path, BodySha256Hex: body.Sha256Hex });
+  if (verified.Ok === false) {
+    rejectAuthFailure(req, res, 401, UNAUTHORIZED);
     return null;
   }
   if (!intake.CheckRateLimit(`sender:${verified.InstallID.toLowerCase()}`)) {
@@ -175,12 +208,12 @@ async function handleEnrol(req: ExpressReq, res: ExpressRes): Promise<void> {
   const raw = await readRawBody(req, MAX_JSON_BODY_BYTES);
   const body = raw ? ParseEnrolRequestBody(parseJson(raw.Bytes)) : null;
   if (!body) {
-    rejectPreSignatureFailure(req, res, 400, { error: 'Invalid enrolment request.' });
+    rejectAuthFailure(req, res, 400, { error: 'Invalid enrolment request.' });
     return;
   }
   const outcome = await intake.EnrolSender(body);
   if (outcome.Ok === false) {
-    rejectPreSignatureFailure(req, res, outcome.Status, { error: 'Enrolment refused.' });
+    rejectAuthFailure(req, res, outcome.Status, { error: 'Enrolment refused.' });
   } else {
     res.status(200).json({ ...outcome.Body });
   }
@@ -198,7 +231,7 @@ async function handleCreate(req: ExpressReq, res: ExpressRes): Promise<void> {
   try {
     res.status(201).json({ ...intake.InitiateBundleIntake(body as IntakeCreateBundleRequest, auth.identity) });
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    res.status(err instanceof IntakeCapacityError ? 429 : 400).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -230,6 +263,8 @@ async function handleComplete(req: ExpressReq, res: ExpressRes): Promise<void> {
   const result = await DiagnosticIntakeService.Instance.CompleteBundleIntake(referenceId, body, auth.identity);
   if (result.reasonCode === SENDER_MISMATCH_REASON) {
     res.status(403).json({ error: 'Forbidden' });
+  } else if (result.reasonCode === COMPLETE_EXPIRED_REASON) {
+    res.status(410).json({ ...result });
   } else {
     res.status(result.status === 'rejected' ? 422 : 200).json({ ...result });
   }
@@ -241,7 +276,7 @@ async function handleComplete(req: ExpressReq, res: ExpressRes): Promise<void> {
  * signed request from a registered sender. Bodies are read raw so the signed body hash can be checked.
  */
 export function RegisterIntakeRoutes(app: ExpressApp, route: (subpath: string) => string): void {
-  const base = '/diagnostics/intake/v1';
+  const base = INTAKE_BASE_SUBPATH;
   app.get(route(`${base}/public-key`), intakeHandler('public-key', handlePublicKey));
   app.post(route(`${base}/enroll`), intakeHandler('enroll', handleEnrol));
   app.post(route(`${base}/bundles`), intakeHandler('create', handleCreate));

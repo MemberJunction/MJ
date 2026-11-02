@@ -33,7 +33,7 @@ export default class DiagScrub extends Command {
         const { args, flags } = await this.parse(DiagScrub);
         const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
         const profile: DiagnosticScrubberProfile = flags.profile === 'FullRaw' ? 'FullRaw' : 'Standard';
-        const rescrubbedBytes = await RescrubDiagnosticBundle(loaded.manifest, loaded.data, profile);
+        const rescrubbedBytes = await RescrubDiagnosticBundle(loaded.Manifest, loaded.Data, profile);
         fs.writeFileSync(flags.output, rescrubbedBytes);
         this.log(`Wrote scrubbed .mjdiag archive (${rescrubbedBytes.byteLength} bytes, profile=${profile}) to ${flags.output}`);
     }

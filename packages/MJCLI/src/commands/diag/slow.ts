@@ -25,7 +25,7 @@ export default class DiagSlow extends Command {
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagSlow);
         const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
-        const slowOps = FindSlowBundleOperations(loaded.data, flags.threshold);
+        const slowOps = FindSlowBundleOperations(loaded.Data, flags.threshold);
 
         if (slowOps.length === 0) {
             this.log(`No operations found exceeding ${flags.threshold}ms.`);
@@ -33,7 +33,7 @@ export default class DiagSlow extends Command {
         }
 
         for (const op of slowOps) {
-            this.log(`${String(op.durationMs.toFixed(1)).padStart(8)}ms | ${op.source.padEnd(11)} | ${op.label}`);
+            this.log(`${String(op.DurationMs.toFixed(1)).padStart(8)}ms | ${op.Source.padEnd(11)} | ${op.Label}`);
         }
     }
 }

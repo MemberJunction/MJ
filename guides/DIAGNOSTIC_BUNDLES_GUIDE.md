@@ -254,26 +254,30 @@ Only registered installations can submit. A sender is a `MJ: Diagnostic Sender R
 - finds the `Active` registration for `installId` and requires `keyId` to equal its `KeyID`;
 - rejects `|now − ts| > 300 s`;
 - requires `aud` to equal its audience, `TrimTrailingSlashes(ApiRoute('/diagnostics/intake/v1', { absolute: true }))`. So `MJAPI_PUBLIC_URL` must be the URL senders put in `Diagnostics.External.CollectorUrl`;
-- verifies `sig` over `mjdiag-http-v1:<METHOD>:<path>:<aud>:<installId>:<ts>:<nonce>:<bodySha256>`. `path` is the full request path as the sender called it, `MJAPI_BASE_PATH` included and the query string removed (`req.originalUrl` up to `?`). `bodySha256` is the hex SHA-256 of the raw body;
+- verifies `sig` over `mjdiag-http-v1:<METHOD>:<path>:<aud>:<installId>:<ts>:<nonce>:<bodySha256>`. The signed path is the public URL's path: the collector verifies the path of its audience URL followed by the route subpath (for example `/api/diagnostics/intake/v1/bundles` for `MJAPI_PUBLIC_URL=https://x/api`), without the query string, so a proxy that strips a path prefix does not break signatures. `bodySha256` is the hex SHA-256 of the raw body;
 - refuses a repeated `(installId, nonce)`.
 
 Any failure answers 401 with a generic message, and the reason is logged. The header and registration are checked before the body is read, and a payload body is never read past its declared `sizeBytes` (413). Rate limits:
 
 | Limit | Applies to | Default |
 |-------|-----------|---------|
-| IP failure limit | Failed attempts before the signature check (missing or malformed header, unknown or non-Active install, key ID mismatch) and failed enrolments, counted per client IP. When an IP is over the limit, its unsigned requests (including `GET /public-key` and `POST /enroll`) and its further failures get 429. A request with a valid signature is never IP-limited. | 60 per minute (`Configure` option `maxFailedAttemptsPerMinute`) |
+| IP failure limit | Failed attempts before the signature check (missing or malformed header, unknown or non-Active install, key ID mismatch), failed signature checks (bad `sig`, skewed `ts`, wrong `aud`, replayed nonce) and failed enrolments, counted per client IP. When an IP is over the limit, its unsigned requests (including `GET /public-key` and `POST /enroll`) and its further failures get 429. A request with a valid signature is never counted or IP-limited. | 60 per minute (`Configure` option `maxFailedAttemptsPerMinute`) |
 | Sender limit | Verified requests on the bundle routes, counted per install ID. | 30 per minute (`Configure` option `maxRequestsPerMinute`) |
+| Open intakes | Intakes of one install that are not completed (created, or uploaded and waiting for complete). `POST /bundles` beyond the limit gets 429. An intake whose 10-minute upload window has passed without an upload is removed. An uploaded intake not completed within 10 minutes after the upload window is rejected and removed (quarantine object deleted, row `Failed`); a complete that arrives after the deadline gets 410 `COMPLETE_EXPIRED`, or 422 `MISSING_PAYLOAD` once the sweep has already removed the record. | 5 (`Configure` option `maxOpenIntakesPerSender`) |
+| Records in memory | Intake records kept in memory. When full, the oldest completed record is removed; when none is completed, `POST /bundles` gets 429. A completed record keeps no encrypted payload, and keeps the decrypted bytes only when no storage provider is set. | 200 (`Configure` option `maxRecordsInMemory`) |
 | Daily quota | See below. | `MaxBundlesPerDay` |
+
+The four `Configure` limit options must be positive integers; any other value throws.
 
 The counters are per process, and each holds at most 10,000 keys (the oldest are dropped first). A collector behind a reverse proxy or load balancer must set Express `trust proxy` (for example in a middleware's `ConfigureExpressApp`) so that `req.ip` is the client address. Otherwise all clients share the proxy's IP and one failure budget.
 
 `POST /bundles` and the payload upload refuse (429) a sender that already has `MaxBundlesPerDay` `Received` bundle rows from the last 24 hours (0 means no limit).
 
-**Binding.** The intake record keeps the authenticated `(installId, keyId)`. A body `installId` that differs answers 400, and payload or complete from another sender answers 403. On complete the envelope must carry a valid sender signature by the same key (`senderKeyId` equal to the authenticated `keyId`), or the bundle is rejected. A successful complete updates the registration's `LastSeenAt`. The `uploadUrl` returned by `POST /bundles` is the public absolute URL (`ApiRoute(…, { absolute: true })`).
+**Binding.** The intake record keeps the authenticated `(installId, keyId)`. A body `installId` that differs answers 400, and payload or complete from another sender answers 403. On complete the envelope must carry a valid sender signature by the same key (`senderKeyId` equal to the authenticated `keyId`), or the bundle is rejected. A successful complete updates only the registration's `LastSeenAt`, on a freshly loaded row, and not when the row is no longer `Active`. The `uploadUrl` returned by `POST /bundles` is the public absolute URL (`ApiRoute(…, { absolute: true })`).
 
 **Revocation and rotation.** Set `Status = 'Revoked'` (and `RevokedAt`): every request from that install then answers 401. To rotate a key, issue a new registration code; the sender enrols again with a new key, and the row's `KeyID` and `PublicKeyBase64` are replaced. Issuing a code re-enables a revoked sender: an enrolment with that code sets the row back to `Active`.
 
-**Replay store.** The nonce cache is in memory, per process. It keeps each nonce for 600 s (the ±300 s skew window), removes expired entries, and refuses new nonces when it is full. A collector that runs more than one MJAPI instance needs a shared store (for example Redis `SET NX EX`), or a nonce replayed to another instance is accepted.
+**Replay store.** The nonce cache is in memory, per process. It keeps each nonce for 602 s (the ±300 s skew window plus 2 s, because the skew check compares whole seconds), removes expired entries, and refuses new nonces when it is full. A collector that runs more than one MJAPI instance needs a shared store (for example Redis `SET NX EX`), or a nonce replayed to another instance is accepted.
 
 ### Step 5: Intake Configuration Reference (`MJ: Instance Configurations`)
 

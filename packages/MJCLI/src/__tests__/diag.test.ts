@@ -83,28 +83,28 @@ describe('mj diag CLI utilities', () => {
 
         // Plain load
         const loadedPlain = await LoadAndVerifyDiagnosticBundle(plainFile);
-        expect(loadedPlain.wasEncrypted).toBe(false);
-        expect(loadedPlain.manifest.bundleId).toBe('cli-test-bundle');
+        expect(loadedPlain.WasEncrypted).toBe(false);
+        expect(loadedPlain.Manifest.bundleId).toBe('cli-test-bundle');
 
         // Timeline & slow ops
-        const timeline = BuildBundleTimeline(loadedPlain.data);
+        const timeline = BuildBundleTimeline(loadedPlain.Data);
         expect(timeline.length).toBe(3);
-        const slow = FindSlowBundleOperations(loadedPlain.data, 500);
+        const slow = FindSlowBundleOperations(loadedPlain.Data, 500);
         expect(slow.length).toBe(2);
-        expect(slow[0].durationMs).toBe(920);
+        expect(slow[0].DurationMs).toBe(920);
 
         // Re-scrub at Standard profile
-        const standardBytes = await RescrubDiagnosticBundle(loadedPlain.manifest, loadedPlain.data, 'Standard');
+        const standardBytes = await RescrubDiagnosticBundle(loadedPlain.Manifest, loadedPlain.Data, 'Standard');
         fs.writeFileSync(rescrubbedFile, standardBytes);
         const loadedStandard = await LoadAndVerifyDiagnosticBundle(rescrubbedFile);
-        expect(loadedStandard.manifest.scrubberProfile).toBe('Standard');
-        expect(loadedStandard.data.serverSql[0].sql).toContain('?');
-        expect(loadedStandard.data.serverSql[0].sql).not.toContain('alice@example.com');
+        expect(loadedStandard.Manifest.scrubberProfile).toBe('Standard');
+        expect(loadedStandard.Data.serverSql[0].sql).toContain('?');
+        expect(loadedStandard.Data.serverSql[0].sql).not.toContain('alice@example.com');
 
         // Export Perfetto & OTLP
-        const perfettoJson = ExportBundleTraces(loadedPlain.data, 'perfetto');
+        const perfettoJson = ExportBundleTraces(loadedPlain.Data, 'perfetto');
         expect(JSON.parse(perfettoJson).traceEvents.length).toBe(2);
-        const otlpJson = ExportBundleTraces(loadedPlain.data, 'otlp');
+        const otlpJson = ExportBundleTraces(loadedPlain.Data, 'otlp');
         expect(JSON.parse(otlpJson).resourceSpans[0].scopeSpans[0].spans.length).toBe(2);
 
         // Encrypted MJDB envelope load
@@ -118,8 +118,8 @@ describe('mj diag CLI utilities', () => {
 
         await expect(LoadAndVerifyDiagnosticBundle(encFile)).rejects.toThrow(/--private-key/);
         const loadedEnc = await LoadAndVerifyDiagnosticBundle(encFile, keyPair.privateKeyBase64);
-        expect(loadedEnc.wasEncrypted).toBe(true);
-        expect(loadedEnc.manifest.bundleId).toBe('cli-test-bundle');
+        expect(loadedEnc.WasEncrypted).toBe(true);
+        expect(loadedEnc.Manifest.bundleId).toBe('cli-test-bundle');
 
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });

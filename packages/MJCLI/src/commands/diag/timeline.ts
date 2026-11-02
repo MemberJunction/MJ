@@ -25,11 +25,11 @@ export default class DiagTimeline extends Command {
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagTimeline);
         const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
-        const rows = BuildBundleTimeline(loaded.data, flags.limit);
+        const rows = BuildBundleTimeline(loaded.Data, flags.limit);
 
         for (const r of rows) {
-            const iso = r.timestampUnixMs > 0 ? new Date(r.timestampUnixMs).toISOString() : 'n/a';
-            this.log(`${iso} | ${r.source.padEnd(11)} | ${String(r.durationMs.toFixed(1)).padStart(8)}ms | ${r.label}`);
+            const iso = r.TimestampUnixMs > 0 ? new Date(r.TimestampUnixMs).toISOString() : 'n/a';
+            this.log(`${iso} | ${r.Source.padEnd(11)} | ${String(r.DurationMs.toFixed(1)).padStart(8)}ms | ${r.Label}`);
         }
     }
 }
