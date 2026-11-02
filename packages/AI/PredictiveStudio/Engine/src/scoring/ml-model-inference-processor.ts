@@ -86,6 +86,7 @@ import { KeyedReader } from '../feature-assembly/as-of/read-by-keys';
 import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
 import type { SeriesHistory } from '../feature-assembly/as-of/series-features';
 import { PredictionUnitRowReader } from '../prediction-unit/unit-row-reader';
+import { DecisionDateAdvance } from '../prediction-unit/decision-date-advance';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainingRefusedError } from '../training/training-refusal';
@@ -558,7 +559,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     const keys = rows.map((r) => this.rowKey(r, rowEntity));
     const read = await KeyedReader.ReadByKeys(seams.DataAccess, rowEntity.Name, rowEntity.PrimaryKey, keys, MLModelInferenceProcessor.datingFields(unit.Spec));
     if (read.Status === 'refused') return read;
-    const refs = keys.map((k) => MLModelInferenceProcessor.rowRef(unit.Spec, rowEntity, read.Rows.get(k.toLowerCase()), k, asOf));
+    // One clock read per scoring run: the assembly day and the day an advancing fixed decision date moves to.
+    const now = new Date();
+    const refs = keys.map((k) => MLModelInferenceProcessor.rowRef(unit.Spec, rowEntity, read.Rows.get(k.toLowerCase()), k, asOf, now));
     return new AsOfFeatureAssembler().Assemble({
       Context: 'score',
       Unit: unit.Spec,
@@ -570,7 +573,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       DataAccess: seams.DataAccess,
       History: this.deps.history || new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }),
       Metadata: seams.Metadata,
-      AssembledAt: new Date(),
+      AssembledAt: now,
       CategoryLevels: unit.CategoryLevels,
     });
   }
@@ -608,10 +611,16 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     return [...new Set(fields)];
   }
 
-  /** One scoped row as the assembler reads it, by the unit row rule the training reader uses; `asOf` sets its decision day. */
-  private static rowRef(spec: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, row: SourceRow | undefined, key: string, asOf: 'unit-rule' | Date): AssemblyRowRef {
+  /**
+   * One scoped row as the assembler reads it, by the unit row rule the training reader uses; `asOf` sets its decision
+   * day. Under the unit rule a fixed decision date that advances each run is the scoring run's UTC day (`now`), the day
+   * a training run started now would advance it to; the stored date is the day the model was trained.
+   */
+  private static rowRef(spec: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, row: SourceRow | undefined, key: string, asOf: 'unit-rule' | Date, now: Date): AssemblyRowRef {
     if (!row) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${key} was not read`);
-    const decision = asOf === 'unit-rule' ? PredictionUnitRowReader.UnitDecisionDate(spec, row) : UtcDay.ToUtcDay(asOf);
+    const decision = asOf !== 'unit-rule' ? UtcDay.ToUtcDay(asOf)
+      : DecisionDateAdvance.AdvancesEachRun(spec) ? UtcDay.ToUtcDay(now)
+      : PredictionUnitRowReader.UnitDecisionDate(spec, row);
     if (decision === null) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${key} has no decision date under its Prediction Unit's rule`);
     return PredictionUnitRowReader.UnitRowRef(spec, rowEntity, row, decision);
   }

@@ -35,6 +35,8 @@ import type {
   FetchRowsResult,
 } from '../../feature-assembly';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import type { IAssemblyMetadata } from '../../feature-assembly/assembly-metadata';
+import type { SourceRow } from '../../feature-assembly/data-access';
 
 /**
  * Unit tests for the MLModelInferenceProcessor (scoring). NO live DB, NO live
@@ -585,5 +587,114 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const { deps } = await unitModel();
     const failing: MLInferenceDeps = { ...deps, trainingRows: { TrainingRowIDsOf: async () => { throw new Error('Loading the training run of model model-1 failed: timeout'); } } };
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps: failing }).Preflight(ctx(UnitYearsWorld.YearsEntity.ID))).rejects.toThrow('Loading the training run of model model-1 failed: timeout');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A fixed decision date that advances each run (a pipeline that had no as-of)
+// ---------------------------------------------------------------------------
+
+describe('MLModelInferenceProcessor — a fixed decision date that advances each run', () => {
+  const TRAIN_DAY = '2026-03-01';
+  /** The scoring run, the day after training. */
+  const SCORE_INSTANT = new Date('2026-03-02T12:00:00Z');
+  const entityIDs: Record<string, string> = { Years: UnitYearsWorld.YearsEntity.ID, People: UnitYearsWorld.PeopleEntity.ID };
+  /** The provider slice scoring reads: entity lookups by name and by ID (one deliberate test-double cast at the seam). */
+  const provider = {
+    EntityByName: (name: string) => (entityIDs[name] ? { ID: entityIDs[name], Name: name } : undefined),
+    EntityByID: (id: string) => {
+      const name = Object.keys(entityIDs).find((n) => entityIDs[n].toLowerCase() === id.toLowerCase());
+      return name ? { ID: entityIDs[name], Name: name } : undefined;
+    },
+  } as unknown as IMetadataProvider;
+  const user = { ID: 'user-1' } as UserInfo;
+  const ctx: RecordProcessorContext = { ContextUser: user, Provider: provider };
+
+  /** The world's unit with its decision date fixed on the training day and advancing each run, as the migration writes it. */
+  function fixedUnit(): ReturnType<typeof UnitYearsWorld.UnitColumns> {
+    return {
+      ...UnitYearsWorld.UnitColumns(),
+      UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: TRAIN_DAY, advance: 'each-run' }, filter: [] }),
+      Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-04-01' } }),
+    };
+  }
+
+  /** The world's metadata with `Years.Region` declared updatable (an untracked entity whose stored value can change). */
+  function metadataWithUpdatableRegion(): IAssemblyMetadata {
+    const years = { ...UnitYearsWorld.YearsEntity, Fields: UnitYearsWorld.YearsEntity.Fields.map((f) => (f.Name === 'Region' ? { ...f, AllowUpdateAPI: true } : f)) };
+    const byName = new Map([years, UnitYearsWorld.PeopleEntity].map((e) => [e.Name, e] as const));
+    return { Entity: (name: string) => byName.get(name) || null };
+  }
+
+  /** A person created the day after training, and that person's membership row. */
+  function tablesWithNewPerson(): Record<string, SourceRow[]> {
+    const tables = UnitYearsWorld.Tables([...UnitYearsWorld.Years(), { ID: 'y2026-4', PersonID: 'p4', StartDate: '2026-01-01', EventsAttended: 42, Region: 'US', Renewed: false }]);
+    tables.People = [...tables.People, { ID: 'p4', Status: 'Active' }];
+    tables['MJ: Record Changes'] = [...tables['MJ: Record Changes'], {
+      ID: 'rc-create-p4', EntityID: UnitYearsWorld.PeopleEntity.ID, Status: 'Complete', RecordID: 'ID|p4', Type: 'Create', Source: 'Internal',
+      ChangedAt: new Date('2026-03-02T06:00:00Z'), ChangesJSON: '{}', FullRecordJSON: JSON.stringify({ ID: 'p4', Status: 'Active' }),
+    }];
+    return tables;
+  }
+
+  /** Train (assemble) on the training day, then return the deps a scoring run over the same world uses. */
+  async function trainedOnTrainingDay(steps: FeatureStepGraph, tables: Record<string, SourceRow[]>, metadata: IAssemblyMetadata): Promise<MLInferenceDeps> {
+    const dataAccess = new TableDataAccess(tables);
+    const units = new FakePredictionUnitStore(fixedUnit());
+    const pipeline = {
+      ID: 'pipe-u', Version: 1, PredictionUnitID: UnitYearsWorld.UnitID, TargetEntity: 'Years', TargetVariable: '__ps_label', ProblemType: 'classification',
+      Algorithm: 'xgboost', AlgorithmID: 'algo', Hyperparameters: '{}', SourceBindings: '[]', FeatureSteps: JSON.stringify(steps), AsOfStrategy: null,
+      LeakageGuard: JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 }), ValidationStrategy: null, EvaluationProtocolID: null,
+    } as unknown as MJMLTrainingPipelineEntity;
+    const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
+    const deps: TrainingDeps = {
+      entityFactory: { getEntityObject: unused },
+      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
+      artifactStore: { save: unused, delete: unused },
+      contextUser: user, provider, predictionUnits: units, assemblyMetadata: metadata, dataAccess,
+      now: () => new Date(`${TRAIN_DAY}T09:00:00Z`),
+    };
+    const training = await new TrainingEngine().AssembleForTraining('pipe-u', deps);
+    if (training.Assembled.Status !== 'assembled') throw new Error(`training assembly refused: ${JSON.stringify(training.Assembled.Refusal)}`);
+    const model = new FakeMLModel();
+    model.Status = 'Validated';
+    model.PipelineID = 'pipe-u';
+    model.FeatureSchema = JSON.stringify(training.Assembled.Columns.map((c) => ({ Name: c.Name, Kind: c.Encoding === 'categorical' ? 'categorical' : 'numeric' })));
+    model.Lineage = JSON.stringify({
+      predictionUnitId: UnitYearsWorld.UnitID, predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Years',
+      featureSpec: training.Features, categoryLevels: Object.fromEntries(training.Assembled.CategoryLevels),
+      trainingSnapshotId: 'TS-1', snapshotContentHash: 'a'.repeat(64),
+      targetEntityName: 'Years', sourceBindings: [], featureSteps: steps, asOfStrategy: { Mode: 'none' },
+    });
+    const built = buildDeps(model);
+    return { ...built.deps, pipelineUnits: { PredictionUnitIDOf: async () => UnitYearsWorld.UnitID }, predictionUnits: units, assemblyMetadata: metadata, dataAccess };
+  }
+
+  /** Score `ids` by the unit rule with the clock on the scoring day. */
+  async function scoreNextDay(deps: MLInferenceDeps, ids: string[]): Promise<Awaited<ReturnType<MLModelInferenceProcessor['AssembleForScoring']>>> {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SCORE_INSTANT);
+    try {
+      return await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring(ids.map((ID) => ({ ID })), ctx, 'unit-rule');
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it('dates scored rows at the scoring day, so an updatable field of an untracked entity is read as it stands today', async () => {
+    const deps = await trainedOnTrainingDay({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['Region'] }] }, UnitYearsWorld.Tables(), metadataWithUpdatableRegion());
+    const scored = await scoreNextDay(deps, ['y2026-0', 'y2026-1']);
+    expect(scored.Status).toBe('assembled');
+    if (scored.Status !== 'assembled') return;
+    expect(scored.Rows.map((r) => r.Values)).toEqual([['EU'], ['US']]);
+  });
+
+  it('dates scored rows at the scoring day, so a tracked record created after training reads its value, not created-after-decision', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
+    const deps = await trainedOnTrainingDay(steps, tablesWithNewPerson(), UnitYearsWorld.Metadata());
+    const scored = await scoreNextDay(deps, ['y2026-4', 'y2026-2']);
+    expect(scored.Status).toBe('assembled');
+    if (scored.Status !== 'assembled') return;
+    expect(scored.Rows.map((r) => r.Values)).toEqual([['Active'], ['Lapsed']]);
   });
 });

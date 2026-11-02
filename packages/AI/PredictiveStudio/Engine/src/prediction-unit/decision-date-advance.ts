@@ -29,11 +29,20 @@ export interface DecisionDateAdvanceDeps {
 
 /** Advancing fixed decision dates. */
 export class DecisionDateAdvance {
+  /**
+   * Whether the unit's decision date is fixed and advances to each run's UTC day. Training saves the advanced version
+   * before it reads; scoring reads such a unit's rows as of the scoring run's own day (the stored date is the day the
+   * model was trained).
+   */
+  public static AdvancesEachRun(unit: PredictionUnitSpec): boolean {
+    return unit.rows.kind === 'grain' && unit.rows.decisionDate.kind === 'fixed' && unit.rows.decisionDate.advance === 'each-run';
+  }
+
   /** Pure: the changes that move an advancing fixed decision date to `runDay`; null when the rule does not advance or is already there. */
   public static DecisionDateAdvanceChanges(unit: PredictionUnitSpec, runDay: string): Partial<UnitDraft> | null {
-    if (unit.rows.kind !== 'grain') return null;
+    if (unit.rows.kind !== 'grain' || !DecisionDateAdvance.AdvancesEachRun(unit)) return null;
     const rule = unit.rows.decisionDate;
-    if (rule.kind !== 'fixed' || rule.advance !== 'each-run' || rule.date === runDay) return null;
+    if (rule.kind !== 'fixed' || rule.date === runDay) return null;
     const day = UtcDay.ToUtcDay(runDay);
     if (day === null || !UtcDay.IsIsoDay(runDay)) throw new Error(`run day ${runDay} is not yyyy-mm-dd`);
     return {
