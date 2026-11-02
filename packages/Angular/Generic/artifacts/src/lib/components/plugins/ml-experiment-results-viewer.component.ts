@@ -225,7 +225,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** The hero's label: the winning row's own metric (a search's inner-fold metric), else the artifact's target metric. */
   public get HeadlineMetricLabel(): string {
-    return this.WinningRow?.metricName || this.TargetMetricLabel;
+    return this.WinningRow?.MetricName || this.TargetMetricLabel;
   }
 
   public get TargetMetricLabel(): string {
@@ -234,23 +234,23 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** The winning row (the one the artifact marks, which need not be rank 1), else the top row. */
   public get WinningRow(): NormalizedLeaderboardRow | null {
-    return this.LeaderboardRows.find(r => r.isWinner) ?? this.LeaderboardRows[0] ?? null;  // no winner: the top row, whose score may be null
+    return this.LeaderboardRows.find(r => r.IsWinner) ?? this.LeaderboardRows[0] ?? null;  // no winner: the top row, whose score may be null
   }
 
   /** Headline best score (the winning row's primary score), formatted. */
   public get HeadlineScore(): string | null {
-    const score = this.WinningRow?.score;
+    const score = this.WinningRow?.Score;
     return (score !== null && score !== undefined) ? this.FormatScore(score) : null;
   }
 
   public get WinningAlgorithm(): string {
-    return this.Spec?.BestModel?.Name ?? this.Spec?.report?.bestModelName ?? this.WinningRow?.algorithm ?? 'Winning model';
+    return this.Spec?.BestModel?.Name ?? this.Spec?.report?.bestModelName ?? this.WinningRow?.Algorithm ?? 'Winning model';
   }
 
   public get WinningModelSubtitle(): string {
     const parts: string[] = [];
-    if (this.WinningRow?.featureSet) {
-      parts.push(this.WinningRow.featureSet);
+    if (this.WinningRow?.FeatureSet) {
+      parts.push(this.WinningRow.FeatureSet);
     }
     const version = this.Spec?.BestModel?.Version ?? this.Spec?.report?.bestModelVersion;
     if ((version !== null && version !== undefined) && `${version}`.trim()) {
@@ -267,8 +267,8 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     }
     // Synthesize a single metric from the headline score when nothing explicit was provided.
     const row = this.WinningRow;
-    if (row?.score !== null && row?.score !== undefined) {
-      return [{ label: row.metricName || this.firstMetricName() || 'Score', value: this.FormatScore(row.score) }];
+    if (row?.Score !== null && row?.Score !== undefined) {
+      return [{ label: row.MetricName || this.firstMetricName() || 'Score', value: this.FormatScore(row.Score) }];
     }
     return [];
   }
@@ -308,13 +308,13 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
    * Drill through to a specific leaderboard row's model, when that row carries a modelId.
    */
   public OnOpenRowModel(row: NormalizedLeaderboardRow): void {
-    if (!row.modelId) {
+    if (!row.ModelID) {
       return;
     }
     this.navigationRequest.emit({
       appName: 'Predictive Studio',
       navItemName: 'Models',
-      queryParams: { modelId: row.modelId }
+      queryParams: { modelId: row.ModelID }
     });
   }
 
@@ -329,7 +329,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
       ?? this.Spec?.BestModelID
       ?? this.Spec?.report?.bestModelId
       ?? this.Spec?.bestModelId
-      ?? this.WinningRow?.modelId
+      ?? this.WinningRow?.ModelID
       ?? null;
   }
 

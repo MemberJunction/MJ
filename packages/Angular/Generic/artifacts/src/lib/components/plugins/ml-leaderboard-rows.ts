@@ -1,6 +1,6 @@
 /**
  * Leaderboard rows for the ML experiment results viewer. A search's rows carry each candidate's inner-fold interval
- * and say they are optimistic; a `cvScore` stored by an older artifact is ignored. `Metric` (canonical) is read before
+ * and say they are optimistic. `Metric` (canonical) is read before
  * `score`, an unmeasured row has a null score, and without a stated winner rank 1 wins only when it was measured. The
  * winner is the one the artifact marks, which need not be rank 1 (a search picks the simplest candidate within one
  * standard error of the best). Each row keeps the name of the metric its score is in: a search's rows are inner-fold
@@ -37,54 +37,52 @@ export interface LeaderboardEntryInput {
   readonly ModelID?: string;  // case-violation-ok-legacy-back-compat: artifact JSON key
   /** The row the artifact marks as the winner. */
   readonly isWinner?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
-  /** Written by older artifacts; never read. */
-  readonly cvScore?: number;  // case-violation-ok-legacy-back-compat: artifact JSON key
 }
 
 /** A leaderboard row as the viewer renders it. */
 export interface NormalizedLeaderboardRow {
   /** The row's rank (1 = best). */
-  readonly rank: number;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly Rank: number;
   /** The algorithm's display name; `Unknown` when the row names none. */
-  readonly algorithm: string;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly Algorithm: string;
   /** The feature-set label; empty when the row names none. */
-  readonly featureSet: string;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly FeatureSet: string;
   /** The row's score; null when not measured. */
-  readonly score: number | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
-  /** The metric `score` is in, as the row states it; null when the row does not say. */
-  readonly metricName: string | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly Score: number | null;
+  /** The metric `Score` is in, as the row states it; null when the row does not say. */
+  readonly MetricName: string | null;
   /** The inner-fold mean's interval, or null when the row is not an inner-fold score. */
-  readonly interval: readonly [number, number] | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly Interval: readonly [number, number] | null;
   /** True for an inner-fold score. */
-  readonly optimistic: boolean;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly Optimistic: boolean;
   /** The model trained for the row; null when it has none. */
-  readonly modelId: string | null;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly ModelID: string | null;
   /** The winning row (the artifact's mark, else a measured rank 1). */
-  readonly isWinner: boolean;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly IsWinner: boolean;
   /** Show the "optimistic" tag: only on the winner, and only when its score is an inner-fold score. */
-  readonly optimisticTag: boolean;  // case-violation-ok-legacy-back-compat: template binding of the artifact row
+  readonly OptimisticTag: boolean;
 }
 
-/** Leaderboard normalisation for the viewer (static members on one owner). */
+/** Leaderboard normalisation for the viewer. */
 export class LeaderboardRows {
   /** Normalized rows, best-first by rank; the winner is the marked one, else a measured rank 1. */
   public static NormalizeLeaderboardRows(entries: readonly LeaderboardEntryInput[]): readonly NormalizedLeaderboardRow[] {
     const rows = entries.map((e, i) => ({
-      rank: e.rank || i + 1,   // canonical leaderboards are best-first; a missing rank takes the position
-      algorithm: e.algorithm || e.algorithmName || 'Unknown',
-      featureSet: e.featureSet || '',
+      Rank: e.rank || i + 1,   // canonical leaderboards are best-first; a missing rank takes the position
+      Algorithm: e.algorithm || e.algorithmName || 'Unknown',
+      FeatureSet: e.featureSet || '',
       // canonical `Metric` first, then lowercase `score`; an unmeasured row stays null (a score of 0 is a real score)
-      score: LeaderboardRows.isNumber(e.Metric) ? e.Metric : LeaderboardRows.isNumber(e.score) ? e.score : null,
-      metricName: e.metricName || null,
-      interval: LeaderboardRows.isNumber(e.innerLower) && LeaderboardRows.isNumber(e.innerUpper) ? [e.innerLower, e.innerUpper] as const : null,
-      optimistic: e.optimistic === true,
-      modelId: e.ModelID || e.modelId || null,
-      isWinner: e.isWinner === true,
-    })).sort((a, b) => a.rank - b.rank);
+      Score: LeaderboardRows.isNumber(e.Metric) ? e.Metric : LeaderboardRows.isNumber(e.score) ? e.score : null,
+      MetricName: e.metricName || null,
+      Interval: LeaderboardRows.isNumber(e.innerLower) && LeaderboardRows.isNumber(e.innerUpper) ? [e.innerLower, e.innerUpper] as const : null,
+      Optimistic: e.optimistic === true,
+      ModelID: e.ModelID || e.modelId || null,
+      IsWinner: e.isWinner === true,
+    })).sort((a, b) => a.Rank - b.Rank);
     // Entries that do not say which one won: rank 1 wins, but only when it has a measured score.
     const winnerStated = entries.some((e) => e.isWinner !== undefined);
-    if (!winnerStated && rows.length > 0 && rows[0].score !== null) rows[0] = { ...rows[0], isWinner: true };
-    return rows.map((r) => ({ ...r, optimisticTag: r.isWinner && r.optimistic }));
+    if (!winnerStated && rows.length > 0 && rows[0].Score !== null) rows[0] = { ...rows[0], IsWinner: true };
+    return rows.map((r) => ({ ...r, OptimisticTag: r.IsWinner && r.Optimistic }));
   }
 
   /**
@@ -104,7 +102,7 @@ export class LeaderboardRows {
 
   /** The distinct metric names the rows state, in row order. */
   private static metricNames(rows: readonly NormalizedLeaderboardRow[]): string[] {
-    return [...new Set(rows.flatMap((r) => (r.metricName === null ? [] : [r.metricName])))];
+    return [...new Set(rows.flatMap((r) => (r.MetricName === null ? [] : [r.MetricName])))];
   }
 
   private static isNumber(v: number | null | undefined): v is number {
