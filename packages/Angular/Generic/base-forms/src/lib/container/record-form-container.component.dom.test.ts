@@ -1214,3 +1214,87 @@ describe('BaseFormToolbarAction — subclass override and metadata inheritance',
     expect(linksForAccounts?.Metadata.MenuLabel).toBe('Links');
   });
 });
+
+/**
+ * Phone-width rail (<= 768px): the section rail is a single horizontal pill strip, so the
+ * More folder must not dump every child into it by default, and the active pill has to be
+ * scrolled into view because the strip clips whatever does not fit.
+ */
+describe('MjRecordFormContainerComponent (DOM) — mobile rail', () => {
+  const MOBILE_SPEC: FormChromeSpec = {
+    Layout: 'left-nav',
+    Groups: [
+      { Key: 'details', Title: 'Details', Icon: 'fa-solid fa-list', SectionKeys: ['identity'], IsMore: false },
+      { Key: 'payments', Title: 'Payments', Icon: 'fa-solid fa-table', SectionKeys: ['payments'], IsMore: false },
+      { Key: '__mj_form_more', Title: 'More', Icon: 'fa-solid fa-folder', SectionKeys: ['audit', 'logs'], IsMore: true },
+    ],
+    RelatedRoles: new Map(),
+    MoreSectionKeys: ['audit', 'logs'],
+  };
+
+  const useViewport = (mobile: boolean) => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((q: string) => ({
+      matches: mobile && q.includes('768'),
+      media: q, onchange: null,
+      addListener: () => undefined, removeListener: () => undefined,
+      addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false,
+    }) as MediaQueryList);
+  };
+
+  const renderMobile = (opts: { mobile: boolean; moreExpandedPref?: '0' | '1'; activeGroup?: string }) => {
+    useViewport(opts.mobile);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => {
+      if (key === 'mj.formchrome.accounts.moreexpanded'.replace('formchrome', 'formChrome').replace('moreexpanded', 'moreExpanded')) return opts.moreExpandedPref;
+      if (key === 'mj.formChrome.accounts.activeGroup') return opts.activeGroup;
+      return undefined;
+    });
+    return renderComponentFixture(MjRecordFormContainerComponent, {
+      imports: CHILD_STUBS,
+      declarations: [MjRecordFormContainerComponent],
+      inputs: { Record: { ...RECORD, IsSaved: true } as unknown as BaseEntity, EntityInfo: { Name: 'Accounts' } },
+      setup: (_instance, ref) => {
+        ref.injector.get(FormChromeCoordinator).Apply(MOBILE_SPEC);
+      },
+    });
+  };
+  const moreChildren = (f: ReturnType<typeof renderMobile>) =>
+    Array.from(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item.is-more-child')) as HTMLElement[];
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps the saved More-expanded preference on desktop', () => {
+    const f = renderMobile({ mobile: false, moreExpandedPref: '1', activeGroup: 'details' });
+    expect(moreChildren(f).length).toBe(2);
+  });
+
+  it('starts with the More folder collapsed on a phone even when the desktop preference says expanded', () => {
+    const f = renderMobile({ mobile: true, moreExpandedPref: '1', activeGroup: 'details' });
+    expect(moreChildren(f).length).toBe(0);
+  });
+
+  it('still opens the More folder on a phone when the active section lives inside it', () => {
+    const f = renderMobile({ mobile: true, moreExpandedPref: '0', activeGroup: 'audit' });
+    expect(moreChildren(f).length).toBe(2);
+  });
+
+  it('scrolls the newly active rail pill into view on a phone', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this); };
+    f.componentInstance.OnChromeGroupActivate('payments');
+    f.detectChanges();
+    const active = f.nativeElement.querySelector('.mj-forms-chrome-rail-item.is-active') as HTMLElement;
+    expect(active?.textContent).toContain('Payments');
+    expect(scrolled).toContain(active);
+  });
+
+  it('does not scroll the rail on desktop where the whole list is visible', () => {
+    const f = renderMobile({ mobile: false, activeGroup: 'details' });
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this); };
+    f.componentInstance.OnChromeGroupActivate('payments');
+    f.detectChanges();
+    expect(scrolled.length).toBe(0);
+  });
+});

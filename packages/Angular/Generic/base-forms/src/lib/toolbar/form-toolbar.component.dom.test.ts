@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
@@ -821,9 +821,56 @@ describe('MjFormToolbarComponent (DOM)', () => {
   });
 
   describe('toolbar auto-hide and visibility pinning', () => {
+    /** Auto-hide is a phone-width behavior: jsdom has no matchMedia, so stub the breakpoint. */
+    const useViewport = (mobile: boolean) => {
+      window.matchMedia = ((q: string) => ({
+        matches: mobile && q.includes('768'),
+        media: q, onchange: null,
+        addListener: () => undefined, removeListener: () => undefined,
+        addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false,
+      }) as MediaQueryList) as typeof window.matchMedia;
+    };
+    beforeEach(() => useViewport(true));
+    afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+
+    it('renders the full toolbar at desktop width with no auto-hide controls, whatever the pin state says', () => {
+      useViewport(false);
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      expect(query(f, '.mj-forms-toolbar')).not.toBeNull();
+      expect(query(f, '.mj-forms-toolbar-collapsed-pill')).toBeNull();
+      expect(query(f, '.mj-forms-toolbar-collapse-btn')).toBeNull();
+      openView(f);
+      expect(query(f, '[data-toolbar-pin="global"]')).toBeNull();
+      expect(query(f, '[data-toolbar-pin="entity"]')).toBeNull();
+      expect(query(f, '[data-toolbar-collapse="menu"]')).toBeNull();
+    });
+
+    it('shows the pin and hide controls in the View menu at phone width', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      f.componentInstance.ExpandToolbarForSession();
+      f.detectChanges();
+      expect(query(f, '.mj-forms-toolbar-collapse-btn')).not.toBeNull();
+      openView(f);
+      expect(query(f, '[data-toolbar-pin="global"]')).not.toBeNull();
+      expect(query(f, '[data-toolbar-collapse="menu"]')).not.toBeNull();
+    });
+
     it('defaults to collapsed pill in Read Mode when mj.form.toolbar.visibility is unset', () => {
       vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const f = renderRaw({ EditMode: false });
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+      expect(query(f, '.mj-forms-toolbar-collapsed-pill')).not.toBeNull();
+      expect(query(f, '.mj-forms-toolbar')).toBeNull();
+    });
+
+    it('still collapses to the pill in Read Mode on an IS-A entity (the hierarchy breadcrumb is its own row)', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const parent = { Name: 'Organizations', DisplayNameOrName: 'Organizations', ParentChain: [], ChildEntities: [], Fields: [] } as unknown as EntityInfo;
+      const f = renderRaw({ EditMode: false, EntityInfo: { ...ENTITY_INFO, ParentChain: [parent] } as unknown as EntityInfo });
+      expect(f.componentInstance.IsInHierarchy).toBe(true);
       expect(f.componentInstance.IsToolbarExpanded).toBe(false);
       expect(query(f, '.mj-forms-toolbar-collapsed-pill')).not.toBeNull();
       expect(query(f, '.mj-forms-toolbar')).toBeNull();

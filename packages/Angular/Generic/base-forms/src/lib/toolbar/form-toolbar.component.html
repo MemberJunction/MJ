@@ -320,6 +320,7 @@
                 </button>
               }
             }
+            @if (IsAutoHideViewport) {
             <div class="mj-forms-menu-heading">Toolbar</div>
             @if (CurrentEntityName) {
               <button class="mj-forms-menu-item" type="button"
@@ -349,6 +350,7 @@
               <span class="mj-forms-menu-icon"><i class="fa-solid fa-eye-slash"></i></span>
               <span class="mj-forms-menu-label">Hide toolbar now</span>
             </button>
+            }
           </div>
         }
       </div>
@@ -360,13 +362,15 @@
     }
     <ng-content select="[toolbar-additional-controls]"></ng-content>
 
-    <button class="mj-forms-btn mj-forms-btn--icon-only mj-forms-toolbar-collapse-btn"
-      type="button"
-      aria-label="Hide form toolbar"
-      title="Hide toolbar"
-      (click)="CollapseToolbarForSession()">
-      <i class="fa-solid fa-chevron-up"></i>
-    </button>
+    @if (IsAutoHideViewport) {
+      <button class="mj-forms-btn mj-forms-btn--icon-only mj-forms-toolbar-collapse-btn"
+        type="button"
+        aria-label="Hide form toolbar"
+        title="Hide toolbar"
+        (click)="CollapseToolbarForSession()">
+        <i class="fa-solid fa-chevron-up"></i>
+      </button>
+    }
   </div>
   }
 

@@ -1035,12 +1035,31 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
+    this.scrollActiveRailItemIntoView();
   }
 
   private isMobileRailViewport(): boolean {
     return typeof window !== 'undefined'
       && typeof window.matchMedia === 'function'
       && window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  private activeGroupIsInMore(): boolean {
+    const active = this.chrome.ActiveGroupKey;
+    return !!active && this.ChromeMoreItems.some((item) => item.Key === active);
+  }
+
+  /**
+   * The phone rail clips whatever does not fit its single row, so the active pill has to be
+   * brought into view on each change. Desktop shows the whole list and never needs this.
+   */
+  private scrollActiveRailItemIntoView(): void {
+    if (!this.isMobileRailViewport()) return;
+    const root: HTMLElement = this.host.nativeElement;
+    const active = root.querySelector('.mj-forms-chrome-rail-item.is-active');
+    if (active instanceof HTMLElement && typeof active.scrollIntoView === 'function') {
+      active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    }
   }
 
   public OnChromeRailExpand(): void {
@@ -1268,6 +1287,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.chrome.ActiveGroupKey) {
       this.expandActiveGroupSections(this.chrome.ActiveGroupKey);
     }
+    // The rail has not drawn this spec yet; bring the active pill into view once it has.
+    setTimeout(() => { if (!this.destroyed) this.scrollActiveRailItemIntoView(); }, 0);
     this.AfterLayoutResolved.emit(new AfterLayoutResolvedEventArgs(result.Spec.Layout));
 
     if (this.Fc) this.Fc.ChromeLayout = result.Spec.Layout;
@@ -1888,6 +1909,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
+    // A phone rail is one horizontal strip: an expanded More folder would put every More
+    // child inline. Start it collapsed there, unless the active section lives inside it.
+    if (this.isMobileRailViewport()) {
+      this.chrome.MoreExpanded = this.activeGroupIsInMore();
+    }
     this.ChromeRailPinned = ParseRailPinnedSetting(
       UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railPinned')),
     );

@@ -340,6 +340,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Lifecycle ----
 
   ngOnInit(): void {
+    this.watchAutoHideViewport();
     this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.InvalidateHierarchy();
     });
@@ -353,6 +354,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   }
 
   ngOnDestroy(): void {
+    this.unwatchAutoHideViewport();
     this.stopDocumentListeners();
     this.destroy$.next();
     this.destroy$.complete();
@@ -1167,13 +1169,42 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.IsGlobalToolbarPinned;
   }
 
+  /** Media query under which Read Mode auto-hides the toolbar behind the [Edit | ...] pill. */
+  public static readonly AUTO_HIDE_MEDIA_QUERY = '(max-width: 768px)';
+
+  private autoHideMedia: MediaQueryList | null = null;
+  private readonly onAutoHideMediaChange = (): void => this.cdr.markForCheck();
+
+  /**
+   * True at phone width, where pixels matter enough to hide the toolbar by default. Desktop
+   * always shows the full toolbar; the pin and hide controls exist only here.
+   */
+  public get IsAutoHideViewport(): boolean {
+    return typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia(MjFormToolbarComponent.AUTO_HIDE_MEDIA_QUERY).matches;
+  }
+
+  private watchAutoHideViewport(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    this.autoHideMedia = window.matchMedia(MjFormToolbarComponent.AUTO_HIDE_MEDIA_QUERY);
+    this.autoHideMedia.addEventListener?.('change', this.onAutoHideMediaChange);
+  }
+
+  private unwatchAutoHideViewport(): void {
+    this.autoHideMedia?.removeEventListener?.('change', this.onAutoHideMediaChange);
+    this.autoHideMedia = null;
+  }
+
   /**
    * Whether the full toolbar renders (`true`) vs. the compact Read-Mode trigger pill (`false`).
+   * Only a phone-width viewport ever collapses. An IS-A hierarchy does not force the toolbar
+   * open: its breadcrumb is its own row below the toolbar block, so it renders either way.
    */
   public get IsToolbarExpanded(): boolean {
+    if (!this.IsAutoHideViewport) return true;
     if (this.EditMode) return true;
     if (this.SearchFilter.trim().length > 0) return true;
-    if (this.IsInHierarchy && this.Config.ShowEntityHierarchy) return true;
     if (this.IsToolbarPinnedOpen) return true;
     if (this.ToolbarSessionExpanded) return true;
     return false;
