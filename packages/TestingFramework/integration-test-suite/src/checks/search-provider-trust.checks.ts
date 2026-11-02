@@ -30,7 +30,7 @@ import type { MJSearchExecutionLogEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AzureAISearchProvider, BaseSearchProvider, FullTextSearchProvider, SearchEngine } from '@memberjunction/search-engine';
 import type { SearchResultItem } from '@memberjunction/search-engine';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 
 /** Every search this bundle runs starts with this, so Teardown can sweep exactly its audit rows. */
@@ -212,8 +212,7 @@ export const SearchProviderTrustChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const agentID = await borrowReadableAgentID(ctx);
             if (typeof agentID !== 'string') {
-                skipNote('SPT1', agentID.Skip);
-                return;
+                SkipCheck(agentID.Skip);
             }
             const probe = ProviderTrustProbe.For(ctx.Provider);
             const azure = new AzureAISearchProvider();

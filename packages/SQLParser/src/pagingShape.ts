@@ -57,7 +57,10 @@ export interface PagingShape {
     SelectListStart: number | null;
 }
 
-/** Reads the shape of a single statement for paging and row caps. */
+/**
+ * Reads the shape of a single statement for paging and row caps.
+ * @deprecated Use `SqlDocument.Parse(sql, dialect)` (`RowCaps()`, `TopLevelOrderBy()`, `CTEs()`) and the `SetRowCap` / `AppendTail` / `WrapAsDerivedTable` transforms.
+ */
 export function AnalyzePagingShape(statement: string, dialect: SQLParserDialect): PagingShape {
     const ctes = SplitLeadingCTEs(statement, dialect);
     const mainStart = ctes ? ctes.MainStart : leadingTriviaEnd(statement, dialect);

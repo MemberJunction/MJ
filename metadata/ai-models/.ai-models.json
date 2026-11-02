@@ -5901,24 +5901,25 @@
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "StartedAt": "2024-06-20T00:00:00.000Z",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 3,
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 3.5 Sonnet pricing as of Jan 2025",
+            "Comments": "Claude 3.5 Sonnet pricing as of Jan 2025. StartedAt corrected from the 2026-01-08 seed-import timestamp to 2024-06-20, the Claude 3.5 Sonnet launch, when the $3/$15 price began. EXPIRED 2025-10-28: Anthropic retired both claude-3-5-sonnet snapshots on the Claude API. Row preserved for historical pricing lookups. Source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations",
             "CacheReadPricePerUnit": 0.3,
-            "CacheWritePricePerUnit": 3.75
+            "CacheWritePricePerUnit": 3.75,
+            "EndedAt": "2025-10-28T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "7C026453-4873-454F-B861-3E6CDBAB944F"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.334Z",
-            "checksum": "d36b7efa806c6e66fd07939514332d64275b85e7e290a190ee481ef113971791"
+            "lastModified": "2026-11-01T22:53:21.463Z",
+            "checksum": "8e3130335d9325b38f69292c94a3880815cbe8642beeb984424aeaf9c6a74da2"
           }
         }
       ]
@@ -24976,6 +24977,46 @@
             "checksum": "90e8f9254bfaa3dff4c8430693eb1e4b041911b5a559139c9ae12967845b1707"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "AE716540-1FAE-4DDD-9F62-B1003C0AC0FF"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.031Z",
+            "checksum": "1ddec9afb6a11edbba5f48279bda146ba6d45de97aa9afc4a207c89adcd75a5e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "5F9B92B6-CF8D-4081-B966-6DBE0A9F8F81"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.045Z",
+            "checksum": "3b77d9a6f1c579eef20117cdc31dc5639080a3da17720076ceb4fbf776350206"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -25367,6 +25408,84 @@
           "sync": {
             "lastModified": "2026-09-10T17:40:34.449Z",
             "checksum": "c04c5558e327ecb53522adf5d3afabf805f83be22ed7bc23f672a89e20186ca6"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "1E2AAB59-4075-4C9F-A276-7F20C736DFAB"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.286Z",
+            "checksum": "ef3a19d01530422a8905c8f6278211ebce792ebe2c213d9b655e2cf0a44a3046"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "audio/mp3,audio/wav,audio/ogg",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "F301C48F-BE96-49F5-AF9A-C9BCF2A1C4F4"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.300Z",
+            "checksum": "bf4242712add585cbf78adaa8f2c7a839740bb3be783c03297dccba55161815a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "video/mp4,video/webm",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "645E6041-270C-443C-9356-E59A48C892ED"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.315Z",
+            "checksum": "511b268236e57bfe862eaf2873500e02fc8b074f4c294c00db5245d051a5ac99"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "8E3003CB-2644-4A55-93B9-48A1FE054703"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.330Z",
+            "checksum": "be915a76c2ab55c495b391ec91e5d6c0f38e4613fb0253817f0af088ff817905"
           }
         }
       ]
@@ -26667,6 +26786,46 @@
             "checksum": "883069baf372dddcefdc409fe613d9939ed2d6f2ed16def6357eec29b062cbdb"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "4D7FA56D-5EA8-42EC-B680-7460837DBCE2"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.346Z",
+            "checksum": "1ddec9afb6a11edbba5f48279bda146ba6d45de97aa9afc4a207c89adcd75a5e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "7EAD0516-4D00-446B-AB6C-C43C53C10B6F"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.361Z",
+            "checksum": "3b77d9a6f1c579eef20117cdc31dc5639080a3da17720076ceb4fbf776350206"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -27909,6 +28068,46 @@
             "checksum": "68da04f4440ca7c8b3ea596210ab58d1d49064d913a6ccc002e06b5a3d73b3cf"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "8B150E82-F4CD-444D-808D-A3B11D15E458"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.237Z",
+            "checksum": "1ddec9afb6a11edbba5f48279bda146ba6d45de97aa9afc4a207c89adcd75a5e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "40033019-353B-40A2-BFF2-0FFF317BA7A6"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.252Z",
+            "checksum": "3b77d9a6f1c579eef20117cdc31dc5639080a3da17720076ceb4fbf776350206"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -28348,7 +28547,7 @@
   {
     "fields": {
       "Name": "Mistral Large 4",
-      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing is 50% off for two weeks from release; the standard rates are $1.36 input / $0.14 cached input / $4.18 output per 1M tokens.",
+      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing was 50% off for two weeks from release, then $1.36 input / $0.14 cached input / $4.18 output per 1M tokens from 2026-10-20. On 2026-10-29 Mistral published the weights (Mistral Ecosystem Open-Weight License) and cut the price to $0.70 input / $0.07 cached input / $2.10 output per 1M tokens.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 22,
       "IsActive": true,
@@ -28445,7 +28644,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2026-10-20T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.36,
@@ -28454,14 +28653,39 @@
             "ProcessingType": "Realtime",
             "CacheReadPricePerUnit": 0.14,
             "CacheWritePricePerUnit": null,
-            "Comments": "Mistral Large 4 standard (post-promotion) pricing: $1.36 input / $0.14 cached input / $4.18 output per 1M tokens. These are the pre-discount list figures Mistral published at the 2026-10-06 launch and recorded first-party in MJ on 2026-10-12 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs. StartedAt is release + the changelog's \"50% off for two weeks\" term; Mistral published no explicit discount end date, so if the promotion was extended this row starts early and the expired $0.68/$2.09 row should be re-opened. Mistral's own pages were unreachable from the 2026-10-19 research session, so the date was not re-verified that week."
+            "Comments": "Mistral Large 4 standard (post-promotion) pricing: $1.36 input / $0.14 cached input / $4.18 output per 1M tokens. These are the pre-discount list figures Mistral published at the 2026-10-06 launch and recorded first-party in MJ on 2026-10-12 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs. StartedAt is release + the changelog's \"50% off for two weeks\" term; Mistral published no explicit discount end date, so if the promotion was extended this row starts early and the expired $0.68/$2.09 row should be re-opened. Mistral's own pages were unreachable from the 2026-10-19 research session, so the date was not re-verified that week. EXPIRED 2026-10-29: Mistral cut Large 4 to $0.70 input / $0.07 cached input / $2.10 output per 1M tokens when it published the open weights, effective 2026-10-29. Superseded by the row starting 2026-10-29. Row preserved for historical pricing lookups. Source: https://docs.mistral.ai/models/mistral-large-4-0 ; https://mistral.ai/news/mistral-large-4-oss/",
+            "EndedAt": "2026-10-29T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "C028672F-4B05-454F-A6EB-CDC57C5D42A8"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:42.552Z",
-            "checksum": "f7855827c02d92588913f20184b6970d6a88404b13a4d2913f83ac8f18f08c42"
+            "lastModified": "2026-11-01T22:53:22.066Z",
+            "checksum": "eef7fe088d898d1c0b1ed4ec0a375ca6915aa85b67336759abf6ecf455fe10a3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.7,
+            "OutputPricePerUnit": 2.1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.07,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Mistral Large 4 price cut, effective 2026-10-29 alongside the open-weight release: $0.70 input / $0.07 cached input / $2.10 output per 1M tokens, with no stated end date (reported as permanent). Read first-party on 2026-11-01 from the Mistral model page; matches the Mistral-served endpoints on OpenRouter (mistralai/mistral-large-4-0, $0.70/$2.10, cached $0.07; EU-region endpoint $0.77/$2.31, not modelled). Mistral's general pricing page did not list Large 4 yet. Sources: https://docs.mistral.ai/models/mistral-large-4-0 ; https://mistral.ai/news/mistral-large-4-oss/ ; https://openrouter.ai/api/v1/models/mistralai/mistral-large-4-0/endpoints"
+          },
+          "primaryKey": {
+            "ID": "FC1B61E9-C479-4A09-BCEE-46612170F01B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.084Z",
+            "checksum": "1edc9eae9b098b4cfeff55db42b07b7fb97d18f90b17d098d4e35429e7603d3e"
           }
         }
       ]
@@ -28470,8 +28694,8 @@
       "ID": "BE2A6CFF-7AC9-4742-851C-04399DA91214"
     },
     "sync": {
-      "lastModified": "2026-10-13T18:59:58.794Z",
-      "checksum": "5c6cd5d8c752dcea24ae1ef3b0bd4647f320a1774fe67bf841b344eef0b2c8d1"
+      "lastModified": "2026-11-01T22:53:21.613Z",
+      "checksum": "7fce7f4338421b23dc281e534a0f4b486154ca2ad19028d2956c86b699f9ad32"
     }
   },
   {
@@ -28742,6 +28966,257 @@
     "sync": {
       "lastModified": "2026-10-20T23:18:41.878Z",
       "checksum": "86c94ec2321d8919c308a1e4c5095d3c23fec32a69c131ec65c85d534cec03c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Video",
+      "Description": "Black Forest Labs' FLUX 3 unified audiovisual generation model for video. Supports text-to-video, image-to-video, keyframes, continuation and synchronized audio in 5-20 s clips (vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
+      "PowerRank": 10,
+      "SpeedRank": 2,
+      "CostRank": 9,
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F86417BD-3F9E-4A34-BD5F-A21A0773923E"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.673Z",
+            "checksum": "928d83191557527cd391b99c8d54a972a0ff0b2de9cdc7a4f2894b7669ff0828"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUX3VideoGenerator",
+            "APIName": "flux-3-video",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6FFB611C-E418-4EE0-BCE4-28B573FC74AD"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.697Z",
+            "checksum": "915c8b6128a2b176430f45b4d0a0a72710eb33e5906d21e64b5d8bba658f34bc"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.45,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Second",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per second of output at the highest published rate, video-to-video (continuation) UHD, $0.45/s (45 credits; 1 credit = $0.01). Published range: Draft HD $0.06/s; text/image to video HD $0.15, FHD $0.24, QHD $0.28, UHD $0.41; video to video HD $0.21, FHD $0.27, QHD $0.31, UHD $0.45. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "7290F8F0-6BB6-4053-A912-5BEDCE835B7C"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.745Z",
+            "checksum": "ce129be5bab32930d73baac0b40fa0487a19a45cdda6e9899cd676a9dbe033dc"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images and keyframes, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "EB46428D-AE90-4745-8264-F7710D11CE0A"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.791Z",
+            "checksum": "a02cc24bbf7edcd0d3bd5c183b00d7d227766f1b4df29aebfe81c47952ab4974"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "MaxCountPerMessage": 1,
+            "Comments": "source clip for continuation (v2v)"
+          },
+          "primaryKey": {
+            "ID": "2FEB1262-7E67-46AA-844B-6608EEFEE7F3"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.809Z",
+            "checksum": "63c73c638d49121129968341680035b50a8c9e61742eeb02e7cf0a6f6352e356"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsSupported": true,
+            "Comments": "synchronized audio"
+          },
+          "primaryKey": {
+            "ID": "0CF82BC5-E82C-4235-9D3B-608605E5CEA4"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.826Z",
+            "checksum": "7788a016f4910b89963c1e10cc97ad9171d138d506a777da7de22d67c2e4c639"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CC202FFC-2015-4C8C-8A6D-8BB30ADBFE2D"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.345Z",
+      "checksum": "21af9086e48dcaef2d096dd8e777b6153ebad02abfc10b8a4c3a7ff30cb91026"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Image",
+      "Description": "Black Forest Labs' FLUX 3 image generation and editing model. Supports text-to-image and multi-reference image input (up to 10 reference images, vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "PowerRank": 11,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A16EB867-6ED6-460C-AAB7-EEAB71665918"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.845Z",
+            "checksum": "928d83191557527cd391b99c8d54a972a0ff0b2de9cdc7a4f2894b7669ff0828"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUXImageGenerator",
+            "APIName": "flux-3-image",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A55AAC36-729E-46C8-8912-830FF7FA991F"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.862Z",
+            "checksum": "c7b1a01ff4c28a6843480596e39f23ce0957f9a603cc23750d3e0824d5df1d22"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.607,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per image at the highest published tier, 4K, $0.607. Published tiers: 768x768 $0.041, 1K $0.048, 1.5K $0.07, 2K $0.10, 4K $0.607. Reference images and prompts are not charged. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "B024CB0E-7FAA-4455-94A1-764F3C1F11FD"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.876Z",
+            "checksum": "d457b74a0468aeec3f41f4a5eff8e610a1c6133e09a6580354cacdd9953a5789"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "33E8D1E4-2B4F-4960-A3A5-EC470C607FD7"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.889Z",
+            "checksum": "b103a806a993d2873776b627d42cc062f501f208d83ce3e52615ff2cce437bbc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DADFD72E-77AB-4699-AE68-578AB4EF0534"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.361Z",
+      "checksum": "26ebb994b82846ed76ad8e9b40b1fed0cb41cc08dbc6d3185821d8360cd8381d"
     }
   },
   {
@@ -29691,6 +30166,29 @@
             "lastModified": "2026-10-28T00:35:14.650Z",
             "checksum": "fc45354cefb4e16f28ecec4a558646bb401bfb8299652671c5c1375d6d3a2be2"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "minimax/minimax-m3.1-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A9AB1F2F-EA8B-4EBE-BB1F-9509FCF5B528"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.917Z",
+            "checksum": "fb8b00d2a2a9962a4bfd9c8a76a7a5fdcd35bf24e75855303d444fd7a6b727f5"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -29726,6 +30224,226 @@
     "sync": {
       "lastModified": "2026-10-28T00:35:14.177Z",
       "checksum": "17a457ad2f79367c5794f1af6bbd21177c52f704f4093b522c1c413858094761"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-6.1 Terra",
+      "PowerRank": 23,
+      "Description": "OpenAI's GPT-6.1 mid-tier Terra model, released October 26, 2026 as the successor to GPT-5.6 Terra; it sits below GPT-6.1 Sol in the GPT-6.1 series and is aimed at everyday agentic, coding and writing work, with strong screenshot understanding. 1,050,000-token context (922K max input), 128K max output. Text and image input, text output. Reasoning effort none, low, medium (default), high, xhigh and max (unlike GPT-6.1 Sol, it accepts none). Function calling, structured outputs and streaming supported on Chat Completions, Responses and Batch. Priced at $1/$5 per 1M, cached input $0.05, cache writes $1.25 (30-minute retention) or $2.50 (12-hour) - half of GPT-5.6 Terra and GPT-6.1 Sol. A prompt above 272K input tokens re-rates the whole request at 2x input and cache rates and 1.5x output ($2/$7.50, cached $0.10); that long-context tier is not modelled. Available on the OpenAI API, Amazon Bedrock (openai.gpt-6.1-terra, lifecycle start 2026-10-23) and OpenRouter. Microsoft Foundry availability is not confirmed and not modelled. OpenRouter's GPT-6.1 Terra Pro is the same model with reasoning mode set to pro, not a separate OpenAI model id, so it is not modelled. Sources: https://developers.openai.com/api/docs/models/gpt-6.1-terra ; https://openai.com/index/introducing-gpt-6-1-terra/",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.6-terra",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "805AC0E9-D046-4D1D-968C-B8DB05584A2B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.105Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7BA1A5E1-1F03-461D-817B-96B47A772516"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.122Z",
+            "checksum": "17c9a35f4fe05692417fb9b31a66d28d8d70b957b0cee7c1028513b03ddeb4f0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "openai.gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "72CA6C87-A37C-4017-9D44-A6F52D76CFA6"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.145Z",
+            "checksum": "702a0fc7aaca5b481f1166c7602c372c7f73f84ab65a92e3d0da6c03728b5f82"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "59B1AFCF-02F9-4F7D-BE7F-0E397C7244F9"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.163Z",
+            "checksum": "5d18c6f8541d95e01629f4ede29a8179a41486716fdd8edc3ee2aff91f227cad"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-10-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": 1.25,
+            "Comments": "GPT-6.1 Terra launch pricing on OpenAI direct (2026-10-26), read first-party from the OpenAI model page on 2026-11-01: $1/$5 per 1M in/out, cached input $0.05, cache write $1.25 (30-minute retention; 12-hour retention is $2.50, not modelled). Long-context tier not modelled: above 272K input tokens the whole request is billed at 2x input and cache rates and 1.5x output ($2/$7.50, cached $0.10). Flex ($0.50/$2.50) and fast ($2/$10) service tiers are not modelled. Source: https://developers.openai.com/api/docs/models/gpt-6.1-terra"
+          },
+          "primaryKey": {
+            "ID": "4BB32781-6B63-47C1-803F-B119CB5F8487"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.180Z",
+            "checksum": "95005a3cc4f94ebd4d9adbd7561dc167df817c1654374c8b159b71dda1b9b867"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F2E7DB51-B7EC-42C7-94FF-57BF4A93BA9C"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.938Z",
+      "checksum": "a5f29c7d75b20de130cc3c1756f820a40af8913c8316e400e0bacf27e17f8916"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Wonder",
+      "PowerRank": 26,
+      "Description": "Meta Superintelligence Labs' frontier reasoning model, released October 12, 2026, positioned above Muse Spark 1.3 for complex personal and professional agentic work. API id muse-wonder-1.0 on Meta's Model API (Preview), also served on OpenRouter as meta/muse-wonder, which is the route MJ uses because no Meta driver class exists. 1,048,576-token context; text, image, video, audio and PDF input, text output; reasoning effort minimal through max; tool calling supported on the OpenRouter route. Meta prices it at $4 input / $0.20 cached input / $20 output per 1M tokens with no long-context premium (web search $2.50 per 1,000 queries); no cost row is recorded because MJ does not track OpenRouter prices and has no Meta-direct route. MaxOutputTokens is omitted: Meta publishes no cap and listings disagree (16K, 131K, 943,718). The higher-tier Muse Wonder Full is only in Meta's Muse Code subscriptions and has no API id, so it is not modelled. On Meta's launch table it scores 52 on the Artificial Analysis Index (GPT-6 Astra 53, Claude Opus 5.5 58). Sources: https://openrouter.ai/meta/muse-wonder ; https://www.eesel.ai/blog/meta-muse-wonder",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 9,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7EAD0B0C-B085-4719-A389-9CC6A5EB06D0"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.957Z",
+            "checksum": "12858372c16eb3c3fca41c3ada75a1d466104cabecb517515ad6331ddd0588ac"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-wonder",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D4CCEAB6-CEDF-4B80-902E-0D663E58365B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.974Z",
+            "checksum": "8fe1c1d14b4758b96017ef2db7895a9f9a3323205d5be2468a0305106d37438e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1C622FDC-9873-4171-978E-596BDF7FEFA8"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.385Z",
+      "checksum": "a61d5c938959adb84a93f63dbcf9c41b7f8332cb6b04e992227fdf5ae2a2b6d3"
     }
   }
 ]

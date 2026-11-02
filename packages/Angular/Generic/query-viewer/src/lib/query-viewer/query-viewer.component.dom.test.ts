@@ -5,7 +5,7 @@ import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { QueryViewerComponent } from './query-viewer.component';
-import type { QueryEntityLinkClickEvent } from '../query-data-grid/models/query-grid-types';
+import type { QueryEntityLinkClickEvent, QueryParameterValues } from '../query-data-grid/models/query-grid-types';
 
 /**
  * DOM coverage for <mj-query-viewer> — the wrapper that runs a stored query and shows its results grid
@@ -25,6 +25,7 @@ class GridStub {
   // A stub that omits an input the template binds is NG0303 at render time, which fails every
   // test that gets far enough to render the grid — not just the ones that assert on export.
   @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+  @Input() ParameterValues: QueryParameterValues | null = null;
   @Output() PageChange = new EventEmitter<unknown>();
   @Output() EntityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
   @Output() RowDoubleClick = new EventEmitter<unknown>();

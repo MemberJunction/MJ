@@ -1,5 +1,11 @@
 # @memberjunction/ng-markdown
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

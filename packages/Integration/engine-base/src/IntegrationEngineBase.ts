@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo, RegisterForStartup } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, IRunViewProvider, RunView, UserInfo, RegisterForStartup } from '@memberjunction/core';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJIntegrationEntity,
     MJIntegrationSourceTypeEntity,
@@ -45,8 +45,9 @@ type CatalogEdgeEnds = Pick<CatalogDependencyEdge, 'CompanyIntegrationObjectID' 
 /**
  * IntegrationEngineBase provides cached metadata for the MJ integration subsystem.
  *
- * It extends BaseEngine to load and auto-refresh all integration-related entities
- * (Integrations, CompanyIntegrations, EntityMaps, FieldMaps, Watermarks, SourceTypes).
+ * It extends BaseEngine to load and auto-refresh the integration-related entities
+ * (Integrations, CompanyIntegrations, EntityMaps, Watermarks, SourceTypes). Field maps are
+ * not cached: read them one entity map at a time with {@link LoadFieldMapsForEntityMap}.
  *
  * This class is safe to use in both client (Angular) and server contexts.
  * For server-side orchestration (sync execution), use the full IntegrationEngine
@@ -59,7 +60,6 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     private _sourceTypes: MJIntegrationSourceTypeEntity[] = [];
     private _companyIntegrations: MJCompanyIntegrationEntity[] = [];
     private _entityMaps: MJCompanyIntegrationEntityMapEntity[] = [];
-    private _fieldMaps: MJCompanyIntegrationFieldMapEntity[] = [];
     private _watermarks: MJCompanyIntegrationSyncWatermarkEntity[] = [];
     private _integrationObjects: MJIntegrationObjectEntity[] = [];
     private _integrationObjectFields: MJIntegrationObjectFieldEntity[] = [];
@@ -126,11 +126,6 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
                 CacheLocal: true,
             },
             {
-                PropertyName: '_fieldMaps',
-                EntityName: 'MJ: Company Integration Field Maps',
-                CacheLocal: true,
-            },
-            {
                 PropertyName: '_watermarks',
                 EntityName: 'MJ: Company Integration Sync Watermarks',
                 CacheLocal: true,
@@ -166,6 +161,10 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         // Not registering them also keeps the property the conditional registration used to buy:
         // the engine starts on a workspace that has this code but not the migration, because there
         // is no dataset whose missing entity could fail its load and be retried forever.
+        //
+        // Company Integration Field Maps are not among these either. A deployment can hold tens of
+        // thousands, every consumer reads one entity map at a time, and this engine starts in every
+        // server process and every browser tab. LoadFieldMapsForEntityMap reads them on demand.
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
 
@@ -223,7 +222,6 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         IntegrationObjectFields?: Array<Partial<MJIntegrationObjectFieldEntity>>;
         CompanyIntegrations?: Array<Partial<MJCompanyIntegrationEntity>>;
         EntityMaps?: Array<Partial<MJCompanyIntegrationEntityMapEntity>>;
-        FieldMaps?: Array<Partial<MJCompanyIntegrationFieldMapEntity>>;
         /**
          * Per-connection catalog rows, as LOADED rows rather than projections — they go through
          * `ProjectCatalogObjects`/`ProjectCatalogFields` exactly as the real load does, so a seed
@@ -237,7 +235,6 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         if (seed.IntegrationObjectFields) this._integrationObjectFields = seed.IntegrationObjectFields as MJIntegrationObjectFieldEntity[];
         if (seed.CompanyIntegrations) this._companyIntegrations = seed.CompanyIntegrations as MJCompanyIntegrationEntity[];
         if (seed.EntityMaps) this._entityMaps = seed.EntityMaps as MJCompanyIntegrationEntityMapEntity[];
-        if (seed.FieldMaps) this._fieldMaps = seed.FieldMaps as MJCompanyIntegrationFieldMapEntity[];
         if (seed.CompanyIntegrationObjects) this._companyIntegrationObjects = seed.CompanyIntegrationObjects;
         if (seed.CompanyIntegrationObjectFields) this._companyIntegrationObjectFields = seed.CompanyIntegrationObjectFields;
     }
@@ -262,11 +259,6 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     /** All entity-level mapping configurations. */
     public get EntityMaps(): MJCompanyIntegrationEntityMapEntity[] {
         return this._entityMaps;
-    }
-
-    /** All field-level mapping configurations. */
-    public get FieldMaps(): MJCompanyIntegrationFieldMapEntity[] {
-        return this._fieldMaps;
     }
 
     /** All sync watermark records. */
@@ -312,9 +304,29 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         return this._entityMaps.filter(em => UUIDsEqual(em.CompanyIntegrationID, companyIntegrationID));
     }
 
-    /** Get all field maps for a given EntityMap ID. */
-    public GetFieldMapsForEntityMap(entityMapID: string): MJCompanyIntegrationFieldMapEntity[] {
-        return this._fieldMaps.filter(fm => UUIDsEqual(fm.EntityMapID, entityMapID));
+    /**
+     * Loads the field maps of one entity map, in Priority order. Throws when the read fails, so a
+     * caller never takes a failed read for an entity map with no field maps.
+     *
+     * @param contextUser Required on the server; omit in the browser.
+     * @param provider The RunView provider to read through; defaults to the engine's provider.
+     */
+    public async LoadFieldMapsForEntityMap(
+        entityMapID: string,
+        contextUser?: UserInfo,
+        provider?: IRunViewProvider | null
+    ): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+        const rv = new RunView(provider ?? this.RunViewProviderToUse);
+        const result = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+            EntityName: 'MJ: Company Integration Field Maps',
+            ExtraFilter: `EntityMapID='${EscapeSQLString(entityMapID)}'`,
+            OrderBy: 'Priority ASC',
+            ResultType: 'entity_object',
+        }, contextUser);
+        if (!result.Success) {
+            throw new Error(`Could not load the field maps of entity map ${entityMapID}: ${result.ErrorMessage}`);
+        }
+        return result.Results;
     }
 
     /** Get the watermark for a given EntityMap ID and direction. */

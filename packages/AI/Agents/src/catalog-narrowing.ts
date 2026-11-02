@@ -23,6 +23,7 @@
  */
 
 import type { ChatMessage, DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
+import type { AgentChatMessage } from '@memberjunction/ai-core-plus';
 import { NormalizeUUID } from '@memberjunction/global';
 
 /** The lists narrowing can shorten. */
@@ -157,7 +158,10 @@ export function OpeningRequestText(messages: ChatMessage[] | undefined): string 
     if (!last) {
         return '';
     }
-    const text = typeof last.content === 'string'
+    const rawContent = (last as AgentChatMessage).metadata?.rawContent;
+    const text = typeof rawContent === 'string'
+        ? rawContent
+        : typeof last.content === 'string'
         ? last.content
         : (last.content ?? []).filter(b => b.type === 'text').map(b => b.content).join('\n');
     return text.trim().slice(0, CATALOG_NARROWING_REQUEST_MAX_CHARS);

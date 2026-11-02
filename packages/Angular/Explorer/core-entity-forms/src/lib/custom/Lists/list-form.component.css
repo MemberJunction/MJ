@@ -44,7 +44,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--mj-brand-on-primary);
     font-size: 24px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -191,7 +191,7 @@
 
 .nav-item:hover:not(.disabled) {
     background: rgba(255, 255, 255, 0.1);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .nav-item.active {
@@ -237,7 +237,7 @@
     border-radius: 9px;
     font-size: 10px;
     font-weight: 600;
-    color: white;
+    color: var(--mj-brand-on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -374,7 +374,7 @@
 .btn-primary {
     padding: 8px 16px;
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border: none;
     border-radius: 6px;
     font-size: 14px;
@@ -419,7 +419,7 @@
 .btn-danger {
     padding: 8px 16px;
     background: var(--mj-status-error);
-    color: white;
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 6px;
     font-size: 14px;

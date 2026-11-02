@@ -26,7 +26,8 @@
  *   NTL10 a failed Action's guidance rides inside its own is_error result;
  *   NTL11 a tool call the provider rejected comes back as a corrective retry naming the tools;
  *   NTL12 a tools-payload rejection retries once without tools, keeping the calls in the history as text;
- *   NTL13 older large tool-call arguments are compacted when the agent opts in.
+ *   NTL13 older large tool-call arguments are compacted when the agent opts in;
+ *   NTL14 a complete_task refused by FinalPayloadValidation does not apply its payload change.
  *
  * Self-cleaning: Setup creates the vendor, model, model-vendor row, prompts and agents (named
  * 'IT: NTL …', and removes any an interrupted earlier run left); Teardown purges every run and
@@ -40,19 +41,21 @@ import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
-import { AGENT_LIVE_SETTLE_MS, Sleep } from './agent-live-shared';
+import { AGENT_LIVE_SETTLE_MS } from './agent-live-shared';
 import {
     AdjacencyViolations, CreateLoopAgent, CreateModel, CreateModelVendor, CreateNativePrompt, CreateVendor, FailedTurn,
-    NewFixture, RejectedCallTurn, RemoveStaleFixtures, ResetScript, ResultBlocksOf, SCRIPTED_DRIVER, ScriptState, StepsOf,
+    IdsWhere, NewFixture, RejectedCallTurn, RemoveStaleFixtures, ResetScript, ResultBlocksOf, SCRIPTED_DRIVER, ScriptState, StepsOf,
     TeardownFixture, TextOf, TextTurn, ToolCallTurn, ToolCallingModesOf,
     type NativeLoopFixture, type RecordedRequest, type ScriptedTurn
 } from './native-tool-loop-shared';
+import { WaitUntil } from './wait-until';
 
 const PREFIX = 'IT: NTL ';
 const ACTION_AGENT = `${PREFIX}Action Agent`;
 const RELAXED_AGENT = `${PREFIX}Relaxed Agent`;
 const DOC_AGENT = `${PREFIX}Doc Agent`;
 const FINAL_TURN_AGENT = `${PREFIX}Final Turn Agent`;
+const VALIDATED_AGENT = `${PREFIX}Validated Agent`;
 const DOC_AGENT_DRIVER = 'ITNtlDocAgent';
 const ACTION_NAME = 'Calculate Expression';
 const ACTION_TOOL = 'calculate_expression';
@@ -122,6 +125,7 @@ async function setup(ctx: IntegrationCheckContext): Promise<void> {
     await CreateLoopAgent(ctx, f, { Name: RELAXED_AGENT, PromptID: actionPrompt, ActionNames: [ACTION_NAME], TypeConfiguration: { NativeControl: { RelaxedTurnShapes: true } } });
     await CreateLoopAgent(ctx, f, { Name: DOC_AGENT, PromptID: docPrompt, DriverClass: DOC_AGENT_DRIVER, TypeConfiguration: docControl });
     await CreateLoopAgent(ctx, f, { Name: FINAL_TURN_AGENT, PromptID: docPrompt, DriverClass: DOC_AGENT_DRIVER, TypeConfiguration: docControl, MaxIterationsPerRun: 2 });
+    await CreateLoopAgent(ctx, f, { Name: VALIDATED_AGENT, PromptID: actionPrompt, ActionNames: [ACTION_NAME], FinalPayloadValidation: { 'status:string': 'ready', 'count:number': 1 } });
     // The prompt runner renders through the template engine's cache, which holds the new templates
     // only after a refresh; the agent and model catalogs likewise.
     await TemplateEngineServer.Instance.Config(true, ctx.User, ctx.Provider);
@@ -159,7 +163,37 @@ async function run(ctx: IntegrationCheckContext, agentName: string, request: str
     const runID = result.agentRun?.ID;
     Assert(!!runID, `${agentName}: the run was recorded`);
     fx().RunIds.push(runID!);
-    await Sleep(AGENT_LIVE_SETTLE_MS);
+
+    // Step and prompt-run rows are written fire-and-forget AFTER RunAgent returns. Nothing in this
+    // bundle reads them — every assertion below is on the in-memory Outcome — but TEARDOWN does:
+    // PurgeAgentRun finds a run's prompt runs only by reading its step rows first ("the steps are
+    // the only path to them"). If they have not landed when the fixture is torn down, the parent
+    // run is deleted and every step and prompt-run row is orphaned, silently, with the tier still
+    // green. That is why this wait exists.
+    //
+    // It used to be `Sleep(AGENT_LIVE_SETTLE_MS)` — a flat 5s, 13 times, about 65s a run. A fixed
+    // sleep is the wrong shape twice over: it pays 5s when the rows land in 200ms, and it is still
+    // not enough on a runner slow enough to need 6, where it leaks without saying so. The run
+    // itself knows how many steps it produced, so wait for exactly that many to be readable and
+    // let the old constant be the ceiling instead of the floor.
+    const expectedSteps = result.agentRun?.Steps?.length ?? 0;
+    if (expectedSteps > 0) {
+        try {
+            await WaitUntil(
+                async () => (await IdsWhere(ctx, 'MJ: AI Agent Run Steps', `AgentRunID='${runID}'`)).length >= expectedSteps,
+                `${agentName}: ${expectedSteps} agent-run step row(s) to land`,
+                // Double the old constant as the ceiling: strictly more headroom than the sleep it
+                // replaces. StableReads guards the case where the server writes more rows than the
+                // in-memory run knows about, so the count is confirmed settled, not merely reached.
+                { TimeoutMs: AGENT_LIVE_SETTLE_MS * 2, PollMs: 100, StableReads: 2 }
+            );
+        } catch (e) {
+            // Non-fatal, matching the suite's teardown philosophy: deliberately non-throwing, but
+            // NOT silent. Turning a slow write into a red check would trade a quiet leak for a
+            // flake; the warning is what makes the leak visible.
+            console.warn(`native-tool-loop: ${e instanceof Error ? e.message : String(e)} — teardown may orphan this run's step and prompt-run rows.`);
+        }
+    }
     return {
         RunID: runID!,
         Status: result.agentRun?.Status ?? 'Unknown',
@@ -413,6 +447,28 @@ export const NativeToolLoopChecks: NamedCheck[] = [
             AssertEqual(calls.length, 3, 'NTL13: three call turns in the history');
             Assert(calls[0].startsWith('[content omitted:'), `NTL13: the oldest argument is stubbed, got ${calls[0].slice(0, 60)}`);
             Assert(calls[1] === big(2) && calls[2] === big(3), 'NTL13: the two most recent are whole');
+        }
+    },
+    {
+        Id: 'native-tool-loop.NTL14',
+        Name: 'NTL14: a complete_task refused by FinalPayloadValidation does not apply its payload change, and its result says to send it again',
+        Fn: async (ctx) => {
+            const complete = (elements: Record<string, unknown>) =>
+                ToolCallTurn([{ name: 'complete_task', args: { message: 'Done.', payloadChangeRequest: { newElements: elements } } }]);
+            // The first completion lacks the count; the second sends only the count. Had the first
+            // change been kept, the second would pass. It is refused too, so the third sends both.
+            const o = await run(ctx, VALIDATED_AGENT, 'Record the status and the count, then finish.', [
+                complete({ status: 'ready' }), complete({ count: 2 }), complete({ status: 'ready', count: 2 })
+            ]);
+            assertCompleted(o, 'NTL14');
+            AssertEqual(o.Requests.length, 3, 'NTL14: two refused completions, then an accepted one');
+            const second = request(o, 1, 'NTL14');
+            assertValidHistory(second, 'NTL14');
+            const refused = answersTo(second, 'complete_task');
+            Assert(refused.length === 1 && refused[0].isError === true && (refused[0].content ?? '').includes('was NOT applied'),
+                `NTL14: the refused complete_task says its change was not applied, got ${JSON.stringify(refused)}`);
+            AssertEqual(o.FinalStep, 'Success', 'NTL14: the run ended on Success');
+            AssertEqual(JSON.stringify(o.Payload), JSON.stringify({ status: 'ready', count: 2 }), 'NTL14: only the accepted change is in the payload');
         }
     }
 ];

@@ -56,6 +56,13 @@ export abstract class AutotagBase {
      */
     public readonly SupportsExhaustiveWalk?: boolean;
 
+    /**
+     * True when items are pushed into this source on demand (such as {@link AutotagUpload}) rather than
+     * pulled by walking an external listing. `Discover` and `Sync` skip push-only sources with a `Skipped`
+     * outcome and never mark their items as orphans.
+     */
+    public readonly IsPushOnly?: boolean;
+
     /** Walk the source for the pipeline's Discover stage, yielding each item as it is found. */
     public Discover?(request: DiscoverRequest): AsyncIterable<DiscoveredItem>;
 

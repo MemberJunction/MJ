@@ -671,7 +671,8 @@
             "PayloadUpstreamPaths": [
               "synthesis.*",
               "report.*",
-              "visualizations.*"
+              "visualizations.*",
+              "video.*"
             ],
             "AgentTypePromptParams": {
               "enableTaskGraphs": true
@@ -864,8 +865,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:58:28.449Z",
-            "checksum": "9b18921ec5ff2811e2901d114fa199d8a850f7908d6a9e0ea8bf9278ab7fa3f6"
+            "lastModified": "2026-11-01T22:54:14.888Z",
+            "checksum": "0a804f01fe3916f38b568f5a6d100d43df47a8e9a27b2bf7ff1d90bc1dd43e5b"
           }
         }
       ],
