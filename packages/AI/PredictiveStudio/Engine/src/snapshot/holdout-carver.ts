@@ -178,7 +178,7 @@ export class RollingOriginCarver implements IHoldoutCarver {
   }
 }
 
-/** The carver a protocol declares, and the unit-row lookup the carvers share (static members on one owner). */
+/** The carver a protocol declares, and the unit-row lookup the carvers share. */
 export class HoldoutCarvers {
   /** The carver for the protocol's holdout kind: the only place a holdout kind maps to a carver. */
   public static CarverForProtocol(protocol: Pick<EvaluationProtocolSpec, 'holdout' | 'seed'>, unit: Pick<PredictionUnitSpec, 'decision'>): IHoldoutCarver {

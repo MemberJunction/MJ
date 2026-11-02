@@ -51,7 +51,7 @@ export class RunViewEvaluationProtocolStore implements IEvaluationProtocolStore 
   }
 }
 
-/** Loads and parses protocols (static members on one owner). */
+/** Loads and parses protocols. */
 export class EvaluationProtocolSpecs {
   /**
    * The protocol version with this ID, parsed, or null when the row does not exist.

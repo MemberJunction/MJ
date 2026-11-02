@@ -7,7 +7,7 @@
  */
 import { createHash } from 'node:crypto';
 
-/** SHA-256 hashing of snapshot bytes and canonical-JSON strings, as a static member on one owner class. */
+/** SHA-256 hashing of snapshot bytes and canonical-JSON strings. */
 export class SnapshotHash {
   /** SHA-256 of bytes or a UTF-8 string, lower-case hex: every Training Snapshot file and content hash. */
   public static Sha256Hex(data: Uint8Array | string): string {

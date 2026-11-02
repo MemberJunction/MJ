@@ -277,7 +277,7 @@ export class FakeEvaluationProtocolStore implements IEvaluationProtocolStore {
   }
 }
 
-/** The trainer answers the fake harness accepts: a completed run for the request's run and snapshot (static members on one owner). */
+/** The trainer answers the fake harness accepts: a completed run for the request's run and snapshot. */
 export class TrainerAnswers {
   /** The completed answer for a request: its run, its snapshot's feature-schema hash, real artifact hashes. */
   public static CannedFor(r: TrainerRequest): TrainerResult {

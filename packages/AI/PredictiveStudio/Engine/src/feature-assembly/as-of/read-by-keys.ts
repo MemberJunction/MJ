@@ -13,7 +13,7 @@ export const READ_BY_KEYS_BATCH = 500;
 
 export type ReadByKeysOutcome = { readonly Status: 'read'; readonly Rows: ReadonlyMap<string, SourceRow> } | { readonly Status: 'refused'; readonly Refusal: AssemblyRefusal };
 
-/** Keyed reads of one entity. Static members on one owner. */
+/** Keyed reads of one entity. */
 export class KeyedReader {
   /**
    * The rows of `keys` (deduplicated case-insensitively), keyed by lower-cased key. The batches are independent reads and

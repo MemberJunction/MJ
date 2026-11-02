@@ -151,7 +151,7 @@ export interface LoadedModel {
    * For a model trained on a Prediction Unit: the unit version, the typed feature columns and the kept categorical
    * levels its Lineage stored, and the unit's row entity. Null for a model trained without a unit (the legacy path).
    */
-  unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /**
    * The records that contributed a development row to the model's Training Snapshot (its manifest's development row
    * ids, compared as UUIDs); empty for a model trained without a snapshot.
@@ -182,17 +182,17 @@ export interface MLInferenceDeps {
   /** Sidecar `/predict` seam. */
   sidecar: ISidecarPredictor;
   /** Which unit a model's pipeline points at; defaults to a `RunViewPipelineUnitLookup` on the run's provider. */
-  pipelineUnits?: IPipelineUnitLookup;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  pipelineUnits?: IPipelineUnitLookup;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** Which records a model was trained on; defaults to a `RunViewTrainingRowsLookup` (the snapshot manifest) on the run's provider. */
-  trainingRows?: ITrainingRowsLookup;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  trainingRows?: ITrainingRowsLookup;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** Prediction Unit store a unit model's unit is loaded from; defaults to a `RunViewPredictionUnitStore` on the run's provider. */
-  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** Entity metadata a unit model's assembly resolves against; defaults to a `ProviderAssemblyMetadata` on the run's provider. */
-  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** The counting data access a unit model's rows are read through; defaults to a `RunViewDataAccess` on the run's provider. */
-  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** The Record Changes history a unit model's assembly replays; defaults to a complete-read `RunViewRecordHistoryReader` over `dataAccess`. */
-  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**

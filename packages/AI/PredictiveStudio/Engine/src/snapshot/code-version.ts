@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JsonParse } from '@memberjunction/predictive-studio-core';
 
-/** The assembly code version, as a static member on one owner class. */
+/** The assembly code version a Training Snapshot records. */
 export class CodeVersionInfo {
   private static packageVersion: string | null = null;
 

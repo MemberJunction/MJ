@@ -64,7 +64,6 @@ import type {
  * The training delegation every in-process caller uses: one production deps builder, one train-by-pipeline entry
  * point and one retrain-from-snapshot entry point, so the Train operation, the Train action, auto-train, the pipeline
  * builder and the rigs train (and retrain) the same way.
- * Static members on one owner.
  */
 export class TrainingDelegation {
   /**

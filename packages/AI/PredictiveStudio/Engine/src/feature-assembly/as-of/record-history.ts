@@ -59,7 +59,7 @@ const SNAPSHOT_DESCRIPTION = 'History snapshot for Predictive Studio as-of cover
  */
 const SNAPSHOT_SAVE_BATCH = 50;
 
-/** Replay of `MJ: Record Changes` rows, and the snapshots that start a record's history. Static members on one owner. */
+/** Replay of `MJ: Record Changes` rows, and the snapshots that start a record's history. */
 export class RecordHistory {
   /**
    * The primary-key value of a RecordID, lower-cased for in-memory matching. Parsed by MJ's own `CompositeKey` (the

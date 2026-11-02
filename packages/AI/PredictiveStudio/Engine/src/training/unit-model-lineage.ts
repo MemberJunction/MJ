@@ -26,20 +26,20 @@ import {
  * levels of each categorical column and the Training Snapshot its rows came from.
  */
 export interface UnitModelLineage {
-  predictionUnitId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  predictionUnitVersion: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  labelVersion: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  featureSpecVersion: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  predictionUnitId: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
+  predictionUnitVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
+  labelVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
+  featureSpecVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** The entity whose records the unit rows are (the entity a scoring scope must hold). */
-  unitRowEntity: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  unitRowEntity: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** The typed columns the matrix was assembled from, in order. */
-  featureSpec: FeatureColumnSpec[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  featureSpec: FeatureColumnSpec[];  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** The kept levels of each categorical column, by column name; scoring folds every other value into the fold level. */
-  categoryLevels: Record<string, string[]>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  categoryLevels: Record<string, string[]>;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** The `MJ: Training Snapshots` row the model was trained from. */
-  trainingSnapshotId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  trainingSnapshotId: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** That snapshot's content hash, so the lineage names the exact rows even if the row were ever re-pointed. */
-  snapshotContentHash: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  snapshotContentHash: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
 }
 
 /** One validation step: the typed value, or the first problem found (a sentence naming the member's path). */
@@ -51,7 +51,7 @@ const FILTER_OPS: readonly RowFilter['op'][] = ['eq', 'neq', 'in', 'not-null', '
 const CATEGORICAL_METHODS: readonly Extract<ColumnEncoding, { kind: 'categorical' }>['method'][] = ['onehot', 'hashed', 'target-in-fold'];
 const DATE_PARTS: readonly Extract<ColumnEncoding, { kind: 'date-parts' }>['parts'][number][] = ['year', 'month', 'dow', 'days-since-decision'];
 
-/** Reads a stored lineage's unit part. Static members on one owner. */
+/** Reads a stored lineage's unit part. */
 export class UnitModelLineageParser {
   /**
    * The unit part of a stored `Lineage` text: every member present and of its declared shape, or every problem found

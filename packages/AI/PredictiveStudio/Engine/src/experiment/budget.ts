@@ -29,7 +29,7 @@ export class TrainingAttemptFailedError extends Error {
   }
 }
 
-/** Experiment-session budget arithmetic (static members on one owner). */
+/** Experiment-session budget arithmetic. */
 export class ExperimentBudget {
   /** Each session iteration trains one candidate, so a session asks the protocol guard for a one-candidate search. */
   private static readonly CANDIDATES_PER_ITERATION = 1;

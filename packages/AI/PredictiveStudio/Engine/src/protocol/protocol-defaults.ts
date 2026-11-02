@@ -16,7 +16,7 @@ import { PredictionUnitRowReader, type UnitReadDeps } from '../prediction-unit/u
 /** What reading the unit's rows needs when the default holdout is carved on their decision dates. */
 export type ProtocolDefaultsReadDeps = Pick<UnitReadDeps, 'DataAccess' | 'Metadata' | 'Now'>;
 
-/** A unit's default holdout and the defaults behind it (static members on one owner). */
+/** A unit's default holdout and the defaults behind it. */
 export class ProtocolDefaults {
   /** Rolling origins of a forecast's default holdout: the fewest the protocol rules accept. */
   public static readonly ROLLING_ORIGINS = 5;

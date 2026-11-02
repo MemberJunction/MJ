@@ -7,7 +7,7 @@
 import type { AssemblyRefusal, TrainingRefusal } from '@memberjunction/predictive-studio-core';
 
 /** The training refusal an as-of assembly refusal becomes: the `assembly` stage with the refusal as its reason. */
-export type AssemblyTrainingRefusal = Extract<TrainingRefusal, { stage: 'assembly' }>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+export type AssemblyTrainingRefusal = Extract<TrainingRefusal, { stage: 'assembly' }>;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
 
 /** Ends feature resolution or assembly at the first refusal; callers read `Refusal`, never the message. */
 export class AssemblyRefused extends Error {

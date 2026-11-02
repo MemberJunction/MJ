@@ -8,7 +8,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import { ProtocolRowFixture } from './protocol-row';
 
-/** Typed trainer-result fixtures (static members on one owner). */
+/** Typed trainer-result fixtures. */
 export class TrainerResultFixtures {
   /** One metric with a 95% interval. */
   public static Mwi(metric: MetricWithInterval['metric'], value: number, lower: number, upper: number, n: number): MetricWithInterval {

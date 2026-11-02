@@ -21,7 +21,7 @@ export type CompleteReadOutcome =
   | { readonly Status: 'refused'; readonly Refusal: AssemblyRefusal };
 
 /**
- * Complete reads: count, read in full or paged by key, compare. Static members on one owner.
+ * Complete reads: count, read in full or paged by key, compare.
  */
 export class CompleteReader {
   public static async ReadCompletely(dataAccess: ICountingDataAccess, params: CompleteReadParams, policy: ReadPolicy): Promise<CompleteReadOutcome> {

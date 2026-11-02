@@ -26,7 +26,7 @@ export interface ChildRow {
 /** Child rows keyed by lower-cased owner key, each list sorted by day then ID. */
 export type ChildRowIndex = ReadonlyMap<string, readonly ChildRow[]>;
 
-/** Windowed aggregates over a dated child table (static members on one owner class). */
+/** Windowed aggregates over a dated child table. */
 export class WindowedAggregates {
   /** Indexes the filtered, dated child rows by owner key; rows without a parseable date are skipped. */
   public static BuildChildRowIndex(rows: readonly SourceRow[], spec: WindowedAggregateSource, primaryKey: string): ChildRowIndex {

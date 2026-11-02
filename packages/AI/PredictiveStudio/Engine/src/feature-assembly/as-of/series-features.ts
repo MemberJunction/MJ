@@ -8,7 +8,7 @@
 import { MS_PER_DAY, type DatedSource, type TemporalSpec } from '@memberjunction/predictive-studio-core';
 
 /** A series feature reference, derived from the contract's `series` source (never restated). */
-// case-violation-ok-legacy-back-compat: contracts.ts wire name
+// case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 export type SeriesFeatureRef = Extract<DatedSource, { kind: 'series' }>['feature'];
 
 /** One observed period of one entity's series. */
@@ -16,7 +16,7 @@ export interface SeriesPoint { readonly EntityKey: string; readonly Period: Date
 /** Series points keyed by lower-cased entity key, then by calendar period index. */
 export type SeriesHistory = { readonly Spec: TemporalSpec; readonly ByEntity: ReadonlyMap<string, ReadonlyMap<number, SeriesPoint>> };
 
-/** Series lags and rolling windows (static members on one owner class). */
+/** Series lags and rolling windows. */
 export class SeriesFeatures {
   /**
    * Calendar index of a period start, monotonic in time so consecutive periods differ by one: days since the epoch for

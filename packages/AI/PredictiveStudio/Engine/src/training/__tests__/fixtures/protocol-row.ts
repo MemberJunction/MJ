@@ -6,7 +6,7 @@
  */
 import { ALLOWED_OUTCOMES, EvaluationProtocol, type EvaluationProtocolColumns, type EvaluationProtocolSpec } from '@memberjunction/predictive-studio-core';
 
-/** A typed `MJ: Evaluation Protocols` row for tests (static members on one owner). */
+/** A typed `MJ: Evaluation Protocols` row for tests. */
 export class ProtocolRowFixture {
   /** The protocol row's ID and lineage root. */
   public static readonly ID = 'P1';

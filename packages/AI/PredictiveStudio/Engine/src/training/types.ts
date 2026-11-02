@@ -208,22 +208,22 @@ export interface TrainingDeps {
   /** The clock for a unit whose censoring cutoff is `now`; defaults to the current time. */
   now?: () => Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The Record Changes history the as-of assembly replays; defaults to a `RunViewRecordHistoryReader` (complete reads) over `dataAccess`. */
-  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /**
    * Where a Prediction Unit run writes its Training Snapshot's files. Required on the unit path: a unit run trains only
    * from a snapshot, so a unit run without a file store fails with an error (incomplete deps; the run is recorded
    * `Failed`, not as a `refused` envelope) rather than training from rows nothing recorded.
    */
-  snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
-  snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /**
    * The trainer every Prediction Unit pipeline trains through. Required on that path: a unit run without one fails
    * before anything is read. Production wiring passes an `MJSidecarTrainer` over the process-shared sidecar.
    */
-  trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */
-  protocols?: IEvaluationProtocolStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  protocols?: IEvaluationProtocolStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**

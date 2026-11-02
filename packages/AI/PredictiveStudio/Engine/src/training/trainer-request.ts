@@ -44,7 +44,7 @@ export interface TrainerRequestInput {
   readonly Now?: Date;
 }
 
-/** Builds and summarises trainer requests (static members on one owner). */
+/** Builds and summarises trainer requests. */
 export class TrainerRequestBuilder {
   /** The trainer's default retry bound for a transport failure or a sidecar fault. */
   public static readonly DefaultMaxRetries = 2;

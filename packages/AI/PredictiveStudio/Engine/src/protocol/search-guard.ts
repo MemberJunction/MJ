@@ -15,7 +15,7 @@ export type ProtocolRequirement =
   | { readonly Ok: true; readonly Loaded: LoadedProtocol }
   | { readonly Ok: false; readonly Refusal: PipelineRefusal };
 
-/** The search guard's checks (static members on one owner). */
+/** The search guard's checks. */
 export class ProtocolSearchGuard {
   /**
    * The protocol version the pipeline is bound to, when it exists and its budget admits `candidates`; otherwise the

@@ -89,7 +89,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** The Training Snapshot file format: serialize, parse and fingerprint, as static members on one owner class. */
+/** The Training Snapshot file format: serialize, parse and fingerprint. */
 export class SnapshotFiles {
   /**
    * The content as the three files' bytes. Refuses content whose rows, manifest and provenance do not align, a row

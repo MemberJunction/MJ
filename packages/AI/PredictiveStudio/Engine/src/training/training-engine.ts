@@ -112,18 +112,18 @@ import type { UnitModelLineage } from './unit-model-lineage';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
 export interface ResolvedPipeline {
-  pipeline: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  targetEntityName: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  targetVariable: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  problemType: ProblemType;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  algorithmDriverKey: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  hyperparameters: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  sourceBindings: SourceBinding[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  featureSteps: FeatureStepGraph;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  asOf: AsOfStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  leakageGuard: LeakageGuard;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  validation: ValidationStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  outcomeConfig: OutcomeConfig;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  pipeline: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  targetEntityName: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  targetVariable: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  problemType: ProblemType;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  algorithmDriverKey: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  hyperparameters: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  sourceBindings: SourceBinding[];  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  featureSteps: FeatureStepGraph;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  asOf: AsOfStrategy;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  leakageGuard: LeakageGuard;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  validation: ValidationStrategy;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  outcomeConfig: OutcomeConfig;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /** The unit rows a complete read returned. */

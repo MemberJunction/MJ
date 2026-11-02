@@ -12,7 +12,7 @@ import { SnapshotManifest, type SnapshotManifestRef } from '../snapshot/snapshot
 import { StorageProviderSnapshotFileStore, type ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { MetadataEntityFactory } from '../training/seams';
 
-/** Training-membership lookups for scoring (static members on one owner). */
+/** Training-membership lookups for scoring. */
 export class TrainingKeys {
   /**
    * The row ids the model trained on: the development rows of its training run's snapshot manifest (the manifest's

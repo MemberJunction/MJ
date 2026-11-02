@@ -66,7 +66,7 @@ export interface ISnapshotFileStore {
 }
 
 /**
- * Builds pre-authorised downloads (static members on one owner). `FileStorageBase.CreatePreAuthDownloadUrl` states no
+ * Builds pre-authorised downloads. `FileStorageBase.CreatePreAuthDownloadUrl` states no
  * lifetime, so the lifetime of each driver's URLs is recorded here, keyed by the provider's `ServerDriverKey`, from
  * what each driver's code fixes: the local file-system driver returns `file://` URLs that do not expire; the AWS S3,
  * Azure Blob, Google Cloud Storage and SharePoint drivers sign their URLs for 10 minutes. Any other driver states no

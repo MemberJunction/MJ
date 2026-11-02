@@ -29,7 +29,7 @@ export class SnapshotIntegrityError extends Error {
 /** The snapshot row columns the manifest reader reads. */
 export type SnapshotManifestRef = Pick<MJTrainingSnapshotEntity, 'RowManifestFileID' | 'RowManifestSha256'>;
 
-/** Verified reads of a snapshot's stored files (static members on one owner). */
+/** Verified reads of a snapshot's stored files. */
 export class SnapshotManifest {
   /**
    * The snapshot's row manifest: the file is read through the store, its bytes must hash to the row's

@@ -13,7 +13,7 @@ export const COUNT_SIGNATURE_MAX_DISTINCT = 50;
 
 type UnitRefusalReason = Extract<UnitValidation, { status: 'refused' }>['reason'];
 
-/** Target validation before training (static members on one owner class). */
+/** Target validation before training. */
 export class UnitTargetValidator {
   private static refused(reason: UnitRefusalReason): UnitValidation {
     return { status: 'refused', reason };

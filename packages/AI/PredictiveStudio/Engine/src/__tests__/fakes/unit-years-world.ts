@@ -29,7 +29,7 @@ export class FakePredictionUnitStore implements IPredictionUnitStore {
   }
 }
 
-/** The world's tables, entities and unit. Static members on one owner. */
+/** The world's tables, entities and unit. */
 export class UnitYearsWorld {
   /** The unit every pipeline of this world points at. */
   public static readonly UnitID = 'U-1';
