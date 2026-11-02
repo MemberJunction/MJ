@@ -488,6 +488,7 @@ export class WorkingRecordCommitter {
                 OrderBy: '__mj_CreatedAt',
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             this.contextUser,

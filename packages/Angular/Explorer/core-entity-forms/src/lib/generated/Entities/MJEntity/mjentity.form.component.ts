@@ -23,6 +23,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: true },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: true },
             { sectionKey: 'externalIntegration', sectionName: 'External Integration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },

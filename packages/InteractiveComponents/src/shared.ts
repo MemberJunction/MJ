@@ -113,6 +113,13 @@ export interface SimpleEmbedTextParams {
      */
     textToEmbed: string | string[];
     modelSize: 'small' | 'medium';
+    /**
+     * Retrieval role of the texts: `'query'` for search text, `'document'` (the default) for text
+     * that is stored and compared. Asymmetric models embed the two differently, so embed a search
+     * box's text as a query and the items it is compared with as documents.
+     * (Mirrors `EmbeddingInputType` in `@memberjunction/ai`, which this package doesn't depend on.)
+     */
+    inputType?: 'query' | 'document';
     contextUser?: UserInfo;
 }
 

@@ -1,5 +1,28 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [8f370b3]
+- Updated dependencies [953086f]
+- Updated dependencies [555a3f3]
+- Updated dependencies [42df19d]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [da449bb]
+- Updated dependencies [19119a8]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.7
+  - @memberjunction/ng-explorer-core@6.2.0-edge.7
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.7
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.7
+  - @memberjunction/ng-shared@6.2.0-edge.7
+  - @memberjunction/ng-container-directives@6.2.0-edge.7
+  - @memberjunction/ng-link-directives@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes
