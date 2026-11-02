@@ -15,13 +15,15 @@
  *                          @memberjunction/* package is at 6.1.0
  *   pre-publish-check --line 6.1 --edge-tag v6.1.0-edge.N
  *                          main is still at the Edge tag, and a trial merge of HEAD into
- *                          <remote>/next has no conflict the resolver cannot handle.
- *                          Run after `version` and again right before the publish.
+ *                          <remote>/next has no conflict the resolver cannot handle, the
+ *                          right changeset partition, and no internal spec the sync
+ *                          cannot normalize. Run after `version` and right before publish.
  *   merge-into-next --line 6.1 --edge-tag v6.1.0-edge.N
  *                          (HEAD at the v6.1.0 tag) check out <remote>/next and merge v6.1.0
  *                          into it; prove the changesets left are exactly those added to
- *                          next after the Edge tag; move every 6.1.0-edge.N version and pin
- *                          on next to 6.1.0 and regenerate the lockfile
+ *                          next after the Edge tag; move every workspace @memberjunction/*
+ *                          version and internal exact/Edge pin on next to 6.1.0, as a
+ *                          fixed-group release would, and regenerate the lockfile
  *   reenter   --line 6.1   changeset pre enter edge + the seed changeset that makes the
  *                          next Edge publish 6.2.0-edge.0 (not 6.1.1-edge.0)
  *   push-next --line 6.1   push HEAD to origin/next, merging in anything that landed on
@@ -259,19 +261,107 @@ export function assertReenteredPreJson(pre, version) {
     }
 }
 
+export const WORKSPACE_FILE = 'pnpm-workspace.yaml';
+const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+const EXACT_SEMVER_RX = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
 /**
- * Move this line's Edge tuple to the candidate's in package.json text: `"version"` and
- * every `@memberjunction/*` value of the form [~^]X.Y.0-edge.N become [~^]X.Y.0. Text in,
- * text out, so formatting and key order survive. Other lines' tuples, normal versions,
- * workspace: specifiers and non-MJ packages are left alone.
- * @param {string} text
- * @param {string} line e.g. "6.2"
+ * The `packages:` globs of pnpm-workspace.yaml (a flat list; `!glob` excludes).
+ * @param {string} yaml
  */
-export function rewriteEdgePins(text, line) {
+export function parseWorkspaceGlobs(yaml) {
+    const include = [];
+    const exclude = [];
+    let inPackages = false;
+    for (const raw of yaml.split('\n')) {
+        const line = raw.replace(/#.*$/, '').trimEnd();
+        if (/^packages:\s*$/.test(line)) {
+            inPackages = true;
+            continue;
+        }
+        if (!inPackages || line.trim() === '') continue;
+        const m = /^\s+-\s+['"]?([^'"]+)['"]?$/.exec(line);
+        if (!m) break; // the next top-level key ends the list
+        (m[1].startsWith('!') ? exclude : include).push(m[1].replace(/^!/, ''));
+    }
+    if (include.length === 0) throw new Error(`${WORKSPACE_FILE} has no packages: globs`);
+    return { include, exclude };
+}
+
+/**
+ * The workspace's package.json files among `paths`, as pnpm selects them: the root, plus
+ * every package.json whose directory matches an include glob and no exclude glob.
+ * @param {string[]} paths repo-relative, posix
+ * @param {{include: string[], exclude: string[]}} globs
+ */
+export function selectWorkspaceManifests(paths, globs) {
+    return paths.filter((p) => {
+        if (p === 'package.json') return true;
+        if (path.posix.basename(p) !== 'package.json') return false;
+        const dir = path.posix.dirname(p);
+        return globs.include.some((g) => path.posix.matchesGlob(dir, g)) && !globs.exclude.some((g) => path.posix.matchesGlob(dir, g));
+    });
+}
+
+/**
+ * What a fixed-group release does to one internal dependency spec: an exact version (any
+ * value) or a [~^]X.Y.0-edge.N range becomes the candidate version; anything else
+ * (workspace:, other ranges) is left alone.
+ * @param {string} spec
+ * @param {string} line
+ */
+export function normalizedSpec(spec, line) {
+    const version = `${line}.0`;
+    if (EXACT_SEMVER_RX.test(spec)) return version;
+    const m = new RegExp(`^([~^])${line.replace('.', '\\.')}\\.0-edge\\.\\d+$`).exec(spec);
+    return m ? `${m[1]}${version}` : spec;
+}
+
+function replaceJsonValue(text, key, from, to, all) {
+    const esc = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = new RegExp(`("${esc(key)}"\\s*:\\s*")${esc(from)}"`, all ? 'g' : '');
+    return text.replace(rx, (_, head) => `${head}${to}"`);
+}
+
+/**
+ * Put a set of workspace manifests where a fixed-group release of X.Y.0 would: every
+ * @memberjunction/* workspace package's version is X.Y.0 whatever it was (a package that
+ * landed at 6.1.0 or 1.0.0 included), and every dependency on one of them that is an
+ * exact version or this line's Edge range points at X.Y.0. Edits text, so formatting and
+ * key order survive. Dependencies on @memberjunction/* packages outside the workspace
+ * (e.g. skyway-*) are not the group's and are left alone. `problems` lists group specs it
+ * cannot normalize (another range, `*`), which resolve from the registry, not the workspace.
+ * @param {{path: string, text: string}[]} manifests
+ * @param {string} line
+ * @returns {{changed: {path: string, text: string}[], problems: string[]}}
+ */
+export function normalizeManifests(manifests, line) {
     if (!LINE_RX.test(line ?? '')) throw new Error(`line must look like X.Y (got "${line}")`);
-    const tuple = line.replace('.', '\\.');
-    const rx = new RegExp(`("(?:version|@memberjunction/[^"]+)"\\s*:\\s*")([~^]?)${tuple}\\.0-edge\\.\\d+"`, 'g');
-    return text.replace(rx, `$1$2${line}.0"`);
+    const version = `${line}.0`;
+    const parsed = manifests.map((m) => ({ ...m, pkg: parseManifest(m) }));
+    const group = new Set(parsed.map((m) => m.pkg.name).filter((n) => n?.startsWith(FIXED_GROUP_PREFIX)));
+    const changed = [];
+    const problems = [];
+    for (const m of parsed) {
+        let text = m.text;
+        if (group.has(m.pkg.name) && m.pkg.version !== version) text = replaceJsonValue(text, 'version', m.pkg.version, version, false);
+        for (const [name, spec] of DEP_FIELDS.flatMap((f) => Object.entries(m.pkg[f] ?? {}))) {
+            if (!group.has(name)) continue;
+            const to = normalizedSpec(spec, line);
+            if (to !== spec) text = replaceJsonValue(text, name, spec, to, true);
+            else if (!spec.startsWith('workspace:') && spec !== version && spec.replace(/^[~^]/, '') !== version) problems.push(`${m.path}: ${name}@${spec}`);
+        }
+        if (text !== m.text) changed.push({ path: m.path, text });
+    }
+    return { changed, problems: [...new Set(problems)] };
+}
+
+function parseManifest({ path: file, text }) {
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        throw new Error(`${file} is not valid JSON: ${e.message}`);
+    }
 }
 
 /**
@@ -365,7 +455,8 @@ export function parseCliArgs(argv) {
 
 function run(cmd, args, opts = {}) {
     try {
-        const out = execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...opts });
+        // 256 MiB: `git ls-tree -r` over the whole MJ tree is several MB, past the 1 MiB default.
+        const out = execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 256 * 1024 * 1024, ...opts });
         return out == null ? '' : out.trim(); // null when the caller inherited stdout
     } catch (e) {
         // git prints "nothing to commit" and friends on STDOUT, which the pipe swallowed;
@@ -548,24 +639,6 @@ function refreshCandidateLockfile(message) {
     run('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' }); // the only proof the lockfile is in sync
 }
 
-/**
- * Rewrite the given package.json files with rewriteEdgePins. Writes files, does not
- * commit. Exported for the git-backed test.
- * @param {string} line
- * @param {string[]} files package.json paths (the workspace's, as `changeset version` sees them)
- * @returns {string[]} the files it changed
- */
-export function rewriteWorkspacePins(line, files) {
-    const changed = [];
-    for (const f of files) {
-        const before = fs.readFileSync(f, 'utf8');
-        const after = rewriteEdgePins(before, line);
-        if (after === before) continue;
-        fs.writeFileSync(f, after);
-        changed.push(f);
-    }
-    return changed;
-}
 
 /**
  * The slice of simple-git's client that back-merge.mjs's refreshLockfile uses, over plain
@@ -586,17 +659,49 @@ const syncGitClient = {
  * Edge back-merge does it (required: the manifests just moved) and proven with a frozen
  * install, and the whole fixed group must sit at X.Y.0.
  */
-async function syncNextToCandidate(line) {
-    const manifests = listWorkspacePackages().map((p) => path.relative(process.cwd(), path.join(p.path, 'package.json')));
-    const changed = rewriteWorkspacePins(line, manifests);
+export async function syncNextToCandidate(line, deps = SYNC_DEPS) {
+    const changed = normalizeWorkingTree(line);
     if (changed.length > 0) {
         run('git', ['add', '--', ...changed]);
-        run('git', ['commit', '-m', `chore: move next's ${line}.0-edge versions and pins to ${line}.0 [skip ci]`]);
+        run('git', ['commit', '-m', `chore: move next's versions and internal pins to ${line}.0 [skip ci]`]);
     }
     console.log(`rewrote ${changed.length} package.json file(s) to ${line}.0`);
-    await refreshLockfileAfterMerge(syncGitClient, { required: true });
-    run('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' }); // the only proof the lockfile is in sync
-    return assertFixedGroupAt(listWorkspacePackages(), `${line}.0`);
+    await deps.refreshLockfile(syncGitClient, { required: true });
+    deps.frozenInstall();
+    return assertFixedGroupAt(deps.listPackages(), `${line}.0`);
+}
+
+/**
+ * The side effects syncNextToCandidate cannot do without pnpm. Tests substitute these;
+ * nothing else does.
+ */
+export const SYNC_DEPS = {
+    refreshLockfile: (client, opts) => refreshLockfileAfterMerge(client, opts),
+    frozenInstall: () => run('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' }), // the only proof the lockfile is in sync
+    listPackages: () => listWorkspacePackages(),
+};
+
+/** The workspace manifests at `rev` (a commit or tree), with their text. */
+function workspaceManifestsAt(rev, textOf) {
+    const yaml = gitShowOrNull(rev, WORKSPACE_FILE);
+    if (yaml === null) throw new Error(`${WORKSPACE_FILE} is missing at ${rev}`);
+    const all = run('git', ['ls-tree', '-r', '--name-only', rev]).split('\n').filter(Boolean);
+    return selectWorkspaceManifests(all, parseWorkspaceGlobs(yaml))
+        .map((p) => ({ path: p, text: textOf(p) }))
+        .filter((m) => m.text !== null);
+}
+
+/**
+ * Normalize the working tree's workspace manifests (normalizeManifests) and write them.
+ * Refuses on a spec it cannot normalize. Exported for the git-backed test.
+ * @returns {string[]} the files it changed
+ */
+export function normalizeWorkingTree(line) {
+    const manifests = workspaceManifestsAt('HEAD', (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    const { changed, problems } = normalizeManifests(manifests, line);
+    if (problems.length > 0) throw new Error(`internal dependency specs that cannot be moved to ${line}.0: ${problems.slice(0, 10).join('; ')}`);
+    for (const m of changed) fs.writeFileSync(m.path, m.text);
+    return changed.map((m) => m.path);
 }
 
 /**
@@ -620,7 +725,7 @@ export function trialMerge(ours, theirs) {
  * Edge tag (a release queued behind this run would publish an Edge build of the closed
  * stream and back-merge it into next), or HEAD cannot merge into next mechanically.
  */
-function prePublishCheck(args) {
+export function prePublishCheck(args) {
     const edgeCommit = assertEdgeTagArg(args);
     if (mainCommit(args.remote) !== edgeCommit) {
         throw new Error(`${args.remote}/main moved off ${args.edgeTag} during the cut. Nothing is published; let that release go out as Edge, then re-dispatch.`);
@@ -634,6 +739,14 @@ function prePublishCheck(args) {
     }
     // The same partition merge-into-next asserts, on the trial tree, while it is still free.
     assertChangesetsAfterMerge(pendingChangesetsAt(tree), keptChangesets(pendingChangesetsAt(edgeCommit), pendingChangesetsAt(nextRef)));
+    // And the same normalization, on the manifests the real merge will produce (next's side
+    // of a conflicted file), so a spec the sync cannot move refuses here, not after publish.
+    const conflicted = new Set(conflicts);
+    const textOf = (p) => (conflicted.has(p) ? gitShowOrNull(nextRef, p) : gitShowOrNull(tree, p));
+    const { problems } = normalizeManifests(workspaceManifestsAt(tree, textOf), args.line);
+    if (problems.length > 0) {
+        throw new Error(`next has internal dependency specs the cut cannot move to ${args.line}.0: ${problems.slice(0, 10).join('; ')}. Nothing is published; pin them exactly (or workspace:) on next first.`);
+    }
     console.log(`pre-publish-check OK: main at ${args.edgeTag}; trial merge into next has ${conflicts.length} package.json/lockfile conflict(s), all mechanical`);
 }
 
@@ -643,7 +756,7 @@ function prePublishCheck(args) {
  * changesets it consumed, while keeping every changeset merged after the Edge tag. Only
  * the lockfile may auto-resolve; the packages are already on npm if this stops.
  */
-async function mergeIntoNext(args) {
+export async function mergeIntoNext(args, deps = SYNC_DEPS) {
     const edgeCommit = assertEdgeTagArg(args);
     const cut = deriveCut(args.edgeTag.slice(1));
     const candidateCommit = revParse(cut.tag);
@@ -657,7 +770,7 @@ async function mergeIntoNext(args) {
     mergeIntoHead(cut.tag, 'ours', `chore: merge the ${cut.version} candidate into next [skip ci]`);
 
     assertChangesetsAfterMerge(pendingChangesets(fs.readdirSync('.changeset')), kept);
-    const count = await syncNextToCandidate(cut.line);
+    const count = await syncNextToCandidate(cut.line, deps);
     console.log(`merge-into-next OK: ${cut.tag} merged into ${nextRef}; ${count} packages at ${cut.version}; ${kept.length} changeset(s) added after ${args.edgeTag} stay for the ${cut.nextLine} stream`);
 }
 
@@ -684,13 +797,13 @@ function reenter(args) {
  * packages already on npm, which is the same "released, not yet recorded" posture the Edge
  * back-merge takes. Never force.
  */
-async function pushNext(args) {
+export async function pushNext(args, deps = SYNC_DEPS) {
     if (!LINE_RX.test(args.line ?? '')) throw new Error(`--line must look like X.Y (got "${args.line}")`);
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
         run('git', ['fetch', args.remote, 'next']);
         const before = revParse('HEAD');
         mergeIntoHead(`${args.remote}/next`, 'theirs');
-        if (revParse('HEAD') !== before) await syncNextToCandidate(args.line);
+        if (revParse('HEAD') !== before) await syncNextToCandidate(args.line, deps);
         try {
             run('git', ['push', args.remote, 'HEAD:next'], { stdio: 'inherit' });
             console.log(`push-next OK on attempt ${attempt}`);

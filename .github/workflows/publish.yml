@@ -542,6 +542,41 @@ jobs:
             fi
           fi
 
+      # An Edge release of a stream whose line is already cut (vX.Y.0 tagged, or
+      # @memberjunction/core@X.Y.0 on npm) would publish X.Y.0-edge.(N+1) after X.Y.0 and
+      # back-merge Edge pre-mode for X.Y into a next that is already on X.(Y+1). It happens
+      # when a release/* PR merges to main during or after a candidate cut (the `publish`
+      # concurrency group only queues it). Refuse before the build, with nothing published.
+      - name: Refuse an Edge release of a line that is already cut
+        if: ${{ env.BRANCH == 'main' && steps.premode.outputs.MODE == 'pre' }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          if ! [[ "$VERSION" =~ ^([0-9]+\.[0-9]+)\.0-edge\.[0-9]+$ ]]; then
+            echo "::error::Edge pre-mode produced $VERSION, not X.Y.0-edge.N."
+            exit 1
+          fi
+          CUT="${BASH_REMATCH[1]}.0"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$CUT" >/dev/null; then
+            echo "::error::v$CUT already exists: line ${BASH_REMATCH[1]} was cut, so $VERSION belongs to a closed stream. Nothing was published. Rebase this release onto next (now on the next stream) instead."
+            exit 1
+          fi
+          # A version npm does not have is E404 (absent); any other npm failure fails the
+          # step, closed: a release that cannot prove its line is open does not publish.
+          if NPM_OUT=$(npm view "@memberjunction/core@$CUT" version 2>&1); then
+            ON_NPM=$NPM_OUT
+          elif grep -q E404 <<<"$NPM_OUT"; then
+            ON_NPM=''
+          else
+            echo "::error::npm view @memberjunction/core@$CUT failed: $NPM_OUT"
+            exit 1
+          fi
+          if [ -n "$ON_NPM" ]; then
+            echo "::error::@memberjunction/core@$CUT is on npm: line ${BASH_REMATCH[1]} was cut (tag not pushed yet?), so $VERSION belongs to a closed stream. Nothing was published."
+            exit 1
+          fi
+          echo "::notice::$VERSION: line ${BASH_REMATCH[1]} not cut yet; Edge release allowed"
+
       # `pnpm run version` above rewrote ~300 manifests and nothing regenerated
       # pnpm-lock.yaml, so every edge release since the pnpm cutover pushed a main
       # whose lockfile still named the PREVIOUS version. Measured on v6.1.0-edge.2:
@@ -1775,6 +1810,27 @@ jobs:
             exit 1
           fi
 
+      # Runs right after the publish, whatever its outcome (only a cancelled run or a
+      # publish that never started skips it), BEFORE Verify: a publish that half-failed or
+      # a Verify that timed out must still leave the commit npm was built from on origin,
+      # or nothing can rebuild it and re-dispatch refuses once any X.Y.0 package is live.
+      # One code path, no failure-only rescue step to rot. Tags are outside next-protect,
+      # so the PAT remote is enough. If npm turns out to hold nothing of this version
+      # (the publish died before uploading), delete the tag and re-dispatch (runbook §2).
+      - name: Commit post-release generated files, tag ${{ steps.cut.outputs.TAG }} and push the tag
+        if: ${{ !cancelled() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure') }}
+        env:
+          TAG: ${{ steps.cut.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          git add -A
+          if [ -n "$(git diff --cached --name-only)" ]; then
+            git commit -m "chore: post-release generated files [skip ci]"
+          fi
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
+          echo "::notice::Tagged and pushed $TAG at $(git rev-parse --short HEAD)"
+
       - name: Verify the publish reached npm and latest did not move
         env:
           VERSION: ${{ steps.cut.outputs.VERSION }}
@@ -1807,29 +1863,14 @@ jobs:
           fi
           echo "::notice::Verified: @memberjunction/core@$VERSION is live under '$NPM_TAG'; latest unmoved at $PREV_LATEST"
 
-      # From here on the packages are on npm. Everything below records that fact.
-      - name: Commit post-release generated files and tag ${{ steps.cut.outputs.TAG }}
-        env:
-          TAG: ${{ steps.cut.outputs.TAG }}
-        run: |
-          set -euo pipefail
-          git add -A
-          if [ -n "$(git diff --cached --name-only)" ]; then
-            git commit -m "chore: post-release generated files [skip ci]"
-          fi
-          git tag "$TAG"
-          echo "::notice::Tagged $TAG at $(git rev-parse --short HEAD)"
-
-      # Pushed first, before anything touches next: from here on the commit npm was built
-      # from exists on origin even if a later step fails. Tags and lts/** are outside
-      # next-protect, so the PAT remote is enough.
-      - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
+      # Only once npm is verified, so a line branch is born for a build that is live.
+      # Still before anything touches next.
+      - name: Create ${{ steps.cut.outputs.BRANCH }} at ${{ steps.cut.outputs.TAG }}
         env:
           TAG: ${{ steps.cut.outputs.TAG }}
           BRANCH: ${{ steps.cut.outputs.BRANCH }}
         run: |
           set -euo pipefail
-          git push origin "refs/tags/$TAG"
           git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
           echo "::notice::$BRANCH created at $TAG"
 
