@@ -1,5 +1,80 @@
 # @memberjunction/telephony-adapters
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 305c429: `MJ: AI Agent Sessions` treats the server-only `CloseReason` values (`TimeLimit`, `Idle`, `Janitor`, `Shutdown`) as server-managed: an ordinary save, such as the generic `UpdateMJAIAgentSession` mutation, may set only `Explicit` or `Error` and cannot replace a server-only reason already recorded, so a session owner can no longer stamp `TimeLimit` and skip the deadline check in `SessionManager.CloseSession`. The server's own close paths (`SessionManager.CloseSession` and the telephony call bookkeeping) save inside `RunWithTrustedSessionConfigWrites`. `@memberjunction/telephony-adapters` now depends on `@memberjunction/core-entities-server`.
+
+### Patch Changes
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [305c429]
+- Updated dependencies [7d0885a]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [e8b240f]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [b1a656b]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [896334a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [bc0503a]
+- Updated dependencies [bbca6b6]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [cf6aee6]
+- Updated dependencies [89a5b59]
+- Updated dependencies [d7e95b9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [7b543fb]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-agents@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities-server@6.2.0-edge.7
+  - @memberjunction/livekit-room-server@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/generic-database-provider@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/server-extensions-core@6.2.0-edge.7
+  - @memberjunction/ai-bridge-server@6.2.0-edge.7
+  - @memberjunction/ai-bridge-base@6.2.0-edge.7
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.7
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.7
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.7
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.7
+  - @memberjunction/communication-ms-graph@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

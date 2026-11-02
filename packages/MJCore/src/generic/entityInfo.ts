@@ -5,7 +5,7 @@ import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
@@ -2444,6 +2444,15 @@ export class EntityFieldInfo extends BaseInfo {
         const t = this.Type.trim().toLowerCase();
         this._isUniqueIdentifierCache = t === 'uniqueidentifier' || t === 'uuid';
         return this._isUniqueIdentifierCache;
+    }
+
+    /**
+     * Returns the canonical string lookup key for a value of this field when matching records
+     * across heterogeneous sources (e.g., SQL Server upper-case vs. PostgreSQL lower-case UUIDs,
+     * while preserving exact case for non-UUID string keys).
+     */
+    public FormatCanonicalValue(value: unknown): string {
+        return CanonicalPrimaryKeyValue(String(value ?? ''), this.IsUniqueIdentifier);
     }
 
     /**

@@ -56,6 +56,7 @@ import {
     AssertEqual,
     IntegrationCheckRegistry,
     Settle,
+    SkipCheck,
     verifyAgentRun,
     type IntegrationCheckContext,
     type NamedCheck,
@@ -197,13 +198,13 @@ function buildRealisticAgentPayload(extraFields: Record<string, unknown> = {}): 
 }
 
 /**
- * Resolves a shipped agent by name, returning null with a clean skip message if absent or inactive.
+ * Resolves a shipped agent by name; skips the running check (SkipCheck) if it is absent or inactive.
  */
 async function resolveShippedAgent(
     name: string,
     provider: IMetadataProvider,
     user: UserInfo
-): Promise<MJAIAgentEntityExtended | null> {
+): Promise<MJAIAgentEntityExtended> {
     const r = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentEntityExtended>(
         {
             EntityName: 'MJ: AI Agents',
@@ -215,12 +216,10 @@ async function resolveShippedAgent(
     );
     const agent = r.Success && r.Results.length === 1 ? r.Results[0] : null;
     if (!agent) {
-        console.log(`      → SKIPPED: shipped agent '${name}' not found in metadata`);
-        return null;
+        SkipCheck(`shipped agent '${name}' not found in metadata`);
     }
     if (agent.Status !== 'Active') {
-        console.log(`      → SKIPPED: '${name}' is ${agent.Status} (not runnable)`);
-        return null;
+        SkipCheck(`shipped agent '${name}' is ${agent.Status} (not runnable); it must be Active`);
     }
     return agent;
 }
@@ -419,14 +418,11 @@ async function runDeterministicScriptedAgent(
     userMessage: string,
     initialPayload: Record<string, unknown>,
     scriptedReplies: Array<Record<string, unknown>>
-): Promise<AgentRunTreeMetrics | null> {
+): Promise<AgentRunTreeMetrics> {
     await AIEngine.Instance.Config(false, ctx.User);
     await ActionEngineServer.Instance.Config(false, ctx.User);
 
     const agent = await resolveShippedAgent(agentName, ctx.Provider, ctx.User);
-    if (!agent) {
-        return null;
-    }
 
     const fx = requireFixture();
     const llm = new TestLLM();
@@ -984,9 +980,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 initialPayload,
                 scriptedReplies
             );
-            if (!metrics) {
-                return;
-            }
             Assert(metrics.TotalStepsInTree >= 7, `PB7: expected >= 7 steps in Sage run, got ${metrics.TotalStepsInTree}`);
             Assert(metrics.PromptSteps >= 4, `PB7: expected >= 4 Prompt steps, got ${metrics.PromptSteps}`);
             Assert(metrics.ActionSteps >= 3, `PB7: expected >= 3 Action steps, got ${metrics.ActionSteps}`);
@@ -1071,9 +1064,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 initialPayload,
                 scriptedReplies
             );
-            if (!metrics) {
-                return;
-            }
             Assert(
                 metrics.TotalRunsInTree >= 2,
                 `PB8: expected >= 2 runs in Query Builder tree (parent + child), got ${metrics.TotalRunsInTree}`
@@ -1150,9 +1140,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 initialPayload,
                 scriptedReplies
             );
-            if (!metrics) {
-                return;
-            }
             Assert(
                 metrics.TotalRunsInTree >= 2,
                 `PB9: expected >= 2 runs in Research Agent tree (parent + child), got ${metrics.TotalRunsInTree}`
@@ -1166,9 +1153,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const sage = await resolveShippedAgent('Sage', ctx.Provider, ctx.User);
-            if (!sage) {
-                return;
-            }
             const fx = requireFixture();
 
             // Create conversation + user turn to benchmark full conversation-linked Sage execution
@@ -1228,9 +1212,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const qb = await resolveShippedAgent('Query Builder', ctx.Provider, ctx.User);
-            if (!qb) {
-                return;
-            }
             const fx = requireFixture();
 
             const prompt = 'How many users are in the system? Give the number only.';
@@ -1268,9 +1249,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const research = await resolveShippedAgent('Research Agent', ctx.Provider, ctx.User);
-            if (!research) {
-                return;
-            }
             const fx = requireFixture();
 
             const prompt =
