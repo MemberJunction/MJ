@@ -597,7 +597,7 @@ describe('MjEntityFormHostComponent — overlapping loads (DOM)', () => {
   });
 });
 
-describe('MjEntityFormHostComponent — phone width mounts the standard form (DOM)', () => {
+describe('MjEntityFormHostComponent — phone width mounts the user\'s mode and hides the strip (DOM)', () => {
   const useViewport = (mobile: boolean) => {
     window.matchMedia = ((q: string) => ({
       matches: mobile && q.includes('768'),
@@ -608,26 +608,41 @@ describe('MjEntityFormHostComponent — phone width mounts the standard form (DO
   };
   afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
 
-  it('mounts the standard form instead of the custom view at phone width, with no switch strip', async () => {
+  it('phone width mounts the user\'s mode and hides the strip', async () => {
     useViewport(true);
     const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    expect(query(f, '.custom')).not.toBeNull();
+    expect(query(f, '.gen')).toBeNull();
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    expect(modeChanges).toEqual([]);
+    expect(f.componentInstance.FormMode).toBe('default');
+  });
+
+  it('phone width with FormMode "standard" mounts the standard form and hides the strip', async () => {
+    useViewport(true);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), inputs: { FormMode: 'standard' } });
     expect(query(f, '.gen')).not.toBeNull();
     expect(query(f, '.custom')).toBeNull();
     expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
   });
 
-  it('keeps the user\'s chosen mode: nothing is emitted and FormMode stays default', async () => {
+  it('host hands the form a FormModeSwitch when a standard alternative exists', async () => {
     useViewport(true);
     const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
-    expect(modeChanges).toEqual([]);
-    expect(f.componentInstance.FormMode).toBe('default');
+    const sw = f.componentInstance.Form?.FormModeSwitch;
+    expect(sw).toBeDefined();
+    expect(sw).not.toBeNull();
+    expect(sw?.Mode).toBe('default');
+    expect(sw?.Switch('standard')).toBe(true);
+    await settle(f);
+    expect(modeChanges).toEqual(['standard']);
+    expect(f.componentInstance.Form?.FormModeSwitch?.Mode).toBe('standard');
   });
 
-  it('leaves an entity whose only form is the standard one exactly as it was', async () => {
+  it('host sets FormModeSwitch to null when no standard alternative exists', async () => {
     useViewport(true);
     const { f } = await mountSwitchHost({ resolution: classResolution(GenForm, GenForm) });
-    expect(query(f, '.gen')).not.toBeNull();
-    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    expect(f.componentInstance.Form?.FormModeSwitch).toBeNull();
   });
 
   it('keeps the sentence and button, and the custom view, at desktop width', async () => {

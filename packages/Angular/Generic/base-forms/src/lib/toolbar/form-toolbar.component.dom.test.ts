@@ -902,6 +902,55 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(query(f, '[data-toolbar-collapse="menu"]')).not.toBeNull();
     });
 
+    it('shows the Form mode switch row in the View sheet at phone width when FormModeSwitch is set, flips label with Mode, and calls Switch with the other mode', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const sw = vi.fn().mockReturnValue(true);
+      const f = renderRaw({ EditMode: false, FormModeSwitch: { Mode: 'default', Switch: sw } });
+      f.componentInstance.ExpandToolbarForSession();
+      f.detectChanges();
+      openView(f);
+
+      const findModeBtn = () =>
+        queryAll(f, '.mj-forms-menu-item').find((b) =>
+          b.textContent?.includes('Open standard form') || b.textContent?.includes('Back to custom view')
+        ) as HTMLElement | undefined;
+
+      const btnDefault = findModeBtn();
+      expect(btnDefault).toBeDefined();
+      expect(btnDefault?.textContent).toContain('Open standard form');
+      expect(btnDefault?.querySelector('.fa-table-list')).not.toBeNull();
+
+      btnDefault!.click();
+      f.detectChanges();
+      expect(sw).toHaveBeenCalledWith('standard');
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+
+      // Standard mode flips label & icon; if Switch returns false (unsaved guard refuses), sheet stays open
+      const swRefuse = vi.fn().mockReturnValue(false);
+      f.componentRef.setInput('FormModeSwitch', { Mode: 'standard', Switch: swRefuse });
+      f.detectChanges();
+      openView(f);
+
+      const btnStandard = findModeBtn();
+      expect(btnStandard?.textContent).toContain('Back to custom view');
+      expect(btnStandard?.querySelector('.fa-wand-magic-sparkles')).not.toBeNull();
+      btnStandard!.click();
+      f.detectChanges();
+      expect(swRefuse).toHaveBeenCalledWith('default');
+      expect(f.componentInstance.ViewMenuOpen).toBe(true);
+    });
+
+    it('hides the Form mode switch row in the View menu at desktop width', () => {
+      useViewport(false);
+      const sw = vi.fn().mockReturnValue(true);
+      const desktop = render({ FormModeSwitch: { Mode: 'default', Switch: sw } });
+      openView(desktop);
+      const desktopModeBtn = queryAll(desktop, '.mj-forms-menu-item').find((b) =>
+        b.textContent?.includes('Open standard form') || b.textContent?.includes('Back to custom view')
+      );
+      expect(desktopModeBtn).toBeUndefined();
+    });
+
     it('defaults to collapsed pill in Read Mode when mj.form.toolbar.visibility is unset', () => {
       vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const f = renderRaw({ EditMode: false });

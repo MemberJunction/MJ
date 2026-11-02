@@ -350,6 +350,15 @@
                 </button>
               }
             }
+            @if (IsAutoHideViewport && FormModeSwitch) {
+              <div class="mj-forms-menu-heading">Form</div>
+              <button class="mj-forms-menu-item" type="button" (click)="OnFormModeSwitchClick()">
+                <span class="mj-forms-menu-icon">
+                  <i class="fa-solid" [class.fa-table-list]="FormModeSwitch.Mode === 'default'" [class.fa-wand-magic-sparkles]="FormModeSwitch.Mode === 'standard'"></i>
+                </span>
+                <span class="mj-forms-menu-label">{{ FormModeSwitch.Mode === 'standard' ? 'Back to custom view' : 'Open standard form' }}</span>
+              </button>
+            }
             @if (IsAutoHideViewport) {
             <div class="mj-forms-menu-heading">Toolbar</div>
             @if (CurrentEntityName) {

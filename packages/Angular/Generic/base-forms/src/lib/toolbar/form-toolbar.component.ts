@@ -12,7 +12,7 @@ import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArg
 import { IsAccordionFormChrome } from '../chrome/form-chrome';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
-import { FormWidthMode, FormContext } from '../types/form-types';
+import { FormWidthMode, FormModeSwitch, FormContext } from '../types/form-types';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 import {
   BeforeSaveEventArgs,
@@ -229,6 +229,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** The currently-applied variant ID, or null when the Default form is active. */
   @Input() CurrentVariantID: string | null = null;
+
+  /**
+   * Callback supplied by the form host when the entity has both a custom view
+   * and a CodeGen standard form. Shown inside the View bottom sheet on phones.
+   */
+  @Input() FormModeSwitch: FormModeSwitch | null = null;
 
   // ---- Outputs ----
 
@@ -1443,7 +1449,16 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this.HasCustomSectionOrder ||
       !!this.Config.ShowWidthToggle
     );
-    return sections || this.ShowVariantPickerButton;
+    return sections || this.ShowVariantPickerButton || (this.IsAutoHideViewport && !!this.FormModeSwitch);
+  }
+
+  /** Switch between the entity's custom view and its CodeGen standard form from the phone View sheet. */
+  public OnFormModeSwitchClick(): void {
+    if (!this.FormModeSwitch) return;
+    const next = this.FormModeSwitch.Mode === 'standard' ? 'default' : 'standard';
+    if (this.FormModeSwitch.Switch(next)) {
+      this.OnMenuSheetVisibleChange('view', false);
+    }
   }
 
   OnDocumentClick(event: MouseEvent): void {
