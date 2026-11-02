@@ -127,10 +127,12 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | `Chat` | Send a message back to the user |
 | `Actions` | Execute one or more server-side actions |
 | `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
-| `SubAgents` | Delegate to sub-agents |
+| `SubAgents` / `Sub-Agent` | Delegate to child, related, or runtime-granted sub-agents and receive their result in-run |
+| `Handoff` | Transfer a top-level interactive conversation to a directly discoverable peer agent (hosts that pass `handoffChain` only) |
+| `Tasks` | Submit a durable `TaskGraphSpec` to the task-graph dispatcher and detach |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
-| `End` | Complete execution |
+| `End` / `Success` / `Failed` | Complete execution |
 | `ForEach` | Iterate over a collection |
 | `While` | Loop while a condition is true |
 
@@ -315,6 +317,17 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 - Actions and their parameters
 - Sub-agent data
 - Prompt configurations
+
+### AgentRunWatchdog
+
+Process-wide guard that keeps an `AIAgentRun` from being left `Running` forever when its process dies or its final save fails. `BaseAgent` calls `Track()` once the run row exists and `Untrack()` as soon as the run leaves `Running` (Completed, Failed, Cancelled, AwaitingFeedback or Paused) — first thing in `Execute()`'s teardown, before any subclass `finalizeRun` hook.
+
+- **Heartbeat** — every `heartbeatIntervalMs` (30s) it stamps `LastHeartbeatAt` on this process's in-flight runs.
+- **Sweep** — every `sweepIntervalMs` (5 min) it force-fails `Running` runs whose heartbeat went stale (`staleThresholdMinutes`, 5) and drops finished runs from its tracked set. Once the process has tracked a run, the sweep keeps running even with nothing tracked, so it also closes runs that other, crashed instances left `Running`. The host also runs `SweepOrphanedRuns` once at startup.
+- **Stop relay** — every 3s it checks whether one of its runs was marked `Cancelled` (the Stop button) and aborts that run.
+- **Idle** — the heartbeat and the stop relay run only while at least one run is tracked: the last run leaving stops them, and the next `Track()` starts them again. With `sweepIntervalMs: 0` the sweep never starts either, so an idle process issues no periodic database statements; see the [Serverless Database Auto-Pause Guide](../../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md) for the trade-off.
+
+Tune it with `AgentRunWatchdog.Instance.Configure({ ... })`; MJServer passes its `agentRunWatchdog` settings through at startup. `sweepIntervalMs: 0` turns the periodic sweep off (the startup sweep still runs, and the tracked-set prune moves to the heartbeat). Other values must be greater than 0; an invalid value throws.
 
 > 📖 **Memory is a big topic.** For the complete architecture — the three-tier model, injection and scoping, the in-flight write pipeline, and the Memory Manager's hardening/consolidation/decay phases — see the **[Agent Memory Guide](../../../guides/AGENT_MEMORY_GUIDE.md)**. The sections below are component-level summaries.
 
