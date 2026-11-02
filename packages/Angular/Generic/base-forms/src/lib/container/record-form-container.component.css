@@ -748,7 +748,7 @@ mj-collapsible-panel.mj-form-role-more {
     height: auto;
     max-height: none;
     overflow: visible;
-    padding: 8px 12px 28px;
+    padding: 0 12px 28px;
   }
 
   .mj-forms-layout-row.mj-forms-layout--left-nav,
@@ -759,19 +759,30 @@ mj-collapsible-panel.mj-form-role-more {
 
   .mj-forms-chrome-rail {
     flex: 0 0 auto;
-    width: 100% !important; /* Beat inline [style.width.px] on mobile */
+    margin: 0 -12px;
+    width: calc(100% + 24px) !important; /* Full-bleed across the 12px container padding */
     min-width: 0 !important;
-    max-width: 100% !important;
+    max-width: calc(100% + 24px) !important;
+    height: 44px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     position: sticky;
     top: 0;
     z-index: 15;
-    padding: 6px 8px;
+    padding: 0 10px;
     border-radius: 0;
     border-left: none;
     border-right: none;
     border-top: none;
     border-bottom: 1px solid var(--mj-border-default);
     background: var(--mj-bg-surface);
+  }
+
+  /* Reserve space on the right of the rail for the docked [Edit | •••] cap so pills clip before it */
+  mj-record-form-container:has(.mj-forms-toolbar-collapsed-pill) .mj-forms-chrome-rail {
+    padding-right: 116px;
   }
 
   /* Hide desktop-only resizer, pin/collapse header, and drag handles on touch/mobile */
@@ -783,10 +794,10 @@ mj-collapsible-panel.mj-form-role-more {
 
   .mj-forms-chrome-rail.is-collapsed {
     flex: 0 0 auto;
-    width: 100% !important;
+    width: calc(100% + 24px) !important;
     min-width: 0 !important;
-    max-width: none !important;
-    height: 36px;
+    max-width: calc(100% + 24px) !important;
+    height: 44px;
     padding: 0;
   }
 
@@ -803,14 +814,17 @@ mj-collapsible-panel.mj-form-role-more {
 
   /* Single-row horizontal pill strip */
   .mj-forms-chrome-rail-items {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
     display: flex;
     flex-direction: row;
+    align-items: center;
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
     gap: 6px;
-    padding-bottom: 2px;
-    padding-right: 112px; /* Leave room at scroll end for the collapsed Edit/More pill */
+    padding: 0 4px 0 0;
     min-height: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
@@ -823,8 +837,10 @@ mj-collapsible-panel.mj-form-role-more {
   .mj-forms-chrome-rail-item {
     flex: 0 0 auto;
     width: auto;
-    min-height: 34px;
-    padding: 6px 12px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12.5px;
     border-radius: var(--mj-radius-full, 9999px);
     white-space: nowrap;
   }
@@ -835,7 +851,7 @@ mj-collapsible-panel.mj-form-role-more {
 
   .mj-forms-chrome-rail-item.is-more-folder {
     margin-top: 0;
-    padding-top: 6px;
+    padding-top: 0;
     border-radius: var(--mj-radius-full, 9999px);
   }
 
@@ -847,10 +863,11 @@ mj-collapsible-panel.mj-form-role-more {
   .mj-forms-chrome-rail-more-tree {
     display: flex;
     flex-direction: row;
+    align-items: center;
     flex-wrap: nowrap;
     gap: 6px;
     margin-left: 0;
-    padding-left: 4px;
+    padding-left: 6px;
     border-left: 2px solid var(--mj-border-default);
   }
 }

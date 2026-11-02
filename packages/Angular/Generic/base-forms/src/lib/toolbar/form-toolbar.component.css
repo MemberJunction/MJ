@@ -998,9 +998,32 @@
    MOBILE TOOLBAR & EDIT BANNER DENSITY (<= 768px)
    ============================================ */
 @media (max-width: 768px) {
+  /* Docked right-side cap on the 44px mobile section rail */
   .mj-forms-toolbar-collapsed-pill {
-    top: 6px;
-    right: 10px;
+    top: 0;
+    right: 0;
+    height: 44px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    gap: 2px;
+    border-radius: 0;
+    border-top: none;
+    border-right: none;
+    border-left: 1px solid var(--mj-border-default);
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    box-shadow: -6px 0 10px -6px rgba(0, 0, 0, 0.08);
+  }
+
+  .mj-forms-collapsed-btn {
+    height: 30px;
+    min-height: 30px;
+    padding: 0 9px;
+    font-size: 12.5px;
+  }
+
+  .mj-forms-collapsed-btn--edit {
+    padding: 0 10px;
   }
 
   .mj-forms-toolbar {
