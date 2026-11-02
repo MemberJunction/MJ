@@ -32,3 +32,20 @@ describe('PsGatePytest.FromJUnit', () => {
       .toEqual({ Collected: 0, Passed: 0, Failed: 0, Errors: 1, NotCollected: [`${NODES_FILE}::test_W8_S3_4_target_encoding_is_in_fold`] });
   });
 });
+
+describe('PsGatePytest child environment', () => {
+  it('drops a PS_SEED_LIMIT the caller exported, so a gate run measures its full seed set', () => {
+    const env = PsGatePytest.ChildEnv('/truth/python', { PS_SEED_LIMIT: '40', PATH: '/bin' });
+    expect(env.PS_SEED_LIMIT).toBeUndefined();
+    expect(env.PATH).toBe('/bin');
+    expect(PsGatePytest.SeedLimit(env)).toBeNull();
+  });
+  it('keeps PS_SEED_LIMIT for an explicit mutation check and reports it as the seed limit', () => {
+    const env = PsGatePytest.ChildEnv('/truth/python', { PS_SEED_LIMIT: '40', PS_GATE_MUTATION_CHECK: '1' });
+    expect(env.PS_SEED_LIMIT).toBe('40');
+    expect(PsGatePytest.SeedLimit(env)).toBe(40);
+  });
+  it('reads a limit of 0 (the nodes\' "no limit") as no seed limit', () => {
+    expect(PsGatePytest.SeedLimit({ PS_SEED_LIMIT: '0' })).toBeNull();
+  });
+});

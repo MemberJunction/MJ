@@ -15,7 +15,7 @@ export const PsGateT2pST5Checks: NamedCheck[] = [
       const r = await PsGatePytest.Run(nodes);
       PsGate.Assert({
         Passed: r.Failed === 0 && r.Errors === 0 && r.NotCollected.length === 0 && r.Collected === expectedCases && r.Passed === expectedCases,
-        Measured: { collected: r.Collected, passed: r.Passed, failed: r.Failed, errors: r.Errors, notCollected: r.NotCollected.join(' ') },
+        Measured: { collected: r.Collected, passed: r.Passed, failed: r.Failed, errors: r.Errors, notCollected: r.NotCollected.join(' '), seedLimit: r.SeedLimit === null ? 'none' : r.SeedLimit },
         Detail: `${r.Passed} of ${expectedCases} pytest case(s) passed; not collected: ${r.NotCollected.join(', ') || 'none'}`,
       });
     },

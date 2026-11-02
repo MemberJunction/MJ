@@ -4,6 +4,9 @@
  * PYTHONPATH, TRUTH_DATA_DIR, PYTHONHASHSEED=0 and one BLAS/OpenMP/numexpr thread, writes a JUnit report and reads the
  * report, never the exit code. A requested node with no case in the report is NotCollected, so a renamed node fails its
  * gate; a missing report throws.
+ *
+ * A statistical node runs its full seed set: the caller's `PS_SEED_LIMIT` reaches the child only when the caller also
+ * sets `PS_GATE_MUTATION_CHECK=1`, and every run reports the seed limit it ran under.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -24,6 +27,17 @@ export interface PytestRunResult {
   /** Requested node ids with no case in the report. */
   NotCollected: readonly string[];
 }
+
+/** One `Run`: the report's counts and the seed limit the nodes ran under. */
+export interface PytestGateRun extends PytestRunResult {
+  /** The `PS_SEED_LIMIT` the child ran under (an explicit mutation check only); null when it ran every seed. */
+  SeedLimit: number | null;
+}
+
+/** The variable a statistical node reads to run only its first k seeds. */
+const SEED_LIMIT_VARIABLE = 'PS_SEED_LIMIT';
+/** Set to `1` by a mutation check, the one run that may shorten a statistical node's seed set. */
+const MUTATION_CHECK_VARIABLE = 'PS_GATE_MUTATION_CHECK';
 
 type CaseResult = 'passed' | 'failed' | 'skipped' | 'error';
 interface JUnitCase { readonly NodeID: string; readonly Result: CaseResult }
@@ -86,23 +100,40 @@ export class PsGatePytest {
     return python;
   }
 
-  /** The child's environment: the caller's, with the TruthSuite interpreter, the truth data and one thread per pool. */
-  private static childEnv(truthPython: string): NodeJS.ProcessEnv {
+  /**
+   * The child's environment: `callerEnv` with the TruthSuite interpreter, the truth data and one thread per pool. The
+   * caller's `PS_SEED_LIMIT` is dropped unless `PS_GATE_MUTATION_CHECK=1`, so a limit left exported in a shell cannot
+   * shorten a gate run that reports its full seed count.
+   */
+  public static ChildEnv(truthPython: string, callerEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    const { [SEED_LIMIT_VARIABLE]: seedLimit, ...inherited } = callerEnv;
+    const limit = callerEnv[MUTATION_CHECK_VARIABLE] === '1' && seedLimit !== undefined ? { [SEED_LIMIT_VARIABLE]: seedLimit } : {};
     return {
-      ...process.env,
+      ...inherited,
+      ...limit,
       PREDICTIVE_STUDIO_PYTHON: truthPython,   // the sidecar's runner runs whichever interpreter this names
-      PYTHONPATH: [path.join(TruthSuite.Root(), 'python'), process.env.PYTHONPATH].filter((p): p is string => !!p).join(path.delimiter),
-      TRUTH_DATA_DIR: process.env.TRUTH_DATA_DIR || path.join(TruthSuite.Root(), '.data'),
+      PYTHONPATH: [path.join(TruthSuite.Root(), 'python'), callerEnv.PYTHONPATH].filter((p): p is string => !!p).join(path.delimiter),
+      TRUTH_DATA_DIR: callerEnv.TRUTH_DATA_DIR || path.join(TruthSuite.Root(), '.data'),
       // Single-threaded and a fixed hash seed: repeated trainings must give predictions equal within 1e-9.
       PYTHONHASHSEED: '0', OMP_NUM_THREADS: '1', OPENBLAS_NUM_THREADS: '1', MKL_NUM_THREADS: '1', NUMEXPR_NUM_THREADS: '1',
     };
   }
 
-  /** Run sidecar pytest node ids (paths relative to `Sidecar/src/python`) and count their JUnit cases. */
-  public static async Run(nodeIds: readonly string[]): Promise<PytestRunResult> {
+  /**
+   * The seed limit a statistical node runs under in `childEnv`: its `PS_SEED_LIMIT` when that is a positive integer
+   * (the nodes read 0 as no limit), else null.
+   */
+  public static SeedLimit(childEnv: NodeJS.ProcessEnv): number | null {
+    const raw = childEnv[SEED_LIMIT_VARIABLE];
+    const limit = raw === undefined ? Number.NaN : Number(raw);
+    return Number.isInteger(limit) && limit > 0 ? limit : null;
+  }
+
+  /** Run sidecar pytest node ids (paths relative to `Sidecar/src/python`), count their JUnit cases and report the seed limit. */
+  public static async Run(nodeIds: readonly string[]): Promise<PytestGateRun> {
     if (nodeIds.length === 0) throw new Error('PsGatePytest.Run needs at least one node id');
     const sidecarDir = path.resolve(TruthSuite.Root(), '..', 'Sidecar');
-    const env = PsGatePytest.childEnv(PsGatePytest.truthPython());
+    const env = PsGatePytest.ChildEnv(PsGatePytest.truthPython(), process.env);
     const dir = mkdtempSync(path.join(tmpdir(), 'ps-gate-pytest-'));
     const report = path.join(dir, 'junit.xml');
     try {
@@ -119,7 +150,7 @@ export class PsGatePytest {
       if (!existsSync(report)) {
         throw new Error(`pytest wrote no JUnit report (exit ${exitCode}): ${output.trim().split('\n').slice(-3).join(' | ')}`);
       }
-      return PsGatePytest.FromJUnit(nodeIds, readFileSync(report, 'utf8'));
+      return { ...PsGatePytest.FromJUnit(nodeIds, readFileSync(report, 'utf8')), SeedLimit: PsGatePytest.SeedLimit(env) };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -3,7 +3,9 @@
  * reported holdout AUC carries a 95% interval. A statistical gate: the node trains one search per seed. The
  * stored outcome is the engine's decision over the same intervals plus guards that only demote `model`, and a run
  * whose sidecar decision differs is refused, so the sidecar's `model` count bounds the stored count. PS_SEED_LIMIT
- * runs the node on its first k seeds with the cap scaled to k; the full count runs once, on the final head.
+ * runs the node on its first k seeds with the cap scaled to k, and reaches the node only in a mutation check
+ * (PS_GATE_MUTATION_CHECK=1); `seedLimit` in Measured records the limit a run used. The full count runs once, on
+ * the final head.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { PsGate } from './ps-gates/ps-gate-fixture';
@@ -18,7 +20,7 @@ export const PsGateW2S65Checks: NamedCheck[] = [
       const r = await PsGatePytest.Run(nodes);
       PsGate.Assert({
         Passed: r.Failed === 0 && r.Errors === 0 && r.NotCollected.length === 0 && r.Collected === expectedCases && r.Passed === expectedCases,
-        Measured: { collected: r.Collected, passed: r.Passed, failed: r.Failed, errors: r.Errors, notCollected: r.NotCollected.join(' ') },
+        Measured: { collected: r.Collected, passed: r.Passed, failed: r.Failed, errors: r.Errors, notCollected: r.NotCollected.join(' '), seedLimit: r.SeedLimit === null ? 'none' : r.SeedLimit },
         Detail: `${r.Passed} of ${expectedCases} pytest case(s) passed; not collected: ${r.NotCollected.join(', ') || 'none'}`,
       });
     },
