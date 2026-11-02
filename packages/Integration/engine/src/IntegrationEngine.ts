@@ -1587,6 +1587,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
             const summary = this.buildSyncResultBody(config.companyIntegration.Integration, result);
+            // Repeated warnings are rolled up by code (SyncLogger.warning) and the summary is emitted
+            // HERE — before the terminal event, so it lands inside this run's own artifact stream.
+            logger.FlushWarningRollups();
             logger.emit('sync.run.complete', {
                 success: result.Success && result.RecordsErrored === 0,
                 durationMs: result.Duration,
@@ -1612,6 +1615,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return result;
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
+            // A failing run is exactly where a warning cascade is most likely, so flush the rollups
+            // on this path too — before the terminal fail event.
+            logger.FlushWarningRollups();
             logger.emit('sync.run.fail', { error: errMsg, durationMs: Date.now() - startTime });
             // Ownership lost (fence moved / lease reclaimed): the run row now belongs to
             // ANOTHER process — writing a terminal status to it here would clobber the new
@@ -3465,9 +3471,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     (batch.HasMore ? ` | more batches pending` : ` | batch complete`)
                 );
 
-                // Update progress on the watermark record so the DB reflects live sync state
+                // Update progress on the watermark record so the DB reflects live sync state.
+                //
+                // RecordsSynced counts RECORDS WRITTEN — created + updated — and nothing else. It used
+                // to be handed `afterApply`, which folds in skipped and errored: an object whose rows
+                // were all content-hash-unchanged reported thousands "synced" while writing nothing,
+                // and an object that errored on every record reported the same number as one that
+                // succeeded on every record. Operators watched that counter climb against a physical
+                // row count that never moved (ACR dev, Vendor Payment: 10,400 "synced" against 3,150
+                // rows). Skipped and errored are still counted — on the run result and the run detail,
+                // where they are named as what they are.
                 if (batch.HasMore) {
-                    await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser));
+                    const writtenSoFar = result.RecordsCreated + result.RecordsUpdated;
+                    await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(entityMapID, writtenSoFar, contextUser));
                 }
             }
 
@@ -3741,6 +3757,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     SampleValues: s.samples,
                 })).sort((a, b) => a.Key.localeCompare(b.Key)),
             };
+        }
+
+        // FINALISE the counter. The mid-loop write above is gated on `batch.HasMore`, so it never
+        // fires for the LAST batch — and an object that finishes in a single page has no such batch
+        // at all, which left its RecordsSynced at whatever the previous run wrote (0, for every
+        // object that has only ever completed in one page). partitionReconcile never entered that
+        // branch either, because its writes all happen after the fetch loop. One write per map per
+        // run closes both cases; it runs after the watermark branches above so the row it updates
+        // exists by now.
+        //
+        // Only for a fetch that completed cleanly. UpdateProgress also stamps LastSyncAt, and a map
+        // that was cancelled, failed mid-fetch or ended INCOMPLETE breaks out of the loop rather than
+        // returning — stamping it would show a run that stopped short as freshly synced.
+        if (fetchCompletedCleanly) {
+            await this.runWriteForMap(entityMapID, () => this.watermarkService.UpdateProgress(
+                entityMapID, result.RecordsCreated + result.RecordsUpdated, contextUser,
+            ));
         }
 
         await this.createRunDetail(run, entityMap, result, contextUser);
@@ -4071,7 +4104,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Paged: an unpaged read is silently capped at the entity's UserViewMaxRows (1000 by
         // default), and a truncated map here makes already-synced records look brand new — so
         // the push would re-CREATE them externally as duplicates.
-        const allMaps = await this.loadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
+        // Streamed per page into the lookup this path actually uses (MJ record id → external id)
+        // rather than materialising every row object first — see loadAllRecordMaps' STREAMING note.
+        const existingMaps = new Map<string, string>();
+        const allMaps = await this.loadAllRecordMaps(
+            companyIntegration.ID, entityMap.EntityID, contextUser,
+            page => { for (const m of page) existingMaps.set(m.EntityRecordID, m.ExternalSystemRecordID); },
+        );
         if (!allMaps.Complete) {
             // Refuse rather than push a partial picture: with an incomplete map, every unmapped
             // record reads as "not yet in the external system" and gets created a second time.
@@ -4080,11 +4119,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 `(${allMaps.Error ?? 'unknown error'}). Refusing to push — an incomplete map would ` +
                 `re-create already-synced records as duplicates in the external system.`
             );
-        }
-
-        const existingMaps = new Map<string, string>();
-        for (const m of allMaps.Rows) {
-            existingMaps.set(m.EntityRecordID, m.ExternalSystemRecordID);
         }
 
         const md = this.ProviderToUse;
@@ -4440,7 +4474,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Paged: an unpaged read is silently capped at the entity's UserViewMaxRows (1000 by
         // default). A tenant with 5,000 orphans would clear 1,000 per run and the operator would
         // see a clean run every time — the truncation was invisible, which is the actual bug.
-        const allMaps = await this.loadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
+        //
+        // Streamed: the orphan test is per row and needs nothing from the rows that pass it, so each
+        // page is filtered and dropped. What stays resident is the ORPHANS — normally a handful —
+        // instead of every mapping the entity has (see loadAllRecordMaps' STREAMING note).
+        const orphans: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const allMaps = await this.loadAllRecordMaps(
+            companyIntegration.ID, entityMap.EntityID, contextUser,
+            page => {
+                for (const m of page) {
+                    if (!fetchedExternalIDs.has(m.ExternalSystemRecordID)) orphans.push(m);
+                }
+            },
+        );
 
         if (!allMaps.Complete) {
             // Deleting against a partial map is the dangerous direction: rows we simply failed to
@@ -4450,14 +4496,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 entityMap.ExternalObjectName ?? entityMap.ID,
                 'ORPHAN_SWEEP_SKIPPED',
                 `Delete-detection was skipped for ${entityMap.Entity}: the record map could not be read completely ` +
-                `(${allMaps.Error ?? 'unknown error'}) after ${allMaps.Rows.length} row(s). No records were deleted. ` +
+                `(${allMaps.Error ?? 'unknown error'}) after ${allMaps.RowsRead} row(s). No records were deleted. ` +
                 `Deleting on a partial map would archive live records.`,
-                { rowsRead: allMaps.Rows.length },
+                { rowsRead: allMaps.RowsRead },
             );
             return;
         }
 
-        const orphans = allMaps.Rows.filter(m => !fetchedExternalIDs.has(m.ExternalSystemRecordID));
         if (orphans.length === 0) return;
 
         // The sweep is a DELETE PATH and must answer to the same policy as every other delete.
@@ -6289,12 +6334,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      *     silently skipping rows while still reporting `Complete: true`. That is exactly the
      *     truncation this helper exists to prevent, and the orphan sweep would archive live
      *     records on the strength of it. Keyset seeks on the last ID seen and cannot shift.
+     *
+     * **STREAMING, when the caller can use it.** Paging bounds the QUERY, not the resident set: with
+     * every page appended to one array, a table with a million mappings for one (CompanyIntegration,
+     * Entity) pair holds a million row objects in the heap for the length of the sweep — and neither
+     * caller wants the rows. The push path wants a `Map` of two of the three columns; the orphan
+     * sweep wants the handful of rows whose external ID is missing from the fetched set. Pass
+     * `onPage` and each page is handed over and dropped: `Rows` comes back EMPTY and `RowsRead`
+     * carries the count. Omit it and the behaviour is exactly as before (rows accumulated), because
+     * the honest reading of "give me everything" is that the caller intends to hold everything.
      */
     private async loadAllRecordMaps(
         companyIntegrationID: string,
         entityID: string,
-        contextUser: UserInfo
-    ): Promise<{ Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean; Error?: string }> {
+        contextUser: UserInfo,
+        onPage?: (rows: ReadonlyArray<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>) => void,
+    ): Promise<{
+        Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>;
+        /** Rows READ, whether or not they were accumulated — the only row count a streaming caller has. */
+        RowsRead: number;
+        Complete: boolean;
+        Error?: string;
+    }> {
         const PAGE_SIZE = IntegrationEngine.RecordMapPageSize;
         // Backstop only: at the default page size this is 50M mappings for one
         // (CompanyIntegration, Entity) pair. It exists so a provider that ignores the seek key
@@ -6304,6 +6365,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const rv = new RunView();
         const rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        let rowsRead = 0;
         let afterID: string | undefined;
 
         for (let pageNo = 0; pageNo < MAX_PAGES; pageNo++) {
@@ -6324,13 +6386,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }, contextUser);
 
             if (!page.Success) {
-                return { Rows: rows, Complete: false, Error: page.ErrorMessage ?? 'RunView failed' };
+                return { Rows: rows, RowsRead: rowsRead, Complete: false, Error: page.ErrorMessage ?? 'RunView failed' };
             }
 
+            rowsRead += page.Results.length;
+            if (onPage) onPage(page.Results);
             // No spread: push(...rows) passes every row as a call argument and throws
             // "Maximum call stack size exceeded" past ~100k rows if a provider returns an oversized page.
-            for (const row of page.Results) rows.push(row);
-            if (page.Results.length < PAGE_SIZE) return { Rows: rows, Complete: true };
+            else for (const row of page.Results) rows.push(row);
+            if (page.Results.length < PAGE_SIZE) return { Rows: rows, RowsRead: rowsRead, Complete: true };
             afterID = page.Results[page.Results.length - 1].ID;
         }
 
@@ -6339,8 +6403,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // saying so is the whole point of the Complete flag.
         return {
             Rows: rows,
+            RowsRead: rowsRead,
             Complete: false,
-            Error: `Record-map paging exceeded ${MAX_PAGES} pages (${rows.length} rows read) without reaching the end.`,
+            Error: `Record-map paging exceeded ${MAX_PAGES} pages (${rowsRead} rows read) without reaching the end.`,
         };
     }
 
