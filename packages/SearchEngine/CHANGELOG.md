@@ -1,5 +1,89 @@
 # @memberjunction/search-engine
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 8f370b3: Add Cohere Rerank 5 (`rerank-v5.0-pro`, `rerank-v5.0-fast`) and its Context Focus spans.
+  - `@memberjunction/ai-cohere`: `CohereReranker` always calls Cohere's `/v2/rerank`, sends the query as written for every Cohere model (the instruction wrapper is gone; Rerank 5 does not take relevance instructions), and defaults to `rerank-v5.0-fast`. The `RelevantSpans` option (`true` or `{ Threshold, MaxSpans }`) asks for Context Focus spans, returned on `document.metadata.RelevantSpans` as `CohereRelevantSpan[]` with text sliced by Unicode code points, as Cohere counts offsets. Only `true` or an object turns it on; `Threshold` is clamped to 0-1 and a non-positive `MaxSpans` is ignored. It sends `max_tokens_per_doc` when the call carries a token limit.
+  - `@memberjunction/ai` and `@memberjunction/ai-reranker`: `RerankParams.MaxTokensPerDocument` carries the model's per-document token limit, and `AIRerankerRunner` fills it from the selected model-vendor row's `MaxInputTokens`, so a 32K Cohere model is no longer truncated at Cohere's 4096 default.
+  - `@memberjunction/search-engine`: `CohereReRanker` uses that `CohereReranker` through the ClassFactory instead of its own Cohere client, and no longer declares `cohere-ai`. It defaults to `rerank-v5.0-fast`; scope config `relevantSpans` sets `SearchResultItem.RelevantSpans` and, unless `focusSnippet` is false, narrows `Snippet` to the spans, in document order, from where the snippet starts in the text sent for reranking. `minRelevanceThreshold` drops weak results but never empties the list.
+  - Metadata: Rerank 5 models, with `Default Rerank` preferring `rerank-v5.0-fast`, so callers that don't pin a model, and search scopes with no `model`, switch to it. Sage and Chief of Staff memory reranking moves to `rerank-v5.0-fast` with `minRelevanceThreshold` 0.02.
+
+- 4c0eaec: Local embeddings move to `@huggingface/transformers` 4.3.1 and can switch models safely; EmbeddingGemma 2 is available as an opt-in model.
+  - `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` names the local model every process embeds with (default: the highest-PowerRank active local model). Agent note, example, tag and query indexes leave out vectors from other models, a save re-embeds such a row, and the new "Re-embed Local Vectors" action moves them all.
+  - Embedding calls take an optional `inputType` (`'query' | 'document'`); Cohere and Bedrock map it natively, and catalog prefixes come from `ModelConfiguration.Embedding`. `LocalEmbedding` batches, honors `dimensions`, truncates to the catalog's `MaxInputTokens`, and sizes ONNX Runtime's thread pool to the CPUs the process may use (in a 2-CPU container, queries were about 10× faster).
+  - A failed embed now returns `null` from `AIEngine.EmbedText` instead of an empty vector.
+
+  **Upgrade notes:**
+  - After upgrading, run `mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"`, then restart the MJ server processes. The new runtime changes all-mpnet-base-v2's vectors (about 0.95 cosine on Linux x64) under the same model ID, and long texts are now truncated at `MaxInputTokens` (256 tokens for all-MiniLM-L6-v2, matching sentence-transformers).
+  - A `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` that names no active local model turns local embedding off, with an error. An inactive model is no longer picked as the default.
+  - TagEngine embeds with the default local model whenever one exists, even if the "Tag Semantic Matching" prompt names a hosted model.
+  - `LocalEmbedding` honors a vector index's `Dimensions`: a value above the model's size now fails instead of being ignored.
+  - The GraphQL `EmbedText` mutation's `modelSize: 'medium'` now means the default local model.
+  - `LocalEmbedding` no longer reads the `useQuantized` / `localURL` settings or `TRANSFORMERS_LOCAL_URL`; it always loads the 8-bit weights.
+
+### Patch Changes
+
+- 1419ba7: Host-assigned search scopes for agent runs, and `actionChanges` that remove every action are now honored.
+  - **`ExecuteAgentParams.SearchScopeIDs`:** the search scopes a host (for example a collaboration space) assigns to a run. They are stamped on every action dispatch as `RunActionParams.RunScope.SearchScopeIDs` and passed to every agent the run starts: sub-agents, `Execute Agent`, realtime delegation and runtime actions. Scoped Search then searches only those scopes (the first when the model names none). The host's assignment stands in for the calling agent's own `SearchScopeAccess` and assigned-scope list, so any agent a host runs can search what the host allows. It never grants: the user's own permission on the scope (`SearchScopePermissionResolver`, new `HostAssigned` input), skill rules, the scope's dimension rules and row-level security still apply. It is read only from the parameter, never from `data`. In such a run the plain Search action refuses (it would search past the host's scopes) and task graphs are withheld (their nodes run without the scopes).
+  - **Remove-all `actionChanges`:** `BaseAgent` treated an empty effective action (or sub-agent) list as "not computed" and fell back to the agent's configured set, so a host that limited an agent to zero actions gave all of them back. A computed empty list is now authoritative; a non-empty or uncomputed one behaves as before.
+
+- 42df19d: Explorer surfaces stop reporting state the server never sent:
+  - A client holding a metadata snapshot keeps serving it when the metadata status check cannot reach the server (connection refused, DNS failure, offline, or a gateway/timeout status), instead of failing with "System Error". Only a transport failure degrades this way (`IsTransportError` in `@memberjunction/core`; `SafeGraphQLError.IsTransportFailure` carries the verdict past the GraphQL error sanitizer); a server that answered — an access denial, a validation rejection — propagates as before.
+  - A run the server force-failed no longer keeps spinning, and an agent run that ended by asking the user a question (AwaitingFeedback) or is parked on a workflow (Paused) is no longer painted as a failure.
+  - A dashboard no longer reports 0% for a run of successes, and global search reports incomplete results through `EntitySearchProvider.OnIncompleteResults` and the log instead of dropping them silently (no UI shows the report yet).
+  - An app with more than 1000 entities shows all of them, and an unwarmed template cache no longer crashes the form that fixes it.
+  - Opening a record works on entities whose primary key is not called `ID`.
+  - List membership filters run on PostgreSQL for uuid and integer keys (`ListMembershipFilter` in `@memberjunction/core`).
+  - List sources resolve every match as the acting user, not the entity's UserViewMaxRows page.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/tag-engine-base@6.2.0-edge.7
+  - @memberjunction/ai-vectordb@6.2.0-edge.7
+  - @memberjunction/storage@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

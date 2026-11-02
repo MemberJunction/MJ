@@ -3,7 +3,7 @@
  * `MJ: AI Agent Request Types` row ("Approval" vs "Information") for a new agent request.
  *
  * The lookup must go through the AI engine (AIEngineBase caches the table during Config and
- * exposes ResolveAgentRequestTypeID), not a private per-run RunView, so the actions, the cockpit
+ * exposes ResolveAgentRequestTypeID), not a private per-run RunView, so the actions, the Chief of Staff app
  * and the agent runner all resolve a type through one source.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';

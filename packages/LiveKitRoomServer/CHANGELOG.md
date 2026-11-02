@@ -1,5 +1,55 @@
 # @memberjunction/livekit-room-server
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 7d0885a: The agent-vision button's name now says the choice covers the whole room, including agents that join later: "Let the agent, and any agent that joins later, see your camera and screen" with one agent, and "Let every agent in this room, including any that join later, see your camera and screen" with several (the "Stop letting ..." names match). The short labels and chips are unchanged. The livekit-room-server README notes that room composite recordings include an agent's avatar video as an unlabeled participant tile.
+- 896334a: Let an idle MJAPI stop polling its database. `AgentRunWatchdog` stops its heartbeat and stop-relay poll when the last run finishes and starts them again on the next run, untracks a run before the subclass `finalizeRun` hook, and validates `Configure()`; its stale-run sweep keeps its default (every 5 minutes once an agent has run) and `agentRunWatchdog.sweepIntervalMs: 0` (env `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS`) leaves only the startup sweep. New switches, defaults unchanged: `agentSessions.janitor` (`MJ_SESSION_JANITOR_ENABLED`, `MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS`), `agentSessions.bridgeReconciler` (`MJ_BRIDGE_RECONCILER_ENABLED`, `MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS`), `agentSessions.handoffOfferExpiry` (`MJ_HANDOFF_OFFER_EXPIRY_ENABLED`, `MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS`; `HandoffOfferRegistry.StartPeriodicSweep()` is new) and `conversationDetailReconciler` (`MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED`, `MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS`). See `guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md`.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/ai-bridge-server@6.2.0-edge.7
+  - @memberjunction/ai-bridge-base@6.2.0-edge.7
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.7
+  - @memberjunction/ai-bridge-livekit-native@6.2.0-edge.7
+  - @memberjunction/storage@6.2.0-edge.7
+  - @memberjunction/network-utils@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

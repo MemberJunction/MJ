@@ -21,7 +21,7 @@
  * read-only: one vector index, template, entity document type, AI model and agent, plus the seeded
  * role-less user `it-nogrant@integration.test`. SOG4 deletes every fixture row and asserts it is gone;
  * the lifecycle Teardown is the best-effort backstop when a check fails first. Missing borrowed rows →
- * every check SKIPS-AS-PASS LOUDLY. Not RequiresMutation-gated, mirroring agent-loop-standin: it writes
+ * every check is recorded as skipped (SkipCheck). Not RequiresMutation-gated, mirroring agent-loop-standin: it writes
  * only its own tagged rows and removes them.
  */
 import { BaseEntity, RunView, UserInfo } from '@memberjunction/core';
@@ -39,7 +39,7 @@ import type {
 } from '@memberjunction/core-entities';
 import { SearchEngine } from '@memberjunction/search-engine';
 import type { SearchResultItem } from '@memberjunction/search-engine';
-import { Assert, AssertEqual, IntegrationCheckRegistry, SEED_FIXTURES_COMMAND, SEEDED_NOGRANT_EMAIL } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SEED_FIXTURES_COMMAND, SEEDED_NOGRANT_EMAIL, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const MARKER = '(mj-integration-test — safe to delete)';
@@ -131,10 +131,6 @@ class OriginGateProbe extends SearchEngine {
         Assert(!!entity, `'${entityName}' is not in metadata`);
         return this.VerifyOriginRecords(entity!, results, contextUser);
     }
-}
-
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ search-origin-gate.${checkId} SKIPPED — ${reason}`);
 }
 
 /** The gate entities `user` may NOT read at the entity level. */
@@ -269,12 +265,11 @@ async function createFixture(ctx: IntegrationCheckContext): Promise<void> {
     fx.Missing = await buildChain(ctx, fx, base, MISSING_ORIGIN_ID, 'missing-origin');
 }
 
-/** Both chains, or undefined after a loud skip note. */
-function usableChains(checkId: string): { Readable: ContentChain; Missing: ContentChain } | undefined {
+/** Both chains; the running check is skipped ({@link SkipCheck}) when they were not built. */
+function usableChains(): { Readable: ContentChain; Missing: ContentChain } {
     const fx = fixture;
     if (!fx?.Readable || !fx.Missing) {
-        skipNote(checkId, fx?.SkipReason ?? 'the fixtures were not created');
-        return undefined;
+        SkipCheck(fx?.SkipReason ?? 'the fixtures were not created');
     }
     return { Readable: fx.Readable, Missing: fx.Missing };
 }
@@ -357,8 +352,7 @@ export const SearchOriginGateChecks: NamedCheck[] = [
         Id: 'search-origin-gate.SOG1',
         Name: 'SOG1: a chunk hit and an item hit derived from a record the user may read are kept',
         Fn: async (ctx): Promise<void> => {
-            const chains = usableChains('SOG1');
-            if (!chains) { return; }
+            const chains = usableChains();
             const hits = chainHits(chains.Readable, 'readable');
             const kept = await OriginGateProbe.For(ctx.Provider).FilterByPermissions(hits, ctx.User);
             AssertEqual(hitIDs(kept), hitIDs(hits), 'both hits of the readable-origin chain survive both gates for the run user');
@@ -369,8 +363,7 @@ export const SearchOriginGateChecks: NamedCheck[] = [
         Id: 'search-origin-gate.SOG2',
         Name: 'SOG2: the origin gate drops hits whose Entity Record Document names a record that does not exist, and only those',
         Fn: async (ctx): Promise<void> => {
-            const chains = usableChains('SOG2');
-            if (!chains) { return; }
+            const chains = usableChains();
             // Anti-vacuity: the missing-origin chunk and item are real rows the run user can read, so the
             // entity-level check admits them — the origin is the only thing left to drop them.
             AssertEqual(await visibleContentRows(ctx, chains.Missing), 2,
@@ -386,12 +379,10 @@ export const SearchOriginGateChecks: NamedCheck[] = [
         Id: 'search-origin-gate.SOG3',
         Name: `SOG3: the role-less user (${SEEDED_NOGRANT_EMAIL}) is shown none of the hits, through either gate`,
         Fn: async (ctx): Promise<void> => {
-            const chains = usableChains('SOG3');
-            if (!chains) { return; }
+            const chains = usableChains();
             const noGrant = await loadSeededNoGrantUser(ctx);
             if (!noGrant) {
-                skipNote('SOG3', `seeded user '${SEEDED_NOGRANT_EMAIL}' not found or holds a role — seed with: ${SEED_FIXTURES_COMMAND}`);
-                return;
+                SkipCheck(`seeded user '${SEEDED_NOGRANT_EMAIL}' not found or holds a role — seed with: ${SEED_FIXTURES_COMMAND}`);
             }
             AssertEqual(unreadableEntities(ctx.Provider, noGrant).length, GATE_ENTITIES.length,
                 `fixture invalid: the role-less user can read one of ${GATE_ENTITIES.join(', ')}`);
@@ -414,8 +405,7 @@ export const SearchOriginGateChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = fixture;
             if (!fx || fx.Created.length === 0) {
-                skipNote('SOG4', fx?.SkipReason ?? 'no fixture rows were created');
-                return;
+                SkipCheck(fx?.SkipReason ?? 'no fixture rows were created');
             }
             const failures = await deleteFixtures(fx);
             AssertEqual(failures.join('; '), '', 'every fixture row deletes');

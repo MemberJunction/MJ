@@ -14,6 +14,7 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { MJButtonDirective, MJClickableDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -69,10 +70,9 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
-import {
-  ChiefOfStaffDashboardComponent,
-  LoadChiefOfStaffDashboard
-} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+import { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
+import { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+import { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 
 // Knowledge Hub components
 import {
@@ -170,9 +170,12 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
-    ChiefOfStaffDashboardComponent
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent
   ],
   imports: [
+    ConversationsModule,
     CompareValueComponent,
     CommonModule,
     FormsModule,
@@ -259,7 +262,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -286,6 +291,8 @@ export class AIDashboardsModule {
         LoadRealtimeManagement();
         LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
-        LoadChiefOfStaffDashboard();
+        LoadChiefOfStaffOverview();
+        LoadChiefOfStaffApprovals();
+        LoadChiefOfStaffGovernance();
     }
 }

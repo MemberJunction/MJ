@@ -72,6 +72,7 @@ export async function LoadRecordChangeSnapshot(
         // nothing to show for them.
         Fields: ['ID', 'EntityID', 'FullRecordJSON'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, contextUser);
 
