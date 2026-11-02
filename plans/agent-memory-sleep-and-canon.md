@@ -47,15 +47,15 @@ Enterprise AI sovereignty is moving from *"where your raw tables sit"* to **"who
 - **Zero-lock-in portability**: Swap Claude, Gemini, OpenAI, or local open-weight models per prompt/agent while retaining 100% of organizational memory and procedural Canon.
 - **Explainable provenance**: Every inferred note, skill, or Canon rule traces through real SQL foreign keys back to the exact runs, conversation turns, learning cycle, and replay evidence that justified it.
 
-### 1.2 Naming Decision: Keep `Canon`
+### 1.2 Naming Decision: Keep `Canon` (as a First-Class `GraphType` over Generic `MJ: Graph Concepts`)
 
 We retain **`Canon`** (over `"Ontology"` or `"Ontology+"`). In enterprise architecture, *Ontology* strictly describes taxonomic/schema structure ("what concepts and relationships exist"). **`Canon`** is defined by **ratified authority** ("what the organization has approved as operational ground truth"), naturally encompassing:
-- Descriptive schema & business concepts (`MJ: Canon Concepts` and `MJ: Graph Edges` in [`canon-semantic-graph.md`](canon-semantic-graph.md)),
-- Prescriptive policies & domain facts (canonical `MJ: AI Agent Notes`),
+- Descriptive schema & business concepts (**`MJ: Graph Concepts` (`__mj.GraphConcept`)** scoped to `GraphID` where `Graph.GraphType = 'Canon'`, plus **`MJ: Graph Edges`** in [`canon-semantic-graph.md`](canon-semantic-graph.md) — generalized from the earlier `CanonConcept` table so any `MJ: Content Source` or group of Content Sources can also build or share a `'Knowledge'` or `'Canon'` graph via `@memberjunction/content-pipeline`'s `GraphStage`),
+- Prescriptive user preferences, hard constraints, & temporary `Provisional` learnings (`MJ: AI Agent Notes` — used **sparingly** as delta memory rather than dumping 400–4,000 page manuals into individual notes; durable domain/policy/metric/process definitions graduate into `MJ: Graph Concepts`),
 - Approved analytical definitions (`MJ: Queries` and Alternate Base Views), and
-- Executable procedures (canonical `MJ: AI Skills` and `MJ: Actions`).
+- Executable procedures (canonical `MJ: AI Skills`, `MJ: Actions`, and saved `TaskGraph` Workflows — with deterministic Weisfeiler-Lehman DAG similarity & telemetry in `@memberjunction/ai-core-plus` surfacing repeated ad-hoc DAG runs for workflow promotion and flagging dormant/bypassed workflows).
 
-CRM person-to-org links form a graph, not Canon; an approved revenue-recognition rule or verified SQL join pattern is **Canon**.
+CRM person-to-org links form a graph (`GraphType = 'Network'`), general RAG document hubs form a knowledge graph (`GraphType = 'Knowledge'`), and an approved revenue-recognition policy, concept hierarchy, or verified SQL join pattern lives in a **Canon** graph (`GraphType = 'Canon'`).
 
 ### 1.3 How Three Converging Plans Fit Together
 
@@ -357,15 +357,16 @@ Full `AgentRunner` replay executes real side-effecting `Actions` (sending emails
 
 ## 6. Phase 4 & Further Directions: Graph, Procedural Skills & In-Flight Search
 
-### 6.1 Canon Semantic Graph Integration (`plans/canon-semantic-graph.md` + PR #6180)
+### 6.1 Semantic Graph & `MJ: Graph Concepts` Integration (`plans/canon-semantic-graph.md` + PR #6180)
 
-We build directly on the Semantic Graph architecture ([`canon-semantic-graph.md`](canon-semantic-graph.md)) rather than creating a separate memory graph:
-1. **Persist `MemoryManagerAgent`'s Discarded EAV Triples**: Today `MemoryManagerAgent.detectAndResolveContradictions` (`memory-manager-agent.ts` L2700–2721) extracts `entityTriples` (`{ entity, attribute, value }`), counts `.length` via `countEntityTriples`, and **discards them**. Phase 4 resolves `entity` mentions against `MJ: Canon Concepts` and `MJ: Entities` (names + synonyms) and writes `MJ: Graph Edges` (`Origin = 'Inferred'`, `Status = 'Proposed'`, edge types `AboutConcept`, `Supports`, `Refines`, `Contradicts`).
-2. **Zero-Drift `NoteLineageEdgeProvider` & `ProposalLineageEdgeProvider`**: Implement two `BaseGraphEdgeProvider` subclasses reading `AIAgentNoteSource` (§3.1) and `AIAgentLearningCycleProposalSource` (§3.4) directly as `Derived` edges.
-3. **Vector Seeds + Canon-Biased Graph Expansion**: After retrieving `2 * MaxNotesToInject` vector seeds, `AgentContextInjector` expands 1–2 hops via `GraphEngine` (**re-applying the 8-level scope filter, `SharedOnly`, and `ProjectEntityValueRowsForUser` FLS check on every traversed neighbor** so graph edges can never leak cross-user/cross-company notes!) and ranks candidates by:
+We build directly on the generalized Semantic Graph architecture ([`canon-semantic-graph.md`](canon-semantic-graph.md)) rather than creating a separate memory graph:
+1. **Generalized `MJ: Graph Concepts` (`__mj.GraphConcept`) & Content Source Graph Overlay**: `CanonConcept` has been generalized to `MJ: Graph Concepts` (`__mj.GraphConcept`) scoped to `GraphID` (`UNIQUE (GraphID, Name)`) with `ConceptType` (`'Domain' | 'Term' | 'Policy' | 'Metric' | 'Process'`), `Specification`, `AuthorityTier` (`'Bylaws' | 'BoardPolicy' | 'ExecutiveSOP' | 'DepartmentPractice' | 'Reference' | 'Inferred'`), `ParentID`, and `Status`, while `MJ: Graphs` (`__mj.Graph`) adds `GraphType` (`'Canon' | 'Knowledge' | 'Network' | 'Custom'`). Large documents (e.g., 400–4,000 page manuals) ingested through `MJ: Content Sources` (`GraphStage` in `@memberjunction/content-pipeline`) synthesize higher-level `MJ: Graph Concepts` (~50–300 concepts per graph) and `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Describes`, `Defines`, `Measures`, `Implements`, `Contradicts`), keeping `MJ: AI Agent Notes` lean and focused on user preferences, constraints, and `Provisional` learnings.
+2. **Persist `MemoryManagerAgent`'s Discarded EAV Triples**: Today `MemoryManagerAgent.detectAndResolveContradictions` (`memory-manager-agent.ts` L2700–2721) extracts `entityTriples` (`{ entity, attribute, value }`), counts `.length` via `countEntityTriples`, and **discards them**. Phase 4 resolves `entity` mentions against `MJ: Graph Concepts` and `MJ: Entities` (names + synonyms) and writes `MJ: Graph Edges` (`Origin = 'Inferred'`, `Status = 'Proposed'`, edge types `AboutConcept`, `Supports`, `Refines`, `Contradicts`).
+3. **Zero-Drift `NoteLineageEdgeProvider` & `ProposalLineageEdgeProvider`**: Implement two `BaseGraphEdgeProvider` subclasses reading `AIAgentNoteSource` (§3.1) and `AIAgentLearningCycleProposalSource` (§3.4) directly as `Derived` edges.
+4. **Vector Seeds + Canon-Biased Graph Expansion**: After retrieving `2 * MaxNotesToInject` vector seeds, `AgentContextInjector` expands 1–2 hops via `GraphEngine` (**re-applying the 8-level scope filter, `SharedOnly`, and `ProjectEntityValueRowsForUser` FLS check on every traversed neighbor** so graph edges can never leak cross-user/cross-company notes!) and ranks candidates by:
    $$\text{Score}(v) = \alpha \cdot \text{Sim}(q, v) + \beta \cdot \max_{u \in \text{Seeds}} \left(\text{Sim}(q, u) \cdot W_{u \to v} \cdot \tau(\text{Status}_{u \to v})\right) + \gamma \cdot \text{CanonBonus}(v)$$
    with $\tau(\text{Approved}) = 1.0$, $\tau(\text{Proposed}) = 0.4$.
-4. **Hybrid Symbolic-Prior + EMA Outcome-Learned Edge Weights**:
+5. **Hybrid Symbolic-Prior + EMA Outcome-Learned Edge Weights**:
    - Initialize `Weight` from `GraphEdgeType.DefaultWeight` $\times$ origin prior (`Declared = 0.90`, `Inferred/Approved = 0.75`, `Inferred/Proposed = 0.45`) to avoid cold-start sparsity.
    - Using Phase 0's per-run injected-item exposure log, update `Weight` via bounded exponential moving average ($w \leftarrow \text{clamp}(w + \eta \cdot r,\; 0.10,\; 1.00)$, $\eta = 0.05$) on counterfactual replay wins ($+1.0$), rated successes ($+0.5$), and user corrections / thumbs-down ($-1.0$).
 
