@@ -250,9 +250,14 @@ Two promotion paths exist today: Data artifact → Query, and form component art
 | JS / TS code | Runtime Action | Stored test cases (persisted as `MJ: Tests`) |
 | SQL / Data | Query | Test run with sample params; results snapshot stored |
 | Component / Report | MJ: Component | Component linter + `packages/React/test-harness` |
-| Plan / task graph | Workflow (Flow agent) | `Workflow.Validate` + a dry run |
+| Plan / task graph | Workflow (Flow agent) | `Workflow.Validate` + a dry run (+ deterministic Weisfeiler-Lehman DAG similarity clustering & telemetry in `@memberjunction/ai-core-plus`) |
 | Procedure markdown | Skill | Replay contrast with and without the skill (rung 3) |
-| Lesson ("cue / lesson / evidence") | Learning Cycle record → Scoped Prompt Part, skill, or note | Rung 3 |
+| Lesson ("cue / lesson / evidence") | Learning Cycle record → Scoped Prompt Part, skill, note, or `MJ: Graph Concept` | Rung 3 |
+
+> **Nov 2026 Design Update (Canon-First Generic Graph Substrate, Content Source GraphRAG Overlay & Deterministic DAG Promotion/Telemetry)**:
+> 1. **Generic `MJ: Graph Concepts` (`__mj.GraphConcept`) & `Graph.GraphType`**: `CanonConcept` from `plans/canon-semantic-graph.md` is generalized to `MJ: Graph Concepts` (`__mj.GraphConcept`) scoped to `GraphID` (`UNIQUE (GraphID, Name)`), and `MJ: Graphs` (`__mj.Graph`) adds `GraphType` (`'Canon' | 'Knowledge' | 'Network' | 'Custom'`). Higher-level organizational concepts (~50–300 per graph) live in `MJ: Graph Concepts`, while `MJ: AI Agent Notes` are used sparingly for user preferences, hard constraints, and temporary `Provisional` learnings.
+> 2. **Opt-In `MJ: Content Sources` Graph Overlay (`GraphStage` in `@memberjunction/content-pipeline`)**: `MJ: Content Sources` can target or share a `GraphID` (`Configuration.GraphOverlay`) to automatically synthesize `GraphConcept`s and `GraphEdge`s (`SourcedFrom`, `Mentions`, `Broader Than`, `Describes`, `Defines`, `Measures`, `Implements`, `Contradicts`) from ingested documents and chunks.
+> 3. **Deterministic `TaskGraph` DAG Similarity & Workflow Telemetry (`@memberjunction/ai-core-plus`)**: `ComputeDAGFingerprint`, `DiscoverWorkflowPromotionCandidates`, and `EvaluateWorkflowCanonHealth` deterministically cluster repeated successful ad-hoc `TaskGraph` executions for promotion to saved Workflows (`PromoteToWorkflow`, `EvolveExistingWorkflow`, `ExistingWorkflowDiscoveryGap`) and monitor saved Workflows for `Dormant`, `UsageDecay`, `ExceptionSpike`, `OutcomeDrift`, and `ShadowBypassed`.
 
 **Learning Cycles become the "improvement library".** `MJ: AI Agent Learning Cycles` (description: "what it learned and changes it requested for stored metadata") is the natural home for the paper's reflector output: per-edit verdict rows and at most one lesson, linked to the canon items it produced. The paper's Prompt 6 (Experience Reflector) gives a ready-made output contract.
 
