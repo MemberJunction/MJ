@@ -112,7 +112,7 @@ export interface TruthHarness {
   GenerateStory(modelId: string): Promise<string | null>;
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
-  /** The planted truth of a loaded W1–W8 seed, keyed by lower-cased MembershipYearID. */
+  /** The planted truth of a loaded W1–W8 seed, keyed by MembershipYearID (case-insensitive). */
   ReadWorldTruth(dataset: LoadedDataset): Promise<UUIDMap<WorldTruthRow>>;
   /** A seeded sample of n primary keys of the dataset's row table. */
   SampleRowIds(dataset: LoadedDataset, n: number, seed: number): Promise<string[]>;

@@ -12,9 +12,12 @@ import type { TruthHarness } from '../harness/types';
 import { TruthConnection } from '../db/connection';
 import { UnitFixtures } from './unit-fixtures';
 
-/** One person's status timeline: Active from `ActiveFrom`, Lapsed from `LapsedFrom` (null = never lapsed). */
-export interface StatusSpan { readonly ActiveFrom: Date; readonly LapsedFrom: Date | null }
-/** Each person's status timeline, keyed by PersonID (iterated with the normalized lower-case key). */
+/**
+ * One person's status timeline: Active from `ActiveFrom`, Lapsed from `LapsedFrom` (null = never lapsed). `PersonID`
+ * is the ID as the membership years hold it: the value written to Record Changes and handed to readers.
+ */
+export interface StatusSpan { readonly PersonID: string; readonly ActiveFrom: Date; readonly LapsedFrom: Date | null }
+/** Each person's status timeline, matched by PersonID in any case (iterate `Values()` for each span's own PersonID). */
 export type StatusTimeline = UUIDMap<StatusSpan>;
 /** One W4 membership year as the timeline reads it. */
 export interface W4MembershipYearRow { readonly PersonID: string; readonly Year: number; readonly Renewed: boolean | null }
@@ -38,8 +41,9 @@ export class W4StatusHistory {
       const personEntity = h.Provider.EntityByName(UnitFixtures.TruthEntityName(h, 'W4_Person'));
       if (!personEntity) throw new Error('pstruth.W4_Person is not registered');
       const existing = await W4StatusHistory.readExistingRows(h, personEntity.ID, timeline);
-      await W4StatusHistory.writeCreateRows(pool, h, personEntity.ID, [...timeline].filter(([id]) => !existing.has(W4StatusHistory.rowKey(id, 'Create'))));
-      await W4StatusHistory.saveUpdateRows(h, personEntity.ID, [...timeline].filter(([id]) => !existing.has(W4StatusHistory.rowKey(id, 'Update'))));
+      const spans = [...timeline.Values()];
+      await W4StatusHistory.writeCreateRows(pool, h, personEntity.ID, spans.filter((t) => !existing.has(W4StatusHistory.rowKey(t.PersonID, 'Create'))));
+      await W4StatusHistory.saveUpdateRows(h, personEntity.ID, spans.filter((t) => !existing.has(W4StatusHistory.rowKey(t.PersonID, 'Update'))));
       return timeline;
     } finally {
       await pool.close();
@@ -53,7 +57,7 @@ export class W4StatusHistory {
   public static BuildTimeline(years: readonly W4MembershipYearRow[]): StatusTimeline {
     const timeline = new UUIDMap<StatusSpan>();
     for (const y of [...years].sort((a, b) => a.Year - b.Year)) {
-      const t = timeline.Get(y.PersonID) || { ActiveFrom: new Date(Date.UTC(y.Year, 0, 1)), LapsedFrom: null };
+      const t = timeline.Get(y.PersonID) || { PersonID: y.PersonID, ActiveFrom: new Date(Date.UTC(y.Year, 0, 1)), LapsedFrom: null };
       timeline.Set(y.PersonID, y.Renewed === false && t.LapsedFrom === null ? { ...t, LapsedFrom: new Date(Date.UTC(y.Year + 1, 0, 1)) } : t);
     }
     return timeline;
@@ -74,7 +78,7 @@ export class W4StatusHistory {
     return W4StatusHistory.BuildTimeline(years.recordset);
   }
 
-  /** The key of one fixture row: the person's RecordID, the row type and the instant it is dated at. */
+  /** The in-memory key of one fixture row (the person's RecordID, upper-cased so any case matches, and the row type). */
   private static rowKey(personId: string, type: 'Create' | 'Update'): string {
     return `ID|${personId.toUpperCase()}|${type}`;
   }
@@ -126,7 +130,7 @@ export class W4StatusHistory {
    * `Source='Internal'`, `Type='Create'` row ("written by the platform and cannot be created through the API"), so the
    * entity layer cannot write them. Confined to this fixture, the test entity's rows and the suite's own database.
    */
-  private static async writeCreateRows(pool: sql.ConnectionPool, h: TruthHarness, entityID: string, people: readonly (readonly [string, StatusSpan])[]): Promise<void> {
+  private static async writeCreateRows(pool: sql.ConnectionPool, h: TruthHarness, entityID: string, people: readonly StatusSpan[]): Promise<void> {
     if (people.length === 0) return;
     const table = new sql.Table('[__mj].[RecordChange]');
     table.columns.add('EntityID', sql.UniqueIdentifier, { nullable: false });
@@ -139,29 +143,27 @@ export class W4StatusHistory {
     table.columns.add('ChangesDescription', sql.NVarChar(sql.MAX), { nullable: false });
     table.columns.add('FullRecordJSON', sql.NVarChar(sql.MAX), { nullable: false });
     table.columns.add('Status', sql.NVarChar(50), { nullable: false });
-    for (const [personId, t] of people) {
-      const id = personId.toUpperCase();
-      table.rows.add(entityID, `ID|${id}`, h.User.ID, 'Create', 'Internal', t.ActiveFrom, '{}', 'Record Created', JSON.stringify({ ID: id, Status: 'Active' }), 'Complete');
+    for (const t of people) {
+      table.rows.add(entityID, `ID|${t.PersonID}`, h.User.ID, 'Create', 'Internal', t.ActiveFrom, '{}', 'Record Created', JSON.stringify({ ID: t.PersonID, Status: 'Active' }), 'Complete');
     }
     await pool.request().bulk(table);
   }
 
   /** The `Update` rows (Active → Lapsed), saved through the entity layer in bounded batches; a failed save throws with its message. */
-  private static async saveUpdateRows(h: TruthHarness, entityID: string, people: readonly (readonly [string, StatusSpan])[]): Promise<void> {
-    const lapsed = people.filter((e): e is [string, StatusSpan & { readonly LapsedFrom: Date }] => e[1].LapsedFrom !== null);
-    const failed = await W4StatusHistory.inBatches(lapsed, async ([personId, t]) => {
-      const id = personId.toUpperCase();
+  private static async saveUpdateRows(h: TruthHarness, entityID: string, people: readonly StatusSpan[]): Promise<void> {
+    const lapsed = people.filter((t): t is StatusSpan & { readonly LapsedFrom: Date } => t.LapsedFrom !== null);
+    const failed = await W4StatusHistory.inBatches(lapsed, async (t) => {
       const rc = await h.Provider.GetEntityObject<MJRecordChangeEntity>('MJ: Record Changes', h.User);
       rc.NewRecord();
       rc.EntityID = entityID;
-      rc.RecordID = `ID|${id}`;
+      rc.RecordID = `ID|${t.PersonID}`;
       rc.UserID = h.User.ID;
       rc.Type = 'Update';
       rc.Source = 'Internal';
       rc.ChangedAt = t.LapsedFrom;
       rc.ChangesJSON = JSON.stringify({ Status: { field: 'Status', oldValue: 'Active', newValue: 'Lapsed' } });
       rc.ChangesDescription = 'Status: Active → Lapsed';
-      rc.FullRecordJSON = JSON.stringify({ ID: id, Status: 'Lapsed' });
+      rc.FullRecordJSON = JSON.stringify({ ID: t.PersonID, Status: 'Lapsed' });
       rc.Status = 'Complete';
       return (await rc.Save()) ? null : rc.LatestResult?.CompleteMessage || 'save failed';
     });

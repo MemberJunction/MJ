@@ -74,18 +74,18 @@ export class AsOfAssemblyGates {
   private static async replayLapses(h: TruthHarness, timeline: StatusTimeline): Promise<LapseReplay> {
     const person = new ProviderAssemblyMetadata(h.Provider).Entity(UnitFixtures.TruthEntityName(h, 'W4_Person'));
     if (!person) throw new Error('pstruth.W4_Person is not registered for assembly');
-    const lapsers = [...timeline].filter((e): e is [string, StatusSpan & { readonly LapsedFrom: Date }] => e[1].LapsedFrom !== null);
+    const lapsers = [...timeline.Values()].filter((t): t is StatusSpan & { readonly LapsedFrom: Date } => t.LapsedFrom !== null);
     const reader = new RunViewRecordHistoryReader(new RunViewDataAccess(h.User, h.Provider), { mode: 'complete' });
-    const history = await reader.Load(person, lapsers.map(([id]) => id), ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, new Date());
+    const history = await reader.Load(person, lapsers.map((t) => t.PersonID), ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, new Date());
     const read = (id: string, before: Date): string | null => {
       const v = history.ValueAt(id, 'Status', before);
       return v.Status === 'value' ? String(v.Value) : null;
     };
     let lapsedAfter = 0;
     let activeBefore = 0;
-    for (const [id, t] of lapsers) {
-      if (read(id, UtcDay.AddUtcDays(t.LapsedFrom, 1)) === 'Lapsed') lapsedAfter++;
-      if (read(id, UtcDay.AddUtcDays(t.LapsedFrom, -1)) === 'Active') activeBefore++;
+    for (const t of lapsers) {
+      if (read(t.PersonID, UtcDay.AddUtcDays(t.LapsedFrom, 1)) === 'Lapsed') lapsedAfter++;
+      if (read(t.PersonID, UtcDay.AddUtcDays(t.LapsedFrom, -1)) === 'Active') activeBefore++;
     }
     return { Lapsers: lapsers.length, LapsedAfter: lapsedAfter, ActiveBefore: activeBefore };
   }

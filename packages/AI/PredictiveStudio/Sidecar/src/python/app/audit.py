@@ -1,7 +1,7 @@
 """Leakage audit on DEVELOPMENT rows, run before any candidate is fitted, and the implausible-gain rule against a
 planted reference score.
 
-The single-feature ceiling is the protocol's (`leakageAudit`), not a fixed constant:
+The flags (the single-feature ceiling is the protocol's `leakageAudit` value, not a fixed constant):
 
   high-cardinality-id   a categorical or identifier feature column whose distinct-value ratio over its non-missing
                         development values exceeds 0.5. The declared encoding decides which columns are checked, so

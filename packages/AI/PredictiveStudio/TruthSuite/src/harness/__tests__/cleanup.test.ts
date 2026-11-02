@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
 import { TRAINING_RUN_RESULTS_SCHEMA, type MetricWithInterval, type StoredTrainerResult, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import {
-  HarnessCleanup, RunRecords, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
+  HarnessCleanup, RecordIDSet, RunRecords, type CleanupEvaluationProtocolRow, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
   type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
 } from '../cleanup';
 
-const P1 = 'aaaaaaaa-0000-0000-0000-000000000001'; // lower case: UUIDSet normalises IDs to lower case
+const P1 = 'aaaaaaaa-0000-0000-0000-000000000001'; // the fake store's rows answer with these lower-case IDs
 const M1 = 'bbbbbbbb-0000-0000-0000-000000000001';
 const M2 = 'bbbbbbbb-0000-0000-0000-000000000002'; // trained from P1, never recorded itself
 const AGENT_P = 'aaaaaaaa-0000-0000-0000-000000000002'; // the pipeline of an observed agent-built model
@@ -128,7 +128,27 @@ class FakeStore implements CleanupStore {
   }
 }
 
+describe('RecordIDSet', () => {
+  it('matches any case and keeps the first spelling of each ID', () => {
+    const ids = new RecordIDSet([P1.toUpperCase(), P1, M1]);
+    expect(ids.Size).toBe(2);
+    expect(ids.Has(P1)).toBe(true);
+    expect([...ids]).toEqual([P1.toUpperCase(), M1]);
+    expect(ids.Delete(P1)).toBe(true);
+    expect([...ids]).toEqual([M1]);
+  });
+});
+
 describe('HarnessCleanup.DeleteRecorded', () => {
+  it('filters on the recorded IDs as recorded, never lower-cased', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1.toUpperCase());
+    records.RecordModel(M1.toUpperCase());
+    const store = new FakeStore();
+    await HarnessCleanup.DeleteRecorded(store, records);
+    expect(store.Filters[0]).toBe(`MJ: ML Models | ID IN ('${M1.toUpperCase()}') OR PipelineID IN ('${P1.toUpperCase()}')`);
+  });
+
   it('targets only the recorded IDs (no name matching) and deletes children first', async () => {
     const records = new RunRecords();
     records.RecordPipeline(P1);

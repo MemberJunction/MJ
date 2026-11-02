@@ -1,7 +1,6 @@
-"""Golden anti-skew tests: an identical raw row must produce an identical transformed vector in the legacy model's
-training matrix (fit the way the retired ``/train`` route fit it, ``tests.tools.legacy_envelope.fit_transform``) and at
-``/predict`` (``preprocessing.transform``, which only applies the frozen parameters). If the frozen parameters stop
-reproducing the training matrix, these tests fail.
+"""Golden anti-skew tests: ``/predict`` (``preprocessing.transform``, which only applies the frozen parameters) must
+reproduce the vectors a legacy model was trained on. The training matrix is pinned from the retired ``/train`` route's
+product ``fit_transform``; ``tests.tools.legacy_envelope.fit_transform`` refits the same parameters for the other tests.
 """
 
 from __future__ import annotations
@@ -38,24 +37,32 @@ def _ops():
     ]
 
 
+# The training matrix the retired /train route's fit_transform produced for `_training_frame()` and `_ops()`, pinned from
+# the product code before that route was removed: a stored v1 model was trained on exactly these vectors.
+_GOLDEN_COLUMNS = ["city=LA", "city=NY", "city=SF", "age", "income", "score"]
+_GOLDEN_MATRIX = np.array([
+    [0.0, 1.0, 0.0, -1.0818452056516008, -1.0716517624676405, 0.0],
+    [0.0, 0.0, 1.0, 0.3416353281005057, 1.4799000529315036, 0.0],
+    [0.0, 1.0, 0.0, 0.0, -0.22113449066792581, 1.0],
+    [1.0, 0.0, 0.0, 1.7651158618526122, -0.22113449066792581, 1.0],
+    [0.0, 0.0, 1.0, -0.32265558765047736, 0.7994862354917318, 2.0],
+    [1.0, 0.0, 0.0, -0.702250396651039, -0.986600035287669, 2.0],
+])
+
+
 def test_golden_train_predict_identity():
-    """The transformed vector for a raw row is identical at train and predict."""
+    """`/predict` reproduces, from the frozen parameters, the pinned matrix the model was trained on."""
     columns, rows, feature_cols = _training_frame()
-    ops = _ops()
+    _, output_columns, fitted = legacy.fit_transform(columns, rows, _ops(), feature_cols)
+    assert output_columns == _GOLDEN_COLUMNS
 
-    train_matrix, output_columns, fitted = legacy.fit_transform(
-        columns, rows, ops, feature_cols
-    )
-
-    # Re-apply the FROZEN fitted params to the same raw rows via the predict path.
+    # Apply the FROZEN fitted params to the same raw rows via the predict path.
     predict_rows = [
         {"age": r[0], "income": r[1], "city": r[2], "score": r[3]} for r in rows
     ]
     predict_matrix = preprocessing.transform(predict_rows, fitted, feature_cols)
 
-    assert train_matrix.shape == predict_matrix.shape
-    # bit-for-bit identical: fit-once / apply-everywhere must not drift
-    np.testing.assert_array_almost_equal(train_matrix, predict_matrix, decimal=12)
+    np.testing.assert_allclose(predict_matrix, _GOLDEN_MATRIX, rtol=1e-12, atol=1e-12)
 
 
 def test_predict_never_refits_with_new_data():

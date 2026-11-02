@@ -3,11 +3,48 @@ import type {
   MJEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity,
   MJRecordProcessEntity, MJTrainingSnapshotEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
 import { JsonParse, TRAINING_RUN_RESULTS_SCHEMA, TrainingRunResultsParser } from '@memberjunction/predictive-studio-core';
 import { HarnessAgent } from './agent';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
+
+/**
+ * A set of record IDs that matches case-insensitively, as `UUIDSet` does, but iterates each ID as it was first recorded
+ * (the value the database or a saved entity returned), so cleanup's `IN (…)` filters never carry a normalized ID.
+ */
+export class RecordIDSet implements Iterable<string> {
+  private readonly ids = new UUIDMap<string>();
+
+  public constructor(ids: Iterable<string> = []) {
+    for (const id of ids) this.Add(id);
+  }
+
+  /** Adds an ID; a case variant of an ID already in the set keeps the first spelling. */
+  public Add(id: string): this {
+    if (!this.ids.Has(id)) this.ids.Set(id, id);
+    return this;
+  }
+
+  /** True when the ID (any case) is in the set. */
+  public Has(id: string): boolean {
+    return this.ids.Has(id);
+  }
+
+  /** Removes the ID (any case); true when it was present. */
+  public Delete(id: string): boolean {
+    return this.ids.Delete(id);
+  }
+
+  /** Number of distinct IDs. */
+  public get Size(): number {
+    return this.ids.Size;
+  }
+
+  public [Symbol.iterator](): Iterator<string> {
+    return this.ids.Values();
+  }
+}
 
 /**
  * The pipelines, models, Prediction Units and Evaluation Protocols one harness created, by ID: the pipelines it created,
@@ -16,10 +53,10 @@ import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
  * prefix (`LIKE`) only observes: it never adds a pipeline, and adds a model only when its pipeline is already recorded.
  */
 export class RunRecords {
-  public readonly PipelineIDs = new UUIDSet();
-  public readonly ModelIDs = new UUIDSet();
-  public readonly PredictionUnitIDs = new UUIDSet();
-  public readonly EvaluationProtocolIDs = new UUIDSet();
+  public readonly PipelineIDs = new RecordIDSet();
+  public readonly ModelIDs = new RecordIDSet();
+  public readonly PredictionUnitIDs = new RecordIDSet();
+  public readonly EvaluationProtocolIDs = new RecordIDSet();
   private readonly agentPipelineNames = new Set<string>();
 
   /** The exact pipeline names of every builder-agent run the harness started (cleanup looks them up again). */
@@ -51,12 +88,12 @@ export class RunRecords {
   public RecordEvaluationProtocol(id: string): void {
     this.EvaluationProtocolIDs.Add(id);
   }
+
   /** Records the Prediction Unit and Evaluation Protocol a pipeline is bound to (each when set). */
   public RecordPipelineBindings(p: Pick<MJMLTrainingPipelineEntity, 'PredictionUnitID' | 'EvaluationProtocolID'>): void {
     if (p.PredictionUnitID) this.RecordPredictionUnit(p.PredictionUnitID);
     if (p.EvaluationProtocolID) this.RecordEvaluationProtocol(p.EvaluationProtocolID);
   }
-
 
   /** Record what a builder-agent run created: its pipelines (a failed run's too) and the model it built, if any. */
   public RecordAgentRun(run: Pick<AgentStepResult, 'PipelineIDs' | 'BuildModelID'>): void {
@@ -213,30 +250,30 @@ export class HarnessCleanup {
   private static async readRecorded(store: CleanupStore, records: RunRecords): Promise<RecordedRows> {
     const modelFilter = HarnessCleanup.anyIn([['ID', records.ModelIDs], ['PipelineID', records.PipelineIDs]]);
     const models = modelFilter ? await store.Models(modelFilter) : [];
-    const modelIds = new UUIDSet(models.map((m) => m.ID));
-    const pipelineIds = new UUIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
+    const modelIds = new RecordIDSet(models.map((m) => m.ID));
+    const pipelineIds = new RecordIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
     const scoring = await HarnessCleanup.readScoring(store, modelIds);
     const runFilter = HarnessCleanup.anyIn([['PipelineID', pipelineIds], ['ResultingModelID', modelIds]]);
     const pipelineFilter = HarnessCleanup.anyIn([['ID', pipelineIds]]);
     const runs = runFilter ? await store.TrainingRuns(runFilter) : [];
-    const snapshotIds = new UUIDSet(runs.flatMap((r) => (r.TrainingSnapshotID ? [r.TrainingSnapshotID] : [])));
+    const snapshotIds = new RecordIDSet(runs.flatMap((r) => (r.TrainingSnapshotID ? [r.TrainingSnapshotID] : [])));
     const snapshotFilter = HarnessCleanup.anyIn([['ID', snapshotIds], ['PipelineID', pipelineIds]]);
     const snapshots = snapshotFilter ? await store.TrainingSnapshots(snapshotFilter) : [];
     const trainerFiles = runs.map((r) => HarnessCleanup.trainerArtifactFileIds(r));
     const modelFileIds = models.flatMap((m) => (m.ArtifactFileID ? [m.ArtifactFileID] : []));
-    const fileFilter = HarnessCleanup.anyIn([['ID', new UUIDSet([...modelFileIds, ...trainerFiles.flatMap((t) => t.FileIDs)])]]);
+    const fileFilter = HarnessCleanup.anyIn([['ID', new RecordIDSet([...modelFileIds, ...trainerFiles.flatMap((t) => t.FileIDs)])]]);
     const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
     return { ...scoring, Models: models, Runs: runs, Snapshots: snapshots, TrainerFiles: trainerFiles, Files: files, Pipelines: pipelines };
   }
 
   /** The models' scoring rows: their bindings and Record Processes, with the processes' runs, run details and watermarks. */
-  private static async readScoring(store: CleanupStore, modelIds: UUIDSet): Promise<ScoringRows> {
+  private static async readScoring(store: CleanupStore, modelIds: RecordIDSet): Promise<ScoringRows> {
     const processes = modelIds.Size > 0 ? await HarnessCleanup.scoringProcesses(store, modelIds) : [];
-    const processFilter = HarnessCleanup.anyIn([['RecordProcessID', new UUIDSet(processes.map((p) => p.ID))]]);
+    const processFilter = HarnessCleanup.anyIn([['RecordProcessID', new RecordIDSet(processes.map((p) => p.ID))]]);
     const processRuns = processFilter ? await store.Rows('MJ: Process Runs', processFilter) : [];
     const bindingFilter = HarnessCleanup.anyIn([['MLModelID', modelIds]]);
-    const detailFilter = HarnessCleanup.anyIn([['ProcessRunID', new UUIDSet(processRuns.map((r) => r.ID))]]);
+    const detailFilter = HarnessCleanup.anyIn([['ProcessRunID', new RecordIDSet(processRuns.map((r) => r.ID))]]);
     return {
       Processes: processes, ProcessRuns: processRuns,
       Bindings: bindingFilter ? await store.Rows('MJ: ML Model Scoring Bindings', bindingFilter) : [],
@@ -253,7 +290,7 @@ export class HarnessCleanup {
    */
   private static async deleteSnapshots(store: CleanupStore, snapshots: CleanupSnapshotRow[]): Promise<string[]> {
     const fileIdsOf = new UUIDMap(snapshots.map((s) => [s.ID, [s.MatrixFileID, s.RowManifestFileID, s.ProvenanceFileID]]));
-    const deletedFileIds = new UUIDSet();
+    const deletedFileIds = new RecordIDSet();
     const failures = await HarnessCleanup.deleteAll('MJ: Training Snapshots', snapshots, (id) => {
       for (const fileId of fileIdsOf.Get(id) || []) deletedFileIds.Add(fileId);
     });
@@ -344,7 +381,7 @@ export class HarnessCleanup {
    * The `WorkType='ML Model'` Record Processes whose configuration names one of `modelIds`. The model is read from the
    * parsed configuration, never matched by text, so another model's process is never selected.
    */
-  private static async scoringProcesses(store: CleanupStore, modelIds: UUIDSet): Promise<CleanupRecordProcessRow[]> {
+  private static async scoringProcesses(store: CleanupStore, modelIds: RecordIDSet): Promise<CleanupRecordProcessRow[]> {
     const all = await store.RecordProcesses(`WorkType = 'ML Model'`);
     return all.filter((p) => {
       const modelId = HarnessCleanup.configuredModelId(p.Configuration);
@@ -362,8 +399,8 @@ export class HarnessCleanup {
     }
   }
 
-  /** `Col IN ('a','b') OR Other IN (…)` over the non-empty ID sets; null when every set is empty. */
-  private static anyIn(clauses: Array<[string, UUIDSet]>): string | null {
+  /** `Col IN ('a','b') OR Other IN (…)` over the non-empty ID sets, each ID as recorded; null when every set is empty. */
+  private static anyIn(clauses: Array<[string, RecordIDSet]>): string | null {
     const parts = clauses
       .filter(([, ids]) => ids.Size > 0)
       .map(([column, ids]) => `${column} IN (${[...ids].map((id) => `'${EscapeSQLString(id)}'`).join(',')})`);

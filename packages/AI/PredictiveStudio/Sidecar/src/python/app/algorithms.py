@@ -267,7 +267,6 @@ TabularBuilder = Callable[[TabularFamily, CandidateParams, int, int, Union[float
 BASELINE_ONLY_DRIVERS: FrozenSet[str] = frozenset({"poisson_glm", "tweedie_glm"})
 
 # The trainer's driver table: every catalog driver plus the baseline-only ones.
-
 _TABULAR_BUILDERS: Dict[str, TabularBuilder] = {
     "logistic_regression": lambda f, p, s, t, w: _glm("logistic_regression", f, p, s, t, w),
     "ridge": lambda f, p, s, t, w: _glm("ridge", f, p, s, t, w),

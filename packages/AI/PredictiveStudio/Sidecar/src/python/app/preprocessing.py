@@ -130,8 +130,8 @@ def _apply_bin(params: Dict[str, Any], row: Dict[str, Any]) -> None:
 
 def _transform_one(
     ops: List[Dict[str, Any]], row: Dict[str, Any]
-) -> Tuple[List[Tuple[str, Any]], List[str]]:
-    """Apply the fitted ops to a single row dict, returning ``(emitted columns, one-hot-consumed columns)``.
+) -> List[Tuple[str, Any]]:
+    """Apply the fitted ops to a single row dict, returning the columns the ops emit, in op order.
 
     Non-onehot ops mutate the row in place (impute/standardize/bin); an impute op
     with the indicator flag also emits its ``<col>__missing`` column into ``out``.
@@ -139,7 +139,6 @@ def _transform_one(
     raw column. The caller reads the remaining row values as pass-through numeric columns.
     """
     out: List[Tuple[str, Any]] = []
-    onehot_consumed: List[str] = []
     for params in ops:
         op = params["op"]
         if op == "impute":
@@ -152,10 +151,9 @@ def _transform_one(
             # Emit indicator columns at the op's position and consume the raw
             # categorical column. Global column order is the fitted output_columns.
             _apply_onehot(params, row, out)
-            onehot_consumed.append(params["col"])
         else:
             raise ValueError(f"Unknown preprocessing op '{op}'")
-    return out, onehot_consumed
+    return out
 
 
 def _coerce_numeric(value: Any, column: str) -> float:
@@ -196,7 +194,7 @@ def transform(
     transformed_records: List[Dict[str, float]] = []
     for rec in rows:
         row = {c: rec.get(c) for c in feature_columns}
-        emitted, _ = _transform_one(fitted_ops, row)
+        emitted = _transform_one(fitted_ops, row)
         rec_map: Dict[str, float] = {name: float(val) for name, val in emitted}
         for c in passthrough:
             rec_map[c] = _coerce_numeric(row.get(c), c)

@@ -67,8 +67,8 @@ class Origin:
 def rolling_origins(n_periods: int, origins: int, horizon: int, gap: int, min_train: int,
                     window: WindowKind) -> List[Origin]:
     """`origins` non-overlapping `horizon`-period test windows ending at the last period (first test period =
-    n - origins * horizon). Origin k's training window ends `gap` periods
-    before its first test period; every origin must keep at least `min_train` training periods."""
+    n - origins * horizon). Origin k's training window ends `gap` periods before its first test period; every origin
+    must keep at least `min_train` training periods."""
     if origins < 5:
         raise ValueError(f"rolling-origin needs at least 5 origins, got {origins}")
     if horizon < 1:
@@ -322,9 +322,9 @@ class DMResult:
 
 def diebold_mariano(loss_a: FArr, loss_b: FArr, h: int) -> DMResult:
     """DM test of equal accuracy on d = loss_a - loss_b: HAC variance with h-1 lags, the Harvey-Leybourne-Newbold
-    small-sample correction, a t(n-1) reference. The statistic and p-value are NaN
-    when the HAC variance of the differential is not positive: identical losses, or a differential so negatively
-    autocorrelated that gamma_0 + 2 * sum(gamma_k) <= 0."""
+    small-sample correction, a t(n-1) reference. The statistic and p-value are NaN when the HAC variance of the
+    differential is not positive: identical losses, or a differential so negatively autocorrelated that
+    gamma_0 + 2 * sum(gamma_k) <= 0."""
     a = np.asarray(loss_a, dtype=np.float64)
     b = np.asarray(loss_b, dtype=np.float64)
     if len(a) != len(b):
