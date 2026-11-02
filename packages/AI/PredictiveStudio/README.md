@@ -16,7 +16,7 @@ flowchart LR
         D["Entities · Queries · External entities<br/>Vector sets · Feature Pipelines"]
     end
     subgraph FEATURE["2 · Feature"]
-        F["FeatureAssemblyExecutor<br/>(as-of · leakage guard · fit-once recipe)"]
+        F["AsOfFeatureAssembler<br/>(rows as of each decision date · typed columns · leakage exclusions)"]
     end
     subgraph MODEL["3 · Model (compute)"]
         M["MLSidecar → Python FastAPI<br/>xgboost · lightgbm · scikit-learn"]
@@ -32,19 +32,19 @@ flowchart LR
 | Layer | What happens | Lives in |
 |---|---|---|
 | **1 · Data** | Pull the training/scoring rows from MJ's existing substrates | `@memberjunction/predictive-studio` (`feature-assembly/data-access`) |
-| **2 · Feature** | Assemble the raw matrix **identically** for train / materialize / on-demand; enforce point-in-time (`as-of`) and leakage deny-lists; emit a fit-once preprocessing recipe | `@memberjunction/predictive-studio` (`feature-assembly`) |
-| **3 · Model** | The CPU-bound **fit** (`/train`) and **inference** (`/predict`) — Node orchestrates, Python computes | `@memberjunction/predictive-studio-sidecar` (+ bundled Python) |
+| **2 · Feature** | Assemble typed columns **identically** for training and scoring, reading every feature as of each Prediction Unit row's decision date and keeping excluded fields out (`AsOfFeatureAssembler`); `FeatureAssemblyExecutor` still assembles score rows for models trained before Prediction Units | `@memberjunction/predictive-studio` (`feature-assembly`) |
+| **3 · Model** | The CPU-bound protocol-driven **training** (`/trainer`) and **inference** (`/predict`) — Node orchestrates, Python computes | `@memberjunction/predictive-studio-sidecar` (+ bundled Python) |
 | **4 · Inference** | Batch + single-record scoring as a Record Set Processing work type, ephemeral or write-back | `@memberjunction/predictive-studio` (`scoring`) |
 
-The cardinal correctness rule runs through all four: **one feature-assembly code path, used identically everywhere**, plus **fit-once / apply-everywhere** preprocessing — so there is no train/serve skew by construction.
+The cardinal correctness rule runs through all four: **one feature-assembly code path per generation of model, used identically for training and scoring**, plus encoding that is **fit inside every training fit and only applied at scoring** — so there is no train/serve skew by construction. Training itself is honest by construction: every pipeline trains under a versioned **Prediction Unit** (what a row is, its decision date, its label) and **Evaluation Protocol** (the locked holdout, the baselines, the gate), and the run stores a three-outcome decision (`model`, `keep-simple-baseline`, `no-signal`) with its reason.
 
 ## The three packages
 
 | Package | What it is | Read |
 |---|---|---|
-| **[`@memberjunction/predictive-studio-core`](./Core/README.md)** | The shared **type contracts** — the sidecar `/train`+`/predict` shapes, the declarative pipeline spec, the visual FeatureStep DAG, the Model Development Agent's `ModelingPlanSpec`, plus the zod runtime validators and the metric-direction helper. Defined once; imported by everything; importing (almost) nothing. | [Core/README.md](./Core/README.md) |
+| **[`@memberjunction/predictive-studio-core`](./Core/README.md)** | The shared **type contracts** — the sidecar `/trainer` and `/predict` shapes, the Prediction Unit and Evaluation Protocol shapes, the gate and the trust verdict, the declarative pipeline spec, the visual FeatureStep DAG, the Model Development Agent's `ModelingPlanSpec`, plus the zod runtime validators and the metric-direction helper. Defined once; imported by everything; importing (almost) nothing. | [Core/README.md](./Core/README.md) |
 | **[`@memberjunction/predictive-studio-sidecar`](./Sidecar/README.md)** | A self-managing TypeScript wrapper (`MLSidecar`) around a **bundled** Python FastAPI ML service. `new MLSidecar(); await s.Start()` and you have a live training/inference service — **no Docker required** (managed child-process spawn on an ephemeral port; remote-URL mode for scaled deployments). | [Sidecar/README.md](./Sidecar/README.md) |
-| **[`@memberjunction/predictive-studio`](./Engine/README.md)** | The **server-side engine** — `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator`, plus feature-pipeline discovery, maintenance, and the **Actions + Remote Operations** invocation surfaces. | [Engine/README.md](./Engine/README.md) |
+| **[`@memberjunction/predictive-studio`](./Engine/README.md)** | The **server-side engine** — `AsOfFeatureAssembler`, `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator`, plus feature-pipeline discovery, maintenance, and the **Actions + Remote Operations** invocation surfaces. | [Engine/README.md](./Engine/README.md) |
 
 ### Dependency direction
 
@@ -76,27 +76,27 @@ pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
 also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests on another interpreter, set
 `PREDICTIVE_STUDIO_PYTHON=<path to python>`.
 
-Then train + score in TypeScript:
+The sidecar on its own, in TypeScript (the engine builds the `TrainerRequest` from a Training Snapshot for you):
 
 ```typescript
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 
 const sidecar = new MLSidecar();   // managed mode — spawns the bundled Python service
 await sidecar.Start();
-const trained = await sidecar.Train(/* TrainRequest from @memberjunction/predictive-studio-core */);
+const trained = await sidecar.RunTrainer(/* TrainerRequest from @memberjunction/predictive-studio-core */);
 const { predictions } = await sidecar.Predict(/* PredictRequest */);
 await sidecar.Stop();
 ```
 
-For the full path — pipeline → `TrainingEngine` → immutable `MJ: ML Models` row → `MLModelInferenceProcessor` scoring, plus the experiment search and the Studio dashboard — see the [Engine README](./Engine/README.md) and the [guide](../../../guides/PREDICTIVE_STUDIO_GUIDE.md).
+For the full path — pipeline bound to a Prediction Unit and an Evaluation Protocol → `TrainingEngine` → stored gate decision → immutable `MJ: ML Models` row (when the gate ships one) → `MLModelInferenceProcessor` scoring, plus the experiment search and the Studio dashboard — see the [Engine README](./Engine/README.md) and the [guide](../../../guides/PREDICTIVE_STUDIO_GUIDE.md).
 
 ## Tests
 
 | Package | Command | Covers |
 |---|---|---|
 | Core / Sidecar / Engine | `npm run test` (per package) | Vitest unit tests — all seams mocked, no DB, no live process |
-| Sidecar (Python) | `npm run test:python` (after `setup:python`) | pytest — per-algorithm train/predict + the anti-skew preprocessing golden tests |
-| Engine (live) | `npm run test:integration` with `PS_INTEGRATION=1` | End-to-end against the **real** managed Python sidecar; skips gracefully if the venv is missing |
+| Sidecar (Python) | `npm run test:python` (after `setup:python`) | pytest — the trainer contract, route and algorithms, `/predict` over legacy and `ps-predictor/v2` artifacts, and the anti-skew encoding and preprocessing golden tests |
+| Engine (live) | `npm run test:integration` with `PS_INTEGRATION=1` | A Prediction Unit pipeline trained end to end through the **real** managed Python sidecar trainer; skips gracefully if the venv is missing |
 
 ## Where to go next
 
