@@ -1,0 +1,175 @@
+import { describe, expect, it } from 'vitest';
+import {
+    ClusterContentIntoConceptSeeds,
+    ExtractLeafTopicFromHeading,
+    GetAuthorityTierRank,
+    InferConceptTypeFromSignals,
+    ResolveGraphOverlayConfig,
+    ScoreConceptNameSimilarity,
+    type ContentChunkSeedInput,
+    type ExistingGraphConceptSeed,
+    type SchemaGroundingTarget,
+} from '../graph/index.js';
+
+describe('GraphOverlay & ConceptSeedClustering', () => {
+    it('resolves Canon vs Knowledge GraphOverlay defaults accurately', () => {
+        const canonResolved = ResolveGraphOverlayConfig('graph-canon-1', {
+            GraphOverlay: { TargetGraphType: 'Canon' },
+        });
+        expect(canonResolved.EnableGraphOverlay).toBe(true);
+        expect(canonResolved.GraphID).toBe('graph-canon-1');
+        expect(canonResolved.TargetGraphType).toBe('Canon');
+        expect(canonResolved.ConceptTaxonomyMode).toBe('propose-only');
+        expect(canonResolved.GroundingMode).toBe('full-canon');
+        expect(canonResolved.AuthorityTier).toBe('ExecutiveSOP');
+
+        const knowledgeResolved = ResolveGraphOverlayConfig(null, {
+            GraphOverlay: { GraphID: 'graph-kb-1', TargetGraphType: 'Knowledge' },
+        });
+        expect(knowledgeResolved.EnableGraphOverlay).toBe(true);
+        expect(knowledgeResolved.GraphID).toBe('graph-kb-1');
+        expect(knowledgeResolved.ConceptTaxonomyMode).toBe('auto-grow');
+        expect(knowledgeResolved.GroundingMode).toBe('none');
+        expect(knowledgeResolved.AuthorityTier).toBe('Reference');
+    });
+
+    it('extracts normalized leaf topics from multi-level document headings and strips section numbers', () => {
+        expect(
+            ExtractLeafTopicFromHeading('Association Bylaws > Article IV: Membership > Section 4.2.1 Renewal Grace Period'),
+        ).toBe('Renewal Grace Period');
+        expect(
+            ExtractLeafTopicFromHeading('Finance Manual / Chapter 9 / §9.3 Conference Refund Policy > Overview'),
+        ).toBe('Conference Refund Policy');
+    });
+
+    it('scores concept similarity across stems and synonyms', () => {
+        expect(
+            ScoreConceptNameSimilarity('Member Grace Windows', 'Renewal Grace Period', [
+                'Dues Grace Window',
+                'Member Grace Window',
+            ]),
+        ).toBe(1.0);
+        expect(ScoreConceptNameSimilarity('Conference Refund Policies', 'Conference Refund Policy')).toBe(1.0);
+    });
+
+    it('infers ConceptType from heading and text signals', () => {
+        expect(InferConceptTypeFromSignals('Net Member Retention Rate', ['Calculated quarterly'])).toBe('Metric');
+        expect(
+            InferConceptTypeFromSignals('Chapter Reinstatement Procedure', [
+                '1. Verify dues. 2. Submit reinstatement form.',
+            ]),
+        ).toBe('Process');
+        expect(
+            InferConceptTypeFromSignals('Event Refund Eligibility', [
+                'Requests over $500 must receive VP approval.',
+            ]),
+        ).toBe('Policy');
+    });
+
+    it('clusters chunks across multiple Content Sources, sorts by AuthorityTier, links MJ Schema, and detects threshold conflicts', () => {
+        const existingConcepts: ExistingGraphConceptSeed[] = [
+            {
+                ConceptID: 'concept-grace-1',
+                Name: 'Renewal Grace Period',
+                ConceptType: 'Policy',
+                Synonyms: ['Dues Grace Window', 'Late Renewal Grace Period'],
+            },
+        ];
+
+        const groundingTargets: SchemaGroundingTarget[] = [
+            {
+                EntityName: 'MJ: Entity Alternate Base Views',
+                RecordID: 'abv-active-members',
+                Name: 'Active Members With Grace Period',
+                SynonymsOrKeywords: ['Renewal Grace Period'],
+            },
+            {
+                EntityName: 'MJ: Entities',
+                RecordID: 'ent-refunds',
+                Name: 'Event Refund Requests',
+                SynonymsOrKeywords: ['Conference Refund Policy'],
+            },
+        ];
+
+        const chunks: ContentChunkSeedInput[] = [
+            // Source 1: Department Practice manual (lower authority, says 90 days)
+            {
+                ChunkID: 'chunk-sop-1',
+                ContentItemID: 'item-sop',
+                ContentSourceID: 'src-dept-sop',
+                ContentItemTitle: 'Member Services Desk Manual',
+                HeadingPath: 'Part 2 > 2.4 Late Renewal Grace Period',
+                Text: 'Staff allow a 90 days grace period before suspending portal access.',
+                Tags: ['Membership', 'Dues Grace Window'],
+                AuthorityTier: 'DepartmentPractice',
+            },
+            // Source 2: Association Bylaws (highest authority, says 60 days!)
+            {
+                ChunkID: 'chunk-bylaws-1',
+                ContentItemID: 'item-bylaws',
+                ContentSourceID: 'src-bylaws',
+                ContentItemTitle: '2026 Association Bylaws',
+                HeadingPath: 'Article IV > Section 4.2 Renewal Grace Period',
+                Text: 'A member in arrears shall have a 60 days grace period to remit annual dues.',
+                Tags: ['Membership'],
+                AuthorityTier: 'Bylaws',
+            },
+            // Source 3: Net-new topic from Finance Policy manual (Conference Refund Policy)
+            {
+                ChunkID: 'chunk-fin-1',
+                ContentItemID: 'item-fin',
+                ContentSourceID: 'src-board-policy',
+                ContentItemTitle: 'Board Financial Policies',
+                HeadingPath: 'Chapter 7 > §7.1 Conference Refund Policy',
+                Text: 'Conference cancellations over $500 must be approved by the VP of Finance.',
+                Tags: ['Conference Refund Policy', 'Events'],
+                AuthorityTier: 'BoardPolicy',
+            },
+        ];
+
+        const result = ClusterContentIntoConceptSeeds(chunks, existingConcepts, {
+            taxonomyMode: 'propose-only',
+            groundingTargets,
+        });
+
+        expect(result.MatchedExistingCount).toBe(1);
+        expect(result.ProposedNewCount).toBe(1);
+        expect(result.Clusters.length).toBe(2);
+
+        const graceCluster = result.Clusters.find((c) => c.MatchedExistingConcept?.ConceptID === 'concept-grace-1')!;
+        expect(graceCluster).toBeDefined();
+        expect(graceCluster.Chunks.length).toBe(2);
+        // Sorted highest authority first: Bylaws chunk before DepartmentPractice chunk
+        expect(graceCluster.Chunks[0].ChunkID).toBe('chunk-bylaws-1');
+        expect(graceCluster.HighestAuthorityTier).toBe('Bylaws');
+        expect(GetAuthorityTierRank(graceCluster.HighestAuthorityTier)).toBeGreaterThan(
+            GetAuthorityTierRank('DepartmentPractice'),
+        );
+
+        // Detected the 60 days vs 90 days conflict between Bylaws and Desk Manual!
+        expect(graceCluster.PotentialConflicts.length).toBe(1);
+        expect(graceCluster.PotentialConflicts[0].HigherAuthorityChunkID).toBe('chunk-bylaws-1');
+        expect(graceCluster.PotentialConflicts[0].LowerAuthorityChunkID).toBe('chunk-sop-1');
+        expect(graceCluster.PotentialConflicts[0].Reason).toContain('60');
+        expect(graceCluster.PotentialConflicts[0].Reason).toContain('90');
+
+        // Grounded to Alternate Base View ('Defines')
+        expect(graceCluster.GroundingMatches.length).toBe(1);
+        expect(graceCluster.GroundingMatches[0].SuggestedEdgeType).toBe('Defines');
+
+        // Net-new proposed concept cluster
+        const refundCluster = result.Clusters.find((c) => !c.MatchedExistingConcept)!;
+        expect(refundCluster.ConceptName).toBe('Conference Refund Policy');
+        expect(refundCluster.InferredConceptType).toBe('Policy');
+        expect(refundCluster.GroundingMatches[0]?.Target.RecordID).toBe('ent-refunds');
+        expect(refundCluster.GroundingMatches[0]?.SuggestedEdgeType).toBe('Describes');
+
+        // Verify 'constrained' mode skips net-new concepts
+        const constrainedResult = ClusterContentIntoConceptSeeds(chunks, existingConcepts, {
+            taxonomyMode: 'constrained',
+        });
+        expect(constrainedResult.MatchedExistingCount).toBe(1);
+        expect(constrainedResult.ProposedNewCount).toBe(0);
+        expect(constrainedResult.UnmatchedChunkIDs).toEqual(['chunk-fin-1']);
+    });
+});
