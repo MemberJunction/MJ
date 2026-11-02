@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BaseAgent } from '../base-agent';
+import { BaseAgent, type ActionFailureClass, type ActionResultSummary } from '../base-agent';
 import {
     EscapeUntrustedDataTags,
     WrapUntrustedExternalData,
@@ -13,50 +13,35 @@ import {
     type MemoryWriteScope,
 } from '../MemoryWriteManager';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { ActionResult, ActionErrorRecovery } from '@memberjunction/actions-base';
-import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { ActionResult, ActionErrorRecovery, ActionOutputTrustLevel } from '@memberjunction/actions-base';
+import type { LoopAgentTypePromptParams } from '../agent-types/loop-agent-prompt-params';
+import type { AgentTaintedSource, ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
+/** Reaches the protected seams under test through ordinary inheritance; no cast crosses a visibility boundary. */
 class HarnessProbeAgent extends BaseAgent {
-    public ResolveTrust(
-        actionName: string,
-        actionResult?: ActionResult,
-        promptParams?: Record<string, unknown>,
-    ): 'Trusted' | 'SemiTrusted' | 'Untrusted' {
-        const params = promptParams
-            ? ({ data: { __agentTypePromptParams: promptParams } } as unknown as ExecuteAgentParams)
-            : undefined;
-        return (this as unknown as {
-            resolveActionTrustLevel: (
-                name: string,
-                entity?: unknown,
-                res?: ActionResult,
-                p?: ExecuteAgentParams,
-            ) => 'Trusted' | 'SemiTrusted' | 'Untrusted';
-        }).resolveActionTrustLevel(actionName, undefined, actionResult, params);
+    public ResolveTrust(actionName: string, actionResult?: ActionResult, promptParams?: Partial<LoopAgentTypePromptParams>): ActionOutputTrustLevel {
+        const params = promptParams ? ({ data: { __agentTypePromptParams: promptParams } } as Partial<ExecuteAgentParams> as ExecuteAgentParams) : undefined;
+        return this.resolveActionTrustLevel(actionName, undefined, actionResult, params);
     }
 
-    public RecordTaint(stepNumber: number, sourceName: string, trustLevel: 'SemiTrusted' | 'Untrusted'): void {
-        (this as unknown as {
-            recordTaintedSource: (n: number, s: string, t: 'SemiTrusted' | 'Untrusted') => void;
-        }).recordTaintedSource(stepNumber, sourceName, trustLevel);
+    public RecordTaint(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
+        this.recordTaintedSource(stepNumber, sourceName, trustLevel);
     }
 
-    public FormatMarkdown(summaries: unknown[]): string {
-        return (this as unknown as {
-            formatActionResultsAsMarkdown: (s: unknown[]) => string;
-        }).formatActionResultsAsMarkdown(summaries);
+    public AbsorbSubAgent(name: string, result: Pick<ExecuteAgentResult, 'taintedSources'>, stepNumber: number): void {
+        this.absorbSubAgentTaint(name, result, stepNumber);
     }
 
-    public ClassifyFailure(summary: unknown): string {
-        return (this as unknown as {
-            classifyActionFailure: (s: unknown) => string;
-        }).classifyActionFailure(summary);
+    public FormatMarkdown(summaries: ActionResultSummary[]): string {
+        return this.formatActionResultsAsMarkdown(summaries);
     }
 
-    public FormatFailureDirective(summary: unknown): string {
-        return (this as unknown as {
-            formatActionFailureDirective: (s: unknown) => string;
-        }).formatActionFailureDirective(summary);
+    public ClassifyFailure(summary: ActionResultSummary): ActionFailureClass {
+        return this.classifyActionFailure(summary);
+    }
+
+    public FormatFailureDirective(summary: ActionResultSummary): string {
+        return this.formatActionFailureDirective(summary);
     }
 }
 
@@ -228,7 +213,7 @@ describe('Untrusted external data: envelope, trust resolution and run taint', ()
                 agentRunId: 'run-123',
                 conversationId: 'conv-1',
                 conversationDetailId: 'cd-1',
-                initiatingUserId: 'user-1',
+                userId: 'user-1',
                 contextUser: { ID: 'user-1' } as never,
                 provider: mockProvider as never,
                 isRunTainted: true,
@@ -262,6 +247,30 @@ describe('Untrusted external data: envelope, trust resolution and run taint', ()
             noteIdSpy.mockRestore();
         }
     });
+
+    it('absorbs a sub-agent\'s tainted sources into the parent run, attributed to the sub-agent step', () => {
+        const agent = new HarnessProbeAgent();
+        const childResult: Pick<ExecuteAgentResult, 'taintedSources'> = {
+            taintedSources: [
+                { stepNumber: 2, sourceName: 'action:Web Search', trustLevel: 'Untrusted' },
+                { stepNumber: 4, sourceName: 'client-tool:BrowserDOMExtract', trustLevel: 'SemiTrusted' },
+            ],
+        };
+
+        agent.AbsorbSubAgent('Research Agent', childResult, 7);
+        agent.AbsorbSubAgent('Research Agent', childResult, 7); // same child, same step: no duplicates
+
+        expect(agent.IsRunTainted).toBe(true);
+        expect(agent.TaintedSources).toEqual([
+            { stepNumber: 7, sourceName: 'sub-agent:Research Agent/action:Web Search', trustLevel: 'Untrusted' },
+            { stepNumber: 7, sourceName: 'sub-agent:Research Agent/client-tool:BrowserDOMExtract', trustLevel: 'SemiTrusted' },
+        ]);
+
+        // A child that ingested nothing leaves the parent as it was.
+        const clean = new HarnessProbeAgent();
+        clean.AbsorbSubAgent('Tidy Agent', { taintedSources: undefined }, 3);
+        expect(clean.IsRunTainted).toBe(false);
+    });
 });
 
 describe('ActionErrorRecovery: rendering and non-retryable failures', () => {
@@ -287,6 +296,7 @@ describe('ActionErrorRecovery: rendering and non-retryable failures', () => {
                 success: false,
                 resultCode: 'INVALID_FIELD_NAMES',
                 message: 'Invalid field name',
+                params: [],
                 errorRecovery,
             },
         ]);
@@ -302,25 +312,28 @@ describe('ActionErrorRecovery: rendering and non-retryable failures', () => {
     it('classifies PERMISSION_DENIED, RUN_SCOPE_UNSUPPORTED, and Retryable=false as non-retryable and emits stop directive', () => {
         const agent = new HarnessProbeAgent();
 
-        const permFailure = {
+        const permFailure: ActionResultSummary = {
             actionName: 'Update Record',
             success: false,
+            params: [],
             resultCode: 'PERMISSION_DENIED',
             message: 'User lacks Update permission on Contacts.',
         };
         expect(agent.ClassifyFailure(permFailure)).toBe('non-retryable');
 
-        const scopeFailure = {
+        const scopeFailure: ActionResultSummary = {
             actionName: 'Execute Stored Query',
             success: false,
+            params: [],
             resultCode: 'RUN_SCOPE_UNSUPPORTED',
             message: 'Action is not supported in current run scope.',
         };
         expect(agent.ClassifyFailure(scopeFailure)).toBe('non-retryable');
 
-        const explicitNonRetryable = {
+        const explicitNonRetryable: ActionResultSummary = {
             actionName: 'Custom Action',
             success: false,
+            params: [],
             resultCode: 'CUSTOM_FATAL',
             message: 'Feature disabled for tenant.',
             errorRecovery: {

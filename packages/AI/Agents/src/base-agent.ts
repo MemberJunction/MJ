@@ -163,6 +163,7 @@ import {
     CURRENT_DATE_PLACEHOLDER,
     CURRENT_DAY_OF_WEEK_PLACEHOLDER,
     CURRENT_TIME_PLACEHOLDER,
+    DEFAULT_UNTRUSTED_ACTION_NAMES,
     RUNTIME_STATE_TAG,
     SCRATCHPAD_NOTES_PLACEHOLDER,
     SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER,
@@ -242,6 +243,7 @@ import {
     summarizePipelineStages,
 } from './pipeline';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
 import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
@@ -338,7 +340,7 @@ interface StoppedRunContinuation {
     Steps: StoppedRunStackStepRecord[];
 }
 
-interface ActionResultSummary {
+export interface ActionResultSummary {
     actionName: string;
     success: boolean;
     params: ActionParam[];
@@ -856,7 +858,7 @@ export class BaseAgent {
      * notes written by the run land as `Status = 'Pending'` with taint provenance in `Comments`.
      * @protected
      */
-    protected _taintedSources: Array<{ stepNumber: number; sourceName: string; trustLevel: 'SemiTrusted' | 'Untrusted' }> = [];
+    protected _taintedSources: AgentTaintedSource[] = [];
 
     /**
      * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
@@ -869,44 +871,20 @@ export class BaseAgent {
     /**
      * Read-only view of all `'Untrusted'` and `'SemiTrusted'` sources ingested during the current run.
      */
-    public get TaintedSources(): ReadonlyArray<{ stepNumber: number; sourceName: string; trustLevel: 'SemiTrusted' | 'Untrusted' }> {
+    public get TaintedSources(): ReadonlyArray<AgentTaintedSource> {
         return this._taintedSources;
     }
 
     /**
-     * Default code-side set of actions whose output is content fetched from outside MJ: web pages, search
-     * results, mail, feeds, arbitrary HTTP responses, and whatever an MCP tool returns (Primitive 2 v1,
-     * DDL-free; the `Action.OutputTrustLevel` column replaces this list later). Actions that only SEND to
-     * an external system (webhooks, outbound messages) and actions that return MJ's own catalog of an
-     * external system (listing or syncing MCP tools) are deliberately absent: their output is a delivery
-     * status or metadata, and tainting a run for them would hold every memory write of a run that merely
-     * posted to Slack. Lowercase-normalized for case-insensitive matching; overridable per agent or run via
-     * `AgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`, `untrustedActionNames`).
+     * The actions whose output this agent treats as external content by default
+     * ({@link DEFAULT_UNTRUSTED_ACTION_NAMES}, lowercase names). A subclass that knows its own
+     * domain's ingestion actions overrides this; a single agent or run adjusts it through
+     * `AgentTypePromptParams` instead. Temporary seam until `Action.OutputTrustLevel` exists.
      * @protected
      */
-    protected static readonly DEFAULT_UNTRUSTED_ACTION_NAMES: ReadonlySet<string> = new Set([
-        'web search',
-        'web page content',
-        'brave search',
-        'perplexity search',
-        'tavily search',
-        'google custom search',
-        'manage my email inbox and drafts',
-        'http request',
-        'url metadata extractor',
-        'read rss feed',
-        'execute mcp tool',
-    ]);
-
-    /**
-     * Context utilization threshold (fraction of the resolved token budget) required before
-     * mid-loop tool-argument compaction (`CompactAnsweredToolCallArguments`) and mid-loop
-     * message expiry (`pruneAndCompactExpiredMessages`) mutate earlier turns (Lesson 1 Vector 2).
-     * Keeping earlier turns untouched below this threshold preserves the provider's byte-exact
-     * prompt cache prefix across routine tool loops.
-     * @protected
-     */
-    protected static readonly MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD = 0.65;
+    protected get defaultUntrustedActionNames(): ReadonlySet<string> {
+        return DEFAULT_UNTRUSTED_ACTION_NAMES;
+    }
 
     /**
      * Parameter-aware failure tracking per action name for the current agent run.
@@ -1437,8 +1415,8 @@ export class BaseAgent {
     ): ActionOutputTrustLevel {
         const normalizedName = actionName.trim().toLowerCase();
         const entityName = actionEntity?.Name?.trim().toLowerCase();
-        const namesAction = (candidate: unknown): boolean => {
-            const n = String(candidate).trim().toLowerCase();
+        const namesAction = (candidate: string): boolean => {
+            const n = candidate.trim().toLowerCase();
             return n === normalizedName || (entityName !== undefined && n === entityName);
         };
         const isLevel = (v: unknown): v is ActionOutputTrustLevel => v === 'Trusted' || v === 'SemiTrusted' || v === 'Untrusted';
@@ -1467,8 +1445,8 @@ export class BaseAgent {
         }
 
         // 4. Default external-content actions
-        if (BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(normalizedName)
-            || (entityName !== undefined && BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(entityName))) {
+        const defaults = this.defaultUntrustedActionNames;
+        if (defaults.has(normalizedName) || (entityName !== undefined && defaults.has(entityName))) {
             return 'Untrusted';
         }
 
@@ -1479,9 +1457,21 @@ export class BaseAgent {
      * Records a tainted source ingested during the current agent run.
      * @protected
      */
-    protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: 'SemiTrusted' | 'Untrusted'): void {
+    protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
         if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
             this._taintedSources.push({ stepNumber, sourceName, trustLevel });
+        }
+    }
+
+    /**
+     * Folds a finished sub-agent's tainted sources into this run's, attributed to the sub-agent step,
+     * so delegating a web search taints the parent exactly as searching itself would. Runs whether or
+     * not the child succeeded: a failed child may still have read external content.
+     * @protected
+     */
+    protected absorbSubAgentTaint(subAgentName: string, subAgentResult: Pick<ExecuteAgentResult, 'taintedSources'>, stepNumber: number): void {
+        for (const source of subAgentResult.taintedSources ?? []) {
+            this.recordTaintedSource(stepNumber, `sub-agent:${subAgentName}/${source.sourceName}`, source.trustLevel);
         }
     }
 
@@ -4703,7 +4693,11 @@ export class BaseAgent {
             // Prune and compact expired messages before executing the next step.
             // Uses _promptTurnCount (not stepCount) so expiration is measured in prompt
             // executions, not all steps (which include actions, loops, sub-agents, etc.)
-            await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
+            // Rewriting an earlier turn costs the cached prefix, so unless the caller asked for it
+            // (messageExpirationOverride) it waits until the window reaches the compaction trigger.
+            if (params.messageExpirationOverride || this.isMidLoopCompactionThresholdReached(params)) {
+                await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
+            }
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
@@ -14657,6 +14651,40 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * The client tools in force for a run: the agent's static metadata tools under the session, app
+     * and override tiers, merged by {@link ResolveClientTools} with its fixed precedence. The prompt
+     * section and the client-tool step both resolve through here, so the tools the model is offered
+     * and the metadata its results are classified against are one list.
+     *
+     * @param data - The run's data bag: `sessionID` selects the session tier, `appContext` the app
+     *   tier, `clientTools` the override tier.
+     */
+    private resolveClientToolsForRun(agent: MJAIAgentEntityExtended, data: Record<string, unknown> | undefined): ClientToolMetadata[] {
+        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
+        const staticTools: ClientToolMetadata[] = AIEngine.Instance.GetClientToolsForAgent(agent.ID).map(tool => ({
+            Name: tool.Name,
+            Description: tool.Description,
+            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+            Category: tool.Category || undefined,
+            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+        }));
+
+        // Dynamic (session) tier — client-SDK enriched tools for this session.
+        const sessionID = data?.sessionID as string | undefined;
+        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
+
+        // App tier — tools the active surface published in the app-context capability manifest.
+        const appContext = data?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
+        const appTools = appContext?.Capabilities?.Tools ?? [];
+
+        // Override tier — tools passed directly in the run's data.
+        const overrideTools = (data?.clientTools as ClientToolMetadata[] | undefined) ?? [];
+
+        return ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
+    }
+
+    /**
      * Build the client tool prompt section for system prompt injection.
      *
      * Resolution is delegated to the shared, tier-agnostic {@link ResolveClientTools}
@@ -14675,29 +14703,7 @@ The context is now within limits. Please retry your request with the recovered c
      * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
-        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
-        const engine = AIEngine.Instance;
-        const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map(tool => ({
-            Name: tool.Name,
-            Description: tool.Description,
-            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-            Category: tool.Category || undefined,
-            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-        }));
-
-        // Dynamic (session) tier — client-SDK enriched tools for this session.
-        const sessionID = extraData?.sessionID as string | undefined;
-        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
-
-        // App tier — tools the active surface published in the app-context capability manifest.
-        const appContext = extraData?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
-        const appTools = appContext?.Capabilities?.Tools ?? [];
-
-        // Override tier — tools passed directly in the run's data.
-        const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
-
-        const tools = ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
+        const tools = this.resolveClientToolsForRun(agent, extraData);
 
         if (tools.length === 0) {
             return ''; // No client tools available
@@ -14885,9 +14891,9 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @param actionSummaries - The action summary objects built by executeActionStep
      * @returns Compact markdown string
-     * @private
+     * @protected
      */
-    private formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
+    protected formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
         return actionSummaries.map(a => {
             const marker = a.success ? '✓' : '✗';
             const lines: string[] = [];
@@ -17587,6 +17593,8 @@ The context is now within limits. Please retry your request with the recovered c
                 stepCount
             );
             
+            this.absorbSubAgentTaint(subAgentRequest.name, subAgentResult, stepEntity?.StepNumber ?? (stepCount + 1));
+
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             if (subAgentResult.success) {
@@ -19922,6 +19930,12 @@ The context is now within limits. Please retry your request with the recovered c
 
         const results: ClientToolResultSummary[] = [];
         const agentRunID = this._agentRun?.ID ?? 'unknown';
+        // Resolved once: the same tiers and precedence the prompt offered the model, keyed by name so each
+        // result can read the tool's declared TrustLevel.
+        const toolsByName = new Map(
+            this.resolveClientToolsForRun(params.agent, { ...(params.data ?? {}), sessionID: params.sessionID })
+                .map(t => [t.Name.trim().toLowerCase(), t] as const)
+        );
 
         // Execute tools sequentially (client may not support parallel UI operations)
         for (const tool of clientTools) {
@@ -19956,12 +19970,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             );
 
-            const sessionTools = params.sessionID ? ClientToolRequestManager.Instance.GetSessionTools(params.sessionID) : [];
-            const appTools = (params.data?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined)?.Capabilities?.Tools ?? [];
-            const overrideTools = (params.data?.clientTools as ClientToolMetadata[] | undefined) ?? [];
-            const matchedClientToolMeta = [...overrideTools, ...sessionTools, ...appTools].find(
-                t => t?.Name?.trim().toLowerCase() === tool.Name.trim().toLowerCase()
-            );
+            const matchedClientToolMeta = toolsByName.get(tool.Name.trim().toLowerCase());
             const resolvedActionTrust = this.resolveActionTrustLevel(tool.Name, undefined, undefined, params);
             const clientToolTrustLevel: ActionOutputTrustLevel =
                 resolvedActionTrust !== 'Trusted'
@@ -22519,6 +22528,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         return {
             success: false,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };
     }
@@ -22571,6 +22581,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         return {
             success: false,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };
     }
@@ -22799,6 +22810,7 @@ The context is now within limits. Please retry your request with the recovered c
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
             fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             handoff: this._handoffResult || undefined,
             resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
@@ -22959,10 +22971,13 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Evaluates whether the conversation's estimated token footprint has reached or exceeded
-     * {@link MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD} (65%) of the resolved context budget
-     * (Lesson 1 Vector 2). Below this threshold, mid-loop tool-argument compaction and message
-     * expiration are deferred so the provider's KV-cached prompt prefix remains byte-stable.
+     * Whether the window has reached the compaction trigger the operator configured — the same
+     * `CompactionTriggerPercent` (agent, then agent type, then the default) that drives cross-turn
+     * compaction, resolved by {@link resolveCompactionBudget} into `TriggerTokens`. Below it, the
+     * mid-loop rewrites of earlier turns (shortening replayed tool-call arguments, expiring old action
+     * results) are deferred, so routine tool loops keep the provider's byte-exact prompt-cache prefix.
+     * One knob governs both kinds of compaction on purpose: a second number would be one more thing
+     * to tune, and an in-run rewrite is only worth a cache miss once the window is actually filling up.
      * @protected
      */
     protected isMidLoopCompactionThresholdReached(params: ExecuteAgentParams): boolean {
@@ -22971,8 +22986,7 @@ The context is now within limits. Please retry your request with the recovered c
             return false;
         }
         const budget = this.resolveCompactionBudget(params, this._agentConfig);
-        const maxTokens = budget.MaxTokens;
-        if (!maxTokens || maxTokens <= 0) {
+        if (!budget.TriggerTokens || budget.TriggerTokens <= 0) {
             return false;
         }
         // estimateConversationTokens counts message content only. The arguments of replayed tool calls
@@ -22988,7 +23002,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
         }
-        return estimatedTokens >= Math.floor(maxTokens * BaseAgent.MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD);
+        return estimatedTokens >= budget.TriggerTokens;
     }
 
     /**
@@ -23003,12 +23017,6 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         currentTurn: number
     ): Promise<void> {
-        // Lesson 1 Vector 2: during a live agent run (_agentRun !== null) without an explicit
-        // caller messageExpirationOverride, defer mid-loop message expiry until context utilization
-        // reaches the threshold so routine turns do not invalidate the provider's prompt cache.
-        if (this._agentRun !== null && !params.messageExpirationOverride && !this.isMidLoopCompactionThresholdReached(params)) {
-            return;
-        }
         const messagesToCompact: Array<{
             index: number;
             message: AgentChatMessage;

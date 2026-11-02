@@ -3815,6 +3815,10 @@ describe('BaseAgent.Execute — replayed reasoning after an earlier message is r
         protected override DriverRequiresStableReasoningPrefix(): boolean {
             return true;
         }
+        /** The window is "full": expiry runs every step, as it would once the compaction trigger is reached. */
+        protected override isMidLoopCompactionThresholdReached(): boolean {
+            return true;
+        }
         protected override async pruneAndCompactExpiredMessages(params: ExecuteAgentParams): Promise<void> {
             const firstResults = params.conversationMessages.findIndex((m) => m.role === 'tool');
             // Before the third request: both call turns are answered.

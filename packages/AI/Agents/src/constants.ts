@@ -84,3 +84,34 @@ export const VOLATILE_TEMPLATE_MARKERS: readonly string[] = [
     CURRENT_DATE_PLACEHOLDER,
     CURRENT_PAYLOAD_PLACEHOLDER,
 ];
+
+// ── Untrusted external data (Primitive 2 v1) ─────────────────────────────────────────────────────
+
+/**
+ * Default set of actions whose output is content fetched from outside MJ: web pages, search results,
+ * mail, feeds, arbitrary HTTP responses, and whatever an MCP tool returns. Their results travel to the
+ * model inside an `<untrusted_external_data>` envelope, lose their `AIDirectives`, and taint the run.
+ *
+ * Temporary: this list stands in for the `Action.OutputTrustLevel` column until that migration lands,
+ * so no 6.2 install needs a schema change for the protection. Actions that only SEND to an external
+ * system (webhooks, outbound messages) and actions that return MJ's own catalog of an external system
+ * (listing or syncing MCP tools) are deliberately absent: their output is a delivery status or metadata,
+ * and tainting a run for them would hold every memory write of a run that merely posted to Slack.
+ *
+ * Lowercase-normalized for case-insensitive matching. `BaseAgent.defaultUntrustedActionNames` is the
+ * overridable seam; `AgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`,
+ * `untrustedActionNames`) adjusts it per agent or per run.
+ */
+export const DEFAULT_UNTRUSTED_ACTION_NAMES: ReadonlySet<string> = new Set([
+    'web search',
+    'web page content',
+    'brave search',
+    'perplexity search',
+    'tavily search',
+    'google custom search',
+    'manage my email inbox and drafts',
+    'http request',
+    'url metadata extractor',
+    'read rss feed',
+    'execute mcp tool',
+]);

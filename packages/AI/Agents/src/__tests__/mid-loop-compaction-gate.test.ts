@@ -1,35 +1,29 @@
 /**
- * Mid-loop compaction is gated on context utilization (plan Lesson 1, vector 2).
+ * Mid-loop compaction is gated on the configured compaction trigger (plan Lesson 1, vector 2).
  *
  * Rewriting an earlier turn — shortening a replayed tool call's arguments, expiring an old action
  * result — changes bytes inside the provider's cached prefix, so every later turn misses the cache.
- * Below 65% of the resolved budget there is room to leave history alone; the gate holds both the
- * argument compaction and the message expiry until the window is actually filling up.
+ * The gate reuses the operator's `CompactionTriggerPercent`, resolved into `TriggerTokens`, rather
+ * than a second threshold of its own: below it there is room to leave history alone.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { BaseAgent } from '../base-agent';
+import type { EffectiveContextBudget } from '../ConversationCompactionManager';
 import type { AgentChatMessage, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 
+/** A 1,000-token window whose configured trigger is 65%: 650 tokens, about 2,600 characters. */
+const BUDGET: EffectiveContextBudget = { MaxTokens: 1000, TriggerTokens: 650, TargetTokens: 300, ClampedToModel: false, BoundedBy: 'Agent' };
+
 class Probe extends BaseAgent {
+    protected override resolveCompactionBudget(): EffectiveContextBudget {
+        return BUDGET;
+    }
     public ThresholdReached(params: ExecuteAgentParams): boolean {
-        return (this as unknown as { isMidLoopCompactionThresholdReached: (p: ExecuteAgentParams) => boolean }).isMidLoopCompactionThresholdReached(params);
-    }
-    public async Prune(params: ExecuteAgentParams, currentTurn: number): Promise<void> {
-        return this.pruneAndCompactExpiredMessages(params, currentTurn);
+        return this.isMidLoopCompactionThresholdReached(params);
     }
 }
 
-/** A probe inside a live run with a 1,000-token budget, so 65% is 650 tokens (about 2,600 characters). */
-function liveProbe(): Probe {
-    const agent = new Probe();
-    (agent as unknown as { _agentRun: Record<string, unknown> })._agentRun = { ID: 'run-1' };
-    (agent as unknown as { logStatus: () => void }).logStatus = vi.fn();
-    (agent as unknown as { resolveCompactionBudget: () => { MaxTokens: number } }).resolveCompactionBudget = () => ({ MaxTokens: 1000 });
-    return agent;
-}
-
-/** An action result that expired turns ago and would be removed by any unguarded prune. */
-function expiredToolTurn(): AgentChatMessage {
+function toolTurn(): AgentChatMessage {
     return {
         role: 'tool',
         content: [{ type: 'tool_result', toolCallId: 'c1', toolName: 'run_query', content: 'short content '.repeat(20), isError: false }] as unknown as string,
@@ -37,46 +31,37 @@ function expiredToolTurn(): AgentChatMessage {
     };
 }
 
-describe('BaseAgent mid-loop compaction gate', () => {
-    it('leaves an expired message in place while the window is under 65% of the budget', async () => {
-        const agent = liveProbe();
-        const params = {
-            agent: { Name: 'Probe' },
-            conversationMessages: [{ role: 'user', content: 'Hello' }, expiredToolTurn()],
-        } as unknown as ExecuteAgentParams;
+function paramsWith(messages: AgentChatMessage[]): ExecuteAgentParams {
+    return { agent: { Name: 'Probe' }, conversationMessages: messages } as Partial<ExecuteAgentParams> as ExecuteAgentParams;
+}
 
-        expect(agent.ThresholdReached(params)).toBe(false);
-        await agent.Prune(params, 5);
-        expect(params.conversationMessages).toHaveLength(2);
+describe('BaseAgent.isMidLoopCompactionThresholdReached', () => {
+    it('is false while the window is under the configured trigger', () => {
+        const agent = new Probe();
+        expect(agent.ThresholdReached(paramsWith([{ role: 'user', content: 'Hello' }, toolTurn()]))).toBe(false);
     });
 
-    it('reports the threshold reached once the window passes 65% of the budget', () => {
-        const agent = liveProbe();
-        const params = {
-            agent: { Name: 'Probe' },
-            conversationMessages: [
-                { role: 'user', content: 'x'.repeat(3000) },
-                expiredToolTurn(),
-                { role: 'user', content: 'next turn 1' },
-                { role: 'assistant', content: 'next turn 2' },
-                { role: 'user', content: 'next turn 3' },
-            ],
-        } as unknown as ExecuteAgentParams;
-
-        expect(agent.ThresholdReached(params)).toBe(true);
+    it('is true once the window reaches the trigger', () => {
+        const agent = new Probe();
+        expect(agent.ThresholdReached(paramsWith([
+            { role: 'user', content: 'x'.repeat(3000) },
+            toolTurn(),
+            { role: 'user', content: 'next turn 1' },
+            { role: 'assistant', content: 'next turn 2' },
+            { role: 'user', content: 'next turn 3' },
+        ]))).toBe(true);
     });
 
-    it('counts replayed tool call arguments toward utilization', () => {
-        const agent = liveProbe();
-        const params = {
-            agent: { Name: 'Probe' },
-            conversationMessages: [
-                { role: 'user', content: 'Hello' },
-                { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'write_file', arguments: { body: 'y'.repeat(3000) } }] },
-                expiredToolTurn(),
-            ],
-        } as unknown as ExecuteAgentParams;
+    it('counts replayed tool-call arguments toward the window', () => {
+        const agent = new Probe();
+        expect(agent.ThresholdReached(paramsWith([
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'write_file', arguments: { body: 'y'.repeat(3000) } }] },
+            toolTurn(),
+        ]))).toBe(true);
+    });
 
-        expect(agent.ThresholdReached(params)).toBe(true);
+    it('is false with no messages', () => {
+        expect(new Probe().ThresholdReached(paramsWith([]))).toBe(false);
     });
 });

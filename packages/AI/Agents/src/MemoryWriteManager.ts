@@ -1,6 +1,7 @@
 import { IMetadataProvider, LogErrorEx, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
 import { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
+import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 
 /**
  * A single in-flight memory write requested by the LLM via the
@@ -90,7 +91,7 @@ export interface MemoryWriteContext {
   /**
    * Provenance of untrusted/semi-trusted sources ingested earlier in this run.
    */
-  taintedSources?: ReadonlyArray<{ stepNumber: number; sourceName: string; trustLevel: 'SemiTrusted' | 'Untrusted' }>;
+  taintedSources?: ReadonlyArray<AgentTaintedSource>;
 }
 
 export interface MemoryWriteManagerConfig {
