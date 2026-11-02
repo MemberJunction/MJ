@@ -818,6 +818,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
           ...(labelFields.length > 0 ? { Fields: [...pkNames, ...labelFields] } : {}),
           ResultType: 'simple',
           MaxRows: ids.length,
+          SkipTotalRowCount: true,
         },
         this.ProviderToUse.CurrentUser ?? undefined,
       );

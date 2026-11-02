@@ -42,9 +42,11 @@
  * @author MemberJunction.com
  */
 
-// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
-// module keeps its framework-free / pure-transformation contract.
+// From the pure @memberjunction/ai model layer: the type import is erased at runtime, and the one value
+// import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
+// pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
@@ -1130,7 +1132,7 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.transcriptionLanguages = languages;
     }
 
-    const turnDetection = normalizeTurnDetection(raw['turnDetection']);
+    const turnDetection = NormalizeTurnDetectionSettings(raw['turnDetection']);
     if (turnDetection) {
         tuning.turnDetection = turnDetection;
     }
@@ -1159,34 +1161,6 @@ function readLanguageCodes(value: unknown): string[] | undefined {
 /** A finite, positive, whole number — or `undefined` for anything else (a limit of 0, -5 or 1.5 is a typo, not a limit). */
 function readPositiveInteger(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-/**
- * Normalizes the `session.turnDetection` block — only the recognized, correctly-typed knobs of the
- * MJ-normalized turn-detection vocabulary survive. Returns `undefined` when nothing valid is
- * present (tolerant, like every other cascade input). The drivers re-validate on extraction, so
- * this is belt-and-braces plus a typed authoring surface.
- */
-function normalizeTurnDetection(raw: unknown): RealtimeTurnDetectionSettings | undefined {
-    if (!isPlainObject(raw)) {
-        return undefined;
-    }
-    const result: RealtimeTurnDetectionSettings = {};
-    const mode = raw['Mode'];
-    if (mode === 'default' || mode === 'serverVad' || mode === 'semanticVad' || mode === 'native') {
-        result.Mode = mode;
-    }
-    const eagerness = raw['Eagerness'];
-    if (eagerness === 'low' || eagerness === 'auto' || eagerness === 'high') {
-        result.Eagerness = eagerness;
-    }
-    if (typeof raw['Threshold'] === 'number' && Number.isFinite(raw['Threshold'])) {
-        result.Threshold = raw['Threshold'];
-    }
-    if (typeof raw['SilenceDurationMs'] === 'number' && Number.isFinite(raw['SilenceDurationMs'])) {
-        result.SilenceDurationMs = raw['SilenceDurationMs'];
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */

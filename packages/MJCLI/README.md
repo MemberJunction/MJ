@@ -16,6 +16,7 @@ graph TD
         B --> H[test]
         B --> I[dbdoc]
         B --> J[querygen]
+        B --> Q2[query]
         B --> K[bump]
         B --> L[clean]
 
@@ -31,6 +32,7 @@ graph TD
         S["@memberjunction/db-auto-doc"]
         T["@memberjunction/query-gen"]
         U["@memberjunction/ai-cli"]
+        V["@memberjunction/core-entities-server"]
     end
 
     E --> P
@@ -39,6 +41,7 @@ graph TD
     I --> S
     J --> T
     G --> U
+    Q2 --> V
 
     style A fill:#2d6a9f,stroke:#1a4971,color:#fff
     style C fill:#2d8659,stroke:#1a5c3a,color:#fff
@@ -49,6 +52,7 @@ graph TD
     style H fill:#b8762f,stroke:#8a5722,color:#fff
     style I fill:#b8762f,stroke:#8a5722,color:#fff
     style J fill:#b8762f,stroke:#8a5722,color:#fff
+    style Q2 fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
 ## Overview
@@ -474,6 +478,75 @@ mj dbdoc reset
 # Generate sample queries
 mj dbdoc generate-queries
 mj dbdoc export-sample-queries
+```
+
+### mj query
+
+Saved query maintenance.
+
+#### mj query refresh
+
+Re-establishes saved queries' parameters, fields, entities and dependencies from their SQL and the database server. The SQL itself is never changed. It runs the same extraction that saving an edited query runs: each query is described on the database server and parsed, the child rows are corrected, and the query's `ExtractedSQLHash`, `ExtractionStatus` and `ExtractionMessage` are updated. Authored annotations (descriptions, and a `Manual` parameter's type, default, sample value and filters) are kept.
+
+```bash
+# Recommended after upgrading: review first, then apply
+mj query refresh --all --dry-run
+mj query refresh --all
+
+# One query by full path, or every query with a bare name
+mj query refresh --name "MJ/Reports/Top Customers"
+
+# A category and everything below it, filling empty descriptions with the LLM
+mj query refresh --category MJ --with-ai
+
+# Every query that reads an entity
+mj query refresh --entity "MJ: AI Agents"
+```
+
+| Flag | Description |
+|------|-------------|
+| `--id <id>` | Refresh the query with this ID. Repeatable. |
+| `--name <name>` | A query name or a full path `Category/Sub/Name`. A bare name selects every query with that name. Repeatable. |
+| `--category <path>` | A category path: the queries in it and in every category below it. Given once. |
+| `--entity <name>` | The queries that read this entity. Repeatable. |
+| `--all` | Refresh every query. |
+| `--dry-run` | Report the changes without writing anything. |
+| `--with-ai` | Fill empty descriptions with the LLM description pass (off by default). |
+| `-v`, `--verbose` | Also list queries that are unchanged. |
+| `--format <text\|json>` | Output format (default `text`). `json` prints the full run report. |
+
+At least one of `--id`, `--name`, `--category`, `--entity` or `--all` is required. The selectors are not mutually exclusive: when several are given, the queries any of them select are refreshed. Each query is refreshed in its own transaction, and the queries a composition depends on are refreshed before the queries that compose them.
+
+**Output.** Progress goes to stderr, one line per query (`[3/31] Refreshed AIUsageHourly`). The report goes to stdout: one heading per query with its outcome and extraction status, then its changes, then a summary line:
+
+```text
+WOULD REFRESH "AIUsageHourly" (<query ID>) [OK]
+    + field CacheReadTokens
+    ~ parameter start (Type)
+    - entity MJ: AI Models
+    ! parameter scope: authored, no longer used by the SQL (kept)
+31 queries: 1 would be refreshed, 30 unchanged, 0 failed (dry run: nothing was written).
+```
+
+`+`, `~` and `-` mark child rows added, updated (with the changed columns) and removed; `~ query (...)` lists changed columns on the query row itself. The outcomes are `REFRESHED` (`WOULD REFRESH` in a dry run), `UNCHANGED`, `NOTPERMITTED`, `UNAVAILABLE` and `FAILED`. Without `--verbose`, unchanged queries with no diagnostics are left out. A failed query reports the reason, and nothing is written for it.
+
+**Exit codes.**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every selected query was refreshed, was unchanged, or was skipped as not permitted. |
+| `1` | A query failed, or an `--id` or `--name` you gave matched no query you can read. |
+| `2` | No selector flag was given. |
+
+**Permissions.** A refresh, including a dry run, needs Update on `MJ: Queries` and Create, Update and Delete on `MJ: Query Fields`, `MJ: Query Parameters`, `MJ: Query Entities` and `MJ: Query Dependencies`. For each query it also needs read access to every entity the query reads, with no field denied on any of them. A query that fails these checks is reported as `NOTPERMITTED` in a bulk run, with no reason given. `mj query refresh` runs in process as the System user, using the database connection in `mj.config.cjs`; the same checks apply when a refresh is started from MJAPI or Explorer as a signed-in user.
+
+#### mj query usage
+
+Prints every `mj query` command with its flags, examples and runtime hints. `--format` takes `text`, `json` or `md`; it defaults to `text` on a terminal and `json` when stdout is piped.
+
+```bash
+mj query usage
+mj query usage --format=json
 ```
 
 ### mj querygen

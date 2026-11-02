@@ -111,6 +111,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Summary: 'Register third-party CLI plugins in mj-cli-plugins.json.',
     Runtime: { class: 'fast' },
   },
+  query: {
+    Summary: 'Refresh saved queries\' extracted parameters, fields and entities from their SQL.',
+    Runtime: { class: 'moderate', typicalSeconds: 30, note: 'scales with the number of queries; each is described on the database server' },
+  },
   querygen: {
     Summary: 'Generate, validate, and export stored queries.',
     Runtime: { class: 'slow', typicalSeconds: 120, note: 'LLM-driven generation; validation alone is fast' },

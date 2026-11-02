@@ -1,7 +1,9 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { AnalyzeTopLevelOrderBy, AnalyzePagingShape, IsReadOnlyQuery, LexSQL } from '@memberjunction/sql-parser';
-import type { OwnRowCap, PagingShape, SQLLexToken } from '@memberjunction/sql-parser';
+import { AnalyzeTopLevelOrderBy, IsReadOnlyQuery, LexSQL, ReplaceSelectList } from '@memberjunction/sql-parser';
+import type { OwnRowCap, SQLLexToken } from '@memberjunction/sql-parser';
 import { GetDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { CountBodyCanSelectConstant, OuterOrderByText, ReadPagingLayout } from './pagingLayout.js';
+import type { PagingLayout } from './pagingLayout.js';
 
 /**
  * Result of wrapping SQL with paging directives.
@@ -55,9 +57,10 @@ function notCapped(sql: string, reason: string): RowCapResult {
  * Handles server-side pagination for query SQL by applying platform-specific
  * paging clauses.
  *
- * The statement is read from tokens ({@link AnalyzePagingShape}), so paging works the same way
- * on SQL the AST parser cannot read, and the query's own text is kept as written: nothing is
- * re-emitted from a syntax tree.
+ * The statement is read with MJ's structural parser (`SqlDocument`, see {@link ReadPagingLayout}),
+ * and from tokens when the parser cannot read all of it, so paging works on any read statement.
+ * The query's own text is kept as written: edits are made by span, and nothing is re-emitted from
+ * a syntax tree.
  *
  * **The query's own row cap is part of what it means.** `StartRow` and `MaxRows` page within the
  * capped result, so the smaller of the query's cap and `MaxRows` wins, and the total row count is
@@ -72,7 +75,8 @@ function notCapped(sql: string, reason: string): RowCapResult {
  * aliases stay valid because the query is not wrapped.
  *
  * **Count SQL** — puts the query (without its ORDER BY, unless its own cap needs it) in a
- * `[__count]` CTE beside the query's own CTEs and selects `COUNT(*) AS TotalRowCount`.
+ * `[__count]` CTE beside the query's own CTEs and selects `COUNT(*) AS TotalRowCount`. A plain
+ * select is counted with its select list replaced by `1 AS [__mj_row]`.
  *
  * A query that ends in `FOR JSON` / `FOR XML` returns a document, not rows, and cannot be paged;
  * asking to page one is an error.
@@ -96,7 +100,7 @@ export class QueryPagingEngine {
     ): PagingWrappedSQL {
         const cleanedSQL = QueryPagingEngine.stripTrailingSemicolons(resolvedSQL);
         const dialect = QueryPagingEngine.getDialect(platform);
-        const shape = AnalyzePagingShape(cleanedSQL, dialect);
+        const shape = ReadPagingLayout(cleanedSQL, dialect);
         if (shape.ReturnsDocument) {
             throw new Error(
                 `QueryPagingEngine: this query ends in FOR ${shape.ReturnsDocument.toUpperCase()}, so it returns a document ` +
@@ -153,7 +157,7 @@ export class QueryPagingEngine {
         const readCheck = IsReadOnlyQuery(cleanedSQL, dialect);
         if (!readCheck.IsReadOnly) return notCapped(cleanedSQL, `the statement is not a single read query: ${readCheck.Reason}`);
 
-        const shape = AnalyzePagingShape(cleanedSQL, dialect);
+        const shape = ReadPagingLayout(cleanedSQL, dialect);
         const caps = shape.OwnCaps;
         if (caps.length === 0) return QueryPagingEngine.addCap(shape, cap, dialect);
         if (caps.length === 1 && caps[0].Numeric) return QueryPagingEngine.tightenCap(shape, caps[0], cap, dialect);
@@ -161,13 +165,13 @@ export class QueryPagingEngine {
     }
 
     /** Caps a statement that has no cap of its own. */
-    private static addCap(shape: PagingShape, cap: number, dialect: SQLDialect): RowCapResult {
+    private static addCap(shape: PagingLayout, cap: number, dialect: SQLDialect): RowCapResult {
         const limit = dialect.LimitClause(cap);
         if (limit.prefix) {
             if (shape.IsSetOperation && shape.ReturnsDocument) {
                 return notCapped(shape.Statement, `a set operation that ends in FOR ${shape.ReturnsDocument.toUpperCase()} returns one document and has no single SELECT to cap`);
             }
-            if (shape.IsSetOperation) return capped(QueryPagingEngine.appendPage(shape, QueryPagingEngine.head(shape), 0, cap, dialect), 'fetch');
+            if (QueryPagingEngine.capsWithFetch(shape)) return capped(QueryPagingEngine.appendPage(shape, QueryPagingEngine.head(shape), 0, cap, dialect), 'fetch');
             if (shape.SelectListStart === null) return QueryPagingEngine.capAsDerivedTable(shape, cap, dialect);
             const at = shape.SelectListStart;
             return capped(`${shape.Statement.substring(0, at)} ${limit.prefix}${shape.Statement.substring(at)}`, 'top');
@@ -175,8 +179,20 @@ export class QueryPagingEngine {
         return capped(`${QueryPagingEngine.head(shape)}\n${limit.suffix}${QueryPagingEngine.tail(shape)}`, 'limit');
     }
 
+    /**
+     * Whether a statement with no cap of its own, on a dialect that caps with a `TOP` prefix, is
+     * capped with `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY` after its ORDER BY instead of `TOP`: a set
+     * operation (no single SELECT to put `TOP` on), and an ordered statement with no top-level
+     * SELECT (a parenthesized query or `VALUES` list followed by ORDER BY). Wrapping the latter as a
+     * derived table would leave its ORDER BY inside with no TOP beside it, which SQL Server refuses.
+     */
+    private static capsWithFetch(shape: PagingLayout): boolean {
+        if (shape.IsSetOperation) return true;
+        return shape.SelectListStart === null && shape.OrderBy !== null && shape.ReturnsDocument === null;
+    }
+
     /** Lowers a numeric cap of the query's own to `cap`, or leaves it when it is already tighter. */
-    private static tightenCap(shape: PagingShape, own: OwnRowCap, cap: number, dialect: SQLDialect): RowCapResult {
+    private static tightenCap(shape: PagingLayout, own: OwnRowCap, cap: number, dialect: SQLDialect): RowCapResult {
         if (own.Rows !== null && own.Rows <= cap) return capped(shape.Statement, 'own-cap');
         const statement = shape.Statement;
         if (own.Form === 'top') {
@@ -197,7 +213,7 @@ export class QueryPagingEngine {
      * where SQL Server allows it beside the query's own TOP; a set operation's ORDER BY is
      * repeated outside (see {@link derivedTableParts}).
      */
-    private static capAsDerivedTable(shape: PagingShape, cap: number, dialect: SQLDialect): RowCapResult {
+    private static capAsDerivedTable(shape: PagingLayout, cap: number, dialect: SQLDialect): RowCapResult {
         const statement = shape.Statement;
         if (shape.ReturnsDocument) {
             return notCapped(statement, `the statement ends in FOR ${shape.ReturnsDocument.toUpperCase()}, which cannot appear inside a derived table`);
@@ -227,14 +243,15 @@ export class QueryPagingEngine {
      * and its `OFFSET` in one subquery, which SQL Server refuses even though it accepts them as a
      * whole statement.
      */
-    private static derivedTableParts(shape: PagingShape, dialect: SQLDialect): { Inner: string; OuterOrderBy: string } {
+    private static derivedTableParts(shape: PagingLayout, dialect: SQLDialect): { Inner: string; OuterOrderBy: string } {
         const statement = shape.Statement;
         const orderBy = shape.IsSetOperation ? shape.OrderBy : null;
         if (!orderBy) {
             return { Inner: statement.substring(shape.MainStart, shape.TailStart).trim(), OuterOrderBy: '' };
         }
         const body = statement.substring(shape.MainStart, orderBy.Start).trim();
-        const outerOrderBy = QueryPagingEngine.unqualifyColumnReferences(statement.substring(orderBy.Start, orderBy.End).trim(), dialect);
+        const outerOrderBy = OuterOrderByText(shape)
+            ?? QueryPagingEngine.unqualifyColumnReferences(statement.substring(orderBy.Start, orderBy.End).trim(), dialect);
         const ownClauseCap = statement.substring(orderBy.End, shape.TailStart).trim();
         const inner = ownClauseCap
             ? `SELECT * FROM (\n${body}\n) AS ${dialect.QuoteIdentifier('_mj_set')}\n${outerOrderBy}\n${ownClauseCap}`
@@ -243,7 +260,8 @@ export class QueryPagingEngine {
     }
 
     /**
-     * Drops the table or schema qualifier from every dotted column name in `sql`, keeping its last
+     * The token-level fallback of {@link OuterOrderByText}, for a statement the structural parser
+     * could not read: drops the table or schema qualifier from every dotted column name in `sql`, keeping its last
      * part: `a.Name` → `Name`, `[dbo].[A].[Name]` → `[Name]`. A dotted name followed by `(` is a
      * function call such as `dbo.fnLen(Name)`, whose schema SQL Server requires, so it is kept.
      * Whitespace, comments and every other token are kept as written.
@@ -332,7 +350,7 @@ export class QueryPagingEngine {
      * appended; a single numeric cap is replaced by the page's clause with the arithmetic folded
      * in; anything else is paged as a derived table.
      */
-    private static buildDataSQL(shape: PagingShape, startRow: number, maxRows: number, dialect: SQLDialect): string {
+    private static buildDataSQL(shape: PagingLayout, startRow: number, maxRows: number, dialect: SQLDialect): string {
         const caps = shape.OwnCaps;
         if (caps.length === 0) {
             return QueryPagingEngine.appendPage(shape, QueryPagingEngine.head(shape), startRow, maxRows, dialect);
@@ -344,18 +362,18 @@ export class QueryPagingEngine {
     }
 
     /** The statement up to the clause that must stay last. */
-    private static head(shape: PagingShape): string {
+    private static head(shape: PagingLayout): string {
         return shape.Statement.substring(0, shape.TailStart).trimEnd();
     }
 
     /** The clause that must stay last (`OPTION (…)`, `FOR UPDATE`), with its leading newline, or ''. */
-    private static tail(shape: PagingShape): string {
+    private static tail(shape: PagingLayout): string {
         const tail = shape.Statement.substring(shape.TailStart).trim();
         return tail ? `\n${tail}` : '';
     }
 
     /** Appends ORDER BY (when the statement has none), the paging clause and the trailing clause. */
-    private static appendPage(shape: PagingShape, head: string, offset: number, rows: number, dialect: SQLDialect): string {
+    private static appendPage(shape: PagingLayout, head: string, offset: number, rows: number, dialect: SQLDialect): string {
         const orderBy = shape.OrderBy ? '' : `\nORDER BY ${QueryPagingEngine.defaultOrderBy(shape, dialect)}`;
         const limit = dialect.LimitClause(rows, offset);
         return `${head}${orderBy}\n${limit.suffix}${QueryPagingEngine.tail(shape)}`;
@@ -367,7 +385,7 @@ export class QueryPagingEngine {
      * has one (a platform that only accepts select-list items there), otherwise its
      * {@link SQLDialect.DefaultPagingOrderBy}.
      */
-    private static defaultOrderBy(shape: PagingShape, dialect: SQLDialect): string {
+    private static defaultOrderBy(shape: PagingLayout, dialect: SQLDialect): string {
         const selectListOrderBy = dialect.SelectListPagingOrderBy;
         if (selectListOrderBy !== null && (shape.IsSetOperation || shape.IsDistinct)) return selectListOrderBy;
         return dialect.DefaultPagingOrderBy;
@@ -377,7 +395,7 @@ export class QueryPagingEngine {
      * Pages within a numeric cap of the query's own: the page starts `startRow` rows into the
      * capped result and stops at the cap. A page that starts at or past the cap is empty.
      */
-    private static pageWithinCap(shape: PagingShape, cap: OwnRowCap, startRow: number, maxRows: number, dialect: SQLDialect): string {
+    private static pageWithinCap(shape: PagingLayout, cap: OwnRowCap, startRow: number, maxRows: number, dialect: SQLDialect): string {
         const remaining = cap.Rows === null ? maxRows : cap.Rows - startRow;
         const rows = Math.min(maxRows, remaining);
         if (rows <= 0) return QueryPagingEngine.emptyResultSQL(dialect);
@@ -393,7 +411,7 @@ export class QueryPagingEngine {
      * page from it as a derived table. Its CTEs stay in front, its trailing clause stays last, and
      * the ORDER BY of a set operation is repeated outside (see {@link derivedTableParts}).
      */
-    private static wrapAndPage(shape: PagingShape, startRow: number, maxRows: number, dialect: SQLDialect): string {
+    private static wrapAndPage(shape: PagingLayout, startRow: number, maxRows: number, dialect: SQLDialect): string {
         const statement = shape.Statement;
         const prefix = statement.substring(0, shape.MainStart);
         const { Inner: inner, OuterOrderBy: outerOrderBy } = QueryPagingEngine.derivedTableParts(shape, dialect);
@@ -419,14 +437,30 @@ export class QueryPagingEngine {
      * The ORDER BY is removed — it does not change a count, and SQL Server forbids it in a CTE —
      * unless the query's own cap needs it to choose its rows. A trailing `OPTION (…)` stays last.
      */
-    private static buildCountSQL(shape: PagingShape, dialect: SQLDialect): string {
+    private static buildCountSQL(statement: PagingLayout, dialect: SQLDialect): string {
+        const shape = QueryPagingEngine.countLayout(statement, dialect);
         const countCTEName = dialect.QuoteIdentifier('__count');
         const body = QueryPagingEngine.countBody(shape, dialect);
-        const ownCTEs = shape.CTEs ? shape.CTEs.Definitions.map(d => d.Text) : [];
-        const recursive = shape.CTEs?.Recursive ? 'RECURSIVE ' : '';
-        const allCTEs = [...ownCTEs, `${countCTEName} AS (\n${body}\n)`];
-        const hint = /^OPTION\b/i.test(shape.Statement.substring(shape.TailStart).trim()) ? QueryPagingEngine.tail(shape) : '';
+        const keyword = dialect.Grammar.RecursiveKeyword;
+        const recursive = shape.Recursive && keyword !== null ? `${keyword} ` : '';
+        const allCTEs = [...shape.CTEDefinitions, `${countCTEName} AS (\n${body}\n)`];
+        const hint = shape.TailIsQueryHint ? QueryPagingEngine.tail(shape) : '';
         return `WITH ${recursive}${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}${hint}`;
+    }
+
+    /**
+     * The statement the count query counts. A plain select (one block, not DISTINCT, no GROUP BY,
+     * HAVING, WINDOW or QUALIFY, no cap of its own, and no aggregate or row-producing function in
+     * its select list) is counted with its select list replaced by one named constant column: the
+     * row count is the same, the database reads less, and duplicate or unnamed output columns,
+     * which a CTE refuses, no longer matter. Any other statement is counted as written.
+     */
+    private static countLayout(shape: PagingLayout, dialect: SQLDialect): PagingLayout {
+        if (!CountBodyCanSelectConstant(shape)) return shape;
+        const parsed = shape.Parsed;
+        if (parsed === null) return shape;
+        const replaced = ReplaceSelectList(parsed.Document, `1 AS ${dialect.QuoteIdentifier('__mj_row')}`);
+        return replaced.Applied ? ReadPagingLayout(replaced.Text, dialect) : shape;
     }
 
     /**
@@ -438,7 +472,7 @@ export class QueryPagingEngine {
      * SQL Server refuses the two in one CTE. It is counted through the same second derived table
      * the data query uses (see {@link derivedTableParts}).
      */
-    private static countBody(shape: PagingShape, dialect: SQLDialect): string {
+    private static countBody(shape: PagingLayout, dialect: SQLDialect): string {
         const statement = shape.Statement;
         if (QueryPagingEngine.hasBranchTopAndOwnClauseCap(shape)) {
             return QueryPagingEngine.derivedTableParts(shape, dialect).Inner;
@@ -455,7 +489,7 @@ export class QueryPagingEngine {
     }
 
     /** Whether a set operation ordered by its own ORDER BY caps both its branches (`TOP`) and itself (`OFFSET` / `LIMIT`). */
-    private static hasBranchTopAndOwnClauseCap(shape: PagingShape): boolean {
+    private static hasBranchTopAndOwnClauseCap(shape: PagingLayout): boolean {
         return shape.IsSetOperation && shape.OrderBy !== null
             && shape.OwnCaps.some(c => c.Form === 'top')
             && shape.OwnCaps.some(c => c.Form === 'clause');
@@ -496,6 +530,8 @@ export class QueryPagingEngine {
 
     /**
      * Strips a TOP N or TOP (N) clause from the beginning of a SELECT statement.
+     * @deprecated Not used by the paging engine. Use `SqlDocument.Parse(sql, dialect).RowCaps()` to
+     * find a statement's `TOP`, and an `EditSet` to remove it.
      */
     static StripTopClause(sql: string): { sql: string; topRemoved: boolean } {
         const topRegex = /^(SELECT\s+(?:DISTINCT\s+)?)TOP\s+(?:\(\s*\d+\s*\)|\d+)\s+/i;
