@@ -7,6 +7,8 @@ import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine'
 import { PredictiveStudioTrainModelOperation, type MJMLTrainingPipelineEntity, type PredictiveStudioTrainModelOutput } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PSPipelinesComponent } from './ps-pipelines.component';
+import { WidgetFixtures } from './evaluation-results/widget-fixtures';
+import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -210,5 +212,53 @@ describe('PSPipelinesComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-pipelines-asof-reset"]')).toBeNull();
     expect(query(fixture, '[data-testid="ps-pipelines-dirty"]')).not.toBeNull();
     expect((query(fixture, '[data-testid="ps-pipelines-save"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  describe('the kept model after a run', () => {
+    const publishedModel = (over: Record<string, unknown> = {}) =>
+      ({ ID: 'm1', PipelineID: 'p1', Version: 2, Status: 'Published', Algorithm: 'Logistic Regression', HoldoutMetrics: JSON.stringify({ 'log-loss': 0.41234, brier: 0.1 }), ...over }) as unknown as MJMLModelEntity;
+    const runWithOutcome = (outcome: 'model' | 'keep-simple-baseline' | null) => {
+      const stored = WidgetFixtures.StoredRunEnvelope();
+      const gate = stored.gate === null || outcome === null ? null : { ...stored.gate, decision: { ...stored.gate.decision, outcome } };
+      return { ID: 'r1', PipelineID: 'p1', ResultingModelID: 'm1', ValidationResults: JSON.stringify({ ...stored, gate }) } as unknown as MJMLTrainingRunEntity;
+    };
+    const renderWith = (model: MJMLModelEntity, run: MJMLTrainingRunEntity, viewMode: 'stages' | 'dag' = 'stages') => {
+      const engine = { ...makeEngine([makePipeline()]), Models: [model], TrainingRuns: [run] } as unknown as PredictiveStudioEngine;
+      return renderComponentFixture(PSPipelinesComponent, { inputs: { engine, ViewMode: viewMode } });
+    };
+
+    it('does not crown a published model whose stored gate outcome kept a simple baseline', () => {
+      const fixture = renderWith(publishedModel(), runWithOutcome('keep-simple-baseline'));
+      const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
+      expect(row.textContent).toContain('Kept a simple baseline');
+      expect(row.textContent).not.toContain('Winner');
+      expect(row.querySelector('.fa-trophy')).toBeNull();
+    });
+
+    it('titles the algorithm card by the outcome rather than "Current Serving Winner" when a simple baseline was kept', () => {
+      const fixture = renderWith(publishedModel(), runWithOutcome('keep-simple-baseline'), 'dag');
+      const node = queryAll(fixture, '[data-testid="ps-pipelines-node"]').find((n) => n.textContent?.includes('Algorithm'));
+      (node as HTMLElement).click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('Kept a simple baseline');
+      expect(fixture.nativeElement.textContent).not.toContain('Current Serving Winner');
+      expect(fixture.nativeElement.textContent).not.toContain('Winner');
+    });
+
+    it('calls a published model the winner when the stored gate outcome is a model, and when the run stores no gate record', () => {
+      for (const outcome of ['model', null] as const) {
+        const fixture = renderWith(publishedModel(), runWithOutcome(outcome));
+        const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
+        expect(row.textContent).toContain('Winner');
+        expect(row.textContent).not.toContain('Kept a simple baseline');
+      }
+    });
+
+    it('shows the stored primary holdout score, not the word Scored, for a metric the legacy list did not know', () => {
+      const fixture = renderWith(publishedModel(), runWithOutcome('model'));
+      const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
+      expect(row.textContent).toContain('log-loss 0.4123');
+      expect(row.textContent).not.toContain('Scored');
+    });
   });
 });

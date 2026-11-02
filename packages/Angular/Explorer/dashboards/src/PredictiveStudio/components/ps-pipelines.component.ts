@@ -11,6 +11,7 @@ import { PSPipelineWizardComponent } from './ps-pipeline-wizard.component';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   parseDenyList,
+  TrainingRunResultsParser,
   type SourceBinding,
   type FeatureStepGraph,
   type FeatureStep,
@@ -18,6 +19,7 @@ import {
   type AsOfStrategy,
   type LeakageGuard,
   type ProblemType,
+  type GateOutcome,
 } from '@memberjunction/predictive-studio-core';
 import { PSPanelKey } from '../predictive-studio.types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
@@ -417,14 +419,16 @@ const PS_PIPELINES_STARTER_PROMPT =
                       </thead>
                       <tbody>
                         @for (m of PipelineModels; track m.ID) {
-                          <tr [class.winner-row]="m.Status === 'Published'" class="pl-model-row" (click)="OpenModelRecord(m.ID)" style="cursor:pointer;" title="Open model record in Explorer">
+                          <tr [class.winner-row]="ModelTag(m) === 'winner'" class="pl-model-row" (click)="OpenModelRecord(m.ID)" style="cursor:pointer;" title="Open model record in Explorer">
                             <td>
                               <div style="display:flex;align-items:center;gap:6px">
                                 <a class="pl-model-link" href="javascript:void(0)" (click)="$event.stopPropagation(); OpenModelRecord(m.ID)">
                                   <strong>v{{ m.Version }}</strong>
                                 </a>
-                                @if (m.Status === 'Published') {
+                                @if (ModelTag(m) === 'winner') {
                                   <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
+                                } @else if (ModelTag(m) === 'kept-baseline') {
+                                  <span class="ps-tag" data-testid="ps-pipelines-kept-baseline">Kept a simple baseline</span>
                                 }
                               </div>
                             </td>
@@ -656,10 +660,14 @@ const PS_PIPELINES_STARTER_PROMPT =
                         <div class="ps-field"><label>Hyperparameters (JSON)</label><textarea class="mj-textarea" rows="4" [value]="EditHyperparams" (input)="SetHyperparams(InputVal($event))"></textarea></div>
                         @if (PublishedModel; as pub) {
                           <div style="margin-top:12px;padding:10px;border-radius:var(--mj-radius-sm);background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);">
-                            <div class="ps-small ps-muted" style="margin-bottom:6px;">Current Serving Winner</div>
+                            <div class="ps-small ps-muted" style="margin-bottom:6px;">{{ ModelTag(pub) === 'kept-baseline' ? 'Kept a simple baseline' : 'Current Serving Winner' }}</div>
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                               <span style="font-size:var(--mj-text-xs);font-weight:600;">v{{ pub.Version }} ({{ pub.Algorithm || 'Model' }})</span>
-                              <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Active</span>
+                              @if (ModelTag(pub) === 'winner') {
+                                <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Active</span>
+                              } @else {
+                                <span class="ps-tag">Active</span>
+                              }
                             </div>
                             <div style="display:flex;gap:6px;">
                               <button mjButton variant="secondary" size="sm" type="button" (click)="OpenModelRecord(pub.ID)" style="flex:1;justify-content:center;" title="Open model record in Explorer">
@@ -692,8 +700,10 @@ const PS_PIPELINES_STARTER_PROMPT =
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
                                   <div style="display:flex;align-items:center;gap:6px;">
                                     <strong>v{{ mdl.Version }}</strong>
-                                    @if (mdl.Status === 'Published') {
+                                    @if (ModelTag(mdl) === 'winner') {
                                       <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
+                                    } @else if (ModelTag(mdl) === 'kept-baseline') {
+                                      <span class="ps-tag">Kept a simple baseline</span>
                                     }
                                     <span class="ps-badge" [class]="StatusClass(mdl.Status)">{{ mdl.Status }}</span>
                                   </div>
@@ -1137,18 +1147,36 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     return step.Inputs ?? [];
   }
 
+  /**
+   * How the pipeline's leaderboard marks a published model: `winner` when its training run's stored gate outcome shipped
+   * a model (or the run stores no gate record), `kept-baseline` when the gate kept a simple baseline, and `none` when the
+   * model is not published or the gate shipped nothing.
+   */
+  public ModelTag(m: MJMLModelEntity): 'winner' | 'kept-baseline' | 'none' {
+    if (m.Status !== 'Published') return 'none';
+    const outcome = this.storedGateOutcome(m.ID);
+    if (outcome === null || outcome === 'model') return 'winner';
+    return outcome === 'keep-simple-baseline' ? 'kept-baseline' : 'none';
+  }
+
+  /** The stored gate outcome of the run that produced a model; null when the run is missing or stores no readable gate record. */
+  private storedGateOutcome(modelId: string): GateOutcome | null {
+    const run = (this.engine?.TrainingRuns ?? []).find((r) => UUIDsEqual(r.ResultingModelID, modelId));
+    if (!run) return null;
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+    if (!parsed.Ok || parsed.Value.status !== 'completed' || parsed.Value.gate === null) return null;
+    return parsed.Value.gate.decision.outcome;
+  }
+
+  /**
+   * The model's primary holdout score as stored: `HoldoutMetrics` lists the primary metric first (then the secondary
+   * ones), so the first finite number is the score the gate was decided on, shown under the metric's stored name.
+   */
   public FormatHoldout(m: MJMLModelEntity): string {
     if (!m.HoldoutMetrics) return m.Metrics ? 'Trained' : 'Pending';
-    try {
-      const hm = typeof m.HoldoutMetrics === 'string' ? JSON.parse(m.HoldoutMetrics) : m.HoldoutMetrics;
-      if (hm.auc != null) return `AUC ${(Number(hm.auc)).toFixed(3)}`;
-      if (hm.r2 != null) return `R² ${(Number(hm.r2)).toFixed(3)}`;
-      if (hm.rmse != null) return `RMSE ${(Number(hm.rmse)).toFixed(2)}`;
-      if (hm.accuracy != null) return `Acc ${(Number(hm.accuracy) * 100).toFixed(1)}%`;
-      return 'Scored';
-    } catch {
-      return 'Scored';
-    }
+    const stored = this.parse<Record<string, unknown>>(m.HoldoutMetrics, {});
+    const primary = Object.entries(stored).find(([, v]) => typeof v === 'number' && Number.isFinite(v));
+    return primary ? `${primary[0]} ${Number(primary[1]).toFixed(4)}` : 'Not scored';
   }
 
   public get AsOfLabel(): string {
