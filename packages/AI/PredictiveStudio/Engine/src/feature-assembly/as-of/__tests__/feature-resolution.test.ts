@@ -165,8 +165,9 @@ describe('ResolveFeatureColumns — fields whose stored value is not the value s
   ] };
   const resolve = (columns: string[]) => FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: columns }] }, unitSpec, withJoined, metadata, { denyFields: [], denySources: [] });
 
-  it('refuses a virtual field, naming it, instead of reading the joined record\'s value as it stands today', () => {
-    expect(resolve(['EventsAttended', 'Person'])).toEqual({ Status: 'refused', Refusal: { kind: 'virtual-field', entity: 'Years', field: 'Person' } });
+  it('never reads a virtual field as immutable: its stored value is the joined record\'s value today', () => {
+    const r = resolve(['Person']);
+    expect(r.Status === 'resolved' && r.Columns[0].source).toEqual({ kind: 'record-changes', entity: 'Years', field: 'Person', keyField: null });
   });
 
   it('never reads a __mj_ system column as immutable: it is read from the change history', () => {

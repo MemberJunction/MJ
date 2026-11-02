@@ -2,10 +2,11 @@
  * @module feature-assembly/as-of/feature-resolution
  *
  * Turns a unit pipeline's FeatureSteps into typed FeatureColumnSpecs: each column's dated source comes from
- * metadata (AllowUpdateAPI = false → immutable-field, else record-changes; a `__mj_` system column is always
- * record-changes), its encoding from the field type unless declared, and every column gets an imputer with a missing
- * indicator. A virtual field (a value the entity's view joins from a related record) is refused. Preprocessing steps
- * must target a produced column. Steps with no as-of semantics are refused.
+ * metadata (AllowUpdateAPI = false → immutable-field, else record-changes; a `__mj_` system column and a virtual
+ * field — a value the entity's view joins from a related record — are always record-changes, and the assembler reads a
+ * virtual field only for rows decided on or after its own day), its encoding from the field type unless declared, and
+ * every column gets an imputer with a missing indicator. Preprocessing steps must target a produced column. Steps with
+ * no as-of semantics are refused.
  */
 import type { AssemblyRefusal, ColumnEncoding, ColumnEncodingKind, FeatureColumnSpec, FeatureStep, FeatureStepGraph, MissingValuePolicy, PredictionUnitSpec, PreprocessingOp, ProtocolExclusions } from '@memberjunction/predictive-studio-core';
 import { NormalizeName, PredictionUnit } from '@memberjunction/predictive-studio-core';
@@ -82,11 +83,11 @@ export class FeatureResolver {
 
   /**
    * Whether a field's stored value is its value since the record was created: declared not updatable
-   * (`AllowUpdateAPI = 0`) and not a `__mj_` system column, which MJ also declares not updatable although the
-   * provider sets it (`__mj_UpdatedAt` changes on every save).
+   * (`AllowUpdateAPI = 0`), and neither a virtual field (its value is the joined record's value today) nor a `__mj_`
+   * system column, both of which MJ also declares not updatable (`__mj_UpdatedAt` changes on every save).
    */
   public static IsImmutableAfterCreate(field: AssemblyFieldInfo): boolean {
-    return !field.AllowUpdateAPI && !field.Name.toLowerCase().startsWith('__mj_');
+    return !field.AllowUpdateAPI && !field.IsVirtual && !field.Name.toLowerCase().startsWith('__mj_');
   }
 
   /** Every column gets an imputer and a missing indicator; mode for categories and booleans, median otherwise. */
@@ -145,8 +146,6 @@ export class FeatureResolver {
       if (this.isDenied(col)) continue;
       const field = entity.Fields.find((x) => x.Name === col);
       if (!field) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entity.Name, field: col });
-      // A virtual field's value is the related record's value today; it is read through the related entity's key instead.
-      if (field.IsVirtual) throw new AssemblyRefused({ kind: 'virtual-field', entity: entity.Name, field: col });
       if (entity.Name === this.RowEntity.Name) this.checkForecastOffset(step, col);
       const encoding = FeatureResolver.EncodingFor(field, step.Encodings?.[col]);
       this.add({

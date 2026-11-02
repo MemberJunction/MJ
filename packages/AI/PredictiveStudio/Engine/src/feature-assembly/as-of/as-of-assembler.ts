@@ -451,11 +451,28 @@ export class AsOfFeatureAssembler {
     const join = await this.keyResolver(source.keyField, input, (row) => row.RowID, state);
     const keyOf = join.KeyOf;
     if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, state), input);
+    if (entity.Fields.some((f) => f.Name === source.field && f.IsVirtual)) return AsOfFeatureAssembler.throughJoin(spec, join, await AsOfFeatureAssembler.virtualFieldReader(spec, source, entity, keyOf, input), input);
     const today = input.Rows.filter((r) => AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
     const keysOf = (rs: readonly AssemblyRowRef[]): string[] => rs.map((r) => keyOf(r)).filter((k): k is string => k !== null);
     const history = await AsOfFeatureAssembler.loadHistory(entity, keysOf(input.Rows), [source.field], input, state);
     const stored = today.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keysOf(today), source.field, input) : new Map<string, SourceRow>();
     return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, { History: history, Stored: stored }, input), input);
+  }
+
+  /**
+   * A virtual field: the entity's view joins it from a related record, so its stored value is that record's value
+   * today and no history replays it. It is read by the module's one rule for rows decided on the assembly's day or
+   * later (the stored value is the value on that day); a row decided earlier refuses the whole read (`virtual-field`),
+   * since nothing can say what the joined value was then.
+   */
+  private static async virtualFieldReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput): Promise<FeatureReader> {
+    if (input.Rows.some((r) => !AsOfFeatureAssembler.onAssemblyDayOrLater(r, input))) throw new AssemblyRefused({ kind: 'virtual-field', entity: entity.Name, field: source.field });
+    const keys = input.Rows.map((r) => keyOf(r)).filter((k): k is string => k !== null);
+    const stored = keys.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keys, source.field, input) : new Map<string, SourceRow>();
+    return (row) => {
+      const key = keyOf(row);
+      return key === null ? AsOfFeatureAssembler.missingValue(spec, 'none', 'none', input) : AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, stored, input);
+    };
   }
 
   /** The stored rows of `keys` (key lower-cased), read by key for the rows decided on the assembly's day or later. */

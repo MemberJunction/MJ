@@ -437,6 +437,47 @@ describe('TrainingEngine — a time-indexed pipeline is judged only on a time-re
   });
 });
 
+describe('TrainingEngine — a virtual (view-joined) field', () => {
+  /** The world's Years rows with a view-joined `PersonName` (as stored today) and metadata declaring it virtual. */
+  function withVirtualPersonName(harness: ReturnType<typeof TrainingHarness.ForUnit>): void {
+    const years = UnitYearsWorld.Years().map((y) => ({ ...y, PersonName: `Person ${String(y.PersonID)}` }));
+    const yearsEntity = { ...UnitYearsWorld.YearsEntity, Fields: [...UnitYearsWorld.YearsEntity.Fields, { Name: 'PersonName', SqlType: 'nvarchar', TSType: 'string' as const, AllowUpdateAPI: false, IsPrimaryKey: false, RelatedEntity: null, IsVirtual: true }] };
+    const byName = new Map([yearsEntity, UnitYearsWorld.PeopleEntity].map((e) => [e.Name, e] as const));
+    harness.deps.assemblyMetadata = { Entity: (name: string) => byName.get(name) || null };
+    harness.deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(years));
+    harness.pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'PersonName'] }] } satisfies FeatureStepGraph);
+  }
+
+  it('trains a unit decided on the run\'s own day, reading the virtual field as it stands that day', async () => {
+    const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const units = new InMemoryUnitVersions();
+    units.Seed({
+      ...UnitYearsWorld.UnitColumns(), LabelWindowDays: 1,
+      UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'fixed', date: '2026-10-20', advance: 'each-run' }, filter: [] }),
+      Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-10-21' } }),
+    });
+    harness.deps.predictionUnits = units;
+    harness.deps.entityFactory = new UnitVersionFactory(units, harness.deps.entityFactory);
+    harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({ MinMinorityClassRows: 1, Holdout: JSON.stringify({ kind: 'seeded-random', fraction: 0.25 }) })]);
+    harness.deps.now = () => new Date('2026-11-02T09:00:00Z');
+    withVirtualPersonName(harness);
+    Object.assign(harness.pipeline, { TargetEntityID: '', Save: async (): Promise<boolean> => true });
+    const trained = await harness.engine.trainModel({ pipelineId: harness.pipeline.ID }, harness.deps);
+    expect(trained.run.Status).toBe('Completed');
+    const rows = snapshotRows(await storedContent(harness.files, harness.snapshots[0]));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => typeof r.PersonName === 'string' && String(r.PersonName).startsWith('Person p'))).toBe(true);
+  });
+
+  it('refuses a unit whose rows are decided on past days, naming the virtual field, before calling the trainer', async () => {
+    const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    withVirtualPersonName(harness);
+    await expect(harness.engine.trainModel({ pipelineId: harness.pipeline.ID }, harness.deps))
+      .rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'virtual-field', entity: 'Years', field: 'PersonName' } } });
+    expect(harness.trainer.Requests).toHaveLength(0);
+  });
+});
+
 describe('TrainingEngine — an advancing fixed decision date', () => {
   it('saves the unit version dated the run day before the run, trains under it, and saves no third version the same day', async () => {
     const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
