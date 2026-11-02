@@ -237,6 +237,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     const gate = storedGate(run);
     expect([result.published, result.heldReason, model.Saves, model.Entity.Status]).toEqual([true, null, 1, 'Published']);
     expect(result.trust).toEqual(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults, Lineage: null }));
+    expect(result.Gate).toEqual({ Outcome: 'model', Reason: gate.reason.text });
     expect(result.trust?.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'B', Value: gate.intervals.modelVsDummy.value, Lower: gate.intervals.modelVsDummy.lower, Upper: gate.intervals.modelVsDummy.upper, Metric: gate.primaryMetric });
   });
 
@@ -290,6 +291,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     spyTraining(world, completedRun([inner('A', 0.42), inner('B', 0.40)], 'B', 'keep-simple-baseline'));
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: false });
     expect(result.leaderboard?.map((r) => [r.algorithm, r.isWinner, r.ModelID, r.modelId])).toEqual([['B', true, undefined, undefined], ['A', false, undefined, undefined]]);
+    expect(result.Gate?.Outcome).toBe('keep-simple-baseline');
   });
 
   it('holds a build whose training run shipped no model, with the stored reason, and publishes nothing', async () => {
@@ -303,6 +305,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect([result.success, result.published, result.modelId, result.model, result.trust]).toEqual([true, false, undefined, undefined, undefined]);
     expect(result.heldReason).toBe('Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.');
     expect(result.leaderboard?.map((r) => r.ModelID)).toEqual([undefined]);
+    expect(result.Gate).toEqual({ Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' });
   });
 
   it('binds a default protocol to a unit pipeline before the search trains, with a budget for every candidate', async () => {

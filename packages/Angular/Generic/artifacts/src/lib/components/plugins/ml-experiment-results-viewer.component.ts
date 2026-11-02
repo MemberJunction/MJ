@@ -80,6 +80,13 @@ interface MLExperimentResultsSpec {
   BestModelID?: string;
   /** The normalized target metric name (PascalCase). */
   TargetMetric?: string;
+  /**
+   * The training run's stored gate outcome: `model` ships the trained finalist, `keep-simple-baseline` ships a simple
+   * baseline, `no-signal` ships nothing. Absent on an artifact written before the outcome was carried.
+   */
+  GateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal';
+  /** The stored gate decision's reason, in words. */
+  GateReason?: string;
 
   // ── Lowercase / LLM-authored fallbacks ──
   /** The modeling goal, plain language */
@@ -232,6 +239,34 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return this.Spec?.TargetMetric ?? this.Spec?.targetMetric ?? this.firstMetricName() ?? 'Score';
   }
 
+  /**
+   * Whether the leaderboard's marked row shipped: the stored outcome is `model`, or the artifact carries no outcome
+   * (written before the outcome was carried). A finalist the gate did not ship is never crowned the winner.
+   */
+  public get FinalistShipped(): boolean {
+    const outcome = this.Spec?.GateOutcome;
+    return outcome === undefined || outcome === 'model';
+  }
+
+  /** The side card's title: the winning model, or what the gate decided instead. */
+  public get OutcomeCardTitle(): string {
+    switch (this.Spec?.GateOutcome) {
+      case 'no-signal': return 'No model shipped';
+      case 'keep-simple-baseline': return 'Kept a simple baseline';
+      default: return 'Winning Model';
+    }
+  }
+
+  /** The stored gate decision's reason; empty when the artifact carries none. */
+  public get GateReason(): string {
+    return this.Spec?.GateReason || '';
+  }
+
+  /** Whether a row is shown as the winner: the row the artifact marks, and only when it shipped. */
+  public IsCrowned(row: NormalizedLeaderboardRow): boolean {
+    return row.IsWinner && this.FinalistShipped;
+  }
+
   /** The winning row (the one the artifact marks, which need not be rank 1), else the top row. */
   public get WinningRow(): NormalizedLeaderboardRow | null {
     return this.LeaderboardRows.find(r => r.IsWinner) ?? this.LeaderboardRows[0] ?? null;  // no winner: the top row, whose score may be null
@@ -243,8 +278,11 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return (score !== null && score !== undefined) ? this.FormatScore(score) : null;
   }
 
+  /** The shipped model's name; for a finalist that did not ship, only a named model record (none for no-signal). */
   public get WinningAlgorithm(): string {
-    return this.Spec?.BestModel?.Name ?? this.Spec?.report?.bestModelName ?? this.WinningRow?.Algorithm ?? 'Winning model';
+    const named = this.Spec?.BestModel?.Name || this.Spec?.report?.bestModelName;
+    if (!this.FinalistShipped) return named || '';
+    return named || this.WinningRow?.Algorithm || 'Winning model';
   }
 
   public get WinningModelSubtitle(): string {
@@ -265,7 +303,10 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     if (provided.length > 0) {
       return provided;
     }
-    // Synthesize a single metric from the headline score when nothing explicit was provided.
+    // Synthesize a single metric from the headline score when nothing explicit was provided, only for a shipped finalist.
+    if (!this.FinalistShipped) {
+      return [];
+    }
     const row = this.WinningRow;
     if (row?.Score !== null && row?.Score !== undefined) {
       return [{ label: row.MetricName || this.firstMetricName() || 'Score', value: this.FormatScore(row.Score) }];

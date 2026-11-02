@@ -400,6 +400,7 @@ class NoModelBuilder extends PredictiveStudioPipelineBuilder {
     return {
       success: true, pipelineId: 'pipe-1', published: false, leakageFlagged: false, errorMessage: null, leaderboard: [],
       heldReason: 'Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.',
+      Gate: { Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' },
     };
   }
 }
@@ -412,6 +413,16 @@ describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — a build 
     expect(payload.Summary).toBe("I built and trained the prediction, but I'm holding it back: Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.");
     expect(step.reasoning).toBe(payload.Summary);
     expect(payload.Markdown).toContain('**Outcome**: **No model shipped** (Held for Review)');
+  });
+
+  it("carries the run's stored gate outcome and reason, so the artifact can title its card by them", async () => {
+    const payload = (await new TestableBuilderAgent(new NoModelBuilder()).Run({ ...plan })).newPayload as PredictiveStudioBuilderPayload;
+    expect([payload.GateOutcome, payload.GateReason]).toEqual(['no-signal', 'Neither the model nor any simple baseline beats the flat guess.']);
+  });
+
+  it('carries no gate outcome for a build whose run stores no gate record', async () => {
+    const payload = (await new TestableBuilderAgent().Run({ ...plan })).newPayload as PredictiveStudioBuilderPayload;
+    expect([payload.GateOutcome, payload.GateReason]).toEqual([undefined, undefined]);
   });
 
   it("builds from the plan without a previous build's results leaderboard", async () => {

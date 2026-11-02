@@ -347,6 +347,17 @@
   background: color-mix(in srgb, var(--mj-status-success) 6%, var(--mj-bg-surface));
 }
 
+.winner-card.no-model {
+  border-color: var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+
+.gate-reason {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+}
+
 .winner-top {
   display: flex;
   align-items: center;

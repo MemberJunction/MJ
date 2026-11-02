@@ -31,6 +31,7 @@ import {
   TrustVerdicts,
   type CandidateSpec,
   type FeatureStepWarning,
+  type GateOutcome,
   type HyperparameterValue,
   type ModelingPlanSpec,
   type TrustVerdict,
@@ -128,6 +129,13 @@ export interface MLLeaderboardEntryPayload {
   isWinner?: boolean;  // case-violation-ok-legacy-back-compat: artifact JSON key
 }
 
+/** The training run's stored gate decision: what shipped (a trained model, a simple baseline, or nothing) and why. */
+export interface BuildGateDecision {
+  readonly Outcome: GateOutcome;
+  /** The stored reason, in words. */
+  readonly Reason: string;
+}
+
 /** The outcome of building a prediction from a plan. */
 export interface BuildPredictionResult {
   /** Whether the build (pipeline create + train) succeeded. */
@@ -152,14 +160,18 @@ export interface BuildPredictionResult {
   pipeline?: MJMLTrainingPipelineEntity;
   /** The leaderboard of the build's one training run. */
   leaderboard?: MLLeaderboardEntryPayload[];
+  /** The training run's stored gate decision; absent when the build failed before a run stored one. */
+  Gate?: BuildGateDecision;
   /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
   warnings?: FeatureStepWarning[];
 }
 
-/** One training of the build's pipeline: the engine's result and the leaderboard it produced. */
+/** One training of the build's pipeline: the engine's result, the leaderboard it produced and its stored gate decision. */
 interface BuildTraining {
   readonly Train: TrainModelResult;
   readonly Leaderboard: MLLeaderboardEntryPayload[];
+  /** Null when the completed run stores no gate record. */
+  readonly Gate: BuildGateDecision | null;
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
@@ -205,7 +217,7 @@ export class PredictiveStudioPipelineBuilder {
     const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
     return {
       success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, leakageFlagged, heldReason,
-      errorMessage: null, leaderboard: training.Leaderboard,
+      errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
@@ -248,7 +260,7 @@ export class PredictiveStudioPipelineBuilder {
     return {
       success: true, pipelineId: pipeline.ID, pipeline, published: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
       heldReason: `Not published — the training run shipped no model: ${TrainingEngine.NoModelReason(training.Train)}`,
-      errorMessage: null, leaderboard: training.Leaderboard,
+      errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
@@ -342,22 +354,23 @@ export class PredictiveStudioPipelineBuilder {
 
   /**
    * Train a pipeline with a Prediction Unit: bind its default Evaluation Protocol (before the run row), run ONE search
-   * over every candidate, and read the leaderboard from the stored inner-fold scores.
+   * over every candidate, and read the leaderboard from the stored inner-fold scores and the gate decision from the stored record.
    */
   private async trainSearch(pipeline: MJMLTrainingPipelineEntity, candidates: readonly CandidateSpec[], sidecarVersion: string, provider: IMetadataProvider, user: UserInfo): Promise<BuildTraining> {
     await this.ensureProtocol(pipeline, candidates.length, provider, user);
     const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, candidates, sidecarVersion }, provider, user);
-    return { Train: train, Leaderboard: PredictiveStudioPipelineBuilder.searchLeaderboard(train) };
+    return { Train: train, ...PredictiveStudioPipelineBuilder.searchResults(train) };
   }
 
   /**
    * A search's leaderboard from the run's stored trainer result: every candidate best-first by inner-fold mean with its
    * interval, each optimistic, the trainer's finalist the winner. The finalist's row links the model only when the gate
-   * shipped the finalist; a kept baseline member's model, or no model, links no candidate row.
+   * shipped the finalist; a kept baseline member's model, or no model, links no candidate row. With it, the stored
+   * gate decision (outcome and reason), so a reader of the leaderboard knows whether the finalist shipped.
    *
    * @throws Error when the completed run stores no trainer result
    */
-  private static searchLeaderboard(train: TrainModelResult): MLLeaderboardEntryPayload[] {
+  private static searchResults(train: TrainModelResult): Pick<BuildTraining, 'Leaderboard' | 'Gate'> {
     const results = TrainingRunResultsParser.ParseTrainingRunResults(train.run.ValidationResults);
     if (!results.Ok || results.Value.status !== 'completed' || results.Value.trainer === null) {
       throw new Error(`Training run ${train.run.ID} completed without a stored trainer result; its search has no leaderboard.`);
@@ -365,11 +378,12 @@ export class PredictiveStudioPipelineBuilder {
     const trainer = results.Value.trainer;
     const gate = results.Value.gate;
     const finalistModelId = train.model !== null && gate !== null && gate.decision.outcome === 'model' ? train.model.ID : undefined;
-    return InnerScoreSelection.LeaderboardFromInnerScores(trainer.innerScores, trainer.finalist).map((row) => ({
+    const leaderboard = InnerScoreSelection.LeaderboardFromInnerScores(trainer.innerScores, trainer.finalist).map((row) => ({
       IterationID: train.run.ID, Metric: row.Mean, ModelID: row.IsFinalist ? finalistModelId : undefined, rank: row.Rank, algorithm: row.Candidate,
       featureSet: 'Pipeline feature set', score: row.Mean, metricName: row.Metric, innerLower: row.Lower, innerUpper: row.Upper,
       optimistic: row.Optimistic, modelId: row.IsFinalist ? finalistModelId : undefined, isWinner: row.IsFinalist,
     }));
+    return { Leaderboard: leaderboard, Gate: gate === null ? null : { Outcome: gate.decision.outcome, Reason: gate.reason.text } };
   }
 
   /**

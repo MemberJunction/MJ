@@ -55,3 +55,36 @@ describe('MLExperimentResultsViewerComponent (DOM) — leaderboard labels', () =
     expect(f.nativeElement.textContent).not.toContain('0.790');
   });
 });
+
+describe('MLExperimentResultsViewerComponent (DOM) — the stored gate outcome', () => {
+  const leaderboard = [searchRow(1, 'lr-c01', 0.331, false), searchRow(2, 'xgb', 0.332, true)];
+  const reason = 'Neither the model nor any simple baseline beats the flat guess on log-loss: no signal.';
+
+  it('crowns no winner on a search whose stored outcome is no-signal, and titles the card by the outcome and its reason', () => {
+    const f = render({ Leaderboard: leaderboard, GateOutcome: 'no-signal', GateReason: reason });
+    expect(queryAll(f, '.crown')).toHaveLength(0);
+    expect(queryAll(f, '.lb-table tbody tr.is-winner')).toHaveLength(0);
+    expect(queryAll(f, '.rank.gold')).toHaveLength(0);
+    expect(f.nativeElement.textContent).not.toContain('Winning Model');
+    expect(f.nativeElement.textContent).not.toContain('winner');
+    expect(text(f, '.col-side .section-title')).toBe('No model shipped');
+    expect(text(f, '.gate-reason')).toBe(reason);
+  });
+
+  it('titles the card "Kept a simple baseline" without a crown when the gate kept a baseline', () => {
+    const f = render({ Leaderboard: leaderboard, GateOutcome: 'keep-simple-baseline', GateReason: 'The simple baseline glm is kept.', BestModel: { ID: 'm1', Name: 'Renewal (v1)', Version: 1 } });
+    expect(queryAll(f, '.crown')).toHaveLength(0);
+    expect(queryAll(f, '.lb-table tbody tr.is-winner')).toHaveLength(0);
+    expect(text(f, '.col-side .section-title')).toBe('Kept a simple baseline');
+    expect(text(f, '.winner-name')).toBe('Renewal (v1)');
+    expect(text(f, '.gate-reason')).toBe('The simple baseline glm is kept.');
+  });
+
+  it('crowns the finalist only when the stored outcome ships it', () => {
+    const f = render({ Leaderboard: leaderboard, GateOutcome: 'model', GateReason: 'The model beats the flat guess.' });
+    expect(queryAll(f, '.crown')).toHaveLength(1);
+    expect(queryAll(f, '.lb-table tbody tr.is-winner')).toHaveLength(1);
+    expect(text(f, '.col-side .section-title')).toBe('Winning Model');
+    expect(text(f, '.hero-metric-label')).toBe('log-loss · winner');
+  });
+});

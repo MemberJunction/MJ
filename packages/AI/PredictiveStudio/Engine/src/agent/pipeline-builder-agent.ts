@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type GateOutcome, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
@@ -80,6 +80,13 @@ export interface PredictiveStudioBuilderPayload extends Omit<ModelingPlanSpec, '
   BestModelID?: string;
   /** Target metric name */
   TargetMetric?: string;
+  /**
+   * The training run's stored gate outcome: `model` ships the trained finalist, `keep-simple-baseline` ships a simple
+   * baseline, `no-signal` ships nothing. Absent when the run stores no gate record.
+   */
+  GateOutcome?: GateOutcome;
+  /** The stored gate decision's reason, in words; absent with `GateOutcome`. */
+  GateReason?: string;
 }
 
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
@@ -352,6 +359,8 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       BestModelID: result.model ? result.model.ID : undefined,
       Summary: summaryText,
       Markdown: reportMarkdown,
+      GateOutcome: result.Gate?.Outcome,
+      GateReason: result.Gate?.Reason,
     };
   }
 

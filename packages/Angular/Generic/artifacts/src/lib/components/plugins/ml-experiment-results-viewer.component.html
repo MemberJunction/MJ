@@ -21,7 +21,7 @@
           <div class="hero-sub">{{ Summary }}</div>
         }
       </div>
-      @if (HeadlineScore !== null) {
+      @if (HeadlineScore !== null && FinalistShipped) {
         <div class="hero-metric">
           <div class="hero-metric-value">{{ HeadlineScore }}</div>
           <div class="hero-metric-label">{{ HeadlineMetricLabel }} · winner</div>
@@ -85,14 +85,14 @@
                 </thead>
                 <tbody>
                   @for (row of LeaderboardRows; track row.Rank) {
-                    <tr [class.is-winner]="row.IsWinner"
+                    <tr [class.is-winner]="IsCrowned(row)"
                         [class.has-model]="row.ModelID"
                         (click)="OnOpenRowModel(row)">
                       <td>
-                        <span class="rank" [class.gold]="row.IsWinner">{{ row.Rank }}</span>
+                        <span class="rank" [class.gold]="IsCrowned(row)">{{ row.Rank }}</span>
                       </td>
                       <td class="algo">
-                        @if (row.IsWinner) {
+                        @if (IsCrowned(row)) {
                           <strong>{{ row.Algorithm }}</strong>
                         } @else {
                           {{ row.Algorithm }}
@@ -104,7 +104,7 @@
                       </td>
                       <td class="muted">{{ row.FeatureSet || '—' }}</td>
                       <td class="num">
-                        @if (row.IsWinner) {
+                        @if (IsCrowned(row)) {
                           <strong>{{ FormatScore(row.Score) }}</strong>
                         } @else {
                           {{ FormatScore(row.Score) }}
@@ -125,7 +125,7 @@
           }
 
           @if (FeatureBars.length > 0) {
-            <div class="section-title">Feature Importance — winning model</div>
+            <div class="section-title">Feature Importance — {{ FinalistShipped ? 'winning' : 'shipped' }} model</div>
             <div class="fi-card">
               @for (bar of FeatureBars; track bar.feature) {
                 <div class="fbar">
@@ -142,17 +142,25 @@
 
         <!-- RIGHT COLUMN: winning model card + drill-through -->
         <div class="col-side">
-          <div class="section-title">Winning Model</div>
-          <div class="winner-card">
+          <div class="section-title">{{ OutcomeCardTitle }}</div>
+          <div class="winner-card" [class.no-model]="Spec.GateOutcome === 'no-signal'">
             <div class="winner-top">
-              <div class="crown"><i class="fa-solid fa-crown"></i></div>
+              @if (FinalistShipped) {
+                <div class="crown"><i class="fa-solid fa-crown"></i></div>
+              }
               <div class="winner-head">
-                <h3 class="winner-name">{{ WinningAlgorithm }}</h3>
+                @if (WinningAlgorithm) {
+                  <h3 class="winner-name">{{ WinningAlgorithm }}</h3>
+                }
                 @if (WinningModelSubtitle) {
                   <div class="muted">{{ WinningModelSubtitle }}</div>
                 }
               </div>
             </div>
+
+            @if (GateReason) {
+              <p class="gate-reason">{{ GateReason }}</p>
+            }
 
             @if (WinningMetrics.length > 0) {
               <div class="wmetrics">
