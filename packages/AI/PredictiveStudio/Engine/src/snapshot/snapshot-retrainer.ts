@@ -16,6 +16,7 @@ import {
   type EvaluationProtocolSpec,
   type PredictionUnitSpec,
   type StoredTrainerResult,
+  type TrainerRequest,
   type TrainerRequestConfig,
   type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
@@ -111,12 +112,13 @@ export class SnapshotRetrainer {
   ): Promise<Record<string, number>> {
     if (!deps.trainer) throw new Error(`Training run ${run.ID} was trained under an Evaluation Protocol; retraining it needs the trainer (deps.trainer)`);
     const [protocol, unit] = await Promise.all([this.LoadProtocolSpec(logged.Request.evaluationProtocolId, deps), this.LoadUnitSpec(snapshot.PredictionUnitID, deps)]);
-    const request = await TrainerRequestBuilder.BuildTrainerRequest({
+    // Each call pre-authorises fresh snapshot downloads: the first attempt sends one, every retry another.
+    const issue = (): Promise<TrainerRequest> => TrainerRequestBuilder.BuildTrainerRequest({
       TrainingRunID: run.ID, Snapshot: snapshot, Files: files, Protocol: protocol, Task: unit.label.outcome,
       Candidates: logged.Request.candidates, Seed: logged.Request.seed, Threads: logged.Request.threads,
       TimeoutSeconds: logged.Request.timeoutSeconds, MaxRetries: logged.Request.maxRetries,
     });
-    const again = await deps.trainer.RunTrainer(request);
+    const again = await deps.trainer.RunTrainer(await issue(), issue);
     if (again.status === 'failed') throw new Error(`Retraining run ${run.ID} failed at stage ${again.stage}: ${again.message}`);
     return TrainerContract.HoldoutMetricsOf(again.holdout);
   }

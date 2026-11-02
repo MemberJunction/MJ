@@ -450,11 +450,13 @@ export class TrainingEngine {
   private async trainThroughTrainer(x: TrainerRunInputs): Promise<MJMLModelEntity | null> {
     const { Run: run, Resolved: resolved, Snapshot: snapshot, Training: training, Deps: deps } = x;
     const candidates = x.Input.candidates || [TrainerRequestBuilder.CandidateFromPipeline(resolved.algorithmDriverKey, resolved.pipeline.AlgorithmID, resolved.algorithmDriverKey, resolved.pipeline.Hyperparameters)];
-    const request = await TrainerRequestBuilder.BuildTrainerRequest({
+    // Each call pre-authorises fresh snapshot downloads: the first attempt sends one, every retry another.
+    const issue = (): Promise<TrainerRequest> => TrainerRequestBuilder.BuildTrainerRequest({
       TrainingRunID: run.ID, Snapshot: snapshot.Entity, Files: x.Files, Protocol: training.Protocol.Protocol, Task: x.Unit.label.outcome,
       Candidates: candidates, TimeoutSeconds: TrainingEngine.TimeoutSecondsFor(training.Protocol.Protocol, x.Input),
     });
-    const result = TrainingEngine.recordTrainerResult(run, await training.Trainer.RunTrainer(request), x.UsdPerSecond);
+    const request = await issue();
+    const result = TrainingEngine.recordTrainerResult(run, await training.Trainer.RunTrainer(request, issue), x.UsdPerSecond);
     TrainingEngine.checkAnswerBelongsToRun(run, snapshot, result);
     TrainingEngine.checkSelection(result);
     const gate = TrainingEngine.buildGateRecord(x, result);

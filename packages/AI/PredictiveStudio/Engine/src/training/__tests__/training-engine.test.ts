@@ -13,6 +13,7 @@ import {
   type TaskType,
   type TrainerCompleted,
   type TrainerRequest,
+  type TrainerResult,
   type TrainingRunResults,
   type FeatureStepGraph,
   type AsOfStrategy,
@@ -22,6 +23,7 @@ import {
 import { TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { TrainingEngine } from '../training-engine';
 import { TrainingRefusedError } from '../training-refusal';
+import type { ITrainerEvaluator } from '../types';
 import { TrainerRequestBuilder } from '../trainer-request';
 import { WasTrainingLeakageFlagged } from '../../operations/delegation';
 import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
@@ -231,6 +233,24 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const results = JSON.parse(runs[0].ValidationResults!);
     expect(results.refusal.stage).toBe('assembly');
     expect(results.refusal.reason.kind).toBe('non-numeric-in-numeric-column');
+  });
+
+  it('hands the trainer a re-issue that pre-authorises fresh snapshot downloads, so a retry never resends expired URLs', async () => {
+    const { engine, deps, pipeline, files } = TrainingHarness.ForUnit(years, unitColumns);
+    const issued = vi.spyOn(files, 'CreatePreAuthDownload');
+    const sent: TrainerRequest[] = [];
+    const retrying: ITrainerEvaluator = {
+      RunTrainer: async (req: TrainerRequest, reissue: () => Promise<TrainerRequest>): Promise<TrainerResult> => {
+        sent.push(req, await reissue());
+        return cannedFor(req);
+      },
+    };
+    deps.trainer = retrying;
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(issued).toHaveBeenCalledTimes(4);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual({ ...sent[0], snapshot: { ...sent[0].snapshot, matrix: sent[1].snapshot.matrix, rowManifest: sent[1].snapshot.rowManifest } });
+    expect([sent[1].snapshot.matrix.fileId, sent[1].snapshot.rowManifest.fileId]).toEqual([sent[0].snapshot.matrix.fileId, sent[0].snapshot.rowManifest.fileId]);
   });
 
   describe('the bound Evaluation Protocol\'s exclusions', () => {

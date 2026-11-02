@@ -20,7 +20,7 @@ import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity } from '@memberjun
 import type { TrainerRequest, TrainerResult } from '@memberjunction/predictive-studio-core';
 import { MLSidecar, SidecarError, TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
-import type { IEntityFactory, IRecordLoader, ITrainerEvaluator } from './types';
+import type { IEntityFactory, IRecordLoader, ITrainerEvaluator, TrainerRequestReissue } from './types';
 
 /**
  * Provider-bound {@link IEntityFactory}: every entity is created through the
@@ -167,25 +167,30 @@ export class MJSidecarTrainer implements ITrainerEvaluator {
 
   /**
    * Run one protocol-driven training with bounded retries: a transport failure or a 5xx answer is retried up to
-   * `req.maxRetries` times. Each attempt first calls `Start()`, which does nothing while the sidecar runs and respawns
-   * a managed child that died, so a crash mid-training is recovered by the next attempt (a failed respawn counts as
-   * that attempt failing). A 4xx refusal and a malformed answer are not retried (the same request gets the same
-   * answer) and are rethrown. When every attempt fails the result is `failed` at stage `timeout` naming the last
-   * error, never partial metrics, with the wall seconds the attempts took as its `computeSeconds` (the sidecar may have
-   * computed for all of them, so the run records that time rather than none).
+   * `req.maxRetries` times. Each retry sends the request `reissue` builds, with fresh snapshot downloads, since the
+   * first attempt's may have expired by then (a failed re-issue counts as that attempt failing). Each attempt first
+   * calls `Start()`, which does nothing while the sidecar runs and respawns a managed child that died, so a crash
+   * mid-training is recovered by the next attempt (a failed respawn counts as that attempt failing). A 4xx refusal and
+   * a malformed answer are not retried (the same request gets the same answer) and are rethrown. A `failed` answer to
+   * a retry keeps the error that forced the retry in its message. When every attempt fails the result is `failed` at
+   * stage `timeout` naming the last error, never partial metrics, with the wall seconds the attempts took as its
+   * `computeSeconds` (the sidecar may have computed for all of them, so the run records that time rather than none).
    *
    * A retried transport failure can repeat a training that is still running: a socket reset on a remote sidecar
    * that kept computing makes attempt 2 train and score the holdout again, concurrently. The sidecar is stateless
    * and the run is seeded, so the repeat produces the same result; only compute repeats, up to
    * `(maxRetries + 1) × (timeoutSeconds + 60)` seconds of wall time.
    */
-  public async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
+  public async RunTrainer(req: TrainerRequest, reissue: TrainerRequestReissue): Promise<TrainerResult> {
     let lastError = '';
     const startedMs = this.clockMs();
     for (let attempt = 0; attempt <= req.maxRetries; attempt++) {
       try {
+        const sent = attempt === 0 ? req : await reissue();
         await this.sidecar.Start();
-        return await this.sidecar.RunTrainer(req);
+        const result = await this.sidecar.RunTrainer(sent);
+        if (result.status !== 'failed' || attempt === 0) return result;
+        return { ...result, message: `${result.message} (attempt ${attempt + 1} of ${req.maxRetries + 1}; attempt ${attempt} failed: ${lastError})` };
       } catch (err) {
         if (MJSidecarTrainer.isNotRetryable(err)) throw err;
         lastError = err instanceof Error ? err.message : String(err);

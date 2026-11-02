@@ -122,9 +122,16 @@ export interface ITrainerEvaluator {
   /**
    * Run one training. Transport failures and sidecar faults are retried up to `req.maxRetries` times; a refused request
    * or a malformed answer throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
+   *
+   * @param req the request the first attempt sends
+   * @param reissue builds the same request with freshly pre-authorised snapshot downloads; every retry sends its result,
+   *   since a download URL expires (ten minutes on the cloud storage providers) and a retry can start long after the first
    */
-  RunTrainer(req: TrainerRequest): Promise<TrainerResult>;
+  RunTrainer(req: TrainerRequest, reissue: TrainerRequestReissue): Promise<TrainerResult>;
 }
+
+/** Builds a trainer request again with freshly pre-authorised snapshot downloads (the rest of the request is unchanged). */
+export type TrainerRequestReissue = () => Promise<TrainerRequest>;
 
 /**
  * Artifact-storage seam (plan §11). The serialized model artifact is persisted
