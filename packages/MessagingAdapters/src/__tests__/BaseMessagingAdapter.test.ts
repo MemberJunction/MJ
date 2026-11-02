@@ -7,7 +7,7 @@
  * All external dependencies (UserCache, RunView, AgentRunner) are mocked.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Metadata, UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
@@ -1575,7 +1575,7 @@ describe('BaseMessagingAdapter', () => {
         });
     });
 
-    describe('same-thread serialization and conversation-id resolution', () => {
+    describe('same-thread serialization', () => {
         beforeEach(async () => {
             await adapter.Initialize();
         });
@@ -1651,75 +1651,6 @@ describe('BaseMessagingAdapter', () => {
                 'convo-created-1',
                 'convo-created-1',
             ]);
-        });
-
-        it('eagerly resolves and stores ConversationID via Metadata.Provider before runAgentWithStreaming on three messages in one thread', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
-            const originalProvider = Metadata.Provider;
-            let savedConversationCount = 0;
-            const passedConversationIds: Array<string | undefined> = [];
-
-            const mockProvider = {
-                GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
-                    if (entityName === 'MJ: Conversations') {
-                        const entity: Record<string, unknown> = {
-                            ID: '',
-                            Name: '',
-                            Description: '',
-                            UserID: '',
-                            Status: '',
-                            DataContextID: null,
-                            Save: vi.fn().mockImplementation(async () => {
-                                savedConversationCount++;
-                                entity.ID = `pre-created-convo-${savedConversationCount}`;
-                                return true;
-                            }),
-                        };
-                        return entity;
-                    }
-                    return null;
-                }),
-            };
-
-            Metadata.Provider = mockProvider as unknown as typeof Metadata.Provider;
-            try {
-                vi.mocked(AgentRunner).mockImplementation(() => ({
-                    RunAgentInConversation: vi.fn().mockImplementation(
-                        async (_params: Record<string, unknown>, options: { conversationId?: string; userMessage?: string }) => {
-                            passedConversationIds.push(options.conversationId);
-                            await new Promise(resolve => setTimeout(resolve, 10));
-                            return {
-                                agentResult: {
-                                    success: true,
-                                    agentRun: { Message: `Handled ${options.userMessage}`, Steps: [] },
-                                },
-                                conversationId: options.conversationId ?? 'unexpected-fallback-convo',
-                                userMessageDetailId: 'u-detail',
-                                agentResponseDetailId: 'a-detail',
-                                artifactInfo: undefined,
-                            };
-                        }
-                    ),
-                    FollowHandoffs: vi.fn().mockResolvedValue([]),
-                }) as ReturnType<typeof vi.fn>);
-
-                const messages = [
-                    createMessage({ MessageID: 'm1', ThreadID: 't-100', ChannelID: 'C1', IsBotMention: true, Text: '<@BOT123> First' }),
-                    createMessage({ MessageID: 'm2', ThreadID: 't-100', ChannelID: 'C1', IsBotMention: true, Text: '<@BOT123> Second' }),
-                    createMessage({ MessageID: 'm3', ThreadID: 't-100', ChannelID: 'C1', IsBotMention: true, Text: '<@BOT123> Third' }),
-                ];
-
-                await Promise.all(messages.map(m => adapter.HandleMessage(m)));
-
-                expect(savedConversationCount).toBe(1);
-                expect(passedConversationIds).toEqual([
-                    'pre-created-convo-1',
-                    'pre-created-convo-1',
-                    'pre-created-convo-1',
-                ]);
-            } finally {
-                Metadata.Provider = originalProvider;
-            }
         });
     });
 });

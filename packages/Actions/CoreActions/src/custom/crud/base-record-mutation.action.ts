@@ -332,7 +332,7 @@ export abstract class BaseRecordMutationAction extends BaseAction {
                 RecoverySuggestion: suggestedFields.length > 0
                     ? `Unknown field(s) ${unknown.map(f => `'${f}'`).join(', ')} on '${entityInfo.Name}'. Did you mean: ${suggestedFields.join(', ')}? Retry using valid updatable field names.`
                     : `Unknown field(s) ${unknown.map(f => `'${f}'`).join(', ')} on '${entityInfo.Name}'. Retry using only valid updatable fields: ${updatable.join(', ')}.`,
-                SuggestedValues: suggestedFields.length > 0 ? suggestedFields : updatable.slice(0, 10),
+                SuggestedValues: suggestedFields.length > 0 ? suggestedFields : undefined,
                 InvalidParams: invalidParams
             }
         };

@@ -13,7 +13,7 @@ import { AgentRunner, ResolveHandoffTarget } from '@memberjunction/ai-agents';
 import { ChatMessage, parseBase64DataUrl } from '@memberjunction/ai';
 import { ExecuteAgentParams, ExecuteAgentResult, FileOutputRef, MAX_HANDOFF_HOPS, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { MJArtifactEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
@@ -138,17 +138,12 @@ export abstract class BaseMessagingAdapter {
     private static readonly THREAD_MAP_MAX_SIZE = 10_000;
 
     /**
-     * Per-thread execution chain that serializes concurrent messages arriving on the same
-     * platform thread so they do not race to create duplicate MJ Conversations or clobber
-     * per-thread streaming indicator IDs.
+     * Per-thread execution chain. Messages on one platform thread are handled one at a time, in
+     * arrival order, so a rapid burst cannot race: the first message creates the MJ Conversation
+     * and stores its id before the second message looks it up, and the per-thread streaming
+     * indicator is never clobbered by a parallel turn.
      */
     private inFlightThreadPromises = new Map<string, Promise<void>>();
-
-    /**
-     * Per-thread in-flight conversation creation promises so concurrent callers on the same
-     * thread share a single MJ Conversation creation round-trip.
-     */
-    private inFlightConversationResolutions = new Map<string, Promise<string | undefined>>();
 
     constructor(settings: MessagingAdapterSettings) {
         this.settings = settings;
@@ -749,15 +744,11 @@ export abstract class BaseMessagingAdapter {
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null
     ): Promise<void> {
-        // Resolve or create (and store) the MJ Conversation for this thread BEFORE launching
-        // runAgentWithStreaming so same-thread turns always share one ConversationID.
+        // Look up the MJ Conversation for this thread. HandleMessage serializes same-thread turns,
+        // so by the time a follow-up message gets here the earlier turn has finished and stored
+        // the id below; RunAgentInConversation creates the conversation when there is none yet.
         const threadKey = this.getThreadKey(message);
-        const existingConversationId = await this.resolveOrCreateThreadConversationId(
-            threadKey,
-            message,
-            agent,
-            contextUser
-        );
+        const existingConversationId = this.getThreadConversationId(threadKey);
 
         let agentResult: ConversationAgentResult;
         try {
@@ -1652,74 +1643,6 @@ export abstract class BaseMessagingAdapter {
             return undefined;
         }
         return entry.conversationId;
-    }
-
-    /**
-     * Resolve an existing MJ Conversation ID for `threadKey`, or eagerly create and store one
-     * before `runAgentWithStreaming` runs so same-thread turns never race to create duplicate
-     * MJ Conversations. Falls back to `undefined` when no metadata provider is configured
-     * (e.g. unit tests that mock `AgentRunner` directly), in which case `RunAgentInConversation`
-     * creates the conversation and `executeAgentAndRespond` caches the returned ID.
-     */
-    private async resolveOrCreateThreadConversationId(
-        threadKey: string,
-        message: IncomingMessage,
-        agent: MJAIAgentEntityExtended,
-        contextUser: UserInfo
-    ): Promise<string | undefined> {
-        const existing = this.getThreadConversationId(threadKey);
-        if (existing) {
-            return existing;
-        }
-
-        const inFlight = this.inFlightConversationResolutions.get(threadKey);
-        if (inFlight) {
-            return inFlight;
-        }
-
-        const resolutionPromise = (async (): Promise<string | undefined> => {
-            const recheck = this.getThreadConversationId(threadKey);
-            if (recheck) {
-                return recheck;
-            }
-            const provider = Metadata.Provider;
-            if (!provider) {
-                return undefined;
-            }
-            try {
-                const conversation = await provider.GetEntityObject<MJConversationEntity>(
-                    'MJ: Conversations',
-                    contextUser
-                );
-                if (!conversation) {
-                    return undefined;
-                }
-                const userMessageText = this.stripBotMention(message.Text);
-                const conversationName = `${this.PlatformName}: ${userMessageText.substring(0, 80)}`;
-                conversation.Name = conversationName || `Chat with ${agent.Name ?? 'Agent'}`;
-                conversation.Description = '';
-                conversation.UserID = contextUser.ID;
-                conversation.Status = 'Available';
-                conversation.DataContextID = null;
-
-                if ((await conversation.Save()) && conversation.ID) {
-                    this.setThreadConversationId(threadKey, conversation.ID);
-                    return conversation.ID;
-                }
-            } catch {
-                // Provider not available or save unsupported in test environment; fall back to AgentRunner
-            }
-            return undefined;
-        })();
-
-        this.inFlightConversationResolutions.set(threadKey, resolutionPromise);
-        try {
-            return await resolutionPromise;
-        } finally {
-            if (this.inFlightConversationResolutions.get(threadKey) === resolutionPromise) {
-                this.inFlightConversationResolutions.delete(threadKey);
-            }
-        }
     }
 
     /**

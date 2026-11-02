@@ -874,29 +874,28 @@ export class BaseAgent {
     }
 
     /**
-     * Default code-side set of actions whose output originates from external, unverified sources
-     * (Primitive 2 v1, DDL-free). Lowercase-normalized for case-insensitive matching; overridable
-     * per agent or run via `AgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`,
-     * `untrustedActionNames`).
+     * Default code-side set of actions whose output is content fetched from outside MJ: web pages, search
+     * results, mail, feeds, arbitrary HTTP responses, and whatever an MCP tool returns (Primitive 2 v1,
+     * DDL-free; the `Action.OutputTrustLevel` column replaces this list later). Actions that only SEND to
+     * an external system (webhooks, outbound messages) and actions that return MJ's own catalog of an
+     * external system (listing or syncing MCP tools) are deliberately absent: their output is a delivery
+     * status or metadata, and tainting a run for them would hold every memory write of a run that merely
+     * posted to Slack. Lowercase-normalized for case-insensitive matching; overridable per agent or run via
+     * `AgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`, `untrustedActionNames`).
      * @protected
      */
     protected static readonly DEFAULT_UNTRUSTED_ACTION_NAMES: ReadonlySet<string> = new Set([
         'web search',
         'web page content',
-        'get my inbox messages',
-        'manage my email inbox and drafts',
         'brave search',
         'perplexity search',
         'tavily search',
+        'google custom search',
+        'manage my email inbox and drafts',
         'http request',
         'url metadata extractor',
-        'rss feed',
-        'slack webhook',
-        'teams webhook',
+        'read rss feed',
         'execute mcp tool',
-        'list mcp tools',
-        'sync mcp tools',
-        'test mcp connection',
     ]);
 
     /**
@@ -1395,7 +1394,7 @@ export class BaseAgent {
                 const nextActions = summary.errorRecovery?.SuggestedNextActions?.length
                     ? ` Suggested alternative actions: ${summary.errorRecovery.SuggestedNextActions.map(a => `\`${a}\``).join(', ')}.`
                     : '';
-                return `[CRITICAL/NON_RETRYABLE_FAILURE] Action '${name}' failed with non-retryable error (${summary.resultCode}): "${summary.message}".${suggestion}${nextActions} DO NOT retry calling '${name}'; pivot to an alternative tool or inform the user.`;
+                return `[CRITICAL/NON_RETRYABLE_FAILURE] Action '${name}' failed with non-retryable error (${summary.resultCode}): "${summary.message}".${suggestion}${nextActions} DO NOT retry '${name}' against the same target or with the same parameters; pivot to an alternative tool, a different target, or inform the user.`;
             }
             case 'audience':
                 return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
@@ -1422,10 +1421,12 @@ export class BaseAgent {
     /**
      * Resolves the output trust classification for an action (Primitive 2 v1, DDL-free).
      * Precedence:
-     * 1. `AgentTypePromptParams` overrides (`actionTrustLevels`, `trustedActionNames`, `untrustedActionNames`)
-     * 2. Explicit `actionResult.TrustLevel` returned by the action implementation
-     * 3. Code-side default untrusted action names ({@link DEFAULT_UNTRUSTED_ACTION_NAMES}) and webhook/MCP heuristics
-     * 4. `'Trusted'`
+     * 1. An explicit per-action `actionTrustLevels` entry in `AgentTypePromptParams` — the operator's last word
+     * 2. The `TrustLevel` the action itself returned on its result — an action knows where its output came from,
+     *    so a name list cannot quietly un-taint it
+     * 3. The `trustedActionNames` / `untrustedActionNames` lists in `AgentTypePromptParams`
+     * 4. The code-side default list of external-content actions ({@link DEFAULT_UNTRUSTED_ACTION_NAMES})
+     * 5. `'Trusted'`
      * @protected
      */
     protected resolveActionTrustLevel(
@@ -1436,55 +1437,38 @@ export class BaseAgent {
     ): ActionOutputTrustLevel {
         const normalizedName = actionName.trim().toLowerCase();
         const entityName = actionEntity?.Name?.trim().toLowerCase();
-
-        // 1. Check AgentTypePromptParams overrides (merged run params or per-run data override)
+        const namesAction = (candidate: unknown): boolean => {
+            const n = String(candidate).trim().toLowerCase();
+            return n === normalizedName || (entityName !== undefined && n === entityName);
+        };
+        const isLevel = (v: unknown): v is ActionOutputTrustLevel => v === 'Trusted' || v === 'SemiTrusted' || v === 'Untrusted';
         const promptParams = (params?.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Partial<LoopAgentTypePromptParams> | undefined;
-        if (promptParams) {
-            if (promptParams.actionTrustLevels && typeof promptParams.actionTrustLevels === 'object') {
-                for (const [key, level] of Object.entries(promptParams.actionTrustLevels)) {
-                    const normalizedKey = key.trim().toLowerCase();
-                    if ((normalizedKey === normalizedName || (entityName && normalizedKey === entityName))
-                        && (level === 'Trusted' || level === 'SemiTrusted' || level === 'Untrusted')) {
-                        return level;
-                    }
-                }
-            }
-            if (Array.isArray(promptParams.trustedActionNames)) {
-                const isExplicitlyTrusted = promptParams.trustedActionNames.some(name => {
-                    const n = String(name).trim().toLowerCase();
-                    return n === normalizedName || (entityName !== undefined && n === entityName);
-                });
-                if (isExplicitlyTrusted) {
-                    return 'Trusted';
-                }
-            }
-            if (Array.isArray(promptParams.untrustedActionNames)) {
-                const isExplicitlyUntrusted = promptParams.untrustedActionNames.some(name => {
-                    const n = String(name).trim().toLowerCase();
-                    return n === normalizedName || (entityName !== undefined && n === entityName);
-                });
-                if (isExplicitlyUntrusted) {
-                    return 'Untrusted';
+
+        // 1. Explicit per-action override
+        if (promptParams?.actionTrustLevels && typeof promptParams.actionTrustLevels === 'object') {
+            for (const [key, level] of Object.entries(promptParams.actionTrustLevels)) {
+                if (namesAction(key) && isLevel(level)) {
+                    return level;
                 }
             }
         }
 
-        // 2. Explicit trust level set on ActionResult / ActionResultSimple by the action itself
-        if (actionResult?.TrustLevel === 'Trusted' || actionResult?.TrustLevel === 'SemiTrusted' || actionResult?.TrustLevel === 'Untrusted') {
+        // 2. The action's own classification of its output
+        if (isLevel(actionResult?.TrustLevel)) {
             return actionResult.TrustLevel;
         }
 
-        // 3. Default untrusted action set + webhook / MCP heuristics
-        if (BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(normalizedName)
-            || (entityName && BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(entityName))) {
+        // 3. Name lists
+        if (Array.isArray(promptParams?.trustedActionNames) && promptParams.trustedActionNames.some(namesAction)) {
+            return 'Trusted';
+        }
+        if (Array.isArray(promptParams?.untrustedActionNames) && promptParams.untrustedActionNames.some(namesAction)) {
             return 'Untrusted';
         }
-        const driverClass = actionEntity?.DriverClass?.trim() ?? '';
-        const categoryName = actionEntity?.Category?.trim() ?? '';
-        if (/\b(?:webhook|mcp)\b/i.test(actionName)
-            || (actionEntity?.Name && /\b(?:webhook|mcp)\b/i.test(actionEntity.Name))
-            || /(?:webhook|mcp)/i.test(driverClass)
-            || /\b(?:webhook|mcp)\b/i.test(categoryName)) {
+
+        // 4. Default external-content actions
+        if (BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(normalizedName)
+            || (entityName !== undefined && BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(entityName))) {
             return 'Untrusted';
         }
 
@@ -22991,6 +22975,8 @@ The context is now within limits. Please retry your request with the recovered c
         if (!maxTokens || maxTokens <= 0) {
             return false;
         }
+        // estimateConversationTokens counts message content only. The arguments of replayed tool calls
+        // travel on every turn too, so they are added here; nothing is counted twice.
         let estimatedTokens = this.estimateConversationTokens(messages);
         for (const msg of messages) {
             const toolCalls = (msg as AgentChatMessage).toolCalls;

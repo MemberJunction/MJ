@@ -9,10 +9,10 @@
 
 PR 1 (6.2-safe fixes) for the Always-On Agent Harness & Core Primitives plan:
 
-- **MessagingAdapters**: Serialize same-thread incoming messages behind an in-flight promise (`inFlightThreadPromises`) and eagerly resolve/create and cache `ConversationID` per thread before invoking `runAgentWithStreaming`, preventing duplicate conversations when rapid messages arrive on the same Slack/Teams thread.
+- **MessagingAdapters**: Messages on one Slack/Teams thread are handled one at a time, in arrival order (`inFlightThreadPromises`), so a rapid burst reuses the conversation the first message created instead of starting one conversation and one agent run per message.
 - **Primitive 2 v1 (DDL-free Trust & Taint Tracking)**:
   - Add `ActionOutputTrustLevel` (`'Trusted' | 'SemiTrusted' | 'Untrusted'`) to `ActionResultSimple`, `ActionResult`, `ActionResultSummary`, `ClientToolMetadata`, and `ClientToolResultSummary`.
-  - Add code-side default untrusted action classification on `BaseAgent` (web search/content, inbox messages, HTTP requests, URL metadata, RSS feeds, webhooks, MCP tools), overridable via `LoopAgentTypePromptParams` (`untrustedActionNames`, `trustedActionNames`, `actionTrustLevels`).
+  - Add a code-side default list of external-content actions on `BaseAgent` (web search and page content, the mail inbox action, HTTP requests, URL metadata, RSS feeds, MCP tool output), overridable via `LoopAgentTypePromptParams` (`actionTrustLevels`, then an action's own `TrustLevel`, then `trustedActionNames` / `untrustedActionNames`).
   - Escape closing `</untrusted_external_data>` tags and wrap `Untrusted`/`SemiTrusted` action and client-tool outputs in the `<untrusted_external_data source="..." trust="..." warning="...">` envelope in `BaseAgent.formatActionResultsAsMarkdown` and `FormatClientToolResults`.
   - Strip `AIDirectives` from `Untrusted` action outputs and track `_taintedSources` / `IsRunTainted` on `BaseAgent`.
   - Land memory notes written during tainted runs with `Status = 'Pending'` and taint provenance in `Comments` (`MemoryWriteManager`).
@@ -22,4 +22,4 @@ PR 1 (6.2-safe fixes) for the Always-On Agent Harness & Core Primitives plan:
   - Add fuzzy entity and field suggestions (`SuggestedValues` and `ErrorRecovery`) to `BaseRecordMutationAction` on `ENTITY_NOT_FOUND`, `INVALID_FIELD_NAMES`, and `PERMISSION_DENIED`.
 - **Lesson 1 Vectors 2 & 5 (Prompt Cache Stability)**:
   - Gate mid-loop `CompactAnsweredToolCallArguments` and automatic `pruneAndCompactExpiredMessages` on a 65% context utilization threshold (`MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD`) instead of invalidating the prompt prefix on every step.
-  - Stage Phase 2 parallel injections (`InjectContextMemory`, `InjectPreExecutionRAG`, `InjectDecisionDiscovery`) into isolated arrays and unshift into `conversationMessages` in a fixed deterministic order after `Promise.all` settles.
+  - Stage Phase 2 parallel injections (`InjectContextMemory`, `InjectPreExecutionRAG`, `InjectDecisionDiscovery`) into isolated arrays and unshift into `conversationMessages` in a fixed deterministic order after `Promise.all` settles (the ordering half of vector 5; follow-up turns still place new retrieved context ahead of turn 1).

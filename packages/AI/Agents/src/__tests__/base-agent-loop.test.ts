@@ -62,7 +62,7 @@ import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
-import { AIAPIKeys, type ChatResult } from '@memberjunction/ai';
+import { AIAPIKeys, type ChatMessage, type ChatResult } from '@memberjunction/ai';
 import { UserInfo as CoreUserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -724,6 +724,60 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         // Prompt 2 received the conversation history with the trailing runtime state fragment appended
         expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
         expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — Phase 2 context injections land in a fixed order', () => {
+    /**
+     * Memory, RAG and decision discovery run in parallel during Phase 2. Each is handed its own staging
+     * array and the three are spliced in afterwards, so the order the model sees never depends on which
+     * lookup finished first (plan Lesson 1, vector 5). Here the slowest one is the one that must come first.
+     */
+    class OrderingAgent extends BaseAgent {
+        protected override async InjectContextMemory(
+            _input: string,
+            _agent: MJAIAgentEntityExtended,
+            _userId?: string,
+            _companyId?: string,
+            _contextUser?: UserInfo,
+            conversationMessages?: ChatMessage[]
+        ): Promise<{ notes: never[]; examples: never[] }> {
+            await new Promise((r) => setTimeout(r, 30));
+            conversationMessages?.unshift({ role: 'system', content: 'MEMORY' });
+            return { notes: [], examples: [] };
+        }
+        protected override async InjectPreExecutionRAG(
+            _lastUserMessage: string,
+            _agent: MJAIAgentEntityExtended,
+            _contextUser: UserInfo | undefined,
+            conversationMessages: ChatMessage[] | undefined
+        ): Promise<AgentPreExecutionRAGResult | null> {
+            await new Promise((r) => setTimeout(r, 15));
+            conversationMessages?.unshift({ role: 'system', content: 'RAG' });
+            return null;
+        }
+        protected override async InjectDecisionDiscovery(
+            _agent: MJAIAgentEntityExtended,
+            _contextUser: UserInfo | undefined,
+            conversationMessages: ChatMessage[] | undefined
+        ): Promise<void> {
+            await new Promise((r) => setTimeout(r, 1));
+            conversationMessages?.unshift({ role: 'system', content: 'DISCOVERY' });
+        }
+    }
+
+    it('places memory, then RAG, then discovery ahead of the first user message, whatever order they finish in', async () => {
+        const agent = new OrderingAgent();
+        const runner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        const contents = (runner.Calls[0].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : ''));
+        const positions = ['MEMORY', 'RAG', 'DISCOVERY', 'Please complete the task'].map((c) => contents.indexOf(c));
+        expect(positions.every((i) => i >= 0)).toBe(true);
+        expect(positions).toEqual([...positions].sort((a, b) => a - b));
     });
 });
 
