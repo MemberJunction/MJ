@@ -286,15 +286,10 @@ export class TrainingEngine {
    */
   private async trainUnitPipeline(resolved: ResolvedPipeline, boundUnitId: string, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
-    const protocol = await this.requireBoundProtocol(resolved, input, deps);
-    // A time-indexed pipeline under a holdout that does not respect time is refused before any run row exists.
-    const timeIndex = ProtocolSearchGuard.CheckTimeIndexHoldout(protocol, resolved.pipeline.ID, resolved.validation.TimeIndexColumn);
-    if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
-    TrainingEngine.refuseUnitOverrides(resolved);
-    const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
-    const training: ProtocolTraining = { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) };
-    // Every pipeline-stage refusal and deps check above writes nothing; only a pipeline that passes them all advances
-    // its decision date (a new unit version), and the run row follows.
+    const { Training: training, SnapshotFiles: snapshotFiles } = await this.requireUnitRunPrerequisites(resolved, input, deps);
+    const protocol = training.Protocol;
+    // Every pipeline-stage refusal and deps check writes nothing; only a pipeline that passes them all advances its
+    // decision date (a new unit version), and the run row follows.
     // `||`: no advance (null) keeps the unit the pipeline is bound to.
     const unitId = (await this.advanceDecisionDate(resolved.pipeline, deps)) || boundUnitId;
     const run = await this.createRunRow(resolved, input, deps);
@@ -326,6 +321,20 @@ export class TrainingEngine {
       await this.recordRunError(run, err, deps);
       throw err;
     }
+  }
+
+  /**
+   * The checks a unit pipeline passes before anything is written: the bound protocol (missing, or over its budget), a
+   * time-indexed pipeline under a holdout that does not respect time (`time-index-needs-time-holdout`), a stored
+   * AsOfStrategy that would override the unit, and deps without a snapshot file store or a trainer. Each throws.
+   */
+  private async requireUnitRunPrerequisites(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<{ Training: ProtocolTraining; SnapshotFiles: ISnapshotFileStore }> {
+    const protocol = await this.requireBoundProtocol(resolved, input, deps);
+    const timeIndex = ProtocolSearchGuard.CheckTimeIndexHoldout(protocol, resolved.pipeline.ID, resolved.validation.TimeIndexColumn);
+    if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
+    TrainingEngine.refuseUnitOverrides(resolved);
+    const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
+    return { Training: { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) }, SnapshotFiles: snapshotFiles };
   }
 
   /**
