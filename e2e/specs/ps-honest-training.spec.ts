@@ -86,7 +86,16 @@ async function expectReadable(page: Page, selector: string): Promise<void> {
     await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
     // The theme switch animates colors; measured mid-transition, a background still on the old theme's color fails. Wait
     // for the CSS transitions only (a looping animation never finishes); a cancelled transition has settled too.
-    await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished.then(() => undefined, () => undefined))));
+    await page.evaluate(async () => {
+      const transitions = document.getAnimations().filter((a) => a instanceof CSSTransition);
+      await Promise.all(transitions.map(async (a) => {
+        try {
+          await a.finished;
+        } catch {
+          // a cancelled transition rejects `finished`; it has settled too
+        }
+      }));
+    });
     const r = await new AxeBuilder({ page }).include(selector).withRules(['color-contrast']).analyze();
     expect(r.violations.map((v) => `${theme}: ${v.id} ${v.nodes.length}`)).toEqual([]);
   }
