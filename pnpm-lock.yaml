@@ -5599,6 +5599,9 @@ importers:
       '@memberjunction/ng-dashboards':
         specifier: 6.2.0-edge.7
         version: link:../dashboards
+      '@memberjunction/ng-diagnostics':
+        specifier: 6.2.0-edge.7
+        version: link:../../Generic/diagnostics
       '@memberjunction/ng-entity-form-dialog':
         specifier: 6.2.0-edge.7
         version: link:../entity-form-dialog
