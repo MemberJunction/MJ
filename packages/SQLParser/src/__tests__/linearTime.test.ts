@@ -21,8 +21,12 @@ const pg = new PostgreSQLDialect();
 const RUNS = 5;
 /** Linear code grows about 2x per doubling; code that rescans per item grows about 4x. */
 const MAX_GROWTH_PER_DOUBLING = 3;
-/** A generous limit of CPU time for any one size. Linear code takes a small part of it. */
-const CEILING_MS = 1000;
+/**
+ * A generous limit of CPU time for any one size. The growth check is what proves linear time; this only
+ * catches a pathological constant. 1000 ms failed the v6.2.0-edge.7 publish gate on runner speed alone
+ * (a linear 16000-tag parse took 1.9 s on a loaded CI runner), so the limit is 4000 ms.
+ */
+const CEILING_MS = 4000;
 /** A long timeout, and up to two more attempts after a failure. A quadratic regression fails every attempt. */
 const TEST_OPTIONS = { timeout: 60_000, retry: 2 };
 
