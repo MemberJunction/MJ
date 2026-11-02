@@ -299,6 +299,10 @@
   border-radius: 4px;
 }
 
+.ps-pipelines .pl-metric-trophy {
+  color: var(--mj-status-warning);
+}
+
 /* Right Detail Workspace */
 .ps-pipelines .pl-workspace {
   flex: 1;

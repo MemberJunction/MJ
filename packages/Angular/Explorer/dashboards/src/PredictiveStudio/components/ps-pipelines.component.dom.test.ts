@@ -260,5 +260,19 @@ describe('PSPipelinesComponent (DOM)', () => {
       expect(row.textContent).toContain('log-loss 0.4123');
       expect(row.textContent).not.toContain('Scored');
     });
+
+    it('puts a trophy on the pipeline card and header score only when the stored gate outcome shipped a model', () => {
+      const kept = renderWith(publishedModel(), runWithOutcome('keep-simple-baseline'));
+      const keptBadges = queryAll(kept, '.pl-metric-badge');
+      expect(keptBadges.length).toBe(2);
+      for (const b of keptBadges) {
+        expect(b.textContent).toContain('log-loss 0.4123');
+        expect(b.querySelector('.fa-trophy')).toBeNull();
+      }
+      const shipped = renderWith(publishedModel(), runWithOutcome('model'));
+      const shippedBadges = queryAll(shipped, '.pl-metric-badge');
+      expect(shippedBadges.length).toBe(2);
+      for (const b of shippedBadges) expect(b.querySelector('.fa-trophy')).not.toBeNull();
+    });
   });
 });

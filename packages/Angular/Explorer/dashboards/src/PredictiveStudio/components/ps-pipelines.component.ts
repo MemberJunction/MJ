@@ -166,8 +166,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                         </div>
                         <div class="pl-card-meta" style="justify-content: space-between; margin-top: 2px;">
                           <span>{{ p.ProblemType }}</span>
-                          @if (BestMetricForPipeline(p); as bm) {
-                            <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
+                          @if (BestModelForPipeline(p); as bm) {
+                            <span class="pl-metric-badge">@if (ModelTag(bm) === 'winner') {<i class="fa-solid fa-trophy pl-metric-trophy"></i> }{{ FormatHoldout(bm) }}</span>
                           }
                         </div>
                       </button>
@@ -191,8 +191,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                   <h1>{{ SelectedPipeline?.Name }}</h1>
                   @if (SelectedPipeline) {
                     <span class="ps-badge" [class]="StatusClass(SelectedPipeline.Status)">{{ SelectedPipeline.Status }}</span>
-                    @if (BestMetricForPipeline(SelectedPipeline); as bm) {
-                      <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
+                    @if (BestModelForPipeline(SelectedPipeline); as bm) {
+                      <span class="pl-metric-badge">@if (ModelTag(bm) === 'winner') {<i class="fa-solid fa-trophy pl-metric-trophy"></i> }{{ FormatHoldout(bm) }}</span>
                     }
                   }
                 </div>
@@ -1117,12 +1117,12 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     this.cdr.markForCheck();
   }
 
-  public BestMetricForPipeline(p?: MJMLTrainingPipelineEntity): string | null {
+  /** The model a pipeline's score badge describes: its published model, else its first model; null when it has none. */
+  public BestModelForPipeline(p?: MJMLTrainingPipelineEntity): MJMLModelEntity | null {
     if (!p || !this.engine?.Models) return null;
     const models = this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, p.ID));
     if (models.length === 0) return null;
-    const best = models.find((m) => m.Status === 'Published') ?? models[0];
-    return this.FormatHoldout(best);
+    return models.find((m) => m.Status === 'Published') ?? models[0];
   }
 
   public SelectStep(id: string): void {
