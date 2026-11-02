@@ -10,6 +10,7 @@ import {
 import { DiagnosticScrubberProfile } from '@memberjunction/diagnostics';
 import {
     MJDiagnosticsService,
+    DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE,
     ClientBundleBuildResult,
     SubmitBundleToSupportResult,
 } from './diagnostics.service';
@@ -49,20 +50,21 @@ import {
                         </div>
 
                         <div class="mj-diag-field">
-                            <label for="mj-diag-scrub-tier">Scrubber Profile</label>
+                            <label for="mj-diag-scrub-tier">Scrubbing Level</label>
                             <select
                                 id="mj-diag-scrub-tier"
                                 [value]="ScrubberProfile"
                                 (change)="OnScrubberProfileChange($event)">
-                                <option value="Standard">Standard (Credentials + SQL Literal Normalization)</option>
-                                <option value="FullRaw">FullRaw (Credentials Always Redacted; SQL Literals Preserved)</option>
+                                <option value="FullRaw">FullRaw (default): credentials removed, SQL and filter literals kept</option>
+                                <option value="Standard">Standard: credentials removed, SQL and filter literals replaced with ?</option>
                             </select>
                         </div>
 
                         @if (LastResult) {
                             <div class="mj-diag-summary-box">
                                 <strong>Bundle Downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
-                                ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings)
+                                ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings,
+                                scrubbing: {{ LastResult.manifest.scrubberProfile }})
                                 <button type="button" class="mj-diag-link-btn" (click)="OnDownloadSnapshot()">
                                     Download Again
                                 </button>
@@ -223,7 +225,7 @@ export class MJDiagnosticReportProblemDialogComponent {
 
     public TicketNumber = '';
     public Note = '';
-    public ScrubberProfile: DiagnosticScrubberProfile = 'Standard';
+    public ScrubberProfile: DiagnosticScrubberProfile = DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
     public LastResult: ClientBundleBuildResult | null = null;
     public LastSubmission: SubmitBundleToSupportResult | null = null;
     public BuildError: string | null = null;

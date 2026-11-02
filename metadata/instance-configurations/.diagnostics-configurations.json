@@ -194,5 +194,19 @@
     "primaryKey": {
       "ID": "8F71C490-5B21-4E3A-9C14-201000000014"
     }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.KeyPairCredentialID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Intake Receiver Key Credential ID",
+      "Description": "MJ: Credentials ID holding this receiver's X25519 key as JSON values keyId, publicKey (SPKI base64) and privateKey (PKCS#8 base64). Intake stays disabled while this is empty.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "A28A085F-7988-45D6-8E3A-74F307293ED9"
+    }
   }
 ]

@@ -6,7 +6,7 @@ import {
   RemoteOpServerContext,
   UserInfo
 } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
   DiagnosticsStartSessionOperation,
   DiagnosticsStartSessionInput,
@@ -36,6 +36,7 @@ import {
 } from './sessionManager.js';
 import { DiagnosticIntakeService } from './intakeService.js';
 import { EncryptDiagnosticBundle } from '@memberjunction/diagnostics';
+import { DIAGNOSTICS_SETTING_KEYS, DiagnosticsSettings } from './settings.js';
 
 function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
   if (!user) return true;
@@ -76,6 +77,7 @@ export async function AuthorizeDiagnosticsUser(
 
 interface InMemoryBundleStoreItem {
   bundleId: string;
+  sessionId: string;
   name: string;
   direction: 'Local' | 'Received';
   status: 'Building' | 'Ready' | 'Sending' | 'Sent' | 'Failed';
@@ -96,26 +98,79 @@ export function GetInMemoryDiagnosticBundle(bundleId: string): InMemoryBundleSto
   return inMemoryBundles.get(bundleId);
 }
 
+type SessionScopeInput = DiagnosticsStartSessionInput['Scope'];
+
+/** True when a `Users` scope names no one but the given user. */
+function isSelfOnlyScope(scopeType: DiagnosticsStartSessionInput['ScopeType'], scope: SessionScopeInput, user: UserInfo): boolean {
+  if (scopeType !== 'Users') return false;
+  if (!scope) return true;
+  const otherScopes = [scope.apiKeyIds, scope.operationNames, scope.remoteOperationKeys].some((list) => (list?.length ?? 0) > 0);
+  if (otherScopes || scope.browserSessionId) return false;
+  const userIds = scope.userIds ?? [];
+  return userIds.length === 0 || userIds.every((id) => UUIDsEqual(id, user.ID));
+}
+
+/** True when the user started the session and its scope is the user alone. */
+function isOwnSelfServiceSession(session: ActiveDiagnosticSession, user: UserInfo): boolean {
+  return UUIDsEqual(session.createdByUserId, user.ID) && isSelfOnlyScope(session.scopeType, session.scope, user);
+}
+
+/** True when self-service recording is on and the user is an active, unrestricted principal. */
+async function isSelfServiceAllowed(user: UserInfo | undefined, provider?: IMetadataProvider): Promise<boolean> {
+  if (!user || !user.IsActive || isScopeLimitedPrincipal(user)) return false;
+  const settings = await DiagnosticsSettings.Load(user, provider);
+  return settings.SelfServiceRecording;
+}
+
+/**
+ * Authorizes work on one session: the user holds `Diagnostics: Run Sessions`, or self-service
+ * recording is on and the user started this self-only session.
+ */
+async function authorizeSessionAccess(user: UserInfo, sessionId: string | undefined, provider?: IMetadataProvider): Promise<boolean> {
+  if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', provider)) return true;
+  const session = sessionId ? DiagnosticSessionManager.Instance.GetSessionRecord(sessionId) : undefined;
+  if (!session || !isOwnSelfServiceSession(session, user)) return false;
+  return isSelfServiceAllowed(user, provider);
+}
+
+/** Throws when an external send is not allowed by the `Diagnostics.External.*` settings. */
+function assertExternalSendAllowed(settings: DiagnosticsSettings, destination: DiagnosticsSendBundleInput['Destination']): void {
+  if (!settings.ExternalEnabled) {
+    throw new Error(`Sending bundles to an external collector is disabled (${DIAGNOSTICS_SETTING_KEYS.ExternalEnabled} is false).`);
+  }
+  const allowed = settings.ExternalDestinations;
+  if (allowed.length > 0 && !allowed.includes(destination)) {
+    throw new Error(`Destination '${destination}' is not in ${DIAGNOSTICS_SETTING_KEYS.ExternalDestinations}.`);
+  }
+}
+
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.StartSession')
 export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSessionOperation {
   protected override async Authorize(
-    _input: DiagnosticsStartSessionInput,
+    input: DiagnosticsStartSessionInput,
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
+    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) {
+      return true;
+    }
+    return isSelfOnlyScope(input.ScopeType, input.Scope, user) && isSelfServiceAllowed(user, context?.provider);
   }
 
   protected override async InternalExecute(
     input: DiagnosticsStartSessionInput,
-    _provider: IMetadataProvider,
+    provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsStartSessionOutput> {
+    const settings = await DiagnosticsSettings.Load(user, provider);
+    if (!settings.CaptureEnabled) {
+      throw new Error(`Diagnostic capture is disabled on this instance (${DIAGNOSTICS_SETTING_KEYS.CaptureEnabled} is false).`);
+    }
     const sessionId = crypto.randomUUID();
     const nowMs = Date.now();
-    const durationMinutes = Math.min(Math.max(input.DurationMinutes ?? 15, 1), 60);
+    const durationMinutes = Math.min(Math.max(input.DurationMinutes ?? 15, 1), settings.MaxSessionMinutes);
     const endsAtMs = nowMs + durationMinutes * 60_000;
-    const scrubLiterals = input.ScrubLiterals ?? false;
+    const scrubLiterals = settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false);
 
     const session: ActiveDiagnosticSession = {
       id: sessionId,
@@ -149,11 +204,11 @@ export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSess
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.StopSession')
 export class DiagnosticsStopSessionServerOperation extends DiagnosticsStopSessionOperation {
   protected override async Authorize(
-    _input: DiagnosticsStopSessionInput,
+    input: DiagnosticsStopSessionInput,
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
+    return authorizeSessionAccess(user, input.SessionID, context?.provider);
   }
 
   protected override async InternalExecute(
@@ -187,9 +242,11 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
 
   protected override async InternalExecute(
     input: DiagnosticsGetMySessionStatusInput,
-    _provider: IMetadataProvider,
+    provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsGetMySessionStatusOutput> {
+    const settings = await DiagnosticsSettings.Load(user, provider);
+    const selfServiceAllowed = settings.CaptureEnabled && settings.SelfServiceRecording;
     const activeSessions = DiagnosticSessionManager.Instance.GetAllActiveSessions();
     const matched = activeSessions.find((s) => {
       if (s.scopeType === 'Instance') return true;
@@ -207,7 +264,7 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
     if (!matched) {
       return {
         Active: false,
-        SelfServiceRecordingAllowed: false
+        SelfServiceRecordingAllowed: selfServiceAllowed
       };
     }
 
@@ -218,7 +275,7 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
       EndsAt: new Date(matched.endsAtMs).toISOString(),
       Level: matched.level,
       ScrubLiterals: matched.scrubLiterals,
-      SelfServiceRecordingAllowed: false
+      SelfServiceRecordingAllowed: selfServiceAllowed
     };
   }
 }
@@ -290,11 +347,11 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.BuildBundle')
 export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundleOperation {
   protected override async Authorize(
-    _input: DiagnosticsBuildBundleInput,
+    input: DiagnosticsBuildBundleInput,
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
+    return authorizeSessionAccess(user, input.SessionID, context?.provider);
   }
 
   protected override async InternalExecute(
@@ -302,8 +359,9 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
     provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsBuildBundleOutput> {
+    const settings = await DiagnosticsSettings.Load(user, provider);
     const bundleId = crypto.randomUUID();
-    const scrubLiterals = input.ScrubLiterals ?? false;
+    const scrubLiterals = settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false);
 
     const assembled = await DiagnosticSessionManager.Instance.AssembleBundleDataFromChunks(
       input.SessionID,
@@ -315,6 +373,7 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
 
     inMemoryBundles.set(bundleId, {
       bundleId,
+      sessionId: input.SessionID,
       name: input.Name ?? `Bundle-${bundleId.slice(0, 8)}`,
       direction: 'Local',
       status: 'Ready',
@@ -344,11 +403,13 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.GetBundlePreview')
 export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBundlePreviewOperation {
   protected override async Authorize(
-    _input: DiagnosticsGetBundlePreviewInput,
+    input: DiagnosticsGetBundlePreviewInput,
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
+    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) return true;
+    const local = inMemoryBundles.get(input.BundleID);
+    return local ? authorizeSessionAccess(user, local.sessionId, context?.provider) : false;
   }
 
   protected override async InternalExecute(
@@ -414,18 +475,20 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
 
   protected override async InternalExecute(
     input: DiagnosticsSendBundleInput,
-    _provider: IMetadataProvider,
-    _user: UserInfo
+    provider: IMetadataProvider,
+    user: UserInfo
   ): Promise<DiagnosticsSendBundleOutput> {
     const local = inMemoryBundles.get(input.BundleID);
     if (!local) {
       throw new Error(`Bundle '${input.BundleID}' not found.`);
     }
 
-    const collectorUrl = input.CollectorUrlOverride || process.env.MJ_DIAGNOSTICS_COLLECTOR_URL;
+    const settings = await DiagnosticsSettings.Load(user, provider);
+    const collectorUrl = input.CollectorUrlOverride || settings.ExternalCollectorUrl;
     let referenceId: string;
 
     if (collectorUrl) {
+      assertExternalSendAllowed(settings, input.Destination);
       const result = await DiagnosticSessionManager.Instance.SendBundleToCollector({
         archiveBytes: local.archiveBytes,
         bundleId: local.bundleId,

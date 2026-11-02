@@ -64,7 +64,7 @@ flowchart LR
 
 Diagnostic logs and telemetry spans rarely contain raw PII, and aggressive regex redaction of emails/phones/UUIDs destroys the exact record IDs and stack traces engineers need to debug issues. MemberJunction therefore uses a **two-stage scrubbing model** in `DiagnosticScrubber`:
 
-1. **Stage 1 — Credential & Secret Scrubber (`standard` tier, always on)**:
+1. **Stage 1 — Credential & Secret Scrubber (always on)**:
    - Strips high-confidence credentials across all logs, span attributes, GraphQL variables, SQL text, and HAR headers:
      - `Authorization: Bearer ...` and `Basic ...` headers
      - JWTs (`eyJ...`)
@@ -72,9 +72,11 @@ Diagnostic logs and telemetry spans rarely contain raw PII, and aggressive regex
      - Database connection strings (`Server=...;Password=...;`, `postgres://user:pass@...`, `redis://:pass@...`)
      - Cloud & AI provider keys (`sk-...`, `AKIA...`, `AIza...`, `ghp_...`, `xoxb-...`)
      - PEM private keys (`-----BEGIN ... PRIVATE KEY-----`)
-2. **Stage 2 — Literal & Payload Scrubber (`strict` tier, opt-in)**:
+2. **Stage 2 — Literal & Payload Scrubber (opt-in)**:
    - Replaces SQL string literals (`'...'`) and numeric literals with `?` via `NormalizeSql`.
    - Scrubs `RunView` `ExtraFilter` literals and GraphQL variable string values while preserving structural keys, entity names, and UUID primary keys.
+
+**Default.** Stage 1 runs on every bundle. Stage 2 is off by default: a session or bundle keeps SQL and filter literals (`ScrubLiterals = false`, scrubber profile `FullRaw`). Turn Stage 2 on per session or bundle with `ScrubLiterals = true` (profile `Standard` in the Explorer dialog), or for the whole instance with `Diagnostics.RequireLiteralScrubbing = true`, which forces `ScrubLiterals = true` in `Diagnostics.StartSession` and `Diagnostics.BuildBundle`.
 
 ### Suppressing Capture in Sensitive Code Paths
 
@@ -135,16 +137,18 @@ All five operations are metadata-registered under the `Diagnostics` category and
 
 ### Submission Instance Configuration (`MJ: Instance Configurations`)
 
+The server reads these settings through `DiagnosticsSettings` (`@memberjunction/diagnostics-server`). A missing row uses the default.
+
 | Configuration Key | Default | Description |
 | --- | --- | --- |
-| `Diagnostics.Enabled` | `true` | Master switch for diagnostic capture and bundle creation. |
-| `Diagnostics.DefaultScrubTier` | `'standard'` | Default scrub tier (`'standard'` or `'strict'`). |
-| `Diagnostics.MaxSessionDurationSeconds` | `900` | Maximum duration (15 min) for an active `Record` or `Watch` session. |
-| `Diagnostics.MaxSessionByteCeiling` | `52428800` | Auto-stops a session when uncompressed chunks exceed 50 MB. |
-| `Diagnostics.RetentionDays` | `14` | Days before `DiagnosticRetentionScheduledJobDriver` purges bundles and sessions. |
-| `Diagnostics.StorageDriverID` | `''` | Optional `MJ: File Storage Accounts` ID for storing generated `.mjdiag` bundles on the customer instance. |
-| `Diagnostics.MJC.CollectorEndpoint` | `'https://diagnostics.memberjunction.com/diagnostics/intake/v1'` | Target MJAPI intake URL when sending bundles to support. |
-| `Diagnostics.MJC.PinnedRootVerifyKey` | `''` | Base64 SPKI Ed25519 public key used to verify the collector's signed key manifest. |
+| `Diagnostics.Capture.Enabled` | `true` | When `false`, `Diagnostics.StartSession` refuses and the middleware does not attach requests to sessions. |
+| `Diagnostics.SelfServiceRecording` | `false` | When `true`, a user without `Diagnostics: Run Sessions` may start a session scoped to their own user ID only. |
+| `Diagnostics.RequireLiteralScrubbing` | `false` | Forces `ScrubLiterals = true` (Stage 2) on every session and bundle. |
+| `Diagnostics.MaxSessionMinutes` | `60` | Upper limit for a session's `DurationMinutes`. |
+| `Diagnostics.RetentionDays` | `14` | Days before the retention job purges local sessions and bundles. |
+| `Diagnostics.External.Enabled` | `false` | Allows `Diagnostics.SendBundle` to send to an external collector. Sending to the in-process intake is not external. |
+| `Diagnostics.External.Destinations` | `[]` | JSON array of allowed destinations (`MJC`, `CustomerCollector`, `StorageAccount`). An empty list allows all. |
+| `Diagnostics.External.CollectorUrl` | `''` | Intake base URL of the external collector. |
 
 ---
 
@@ -160,31 +164,31 @@ Generate an X25519 encryption keypair (and optional Ed25519 signing keypair) usi
 npx mj diag keygen --key-id mjc-intake-2026-01 --signing
 ```
 
-1. Store the **X25519 Private Key (PKCS#8 base64)** in `MJ: Credentials` (encrypted at rest via `@memberjunction/encryption`).
-2. Record the `MJ: Credentials` row ID in the `Diagnostics.Intake.KeyPairCredentialID` instance configuration setting.
+1. Store the X25519 key in `MJ: Credentials` (encrypted at rest via `@memberjunction/encryption`). The credential values are JSON with three fields: `keyId`, `publicKey` (SPKI base64) and `privateKey` (PKCS#8 base64).
+2. Record the `MJ: Credentials` row ID in the `Diagnostics.Intake.KeyPairCredentialID` instance configuration setting. At startup the server loads this key and enables intake only when `Diagnostics.Intake.Enabled` is `true` and the key loads; otherwise intake stays disabled and the server logs a warning. Startup never generates a key pair.
 3. Publish the **X25519 Public Key (SPKI base64)** and `keyId` so submitting instances can encrypt bundles to your collector via `EncryptBundleForCollector`.
 
 ### Step 2: Set Up `MJStorage` Locations (Quarantine-then-Promote)
 
-To ensure unverified or infected bytes never mingle with trusted support artifacts, configure **two separate storage locations** (`MJ: File Storage Accounts`):
+To ensure unverified or infected bytes never mingle with trusted support artifacts, configure **two separate storage locations** (`MJ: File Storage Providers`). When `Diagnostics.Intake.StorageProviderID` is empty, intake keeps payloads in memory only. When `Diagnostics.Intake.QuarantineStorageProviderID` is empty, quarantine uses the verified provider.
 
-1. **Quarantine Storage Account** (`Diagnostics.Intake.QuarantineStorageDriverID`):
+1. **Quarantine Storage Provider** (`Diagnostics.Intake.QuarantineStorageProviderID`):
    - Dedicated S3 bucket, Azure Blob container, or GCS bucket with **no public read access**, **no execution permissions**, and a **24-hour object lifecycle expiration rule**.
    - Incoming encrypted uploads are staged at:
      ```text
-     quarantine/<uploadId>/<bundleId>.mjdiag.enc
+     quarantine/<referenceId>.mjdiag.enc
      ```
-2. **Verified Storage Account** (`Diagnostics.Intake.VerifiedStorageDriverID`):
+2. **Verified Storage Provider** (`Diagnostics.Intake.StorageProviderID`):
    - Long-term support bucket accessible to support engineers and the `@Diagnostic Analyst` agent.
    - Only after a bundle passes **all four verification gates** (MJDB header pre-check → AEAD AES-256-GCM decryption → `VerifyBundleArchive` ZIP/manifest verification → Malware Scan verdict `Clean`) are the decrypted `.mjdiag` bytes promoted to:
      ```text
-     verified/<YYYY-MM-DD>/<bundleId>.mjdiag
+     verified/<YYYY-MM-DD>/<referenceId>.mjdiag
      ```
    - The quarantine object is immediately deleted upon promotion or rejection.
 
 ### Step 3: Configure Malware Scanning (`IDiagnosticMalwareScanner`)
 
-Configure `Diagnostics.Intake.MalwareScanProvider` in `MJ: Instance Configurations` to match your cloud infrastructure:
+No instance setting selects the scanner. Startup uses `StructuralOnlyMalwareScanner` (Option C). To use another scanner, call `DiagnosticIntakeService.Instance.Configure({ malwareScanner })` from server code after startup:
 
 #### Option A: Cloud-Native Object Tagging (`CloudObjectTag`) — Recommended for AWS / Azure / GCP
 When the Quarantine bucket is backed by **AWS S3 with GuardDuty Malware Protection**, **Azure Blob Storage with Microsoft Defender for Storage**, or **GCP Cloud Storage**, the cloud provider automatically scans every object written to the quarantine bucket and writes the verdict to the object's tags/metadata.
@@ -195,7 +199,6 @@ When the Quarantine bucket is backed by **AWS S3 with GuardDuty Malware Protecti
 
 #### Option B: ClamAV / HTTP Webhook (`ClamAVWebhook`)
 For self-hosted, Docker, or Kubernetes deployments running a ClamAV REST sidecar (e.g., `clamav-rest` or an internal scanning microservice):
-- Set `Diagnostics.Intake.MalwareScanProvider = 'ClamAVWebhook'`.
 - `ClamAvWebhookMalwareScanner` streams the archive bytes via `POST` (`application/octet-stream`) to your scanner endpoint and requires `{ "clean": true }` before promoting the bundle.
 
 #### Option C: Cryptographic + Structural Verification (`None` / `StructuralOnlyMalwareScanner`)
@@ -210,15 +213,13 @@ Even when no external antivirus daemon is configured, the intake pipeline **alwa
 
 | Configuration Key | Default | Description |
 | --- | --- | --- |
-| `Diagnostics.Intake.Enabled` | `false` | Enables `/diagnostics/intake/v1/*` routes on this MJAPI instance. |
-| `Diagnostics.Intake.QuarantineStorageDriverID` | `''` | `MJ: File Storage Accounts` ID for staging unverified encrypted uploads. |
-| `Diagnostics.Intake.VerifiedStorageDriverID` | `''` | `MJ: File Storage Accounts` ID for promoted, verified `.mjdiag` bundles. |
-| `Diagnostics.Intake.MalwareScanProvider` | `'None'` | `'CloudObjectTag'`, `'ClamAVWebhook'`, or `'None'` (`StructuralOnly`). |
-| `Diagnostics.Intake.KeyPairCredentialID` | `''` | `MJ: Credentials` ID holding the collector's X25519 private key. |
-| `Diagnostics.Intake.RequireSignature` | `false` | Require a valid Ed25519 sender signature in the `MJDB` envelope header. |
-| `Diagnostics.Intake.RequireTicketNumber` | `true` | Require a non-empty support ticket number in `POST /initiate` and AAD. |
-| `Diagnostics.Intake.MaxBundleBytes` | `104857600` | Maximum encrypted upload size in bytes (default 100 MB). |
-| `Diagnostics.Intake.PostReceiveActionID` | `''` | Optional `MJ: Actions` ID triggered automatically after a bundle is promoted to Verified storage (e.g., to run `@Diagnostic Analyst` and post findings to the support ticket). |
+| `Diagnostics.Intake.Enabled` | `false` | Enables `/diagnostics/intake/v1/*` routes on this MJAPI instance. Intake also needs a receiver key (below). |
+| `Diagnostics.Intake.KeyPairCredentialID` | `''` | `MJ: Credentials` ID holding this receiver's X25519 key (`keyId`, `publicKey`, `privateKey`). Intake stays disabled while it is empty. |
+| `Diagnostics.Intake.StorageProviderID` | `''` | `MJ: File Storage Providers` ID for promoted, verified `.mjdiag` bundles. |
+| `Diagnostics.Intake.QuarantineStorageProviderID` | `''` | Optional `MJ: File Storage Providers` ID for staging unverified encrypted uploads. |
+| `Diagnostics.Intake.DecryptOnIngest` | `true` | Passed to intake. Intake always decrypts and verifies in this version; `false` has no effect yet. |
+| `Diagnostics.Intake.RetentionDays` | `30` | Days to keep received bundles. |
+| `Diagnostics.Intake.OnBundleReceivedActionID` | `''` | Optional `MJ: Actions` ID run after a bundle passes verification. It runs as the system user with the inputs `ReferenceID`, `BundleID`, `SenderInstallID`, `SenderMJVersion`, `Summary`, `Contact`, `FindingsCount` and `VerifiedStoragePath`. |
 
 ---
 

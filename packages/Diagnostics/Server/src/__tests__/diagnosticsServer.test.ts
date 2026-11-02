@@ -8,10 +8,16 @@ import {
     IMetadataProvider,
     UserInfo,
 } from '@memberjunction/core';
+import { InstanceConfigEngine } from '@memberjunction/core-entities';
+import { CredentialEngine, ResolvedCredential } from '@memberjunction/credentials';
 import {
+    DiagnosticsStartSessionServerOperation,
+    DiagnosticsStopSessionServerOperation,
+    DiagnosticsGetBundlePreviewServerOperation,
     DiagnosticsUploadClientCaptureServerOperation,
     DiagnosticsBuildBundleServerOperation,
     DiagnosticsSendBundleServerOperation,
+    GetInMemoryDiagnosticBundle,
 } from '../remoteOperations.js';
 import {
     BuildMjdiagArchive,
@@ -47,6 +53,21 @@ function createRouteRecorder(): { App: ExpressAppParam; Paths: string[] } {
     const fake = { get: record, post: record, put: record };
     return { App: fake as unknown as ExpressAppParam, Paths: paths };
 }
+
+/** Makes `InstanceConfigEngine` return the given values; unlisted keys fall back to their defaults. */
+function mockInstanceSettings(values: Record<string, string> = {}): void {
+    const engine = InstanceConfigEngine.Instance;
+    vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(engine, 'Get').mockImplementation((key: string) => values[key]);
+}
+
+const ownerUser = {
+    ID: 'user-owner-1',
+    IsActive: true,
+    Type: 'Owner',
+    UserRoles: [{ Role: 'Developer' }],
+} as unknown as UserInfo;
+const emptyProvider = {} as unknown as IMetadataProvider;
 
 async function createValidBundleZip(bundleId: string): Promise<Uint8Array> {
     const bundleData: DiagnosticBundleData = {
@@ -97,6 +118,11 @@ describe('@memberjunction/diagnostics-server', () => {
         manager = DiagnosticSessionManager.Instance;
         manager.Initialize({ enableConsoleTap: false, enablePolling: false });
         manager.ResetForTests();
+        mockInstanceSettings();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
     describe('AsyncLocalStorage Context & Isolation', () => {
@@ -633,6 +659,176 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(sendRes.Output?.Status).toBe('Sent');
             expect(sendRes.Output?.ExternalReferenceID).toMatch(/^diagref_/);
             expect(intake.GetReceivedBundle(sendRes.Output!.ExternalReferenceID!)?.status).toBe('Ready');
+        });
+    });
+    describe('Diagnostics.* instance settings', () => {
+        it('StartSession refuses when Diagnostics.Capture.Enabled is false', async () => {
+            mockInstanceSettings({ 'Diagnostics.Capture.Enabled': 'false' });
+            const op = new DiagnosticsStartSessionServerOperation();
+            const res = await op.ExecuteServer(
+                { Name: 'Capture off', ScopeType: 'Users' },
+                { provider: emptyProvider, user: ownerUser }
+            );
+            expect(res.Success).toBe(false);
+            expect(res.ErrorMessage).toMatch(/Diagnostics\.Capture\.Enabled/);
+            expect(manager.GetAllActiveSessions()).toHaveLength(0);
+        });
+
+        it('RequireLiteralScrubbing forces ScrubLiterals on StartSession and BuildBundle', async () => {
+            mockInstanceSettings({ 'Diagnostics.RequireLiteralScrubbing': 'true' });
+            const startRes = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: 'Forced scrub', ScopeType: 'Users', ScrubLiterals: false },
+                { provider: emptyProvider, user: ownerUser }
+            );
+            expect(startRes.Output?.ScrubLiterals).toBe(true);
+
+            const buildRes = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
+                { SessionID: startRes.Output!.SessionID, ScrubLiterals: false },
+                { provider: emptyProvider, user: ownerUser }
+            );
+            expect(buildRes.Success).toBe(true);
+            expect(GetInMemoryDiagnosticBundle(buildRes.Output!.BundleID)?.scrubLiterals).toBe(true);
+        });
+
+        it('SendBundle refuses an external collector when Diagnostics.External.Enabled is false', async () => {
+            mockInstanceSettings({ 'Diagnostics.External.CollectorUrl': 'https://collector.example/diagnostics/intake/v1' });
+            const fetchStub = vi.fn(async () => {
+                throw new Error('network disabled in test');
+            });
+            vi.stubGlobal('fetch', fetchStub);
+            try {
+                const uploadRes = await new DiagnosticsUploadClientCaptureServerOperation().ExecuteServer(
+                    { ClientLogs: [{ timestamp: new Date().toISOString(), severity: 'error', source: 'client', message: 'x' }] },
+                    { provider: emptyProvider, user: ownerUser }
+                );
+                const buildRes = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
+                    { SessionID: uploadRes.Output!.SessionID },
+                    { provider: emptyProvider, user: ownerUser }
+                );
+                const sendRes = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
+                    { BundleID: buildRes.Output!.BundleID, Destination: 'CustomerCollector' },
+                    { provider: emptyProvider, user: ownerUser }
+                );
+                expect(sendRes.Success).toBe(false);
+                expect(sendRes.ErrorMessage).toMatch(/Diagnostics\.External\.Enabled/);
+                expect(fetchStub).not.toHaveBeenCalled();
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('server startup leaves intake disabled when no key credential is set', async () => {
+            DiagnosticIntakeService.Instance.ResetForTests();
+            mockInstanceSettings({ 'Diagnostics.Intake.Enabled': 'true' });
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await new DiagnosticsServerMiddleware().Initialize({ ApiRoute: (p: string) => p });
+
+            expect(DiagnosticIntakeService.Instance.Enabled).toBe(false);
+            expect(logged.mock.calls.some((c) => c.join(' ').includes('Diagnostics.Intake.KeyPairCredentialID'))).toBe(true);
+        });
+
+        it('server startup configures intake from the settings and the key credential', async () => {
+            DiagnosticIntakeService.Instance.ResetForTests();
+            const key = await GenerateDiagnosticKeyPair('X25519', 'intake-key-from-credential');
+            mockInstanceSettings({
+                'Diagnostics.Intake.Enabled': 'true',
+                'Diagnostics.Intake.KeyPairCredentialID': 'CRED-0001',
+                'Diagnostics.Intake.RetentionDays': '7',
+            });
+            vi.spyOn(CredentialEngine.Instance, 'Config').mockResolvedValue(undefined);
+            const resolved: ResolvedCredential = {
+                credential: null,
+                values: { keyId: key.keyId, publicKey: key.publicKeyBase64, privateKey: key.privateKeyBase64 },
+                source: 'database',
+                expirationStatus: 'valid',
+            };
+            const getCredential = vi.spyOn(CredentialEngine.Instance, 'GetCredential').mockResolvedValue(resolved);
+
+            await new DiagnosticsServerMiddleware().Initialize({ ApiRoute: (p: string) => p });
+
+            expect(getCredential).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ credentialId: 'CRED-0001' }));
+            expect(DiagnosticIntakeService.Instance.Enabled).toBe(true);
+            const descriptor = await DiagnosticIntakeService.Instance.GetPublicKeyDescriptor();
+            expect(descriptor.keyId).toBe(key.keyId);
+            expect(descriptor.publicKey).toBe(key.publicKeyBase64);
+        });
+    });
+    describe('Self-service recording sessions', () => {
+        const selfUser = {
+            ID: 'AAAAAAAA-1111-4111-8111-000000000001',
+            IsActive: true,
+            Type: 'User',
+            UserRoles: [],
+        } as unknown as UserInfo;
+        const otherUserId = 'BBBBBBBB-2222-4222-8222-000000000002';
+
+        function registerSession(id: string, createdByUserId: string, userIds: string[]): void {
+            manager.RegisterActiveSession({
+                id,
+                name: id,
+                status: 'Active',
+                scopeType: 'Users',
+                scope: { userIds },
+                level: 'Standard',
+                categories: ['Logs'],
+                scrubLiterals: false,
+                startedAtMs: Date.now(),
+                endsAtMs: Date.now() + 60_000,
+                maxBytes: 10_000_000,
+                createdByUserId,
+                bytesWritten: 0,
+            });
+        }
+
+        it('lets a self-service user stop, build and preview a session they started', async () => {
+            mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
+            const ctx = { provider: emptyProvider, user: selfUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: 'My problem', ScopeType: 'Users' },
+                ctx
+            );
+            expect(started.Success).toBe(true);
+            const sessionId = started.Output!.SessionID;
+
+            const stopped = await new DiagnosticsStopSessionServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+            expect(stopped.Success).toBe(true);
+
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+            expect(built.Success).toBe(true);
+
+            const preview = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer(
+                { BundleID: built.Output!.BundleID },
+                ctx
+            );
+            expect(preview.Success).toBe(true);
+        });
+
+        it("refuses a self-service user on another user's session", async () => {
+            mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
+            const ctx = { provider: emptyProvider, user: selfUser };
+            registerSession('other-users-session', otherUserId, [otherUserId]);
+            registerSession('admin-session-on-me', otherUserId, [selfUser.ID]);
+
+            for (const sessionId of ['other-users-session', 'admin-session-on-me']) {
+                const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+                expect(built.Success).toBe(false);
+                expect(built.ErrorMessage).toMatch(/Not authorized/);
+                const stopped = await new DiagnosticsStopSessionServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+                expect(stopped.Success).toBe(false);
+                expect(stopped.ErrorMessage).toMatch(/Not authorized/);
+            }
+
+            const ownerBuilt = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
+                { SessionID: 'other-users-session' },
+                { provider: emptyProvider, user: ownerUser }
+            );
+            const preview = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer(
+                { BundleID: ownerBuilt.Output!.BundleID },
+                ctx
+            );
+            expect(preview.Success).toBe(false);
+            expect(preview.ErrorMessage).toMatch(/Not authorized/);
         });
     });
 });

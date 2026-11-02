@@ -24,6 +24,9 @@ import {
   MAX_INTAKE_BUNDLE_BYTES
 } from './intakeService.js';
 import { GetInMemoryDiagnosticBundle } from './remoteOperations.js';
+import { DiagnosticsSettings } from './settings.js';
+import { ConfigureIntakeFromSettings } from './intakeStartup.js';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 export function ParseTraceparentHeader(headerValue?: string): { traceId: string; spanId: string } {
   if (headerValue && typeof headerValue === 'string') {
@@ -52,7 +55,7 @@ export function CreateDiagnosticsApolloPlugin(): ApolloServerPlugin {
         async didResolveOperation(requestContext) {
           resolvedOpName = requestContext.operationName ?? undefined;
           const ctx = GetDiagnosticContext();
-          if (ctx) {
+          if (ctx && DiagnosticsSettings.Current().CaptureEnabled) {
             const variables = requestContext.request.variables as Record<string, unknown> | undefined;
             const inputObj = variables?.['input'] as Record<string, unknown> | undefined;
             const remoteOpKey =
@@ -102,9 +105,16 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
 
   private serverContext: ServerMiddlewareContext | undefined;
 
+  /**
+   * Starts the session manager, loads the `Diagnostics.*` settings and configures intake from them.
+   * MJServer calls this after metadata and the user cache are loaded.
+   */
   public override async Initialize(context?: ServerMiddlewareContext): Promise<void> {
     this.serverContext = context;
     DiagnosticSessionManager.Instance.Initialize({ enableConsoleTap: true, enablePolling: false });
+    const systemUser = UserCache.Instance.GetSystemUser();
+    const settings = await DiagnosticsSettings.Load(systemUser);
+    await ConfigureIntakeFromSettings(settings, systemUser);
   }
 
   /**
@@ -147,11 +157,9 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
         IsCaptured: false
       };
 
-      DiagnosticSessionManager.Instance.MatchPreAuth(
-        context,
-        explicitSessionId,
-        browserSessionId
-      );
+      if (DiagnosticsSettings.Current().CaptureEnabled) {
+        DiagnosticSessionManager.Instance.MatchPreAuth(context, explicitSessionId, browserSessionId);
+      }
 
       RunWithServerDiagnosticContext(context, () => {
         next();
@@ -164,7 +172,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
   public override GetPostAuthMiddleware(): MiddlewareList {
     const postAuthHandler: MiddlewareHandler = (req: ExpressReq, _res: ExpressRes, next: ExpressNext) => {
       const ctx = GetDiagnosticContext();
-      if (ctx) {
+      if (ctx && DiagnosticsSettings.Current().CaptureEnabled) {
         const reqWithUser = req as ExpressReq & {
           userPayload?: {
             userRecord?: { ID?: string };

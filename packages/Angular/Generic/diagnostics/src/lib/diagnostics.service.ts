@@ -30,6 +30,14 @@ import {
 } from '@memberjunction/diagnostics';
 
 export const MJ_DIAGNOSTICS_IDB_NAME = 'MJ_Diagnostics';
+
+/**
+ * Scrubber profile used when a caller gives none. It matches the server default (`ScrubLiterals = false`).
+ * `FullRaw` = Stage 1 credential scrubbing only; SQL and filter literals are kept.
+ * `Standard` = Stage 1 plus Stage 2, which replaces SQL and filter literals with `?`.
+ * The bundle manifest records the same name in `scrubberProfile`.
+ */
+export const DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE: DiagnosticScrubberProfile = 'FullRaw';
 const IDB_STORE_NAME = 'session_buffer';
 
 export interface ActiveRecordingState {
@@ -110,7 +118,7 @@ export class MJDiagnosticsService {
         sessionId: null,
         mode: 'flight-recorder',
         startedAtIso: null,
-        scrubberProfile: 'Standard',
+        scrubberProfile: DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE,
     });
 
     private readonly reportDialogOpenSubject = new BehaviorSubject<boolean>(false);
@@ -208,7 +216,7 @@ export class MJDiagnosticsService {
     /**
      * Starts a client/server recording session and binds the session ID header hook.
      */
-    public StartRecording(sessionId: string, scrubberProfile: DiagnosticScrubberProfile = 'Standard'): void {
+    public StartRecording(sessionId: string, scrubberProfile: DiagnosticScrubberProfile = DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE): void {
         const nextState: ActiveRecordingState = {
             isRecording: true,
             sessionId,
@@ -232,7 +240,7 @@ export class MJDiagnosticsService {
             sessionId: null,
             mode: 'flight-recorder',
             startedAtIso: null,
-            scrubberProfile: 'Standard',
+            scrubberProfile: DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE,
         };
         this.recordingStateSubject.next(nextState);
         if (this.sessionIdHook) {
@@ -301,7 +309,7 @@ export class MJDiagnosticsService {
     public async SubmitBundleToSupport(
         options: SubmitBundleToSupportOptions = {},
     ): Promise<SubmitBundleToSupportResult> {
-        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? 'Standard';
+        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
         const scrubLiterals = scrubberProfile === 'Standard';
         const activeSessionId = this.recordingStateSubject.value.sessionId ?? undefined;
 
@@ -411,7 +419,7 @@ export class MJDiagnosticsService {
      * Builds a scrubbed `.mjdiag` archive from the current client-side buffers.
      */
     public async BuildClientBundle(options: ClientBundleBuildOptions = {}): Promise<ClientBundleBuildResult> {
-        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? 'Standard';
+        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
         const bundleId = `diag-client-${Date.now()}`;
 
         const rawBundleData: DiagnosticBundleData = {

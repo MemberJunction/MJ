@@ -177,7 +177,10 @@ export function SafeSerializeConsoleArgs(args: unknown[], maxBytes: number = 819
 }
 
 export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionManager> {
+  private static readonly MAX_ENDED_SESSIONS = 1000;
   private _activeSessions = new Map<string, ActiveDiagnosticSession>();
+  /** Sessions that stopped or expired in this process, kept so their owner can still be checked. */
+  private _endedSessions = new Map<string, ActiveDiagnosticSession>();
   private _chunkBuffers = new Map<string, PendingChunkBuffer>();
   private _sequenceCounters = new Map<string, number>();
   private _redeemedDownloadNonces = new Map<string, number>();
@@ -207,6 +210,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
 
   public ResetForTests(): void {
     this._activeSessions.clear();
+    this._endedSessions.clear();
     this._chunkBuffers.clear();
     this._sequenceCounters.clear();
     this._redeemedDownloadNonces.clear();
@@ -313,20 +317,34 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     if (!s) return undefined;
     if (s.status !== 'Active' || Date.now() >= s.endsAtMs) {
       s.status = 'Expired';
-      this._activeSessions.delete(sessionId);
+      this.moveToEnded(s);
       return undefined;
     }
     return s;
   }
 
+  /** Returns a session that is active, or that stopped or expired in this process. */
+  public GetSessionRecord(sessionId: string): ActiveDiagnosticSession | undefined {
+    return this._activeSessions.get(sessionId) ?? this._endedSessions.get(sessionId);
+  }
+
+  private moveToEnded(session: ActiveDiagnosticSession): void {
+    this._activeSessions.delete(session.id);
+    this._endedSessions.set(session.id, session);
+    if (this._endedSessions.size > DiagnosticSessionManager.MAX_ENDED_SESSIONS) {
+      const oldest = this._endedSessions.keys().next().value;
+      if (oldest !== undefined) this._endedSessions.delete(oldest);
+    }
+  }
+
   public GetAllActiveSessions(): ActiveDiagnosticSession[] {
     const now = Date.now();
     const out: ActiveDiagnosticSession[] = [];
-    for (const [id, s] of this._activeSessions.entries()) {
+    for (const s of this._activeSessions.values()) {
       if (s.status === 'Active' && now < s.endsAtMs) {
         out.push(s);
       } else {
-        this._activeSessions.delete(id);
+        this.moveToEnded(s);
       }
     }
     return out;
@@ -336,7 +354,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     const s = this._activeSessions.get(sessionId);
     if (s) {
       s.status = 'Stopped';
-      this._activeSessions.delete(sessionId);
+      this.moveToEnded(s);
     }
     return s;
   }

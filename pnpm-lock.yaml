@@ -11537,6 +11537,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.7
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.7
+        version: link:../../Credentials/Engine
       '@memberjunction/diagnostics':
         specifier: 6.2.0-edge.7
         version: link:../Core
