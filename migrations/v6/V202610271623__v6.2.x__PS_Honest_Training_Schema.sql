@@ -10,7 +10,7 @@
  *   4. MLTrainingPipeline  + PredictionUnitID, EvaluationProtocolID
  *   5. MLTrainingRun       + TrainingSnapshotID, EvaluationProtocolID, CodeVersion, ComputeSeconds
  *   6. FeatureValue        + EffectiveAsOf, InputAsOf (the as-of column shared by pipeline rows and
- *                             PR 4's Source = 'Model' rows, D-058)
+ *                             Source = 'Model' rows)
  *
  * A version row is never updated: "editing" inserts the next version (Version + 1, same LineageRootID).
  * Version 1's LineageRootID is its own ID (the client supplies the ID on insert).
