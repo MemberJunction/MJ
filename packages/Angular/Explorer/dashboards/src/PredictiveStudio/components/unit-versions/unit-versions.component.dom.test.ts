@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ProtocolRows, type UnitDraft } from '@memberjunction/predictive-studio-core';
 import { PSUnitVersionsComponent } from './unit-versions.component';
@@ -143,5 +143,18 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
     await older;
     expect(Fixture.componentInstance.Versions).toEqual([]);
     expect(Fixture.componentInstance.Error).toContain('ANOTHER-MISSING-ID');
+  });
+
+  it('does not reload when the unit ID is set again in another case, and reloads for another lineage', async () => {
+    // an ID with letters, so its lower-case spelling differs from the one the widget holds
+    const lettered = 'CCCCCCCC-2222-4333-8444-DDDDDDDDDDDD';
+    const { Fixture } = await render(lettered, []);
+    const widget = Fixture.componentInstance;
+    const load = vi.spyOn(widget, 'Load');
+    widget.UnitID = lettered.toLowerCase();
+    expect(load).not.toHaveBeenCalled();
+    widget.UnitID = 'ANOTHER-LINEAGE-ID';
+    expect(load).toHaveBeenCalledTimes(1);
+    await load.mock.results[0]?.value;
   });
 });

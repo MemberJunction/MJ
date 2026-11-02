@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { EvaluationProtocolRules, ProtocolRows, type EvaluationProtocolDraft, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { PSProtocolVersionsComponent } from './protocol-versions.component';
@@ -124,5 +124,18 @@ describe('PSProtocolVersionsComponent saves (DOM)', () => {
     Store.NextRow = row;
     await Fixture.componentInstance.Save(draft);
     expect([row.Version, After.length, Store.Rows.length]).toEqual([0, 0, 0]);
+  });
+
+  it('does not reload when the protocol ID is set again in another case, and reloads for another lineage', async () => {
+    // an ID with letters, so its lower-case spelling differs from the one the widget holds
+    const lettered = 'CCCCCCCC-2222-4333-8444-DDDDDDDDDDDD';
+    const { Fixture } = await render(lettered, []);
+    const widget = Fixture.componentInstance;
+    const load = vi.spyOn(widget, 'Load');
+    widget.EvaluationProtocolID = lettered.toLowerCase();
+    expect(load).not.toHaveBeenCalled();
+    widget.EvaluationProtocolID = 'ANOTHER-LINEAGE-ID';
+    expect(load).toHaveBeenCalledTimes(1);
+    await load.mock.results[0]?.value;
   });
 });

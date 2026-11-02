@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { PSPipelineBindingsComponent } from './pipeline-bindings.component';
@@ -109,5 +109,16 @@ describe('PSPipelineBindingsComponent (DOM)', () => {
     expect(Pipeline.Saves).toBe(1);
     expect([After[0]?.Success, After[0]?.ErrorMessage]).toEqual([false, 'The unit and the protocol disagree: horizon-mismatch.']);
     expect(PSDomQueries.HostElement(Fixture).querySelector('[data-testid="ps-bindings-error"]')?.textContent).toContain('horizon-mismatch');
+  });
+
+  it('does not reload when the pipeline ID is set again in another case, and reloads for another pipeline', async () => {
+    const { Fixture } = await render();
+    const widget = Fixture.componentInstance;
+    const load = vi.spyOn(widget, 'Load');
+    widget.PipelineID = PIPELINE_ID.toLowerCase();
+    expect(load).not.toHaveBeenCalled();
+    widget.PipelineID = UNIT_V2;
+    expect(load).toHaveBeenCalledTimes(1);
+    await load.mock.results[0]?.value;
   });
 });
