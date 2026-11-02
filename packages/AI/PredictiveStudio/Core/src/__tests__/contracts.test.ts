@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MetricDirections, ValidateBudget } from '../index';
 import type {
-  TrainRequest,
   PredictResponse,
   FeatureStep,
   FeatureStepGraph,
@@ -31,30 +30,6 @@ describe('MetricDirections.IsErrorMetric', () => {
  * the assertions document the intended structure.
  */
 describe('predictive-studio-core contracts', () => {
-  it('TrainRequest accepts an inline-matrix training request', () => {
-    const req: TrainRequest = {
-      algorithm: 'xgboost',
-      problem_type: 'classification',
-      hyperparameters: { max_depth: 6 },
-      validation: { strategy: 'train_test_split', test_size: 0.2 },
-      feature_schema: [
-        { Name: 'tenure', Kind: 'numeric' },
-        { Name: 'city', Kind: 'categorical' },
-        { Name: 'emb_0', Kind: 'embedding' },
-      ],
-      preprocessing: [
-        { op: 'impute', col: 'tenure', strategy: 'mean' },
-        { op: 'onehot', col: 'city' },
-      ],
-      target: 'renewed',
-      data: { columns: ['tenure', 'city', 'emb_0', 'renewed'], rows: [[3, 'NYC', 0.12, 1]] },
-    };
-
-    expect(req.algorithm).toBe('xgboost');
-    expect(req.feature_schema).toHaveLength(3);
-    expect(req.data?.rows[0]).toHaveLength(4);
-  });
-
   it('PredictResponse aligns predictions positionally', () => {
     const resp: PredictResponse = {
       predictions: [

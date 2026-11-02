@@ -69,7 +69,7 @@ describe('LegacyUnitInputs — provenance', () => {
   it('words the unit Name and Description by its creator: the migration, the Pipeline Wizard or the Pipeline Builder', () => {
     const draftOf = (creator: 'migration' | 'wizard' | 'builder') => {
       const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null, ProblemType: 'regression' }), [], '2026-10-20', [], creator);
-      return r.Kind === 'unit' ? [r.Draft.Name, r.Draft.Description.split(' from ')[0]] : r;
+      return r.Kind === 'unit' ? [r.Draft.Name, r.Draft.Description?.split(' from ')[0]] : r;
     };
     expect([draftOf('migration'), draftOf('wizard'), draftOf('builder')]).toEqual([
       ['Member Renewal Risk — migrated unit', 'Created by the Prediction Unit pipeline migration on 2026-10-20'],

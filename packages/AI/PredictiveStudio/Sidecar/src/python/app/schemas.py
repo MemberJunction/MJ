@@ -53,7 +53,8 @@ class PredictRequest(BaseModel):
 
     artifact_b64: Optional[str] = None
     artifact_ref: Optional[str] = None
-    # convenience: warm-cache key returned by /train as `model_id`
+    # convenience: warm-cache key, the SHA-256 hex of the artifact's base64 text (`artifacts.artifact_hash`); lets a
+    # caller score a model already in the cache without resending its bytes
     model_id: Optional[str] = None
     fitted_preprocessing: Dict[str, Any] = Field(default_factory=dict)
     feature_schema: List[FeatureSchemaEntry] = Field(default_factory=list)
