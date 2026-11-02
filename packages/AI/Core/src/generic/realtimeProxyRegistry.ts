@@ -1,5 +1,5 @@
 import { BaseSingleton } from '@memberjunction/global';
-import type { RealtimeSessionParams } from './baseRealtime';
+import { ClampSessionSecondsValue, type RealtimeSessionParams } from './baseRealtime';
 
 /**
  * The URL path MJAPI's realtime proxy listens on for websocket upgrades, and that provider drivers
@@ -559,11 +559,10 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
     /** The session's life in seconds: `LifetimeSeconds` (default 30 minutes), or `MaxSessionSeconds` when shorter. */
     private static relayLifetimeSeconds(params: RealtimeRelayIssueParams): number {
         const lifetime = RealtimeProxyRegistry.relaySeconds(params.LifetimeSeconds, REALTIME_RELAY_SESSION_LIFETIME_SECONDS);
-        const cap = params.MaxSessionSeconds;
-        if (typeof cap !== 'number' || !Number.isFinite(cap) || cap <= 0) {
-            return lifetime; // no MJ session cap
-        }
-        return Math.min(lifetime, Math.max(1, cap));
+        // Same rule as the drivers' ClampSessionSeconds (positive integers only), so the ticket ends when the
+        // ClientConfig's MaxSessionSeconds says it does; an invalid cap counts as unset.
+        const cap = ClampSessionSecondsValue(params.MaxSessionSeconds);
+        return cap === undefined ? lifetime : Math.min(lifetime, cap);
     }
 
     /** A duration in seconds: at least 1 when given, the default when omitted or not a finite number. */

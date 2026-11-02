@@ -34,7 +34,7 @@ import type { EntityInfo, IMetadataProvider, RunQueryParams, RunQueryResult, Use
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryEntityExtended, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, RowKeys } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, RowKeys, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -296,13 +296,11 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
             Assert(catalog.length > 0 || QueryEngine.Instance.Queries.length === 0,
                 'catalog classification must not drop every Approved query');
             if (catalog.length === 0) {
-                SkipAsPass('runquery-catalog.QC1', 'no Approved catalog queries in this deployment (seed metadata/queries)');
-                return;
+                SkipCheck('no Approved catalog queries in this deployment (seed metadata/queries)');
             }
             const bare = catalog.filter(c => c.Params.length === 0 && !c.Query.UsesTemplate);
             if (bare.length === 0) {
-                SkipAsPass('runquery-catalog.QC1', 'no zero-parameter, non-templated catalog queries in this deployment');
-                return;
+                SkipCheck('no zero-parameter, non-templated catalog queries in this deployment');
             }
             const offenders: string[] = [];
             for (const cls of bare) {
@@ -332,8 +330,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
             const catalog = await LoadCatalog(ctx);
             const required = catalog.filter(c => c.RequiredParams.length > 0);
             if (required.length === 0) {
-                SkipAsPass('runquery-catalog.QC2', 'no catalog query declares a required parameter in this deployment');
-                return;
+                SkipCheck('no catalog query declares a required parameter in this deployment');
             }
             const offenders: string[] = [];
             for (const cls of required) {
@@ -375,8 +372,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
             const catalog = await LoadCatalog(ctx);
             const strict = catalog.filter(c => c.Params.length > 0 && c.RawSpliceParams.length === 0);
             if (strict.length === 0) {
-                SkipAsPass('runquery-catalog.QC3', 'no filtered parameterized catalog queries in this deployment');
-                return;
+                SkipCheck('no filtered parameterized catalog queries in this deployment');
             }
             const refEntity = PickReferenceEntity(ctx.Provider);
             const offenders: string[] = [];
@@ -408,8 +404,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
             const catalog = await LoadCatalog(ctx);
             const rawSet = catalog.filter(c => c.RawSpliceParams.length > 0);
             if (rawSet.length === 0) {
-                SkipAsPass('runquery-catalog.QC4', 'no raw-identifier catalog queries in this deployment');
-                return;
+                SkipCheck('no raw-identifier catalog queries in this deployment');
             }
             const refEntity = PickReferenceEntity(ctx.Provider);
             Assert(!!refEntity, 'QC4 precondition: a reference entity must be resolvable from live metadata');
@@ -449,8 +444,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
             const catalog = await LoadCatalog(ctx);
             const strict = catalog.filter(c => c.Params.length > 0 && c.RawSpliceParams.length === 0);
             if (strict.length === 0) {
-                SkipAsPass('runquery-catalog.QC5', 'no filtered parameterized catalog queries in this deployment');
-                return;
+                SkipCheck('no filtered parameterized catalog queries in this deployment');
             }
             const refEntity = PickReferenceEntity(ctx.Provider);
             for (const cls of strict) {
@@ -471,7 +465,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
                 console.log(`      → QC5 pinned on ${queryLabel(cls)}: ${appliedKeys.size} key(s) echoed`);
                 return;
             }
-            SkipAsPass('runquery-catalog.QC5', 'no parameterized catalog query succeeded with derived params (QC3 reports the failures)');
+            SkipCheck('no parameterized catalog query succeeded with derived params (QC3 reports the failures)');
         }
     },
     {
@@ -481,8 +475,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
             const catalog = await LoadCatalog(ctx);
             const templatedNoParam = catalog.filter(c => c.Params.length === 0 && c.Query.UsesTemplate);
             if (templatedNoParam.length === 0) {
-                SkipAsPass('runquery-catalog.QC6', 'no templated zero-parameter catalog queries in this deployment');
-                return;
+                SkipCheck('no templated zero-parameter catalog queries in this deployment');
             }
             const offenders: string[] = [];
             for (const cls of templatedNoParam) {

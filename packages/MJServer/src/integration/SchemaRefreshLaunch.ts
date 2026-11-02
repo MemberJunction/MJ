@@ -30,6 +30,15 @@ export interface SchemaRefreshSummaryLike {
     FailureMessage?: string;
     ObjectsCreated: number;
     ObjectsUpdated: number;
+    /**
+     * FIELD counts, not an optional nicety: a connector whose objects are PRESUPPOSED (declared in
+     * its own metadata) creates no objects on any run, so the object counts of a refresh that
+     * created 69 fields and updated 487 are "0 and 0" — which reads as "the refresh found nothing".
+     * Both counts were already carried on the pipeline result; only this type stopped them reaching
+     * the sentence.
+     */
+    FieldsCreated: number;
+    FieldsUpdated: number;
     UnresolvedObjects: string[];
 }
 
@@ -38,8 +47,9 @@ function describeFinishedRefresh(summary: SchemaRefreshSummaryLike): string {
     if (!summary.Succeeded) {
         return `schema refresh FAILED (${summary.FailureMessage ?? 'no reason reported'}) — see run ${summary.RunID}`;
     }
-    return `schema refresh: ${summary.ObjectsCreated} created, ` +
-        `${summary.ObjectsUpdated} updated, ${summary.UnresolvedObjects.length} PK-unresolved`;
+    return `schema refresh: ${summary.ObjectsCreated} objects created, ` +
+        `${summary.ObjectsUpdated} updated, ${summary.FieldsCreated} fields created, ` +
+        `${summary.FieldsUpdated} updated, ${summary.UnresolvedObjects.length} PK-unresolved`;
 }
 
 /**

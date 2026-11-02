@@ -543,6 +543,7 @@ export class ArtifactStateService {
           ExtraFilter: `ArtifactID='${artifactId}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         },
         currentUser

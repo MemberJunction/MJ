@@ -24,7 +24,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import type { MJApplicationEntity, MJUserApplicationEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -81,8 +81,7 @@ export const AppBehavioralChecks: NamedCheck[] = [
             const marker = Date.now().toString(36);
             const probe = await ctx.Provider.GetEntityObject<MJApplicationEntity>('MJ: Applications', ctx.User);
             if (!txCapable(probe)) {
-                console.warn('  ⚠ AB1 SKIPPED — provider has no BeginTransaction (client transport); the fan-out save path requires the in-process server provider.');
-                return;
+                SkipCheck('provider has no BeginTransaction (client transport); the fan-out save path requires the in-process server provider');
             }
             const expected = await activeUserCount(ctx);
             Assert(expected > 0, 'AB1 would be vacuous with zero active users');
@@ -113,8 +112,7 @@ export const AppBehavioralChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const probe = await ctx.Provider.GetEntityObject<MJApplicationEntity>('MJ: Applications', ctx.User);
             if (!txCapable(probe)) {
-                console.warn('  ⚠ AB2 SKIPPED — provider has no BeginTransaction (client transport).');
-                return;
+                SkipCheck('provider has no BeginTransaction (client transport); the slug-collision save path requires the in-process server provider');
             }
             // Application NAMES are unique (UQ_Application_Name) — the slug walk is triggered by
             // DIFFERENT names that slug IDENTICALLY (generateSlugFromName strips punctuation).

@@ -134,6 +134,7 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
             ExtraFilter: `ID='${EscapeSQLString(recordProcessID)}' AND WorkType='Infer' AND Status='Active'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, p.ContextUser);
         if (!rv.Success) {
             throw new Error(`Reading Record Process '${recordProcessID}' failed: ${rv.ErrorMessage}`);
@@ -290,6 +291,7 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
             OrderBy: '__mj_UpdatedAt DESC',
             Fields: ['ID', 'StartTime', '__mj_UpdatedAt'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             BypassCache: true,
         }, p.ContextUser);
         if (!rv.Success) {
@@ -320,6 +322,7 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
             OrderBy: 'StartedAt DESC',
             Fields: ['ID', 'Status', 'ErrorMessage'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, p.ContextUser);
         if (!rv.Success) {
             throw new Error(`Reading MJ: Test Runs failed: ${rv.ErrorMessage}`);
