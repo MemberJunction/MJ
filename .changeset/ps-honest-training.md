@@ -18,6 +18,11 @@
 "@memberjunction/server-bootstrap-lite": minor
 ---
 
+Predictive Studio honest training: Prediction Units (immutable versions with outcome window, censoring and task type),
+as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
+saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
+(model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
+
 Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
 signal), stores that decision with its reason on the run, and renders the trust verdict from it.
 
@@ -44,8 +49,14 @@ signal), stores that decision with its reason on the run, and renders the trust 
   `buildImprovePrompt` are removed.
 - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
   (`test:gate-parity`, `test:gate-parity-refpipe`).
-- `@memberjunction/integration-test-suite`: seven Predictive Studio gate checks (G2.1, G2.2, G2.3, G2.5, G2.7, G2.8,
-  G2.22).
+- `@memberjunction/integration-test-suite`: seven Predictive Studio gate checks of the gate decision (how often a
+  planted null publishes, the AUC-interval and minority-class guards, the kept simple baseline, the baselines' intervals,
+  and the incumbent heuristic scored as a named comparator).
+- `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
+  interval and tags the winner's score optimistic; `NormalizedLeaderboardRow` members are PascalCase (`Rank`,
+  `Algorithm`, `FeatureSet`, `Score`, `MetricName`, `Interval`, `Optimistic`, `ModelID`, `IsWinner`, `OptimisticTag`),
+  `LeaderboardEntryInput.cvScore` is removed, and the deprecated `formatImportance` / `formatScore` aliases of
+  `MLExperimentResultsViewerComponent` are removed.
 - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
 
 Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
@@ -68,13 +79,25 @@ version 1 of each, and the training path without them is removed.
   gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
   `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
   input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
-- `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types.
+- `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: Prediction Units`,
+  `MJ: Evaluation Protocols` and `MJ: Training Snapshots` entities.
+- `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
+  Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
+  protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
+- `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
+  its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
+  row ships inactive; Training Snapshots name it through `PS_SNAPSHOT_STORAGE_PROVIDER` (default `Local File System`),
+  and an install whose sidecar runs on another host points that at a cloud provider.
+- `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
+  `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
+  generated GraphQL schema, class registrations and record forms for the three new entities.
 - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
   protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
   pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase
   aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
   bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
-  PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`.
+  PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`, inherited with `CurrentUser` and
+  `ChatEnvironmentId` from `PSResourceBase`.
 - `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
   `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
   key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
