@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W1 -> S5.4 #3",
-    "Description": "Gate G2.32 (phase 2, dataset W1, criterion S5.4 #3): the trainer's code-version record, which every trainer run carries into the model lineage, holds the python, numpy, scikit-learn, xgboost and lightgbm versions and the thread count and seed it was given (1 of 1 pytest case), and the engine refuses a completed result whose code version lacks either: one without scikit-learn's version and one with a thread count of 0 are each refused naming the gap, with the run left Failed. It fails when TrainerRunRecorder.ApplyTrainerResultToRun skips TrainerContract.CodeVersionGaps, so a lineage-incomplete run completes.",
+    "Description": "Gate G2.32 (phase 2, dataset W1, criterion S5.4 #3): one W1-signal s42 training through the product's training operation completes and stores the trainer's code version on its run row (MJ: ML Training Runs.CodeVersion) with the python, numpy, scikit-learn, xgboost and lightgbm versions and a thread count of at least 1, read back from the row; the sidecar's code-version record holds those versions and the thread count and seed it was given (1 of 1 pytest case); and the engine refuses a completed result whose code version lacks either: one without scikit-learn's version and one with a thread count of 0 are each refused naming the gap, with the run left Failed. It fails when TrainerRunRecorder.ApplyTrainerResultToRun skips TrainerContract.CodeVersionGaps, so a lineage-incomplete run completes, and when a trained run stores no CodeVersion or one lacking a library version or the thread count.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.32\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S5.4 #3\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "The trainer's code version records the five library versions and the thread count (1 of 1 pytest case passes), and completed results lacking scikit-learn's version or with 0 threads are each refused with the run left Failed."
+      "summary": "A W1 training run stores a CodeVersion naming the five library versions and at least one thread, the trainer's code version records them (1 of 1 pytest case passes), and completed results lacking scikit-learn's version or with 0 threads are each refused with the run left Failed."
     },
     "Configuration": {
       "tier": "mutation",
