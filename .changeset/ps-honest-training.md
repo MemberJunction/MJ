@@ -34,6 +34,8 @@ signal), stores that decision with its reason on the run, and renders the trust 
   `IArtifactStore.delete` are new required members. `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
   renamed `trustTitle` / `headline`;
   `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
+  The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
+  `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
 - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
   `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
   the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
@@ -54,7 +56,7 @@ version 1 of each, and the training path without them is removed.
   code `TIME_HOLDOUT_REQUIRED`.
 - `@memberjunction/predictive-studio`: the `Migrate Pipelines to Prediction Units and Evaluation Protocols` Action (dry run by default) binds
   each pipeline to a version-1 unit and protocol, archives one that cannot be expressed, or holds one with its reason
-  (an undetermined adverse class, a declared time index). A pipeline without a unit is refused `UNIT_REQUIRED`; the
+  (an undetermined adverse class, a declared time index, a date column with a value that is not a date). A pipeline without a unit is refused `UNIT_REQUIRED`; the
   legacy training path and `MLSidecar.Train` are deleted. A time-indexed pipeline under a holdout that does not respect
   time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
   after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
