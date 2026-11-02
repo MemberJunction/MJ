@@ -52,9 +52,10 @@ export class HarnessPipelines {
    * Creates and saves a truth-suite pipeline from a spec; throws with the save's message when it fails. A pipeline
    * without an as-of (`AsOf.Mode === 'none'`) is then given version 1 of its Prediction Unit and Evaluation Protocol by
    * the pipeline migration, as every existing pipeline is, so it trains on the unit path. A pipeline that declares a time
-   * index is held by the migration (no unit, the held line in its Description) and stays unbound: G0.11 measures that it
-   * is refused. Any other outcome than `migrated` or that hold is a harness error, never a measured outcome. A pipeline
-   * with an as-of stays unbound on purpose: G0.8 measures that it is refused (`UNIT_REQUIRED`).
+   * index is held by the migration (no unit, the held line in its Description) and stays unbound: the time-index
+   * containment check measures that it is refused. Any other outcome than `migrated` or that hold is a harness error,
+   * never a measured outcome. A pipeline with an as-of stays unbound on purpose: the as-of containment check measures
+   * that it is refused (`UNIT_REQUIRED`).
    */
   public static async CreatePipeline(
     provider: GraphQLDataProvider,

@@ -1,6 +1,6 @@
 /**
  * Runtime check of the Prediction Unit pipeline migration, in-process against the database the harness resolves. It
- * copies a truth-suite W1 pipeline that has no unit (default: the one M11.2 provisioned, `PS_LEGACY_PIPELINE_ID`) into
+ * copies a truth-suite W1 pipeline that has no unit (`PS_LEGACY_PIPELINE_ID`; the default is the legacy W1 pipeline kept in the test database) into
  * five pipelines named `PR3 migration check …` with `PredictionUnitID`/`EvaluationProtocolID` NULL:
  *   (a) `AsOfStrategy {"Mode":"column","Column":"StartDate"}`, (b) `AsOfStrategy` NULL, (c) `{"Mode":"offset","OffsetDays":30}`,
  *   (d) a classification of `PS Truth: Scn_C2.Target` (two classes, a name with no polarity, no OutcomeConfig, no model),
