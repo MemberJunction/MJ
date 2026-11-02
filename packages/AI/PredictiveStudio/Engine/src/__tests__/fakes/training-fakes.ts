@@ -138,7 +138,8 @@ export class FakeTrainingSnapshot extends FakeEntity {
 
   public override async Save(): Promise<boolean> {
     const ok = await super.Save();
-    if (ok && this.ID === '') this.ID = `snapshot-${FakeTrainingSnapshot.saved++}`;
+    // A UUID-shaped ID, as the database assigns: the trainer's request schema validates snapshot IDs as UUIDs.
+    if (ok && this.ID === '') this.ID = `00000000-0000-4000-8000-${String(FakeTrainingSnapshot.saved++).padStart(12, '0')}`;
     return ok;
   }
 
@@ -300,6 +301,20 @@ export class TrainingHarness {
    * The model a training run created; throws when the run shipped none. For tests of paths that always create one (a
    * pipeline without a Prediction Unit, or a gate decision that ships an artifact).
    */
+  /**
+   * A typed engine result over the fake rows: the run (and the model, when given) with the given fields, typed as
+   * entities by the factory seam.
+   */
+  public static async ResultOf(run: Partial<FakeMLRun>, model: Partial<FakeMLModel> | null): Promise<TrainModelResult> {
+    const r = Object.assign(new FakeMLRun('run-1'), run);
+    const m = model === null ? null : Object.assign(new FakeMLModel('model-1'), model);
+    const factory = new FakeEntityFactory(() => m || new FakeMLModel('unused'), () => r);
+    return {
+      model: m === null ? null : await factory.getEntityObject<MJMLModelEntity>('MJ: ML Models'),
+      run: await factory.getEntityObject<MJMLTrainingRunEntity>('MJ: ML Training Runs'),
+    };
+  }
+
   public static ModelOf(result: TrainModelResult): MJMLModelEntity {
     if (result.model === null) throw new Error(`training run ${result.run.ID} shipped no model`);
     return result.model;

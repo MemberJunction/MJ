@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
-import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import { GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, type TrainerCompleted, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioTrainModelAction } from '../train-model.action';
 import { TrainingEngine } from '../../training/training-engine';
@@ -10,7 +8,7 @@ import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../trai
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
-import { FakeEntityFactory, FakeEvaluationProtocolStore, FakeMLModel, FakeMLRun } from '../../__tests__/fakes/training-fakes';
+import { FakeEvaluationProtocolStore, TrainingHarness, type FakeMLModel, type FakeMLRun } from '../../__tests__/fakes/training-fakes';
 import type { IEvaluationProtocolStore } from '../../training/evaluation-protocol-store';
 
 /**
@@ -72,33 +70,14 @@ class TestableTrainAction extends PredictiveStudioTrainModelAction {
 const PROTOCOL = ProtocolRowFixture.Spec();
 const RUN_ID = '00000000-0000-0000-0000-0000000000a1';
 
-/** The v2 envelope a completed run stores for `result` (the gate record built by the owner training uses). */
-function storedResults(result: TrainerCompleted): string {
-  const built = GateRecords.BuildStoredGateRecord({ Result: result, Protocol: PROTOCOL, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, Carve: null });
-  if (built.Ok === false) throw new Error(`the fixture's gate record was refused: ${built.Refusal.kind}`);
-  const envelope: TrainingRunResults = {
-    schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
-    unitResolution: { rowsRead: 10, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 10, dataCutoff: '2026-01-01' },
-    trainer: TrainerContract.ToStoredTrainerResult(result, new Map(result.artifacts.map((a, i): [string, string] => [a.candidate, `F${i + 1}`]))),
-    trainerRequest: null, carve: null, gate: built.Record,
-  };
-  return JSON.stringify(envelope);
-}
-
-/** A typed engine result over the shared fake rows (the fake factory is the one seam that types them as entities). */
-async function resultOf(run: Partial<FakeMLRun>, model: Partial<FakeMLModel> | null): Promise<TrainModelResult> {
-  const r = Object.assign(new FakeMLRun('run-1'), { TrainingSnapshotID: 'snap-1', EvaluationProtocolID: ProtocolRowFixture.ID }, run);
-  const m = model === null ? null : Object.assign(new FakeMLModel('model-1'), model);
-  const factory = new FakeEntityFactory(() => m || new FakeMLModel('unused'), () => r);
-  return {
-    model: m === null ? null : await factory.getEntityObject<MJMLModelEntity>('MJ: ML Models'),
-    run: await factory.getEntityObject<MJMLTrainingRunEntity>('MJ: ML Training Runs'),
-  };
+/** A typed engine result over the shared fake rows, the run bound to the fixture snapshot and protocol. */
+function resultOf(run: Partial<FakeMLRun>, model: Partial<FakeMLModel> | null): Promise<TrainModelResult> {
+  return TrainingHarness.ResultOf({ TrainingSnapshotID: 'snap-1', EvaluationProtocolID: ProtocolRowFixture.ID, ...run }, model);
 }
 
 /** A shipped-member run: model v5 (Draft) with stored scores, the gate keeping the simple baseline `glm`. */
 function shippedRun(notes: string | null): Promise<TrainModelResult> {
-  return resultOf({ Notes: notes, ValidationResults: storedResults(TrainerResultFixtures.CannedCompleted(RUN_ID, PROTOCOL)) }, { Version: 5, Status: 'Draft', HoldoutMetrics: JSON.stringify({ auc: 0.81 }) });
+  return resultOf({ Notes: notes, ValidationResults: TrainerResultFixtures.ValidationResultsFor(TrainerResultFixtures.CannedCompleted(RUN_ID, PROTOCOL)) }, { Version: 5, Status: 'Draft', HoldoutMetrics: JSON.stringify({ auc: 0.81 }) });
 }
 function params(list: ActionParam[]): RunActionParams {
   return { Params: list } as RunActionParams;
@@ -152,6 +131,15 @@ describe('PredictiveStudioTrainModelAction — a run that shipped no model', () 
     expect([result.Success, out(p, 'ModelID'), out(p, 'HoldoutMetrics'), out(p, 'LeakageFlagged'), out(p, 'GateOutcome'), out(p, 'GateReason')])
       .toEqual([true, null, null, false, 'no-signal', TrainerResultFixtures.NoSignalReason]);
     expect(result.Message).toBe(`Training run run-1 completed and shipped no model: ${TrainerResultFixtures.NoSignalReason}`);
+  });
+});
+
+describe('PredictiveStudioTrainModelAction — leakage flag on a run without a model', () => {
+  it('reports the stored reason alone: the sign-off note is about a model, and none shipped', async () => {
+    const run = await resultOf({ Notes: 'LEAKAGE WARNING: one field dominates', ValidationResults: TrainerResultFixtures.NoSignalValidationResults() }, null);
+    const p = params([{ Name: 'PipelineID', Type: 'Input', Value: 'pipe-1' }]);
+    const result = await new TestableTrainAction(new MockTrainingEngine(run)).run(p);
+    expect([out(p, 'LeakageFlagged'), result.Message]).toEqual([true, `Training run run-1 completed and shipped no model: ${TrainerResultFixtures.NoSignalReason}`]);
   });
 });
 

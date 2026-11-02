@@ -3,8 +3,8 @@
  */
 import { createHash } from 'node:crypto';
 import {
-  GateRecords, TRAINING_RUN_RESULTS_SCHEMA,
-  type BaselineResult, type EvaluationProtocolSpec, type MetricWithInterval, type ReturnedArtifact, type TrainerCompleted, type TrainerResult, type TrainingRunResults,
+  GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract,
+  type StoredGateRecord, type BaselineResult, type EvaluationProtocolSpec, type MetricWithInterval, type ReturnedArtifact, type TrainerCompleted, type TrainerResult, type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
 import { ProtocolRowFixture } from './protocol-row';
 
@@ -106,23 +106,37 @@ export class TrainerResultFixtures {
     };
   }
 
-  /**
-   * The `ValidationResults` a completed no-signal unit run stores: the v2 envelope with the gate record of
-   * {@link CannedNoSignal} under {@link ProtocolRowFixture}, its reason `nothing-beats-dummy`.
-   */
-  public static NoSignalValidationResults(): string {
+  /** The gate record the gate owner builds for a completed binary result under {@link ProtocolRowFixture}; throws when it is refused. */
+  public static GateRecordFor(result: TrainerCompleted): StoredGateRecord {
     const protocol = ProtocolRowFixture.Spec();
-    const built = GateRecords.BuildStoredGateRecord({
-      Result: TrainerResultFixtures.CannedNoSignal('00000000-0000-0000-0000-0000000000a1', protocol),
-      Protocol: protocol, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, Carve: null,
-    });
-    if (built.Ok === false) throw new Error(`NoSignalValidationResults: the gate record was refused: ${built.Refusal.kind}`);
+    const built = GateRecords.BuildStoredGateRecord({ Result: result, Protocol: protocol, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, Carve: null });
+    if (built.Ok === false) throw new Error(`GateRecordFor: the gate record was refused: ${built.Refusal.kind}`);
+    return built.Record;
+  }
+
+  /**
+   * The `ValidationResults` a completed unit run stores for `result`: the v2 envelope with the unit counts, the stored
+   * trainer result (artifacts as file references; `StoreTrainer: false` stores none) and `Gate` (by default
+   * {@link GateRecordFor}; `null` stores no gate record).
+   */
+  public static ValidationResultsFor(result: TrainerCompleted, o: { readonly Gate?: StoredGateRecord | null; readonly StoreTrainer?: boolean } = {}): string {
+    const gate = o.Gate === undefined ? TrainerResultFixtures.GateRecordFor(result) : o.Gate;
+    const trainer = o.StoreTrainer === false ? null : TrainerContract.ToStoredTrainerResult(result, new Map(result.artifacts.map((a, i): [string, string] => [a.candidate, `F${i + 1}`])));
     const envelope: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
       unitResolution: { rowsRead: 8, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 8, dataCutoff: '2026-01-01' },
-      trainer: null, trainerRequest: null, carve: null, gate: built.Record,
+      trainer, trainerRequest: null, carve: null, gate,
     };
     return JSON.stringify(envelope);
+  }
+
+  /**
+   * The `ValidationResults` a completed no-signal unit run stores: the v2 envelope with the gate record of
+   * {@link CannedNoSignal} under {@link ProtocolRowFixture}, its reason `nothing-beats-dummy`, and no stored trainer result.
+   */
+  public static NoSignalValidationResults(): string {
+    const protocol = ProtocolRowFixture.Spec();
+    return TrainerResultFixtures.ValidationResultsFor(TrainerResultFixtures.CannedNoSignal('00000000-0000-0000-0000-0000000000a1', protocol), { StoreTrainer: false });
   }
 
   /** The reason text of {@link NoSignalValidationResults}'s gate record. */

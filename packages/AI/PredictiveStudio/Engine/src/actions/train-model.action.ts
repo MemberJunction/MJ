@@ -23,7 +23,7 @@ import { LogError, Metadata } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { TrainingEngine } from '../training/training-engine';
-import type { TrainingDeps, TrainModelResult } from '../training/types';
+import type { TrainingDeps } from '../training/types';
 import { RunViewEvaluationProtocolStore, type IEvaluationProtocolStore } from '../training/evaluation-protocol-store';
 import { TrainingDelegation } from '../operations/delegation';
 import { TrainModelMapping } from '../operations/train-model.mapping';
@@ -58,7 +58,7 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
       const deps = await this.buildDeps(params);
       const result = await this.createEngine().trainModel({ pipelineId }, deps);
       const facts = await TrainModelMapping.GatherRunFacts(result, this.protocolStore(deps));
-      return this.mapResult(params, result, TrainModelMapping.TrainModelOutputFrom(facts));
+      return this.mapResult(params, TrainModelMapping.TrainModelOutputFrom(facts));
     } catch (e) {
       LogError(e);
       const error = e instanceof Error ? e : new Error(String(e));
@@ -71,7 +71,7 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
    * Map the Train output (the same one the operation returns) onto the action's output params. A run whose gate
    * decision ships no model succeeds with `ModelID` null; its message is the stored reason.
    */
-  protected mapResult(params: RunActionParams, result: TrainModelResult, out: PredictiveStudioTrainModelOutput): ActionResultSimple {
+  protected mapResult(params: RunActionParams, out: PredictiveStudioTrainModelOutput): ActionResultSimple {
     // `||`: an absent output member is an empty output param (null), never `undefined`.
     this.addOutputParam(params, 'ModelID', out.modelId || null);
     this.addOutputParam(params, 'HoldoutMetrics', out.holdoutMetrics || null);
@@ -80,13 +80,10 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
     this.addOutputParam(params, 'GateReason', out.gateReason || null);
     this.addOutputParam(params, 'TrainingSnapshotID', out.trainingSnapshotId || null);
     this.addOutputParam(params, 'EvaluationProtocolID', out.evaluationProtocolId || null);
-    const model = result.model;
-    if (model === null) return this.ok(params, `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`);
-
-    const note = out.leakageFlagged
+    const note = out.modelId && out.leakageFlagged
       ? ' A single feature is doing almost all the predicting — a human must confirm this is not target leakage before the model is trusted.'
       : '';
-    return this.ok(params, `Trained model ${model.ID} (v${model.Version}).${note}`);
+    return this.ok(params, `${TrainModelMapping.FinishedMessage(out)}${note}`);
   }
 
   // ----- injectable engine + deps seams (overridden in tests) ----------------

@@ -121,6 +121,17 @@ export class TrainModelMapping {
     };
   }
 
+  /**
+   * The one sentence a finished Train call reports: the produced model and its version, or the stored reason no model
+   * shipped. Read from the mapped output, so both surfaces report the reason the output carries.
+   */
+  public static FinishedMessage(out: TrainOutput): string {
+    // `||`: the mapping stores a gate whenever no model ships; an absent reason still names the status, never "undefined".
+    return out.modelId
+      ? `Trained model ${out.modelId} (v${out.version}).`
+      : `Training run ${out.trainingRunId} completed and shipped no model: ${out.gateReason || out.status}`;
+  }
+
   /** The protocol row's Version, or null for a run with no protocol; a protocol the run names but nobody can read throws. */
   private static async protocolVersionOf(runId: string, protocolId: string | null, protocols: IEvaluationProtocolStore): Promise<number | null> {
     if (protocolId === null) return null;

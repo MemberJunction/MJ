@@ -28,7 +28,7 @@ import {
   type PredictiveStudioTrainModelOutput,
 } from '@memberjunction/core-entities';
 
-import type { TrainModelInput, TrainModelResult } from '../training/types';
+import type { TrainModelInput } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
 import { RunViewEvaluationProtocolStore, type IEvaluationProtocolStore } from '../training/evaluation-protocol-store';
 import { TrainingDelegation } from './delegation';
@@ -73,9 +73,10 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
     const engineInput = this.toEngineInput(input);
     this.reportProgress(context, 0, `Training model from pipeline ${input.pipelineId}…`);
     const result = await TrainingDelegation.TrainModelViaEngine(engineInput, provider, user, this.engine());
-    this.reportProgress(context, 1, this.finishedMessage(result));
-    const facts = await TrainModelMapping.GatherRunFacts(result, this.protocolStore(provider, user));
-    return TrainModelMapping.TrainModelOutputFrom(facts);
+    // The output is mapped (and may fail closed) before the finishing line, so "completed" is never followed by an error.
+    const out = TrainModelMapping.TrainModelOutputFrom(await TrainModelMapping.GatherRunFacts(result, this.protocolStore(provider, user)));
+    this.reportProgress(context, 1, TrainModelMapping.FinishedMessage(out));
+    return out;
   }
 
   /**
@@ -104,13 +105,6 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
   /** Where the run's protocol version is read, through the request's provider and user. Overridable for tests. */
   protected protocolStore(provider: IMetadataProvider, user: UserInfo): IEvaluationProtocolStore {
     return new RunViewEvaluationProtocolStore(provider, user);
-  }
-
-  /** The finishing progress line: the produced model, or the stored reason no model shipped. */
-  private finishedMessage(result: TrainModelResult): string {
-    return result.model === null
-      ? `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`
-      : `Trained model ${result.model.ID} (v${result.model.Version}).`;
   }
 
   private reportProgress(context: RemoteOpServerContext, processed: 0 | 1, message: string): void {

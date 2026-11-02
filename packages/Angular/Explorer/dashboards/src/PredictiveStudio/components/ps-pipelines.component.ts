@@ -759,8 +759,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                     <div class="ps-card-head"><i class="fa-solid fa-scissors" style="color:var(--mj-brand-primary)"></i><h3>Validation</h3></div>
                     <div class="ps-card-body">
                       <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="EditValidation.Strategy" (change)="SetValStrategy(InputVal($event))"><option value="train_test_split">train_test_split</option><option value="kfold">kfold</option><option value="holdout">holdout</option></select></div>
-                      @if (EditValidation.Strategy === 'train_test_split') { <div class="ps-field"><label>Test size</label><input class="mj-input" type="number" step="0.05" [value]="EditValidation.TestSize ?? 0.2" (input)="SetTestSize(InputVal($event))" /></div> }
-                      @if (EditValidation.Strategy === 'kfold') { <div class="ps-field"><label>Folds (k)</label><input class="mj-input" type="number" [value]="EditValidation.K ?? 5" (input)="SetK(InputVal($event))" /></div> }
+                      @if (EditValidation.Strategy === 'train_test_split') { <div class="ps-field"><label>Test size</label><input class="mj-input" type="number" step="0.05" [value]="EditValidation.TestSize || 0.2" (input)="SetTestSize(InputVal($event))" /></div> }
+                      @if (EditValidation.Strategy === 'kfold') { <div class="ps-field"><label>Folds (k)</label><input class="mj-input" type="number" [value]="EditValidation.K || 5" (input)="SetK(InputVal($event))" /></div> }
                       <div class="ps-field"><label>Locked holdout fraction</label><input class="mj-input" type="number" step="0.05" [value]="EditValidation.LockedHoldoutFraction" (input)="SetHoldout(InputVal($event))" /></div>
                     </div>
                   </div>

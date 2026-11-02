@@ -230,7 +230,7 @@ export class TrainingEngine {
     const usdPerSecond = ComputePricing.ReadComputeRate();
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
     if (!resolved.pipeline.PredictionUnitID) throw TrainingEngine.UnitRequired(resolved.pipeline.ID);
-    return this.trainUnitPipeline(resolved, input, deps, usdPerSecond);
+    return this.trainUnitPipeline(resolved, resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond);
   }
 
   /**
@@ -284,7 +284,7 @@ export class TrainingEngine {
    * Training Snapshot the run references, and trained through the protocol trainer. A refusal after the run row exists
    * is recorded on it as a `refused` envelope.
    */
-  private async trainUnitPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
+  private async trainUnitPipeline(resolved: ResolvedPipeline, boundUnitId: string, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const protocol = await this.requireBoundProtocol(resolved, input, deps);
     // A time-indexed pipeline under a holdout that does not respect time is refused before any run row exists.
@@ -295,7 +295,8 @@ export class TrainingEngine {
     const training: ProtocolTraining = { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) };
     // Every pipeline-stage refusal and deps check above writes nothing; only a pipeline that passes them all advances
     // its decision date (a new unit version), and the run row follows.
-    const unitId = (await this.advanceDecisionDate(resolved.pipeline, deps)) || resolved.pipeline.PredictionUnitID;
+    // `||`: no advance (null) keeps the unit the pipeline is bound to.
+    const unitId = (await this.advanceDecisionDate(resolved.pipeline, deps)) || boundUnitId;
     const run = await this.createRunRow(resolved, input, deps);
     try {
       TrainingEngine.refuseProtocolNewerThanRun(protocol, run);

@@ -196,7 +196,7 @@ describe('PipelineMigration.EnsurePipelineUnitAndProtocol', () => {
     expect((await PipelineMigration.EnsurePipelineUnitAndProtocol(p.Entity, deps, false)).Cutoff).toBeNull();
     expect(JSON.parse(factory.Protocols[0].Holdout)).toEqual({ kind: 'seeded-random', fraction: 0.25 });
     expect(JSON.parse(factory.Units.Rows[0].UnitRows).decisionDate).toEqual({ kind: 'fixed', date: '2026-10-20', advance: 'each-run' });
-    expect([factory.Units.Rows[0].Name.endsWith(' — migrated unit'), factory.Units.Rows[0].Description.startsWith('Created by the Prediction Unit pipeline migration on 2026-10-20 ')]).toEqual([true, true]);
+    expect([factory.Units.Rows[0].Name.endsWith(' — migrated unit'), factory.Units.Rows[0].Description?.startsWith('Created by the Prediction Unit pipeline migration on 2026-10-20 ')]).toEqual([true, true]);
     const archived = new LegacyPipeline();
     archived.Status = 'Archived';
     expect((await PipelineMigration.EnsurePipelineUnitAndProtocol(archived.Entity, deps, false)).Reason).toBe('archived');
@@ -210,7 +210,7 @@ describe('PipelineMigration.BindMigratedUnit', () => {
     p.AsOfStrategy = JSON.stringify({ Mode: 'none' });
     const bound = await PipelineMigration.BindMigratedUnit(p.Entity, deps);
     expect([bound.Ok, p.PredictionUnitID === null, p.EvaluationProtocolID, factory.Protocols.length]).toEqual([true, false, null, 0]);
-    expect([factory.Units.Rows[0].Name.endsWith(' — unit'), factory.Units.Rows[0].Description.startsWith('Created by the Pipeline Builder on 2026-10-20 ')]).toEqual([true, true]);
+    expect([factory.Units.Rows[0].Name.endsWith(' — unit'), factory.Units.Rows[0].Description?.startsWith('Created by the Pipeline Builder on 2026-10-20 ')]).toEqual([true, true]);
     const neutral = new LegacyPipeline();
     neutral.TargetVariable = 'Segment';
     const { deps: d2 } = setup({ Segment: ['A', 'B'] });

@@ -1,48 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import {
-  GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract,
-  type StoredGateRecord, type TrainerCompleted, type TrainingRunResults,
-} from '@memberjunction/predictive-studio-core';
+import { TRAINING_RUN_RESULTS_SCHEMA, type StoredGateRecord, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 
 import { TrainModelMapping, type TrainRunFacts } from '../train-model.mapping';
 import { TrainingRefusedError } from '../../training/training-refusal';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
-import { FakeEntityFactory, FakeEvaluationProtocolStore, FakeMLModel, FakeMLRun } from '../../__tests__/fakes/training-fakes';
-import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import type { TrainModelResult } from '../../training/types';
-
-/** A typed engine result over the shared fake rows (the fake factory is the one seam that types them as entities). */
-async function resultOf(run: Partial<FakeMLRun>, model: Partial<FakeMLModel> | null): Promise<TrainModelResult> {
-  const r = Object.assign(new FakeMLRun('run-1'), run);
-  const m = model === null ? null : Object.assign(new FakeMLModel('model-1'), model);
-  const factory = new FakeEntityFactory(() => m || new FakeMLModel('unused'), () => r);
-  return {
-    model: m === null ? null : await factory.getEntityObject<MJMLModelEntity>('MJ: ML Models'),
-    run: await factory.getEntityObject<MJMLTrainingRunEntity>('MJ: ML Training Runs'),
-  };
-}
+import { FakeEvaluationProtocolStore, TrainingHarness } from '../../__tests__/fakes/training-fakes';
 
 const RUN_ID = '00000000-0000-0000-0000-0000000000a1';
 const PROTOCOL = ProtocolRowFixture.Spec();
-
-/** The gate record a completed result stores under the fixture protocol (built by the same owner training uses). */
-function gateRecordOf(result: TrainerCompleted): StoredGateRecord {
-  const built = GateRecords.BuildStoredGateRecord({ Result: result, Protocol: PROTOCOL, Task: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, Carve: null });
-  if (built.Ok === false) throw new Error(`the fixture's gate record was refused: ${built.Refusal.kind}`);
-  return built.Record;
-}
-
-/** A complete v2 envelope: unit counts, the stored trainer result (artifacts as file references) and the gate record. */
-function envelopeOf(result: TrainerCompleted, gate: StoredGateRecord = gateRecordOf(result)): string {
-  const trainer = TrainerContract.ToStoredTrainerResult(result, new Map(result.artifacts.map((a, i): [string, string] => [a.candidate, `F${i + 1}`])));
-  const envelope: TrainingRunResults = {
-    schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
-    unitResolution: { rowsRead: 10, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 10, dataCutoff: '2026-01-01' },
-    trainer, trainerRequest: null, carve: null, gate,
-  };
-  return JSON.stringify(envelope);
-}
+const envelopeOf = TrainerResultFixtures.ValidationResultsFor;
+const gateRecordOf = TrainerResultFixtures.GateRecordFor;
+const resultOf = TrainingHarness.ResultOf;
 
 function facts(over: Partial<TrainRunFacts>): TrainRunFacts {
   return {
@@ -112,7 +81,7 @@ describe('TrainModel mapping — output from the run facts', () => {
       decision: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'heuristic:renewal-rule', shippedRole: 'simpleBaseline', note: null },
       reason: { code: 'heuristic-carries-signal', text: 'The existing rule "renewal-rule" beats the flat guess: keep the rule.' },
     };
-    const out = TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: envelopeOf(base, kept) }));
+    const out = TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: envelopeOf(base, { Gate: kept }) }));
     expect([out.status, out.modelId, out.shipped, out.gateReason]).toEqual(['KeptExistingRule', undefined, 'heuristic:renewal-rule', kept.reason.text]);
   });
 
@@ -121,11 +90,14 @@ describe('TrainModel mapping — output from the run facts', () => {
     expect('holdoutMetrics' in out).toBe(false);
   });
 
-  it('fails closed on an unreadable envelope, a run with no model and no stored decision, and a shipping decision with no model row', () => {
+  it('fails closed on an unreadable envelope, a stored refusal, a run with no model and no stored decision, and a shipping decision with no model row', () => {
     expect(() => TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: 'not json' }))).toThrow(/run-1 .*cannot be read/);
     expect(() => TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: null }))).toThrow(/run-1 .*cannot be read/);
-    const noGate = JSON.stringify({ ...JSON.parse(envelopeOf(TrainerResultFixtures.CannedNoSignal(RUN_ID, PROTOCOL))), gate: null });
+    const noGate = envelopeOf(TrainerResultFixtures.CannedNoSignal(RUN_ID, PROTOCOL), { Gate: null });
     expect(() => TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: noGate }))).toThrow('training run run-1 produced no model and stored no gate decision');
+    const refused: TrainingRunResults = { schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } } };
+    expect(() => TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: JSON.stringify(refused) })))
+      .toThrow('training run run-1 stored a refusal, so its results cannot be read as a completed run');
     const shipsGlm = envelopeOf(TrainerResultFixtures.CannedCompleted(RUN_ID, PROTOCOL));
     expect(() => TrainModelMapping.TrainModelOutputFrom(facts({ ValidationResults: shipsGlm })))
       .toThrow('training run run-1 stored the outcome keep-simple-baseline shipping glm but produced no model');

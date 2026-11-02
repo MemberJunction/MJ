@@ -125,7 +125,8 @@ export class InMemorySnapshotFileStore implements ISnapshotFileStore {
     SnapshotObjectKeys.AssertSafe(objectKey);
     const existing = [...this.Saved.entries()].find(([, f]) => f.Key === objectKey);
     if (existing) SnapshotWriteOnce.AcceptExisting(objectKey, existing[1].Bytes, bytes);
-    const id = existing ? existing[0] : `mem-snapshot-file-${this.Saved.size + 1}`;
+    // A UUID-shaped ID, as an `MJ: Files` row has: the trainer's request schema validates file IDs as UUIDs.
+    const id = existing ? existing[0] : `00000000-0000-4000-9000-${String(this.Saved.size + 1).padStart(12, '0')}`;
     if (!existing) this.Saved.set(id, { Key: objectKey, Bytes: bytes });
     return { FileID: id, ProviderID: this.providerId, ProviderKey: objectKey, Sha256: SnapshotHash.Sha256Hex(bytes), SizeBytes: bytes.byteLength };
   }
