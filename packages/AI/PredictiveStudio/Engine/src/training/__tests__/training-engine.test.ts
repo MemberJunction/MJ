@@ -105,11 +105,13 @@ describe('TrainingEngine — the evaluation record of a unit run', () => {
     expect([refused.runs.length, refused.trainer.Requests.length]).toEqual([0, 0]);
   });
 
-  it('withholds trust on the model of a pipeline that declares a time index, with the reason in its Lineage', async () => {
+  it('withholds no trust from a time-indexed pipeline judged on the protocol\'s date-carved holdout, in its Lineage or its run notes', async () => {
     const h = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
     h.pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'StartDate' });
-    const model = TrainingHarness.ModelOf(await h.engine.trainModel({ pipelineId: h.pipeline.ID }, h.deps));
-    expect(EvaluationLineage.Read(model.Lineage)).toMatchObject({ TimeIndexColumn: 'StartDate', WithheldReason: EvaluationLineage.NotEvaluatedAsForecast });
+    const trained = await h.engine.trainModel({ pipelineId: h.pipeline.ID }, h.deps);
+    const model = TrainingHarness.ModelOf(trained);
+    expect(EvaluationLineage.Read(model.Lineage)).toMatchObject({ TimeIndexColumn: 'StartDate', WithheldReason: null });
+    expect(trained.run.Notes).not.toContain('Trust withheld');
   });
 });
 

@@ -545,7 +545,11 @@ export class TrainingEngine {
       Result: result,
       Finalist: TrainingEngine.finalistCandidate(candidates, result.finalist),
       Importance: importance,
-      Evaluation: EvaluationLineage.Build(x.Resolved.validation, { ValidationOutOfSample: true, ImportanceKind: TrainerContract.ImportanceKindOf(result.importance), MajorityBaselineRule: x.MajorityBaselineRule }),
+      Evaluation: EvaluationLineage.Build(x.Resolved.validation, {
+        ValidationOutOfSample: true, ImportanceKind: TrainerContract.ImportanceKindOf(result.importance), MajorityBaselineRule: x.MajorityBaselineRule,
+        // A time-indexed pipeline trains only under a time-respecting holdout, so its model was tested on later periods.
+        HoldoutRespectsTime: ProtocolSearchGuard.TimeRespectingHoldouts.includes(x.Training.Protocol.Protocol.holdout.kind),
+      }),
       Dominance: this.checkLeakage(importance, x.Resolved.leakageGuard),
     };
   }

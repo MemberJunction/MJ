@@ -55,17 +55,19 @@ export class EvaluationLineage {
    * The record training writes for a pipeline's validation strategy. `ValidationOutOfSample` is required: it is the
    * flag that lets validation `Metrics` count toward trust, so it never defaults to true. Pass `MajorityBaselineRule`
    * when the caller has already parsed it with {@link ParseMajorityBaselineRule}; otherwise it is parsed here, which
-   * throws `InvalidMajorityBaselineRuleError` for an unknown value.
+   * throws `InvalidMajorityBaselineRuleError` for an unknown value. A declared time index withholds trust
+   * ({@link NotEvaluatedAsForecast}) unless `HoldoutRespectsTime` says the model was tested on later periods than it
+   * trained on (a date-carved or rolling-origin holdout).
    */
   public static Build(
     validation: ValidationStrategy,
-    options: { ValidationOutOfSample: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule },
+    options: { ValidationOutOfSample: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule; HoldoutRespectsTime?: boolean },
   ): EvaluationRecord {
     const timeIndex = validation.TimeIndexColumn?.trim() || null;
     return {
       ValidationOutOfSample: options.ValidationOutOfSample,
       TimeIndexColumn: timeIndex,
-      WithheldReason: timeIndex ? EvaluationLineage.NotEvaluatedAsForecast : null,
+      WithheldReason: timeIndex && options.HoldoutRespectsTime !== true ? EvaluationLineage.NotEvaluatedAsForecast : null,
       MajorityBaselineRule: options.MajorityBaselineRule || EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
       ImportanceKind: options.ImportanceKind || null,
     };

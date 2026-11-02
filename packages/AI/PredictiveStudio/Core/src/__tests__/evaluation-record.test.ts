@@ -14,6 +14,10 @@ describe('evaluation record', () => {
     const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' }, { ValidationOutOfSample: true });
     expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', WithheldReason: EvaluationLineage.NotEvaluatedAsForecast, MajorityBaselineRule: 'enforce', ImportanceKind: null });
   });
+  it('withholds nothing from a time-indexed model whose holdout respects time (it was tested on later periods)', () => {
+    const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' }, { ValidationOutOfSample: true, HoldoutRespectsTime: true });
+    expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: null });
+  });
   it('round-trips through the Lineage JSON and tolerates lineage without it', () => {
     const record = EvaluationLineage.Build({ Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' }, { ValidationOutOfSample: true, ImportanceKind: 'none' });
     expect(EvaluationLineage.Read(JSON.stringify({ pipelineId: 'p', [EvaluationLineage.Key]: record }))).toEqual(record);
