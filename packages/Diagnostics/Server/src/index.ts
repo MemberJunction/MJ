@@ -5,4 +5,5 @@ export * from './middleware.js';
 export * from './remoteOperations.js';
 export * from './retentionJobDriver.js';
 export * from './settings.js';
-export * from './intakeStorageBridge.js';
+export * from './version.js';
+export { MJStorageIntakeBridge } from './intakeStorageBridge.js';

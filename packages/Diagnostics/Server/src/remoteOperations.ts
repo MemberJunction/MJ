@@ -37,6 +37,7 @@ import {
 import { DiagnosticIntakeService } from './intakeService.js';
 import { EncryptDiagnosticBundle } from '@memberjunction/diagnostics';
 import { DIAGNOSTICS_SETTING_KEYS, DiagnosticsSettings } from './settings.js';
+import { MJ_VERSION } from './version.js';
 
 function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
   if (!user) return true;
@@ -521,7 +522,7 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
         installId: DiagnosticSessionManager.Instance.InstallID,
         bundleId: local.bundleId,
         formatVersion: 1,
-        mjVersion: '6.2.0',
+        mjVersion: MJ_VERSION,
         scrubLiterals: local.scrubLiterals,
         sizeBytes: encryptedBytes.byteLength,
         plaintextSha256,

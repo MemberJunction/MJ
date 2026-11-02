@@ -79,7 +79,7 @@ import {
   SummarizeSqlParameters,
   FormatSqlParameterTypesForError,
 } from '@memberjunction/generic-database-provider';
-import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import { BindTypedParameters } from './typedParameters';
 import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
@@ -955,6 +955,20 @@ export class SQLServerDataProvider
    */
   public get DatabaseConnection(): any {
     return this._pool;
+  }
+
+  /** Reads the live counts from the mssql connection pool, or `null` before the pool is set. */
+  public override GetPoolStats(): DatabasePoolStats | null {
+    const pool = this._pool;
+    if (!pool) {
+      return null;
+    }
+    return {
+      TotalConnections: pool.size,
+      ActiveConnections: pool.borrowed,
+      IdleConnections: pool.available,
+      WaitingRequests: pool.pending,
+    };
   }
 
   /**

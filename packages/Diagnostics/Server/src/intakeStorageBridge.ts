@@ -24,9 +24,9 @@ export class MJStorageIntakeBridge implements IDiagnosticStorageBridge {
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<MJStorageIntakeBridge> {
-    const verifiedDriver = await loadDriver(verifiedProviderId, contextUser, provider);
+    const verifiedDriver = await LoadStorageDriver(verifiedProviderId, contextUser, provider);
     const quarantineDriver = quarantineProviderId
-      ? await loadDriver(quarantineProviderId, contextUser, provider)
+      ? await LoadStorageDriver(quarantineProviderId, contextUser, provider)
       : verifiedDriver;
     return new MJStorageIntakeBridge(quarantineDriver, verifiedDriver);
   }
@@ -55,7 +55,8 @@ export class MJStorageIntakeBridge implements IDiagnosticStorageBridge {
   }
 }
 
-async function loadDriver(
+/** Loads an `MJ: File Storage Providers` row and returns its initialized storage driver. Throws when it cannot be loaded. */
+export async function LoadStorageDriver(
   storageProviderId: string,
   contextUser?: UserInfo,
   provider?: IMetadataProvider

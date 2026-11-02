@@ -1,4 +1,5 @@
 import * as crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     GetDiagnosticContext,
@@ -9,6 +10,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
+import { DatabasePoolStats, GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { CredentialEngine, ResolvedCredential } from '@memberjunction/credentials';
 import {
     DiagnosticsStartSessionServerOperation,
@@ -41,6 +43,7 @@ import {
     MalwareScanResult,
 } from '../malwareScanner.js';
 import { DiagnosticsServerMiddleware } from '../middleware.js';
+import { MJ_VERSION } from '../version.js';
 
 type ExpressAppParam = Parameters<DiagnosticsServerMiddleware['ConfigureExpressApp']>[0];
 
@@ -292,6 +295,61 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(assembled.bundleData.clientLogs.length).toBe(1);
             expect(assembled.bundleData.serverSql[0].sql).toContain('Secret = ?');
             expect(assembled.bundleData.findings.some((f) => f.category === 'slow_sql')).toBe(true);
+        });
+    });
+
+    describe('Server health snapshot and version', () => {
+        it('omits the database pool block when the provider reports no pool stats', () => {
+            const snapshot = manager.CollectServerHealthSnapshot(emptyProvider);
+            expect(snapshot.databasePool).toBeUndefined();
+        });
+
+        it('reports the pool stats the database provider measured', () => {
+            const provider = Object.create(GenericDatabaseProvider.prototype) as GenericDatabaseProvider;
+            const stats: DatabasePoolStats = {
+                TotalConnections: 7,
+                ActiveConnections: 5,
+                IdleConnections: 2,
+                WaitingRequests: 3,
+            };
+            Object.defineProperty(provider, 'GetPoolStats', { value: () => stats });
+
+            const snapshot = manager.CollectServerHealthSnapshot(provider);
+
+            expect(snapshot.databasePool).toEqual({
+                totalConnections: 7,
+                activeConnections: 5,
+                idleConnections: 2,
+                waitingRequests: 3,
+            });
+        });
+
+        it('stamps the bundle with MJ_VERSION', async () => {
+            const assembled = await manager.AssembleBundleDataFromChunks(undefined, false, undefined, undefined, emptyProvider);
+            expect(assembled.bundleData.environment.mjVersion).toBe(MJ_VERSION);
+        });
+
+        it('reads MJ_VERSION from the trimmed environment variable when it is set', async () => {
+            vi.stubEnv('MJ_VERSION', '  9.9.9-test  ');
+            vi.resetModules();
+            try {
+                const fresh = await import('../version.js');
+                expect(fresh.MJ_VERSION).toBe('9.9.9-test');
+            } finally {
+                vi.unstubAllEnvs();
+            }
+        });
+
+        it('falls back to the package version when MJ_VERSION is blank', async () => {
+            const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
+            vi.stubEnv('MJ_VERSION', '   ');
+            vi.resetModules();
+            try {
+                const fresh = await import('../version.js');
+                expect(fresh.MJ_VERSION).toBe(pkg.version);
+            } finally {
+                vi.unstubAllEnvs();
+            }
         });
     });
 

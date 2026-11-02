@@ -154,7 +154,7 @@ export function AnalyzeDiagnosticBundleData(data: DiagnosticBundleData): Diagnos
             }
         }
 
-        if (databasePool.waitingRequests > 0) {
+        if (databasePool && databasePool.waitingRequests > 0) {
             findings.push({
                 id: 'finding-db-pool-exhaustion',
                 severity: databasePool.waitingRequests >= 3 ? 'critical' : 'warning',

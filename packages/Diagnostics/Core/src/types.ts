@@ -138,7 +138,8 @@ export interface DiagnosticServerHealthSnapshot {
         externalBytes: number;
         arrayBuffersBytes?: number;
     };
-    databasePool: {
+    /** Measured pool counts; absent when the database provider exposes no pool. */
+    databasePool?: {
         totalConnections: number;
         activeConnections: number;
         idleConnections: number;

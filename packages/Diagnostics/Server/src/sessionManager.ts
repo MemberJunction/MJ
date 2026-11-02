@@ -26,6 +26,7 @@ import {
   IDiagnosticSessionScope
 } from '@memberjunction/core-entities';
 import {
+  DatabasePoolStats,
   GenericDatabaseProvider,
   SqlObservation
 } from '@memberjunction/generic-database-provider';
@@ -45,6 +46,7 @@ import {
   EncryptDiagnosticBundle,
   DiagnosticContributorRegistry
 } from '@memberjunction/diagnostics';
+import { MJ_VERSION } from './version.js';
 
 export interface ActiveDiagnosticSession {
   id: string;
@@ -700,7 +702,8 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return total;
   }
 
-  public CollectServerHealthSnapshot(): DiagnosticServerHealthSnapshot {
+  /** Builds the health snapshot. The pool block appears only when the database provider measured it. */
+  public CollectServerHealthSnapshot(provider?: IMetadataProvider): DiagnosticServerHealthSnapshot {
     const mem = process.memoryUsage();
     const lagP95Ms = this._eventLoopHistogram
       ? Number((this._eventLoopHistogram.percentile(95) / 1_000_000).toFixed(2))
@@ -726,16 +729,26 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         heapUsedBytes: mem.heapUsed,
         externalBytes: mem.external
       },
-      databasePool: {
-        totalConnections: 10,
-        activeConnections: 1,
-        idleConnections: 9,
-        waitingRequests: 0
-      },
+      databasePool: this.readDatabasePool(provider ?? Metadata.Provider),
       cacheStats: {
         enabled: cacheEnabled,
         entryCount: cacheEntryCount
       }
+    };
+  }
+
+  /** Maps the provider's measured pool counts to the snapshot shape, or `undefined` when there are none. */
+  private readDatabasePool(provider: IMetadataProvider | undefined): DiagnosticServerHealthSnapshot['databasePool'] {
+    const stats: DatabasePoolStats | null =
+      provider instanceof GenericDatabaseProvider ? provider.GetPoolStats() : null;
+    if (!stats) {
+      return undefined;
+    }
+    return {
+      totalConnections: stats.TotalConnections,
+      activeConnections: stats.ActiveConnections,
+      idleConnections: stats.IdleConnections,
+      waitingRequests: stats.WaitingRequests
     };
   }
 
@@ -828,7 +841,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
 
       const rawData: DiagnosticBundleData = {
         environment: clientSeed?.environment ?? {
-          mjVersion: '6.2.0',
+          mjVersion: MJ_VERSION,
           nodeVersion: process.version,
           osPlatform: os.platform(),
           osRelease: os.release(),
@@ -844,7 +857,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         serverTraces,
         serverSql,
         serverLogs,
-        serverHealth: clientSeed?.serverHealth ?? this.CollectServerHealthSnapshot(),
+        serverHealth: clientSeed?.serverHealth ?? this.CollectServerHealthSnapshot(provider),
         findings: [],
         contrib
       };
@@ -1034,7 +1047,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         installId: this._installId,
         bundleId: params.bundleId,
         formatVersion: 1,
-        mjVersion: '6.2.0',
+        mjVersion: MJ_VERSION,
         scrubLiterals: params.scrubLiterals,
         sizeBytes: encryptedBytes.byteLength,
         plaintextSha256,

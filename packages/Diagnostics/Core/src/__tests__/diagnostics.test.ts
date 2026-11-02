@@ -543,6 +543,16 @@ describe('Automated Findings Engine & Perfetto / OTLP Exporters', () => {
     expect(categories.has('clock_skew')).toBe(true);
   });
 
+  it('skips the pool rule when the health snapshot has no database pool block', () => {
+    const data = createSampleBundleData();
+    delete data.serverHealth!.databasePool;
+    const findings = AnalyzeDiagnosticBundleData(data);
+    const categories = new Set(findings.map((f) => f.category));
+
+    expect(categories.has('db_pool_exhaustion')).toBe(false);
+    expect(categories.has('memory_pressure')).toBe(true);
+  });
+
   it('exports client and server spans to Perfetto TraceEvents and OTLP JSON', () => {
     const data = createSampleBundleData();
     const perfetto = ExportToPerfettoTrace(data);

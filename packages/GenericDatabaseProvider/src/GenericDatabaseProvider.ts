@@ -106,7 +106,7 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
-import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { DatabasePoolStats, SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, SqlDocument, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
@@ -392,6 +392,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return () => {
             GenericDatabaseProvider._sqlObservers.delete(normalized);
         };
+    }
+
+    /**
+     * Returns the live connection pool counts, or `null` when this provider has no pool to measure.
+     * Providers that own a pool override this.
+     */
+    public GetPoolStats(): DatabasePoolStats | null {
+        return null;
     }
 
     /**

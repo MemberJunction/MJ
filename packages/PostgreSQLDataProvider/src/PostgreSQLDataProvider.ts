@@ -39,7 +39,7 @@ import {
     SummarizeSqlParameters,
     FormatSqlParameterTypesForError,
 } from '@memberjunction/generic-database-provider';
-import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
     DescribeCatalogParameters, DescribeWrapperSQL, FieldDescriptionOf, MapPostgreSQLDescribeFields, POSTGRESQL_DESCRIBE_CATALOG_SQL, POSTGRESQL_DESCRIBE_TIMEOUT_MS,
     type PostgreSQLDescribeCatalogRow,
@@ -315,6 +315,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     get DatabaseConnection(): pg.Pool {
         return this._connectionManager.Pool;
+    }
+
+    /** Reads the live counts from the pg pool, or `null` before the pool is initialized. */
+    public override GetPoolStats(): DatabasePoolStats | null {
+        if (!this._connectionManager.IsConnected) {
+            return null;
+        }
+        const pool = this._connectionManager.Pool;
+        return {
+            TotalConnections: pool.totalCount,
+            ActiveConnections: pool.totalCount - pool.idleCount,
+            IdleConnections: pool.idleCount,
+            WaitingRequests: pool.waitingCount,
+        };
     }
 
     get InstanceConnectionString(): string {
