@@ -17,7 +17,7 @@ import { HarnessWorldTruth } from './world-truth';
 import { HarnessProvenance } from './provenance';
 import { HarnessSidecar } from './sidecar';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
-import type { CandidateModel, LoadedDataset, TruthHarness } from './types';
+import type { CandidateModel, LoadedDataset, PipelineSpec, TruthHarness } from './types';
 
 /** What every harness member closes over: one MJAPI connection, one mssql pool, the algorithm catalogue, the run id. */
 export interface RunContext {
@@ -190,6 +190,14 @@ export class RunFixtures {
     }
   }
 
+  /** Creates a pipeline and records the unit and protocol the migration bound to it: they are this run's rows too, so cleanup deletes them. */
+  private static async createRecordedPipeline(ctx: RunContext, created: RunRecords, spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity> {
+    const p = await HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec);
+    if (p.PredictionUnitID) created.RecordPredictionUnit(p.PredictionUnitID);
+    if (p.EvaluationProtocolID) created.RecordEvaluationProtocol(p.EvaluationProtocolID);
+    return p;
+  }
+
   /** One object literal: a TruthHarness member without a line here is a compile error. */
   private static async harnessFrom(provider: GraphQLDataProvider, user: UserInfo, pool: DatasetPool): Promise<TruthHarness> {
     const ctx: RunContext = {
@@ -206,13 +214,7 @@ export class RunFixtures {
       RunID: ctx.RunID,
       Created: created,
       EnsureLoaded: (ref) => HarnessDatasets.EnsureLoaded(ctx, ref),
-      CreatePipeline: async (spec) => {
-        const p = await HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec);
-        // The unit and protocol the migration bound are this run's rows too, so cleanup deletes them.
-        if (p.PredictionUnitID) created.RecordPredictionUnit(p.PredictionUnitID);
-        if (p.EvaluationProtocolID) created.RecordEvaluationProtocol(p.EvaluationProtocolID);
-        return p;
-      },
+      CreatePipeline: (spec) => RunFixtures.createRecordedPipeline(ctx, created, spec),
       Train: (pipeline, opts) => HarnessTraining.Train(ctx, pipeline, opts),
       RunBuilderAgent: (plan) => HarnessAgent.RunBuilderAgent(ctx, plan),
       ReadModel: (modelId) => HarnessModels.ReadModel(ctx, modelId),
