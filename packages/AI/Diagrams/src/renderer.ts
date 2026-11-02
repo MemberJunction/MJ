@@ -138,6 +138,13 @@ function routeOrthogonal(
         };
     }
     if (s.l - t.r >= 24) {
+        if (s.laneId !== t.laneId && t.y > s.y) {
+            const y0 = opts.channelY - opts.channelOffset;
+            return {
+                d: `M${s.x} ${s.b}V${y0}H${t.x}V${t.t}`,
+                segs: [[s.x, s.b, s.x, y0], [s.x, y0, t.x, y0], [t.x, y0, t.x, t.t]],
+            };
+        }
         const y0 = (opts.clearanceY ?? Math.min(s.t, t.t)) - 16 - opts.channelOffset;
         return {
             d: `M${s.x} ${s.t}V${y0}H${t.x}V${t.t}`,
@@ -274,7 +281,10 @@ function routeHorizontalBandEdges(
         const sidePort = mainFlag || s.laneId === t.laneId || outs.length === 1;
         const channelY = t.y > s.y ? sLane.y + sLane.h : sLane.y;
 
-        const forwardOuts = outs.map((o) => toBox(pos[o.to]).l).filter((l) => l - s.r >= 24);
+        const forwardOuts = [
+            ...outs.map((o) => toBox(pos[o.to]).l),
+            ...allBoxes.filter((b) => b.laneId === s.laneId).map((b) => b.l),
+        ].filter((l) => l - s.r >= 24);
         const nextL = forwardOuts.length ? Math.min(...forwardOuts) : Infinity;
         const gapX = Number.isFinite(nextL) ? Math.round((s.r + nextL) / 2) : undefined;
         const gapBucket = gapX !== undefined ? Math.round(gapX / 24) : Math.round(s.r / 24);
@@ -466,9 +476,17 @@ const DIAGRAM_CSS = `
 
 function wrapText(text: string, maxChars: number): string[] {
     if (!text) return [];
+    const words: string[] = [];
+    for (let w of text.split(/\s+/)) {
+        while (w.length > maxChars) {
+            words.push(w.slice(0, maxChars));
+            w = w.slice(maxChars);
+        }
+        if (w) words.push(w);
+    }
     const lines: string[] = [];
     let cur = '';
-    for (const w of text.split(/\s+/)) {
+    for (const w of words) {
         if ((cur + ' ' + w).trim().length > maxChars && cur) {
             lines.push(cur);
             cur = w;
@@ -556,9 +574,10 @@ function renderSummaryCardsSvg(cards: MJDiagramCard[], y: number, width: number)
     const markup = cards.map((c, i) => {
         const x = LEFT + (i % perRow) * (cw + 16);
         const cy = y + Math.floor(i / perRow) * (ch + 16);
-        const lines = wrapText(c.body ?? '', 46);
+        const titleText = c.title.length > 40 ? `${c.title.slice(0, 39)}…` : c.title;
+        const lines = wrapText(c.body ?? '', 42);
         // Two lines fit on the card; the full text is in <desc> for the details panel.
-        if (lines.length > 2) lines[1] = `${lines[1].slice(0, 45)}…`;
+        if (lines.length > 2) lines[1] = `${lines[1].slice(0, 41)}…`;
         const bodyLines = lines
             .slice(0, 2)
             .map((ln, j) => `<text class="cb" x="${x + 18}" y="${cy + 44 + j * 16}">${esc(ln)}</text>`)
@@ -569,7 +588,7 @@ function renderSummaryCardsSvg(cards: MJDiagramCard[], y: number, width: number)
             (c.body ? `<desc>${esc(c.body)}</desc>` : '') +
             `<rect x="${x}" y="${cy}" width="${cw}" height="${ch}" rx="8"/>` +
             `<rect class="bar" x="${x}" y="${cy}" width="4" height="${ch}" rx="2"/>` +
-            `<text class="ct" x="${x + 18}" y="${cy + 24}">${esc(c.title)}</text>${bodyLines}</g>`
+            `<text class="ct" x="${x + 18}" y="${cy + 24}">${esc(titleText)}</text>${bodyLines}</g>`
         );
     });
     return { markup, nextY: y + Math.ceil(cards.length / perRow) * (ch + 16) - 16 };
@@ -609,9 +628,9 @@ export function RenderDiagramSvg(spec: MJDiagramSpec, prefix = 'mjd'): string {
     const out: string[] = [
         ...renderLanesSvg(layout.lanes, spec.kind === 'sequence'),
         ...(layout.lifelines ?? []).map((ll) => `<line class="lifeline" x1="${ll.x}" y1="${ll.y1}" x2="${ll.x}" y2="${ll.y2}"/>`),
+        ...renderNodesSvg(spec, layout.pos, mainSet, laneLabels),
         ...renderEdgesSvg(layout.edges, prefix, Object.fromEntries(spec.nodes.map((n) => [n.id, n.label]))),
         ...(layout.sequenceDots ?? []).map((d) => `<circle class="seq-dot" cx="${d.x}" cy="${d.y}" r="4"/>`),
-        ...renderNodesSvg(spec, layout.pos, mainSet, laneLabels),
     ];
 
     const cards = spec.cards ?? [];

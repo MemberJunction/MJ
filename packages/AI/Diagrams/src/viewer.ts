@@ -87,11 +87,19 @@ const SHELL_CSS = `
 }
 .mjd-stage svg.mjd {
   display: block;
-  margin: 0 auto;
+  flex-shrink: 0;
   max-width: 100%;
   min-width: var(--mjd-min-w, 0);
   height: auto;
   user-select: none;
+}
+.mjd-shell:has(.mjd-panel[data-empty="false"]) .mjd-stage {
+  scroll-padding-right: 366px;
+}
+.mjd-shell:has(.mjd-panel[data-empty="false"]) .mjd-stage::after {
+  content: "";
+  flex: 0 0 360px;
+  height: 1px;
 }
 .mjd-panel {
   position: absolute;
@@ -430,7 +438,7 @@ function buildEdgePanelDom(edge: EdgeRecord, index: IndexedDiagram): Node[] {
 
 function buildCardPanelDom(card: SVGGElement, nodeIds: string[], index: IndexedDiagram): Node[] {
     const doc = card.ownerDocument;
-    const title = card.querySelector('.ct')?.textContent || card.getAttribute('aria-label') || 'Summary rule';
+    const title = card.getAttribute('aria-label') || card.querySelector('.ct')?.textContent || 'Summary rule';
     const body = card.querySelector('desc')?.textContent || '';
     const nodes: Node[] = [
         createCloseButton(doc),
@@ -605,13 +613,17 @@ class DiagramViewer implements DiagramViewerInstance {
         const target = (e.target as Element).closest<HTMLElement>('[data-act], [data-jump], [data-trace]');
         if (!target) return;
         if (target.dataset.act === 'close-panel') return this.close();
-        if (target.dataset.jump) this.Select(target.dataset.jump);
-        else if (target.dataset.trace && this.selected) this.Trace(this.selected, target.dataset.trace as 'up' | 'down');
+        if (target.dataset.jump) {
+            this.Select(target.dataset.jump);
+            this.index.nodes.get(target.dataset.jump)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        } else if (target.dataset.trace && this.selected) {
+            this.Trace(this.selected, target.dataset.trace as 'up' | 'down');
+        }
         // The clicked button was replaced by the new panel content; keep keyboard focus in the panel.
         const heading = this.panel.querySelector<HTMLElement>('h3');
         if (heading) {
             heading.tabIndex = -1;
-            heading.focus();
+            heading.focus({ preventScroll: true });
         }
     }
 

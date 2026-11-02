@@ -396,4 +396,120 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         MountInteractiveDiagram(host, '<svg xmlns="http://www.w3.org/2000/svg"><text>plain</text></svg>', sanitize);
         expect(shadow(host).querySelector('style')?.textContent).toContain('background:var(--mj-color-neutral-0');
     });
+
+    it('caps validator errors at 20 and skips suggestId once the cap is reached', () => {
+        const nodes = Array.from({ length: 40 }, (_, i) => ({
+            id: `n${i}-${'x'.repeat(120)}`,
+            lane: 'l',
+            label: `N${i}`,
+        }));
+        const mainPath = Array.from({ length: 3400 }, (_, i) => `bad-${i}-${'y'.repeat(115)}`);
+        const start = performance.now();
+        const res = RenderDiagram({
+            kind: 'workflow',
+            title: 'T',
+            lanes: lane,
+            nodes,
+            edges: [{ from: nodes[0].id, to: nodes[1].id }],
+            mainPath,
+        });
+        expect(performance.now() - start).toBeLessThan(250);
+        expect(res.Success).toBe(false);
+        if (!res.Success) {
+            expect(res.Diagnostics).toHaveLength(20);
+            expect(res.Message.length).toBeLessThan(250_000);
+        }
+    });
+
+    it('truncates long card titles and single-word URLs, and reads the full title from aria-label in the panel', () => {
+        const title = 'Continuing education documentation and audit retention requirement';
+        const url = `https://portal.example.org/certification/audit/${'a'.repeat(55)}`;
+        const spec = validSpec('renewal.workflow.json');
+        spec.cards = [{ id: 'c1', title, body: url, nodes: ['log'] }];
+        const svg = RenderDiagramSvg(spec);
+        const svgDoc = new JSDOM(svg).window.document;
+        expect(svgDoc.querySelector('.card .ct')?.textContent).toBe(`${title.slice(0, 39)}…`);
+        const bodyLines = [...svgDoc.querySelectorAll('.card .cb')].map((el) => el.textContent ?? '');
+        expect(bodyLines).toHaveLength(2);
+        expect(Math.max(...bodyLines.map((l) => l.length))).toBeLessThanOrEqual(42);
+        expect(bodyLines[1].endsWith('…')).toBe(true);
+
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, svg, sanitize)!;
+        viewer.Svg.querySelector('.card')!.dispatchEvent(new doc.defaultView!.Event('click', { bubbles: true }));
+        expect(shadow(host).querySelector('.mjd-panel h3')?.textContent).toBe(title);
+        expect(shadow(host).querySelector('.mjd-panel .mjd-desc')?.textContent).toBe(url);
+    });
+
+    it('refuses duplicate explicit card IDs and suffixes derived card IDs when titles repeat', () => {
+        const base = validSpec('renewal.workflow.json');
+        const dup = ValidateDiagramSpec({
+            ...base,
+            cards: [
+                { id: 'same', title: 'First', body: 'A', nodes: ['log'] },
+                { id: 'same', title: 'Second', body: 'B', nodes: ['submit'] },
+            ],
+        });
+        expect(dup.Valid ? [] : dup.Diagnostics.map((d) => d.Code)).toContain('DUPLICATE_CARD_ID');
+
+        const derived = ValidateDiagramSpec({
+            ...base,
+            cards: [
+                { title: 'Grace period', body: 'First rule', nodes: ['log'] },
+                { title: 'Grace period', body: 'Second rule', nodes: ['submit'] },
+            ],
+        });
+        if (!derived.Valid) throw new Error('repeated card titles without explicit IDs should validate');
+        expect(derived.Spec.cards?.map((c) => c.id)).toEqual(['grace-period', 'grace-period-2']);
+
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, RenderDiagramSvg(derived.Spec), sanitize)!;
+        const cards = viewer.Svg.querySelectorAll<SVGGElement>('.card');
+        cards[0].dispatchEvent(new doc.defaultView!.Event('click', { bubbles: true }));
+        cards[1].dispatchEvent(new doc.defaultView!.Event('click', { bubbles: true }));
+        expect(cards[0].classList.contains('sel')).toBe(false);
+        expect(cards[1].classList.contains('sel')).toBe(true);
+        expect(shadow(host).querySelector('.mjd-panel .mjd-desc')?.textContent).toBe('Second rule');
+    });
+
+    it('lists validator limits in every reference guide', () => {
+        for (const kind of ['workflow', 'lifecycle', 'sequence', 'dataflow'] as const) {
+            const ref = GetDiagramReference(kind);
+            expect(ref.Success).toBe(true);
+            if (ref.Success) {
+                expect(ref.Content).toContain('40');
+                expect(ref.Content).toContain('80');
+                expect(ref.Content).toContain('8 cards');
+                expect(ref.Content).toContain('128');
+                expect(ref.Content).toContain('300');
+                expect(ref.Content).toContain('no spaces');
+            }
+        }
+    });
+
+    it('places nodes before connections in DOM tab order and scrolls jumped-to nodes into view', () => {
+        const svg = RenderDiagramSvg(validSpec('renewal.workflow.json'));
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, svg, sanitize)!;
+        const focusable = [...viewer.Svg.querySelectorAll('[tabindex="0"]')];
+        const firstEdgeIdx = focusable.findIndex((el) => el.classList.contains('edge'));
+        const lastNodeIdx = focusable.map((el) => el.classList.contains('node')).lastIndexOf(true);
+        expect(lastNodeIdx).toBeLessThan(firstEdgeIdx);
+
+        viewer.Select('review');
+        const row = shadow(host).querySelector<HTMLButtonElement>('.mjd-panel button.mjd-conn')!;
+        const targetEl = viewer.Svg.querySelector<SVGGElement>(`[data-node-id="${row.dataset.jump}"]`)!;
+        let scrolledOpts: ScrollIntoViewOptions | null = null;
+        Object.assign(targetEl, {
+            scrollIntoView: (opts: ScrollIntoViewOptions) => {
+                scrolledOpts = opts;
+            },
+        });
+        row.click();
+        expect(scrolledOpts).toEqual({ block: 'nearest', inline: 'nearest' });
+        expect(shadow(host).getElementById('mj-diagram-viewer-styles')?.textContent).toContain('scroll-padding-right: 366px');
+    });
 });

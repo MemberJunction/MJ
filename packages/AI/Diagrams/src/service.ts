@@ -48,6 +48,9 @@ export function RenderDiagram(rawSpec: unknown, fallbackKind?: string): MJDiagra
     }
 }
 
+const LIMITS_LINE =
+    '- **Limits**: Max 40 nodes/lanes/participants, 80 edges/messages/phases, 8 cards. IDs: max 128 chars, no spaces. Labels and titles: max 300 chars.';
+
 const REFERENCE_GUIDES: Record<MJDiagramKind, string> = {
     workflow: `# MJ Workflow Diagram Spec (\`kind: "workflow"\`)
 
@@ -60,7 +63,8 @@ Use a **workflow** diagram when explaining a process with steps owned by differe
 - \`nodes\`: \`[{ "id": "submit", "lane": "member", "kind": "start" | "task" | "decision" | "end" | "error", "label": "Short title", "sublabel": "2-4 word context", "detail": "1-2 sentence explanation for the side panel" }]\`
 - \`edges\`: \`[{ "from": "submit", "to": "review", "label": "optional condition", "role": "default" | "branch" | "error" }]\`
 - \`mainPath\`: Ordered array of node IDs along the happy path (e.g. \`["log", "submit", "review", "issue"]\`)
-- \`cards\` (optional): \`[{ "id": "deadline", "title": "Rule title", "body": "Rule explanation", "nodes": ["submit"] }]\``,
+- \`cards\` (optional): \`[{ "id": "deadline", "title": "Rule title", "body": "Rule explanation", "nodes": ["submit"] }]\`
+${LIMITS_LINE}`,
 
     lifecycle: `# MJ Lifecycle Diagram Spec (\`kind: "lifecycle"\`)
 
@@ -72,7 +76,8 @@ Use a **lifecycle** diagram when explaining status transitions (e.g. active, ren
 - \`lanes\` (or \`groups\`): \`[{ "id": "main", "label": "Membership" }, { "id": "waiting", "label": "Grace period", "role": "waiting" }, { "id": "terminal", "label": "After lapsing", "role": "terminal" }]\`
 - \`nodes\` (or \`states\`): \`[{ "id": "active", "lane": "main", "kind": "start" | "state" | "waiting" | "success" | "error", "label": "Active", "sublabel": "dues paid", "step": "01", "detail": "..." }]\`
 - \`edges\` (or \`transitions\`): \`[{ "from": "active", "to": "due", "label": "Nov 1", "role": "default" | "error" }]\`
-- \`mainPath\`: Ordered array of state IDs on the normal renewal path`,
+- \`mainPath\`: Ordered array of state IDs on the normal renewal path
+${LIMITS_LINE}`,
 
     sequence: `# MJ Sequence Diagram Spec (\`kind: "sequence"\`)
 
@@ -84,7 +89,8 @@ Use a **sequence** diagram when three or more parties hand work back and forth o
 - \`participants\`: \`[{ "id": "author", "label": "Author", "sublabel": "member" }, ...]\`
 - \`phases\` (optional): \`[{ "id": "submit", "label": "Submit", "fromMessage": 0, "toMessage": 2 }]\`
 - \`messages\` (or \`edges\`): \`[{ "from": "author", "to": "portal", "label": "submit abstract by Mar 15", "role": "emphasis" | "default" | "return" | "conditional" }]\`
-- \`cards\` (optional): Summary rule cards`,
+- \`cards\` (optional): Summary rule cards
+${LIMITS_LINE}`,
 
     dataflow: `# MJ Data Flow Diagram Spec (\`kind: "dataflow"\`)
 
@@ -95,7 +101,8 @@ Use a **dataflow** diagram when showing how data moves left-to-right across stag
 - \`title\`: Data flow title
 - \`stages\` (or \`lanes\`): \`[{ "id": "attend", "label": "Attend" }, { "id": "capture", "label": "Capture" }, ...]\`
 - \`nodes\`: \`[{ "id": "scan", "lane": "attend", "kind": "task" | "database" | "decision" | "external", "label": "Badge scan", "sublabel": "session door", "detail": "..." }]\`
-- \`flows\` (or \`edges\`): \`[{ "from": "scan", "to": "log", "label": "scan in and out", "data": "badge ID", "role": "default" | "emphasis" | "error" }]\``,
+- \`flows\` (or \`edges\`): \`[{ "from": "scan", "to": "log", "label": "scan in and out", "data": "badge ID", "role": "default" | "emphasis" | "error" }]\`
+${LIMITS_LINE}`,
 };
 
 export type DiagramReferenceResult =

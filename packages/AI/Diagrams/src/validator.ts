@@ -35,6 +35,8 @@ const MAX_PHASES = MAX_EDGES;
 const MAX_ID_CHARS = 128;
 /** Labels are drawn in boxes; longer text belongs in a node's "detail" or a card's "body". */
 const MAX_LABEL_CHARS = 300;
+/** Enough errors for an agent to repair a broken spec without unbounded editDistance work or huge payloads. */
+const MAX_ERRORS = 20;
 const ID_KEYS = new Set(['id', 'from', 'to', 'lane', 'group', 'phase', 'nodes', 'mainPath']);
 const LABEL_KEYS = new Set(['title', 'subtitle', 'label', 'sublabel', 'data', 'stage']);
 
@@ -66,8 +68,8 @@ function editDistance(a: string, b: string): number {
     return dp[m][n];
 }
 
-function suggestId(bad: string, candidates: string[]): string {
-    if (!candidates.length) return '';
+function suggestId(bad: string, candidates: string[], diagnostics: MJDiagramDiagnostic[]): string {
+    if (!candidates.length || diagnostics.length >= MAX_ERRORS) return '';
     let best = candidates[0];
     let bestScore = editDistance(bad, best);
     for (const c of candidates.slice(1)) {
@@ -87,14 +89,14 @@ function suggestId(bad: string, candidates: string[]): string {
  */
 function checkStrings(raw: Record<string, unknown>, diagnostics: MJDiagramDiagnostic[]): void {
     const stack: Array<[unknown, string, string]> = Object.entries(raw).map(([k, v]) => [v, k, k]);
-    while (stack.length > 0) {
+    while (stack.length > 0 && diagnostics.length < MAX_ERRORS) {
         const [v, path, key] = stack.pop()!;
         if (Array.isArray(v)) v.forEach((x, i) => stack.push([x, `${path}[${i}]`, key]));
         else if (isRecord(v)) Object.entries(v).forEach(([k, x]) => stack.push([x, `${path}.${k}`, k]));
         else if (typeof v !== 'string') continue;
         else if (ID_KEYS.has(key) && v.length > MAX_ID_CHARS) pushError(diagnostics, 'ID_TOO_LONG', path, `${path} is ${v.length} characters; IDs can be at most ${MAX_ID_CHARS}.`, 'Use a short slug such as "submit-form".');
         else if (key === 'id' && /\s/.test(v.trim())) pushError(diagnostics, 'ID_HAS_WHITESPACE', path, `${path} "${v}" contains whitespace.`, `Use an id without spaces, such as "${slugify(v, 'id')}".`);
-        else if (LABEL_KEYS.has(key) && v.length > MAX_LABEL_CHARS) pushError(diagnostics, 'TEXT_TOO_LONG', path, `${path} is ${v.length} characters; labels and titles can be at most ${MAX_LABEL_CHARS}.`, 'Shorten it and move the rest into a node\'s "detail" or a card\'s "body".');
+        else if (LABEL_KEYS.has(key) && v.length > MAX_LABEL_CHARS) pushError(diagnostics, 'TEXT_TOO_LONG', path, `${path} is ${v.length} characters; labels and titles can at most be ${MAX_LABEL_CHARS}.`, 'Shorten it and move the rest into a node\'s "detail" or a card\'s "body".');
     }
 }
 
@@ -164,7 +166,9 @@ function pushError(
     message: string,
     fix: string
 ): void {
-    diagnostics.push({ Code: code, Severity: 'error', Path: path, Message: message, Fix: fix });
+    if (diagnostics.length < MAX_ERRORS) {
+        diagnostics.push({ Code: code, Severity: 'error', Path: path, Message: message, Fix: fix });
+    }
 }
 
 function parseRawSpecObject(
@@ -336,7 +340,7 @@ function validateSingleNode(
         if (!laneRef) {
             pushError(diagnostics, 'MISSING_NODE_LANE', `${path}.lane`, `Node "${id || idx}" does not specify a "lane"${kind === 'dataflow' ? ' (or "stage")' : ''}.`, `Set "lane" to one of: ${lanes.map((l) => `"${l.id}"`).join(', ')}.`);
         } else if (!laneIds.has(laneRef)) {
-            pushError(diagnostics, 'UNKNOWN_NODE_LANE', `${path}.lane`, `Node "${id || idx}" references unknown lane "${laneRef}".`, `Change "${laneRef}" to an existing lane id.${suggestId(laneRef, [...laneIds])}`);
+            pushError(diagnostics, 'UNKNOWN_NODE_LANE', `${path}.lane`, `Node "${id || idx}" references unknown lane "${laneRef}".`, `Change "${laneRef}" to an existing lane id.${suggestId(laneRef, [...laneIds], diagnostics)}`);
         }
     }
     if (id && label && !nodeIds.has(id)) {
@@ -402,10 +406,10 @@ function validateSingleEdge(
     }
     const from = asString(e.from);
     const to = asString(e.to);
-    if (!from) pushError(diagnostics, 'MISSING_EDGE_FROM', `${path}.from`, `${path} is missing "from".`, `Set "from" to a valid node id.${suggestId('', [...nodeIds])}`);
-    else if (nodeIds.size > 0 && !nodeIds.has(from)) pushError(diagnostics, 'UNKNOWN_EDGE_FROM', `${path}.from`, `${path}.from references unknown node "${from}".`, `Change "from" to a defined node id.${suggestId(from, [...nodeIds])}`);
-    if (!to) pushError(diagnostics, 'MISSING_EDGE_TO', `${path}.to`, `${path} is missing "to".`, `Set "to" to a valid node id.${suggestId('', [...nodeIds])}`);
-    else if (nodeIds.size > 0 && !nodeIds.has(to)) pushError(diagnostics, 'UNKNOWN_EDGE_TO', `${path}.to`, `${path}.to references unknown node "${to}".`, `Change "to" to a defined node id.${suggestId(to, [...nodeIds])}`);
+    if (!from) pushError(diagnostics, 'MISSING_EDGE_FROM', `${path}.from`, `${path} is missing "from".`, `Set "from" to a valid node id.${suggestId('', [...nodeIds], diagnostics)}`);
+    else if (nodeIds.size > 0 && !nodeIds.has(from)) pushError(diagnostics, 'UNKNOWN_EDGE_FROM', `${path}.from`, `${path}.from references unknown node "${from}".`, `Change "from" to a defined node id.${suggestId(from, [...nodeIds], diagnostics)}`);
+    if (!to) pushError(diagnostics, 'MISSING_EDGE_TO', `${path}.to`, `${path} is missing "to".`, `Set "to" to a valid node id.${suggestId('', [...nodeIds], diagnostics)}`);
+    else if (nodeIds.size > 0 && !nodeIds.has(to)) pushError(diagnostics, 'UNKNOWN_EDGE_TO', `${path}.to`, `${path}.to references unknown node "${to}".`, `Change "to" to a defined node id.${suggestId(to, [...nodeIds], diagnostics)}`);
 
     if (from && from === to && !allowSelf) pushError(diagnostics, 'SELF_LOOP_EDGE', path, `${path} goes from "${from}" to itself.`, 'Remove the edge, or describe the repeat in the node\'s "detail" instead.');
 
@@ -502,7 +506,7 @@ function validateExplicitMainPath(
     rawMainPath.forEach((item, idx) => {
         const nid = asString(item);
         if (!nodeIds.has(nid)) {
-            pushError(diagnostics, 'UNKNOWN_MAIN_PATH_NODE', `mainPath[${idx}]`, `mainPath[${idx}] references unknown node "${nid}".`, `Use a defined node id in "mainPath".${suggestId(nid, [...nodeIds])}`);
+            pushError(diagnostics, 'UNKNOWN_MAIN_PATH_NODE', `mainPath[${idx}]`, `mainPath[${idx}] references unknown node "${nid}".`, `Use a defined node id in "mainPath".${suggestId(nid, [...nodeIds], diagnostics)}`);
         } else {
             mp.push(nid);
         }
@@ -584,6 +588,7 @@ function validateSingleCard(
     nodes: MJDiagramNode[],
     nodeIds: Set<string>,
     mainPath: string[] | undefined,
+    cardIds: Set<string>,
     cards: MJDiagramCard[],
     diagnostics: MJDiagramDiagnostic[]
 ): void {
@@ -597,7 +602,16 @@ function validateSingleCard(
         pushError(diagnostics, 'MISSING_CARD_TITLE', `${path}.title`, `${path} is missing "title".`, 'Add a non-empty "title" to the summary card.');
         return;
     }
-    const cId = asString(c.id) || slugify(cTitle, `card-${idx + 1}`);
+    const explicitId = asString(c.id);
+    let cId = explicitId || slugify(cTitle, `card-${idx + 1}`);
+    if (explicitId) {
+        if (cardIds.has(explicitId)) pushError(diagnostics, 'DUPLICATE_CARD_ID', `${path}.id`, `Duplicate card id "${explicitId}".`, 'Give every summary card a unique "id".');
+    } else {
+        const baseId = cId;
+        let suffix = 2;
+        while (cardIds.has(cId)) cId = `${baseId}-${suffix++}`;
+    }
+    cardIds.add(cId);
     const items = Array.isArray(c.items) ? c.items.map((x) => asString(x)).filter(Boolean) : undefined;
     const body = asString(c.body) || (items ? items.join(' · ') : '');
 
@@ -605,7 +619,7 @@ function validateSingleCard(
     if (Array.isArray(c.nodes) && c.nodes.length > 0) {
         c.nodes.forEach((nidRaw, nIdx) => {
             const nid = asString(nidRaw);
-            if (!nodeIds.has(nid)) pushError(diagnostics, 'UNKNOWN_CARD_NODE', `${path}.nodes[${nIdx}]`, `${path}.nodes[${nIdx}] references unknown node "${nid}".`, `Use a defined node id in card.nodes.${suggestId(nid, [...nodeIds])}`);
+            if (!nodeIds.has(nid)) pushError(diagnostics, 'UNKNOWN_CARD_NODE', `${path}.nodes[${nIdx}]`, `${path}.nodes[${nIdx}] references unknown node "${nid}".`, `Use a defined node id in card.nodes.${suggestId(nid, [...nodeIds], diagnostics)}`);
             else cardNodes.push(nid);
         });
     } else {
@@ -670,7 +684,8 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
         pushError(diagnostics, 'TOO_MANY_CARDS', 'cards', `Diagram has ${raw.cards.length} summary cards; maximum allowed is ${MAX_CARDS}.`, `Keep the ${MAX_CARDS} most important rules as cards.`);
     } else if (Array.isArray(raw.cards) && raw.cards.length > 0) {
         cards = [];
-        raw.cards.forEach((c, idx) => validateSingleCard(c, idx, nodes, nodeIds, mainPath, cards!, diagnostics));
+        const cardIds = new Set<string>();
+        raw.cards.forEach((c, idx) => validateSingleCard(c, idx, nodes, nodeIds, mainPath, cardIds, cards!, diagnostics));
     }
 
     if (diagnostics.length > 0) return { Valid: false, Diagnostics: diagnostics };
