@@ -11,8 +11,8 @@ describe('W4StatusHistory.BuildTimeline', () => {
       { PersonID: 'AA', Year: 2022, Renewed: false },
       { PersonID: 'BB', Year: 2022, Renewed: true },
     ]);
-    expect(timeline.get('aa')).toEqual({ ActiveFrom: day('2021-01-01'), LapsedFrom: day('2023-01-01') });
-    expect(timeline.get('bb')).toEqual({ ActiveFrom: day('2022-01-01'), LapsedFrom: null });
+    expect(timeline.Get('aa')).toEqual({ ActiveFrom: day('2021-01-01'), LapsedFrom: day('2023-01-01') });
+    expect(timeline.Get('BB')).toEqual({ ActiveFrom: day('2022-01-01'), LapsedFrom: null });
   });
 });
 

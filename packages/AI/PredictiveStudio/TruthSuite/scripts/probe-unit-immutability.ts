@@ -16,23 +16,14 @@
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MetadataEntityFactory, PredictionUnitVersioning } from '@memberjunction/predictive-studio';
-import { LoadClientConfig } from '@memberjunction/testing-integration';
+import { ScriptRunner } from './script-runner';
 
 const PROBE_UNIT_NAME = 'Member renewal (immutability probe)';
 const ENTITY_NAME = 'MJ: Prediction Units';
 /** Placeholder author user id: the unit's AuthoredBy JSON needs a UUID-shaped value; it is not resolved to a user. */
 const PROBE_AUTHOR_USER_ID = '3B0F6C59-0000-4000-8000-000000000001';
-
-/** Connect with the system API key on a separate connection and return the provider. */
-async function connect(): Promise<GraphQLDataProvider> {
-  const client = LoadClientConfig();
-  const provider = new GraphQLDataProvider();
-  const config = new GraphQLProviderConfigData('', client.Url, '', async () => '', '__mj', undefined, undefined, client.MJAPIKey);
-  if (!(await provider.Config(config, undefined, true))) throw new Error('GraphQLDataProvider Config() returned false');
-  return provider;
-}
 
 /** The version-1 renewal unit the truth suite stores. The server gives it its ID and makes it its own lineage root. */
 function fillProbeUnit(unit: MJPredictionUnitEntity): void {
@@ -129,6 +120,7 @@ async function countProbeRows(provider: GraphQLDataProvider): Promise<number> {
     provider.CurrentUser,
   );
   if (!found.Success) throw new Error(`probe unit count failed: ${found.ErrorMessage}`);
+  if (found.TotalRowCount === undefined) throw new Error('probe unit count returned no TotalRowCount');
   return found.TotalRowCount;
 }
 
@@ -142,7 +134,7 @@ async function cleanup(provider: GraphQLDataProvider): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const provider = await connect();
+  const provider = await ScriptRunner.ConnectWithApiKey();
   if (process.argv.includes('--cleanup')) await cleanup(provider);
   else if (process.argv.includes('--label-version')) {
     try {
@@ -154,15 +146,4 @@ async function main(): Promise<void> {
   else await probeEdit(provider);
 }
 
-/** Runs `main` and exits 0, or prints the error with its stack and exits 1. */
-async function run(): Promise<void> {
-  try {
-    await main();
-    process.exit(0);
-  } catch (error: unknown) {
-    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
-    process.exit(1);
-  }
-}
-
-void run();
+void ScriptRunner.Run(main);

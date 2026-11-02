@@ -22,9 +22,10 @@ afterEach(async () => {
 });
 
 describe('HarnessWorldTruth.ReadWorldTruth', () => {
-  it('reads each row keyed by lower-cased MembershipYearID', async () => {
+  it('reads each row keyed by MembershipYearID, matched whatever its case', async () => {
     const truth = await HarnessWorldTruth.ReadWorldTruth(await datasetWithTruth('AB-1,2026,0.8,1,0'));
-    expect(truth.get('ab-1')).toEqual({ Cycle: 2026, TrueP: 0.8, Censored: false });
+    expect(truth.Get('ab-1')).toEqual({ Cycle: 2026, TrueP: 0.8, Censored: false });
+    expect(truth.Get('AB-1')).toEqual({ Cycle: 2026, TrueP: 0.8, Censored: false });
   });
   it('fails on a row with fewer cells than the header', async () => {
     await expect(HarnessWorldTruth.ReadWorldTruth(await datasetWithTruth('AB-1,2026,0.8'))).rejects.toThrow(/data row 1 has 3 cells; the header has 5/);

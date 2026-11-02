@@ -11,7 +11,7 @@ import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   EvaluationProtocolRules, PredictionUnit,
-  type ColumnEncodingKind, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
+  type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
   type PredictionUnitSpec, type SliceSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import {
@@ -72,6 +72,12 @@ export interface ScenarioUnitPipelineOptions {
   readonly Protocol: ProtocolChoice;
 }
 
+/** The training-run fields `UnitFixtures.LatestRun` reads. */
+const LATEST_TRAINING_RUN_FIELDS = ['ID', 'PipelineID', 'EvaluationProtocolID', 'Status', 'ResultingModelID', 'TrainingSnapshotID', 'ValidationResults', 'Notes'] as const;
+
+/** A pipeline's newest training run as `UnitFixtures.LatestRun` returns it: a plain read-only row. */
+export type LatestTrainingRun = Pick<MJMLTrainingRunEntity, (typeof LATEST_TRAINING_RUN_FIELDS)[number]>;
+
 export interface ProvisionedUnitPipeline {
   readonly UnitRow: MJPredictionUnitEntity;
   readonly Unit: PredictionUnitSpec;
@@ -96,13 +102,14 @@ export class UnitFixtures {
   }
 
   /** The pstruth entity registered for a base table (names come from the test schema's CodeGen config, so they are looked up). */
-  public static TruthEntityName(h: TruthHarness, baseTable: string): string {
+  public static TruthEntityName(h: Pick<TruthHarness, 'Provider'>, baseTable: string): string {
     const e = h.Provider.Entities.find((x) => x.SchemaName === 'pstruth' && x.BaseTable === baseTable);
     if (!e) throw new Error(`pstruth.${baseTable} is not registered; run truth:provision`);
     return e.Name;
   }
 
-  public static C1RenewalUnitDraft(h: TruthHarness): UnitDraft {
+  /** The C1 renewal unit: renewed = the next dues period within 400 days of this one. */
+  public static C1RenewalUnitDraft(h: Pick<TruthHarness, 'Provider'>): UnitDraft {
     return {
       Name: 'C1 renewal (person x dues period)', Description: 'Renewed = the next dues period within 400 days of this one (the reference renewal unit).',
       UnitRows: { kind: 'grain-x-periods', grainEntity: UnitFixtures.TruthEntityName(h, 'C1Person'), childEntity: UnitFixtures.TruthEntityName(h, 'C1DuesPeriod'), foreignKey: 'PersonID', periodDate: 'OrderDate', filter: [] },
@@ -174,12 +181,23 @@ export class UnitFixtures {
 
   /** A cross-sectional planted scenario (no dates): one decision moment for every row. */
   public static ScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType): UnitDraft {
+    return UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind})`, { kind: 'fixed', date: '2020-01-01' }, '2020-12-31', null);
+  }
+
+  /** The registered entity name of a planted scenario's table (`Scn_<scenario without its dash>`). */
+  private static scenarioEntityName(h: TruthHarness, scenario: string): string {
+    return UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`);
+  }
+
+  /** A planted-scenario unit draft: one row per scenario row, labelled by `Target`, decided and censored as given. */
+  private static scenarioDraft(h: TruthHarness, scenario: string, task: TaskType, name: string, decisionDate: DecisionDateRule,
+                               censorCutoff: string, groupKey: string | null): UnitDraft {
     return {
-      Name: `${scenario} (${task.kind})`, Description: null,
-      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`), decisionDate: { kind: 'fixed', date: '2020-01-01' }, filter: [] },
+      Name: name, Description: null,
+      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.scenarioEntityName(h, scenario), decisionDate, filter: [] },
       LabelRule: { kind: 'column', column: 'Target' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: task,
-      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2020-12-31' } },
-      ChangeHistoryPolicy: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, GroupKey: null, TemporalSpec: null,
+      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: censorCutoff } },
+      ChangeHistoryPolicy: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, GroupKey: groupKey, TemporalSpec: null,
       DecisionSpec: { action: 'scenario', actorRole: 'test', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
     };
   }
@@ -319,15 +337,8 @@ export class UnitFixtures {
 
   /** A planted scenario whose rows carry a date column: one row per scenario row, decided at that date. */
   public static DatedScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType, dateColumn: string, groupKey: string | null): UnitDraft {
-    return {
-      Name: `${scenario} (${task.kind}, dated)`, Description: null,
-      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`), decisionDate: { kind: 'column', column: dateColumn }, filter: [] },
-      LabelRule: { kind: 'column', column: 'Target' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: task,
-      // Planted outcomes are fully observed: a cutoff after every scenario date censors nothing.
-      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2099-12-31' } },
-      ChangeHistoryPolicy: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, GroupKey: groupKey, TemporalSpec: null,
-      DecisionSpec: { action: 'scenario', actorRole: 'test', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
-    };
+    // Planted outcomes are fully observed: a cutoff after every scenario date censors nothing.
+    return UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind}, dated)`, { kind: 'column', column: dateColumn }, '2099-12-31', groupKey);
   }
 
   /**
@@ -335,7 +346,7 @@ export class UnitFixtures {
    * column `T` (always: a scenario without dated rows still has a `T` column, NULL on every row) and `dateColumn`.
    */
   public static ScenarioFeatureColumns(h: TruthHarness, scenario: string, dateColumn: string | null): readonly string[] {
-    const entity = h.Provider.EntityByName(UnitFixtures.TruthEntityName(h, `Scn_${scenario.replace('-', '')}`));
+    const entity = h.Provider.EntityByName(UnitFixtures.scenarioEntityName(h, scenario));
     if (!entity) throw new Error(`scenario ${scenario} is not registered`);
     const skip = new Set(['ID', 'EntityKey', 'Target', 'TruthScore', 'WorldID', 'Seed', 'T', ...(dateColumn ? [dateColumn] : [])]);
     return entity.Fields.filter((f) => !f.IsPrimaryKey && !skip.has(f.Name) && !f.Name.startsWith('__mj') && !f.Name.startsWith('True')).map((f) => f.Name);
@@ -352,20 +363,13 @@ export class UnitFixtures {
     );
   }
 
-  /** The newest training run of a pipeline (an entity: callers read ValidationResults, Status and ResultingModelID). */
-  public static async LatestRun(h: TruthHarness, pipelineId: string): Promise<MJMLTrainingRunEntity> {
-    const r = await RunView.FromMetadataProvider(h.Provider).RunView<MJMLTrainingRunEntity>({ EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${EscapeSQLString(pipelineId)}'`, OrderBy: '__mj_CreatedAt DESC', MaxRows: 1, ResultType: 'entity_object' }, h.User);
+  /** The newest training run of a pipeline, read-only: the fields the gate checks read. */
+  public static async LatestRun(h: TruthHarness, pipelineId: string): Promise<LatestTrainingRun> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<LatestTrainingRun>({
+      EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${EscapeSQLString(pipelineId)}'`, OrderBy: '__mj_CreatedAt DESC', MaxRows: 1,
+      Fields: [...LATEST_TRAINING_RUN_FIELDS], ResultType: 'simple',
+    }, h.User);
     if (!r.Success || !r.Results[0]) throw new Error(`No training run for pipeline ${pipelineId}`);
     return r.Results[0];
-  }
-
-  /** A saved unit version, parsed. */
-  public static async LoadUnitSpec(h: TruthHarness, unitId: string): Promise<PredictionUnitSpec> {
-    const r = await RunView.FromMetadataProvider(h.Provider).RunView<MJPredictionUnitEntity>({ EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, ResultType: 'simple' }, h.User);
-    if (!r.Success) throw new Error(`Reading Prediction Unit ${unitId} failed: ${r.ErrorMessage || 'unknown error'}`);
-    if (!r.Results[0]) throw new Error(`Prediction Unit ${unitId} was not found`);
-    const parsed = PredictionUnit.ParsePredictionUnitRow(r.Results[0]);
-    if (parsed.Ok === false) throw new Error(`Prediction Unit ${unitId} does not parse: ${parsed.Errors.join('; ')}`);
-    return parsed.Value;
   }
 }

@@ -5,13 +5,12 @@
  * when it cannot measure.
  */
 import { UUIDMap } from '@memberjunction/global';
-import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { TrainingRunResultsParser, UtcDay, type AssemblyRefusal } from '@memberjunction/predictive-studio-core';
 import {
   BuildProductionMLInferenceDeps, MLModelInferenceProcessor, ProviderAssemblyMetadata, RunViewDataAccess, RunViewRecordHistoryReader, TrainingDelegation, TrainingEngine,
   type AsOfAssembledMatrix, type AssembledRow, type SourceRow, type UnitTrainingAssembly,
 } from '@memberjunction/predictive-studio';
-import { UnitFixtures, W4StatusHistory, type GateMeasurement, type StatusSpan, type StatusTimeline, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { UnitFixtures, W4StatusHistory, type GateMeasurement, type StatusSpan, type StatusTimeline, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** The catalog algorithms a refused as-of column must be refused for, one training run each. */
@@ -26,7 +25,7 @@ const PARITY_SAMPLE = 100;
 /** The as-of assembly gate bodies (G1.4, G1.5, G1.9, G1.12), as static members on one owner class. */
 export class AsOfAssemblyGates {
   /** The assembly refusal a training run stored, or null when the run was not refused at the assembly stage. */
-  private static assemblyRefusal(run: MJMLTrainingRunEntity): AssemblyRefusal | null {
+  private static assemblyRefusal(run: LatestTrainingRun): AssemblyRefusal | null {
     const r = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
     return r.Ok && r.Value.status === 'refused' && r.Value.refusal.stage === 'assembly' ? r.Value.refusal.reason : null;
   }

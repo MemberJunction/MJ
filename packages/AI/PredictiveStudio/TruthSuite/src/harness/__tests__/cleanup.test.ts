@@ -91,7 +91,7 @@ class FakeStore implements CleanupStore {
     this.Filters.push(`MJ: Evaluation Protocols | ${filter}`);
     const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
     const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
-    return ids.map((id) => ({ ...this.row('MJ: Evaluation Protocols', id), Version: versionOf[id] ?? 1 }));
+    return ids.map((id) => ({ ...this.row('MJ: Evaluation Protocols', id), Version: versionOf[id] || 1 }));
   }
   public async RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]> {
     this.Filters.push(`MJ: Record Processes | ${filter}`);
@@ -100,7 +100,7 @@ class FakeStore implements CleanupStore {
   }
   public async TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]> {
     this.Filters.push(`MJ: ML Training Runs | ${filter}`);
-    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID ?? null, ValidationResults: this.options.RunValidationResults ?? null }];
+    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID || null, ValidationResults: this.options.RunValidationResults || null }];
   }
   public async TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]> {
     this.Filters.push(`MJ: Training Snapshots | ${filter}`);

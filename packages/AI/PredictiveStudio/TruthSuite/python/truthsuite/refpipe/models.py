@@ -26,7 +26,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
 FArr = npt.NDArray[np.float64]
-PROBLEMS = ("binary", "multiclass", "regression", "count", "tweedie")
 ALGOS = ("glm", "lgbm", "xgb")  # complexity order: the 1-SE rule prefers earlier entries
 TWEEDIE_POWER = 1.5
 PLATT_BELOW = 2000

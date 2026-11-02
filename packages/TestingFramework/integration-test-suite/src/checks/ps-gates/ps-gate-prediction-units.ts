@@ -6,10 +6,10 @@
 import { join } from 'node:path';
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
-import type { MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, JsonParse, TrainingRunResultsParser, type FeatureImportance, type PredictionUnitSpec, type SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { DetectSingleFeatureDominance, PredictionUnitRowReader, ProviderAssemblyMetadata, RunViewDataAccess, PredictionUnitVersioning, SnapshotManifest, StorageProviderSnapshotFileStore, type UnitRowReadResult } from '@memberjunction/predictive-studio';
-import { C1CorpusFixture, C1_CORPUS_DIR, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { C1CorpusFixture, C1_CORPUS_DIR, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** The Training Snapshot columns the snapshot assertions read. */
@@ -35,7 +35,7 @@ export class PredictionUnitGates {
   }
 
   /** The Training Snapshot counts the snapshot gates assert, and its manifest file. */
-  private static async snapshotCounts(h: TruthHarness, run: MJMLTrainingRunEntity): Promise<SnapshotCounts | null> {
+  private static async snapshotCounts(h: TruthHarness, run: LatestTrainingRun): Promise<SnapshotCounts | null> {
     if (!run.TrainingSnapshotID) return null;
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<SnapshotCounts>({
       EntityName: 'MJ: Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`,
@@ -154,7 +154,7 @@ export class PredictionUnitGates {
     if (!snapshot) return { Passed: false, Measured: { censoredRowsExcluded: unitResolution.censoredRowsExcluded }, Detail: `run ${run.ID} has no Training Snapshot` };
     const censoredInMatrix = unitResolution.resolvedRows - snapshot.ManifestRowCount;
     const truth = await h.ReadWorldTruth(w5);
-    const newest = [...truth.values()].filter((t) => t.Censored);
+    const newest = [...truth.Values()].filter((t) => t.Censored);
     if (!run.ResultingModelID) return { Passed: false, Measured: {}, Detail: `run ${run.ID} produced no model` };
     const dominant = await PredictionUnitGates.dominantFeature(h, run.ResultingModelID);
     const promoted = await h.Promote(run.ResultingModelID, 'Validated', 'G1.3: dry-run preview of the newest cycle');
@@ -225,7 +225,7 @@ export class PredictionUnitGates {
     const r1 = TrainingRunResultsParser.ParseTrainingRunResults((await UnitFixtures.LatestRun(h, asContinuous.Pipeline.ID)).ValidationResults);
     const asCount = await UnitFixtures.ProvisionScenarioPipeline(h, 'R3', { kind: 'count' });
     await h.Train(asCount.Pipeline);
-    const run2: MJMLTrainingRunEntity = await UnitFixtures.LatestRun(h, asCount.Pipeline.ID);
+    const run2: LatestTrainingRun = await UnitFixtures.LatestRun(h, asCount.Pipeline.ID);
     const refusedContinuous = r1.Ok && r1.Value.status === 'refused' && r1.Value.refusal.reason.kind === 'task-type-mismatch';
     return { Passed: refusedContinuous && run2.Status === 'Completed', Measured: { refusedContinuous, countRunStatus: run2.Status }, Detail: `declared continuous: ${refusedContinuous ? 'refused (task-type-mismatch)' : 'not refused'}; declared count: run ${run2.Status}` };
   }

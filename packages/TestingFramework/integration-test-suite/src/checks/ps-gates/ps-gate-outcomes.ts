@@ -6,12 +6,12 @@
  * stored-bounds count (G2.33's stored half on W7).
  */
 import { GateRecords, GateRules, TrainingRunResultsParser, type MetricWithInterval, type StoredGateRecord, type StoredTrainerResult } from '@memberjunction/predictive-studio-core';
-import type { MJMLTrainingPipelineEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import { UnitFixtures, type GateMeasurement, type ProtocolChoice, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { UnitFixtures, type GateMeasurement, type ProtocolChoice, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** A trained run with its stored gate record and trainer result (null when the run stored none). */
-interface StoredRun { readonly Run: MJMLTrainingRunEntity; readonly Gate: StoredGateRecord | null; readonly Trainer: StoredTrainerResult | null }
+interface StoredRun { readonly Run: LatestTrainingRun; readonly Gate: StoredGateRecord | null; readonly Trainer: StoredTrainerResult | null }
 
 /** What one W7 seed stored: its outcome and the guard inputs the threshold reads. */
 interface W7SeedOutcome {

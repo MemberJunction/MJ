@@ -10,7 +10,7 @@ import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTraini
 import { JsonParse, StoreSchemas, TrainingRunResultsParser, type ClassBalanceEntry, type HoldoutCarveSummary, type SnapshotRowKey, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import { SnapshotManifest, StorageProviderSnapshotFileStore } from '@memberjunction/predictive-studio';
 import { EscapeSQLString, OrdinalCompare, UUIDMap, UUIDSet } from '@memberjunction/global';
-import { C1CorpusFixture, C1_CORPUS_DIR, ContainmentProbe, UnitFixtures, type GateMeasurement, type ProtocolChoice, type ProvisionedUnitPipeline, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { C1CorpusFixture, C1_CORPUS_DIR, ContainmentProbe, UnitFixtures, type GateMeasurement, type ProtocolChoice, type ProvisionedUnitPipeline, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGatePytest, type PytestRunResult } from './ps-gate-pytest';
 
 type Completed = Extract<TrainingRunResults, { status: 'completed' }>;
@@ -80,12 +80,12 @@ export class EvaluationProtocolGates {
     return r.NotCollected.length === 0 && r.Failed + r.Errors === 0 && r.Collected > 0 && r.Passed === r.Collected;
   }
 
-  private static async train(h: TruthHarness, pipeline: MJMLTrainingPipelineEntity): Promise<MJMLTrainingRunEntity> {
+  private static async train(h: TruthHarness, pipeline: MJMLTrainingPipelineEntity): Promise<LatestTrainingRun> {
     await h.Train(pipeline);
     return UnitFixtures.LatestRun(h, pipeline.ID);
   }
 
-  private static async stored(h: TruthHarness, run: MJMLTrainingRunEntity): Promise<StoredRun | string> {
+  private static async stored(h: TruthHarness, run: LatestTrainingRun): Promise<StoredRun | string> {
     const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
     if (!parsed.Ok || parsed.Value.status !== 'completed') return `run ${run.ID} did not complete (${run.Notes || ''})`;
     if (!run.TrainingSnapshotID) return `run ${run.ID} has no snapshot`;

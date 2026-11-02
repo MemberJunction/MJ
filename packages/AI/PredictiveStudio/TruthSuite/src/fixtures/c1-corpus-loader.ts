@@ -8,23 +8,18 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { BulkLoader } from '../db/bulk-load';
+import { TruthCsv } from '../db/csv';
 
 export const C1_CORPUS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'c1-corpus');
 
 export interface C1CsvTable { readonly Header: readonly string[]; readonly Rows: readonly Readonly<Record<string, string>>[] }
 
-/**
- * The C1 corpus fixture: read and verify its committed CSVs and load them into the pstruth C1 tables (static members
- * on one owner class rather than free exported functions).
- */
+/** The C1 corpus fixture: reads and verifies its committed CSVs and loads them into the pstruth C1 tables. */
 export class C1CorpusFixture {
-  /** Parse one fixture CSV (unquoted by construction: the builder refuses values needing quotes). */
+  /** Parse one fixture CSV with `TruthCsv.Parse` (unquoted by construction: the builder refuses values needing quotes). */
   public static async ReadC1CorpusCsv(path: string): Promise<C1CsvTable> {
-    const text = await readFile(path, 'utf8');
-    const lines = text.split('\n').filter((l) => l.length > 0);
-    const header = lines[0].split(',');
-    const rows = lines.slice(1).map((line) => {
-      const cells = line.split(',');
+    const { Header: header, Rows: lines } = TruthCsv.Parse(await readFile(path, 'utf8'));
+    const rows = lines.map((cells) => {
       if (cells.length !== header.length) throw new Error(`${path}: row has ${cells.length} cells, header has ${header.length}`);
       const row: Record<string, string> = {};
       header.forEach((h, i) => { row[h] = cells[i]; });
@@ -84,14 +79,7 @@ export class C1CorpusFixture {
         table.columns.add(c.Column, type, { nullable: isNullable });
       }
       for (const row of csv.Rows) {
-        table.rows.add(...load.Columns.map((c) => {
-          const v = row[c.Csv];
-          if (v === '') return null;
-          if (c.Type === 'int') return Number.parseInt(v, 10);
-          if (c.Type === 'decimal') return Number.parseFloat(v);
-          if (c.Type === 'date') return new Date(`${v}T00:00:00Z`);
-          return v;
-        }));
+        table.rows.add(...load.Columns.map((c) => TruthCsv.CoerceCell(row[c.Csv], CSV_SQL_TYPE[c.Type])));
       }
       await pool.request().bulk(table);
       const n = await pool.request().query<{ n: number }>(`SELECT COUNT(*) AS n FROM [pstruth].[${load.Table}]`);
@@ -103,7 +91,12 @@ export class C1CorpusFixture {
 }
 
 
-interface TableLoad { readonly Csv: string; readonly Table: string; readonly Columns: readonly { readonly Csv: string; readonly Column: string; readonly Type: 'uuid' | 'date' | 'int' | 'decimal' | 'text' }[] }
+type C1ColumnType = 'uuid' | 'date' | 'int' | 'decimal' | 'text';
+
+interface TableLoad { readonly Csv: string; readonly Table: string; readonly Columns: readonly { readonly Csv: string; readonly Column: string; readonly Type: C1ColumnType }[] }
+
+/** The `TruthCsv.CoerceCell` type each column type is read as (an empty cell is null; a decimal is read as a number). */
+const CSV_SQL_TYPE: Readonly<Record<C1ColumnType, string>> = { uuid: 'UNIQUEIDENTIFIER', date: 'DATE', int: 'INT', decimal: 'FLOAT', text: 'NVARCHAR' };
 
 const LOADS: readonly TableLoad[] = [
   { Csv: 'people.csv', Table: 'C1Person', Columns: [{ Csv: 'PersonID', Column: 'ID', Type: 'uuid' }, { Csv: 'JoinDate', Column: 'JoinDate', Type: 'date' }, { Csv: 'Segment', Column: 'Segment', Type: 'text' }, { Csv: 'Region', Column: 'Region', Type: 'text' }] },

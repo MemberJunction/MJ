@@ -6,7 +6,7 @@
 import sql from 'mssql';
 import { RunView } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import { UtcDay } from '@memberjunction/predictive-studio-core';
 import type { TruthHarness } from '../harness/types';
 import { TruthConnection } from '../db/connection';
@@ -14,15 +14,15 @@ import { UnitFixtures } from './unit-fixtures';
 
 /** One person's status timeline: Active from `ActiveFrom`, Lapsed from `LapsedFrom` (null = never lapsed). */
 export interface StatusSpan { readonly ActiveFrom: Date; readonly LapsedFrom: Date | null }
-/** Each person's status timeline, keyed by lower-cased PersonID. */
-export type StatusTimeline = ReadonlyMap<string, StatusSpan>;
+/** Each person's status timeline, keyed by PersonID (iterated with the normalized lower-case key). */
+export type StatusTimeline = UUIDMap<StatusSpan>;
 /** One W4 membership year as the timeline reads it. */
 export interface W4MembershipYearRow { readonly PersonID: string; readonly Year: number; readonly Renewed: boolean | null }
 
 /** Record Change writes in flight at once: bounded so thousands of saves never exhaust MJAPI's connection pool. */
 const WRITE_BATCH = 100;
 
-/** The W4 Person.Status history fixture, as static members on one owner class. */
+/** Writes and reads the dated W4 Person.Status history the as-of assembly replays. */
 export class W4StatusHistory {
   /**
    * Writes the dated `Person.Status` history the W4 world implies as `MJ: Record Changes` rows for the test entity
@@ -50,19 +50,18 @@ export class W4StatusHistory {
    * Each person's timeline from their membership years (in year order): Active from 1 January of the first cycle (the
    * cycle's StartDate), Lapsed from 1 January after the first cycle they did not renew.
    */
-  public static BuildTimeline(years: readonly W4MembershipYearRow[]): Map<string, StatusSpan> {
-    const timeline = new Map<string, StatusSpan>();
+  public static BuildTimeline(years: readonly W4MembershipYearRow[]): StatusTimeline {
+    const timeline = new UUIDMap<StatusSpan>();
     for (const y of [...years].sort((a, b) => a.Year - b.Year)) {
-      const k = y.PersonID.toLowerCase();
-      const t = timeline.get(k) || { ActiveFrom: new Date(Date.UTC(y.Year, 0, 1)), LapsedFrom: null };
-      timeline.set(k, y.Renewed === false && t.LapsedFrom === null ? { ...t, LapsedFrom: new Date(Date.UTC(y.Year + 1, 0, 1)) } : t);
+      const t = timeline.Get(y.PersonID) || { ActiveFrom: new Date(Date.UTC(y.Year, 0, 1)), LapsedFrom: null };
+      timeline.Set(y.PersonID, y.Renewed === false && t.LapsedFrom === null ? { ...t, LapsedFrom: new Date(Date.UTC(y.Year + 1, 0, 1)) } : t);
     }
     return timeline;
   }
 
   /** The status the timeline says was in force at the end of a decision day; null when the person had not joined. */
   public static ExpectedStatusAt(timeline: StatusTimeline, personId: string, decision: Date): string | null {
-    const t = timeline.get(personId.toLowerCase());
+    const t = timeline.Get(personId);
     if (!t) return null;
     const asOf = UtcDay.AddUtcDays(decision, 1).getTime();
     if (asOf <= t.ActiveFrom.getTime()) return null;
@@ -70,7 +69,7 @@ export class W4StatusHistory {
   }
 
   /** The W4 membership years, read from the test schema. */
-  private static async readTimeline(pool: sql.ConnectionPool): Promise<Map<string, StatusSpan>> {
+  private static async readTimeline(pool: sql.ConnectionPool): Promise<StatusTimeline> {
     const years = await pool.request().query<W4MembershipYearRow>('SELECT CONVERT(nvarchar(36), PersonID) AS PersonID, [Year], Renewed FROM pstruth.W4_MembershipYear');
     return W4StatusHistory.BuildTimeline(years.recordset);
   }
@@ -98,7 +97,7 @@ export class W4StatusHistory {
     const foreign: string[] = [];
     for (const r of res.Results) {
       const personId = r.RecordID.replace(/^ID\|/, '');
-      const span = timeline.get(personId.toLowerCase());
+      const span = timeline.Get(personId);
       const at = span ? W4StatusHistory.rowInstant(span, r.Type) : null;
       if ((r.Type !== 'Create' && r.Type !== 'Update') || at === null || at.getTime() !== new Date(r.ChangedAt).getTime()) {
         foreign.push(`${r.RecordID} ${r.Type} ${new Date(r.ChangedAt).toISOString()}`);

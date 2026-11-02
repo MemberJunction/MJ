@@ -76,10 +76,6 @@ def rmse(y: Arr, p: Arr) -> float:
     return float(math.sqrt(float(np.mean((_f(y) - _f(p)) ** 2))))
 
 
-def mse(y: Arr, p: Arr) -> float:
-    return float(np.mean((_f(y) - _f(p)) ** 2))
-
-
 def mae(y: Arr, p: Arr) -> float:
     return float(np.mean(np.abs(_f(y) - _f(p))))
 

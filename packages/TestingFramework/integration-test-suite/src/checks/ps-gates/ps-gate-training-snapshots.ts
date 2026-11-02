@@ -6,14 +6,14 @@
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
-import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { UtcDay, type FeatureColumnSpec, type PredictionUnitSpec, type ValueProvenance } from '@memberjunction/predictive-studio-core';
 import {
   BuildProductionMLInferenceDeps, MLModelInferenceProcessor, PredictionUnitRowReader, RunViewTrainingSnapshotStore, SnapshotFiles, SnapshotHash, SnapshotIntegrityError,
   StorageProviderSnapshotFileStore, TrainingDelegation, TrainingEngine,
   type AsOfAssembledMatrix, type AssembledRow, type MatrixCell, type RetrainResult, type SourceRow, type UnitTrainingAssembly,
 } from '@memberjunction/predictive-studio';
-import { HarnessSidecar, ProvenanceResolver, UnitFixtures, type GateMeasurement, type ScoredRowBinding, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { HarnessSidecar, ProvenanceResolver, UnitFixtures, type GateMeasurement, type ScoredRowBinding, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 
 /** The W1-signal s42 unit rows: every membership year resolves, so the manifest holds all of them. */
 const W1_MANIFEST_ROWS = 16776;
@@ -32,7 +32,7 @@ interface RowResolution { readonly Seen: number; readonly Resolved: number; read
 /** The Training Snapshot and provenance gate bodies (G1.10, G1.11), as static members on one owner class. */
 export class TrainingSnapshotGates {
   /** The run's Training Snapshot row, read through the product's snapshot store. */
-  private static async snapshotOf(h: TruthHarness, run: MJMLTrainingRunEntity): Promise<MJTrainingSnapshotEntity | null> {
+  private static async snapshotOf(h: TruthHarness, run: LatestTrainingRun): Promise<MJTrainingSnapshotEntity | null> {
     if (!run.TrainingSnapshotID) return null;
     return new RunViewTrainingSnapshotStore(h.Provider, h.User).LoadSnapshot(run.TrainingSnapshotID);
   }

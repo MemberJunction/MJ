@@ -8,7 +8,7 @@ import { TruthSuite } from '../truth-suite';
 /** The environment variable `MLSidecar` reads its remote URL from when it is constructed. */
 const SIDECAR_URL_VARIABLE = 'PREDICTIVE_STUDIO_SIDECAR_URL';
 
-/** `TruthHarness.UseSuiteSidecar`, the gate fixture's default and the suite sidecar's trainer (static members on one owner). */
+/** `TruthHarness.UseSuiteSidecar`, the gate fixture's default and the suite sidecar's trainer. */
 export class HarnessSidecar {
   /** Where the truth sidecar writes its URL when it starts (`pnpm run truth:sidecar`). */
   private static urlFile(): string {

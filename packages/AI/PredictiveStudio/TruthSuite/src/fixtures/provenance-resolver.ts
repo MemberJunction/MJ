@@ -73,7 +73,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The Record Change fields the resolver reads. */
 const RECORD_CHANGE_FIELDS: ReadonlyArray<keyof MJRecordChangeEntity> = ['ID', 'EntityID', 'RecordID', 'Type', 'Status', 'ChangedAt', 'FullRecordJSON'];
 
-/** The provenance resolver, as static members on one owner class. */
+/** Resolves an assembled value's provenance back to its source record and its scored row. */
 export class ProvenanceResolver {
   /** The production read seams on a provider, as the acting user (the ones the assembly reads through). */
   public static Sources(provider: IMetadataProvider, user: UserInfo): ProvenanceSources {
@@ -299,8 +299,7 @@ export class ProvenanceResolver {
    */
   private static expectedKey(source: FieldSource, row: ScoredRowBinding): string | null {
     if (source.keyField === null) return row.RowID;
-    const v = row.Fields[source.keyField];
-    return v === null || v === undefined || String(v) === '' ? null : String(v);
+    return ProvenanceResolver.storedKey(row, source.keyField);
   }
 
   /**
@@ -309,7 +308,12 @@ export class ProvenanceResolver {
    */
   private static expectedOwner(source: WindowedAggregateSource, row: ScoredRowBinding): string | null {
     if (source.ownerKeyField === null) return null;
-    const v = row.Fields[source.ownerKeyField];
+    return ProvenanceResolver.storedKey(row, source.ownerKeyField);
+  }
+
+  /** The row's stored value of a key field as text; null when it is missing or empty. */
+  private static storedKey(row: ScoredRowBinding, field: string): string | null {
+    const v = row.Fields[field];
     return v === null || v === undefined || String(v) === '' ? null : String(v);
   }
 

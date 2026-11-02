@@ -1,5 +1,6 @@
 import type { UserInfo, EntityInfo } from '@memberjunction/core';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import type { UUIDMap } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJProcessRunEntity,
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
   PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
@@ -112,7 +113,7 @@ export interface TruthHarness {
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
   /** The planted truth of a loaded W1–W8 seed, keyed by lower-cased MembershipYearID. */
-  ReadWorldTruth(dataset: LoadedDataset): Promise<ReadonlyMap<string, WorldTruthRow>>;
+  ReadWorldTruth(dataset: LoadedDataset): Promise<UUIDMap<WorldTruthRow>>;
   /** A seeded sample of n primary keys of the dataset's row table. */
   SampleRowIds(dataset: LoadedDataset, n: number, seed: number): Promise<string[]>;
   /** Whether one assembled value names its scored row and resolves to its source, source version and computed-at. */

@@ -8,7 +8,7 @@
  * `Scn_…`, `W<n>_…`) applies to its own table only.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import type { MJEntityFieldEntity } from '@memberjunction/core-entities';
 
 export interface ImmutableFieldDeclaration { readonly BaseTable: string; readonly Fields: readonly string[] }
@@ -50,18 +50,21 @@ export class ImmutableFieldDeclarations {
    * and each result is checked.
    */
   public static async Apply(provider: IMetadataProvider, user: UserInfo, schema: string = 'pstruth'): Promise<number> {
-    const declared = new Map<string, ReadonlySet<string>>();   // entity ID (lower-case) → declared field names
+    const declared = new UUIDMap<ReadonlySet<string>>();   // entity ID → declared field names
+    const entityIDs: string[] = [];                         // the same IDs as metadata holds them, for the filter
     // A table no declaration covers is not provisioned here, or keeps every field updatable.
     for (const entity of provider.Entities.filter((e) => e.SchemaName === schema)) {
       const fields = TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, entity.BaseTable)).flatMap((d) => d.Fields);
-      if (fields.length > 0) declared.set(NormalizeUUID(entity.ID), new Set(fields));
+      if (fields.length === 0) continue;
+      declared.Set(entity.ID, new Set(fields));
+      entityIDs.push(entity.ID);
     }
-    if (declared.size === 0) return 0;
-    const ids = [...declared.keys()].map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    if (entityIDs.length === 0) return 0;
+    const ids = entityIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
     const fields = await RunView.FromMetadataProvider(provider).RunView<MJEntityFieldEntity>(
       { EntityName: 'MJ: Entity Fields', ExtraFilter: `EntityID IN (${ids}) AND AllowUpdateAPI = 1`, ResultType: 'entity_object' }, user);
     if (!fields.Success) throw new Error(`Reading the declared pstruth fields failed: ${fields.ErrorMessage}`);
-    const toChange = fields.Results.filter((f) => declared.get(NormalizeUUID(f.EntityID))?.has(f.Name) === true);
+    const toChange = fields.Results.filter((f) => declared.Get(f.EntityID)?.has(f.Name) === true);
     const saved = await Promise.all(toChange.map(async (f) => {
       f.AllowUpdateAPI = false;
       return { f, ok: await f.Save() };

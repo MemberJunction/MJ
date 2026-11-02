@@ -128,10 +128,7 @@ export class RunFixtures {
       Fields: ['PredictionUnitID', 'EvaluationProtocolID'], ResultType: 'simple', BypassCache: true,
     }, user);
     if (!r.Success) throw new Error(`reading the agent pipelines' bindings failed: ${r.ErrorMessage}`);
-    for (const p of r.Results) {
-      if (p.PredictionUnitID) h.Created.RecordPredictionUnit(p.PredictionUnitID);
-      if (p.EvaluationProtocolID) h.Created.RecordEvaluationProtocol(p.EvaluationProtocolID);
-    }
+    for (const p of r.Results) h.Created.RecordPipelineBindings(p);
   }
 
   /** Trains a logistic-regression model on the given dataset (every unit row: a unit pipeline refuses a row cap) and returns its `ModelID`. */
@@ -193,8 +190,7 @@ export class RunFixtures {
   /** Creates a pipeline and records the unit and protocol the migration bound to it: they are this run's rows too, so cleanup deletes them. */
   private static async createRecordedPipeline(ctx: RunContext, created: RunRecords, spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity> {
     const p = await HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec);
-    if (p.PredictionUnitID) created.RecordPredictionUnit(p.PredictionUnitID);
-    if (p.EvaluationProtocolID) created.RecordEvaluationProtocol(p.EvaluationProtocolID);
+    created.RecordPipelineBindings(p);
     return p;
   }
 
