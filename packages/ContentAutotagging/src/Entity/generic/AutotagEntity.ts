@@ -217,7 +217,8 @@ export class AutotagEntity extends AutotagBase {
             ExtraFilter: `ID='${contentItemTag.ItemID}'`,
             Fields: ['ID', 'ContentSourceID', 'EntityRecordDocumentID'],
             ResultType: 'simple',
-            MaxRows: 1
+            MaxRows: 1,
+            SkipTotalRowCount: true
         }, contextUser);
 
         if (!ciResult.Success || ciResult.Results.length === 0) return;
@@ -302,6 +303,7 @@ export class AutotagEntity extends AutotagBase {
             Fields: ['ID', 'EntityID', 'RecordID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             // A one-off lookup by ID. A cached RunView reads every column (DocumentText, VectorJSON) and
             // keeps a single-use slot, so bypass the cache and let Fields apply.
             BypassCache: true,

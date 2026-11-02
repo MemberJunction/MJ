@@ -73,6 +73,19 @@ export type AppContext = {
    * Used only to key abuse limits (e.g. realtime verification sends) — never as an identity.
    */
   ClientIp?: string;
+
+  /**
+   * The request's `Origin` header as a normalized origin — scheme, host and port, lowercased, no
+   * trailing slash (e.g. `https://app.example.com:8443`). Normalized by `NormalizeOrigin`, the same
+   * helper the realtime widget allowlist uses, so it compares to allowlist entries normalized the
+   * same way with plain string equality. Ports are kept as sent; browsers omit default ports.
+   *
+   * Undefined when the request sent no `Origin` (server-to-server calls, many same-origin GETs),
+   * sent the opaque `null` origin, or sent a value that is not an http(s) origin. Always absent on
+   * WebSocket (subscription) contexts. Treat undefined as "origin unknown": an allowlist check
+   * must fail closed on it.
+   */
+  RequestOrigin?: string;
 };
 
 export class ProviderInfo {
@@ -145,6 +158,11 @@ export type RunViewGenericParams = {
    * Propagated to `RunViewParams.IncludeBinaryFields`.
    */
   includeBinaryFields?: boolean;
+  /**
+   * When true, no count runs to populate `TotalRowCount`, which comes back undefined.
+   * Propagated to `RunViewParams.SkipTotalRowCount`.
+   */
+  skipTotalRowCount?: boolean;
   /**
    * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
    * for this entity. Propagated to `RunViewParams.AlternateBaseView`.

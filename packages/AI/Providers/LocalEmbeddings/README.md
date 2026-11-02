@@ -7,9 +7,9 @@ MemberJunction AI provider for local text embeddings using Transformers.js. This
 ```mermaid
 graph TD
     A["LocalEmbedding<br/>(Provider)"] -->|extends| B["BaseEmbeddings<br/>(@memberjunction/ai)"]
-    A -->|uses| C["Transformers.js<br/>(@xenova/transformers)"]
+    A -->|uses| C["Transformers.js<br/>(@huggingface/transformers)"]
     C -->|loads from| D["Hugging Face Hub<br/>(or local cache)"]
-    C -->|runs| E["Feature Extraction<br/>Pipeline"]
+    C -->|runs| E["ONNX model<br/>mean pooling + L2 norm"]
     E -->|generates| F["Embedding Vectors"]
     B -->|registered via| G["@RegisterClass"]
 
@@ -30,9 +30,13 @@ graph TD
 - **Privacy-Focused**: Data never leaves your infrastructure
 - **Multiple Models**: Support for various sentence-transformer models from Hugging Face
 - **Automatic Caching**: Models are downloaded once and cached locally
-- **Batch Processing**: Efficient batch embedding with configurable batch sizes (default 32)
+- **Batch Processing**: `EmbedTexts` runs one ONNX call per 32 texts or 8,192 padded tokens, so long documents go one at a time
 - **Model Preloading**: Warm up models before first inference
-- **Quantized Models**: Use quantized models for better performance
+- **Quantized Models**: Loads the 8-bit (`q8`) ONNX weights
+- **Container-aware threads**: ONNX Runtime uses one thread per CPU the process may use (`os.availableParallelism()`), so a container's CPU limit is respected
+- **Matryoshka truncation**: `dimensions` keeps the leading values and re-normalizes
+- **Input cap**: `maxInputTokens` truncates each text in the tokenizer
+- **Text-only multimodal models**: the vision and audio encoders of a multimodal model (e.g. EmbeddingGemma 2) are not loaded
 
 ## Supported Models
 
@@ -44,6 +48,11 @@ graph TD
 | `paraphrase-multilingual-MiniLM-L12-v2` | 384 | Multilingual support (50+ languages) |
 | `gte-small` | 384 | General Text Embeddings (efficient) |
 | `bge-small-en-v1.5` | 384 | BAAI General Embeddings (English) |
+
+Any Hugging Face repo with transformers.js ONNX weights works the same way, for example
+`onnx-community/embeddinggemma-2-ONNX` (768 dimensions, truncatable to 512/256/128, 8,192-token
+window). Its catalog row is `EmbeddingGemma 2 (Local)`, which caps inputs at 2,048 tokens to bound memory; it is opt-in through
+`MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` (see `plans/embeddinggemma-2-local-embeddings.md`).
 
 ## Installation
 
@@ -79,14 +88,34 @@ const results = await embedder.EmbedTexts({
 console.log(results.vectors.length); // 3 embedding vectors
 ```
 
+### Dimensions and input length
+
+```typescript
+const result = await embedder.EmbedText({
+    text: 'Your text to embed',
+    model: 'onnx-community/embeddinggemma-2-ONNX',
+    dimensions: 256,       // Matryoshka: keep the first 256 values, then re-normalize
+    maxInputTokens: 2048   // truncate longer inputs; this model's tokenizer declares no limit
+});
+```
+
+`dimensions` larger than the model's output fails the call. Callers normally pass
+`MJ: Vector Indexes.Dimensions` and `MJ: AI Model Vendors.MaxInputTokens`.
+
+### Failures
+
+Following the `BaseEmbeddings` convention, a failed `EmbedText` returns `vector: []` and a failed
+`EmbedTexts` returns `vectors: []`. The error is logged. Check the length before using the result.
+
 ### Configuration
 
 ```typescript
 embedder.SetAdditionalSettings({
-    cacheDir: '/path/to/model/cache',
-    useQuantized: true
+    cacheDir: '/path/to/model/cache'
 });
 ```
+
+`cacheDir` applies when the runtime first loads, so set it before the first embed.
 
 ### Model Management
 
@@ -104,11 +133,16 @@ LocalEmbedding.clearSharedCache(); // Static method
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TRANSFORMERS_CACHE_DIR` | `./.cache/transformers` | Directory for storing downloaded models |
-| `TRANSFORMERS_LOCAL_URL` | (empty) | Optional local URL for model files |
 
-## ESM/CommonJS Compatibility
+## Runtime loading
 
-This package is built as CommonJS. The underlying `@xenova/transformers` library is ESM-only, so dynamic imports are used as a workaround (the official recommended approach by HuggingFace for CommonJS environments).
+`@huggingface/transformers` (4.3.1 or later) is imported on the first embed, not when this package
+loads. Importing it costs about 80–150 ms and 50 MB of memory (native onnxruntime and sharp), and
+every process that loads the server class manifest loads this package.
+
+Only one transformers.js runtime can live in a process: loading `@xenova/transformers` alongside it
+aborts on duplicate native libraries. `@memberjunction/search-engine`'s `BGEReRanker` uses the same
+runtime for that reason.
 
 ## Class Registration
 
@@ -118,4 +152,4 @@ Registered as `LocalEmbedding` via `@RegisterClass(BaseEmbeddings, 'LocalEmbeddi
 
 - `@memberjunction/ai` - Core AI abstractions
 - `@memberjunction/global` - Class registration
-- `@xenova/transformers` - Hugging Face Transformers.js runtime
+- `@huggingface/transformers` - Hugging Face Transformers.js runtime
