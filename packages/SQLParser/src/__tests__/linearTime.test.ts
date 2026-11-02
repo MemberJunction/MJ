@@ -42,10 +42,19 @@ function cpuMs(run: () => void): number {
 }
 
 /**
+ * Lets the event loop run. Each measurement is synchronous and CPU-bound, so without a yield a test
+ * keeps its Vitest worker busy for its whole length, and on a slow CI runner the worker's progress
+ * messages time out ("Timeout calling onTaskUpdate") even though every test passes.
+ */
+function yieldToEventLoop(): Promise<void> {
+    return new Promise((resolve) => setImmediate(resolve));
+}
+
+/**
  * The median CPU time of `run` at each size, after one warm-up run. Stops after the first size
  * whose time passes {@link CEILING_MS}, so a quadratic regression fails fast.
  */
-function timesBySize(sizes: readonly number[], makeRun: (size: number) => () => void): number[] {
+async function timesBySize(sizes: readonly number[], makeRun: (size: number) => () => void): Promise<number[]> {
     makeRun(sizes[0])();
     const medians: number[] = [];
     for (const size of sizes) {
@@ -54,6 +63,7 @@ function timesBySize(sizes: readonly number[], makeRun: (size: number) => () => 
         for (let r = 0; r < RUNS; r++) {
             times.push(cpuMs(run));
             if (times[times.length - 1] > CEILING_MS) break;
+            await yieldToEventLoop();
         }
         times.sort((a, b) => a - b);
         medians.push(times[Math.floor(times.length / 2)]);
@@ -78,8 +88,8 @@ function growthPerDoubling(sizes: readonly number[], times: readonly number[]): 
 }
 
 /** Times `makeRun` over `sizes` and expects linear growth and no size over the ceiling. */
-function expectLinearTime(sizes: readonly number[], makeRun: (size: number) => () => void): void {
-    const times = timesBySize(sizes, makeRun);
+async function expectLinearTime(sizes: readonly number[], makeRun: (size: number) => () => void): Promise<void> {
+    const times = await timesBySize(sizes, makeRun);
     const measured = sizes.slice(0, times.length);
     const report = `time by size: ${measured.map((size, i) => `${size}: ${times[i].toFixed(1)} ms`).join(', ')}`;
     expect(times.length, report).toBeGreaterThan(1);
@@ -92,18 +102,18 @@ describe('SQLParser fallback renaming takes time linear in the SQL', () => {
     // renames the bracket identifiers and tries again, and that retry fails just as early. Only the
     // renaming scan reads the whole text.
 
-    it('when the SQL holds every alias prefix up to the n-th: _mjid_, _mjid1_, _mjid2_, …', TEST_OPTIONS, () => {
+    it('when the SQL holds every alias prefix up to the n-th: _mjid_, _mjid1_, _mjid2_, …', TEST_OPTIONS, async () => {
         const sql = (n: number): string =>
             `SELECT 1 FROM t WHERE ([x] = 1 _mjid_ ${Array.from({ length: n }, (_, k) => `_mjid${k + 1}_`).join(' ')})`;
-        expectLinearTime([4000, 8000, 16000, 32000, 64000], (n) => {
+        await expectLinearTime([4000, 8000, 16000, 32000, 64000], (n) => {
             const text = sql(n);
             return () => new SQLParser(text, ss);
         });
     });
 
-    it('when the SQL holds many bracket identifiers', TEST_OPTIONS, () => {
+    it('when the SQL holds many bracket identifiers', TEST_OPTIONS, async () => {
         const sql = (n: number): string => `SELECT 1 FROM t WHERE ([x] = 1 ${'[a b] '.repeat(n)})`;
-        expectLinearTime([8000, 16000, 32000, 64000, 128000], (n) => {
+        await expectLinearTime([8000, 16000, 32000, 64000, 128000], (n) => {
             const text = sql(n);
             return () => new SQLParser(text, ss);
         });
@@ -111,10 +121,10 @@ describe('SQLParser fallback renaming takes time linear in the SQL', () => {
 });
 
 describe('FindForbiddenFunctionCalls takes time linear in the SQL', () => {
-    it('when the SQL calls many different forbidden names', TEST_OPTIONS, () => {
+    it('when the SQL calls many different forbidden names', TEST_OPTIONS, async () => {
         const sql = (n: number): string => `SELECT ${Array.from({ length: n }, (_, k) => `lo_x${k}()`).join(', ')}`;
         expect(FindForbiddenFunctionCalls(`${sql(3)}, lo_x1()`, pg)).toEqual(['lo_x0', 'lo_x1', 'lo_x2']);
-        expectLinearTime([8000, 16000, 32000, 64000, 128000], (n) => {
+        await expectLinearTime([8000, 16000, 32000, 64000, 128000], (n) => {
             const text = sql(n);
             return () => FindForbiddenFunctionCalls(text, pg);
         });
@@ -251,14 +261,14 @@ const TEMPLATE_CASES: LinearCase[] = [
 
 describe('P11: every public method takes time linear in the SQL', () => {
     for (const c of [...AST_CASES, ...INSTANCE_CASES, ...LEXER_CASES, ...TEMPLATE_CASES]) {
-        it(`${c.Method} on ${c.Shape}`, TEST_OPTIONS, () => {
-            expectLinearTime(c.Sizes, (n) => c.makeRun(SHAPES[c.Shape](n)));
+        it(`${c.Method} on ${c.Shape}`, TEST_OPTIONS, async () => {
+            await expectLinearTime(c.Sizes, (n) => c.makeRun(SHAPES[c.Shape](n)));
         });
     }
 
-    it(`IsIdentifierAliasName on a long run of digits`, TEST_OPTIONS, () => {
+    it(`IsIdentifierAliasName on a long run of digits`, TEST_OPTIONS, async () => {
         expect(SQLParser.IsIdentifierAliasName('_mjid_12')).toBe(true);
-        expectLinearTime([100_000, 200_000, 400_000], (n) => {
+        await expectLinearTime([100_000, 200_000, 400_000], (n) => {
             const almost = `_mjid${'1'.repeat(n)}_${'2'.repeat(n)}x`;
             return () => SQLParser.IsIdentifierAliasName(almost);
         });
@@ -282,9 +292,10 @@ function warmUp(sizes: readonly number[], makeRun: (size: number) => () => void)
 }
 
 /** {@link expectLinearTime} after {@link warmUp}. */
-function expectLinearTimeWarm(sizes: readonly number[], makeRun: (size: number) => () => void): void {
+async function expectLinearTimeWarm(sizes: readonly number[], makeRun: (size: number) => () => void): Promise<void> {
     warmUp(sizes, makeRun);
-    expectLinearTime(sizes, makeRun);
+    await yieldToEventLoop();
+    await expectLinearTime(sizes, makeRun);
 }
 
 /**
@@ -325,8 +336,8 @@ describe('P11: the template methods on unclosed tags', () => {
         // L0 lexer replaces MJLexer behind the reviewed methods, DISCUSSION §6, 2026-10-27). P11. The frozen
         // methods stay pinned. Before the redesign: about 3.8x per doubling for the lexer-only methods (Tokenize
         // 3.1 → 11.6 → 44 ms at 1000/2000/4000 `{% if x `), about 3.4x for Parse and ExtractSelectColumns.
-        test(`${method} on many unclosed {% if %} openers`, options, () => {
-            expectLinearTimeWarm(pinExpressionTags ? [1000, 2000, 4000] : [2000, 4000, 8000], (n) => {
+        test(`${method} on many unclosed {% if %} openers`, options, async () => {
+            await expectLinearTimeWarm(pinExpressionTags ? [1000, 2000, 4000] : [2000, 4000, 8000], (n) => {
                 const text = SHAPES.unclosedBlockTags(n);
                 return () => run(text);
             });
@@ -334,8 +345,8 @@ describe('P11: the template methods on unclosed tags', () => {
 
         if (!pinExpressionTags) continue;
         // Decided: as above. P11. Before the redesign: about 3.8x per doubling (Tokenize 2.9 → 10.8 → 42 ms at 8000/16000/32000 `{{ x `).
-        test(`${method} on many unclosed {{ openers`, options, () => {
-            expectLinearTimeWarm([8000, 16000, 32000], (n) => {
+        test(`${method} on many unclosed {{ openers`, options, async () => {
+            await expectLinearTimeWarm([8000, 16000, 32000], (n) => {
                 const text = SHAPES.unclosedExpressionTags(n);
                 return () => run(text);
             });
@@ -353,8 +364,8 @@ describe('P11: ordinary templates', () => {
 
     // Decided: linear time on adversarial input for every public method (DISCUSSION §5.1 P11, #5571). P11.
     // Before the redesign: about 3.6x per doubling — 85 → 294 → 1138 ms at 4000/8000/16000 optional predicates.
-    it('RenameTemplateVariable on many {% if %} predicates', TEST_OPTIONS, () => {
-        expectLinearTimeWarm([1000, 2000, 4000], (n) => {
+    it('RenameTemplateVariable on many {% if %} predicates', TEST_OPTIONS, async () => {
+        await expectLinearTimeWarm([1000, 2000, 4000], (n) => {
             const text = SHAPES.manyTags(n);
             return () => SQLParser.RenameTemplateVariable(text, 'p1', 'q1');
         });
@@ -368,7 +379,7 @@ describe('P11: inputs too large for a spread argument list', () => {
 
     // Decided: every public method handles adversarial input without failing (DISCUSSION §5.1 P11, #5571). P11.
     // Before the redesign: RangeError "Maximum call stack size exceeded" — checkSelect spread every token into Math.min(...).
-    it('IsReadOnlyQuery answers for a SELECT of 300,000 tokens', TEST_OPTIONS, () => {
+    it('IsReadOnlyQuery answers for a SELECT of 300,000 tokens', TEST_OPTIONS, async () => {
         expect(IsReadOnlyQuery(`SELECT ${'1, '.repeat(150_000)}1`, ss)).toEqual({ IsReadOnly: true, Reason: null });
     });
 });
