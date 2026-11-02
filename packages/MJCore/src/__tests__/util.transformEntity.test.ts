@@ -1,8 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TransformSimpleObjectToEntityObject } from '../generic/util';
 import { BaseEntity } from '../generic/baseEntity';
-import { IMetadataProvider } from '../generic/interfaces';
+import { BaseEngineRegistry } from '../generic/baseEngineRegistry';
+import { EntityInfo } from '../generic/entityInfo';
+import { IEntityDataProvider, IMetadataProvider } from '../generic/interfaces';
+import { Metadata } from '../generic/metadata';
+import { ProviderBase } from '../generic/providerBase';
 import { UserInfo } from '../generic/securityInfo';
+import {
+    ADMIN_ROLE_ID,
+    BuildLoadHintEntities,
+    FakeProductTypeEngine,
+    InMemoryISAStore,
+    LoadHintTestEntity,
+    LoadHintTestProvider,
+    MakeLoadHintUser,
+} from './mocks/ISALoadHintFixture';
 
 /**
  * Lightweight mock entity that does NOT extend BaseEntity (which requires
@@ -199,5 +212,398 @@ describe('TransformSimpleObjectToEntityObject', () => {
             expect(call.entityName).toBe('My Special Entity');
             expect(call.contextUser).toBe(mockUser);
         }
+    });
+});
+
+/**
+ * The per-row path of `RunView({ ResultType: 'entity_object' })` on an IS-A parent. Each row's
+ * `LoadFromData()` looks for the row's subtype: without a rule that answers on load, that is a probe
+ * and a child load per row, so a view of 100 records with subtypes costs 1 + 200 round trips. With
+ * a SubtypeSelector that sets UseForLoadedRecords, answered from a loaded engine, the child load
+ * checks the answer and the probe is skipped: 1 + 100.
+ */
+describe('TransformSimpleObjectToEntityObject — IS-A parents on the entity-object RunView path', () => {
+    const ROW_COUNT = 100;
+    const MEETING_TYPE_ID = 'a1000000-0000-0000-0000-000000000001';
+    const PUBLICATION_TYPE_ID = 'a1000000-0000-0000-0000-000000000002';
+    const SELECTOR_PATH = 'ProductTypeID.ProductExtensionEntity';
+
+    let store: InMemoryISAStore;
+    let provider: LoadHintTestProvider;
+    let user: UserInfo;
+    let productsInfo: EntityInfo;
+    let productIDs: string[];
+    let typeEngine: FakeProductTypeEngine | null = null;
+
+    /** Even rows are Meetings, odd rows Publications. */
+    function expectedSubtype(index: number): string {
+        return index % 2 === 0 ? 'Meetings' : 'Publications';
+    }
+
+    function productID(index: number): string {
+        return `b1000000-0000-0000-0000-${String(index).padStart(12, '0')}`;
+    }
+
+    beforeEach(() => {
+        store = new InMemoryISAStore();
+        user = MakeLoadHintUser(ADMIN_ROLE_ID);
+        provider = new LoadHintTestProvider(BuildLoadHintEntities(), store, user);
+        Metadata.Provider = provider as unknown as ProviderBase;
+        BaseEntity.Provider = provider.AsEntityDataProvider;
+        productsInfo = provider.EntityByName('Products')!;
+
+        store.Insert('Product Types', { ID: MEETING_TYPE_ID, Name: 'Meeting', ProductExtensionEntity: 'Meetings' });
+        store.Insert('Product Types', { ID: PUBLICATION_TYPE_ID, Name: 'Publication', ProductExtensionEntity: 'Publications' });
+        productIDs = [];
+        for (let i = 0; i < ROW_COUNT; i++) {
+            const id = productID(i);
+            productIDs.push(id);
+            const isMeeting = expectedSubtype(i) === 'Meetings';
+            store.Insert('Products', { ID: id, Name: `Product ${i}`, ProductTypeID: isMeeting ? MEETING_TYPE_ID : PUBLICATION_TYPE_ID });
+            if (isMeeting) {
+                store.Insert('Meetings', { ID: id, Venue: `Room ${i}` });
+            } else {
+                store.Insert('Publications', { ID: id, ISBN: `isbn-${i}` });
+            }
+        }
+    });
+
+    afterEach(() => {
+        if (typeEngine) {
+            BaseEngineRegistry.Instance.UnregisterEngine(typeEngine);
+            typeEngine = null;
+        }
+        BaseEntity.ClearSubtypeLookupCache();
+        Metadata.Provider = null as unknown as ProviderBase;
+        BaseEntity.Provider = null as unknown as IEntityDataProvider;
+    });
+
+    /** The rows a RunView of Products returns: its own view's columns only. */
+    function viewRows(ids: string[] = productIDs): Record<string, unknown>[] {
+        return ids.map(id => store.ViewRow(productsInfo, id)!);
+    }
+
+    function useSelector(useForLoadedRecords: boolean): void {
+        productsInfo.SubtypeSelector = JSON.stringify(useForLoadedRecords
+            ? { Path: SELECTOR_PATH, UseForLoadedRecords: true }
+            : { Path: SELECTOR_PATH });
+    }
+
+    /**
+     * Caches Product Types the way a BaseEngine does: an entity-object RunView of the type rows,
+     * which holds all rows in raw mode, without built fields.
+     */
+    async function cacheProductTypes(typeIDs: string[] = [MEETING_TYPE_ID, PUBLICATION_TYPE_ID]): Promise<LoadHintTestEntity[]> {
+        const typeRows = typeIDs.map(id => store.ViewRow(provider.EntityByName('Product Types')!, id)!);
+        const types = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            provider as unknown as IMetadataProvider, 'Product Types', typeRows, user
+        );
+        typeEngine = new FakeProductTypeEngine(types);
+        BaseEngineRegistry.Instance.RegisterEngine(typeEngine);
+        return types;
+    }
+
+    async function transformProducts(rows: Record<string, unknown>[] = viewRows()): Promise<BaseEntity[]> {
+        return TransformSimpleObjectToEntityObject<BaseEntity>(provider as unknown as IMetadataProvider, 'Products', rows, user);
+    }
+
+    function expectEverySubtypeLinked(results: BaseEntity[]): void {
+        expect(results).toHaveLength(ROW_COUNT);
+        results.forEach((product, index) => {
+            expect(product.ISAChild?.EntityInfo.Name).toBe(expectedSubtype(index));
+        });
+    }
+
+    it('without a subtype rule: a probe and a child load for every row', async () => {
+        const results = await transformProducts();
+
+        expectEverySubtypeLinked(results);
+        expect(provider.Count('FindISAChildEntity')).toBe(ROW_COUNT);
+        expect(provider.Count('Load')).toBe(ROW_COUNT);
+        expect(provider.RoundTrips).toHaveLength(2 * ROW_COUNT);
+    });
+
+    it('with a SubtypeSelector that does not set UseForLoadedRecords: a probe and a child load for every row, as without a rule', async () => {
+        useSelector(false);
+        await cacheProductTypes();
+
+        const results = await transformProducts();
+
+        expectEverySubtypeLinked(results);
+        expect(provider.Count('FindISAChildEntity')).toBe(ROW_COUNT);
+        expect(provider.RoundTrips).toHaveLength(2 * ROW_COUNT);
+    });
+
+    it('with a SubtypeSelector that sets UseForLoadedRecords, answered from a loaded engine: only the child load for every row', async () => {
+        useSelector(true);
+        await cacheProductTypes();
+
+        const results = await transformProducts();
+
+        expectEverySubtypeLinked(results);
+        expect(provider.Count('FindISAChildEntity')).toBe(0);
+        expect(provider.Count('Load', 'Meetings')).toBe(ROW_COUNT / 2);
+        expect(provider.Count('Load', 'Publications')).toBe(ROW_COUNT / 2);
+        expect(provider.RoundTrips).toHaveLength(ROW_COUNT);
+    });
+
+    it('typed rows that have no subtype row cost the probe as well, and log no errors', async () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const typedIDs = Array.from({ length: ROW_COUNT }, (_, i) => `b2000000-0000-0000-0000-${String(i).padStart(12, '0')}`);
+        for (const id of typedIDs) {
+            store.Insert('Products', { ID: id, Name: `Typed ${id}`, ProductTypeID: MEETING_TYPE_ID }); // no Meetings row
+        }
+        useSelector(true);
+        await cacheProductTypes();
+
+        const results = await transformProducts(viewRows(typedIDs));
+
+        expect(results.every(product => product.ISAChild === null)).toBe(true);
+        expect(provider.Count('Load', 'Meetings')).toBe(ROW_COUNT);
+        expect(provider.Count('FindISAChildEntity')).toBe(ROW_COUNT);
+        expect(errors).not.toHaveBeenCalled();
+    });
+
+    it('reading the cached rows\' keys leaves the rows an engine holds in raw mode unhydrated', async () => {
+        // Fifty types, alternating the two extensions; each product points at one of them.
+        const typeIDs = Array.from({ length: 50 }, (_, i) => `a3000000-0000-0000-0000-${String(i).padStart(12, '0')}`);
+        typeIDs.forEach((id, i) => store.Insert('Product Types', { ID: id, Name: `Type ${i}`, ProductExtensionEntity: i % 2 === 0 ? 'Meetings' : 'Publications' }));
+        productIDs.forEach((id, i) => store.Insert('Products', { ID: id, Name: `Product ${i}`, ProductTypeID: typeIDs[(2 * i + (i % 2)) % typeIDs.length] }));
+        useSelector(true);
+        const cachedTypes = await cacheProductTypes(typeIDs);
+        const rawBefore = cachedTypes.filter(type => type.RawModeActive).length;
+
+        const results = await transformProducts();
+
+        expectEverySubtypeLinked(results);
+        expect(provider.Count('FindISAChildEntity')).toBe(0);
+        expect(rawBefore).toBe(typeIDs.length);
+        expect(cachedTypes.filter(type => type.RawModeActive).length).toBe(rawBefore);
+    });
+});
+
+describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query CheckForChildRecords', () => {
+    class BatchedLoadHintTestProvider extends LoadHintTestProvider {
+        public BatchDiscoveryCalls = 0;
+        public RunViewsBatchCalls = 0;
+
+        public async FindISAChildEntitiesBatch(
+            entityInfo: EntityInfo,
+            recordPKValues: string[]
+        ): Promise<Map<string, string[]>> {
+            this.BatchDiscoveryCalls++;
+            const out = new Map<string, string[]>();
+            for (const pk of recordPKValues) {
+                const matched = entityInfo.ChildEntities.filter(c => this.Store.HasRow(c.Name, pk)).map(c => c.Name);
+                if (matched.length > 0) {
+                    out.set(pk.toLowerCase(), matched);
+                }
+            }
+            return out;
+        }
+
+        /** Every param object handed to RunViews, in call order — lets tests assert cache directives. */
+        public RunViewsParams: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean }> = [];
+
+        public async RunViews(
+            params: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean }>
+        ): Promise<Array<{ Success: boolean; Results: Record<string, unknown>[]; RowCount: number; TotalRowCount: number; ExecutionTime: number; ErrorMessage: string; UserViewRunID: string }>> {
+            this.RunViewsBatchCalls++;
+            this.RunViewsParams.push(...params);
+            return params.map(p => {
+                const info = p.EntityName ? this.EntityByName(p.EntityName) : undefined;
+                if (!info) {
+                    return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+                }
+                const filterStr = typeof p.ExtraFilter === 'string' ? p.ExtraFilter : '';
+                const quotedIds = Array.from(filterStr.matchAll(/'([^']+)'/g)).map(m => m[1]);
+                const rows: Record<string, unknown>[] = [];
+                for (const id of quotedIds) {
+                    const row = this.Store.ViewRow(info, id);
+                    if (row) rows.push(row);
+                }
+                return {
+                    Success: true,
+                    Results: rows,
+                    RowCount: rows.length,
+                    TotalRowCount: rows.length,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            });
+        }
+    }
+
+    const BATCH_ROWS = 40;
+    const MEETING_TYPE_ID = 'c1000000-0000-0000-0000-000000000001';
+    const PUB_TYPE_ID = 'c1000000-0000-0000-0000-000000000002';
+    let entities: EntityInfo[];
+    let store: InMemoryISAStore;
+    let batchedProvider: BatchedLoadHintTestProvider;
+    let user: UserInfo;
+    let previousGlobalProvider: IMetadataProvider;
+    let previousEntityProvider: IEntityDataProvider;
+    let registeredEngine: FakeProductTypeEngine | null = null;
+
+    beforeEach(() => {
+        previousGlobalProvider = Metadata.Provider;
+        previousEntityProvider = BaseEntity.Provider;
+        entities = BuildLoadHintEntities();
+        store = new InMemoryISAStore();
+        user = MakeLoadHintUser(ADMIN_ROLE_ID);
+        batchedProvider = new BatchedLoadHintTestProvider(entities, store, user);
+        Metadata.Provider = batchedProvider as object as IMetadataProvider;
+        BaseEntity.Provider = batchedProvider.AsEntityDataProvider;
+
+        store.Insert('Product Types', { ID: MEETING_TYPE_ID, Name: 'Meeting', ProductExtensionEntity: 'Meetings' });
+        store.Insert('Product Types', { ID: PUB_TYPE_ID, Name: 'Publication', ProductExtensionEntity: 'Publications' });
+        for (let i = 0; i < BATCH_ROWS; i++) {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            const isMeeting = i % 2 === 0;
+            store.Insert('Products', { ID: id, Name: `Prod ${i}`, ProductTypeID: isMeeting ? MEETING_TYPE_ID : PUB_TYPE_ID });
+            if (isMeeting) {
+                store.Insert('Meetings', { ID: id, Venue: `Hall ${i}` });
+            } else {
+                store.Insert('Publications', { ID: id, ISBN: `978-${i}` });
+            }
+        }
+    });
+
+    afterEach(() => {
+        if (registeredEngine) {
+            BaseEngineRegistry.Instance.UnregisterEngine(registeredEngine);
+            registeredEngine = null;
+        }
+        BaseEntity.ClearSubtypeLookupCache();
+        Metadata.Provider = previousGlobalProvider;
+        BaseEntity.Provider = previousEntityProvider;
+    });
+
+    it('hydrates N IS-A parent rows without SubtypeSelector in 2 batched queries instead of 2N', async () => {
+        const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(batchedProvider.EntityByName('Products')!, id)!;
+        });
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(results).toHaveLength(BATCH_ROWS);
+        results.forEach((p, idx) => {
+            expect(p.ISAChild?.EntityInfo.Name).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+        });
+        expect(batchedProvider.BatchDiscoveryCalls).toBe(1);
+        expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+        expect(batchedProvider.RoundTrips).toHaveLength(0);
+    });
+
+    it('hydrates N IS-A parent rows with SubtypeSelector in 1 batched RunViews query (0 discovery queries)', async () => {
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        productsInfo.SubtypeSelector = JSON.stringify({
+            Path: 'ProductTypeID.ProductExtensionEntity',
+            UseForLoadedRecords: true,
+        });
+
+        const ptInfo = batchedProvider.EntityByName('Product Types')!;
+        const typeRows = [MEETING_TYPE_ID, PUB_TYPE_ID].map(id => store.ViewRow(ptInfo, id)!);
+        const typeEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Product Types',
+            typeRows,
+            user
+        );
+        registeredEngine = new FakeProductTypeEngine(typeEntities);
+        BaseEngineRegistry.Instance.RegisterEngine(registeredEngine);
+
+        const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(productsInfo, id)!;
+        });
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(results).toHaveLength(BATCH_ROWS);
+        results.forEach((p, idx) => {
+            expect(p.ISAChild?.EntityInfo.Name).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+        });
+        expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+        expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+    });
+
+    it('batched IS-A child discovery and hydration reads bypass the RunView cache (internal reads never create per-IN-list slots)', async () => {
+        // The pre-batch path hydrated each child through InnerLoad, which never touched the
+        // RunView cache. The batched RunViews would otherwise be ordinary server reads: every
+        // distinct IN-list of parent keys becomes its own filtered cache slot, invalidated
+        // (never maintained) on each child save — unbounded slot churn with no reuse.
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(productsInfo, id)!;
+        });
+
+        await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(batchedProvider.RunViewsParams.length).toBeGreaterThan(0);
+        for (const p of batchedProvider.RunViewsParams) {
+            expect(p.BypassCache, `child read for ${p.EntityName} must set BypassCache`).toBe(true);
+        }
+    });
+
+    it('CheckForChildRecords resolves IS-A child existence in 1 FindISAChildEntity probe instead of C RunViews', async () => {
+        const id = `c2000000-0000-0000-0000-${String(0).padStart(12, '0')}`;
+        const product = await batchedProvider.GetEntityObject<BaseEntity>('Products', user);
+        product.Hydrate(store.ViewRow(batchedProvider.EntityByName('Products')!, id)!);
+        batchedProvider.ResetRoundTrips();
+
+        const check = await (product as object as { CheckForChildRecords: () => Promise<{ HasChildren: boolean; ChildEntityName: string }> }).CheckForChildRecords();
+        expect(check).toEqual({ HasChildren: true, ChildEntityName: 'Meetings' });
+        expect(batchedProvider.Count('FindISAChildEntity')).toBe(1);
+    });
+
+    it('skips querying an IS-A child entity in RunViews when the user lacks Read permission on that child type', async () => {
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        vi.spyOn(meetingsInfo, 'GetUserPermisions').mockReturnValue({
+            CanRead: false,
+            CanCreate: false,
+            CanUpdate: false,
+            CanDelete: false,
+        } as ReturnType<EntityInfo['GetUserPermisions']>);
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const rows = Array.from({ length: 4 }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(productsInfo, id)!;
+        });
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(results).toHaveLength(4);
+        // Even indices (Meetings) remain unlinked plain parents; odd indices (Publications) link their child
+        expect(results[0].ISAChild).toBeNull();
+        expect(results[1].ISAChild?.EntityInfo.Name).toBe('Publications');
+        expect(results[2].ISAChild).toBeNull();
+        expect(results[3].ISAChild?.EntityInfo.Name).toBe('Publications');
+        // Meetings was never even queried via RunViews
+        expect(batchedProvider.RunViewsParams.map(p => p.EntityName)).toEqual(['Publications']);
     });
 });

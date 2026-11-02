@@ -4,7 +4,7 @@ import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
@@ -2046,6 +2046,15 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * Returns the canonical string lookup key for a value of this field when matching records
+     * across heterogeneous sources (e.g., SQL Server upper-case vs. PostgreSQL lower-case UUIDs,
+     * while preserving exact case for non-UUID string keys).
+     */
+    public FormatCanonicalValue(value: unknown): string {
+        return CanonicalPrimaryKeyValue(String(value ?? ''), this.IsUniqueIdentifier);
+    }
+
+    /**
      * Returns true if the field's SQL type is **fixed-width / space-padded**
      * (SQL Server `char`/`nchar`, PostgreSQL `char`/`character`/`bpchar`).
      *
@@ -2527,7 +2536,10 @@ export class EntityInfo extends BaseInfo {
                 try {
                     const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
                     if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
-                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                        this._subtypeSelectorConfig = {
+                            Path: parsed['Path'].trim(),
+                            UseForLoadedRecords: this.parseSubtypeSelectorUseForLoadedRecords(parsed),
+                        };
                     } else {
                         LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
                         this._subtypeSelectorConfig = null;
@@ -2541,6 +2553,20 @@ export class EntityInfo extends BaseInfo {
             }
         }
         return this._subtypeSelectorConfig;
+    }
+
+    /**
+     * Reads the selector's optional `UseForLoadedRecords` flag. Only a JSON `true` turns load hints
+     * on; a value of any other type is logged and leaves them off, so a quoted `"true"` can't look
+     * like an opt-in that silently does nothing.
+     */
+    private parseSubtypeSelectorUseForLoadedRecords(parsed: Record<string, unknown>): boolean {
+        const value = parsed['UseForLoadedRecords'];
+        if (value === undefined || value === null || typeof value === 'boolean') {
+            return value === true;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UseForLoadedRecords' must be true or false, but is ${JSON.stringify(value)}. Loads of this entity won't use the selector.`);
+        return false;
     }
     /**
      * Whether to audit when users access records from this entity
