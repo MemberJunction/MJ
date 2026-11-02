@@ -2599,11 +2599,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // 3. Clear sessionStorage
       sessionStorage.clear();
 
-      // 4. Delete all IndexedDB databases
+      // 4. Delete all IndexedDB databases (preserving MJ_Diagnostics so active recordings survive)
       if (window.indexedDB?.databases) {
         window.indexedDB.databases().then(databases => {
           for (const db of databases) {
-            if (db.name) {
+            if (db.name && db.name !== 'MJ_Diagnostics') {
               window.indexedDB.deleteDatabase(db.name);
             }
           }

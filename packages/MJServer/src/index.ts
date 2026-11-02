@@ -499,7 +499,8 @@ const setupComplete$ = new ReplaySubject(1);
     await WirePushStatusFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+    const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
   const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
@@ -588,6 +589,8 @@ const setupComplete$ = new ReplaySubject(1);
     // Generated resolvers call this static method with bracket-quoted SQL.
     // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
     const origExecuteSQLWithPool = SQLServerDataProvider.ExecuteSQLWithPool;
+    const { GenericDatabaseProvider: GenericDBProv, SummarizeSqlParameters: SummarizeParams } = await import('@memberjunction/generic-database-provider');
+    const { GetDiagnosticContext: GetDiagCtx, IsDiagnosticCaptureSuppressed: IsDiagSuppressed } = await import('@memberjunction/core');
     SQLServerDataProvider.ExecuteSQLWithPool = async function(
       pool: sql.ConnectionPool, query: string, parameters?: unknown[], contextUser?: import('@memberjunction/core').UserInfo
     ): Promise<unknown[]> {
@@ -596,8 +599,38 @@ const setupComplete$ = new ReplaySubject(1);
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
         const pgQuery = TranslateBracketsToPG(query);
-        const result = await thePgPool.query(pgQuery);
-        return result.rows;
+        const startTime = performance.now();
+        try {
+          const result = await thePgPool.query(pgQuery);
+          if (!IsDiagSuppressed() && GenericDBProv.HasSqlObservers()) {
+            GenericDBProv.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeParams(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: result.rows?.length ?? 0,
+              isMutation: false,
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagCtx(),
+            });
+          }
+          return result.rows;
+        } catch (err) {
+          if (!IsDiagSuppressed() && GenericDBProv.HasSqlObservers()) {
+            GenericDBProv.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeParams(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: 0,
+              isMutation: false,
+              errorMessage: err instanceof Error ? err.message : String(err),
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagCtx(),
+            });
+          }
+          throw err;
+        }
       }
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
@@ -1606,7 +1639,7 @@ const setupComplete$ = new ReplaySubject(1);
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>({
-      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID'],
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID', 'X-MJ-Trace-ID'],
     }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
@@ -2447,3 +2480,5 @@ export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
 export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
 export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
+export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
+export type { StartupSummarySnapshot } from './logging/StartupLogger.js';

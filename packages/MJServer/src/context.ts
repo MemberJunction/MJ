@@ -21,7 +21,7 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, GetDiagnosticContext, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
@@ -49,7 +49,7 @@ function isDebugLogLevel(): boolean {
   if (isDebugLevelCache === undefined) {
     isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
   }
-  return isDebugLevelCache;
+  return isDebugLevelCache || GetDiagnosticContext()?.sessionId != null;
 }
 
 const SESSION_AUDIT_TYPE = 'Session Established';

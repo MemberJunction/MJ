@@ -2329,3 +2329,186 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
 }
 
+
+// ============================================================
+// Diagnostics Remote Operations Types & Typed Bases
+// ============================================================
+
+export interface DiagnosticsStartSessionInput {
+    Name: string;
+    Reason?: string;
+    ScopeType: 'Users' | 'APIKeys' | 'Operations' | 'BrowserSession' | 'Instance';
+    Scope?: {
+        userIds?: string[];
+        apiKeyIds?: string[];
+        operationNames?: string[];
+        remoteOperationKeys?: string[];
+        browserSessionId?: string;
+    };
+    Level?: 'Standard' | 'Verbose' | 'Debug';
+    Categories?: string[];
+    ScrubLiterals?: boolean;
+    DurationMinutes?: number;
+    MaxBytes?: number;
+}
+
+export interface DiagnosticsStartSessionOutput {
+    SessionID: string;
+    Status: 'Active' | 'Stopped' | 'Expired';
+    StartedAt: string;
+    EndsAt: string;
+    ScrubLiterals: boolean;
+}
+
+export interface DiagnosticsStopSessionInput {
+    SessionID: string;
+}
+
+export interface DiagnosticsStopSessionOutput {
+    SessionID: string;
+    Status: 'Stopped';
+    StoppedAt: string;
+    FlushedChunkCount: number;
+}
+
+export interface DiagnosticsGetMySessionStatusInput {
+    BrowserSessionID?: string;
+}
+
+export interface DiagnosticsGetMySessionStatusOutput {
+    Active: boolean;
+    SessionID?: string;
+    SessionName?: string;
+    EndsAt?: string;
+    Level?: 'Standard' | 'Verbose' | 'Debug';
+    ScrubLiterals?: boolean;
+    SelfServiceRecordingAllowed: boolean;
+}
+
+export interface DiagnosticsUploadClientCaptureInput {
+    SessionID?: string;
+    CreateSelfServiceSession?: boolean;
+    Reason?: string;
+    ScrubLiterals?: boolean;
+    Environment?: Record<string, unknown>;
+    Repro?: Record<string, unknown>;
+    ClientLogs?: Array<Record<string, unknown>>;
+    ClientWaterfall?: Array<Record<string, unknown>>;
+    ClientTelemetry?: Array<Record<string, unknown>>;
+}
+
+export interface DiagnosticsUploadClientCaptureOutput {
+    SessionID: string;
+    ChunksWritten: number;
+    TotalBytesWritten: number;
+}
+
+export interface DiagnosticsBuildBundleInput {
+    SessionID?: string;
+    Name?: string;
+    Description?: string;
+    ScrubLiterals?: boolean;
+    ClientBundleData?: Record<string, unknown>;
+}
+
+export interface DiagnosticsBuildBundleOutput {
+    BundleID: string;
+    Status: 'Ready' | 'Failed';
+    SizeBytes: number;
+    SHA256: string;
+    FindingsCount: number;
+    DownloadToken?: string;
+    DownloadUrl?: string;
+}
+
+export interface DiagnosticsGetBundlePreviewInput {
+    BundleID: string;
+    MintDownloadToken?: boolean;
+}
+
+export interface DiagnosticsGetBundlePreviewOutput {
+    BundleID: string;
+    Name: string;
+    Direction: 'Local' | 'Received';
+    Status: string;
+    SizeBytes: number;
+    SHA256: string | null;
+    ScrubLiterals: boolean;
+    Manifest: Record<string, unknown> | null;
+    ScrubReport: Record<string, unknown> | null;
+    Findings: Array<Record<string, unknown>>;
+    ReadmeText: string;
+    DownloadToken?: string;
+    DownloadUrl?: string;
+}
+
+export interface DiagnosticsSendBundleInput {
+    BundleID: string;
+    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
+    CollectorUrlOverride?: string;
+    ContactInfo?: string;
+    Summary?: string;
+}
+
+export interface DiagnosticsSendBundleOutput {
+    BundleID: string;
+    Status: 'Sent' | 'Failed';
+    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
+    ExternalReferenceID?: string;
+    SentAt?: string;
+    ErrorMessage?: string;
+}
+
+export class DiagnosticsStartSessionOperation extends BaseRemotableOperation<DiagnosticsStartSessionInput, DiagnosticsStartSessionOutput> {
+    public readonly OperationKey = "Diagnostics.StartSession";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_start_session_v1";
+}
+
+export class DiagnosticsStopSessionOperation extends BaseRemotableOperation<DiagnosticsStopSessionInput, DiagnosticsStopSessionOutput> {
+    public readonly OperationKey = "Diagnostics.StopSession";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_stop_session_v1";
+}
+
+export class DiagnosticsGetMySessionStatusOperation extends BaseRemotableOperation<DiagnosticsGetMySessionStatusInput, DiagnosticsGetMySessionStatusOutput> {
+    public readonly OperationKey = "Diagnostics.GetMySessionStatus";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_my_session_status_v1";
+}
+
+export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperation<DiagnosticsUploadClientCaptureInput, DiagnosticsUploadClientCaptureOutput> {
+    public readonly OperationKey = "Diagnostics.UploadClientCapture";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_upload_client_v1";
+}
+
+export class DiagnosticsBuildBundleOperation extends BaseRemotableOperation<DiagnosticsBuildBundleInput, DiagnosticsBuildBundleOutput> {
+    public readonly OperationKey = "Diagnostics.BuildBundle";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_build_bundle_v1";
+}
+
+export class DiagnosticsGetBundlePreviewOperation extends BaseRemotableOperation<DiagnosticsGetBundlePreviewInput, DiagnosticsGetBundlePreviewOutput> {
+    public readonly OperationKey = "Diagnostics.GetBundlePreview";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:read";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_bundle_preview_v1";
+}
+
+export class DiagnosticsSendBundleOperation extends BaseRemotableOperation<DiagnosticsSendBundleInput, DiagnosticsSendBundleOutput> {
+    public readonly OperationKey = "Diagnostics.SendBundle";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "diagnostics:send";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_diag_send_bundle_v1";
+}

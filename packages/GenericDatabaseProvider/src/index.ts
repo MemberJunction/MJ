@@ -1,4 +1,11 @@
-export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export {
+    GenericDatabaseProvider,
+    DoomedTransactionError,
+    ExecuteSQLBatchOptions,
+    SummarizeSqlParameters,
+    FormatSqlParameterTypesForError,
+} from './GenericDatabaseProvider.js';
+export type { SqlParameterSummary, SqlObservation, ISqlObserver } from './GenericDatabaseProvider.js';
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';

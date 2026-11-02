@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Diagnostics: Run Sessions",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-203000000001"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Diagnostics: Send Externally",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-203000000002"
+    }
+  }
+]

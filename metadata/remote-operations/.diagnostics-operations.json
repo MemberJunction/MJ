@@ -1,0 +1,163 @@
+[
+  {
+    "fields": {
+      "Name": "Start Diagnostic Session",
+      "OperationKey": "Diagnostics.StartSession",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Starts a bounded diagnostic recording session targeting users, API keys, operations, a browser session, or the instance. Implemented by DiagnosticsStartSessionServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsStartSessionInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsStartSessionOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Stop Diagnostic Session",
+      "OperationKey": "Diagnostics.StopSession",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Stops an active diagnostic session immediately and broadcasts a multi-instance flush so all server nodes write their pending chunks. Implemented by DiagnosticsStopSessionServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsStopSessionInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsStopSessionOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get My Diagnostic Session Status",
+      "OperationKey": "Diagnostics.GetMySessionStatus",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Returns whether the calling user or browser session is currently targeted by an active diagnostic recording session, plus whether self-service recording is enabled. Implemented by DiagnosticsGetMySessionStatusServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsGetMySessionStatusInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsGetMySessionStatusOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": null,
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upload Client Diagnostic Capture",
+      "OperationKey": "Diagnostics.UploadClientCapture",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Uploads client-side flight-recorder buffers (logs, GraphQL waterfall, telemetry, startup marks, reproduction notes) into a diagnostic session as re-scrubbed compressed chunks. Implemented by DiagnosticsUploadClientCaptureServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsUploadClientCaptureInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsUploadClientCaptureOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": null,
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000004"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Build Diagnostic Bundle",
+      "OperationKey": "Diagnostics.BuildBundle",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Flushes all participating server instances, assembles session chunks into a .mjdiag ZIP archive, runs the two-stage credential/literal scrubber and automated findings engine, verifies the archive with VerifyBundleArchive, and persists the bundle. Implemented by DiagnosticsBuildBundleServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsBuildBundleInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsBuildBundleOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000005"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Diagnostic Bundle Preview",
+      "OperationKey": "Diagnostics.GetBundlePreview",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Returns a diagnostic bundle's manifest, scrubbing summary, README text, automated findings, and an optional short-lived single-use signed download token. Implemented by DiagnosticsGetBundlePreviewServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsGetBundlePreviewInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsGetBundlePreviewOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000006"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Send Diagnostic Bundle",
+      "OperationKey": "Diagnostics.SendBundle",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Encrypts a verified .mjdiag bundle using X25519+HKDF-SHA256+AES-256-GCM with AAD and transmits it to an allowed external destination (MJC, CustomerCollector, or StorageAccount). Implemented by DiagnosticsSendBundleServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsSendBundleInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsSendBundleOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "diagnostics:send",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000007"
+    }
+  }
+]

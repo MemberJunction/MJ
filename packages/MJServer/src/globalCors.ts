@@ -44,6 +44,7 @@ export function CreateGlobalCorsMiddleware(
         },
         credentials: corsWildcard ? false : (settings?.allowCredentials ?? true),
         maxAge: settings?.maxAge ?? 86400,
+        exposedHeaders: ['X-MJ-Trace-ID'],
     }) as RequestHandler;
     return SkipForServerExtensionRoots(globalCors, extensionOwnedRoots);
 }

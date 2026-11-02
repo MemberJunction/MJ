@@ -153708,3 +153708,1186 @@ export class MJWorkspaceEntity extends BaseEntity<MJWorkspaceEntityType> {
         return this.Get('User');
     }
 }
+
+
+export interface IDiagnosticSessionScope {
+    userIds?: string[];
+    apiKeyIds?: string[];
+    operationNames?: string[];
+    remoteOperationKeys?: string[];
+    browserSessionId?: string;
+}
+
+export interface IDiagnosticBundleFileDigest {
+    sha256: string;
+    sizeBytes: number;
+    uncompressedBytes: number;
+}
+
+export interface IDiagnosticBundleManifest {
+    schemaVersion: '1.0';
+    bundleId: string;
+    sessionId?: string;
+    createdAt: string;
+    captureReason: string;
+    scrubberProfile: 'Standard' | 'FullRaw';
+    files: Record<string, IDiagnosticBundleFileDigest>;
+}
+
+export interface IDiagnosticScrubReport {
+    credentialsScrubbedCount: number;
+    sqlLiteralsNormalizedCount: number;
+    customPatternsAppliedCount: number;
+}
+
+export interface IDiagnosticFinding {
+    id: string;
+    severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+    category: string;
+    title: string;
+    summary: string;
+    recommendation: string;
+    relatedTraceIds: string[];
+    evidence: Record<string, unknown>;
+}
+
+
+export const MJDiagnosticSessionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar`),
+    Status: z.union([z.literal('Active'), z.literal('Expired'), z.literal('Stopped')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar`),
+    ScopeType: z.union([z.literal('APIKeys'), z.literal('BrowserSession'), z.literal('Instance'), z.literal('Operations'), z.literal('Users')]).describe(`
+        * * Field Name: ScopeType
+        * * Display Name: Scope Type
+        * * SQL Data Type: nvarchar`),
+    ScopeJSON: z.string().nullable().describe(`
+        * * Field Name: ScopeJSON
+        * * Display Name: Scope JSON
+        * * SQL Data Type: nvarchar`),
+    Level: z.union([z.literal('Debug'), z.literal('Standard'), z.literal('Verbose')]).describe(`
+        * * Field Name: Level
+        * * Display Name: Level
+        * * SQL Data Type: nvarchar`),
+    CategoriesJSON: z.string().nullable().describe(`
+        * * Field Name: CategoriesJSON
+        * * Display Name: Categories JSON
+        * * SQL Data Type: nvarchar`),
+    ScrubLiterals: z.boolean().describe(`
+        * * Field Name: ScrubLiterals
+        * * Display Name: Scrub Literals
+        * * SQL Data Type: bit`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset`),
+    EndsAt: z.date().describe(`
+        * * Field Name: EndsAt
+        * * Display Name: Ends At
+        * * SQL Data Type: datetimeoffset`),
+    StoppedAt: z.date().nullable().describe(`
+        * * Field Name: StoppedAt
+        * * Display Name: Stopped At
+        * * SQL Data Type: datetimeoffset`),
+    MaxBytes: z.number().describe(`
+        * * Field Name: MaxBytes
+        * * Display Name: Max Bytes
+        * * SQL Data Type: bigint`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar`),
+});
+
+export type MJDiagnosticSessionEntityType = z.infer<typeof MJDiagnosticSessionSchema>;
+
+
+export const MJDiagnosticSessionChunkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    DiagnosticSessionID: z.string().describe(`
+        * * Field Name: DiagnosticSessionID
+        * * Display Name: Diagnostic Session ID
+        * * SQL Data Type: uniqueidentifier`),
+    Source: z.union([z.literal('Client'), z.literal('Server')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar`),
+    HostInstanceLabel: z.string().describe(`
+        * * Field Name: HostInstanceLabel
+        * * Display Name: Host Instance Label
+        * * SQL Data Type: nvarchar`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int`),
+    ContentKind: z.union([z.literal('App'), z.literal('Errors'), z.literal('Health'), z.literal('Logs'), z.literal('Network'), z.literal('SQL'), z.literal('Spans'), z.literal('Telemetry'), z.literal('Timeline')]).describe(`
+        * * Field Name: ContentKind
+        * * Display Name: Content Kind
+        * * SQL Data Type: nvarchar`),
+    Data: z.string().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: varbinary`),
+    EntryCount: z.number().describe(`
+        * * Field Name: EntryCount
+        * * Display Name: Entry Count
+        * * SQL Data Type: int`),
+    FirstEntryAt: z.date().nullable().describe(`
+        * * Field Name: FirstEntryAt
+        * * Display Name: First Entry At
+        * * SQL Data Type: datetimeoffset`),
+    LastEntryAt: z.date().nullable().describe(`
+        * * Field Name: LastEntryAt
+        * * Display Name: Last Entry At
+        * * SQL Data Type: datetimeoffset`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset`),
+    DiagnosticSession: z.string().describe(`
+        * * Field Name: DiagnosticSession
+        * * Display Name: Diagnostic Session
+        * * SQL Data Type: nvarchar`),
+});
+
+export type MJDiagnosticSessionChunkEntityType = z.infer<typeof MJDiagnosticSessionChunkSchema>;
+
+
+export const MJDiagnosticBundleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar`),
+    Direction: z.union([z.literal('Local'), z.literal('Received')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar`),
+    DiagnosticSessionID: z.string().nullable().describe(`
+        * * Field Name: DiagnosticSessionID
+        * * Display Name: Diagnostic Session ID
+        * * SQL Data Type: uniqueidentifier`),
+    Status: z.union([z.literal('Building'), z.literal('Expired'), z.literal('Failed'), z.literal('Ready'), z.literal('Receiving'), z.literal('Sending'), z.literal('Sent')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar`),
+    ScrubLiterals: z.boolean().describe(`
+        * * Field Name: ScrubLiterals
+        * * Display Name: Scrub Literals
+        * * SQL Data Type: bit`),
+    WindowStart: z.date().nullable().describe(`
+        * * Field Name: WindowStart
+        * * Display Name: Window Start
+        * * SQL Data Type: datetimeoffset`),
+    WindowEnd: z.date().nullable().describe(`
+        * * Field Name: WindowEnd
+        * * Display Name: Window End
+        * * SQL Data Type: datetimeoffset`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier`),
+    Data: z.string().nullable().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: varbinary`),
+    SizeBytes: z.number().describe(`
+        * * Field Name: SizeBytes
+        * * Display Name: Size Bytes
+        * * SQL Data Type: bigint`),
+    SHA256: z.string().nullable().describe(`
+        * * Field Name: SHA256
+        * * Display Name: SHA256
+        * * SQL Data Type: nchar`),
+    ManifestJSON: z.string().nullable().describe(`
+        * * Field Name: ManifestJSON
+        * * Display Name: Manifest JSON
+        * * SQL Data Type: nvarchar`),
+    ScrubReportJSON: z.string().nullable().describe(`
+        * * Field Name: ScrubReportJSON
+        * * Display Name: Scrub Report JSON
+        * * SQL Data Type: nvarchar`),
+    FindingsJSON: z.string().nullable().describe(`
+        * * Field Name: FindingsJSON
+        * * Display Name: Findings JSON
+        * * SQL Data Type: nvarchar`),
+    FailureReason: z.string().nullable().describe(`
+        * * Field Name: FailureReason
+        * * Display Name: Failure Reason
+        * * SQL Data Type: nvarchar`),
+    CreatedByUserID: z.string().nullable().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: uniqueidentifier`),
+    ApprovedAt: z.date().nullable().describe(`
+        * * Field Name: ApprovedAt
+        * * Display Name: Approved At
+        * * SQL Data Type: datetimeoffset`),
+    Destination: z.union([z.literal('CustomerCollector'), z.literal('MJC'), z.literal('StorageAccount')]).nullable().describe(`
+        * * Field Name: Destination
+        * * Display Name: Destination
+        * * SQL Data Type: nvarchar`),
+    SentAt: z.date().nullable().describe(`
+        * * Field Name: SentAt
+        * * Display Name: Sent At
+        * * SQL Data Type: datetimeoffset`),
+    ExternalReferenceID: z.string().nullable().describe(`
+        * * Field Name: ExternalReferenceID
+        * * Display Name: External Reference ID
+        * * SQL Data Type: nvarchar`),
+    SenderInstallID: z.string().nullable().describe(`
+        * * Field Name: SenderInstallID
+        * * Display Name: Sender Install ID
+        * * SQL Data Type: uniqueidentifier`),
+    SenderMJVersion: z.string().nullable().describe(`
+        * * Field Name: SenderMJVersion
+        * * Display Name: Sender MJ Version
+        * * SQL Data Type: nvarchar`),
+    ContactInfo: z.string().nullable().describe(`
+        * * Field Name: ContactInfo
+        * * Display Name: Contact Info
+        * * SQL Data Type: nvarchar`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset`),
+    DiagnosticSession: z.string().nullable().describe(`
+        * * Field Name: DiagnosticSession
+        * * Display Name: Diagnostic Session
+        * * SQL Data Type: nvarchar`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar`),
+    CreatedByUser: z.string().nullable().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar`),
+});
+
+export type MJDiagnosticBundleEntityType = z.infer<typeof MJDiagnosticBundleSchema>;
+
+
+/**
+ * MJ: Diagnostic Sessions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticSession
+ * * Base View: vwDiagnosticSessions
+ * * @description Bounded server and client diagnostic recording sessions with tenant isolation, scope targeting, and byte-budget controls.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Sessions')
+export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar
+    */
+    get Status(): 'Active' | 'Expired' | 'Stopped' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Expired' | 'Stopped') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ScopeType
+    * * Display Name: Scope Type
+    * * SQL Data Type: nvarchar
+    */
+    get ScopeType(): 'APIKeys' | 'BrowserSession' | 'Instance' | 'Operations' | 'Users' {
+        return this.Get('ScopeType');
+    }
+    set ScopeType(value: 'APIKeys' | 'BrowserSession' | 'Instance' | 'Operations' | 'Users') {
+        this.Set('ScopeType', value);
+    }
+
+    /**
+    * * Field Name: ScopeJSON
+    * * Display Name: Scope JSON
+    * * SQL Data Type: nvarchar
+    */
+    get ScopeJSON(): string | null {
+        return this.Get('ScopeJSON');
+    }
+    set ScopeJSON(value: string | null) {
+        this.Set('ScopeJSON', value);
+    }
+    get ScopeObject(): IDiagnosticSessionScope | null {
+        return this.GetJSONFieldObject<IDiagnosticSessionScope>('ScopeJSON');
+    }
+    set ScopeObject(value: IDiagnosticSessionScope | null) {
+        this.SetJSONFieldObject<IDiagnosticSessionScope>('ScopeJSON', value);
+    }
+
+    /**
+    * * Field Name: Level
+    * * Display Name: Level
+    * * SQL Data Type: nvarchar
+    */
+    get Level(): 'Debug' | 'Standard' | 'Verbose' {
+        return this.Get('Level');
+    }
+    set Level(value: 'Debug' | 'Standard' | 'Verbose') {
+        this.Set('Level', value);
+    }
+
+    /**
+    * * Field Name: CategoriesJSON
+    * * Display Name: Categories JSON
+    * * SQL Data Type: nvarchar
+    */
+    get CategoriesJSON(): string | null {
+        return this.Get('CategoriesJSON');
+    }
+    set CategoriesJSON(value: string | null) {
+        this.Set('CategoriesJSON', value);
+    }
+    get CategoriesObject(): Array<string> | null {
+        return this.GetJSONFieldObject<Array<string>>('CategoriesJSON');
+    }
+    set CategoriesObject(value: Array<string> | null) {
+        this.SetJSONFieldObject<Array<string>>('CategoriesJSON', value);
+    }
+
+    /**
+    * * Field Name: ScrubLiterals
+    * * Display Name: Scrub Literals
+    * * SQL Data Type: bit
+    */
+    get ScrubLiterals(): boolean {
+        return this.Get('ScrubLiterals');
+    }
+    set ScrubLiterals(value: boolean) {
+        this.Set('ScrubLiterals', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndsAt
+    * * Display Name: Ends At
+    * * SQL Data Type: datetimeoffset
+    */
+    get EndsAt(): Date {
+        return this.Get('EndsAt');
+    }
+    set EndsAt(value: Date) {
+        this.Set('EndsAt', value);
+    }
+
+    /**
+    * * Field Name: StoppedAt
+    * * Display Name: Stopped At
+    * * SQL Data Type: datetimeoffset
+    */
+    get StoppedAt(): Date | null {
+        return this.Get('StoppedAt');
+    }
+    set StoppedAt(value: Date | null) {
+        this.Set('StoppedAt', value);
+    }
+
+    /**
+    * * Field Name: MaxBytes
+    * * Display Name: Max Bytes
+    * * SQL Data Type: bigint
+    */
+    get MaxBytes(): number {
+        return this.Get('MaxBytes');
+    }
+    set MaxBytes(value: number) {
+        this.Set('MaxBytes', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+}
+
+
+/**
+ * MJ: Diagnostic Session Chunks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticSessionChunk
+ * * Base View: vwDiagnosticSessionChunks
+ * * @description Compressed NDJSON capture chunks flushed by server instances and client browsers during a diagnostic session.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Session Chunks')
+export class MJDiagnosticSessionChunkEntity extends BaseEntity<MJDiagnosticSessionChunkEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DiagnosticSessionID
+    * * Display Name: Diagnostic Session ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get DiagnosticSessionID(): string {
+        return this.Get('DiagnosticSessionID');
+    }
+    set DiagnosticSessionID(value: string) {
+        this.Set('DiagnosticSessionID', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar
+    */
+    get Source(): 'Client' | 'Server' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Client' | 'Server') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: HostInstanceLabel
+    * * Display Name: Host Instance Label
+    * * SQL Data Type: nvarchar
+    */
+    get HostInstanceLabel(): string {
+        return this.Get('HostInstanceLabel');
+    }
+    set HostInstanceLabel(value: string) {
+        this.Set('HostInstanceLabel', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: ContentKind
+    * * Display Name: Content Kind
+    * * SQL Data Type: nvarchar
+    */
+    get ContentKind(): 'App' | 'Errors' | 'Health' | 'Logs' | 'Network' | 'SQL' | 'Spans' | 'Telemetry' | 'Timeline' {
+        return this.Get('ContentKind');
+    }
+    set ContentKind(value: 'App' | 'Errors' | 'Health' | 'Logs' | 'Network' | 'SQL' | 'Spans' | 'Telemetry' | 'Timeline') {
+        this.Set('ContentKind', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: varbinary
+    */
+    get Data(): string {
+        return this.Get('Data');
+    }
+    set Data(value: string) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: EntryCount
+    * * Display Name: Entry Count
+    * * SQL Data Type: int
+    */
+    get EntryCount(): number {
+        return this.Get('EntryCount');
+    }
+    set EntryCount(value: number) {
+        this.Set('EntryCount', value);
+    }
+
+    /**
+    * * Field Name: FirstEntryAt
+    * * Display Name: First Entry At
+    * * SQL Data Type: datetimeoffset
+    */
+    get FirstEntryAt(): Date | null {
+        return this.Get('FirstEntryAt');
+    }
+    set FirstEntryAt(value: Date | null) {
+        this.Set('FirstEntryAt', value);
+    }
+
+    /**
+    * * Field Name: LastEntryAt
+    * * Display Name: Last Entry At
+    * * SQL Data Type: datetimeoffset
+    */
+    get LastEntryAt(): Date | null {
+        return this.Get('LastEntryAt');
+    }
+    set LastEntryAt(value: Date | null) {
+        this.Set('LastEntryAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DiagnosticSession
+    * * Display Name: Diagnostic Session
+    * * SQL Data Type: nvarchar
+    */
+    get DiagnosticSession(): string {
+        return this.Get('DiagnosticSession');
+    }
+}
+
+
+/**
+ * MJ: Diagnostic Bundles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticBundle
+ * * Base View: vwDiagnosticBundles
+ * * @description Assembled .mjdiag diagnostic bundles (both locally built bundles and external bundles received via MJAPI intake) with manifest, scrubbing report, automated findings, and MJStorage link.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Bundles')
+export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntityType> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar
+    */
+    get Direction(): 'Local' | 'Received' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Local' | 'Received') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: DiagnosticSessionID
+    * * Display Name: Diagnostic Session ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get DiagnosticSessionID(): string | null {
+        return this.Get('DiagnosticSessionID');
+    }
+    set DiagnosticSessionID(value: string | null) {
+        this.Set('DiagnosticSessionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar
+    */
+    get Status(): 'Building' | 'Expired' | 'Failed' | 'Ready' | 'Receiving' | 'Sending' | 'Sent' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Building' | 'Expired' | 'Failed' | 'Ready' | 'Receiving' | 'Sending' | 'Sent') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ScrubLiterals
+    * * Display Name: Scrub Literals
+    * * SQL Data Type: bit
+    */
+    get ScrubLiterals(): boolean {
+        return this.Get('ScrubLiterals');
+    }
+    set ScrubLiterals(value: boolean) {
+        this.Set('ScrubLiterals', value);
+    }
+
+    /**
+    * * Field Name: WindowStart
+    * * Display Name: Window Start
+    * * SQL Data Type: datetimeoffset
+    */
+    get WindowStart(): Date | null {
+        return this.Get('WindowStart');
+    }
+    set WindowStart(value: Date | null) {
+        this.Set('WindowStart', value);
+    }
+
+    /**
+    * * Field Name: WindowEnd
+    * * Display Name: Window End
+    * * SQL Data Type: datetimeoffset
+    */
+    get WindowEnd(): Date | null {
+        return this.Get('WindowEnd');
+    }
+    set WindowEnd(value: Date | null) {
+        this.Set('WindowEnd', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: varbinary
+    */
+    get Data(): string | null {
+        return this.Get('Data');
+    }
+    set Data(value: string | null) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: SizeBytes
+    * * Display Name: Size Bytes
+    * * SQL Data Type: bigint
+    */
+    get SizeBytes(): number {
+        return this.Get('SizeBytes');
+    }
+    set SizeBytes(value: number) {
+        this.Set('SizeBytes', value);
+    }
+
+    /**
+    * * Field Name: SHA256
+    * * Display Name: SHA256
+    * * SQL Data Type: nchar
+    */
+    get SHA256(): string | null {
+        return this.Get('SHA256');
+    }
+    set SHA256(value: string | null) {
+        this.Set('SHA256', value);
+    }
+
+    /**
+    * * Field Name: ManifestJSON
+    * * Display Name: Manifest JSON
+    * * SQL Data Type: nvarchar
+    */
+    get ManifestJSON(): string | null {
+        return this.Get('ManifestJSON');
+    }
+    set ManifestJSON(value: string | null) {
+        this.Set('ManifestJSON', value);
+    }
+    get ManifestObject(): IDiagnosticBundleManifest | null {
+        return this.GetJSONFieldObject<IDiagnosticBundleManifest>('ManifestJSON');
+    }
+    set ManifestObject(value: IDiagnosticBundleManifest | null) {
+        this.SetJSONFieldObject<IDiagnosticBundleManifest>('ManifestJSON', value);
+    }
+
+    /**
+    * * Field Name: ScrubReportJSON
+    * * Display Name: Scrub Report JSON
+    * * SQL Data Type: nvarchar
+    */
+    get ScrubReportJSON(): string | null {
+        return this.Get('ScrubReportJSON');
+    }
+    set ScrubReportJSON(value: string | null) {
+        this.Set('ScrubReportJSON', value);
+    }
+    get ScrubReportObject(): IDiagnosticScrubReport | null {
+        return this.GetJSONFieldObject<IDiagnosticScrubReport>('ScrubReportJSON');
+    }
+    set ScrubReportObject(value: IDiagnosticScrubReport | null) {
+        this.SetJSONFieldObject<IDiagnosticScrubReport>('ScrubReportJSON', value);
+    }
+
+    /**
+    * * Field Name: FindingsJSON
+    * * Display Name: Findings JSON
+    * * SQL Data Type: nvarchar
+    */
+    get FindingsJSON(): string | null {
+        return this.Get('FindingsJSON');
+    }
+    set FindingsJSON(value: string | null) {
+        this.Set('FindingsJSON', value);
+    }
+    get FindingsObject(): Array<IDiagnosticFinding> | null {
+        return this.GetJSONFieldObject<Array<IDiagnosticFinding>>('FindingsJSON');
+    }
+    set FindingsObject(value: Array<IDiagnosticFinding> | null) {
+        this.SetJSONFieldObject<Array<IDiagnosticFinding>>('FindingsJSON', value);
+    }
+
+    /**
+    * * Field Name: FailureReason
+    * * Display Name: Failure Reason
+    * * SQL Data Type: nvarchar
+    */
+    get FailureReason(): string | null {
+        return this.Get('FailureReason');
+    }
+    set FailureReason(value: string | null) {
+        this.Set('FailureReason', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get CreatedByUserID(): string | null {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string | null) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedAt
+    * * Display Name: Approved At
+    * * SQL Data Type: datetimeoffset
+    */
+    get ApprovedAt(): Date | null {
+        return this.Get('ApprovedAt');
+    }
+    set ApprovedAt(value: Date | null) {
+        this.Set('ApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: Destination
+    * * Display Name: Destination
+    * * SQL Data Type: nvarchar
+    */
+    get Destination(): 'CustomerCollector' | 'MJC' | 'StorageAccount' | null {
+        return this.Get('Destination');
+    }
+    set Destination(value: 'CustomerCollector' | 'MJC' | 'StorageAccount' | null) {
+        this.Set('Destination', value);
+    }
+
+    /**
+    * * Field Name: SentAt
+    * * Display Name: Sent At
+    * * SQL Data Type: datetimeoffset
+    */
+    get SentAt(): Date | null {
+        return this.Get('SentAt');
+    }
+    set SentAt(value: Date | null) {
+        this.Set('SentAt', value);
+    }
+
+    /**
+    * * Field Name: ExternalReferenceID
+    * * Display Name: External Reference ID
+    * * SQL Data Type: nvarchar
+    */
+    get ExternalReferenceID(): string | null {
+        return this.Get('ExternalReferenceID');
+    }
+    set ExternalReferenceID(value: string | null) {
+        this.Set('ExternalReferenceID', value);
+    }
+
+    /**
+    * * Field Name: SenderInstallID
+    * * Display Name: Sender Install ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get SenderInstallID(): string | null {
+        return this.Get('SenderInstallID');
+    }
+    set SenderInstallID(value: string | null) {
+        this.Set('SenderInstallID', value);
+    }
+
+    /**
+    * * Field Name: SenderMJVersion
+    * * Display Name: Sender MJ Version
+    * * SQL Data Type: nvarchar
+    */
+    get SenderMJVersion(): string | null {
+        return this.Get('SenderMJVersion');
+    }
+    set SenderMJVersion(value: string | null) {
+        this.Set('SenderMJVersion', value);
+    }
+
+    /**
+    * * Field Name: ContactInfo
+    * * Display Name: Contact Info
+    * * SQL Data Type: nvarchar
+    */
+    get ContactInfo(): string | null {
+        return this.Get('ContactInfo');
+    }
+    set ContactInfo(value: string | null) {
+        this.Set('ContactInfo', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DiagnosticSession
+    * * Display Name: Diagnostic Session
+    * * SQL Data Type: nvarchar
+    */
+    get DiagnosticSession(): string | null {
+        return this.Get('DiagnosticSession');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar
+    */
+    get File(): string | null {
+        return this.Get('File');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar
+    */
+    get CreatedByUser(): string | null {
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+}

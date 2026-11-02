@@ -1,0 +1,198 @@
+[
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Capture.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Enable Diagnostic Session Capture",
+      "Description": "Allow administrators to start diagnostic recording sessions and assemble .mjdiag bundles on this instance.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000001"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.SelfServiceRecording",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Allow Self-Service Problem Recording",
+      "Description": "When enabled, non-admin users may start a self-scoped diagnostic session from 'Report a problem'; resulting bundles go to the local administrator queue.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000002"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.RequireLiteralScrubbing",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Require SQL & Filter Literal Scrubbing",
+      "Description": "Forces ScrubLiterals = true on all sessions and bundles, replacing inline SQL and filter string/number/UUID literals with ? placeholders.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000003"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.Enabled",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Allow External Bundle Transmission",
+      "Description": "Permits administrators holding 'Diagnostics: Send Externally' to transmit encrypted .mjdiag.enc bundles to configured external destinations.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000004"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.Destinations",
+      "Value": "[]",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Allowed External Bundle Destinations",
+      "Description": "JSON array of allowed external destination identifiers: MJC, CustomerCollector, StorageAccount.",
+      "DefaultValue": "[]"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000005"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.CollectorUrl",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Customer Collector Intake Base URL",
+      "Description": "Base URL of a CustomerCollector MJAPI intake endpoint when sending bundles to a self-hosted enterprise hub.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000006"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.MaxSessionMinutes",
+      "Value": "60",
+      "ValueType": "number",
+      "Category": "Diagnostics",
+      "DisplayName": "Maximum Diagnostic Session Duration (Minutes)",
+      "Description": "Maximum duration in minutes allowed for a single diagnostic recording session.",
+      "DefaultValue": "60"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000007"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.RetentionDays",
+      "Value": "14",
+      "ValueType": "number",
+      "Category": "Diagnostics",
+      "DisplayName": "Local Diagnostic Retention Period (Days)",
+      "Description": "Number of days to retain local diagnostic sessions, chunks, and bundles before automatic purge.",
+      "DefaultValue": "14"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000008"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.Enabled",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Enable Standard MJAPI Bundle Intake",
+      "Description": "Enables the /diagnostics/intake/v1 endpoints on this MJAPI instance to receive, verify, malware-scan, and store external .mjdiag.enc bundles.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000009"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.StorageProviderID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Intake Verified MJStorage Provider ID",
+      "Description": "MJ: File Storage Providers ID where verified, malware-clean .mjdiag bundles are promoted and stored.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000010"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.QuarantineStorageProviderID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Intake Quarantine MJStorage Provider ID",
+      "Description": "Optional quarantine MJ: File Storage Providers ID where incoming payloads are staged during malware scanning before promotion.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000011"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.DecryptOnIngest",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Decrypt & Verify Bundles on Ingest",
+      "Description": "Decrypt incoming .mjdiag.enc envelopes using the receiver's X25519 private key in MJ: Credentials, run VerifyBundleArchive, and index manifest/findings.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000012"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.RetentionDays",
+      "Value": "30",
+      "ValueType": "number",
+      "Category": "Diagnostics",
+      "DisplayName": "Received Bundle Retention Period (Days)",
+      "Description": "Number of days to retain received diagnostic bundles before automatic purge.",
+      "DefaultValue": "30"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000013"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.OnBundleReceivedActionID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Post-Intake Action ID",
+      "Description": "Optional MJ: Actions ID invoked asynchronously after a received bundle passes cryptographic, structural, and malware verification.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000014"
+    }
+  }
+]

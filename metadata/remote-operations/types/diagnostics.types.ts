@@ -1,0 +1,124 @@
+export interface DiagnosticsStartSessionInput {
+    Name: string;
+    Reason?: string;
+    ScopeType: 'Users' | 'APIKeys' | 'Operations' | 'BrowserSession' | 'Instance';
+    Scope?: {
+        userIds?: string[];
+        apiKeyIds?: string[];
+        operationNames?: string[];
+        remoteOperationKeys?: string[];
+        browserSessionId?: string;
+    };
+    Level?: 'Standard' | 'Verbose' | 'Debug';
+    Categories?: string[];
+    ScrubLiterals?: boolean;
+    DurationMinutes?: number;
+    MaxBytes?: number;
+}
+
+export interface DiagnosticsStartSessionOutput {
+    SessionID: string;
+    Status: 'Active' | 'Stopped' | 'Expired';
+    StartedAt: string;
+    EndsAt: string;
+    ScrubLiterals: boolean;
+}
+
+export interface DiagnosticsStopSessionInput {
+    SessionID: string;
+}
+
+export interface DiagnosticsStopSessionOutput {
+    SessionID: string;
+    Status: 'Stopped';
+    StoppedAt: string;
+    FlushedChunkCount: number;
+}
+
+export interface DiagnosticsGetMySessionStatusInput {
+    BrowserSessionID?: string;
+}
+
+export interface DiagnosticsGetMySessionStatusOutput {
+    Active: boolean;
+    SessionID?: string;
+    SessionName?: string;
+    EndsAt?: string;
+    Level?: 'Standard' | 'Verbose' | 'Debug';
+    ScrubLiterals?: boolean;
+    SelfServiceRecordingAllowed: boolean;
+}
+
+export interface DiagnosticsUploadClientCaptureInput {
+    SessionID?: string;
+    CreateSelfServiceSession?: boolean;
+    Reason?: string;
+    ScrubLiterals?: boolean;
+    Environment?: Record<string, unknown>;
+    Repro?: Record<string, unknown>;
+    ClientLogs?: Array<Record<string, unknown>>;
+    ClientWaterfall?: Array<Record<string, unknown>>;
+    ClientTelemetry?: Array<Record<string, unknown>>;
+}
+
+export interface DiagnosticsUploadClientCaptureOutput {
+    SessionID: string;
+    ChunksWritten: number;
+    TotalBytesWritten: number;
+}
+
+export interface DiagnosticsBuildBundleInput {
+    SessionID?: string;
+    Name?: string;
+    Description?: string;
+    ScrubLiterals?: boolean;
+    ClientBundleData?: Record<string, unknown>;
+}
+
+export interface DiagnosticsBuildBundleOutput {
+    BundleID: string;
+    Status: 'Ready' | 'Failed';
+    SizeBytes: number;
+    SHA256: string;
+    FindingsCount: number;
+    DownloadToken?: string;
+    DownloadUrl?: string;
+}
+
+export interface DiagnosticsGetBundlePreviewInput {
+    BundleID: string;
+    MintDownloadToken?: boolean;
+}
+
+export interface DiagnosticsGetBundlePreviewOutput {
+    BundleID: string;
+    Name: string;
+    Direction: 'Local' | 'Received';
+    Status: string;
+    SizeBytes: number;
+    SHA256: string | null;
+    ScrubLiterals: boolean;
+    Manifest: Record<string, unknown> | null;
+    ScrubReport: Record<string, unknown> | null;
+    Findings: Array<Record<string, unknown>>;
+    ReadmeText: string;
+    DownloadToken?: string;
+    DownloadUrl?: string;
+}
+
+export interface DiagnosticsSendBundleInput {
+    BundleID: string;
+    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
+    CollectorUrlOverride?: string;
+    ContactInfo?: string;
+    Summary?: string;
+}
+
+export interface DiagnosticsSendBundleOutput {
+    BundleID: string;
+    Status: 'Sent' | 'Failed';
+    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
+    ExternalReferenceID?: string;
+    SentAt?: string;
+    ErrorMessage?: string;
+}

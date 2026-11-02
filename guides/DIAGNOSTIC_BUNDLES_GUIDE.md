@@ -1,0 +1,227 @@
+# Diagnostic Bundles Guide
+
+This guide covers the **MemberJunction Diagnostic Bundles** subsystem end-to-end:
+1. How client and server diagnostic capture works (`Snapshot`, `Record`, and `Watch` modes)
+2. How `.mjdiag` archives are scrubbed, verified, and encrypted (`MJDB` v1 envelope)
+3. How to configure an MJ instance to **submit** diagnostic bundles (or download them locally)
+4. How to set up any MJAPI instance as a **receiving server** (`/diagnostics/intake/v1`), including **MJStorage Quarantine-then-Promote locations**, **Malware Scanning** (AWS GuardDuty, Azure Defender, ClamAV/Webhook, and structural verification), and **Collector Key Custody** (`MJ: Credentials`)
+5. How to inspect, re-scrub, and export bundles with the `mj diag` CLI and the `@Diagnostic Analyst` agent
+
+---
+
+## 1. Architecture Overview
+
+```mermaid
+flowchart LR
+    subgraph Client["Browser (@memberjunction/ng-diagnostics)"]
+        CLog["RegisterLoggerSink + Console"]
+        CSpan["TelemetryManager Spans"]
+        CIDB["MJ_Diagnostics IndexedDB (1s debounce)"]
+    end
+
+    subgraph Server["Customer MJAPI (@memberjunction/diagnostics-server)"]
+        ALS["AsyncLocalStorage Context"]
+        SLog["Logger Sink + Deduplicated Console Tap"]
+        SSql["ISqlObserver (Normalized SQL)"]
+        SApollo["Apollo Span Plugin"]
+        Chunks[("MJ: Diagnostic Session Chunks")]
+        Assembler["Bundle Assembler + Scrubber + Findings"]
+    end
+
+    subgraph Archive[".mjdiag Archive & MJDB Envelope"]
+        Zip["Zero-Dep STORED/DEFLATE ZIP (.mjdiag)"]
+        Env["MJDB v1 (X25519 + HKDF-SHA256 + AES-256-GCM)"]
+    end
+
+    subgraph Receiver["Receiving MJAPI (/diagnostics/intake/v1)"]
+        PreCheck["MJDB Header & KeyID Pre-Check"]
+        QStore[("MJStorage: Quarantine Bucket")]
+        Decrypt["AEAD Decrypt + VerifyBundleArchive"]
+        AV["IDiagnosticMalwareScanner"]
+        VStore[("MJStorage: Verified Bucket")]
+    end
+
+    CLog --> Assembler
+    CSpan --> Assembler
+    CIDB --> Assembler
+    ALS --> SLog & SSql & SApollo
+    SLog & SSql & SApollo --> Chunks --> Assembler
+    Assembler --> Zip --> Env
+    Env --> PreCheck --> QStore --> Decrypt --> AV --> VStore
+```
+
+### Packages
+
+| Package | Layer | Responsibility |
+| --- | --- | --- |
+| [`@memberjunction/diagnostics`](../packages/Diagnostics/Core/README.md) | L0 (Isomorphic, zero external runtime deps) | Ring buffers, `.mjdiag` ZIP reader/writer, `VerifyBundleArchive`, two-stage `DiagnosticScrubber`, X25519/AES-256-GCM/Ed25519 `MJDB` envelope crypto, automated findings engine, Perfetto & OTLP exporters, `BaseDiagnosticContributor`. |
+| [`@memberjunction/diagnostics-server`](../packages/Diagnostics/Server/README.md) | Server (`MJAPI`) | `DiagnosticSessionManager`, `AsyncLocalStorage` request/session context, 3-stage `DiagnosticsServerMiddleware`, `ISqlObserver` hook, chunk persistence, `.mjdiag` assembly, single-use HMAC download tokens, outbound MJC transport, standard `/diagnostics/intake/v1` receiver, malware scanners, Remote Operations, and retention purge job driver. |
+| [`@memberjunction/ng-diagnostics`](../packages/Angular/Generic/diagnostics/README.md) | Angular Generic (`widgets` layer) | `MJDiagnosticsService` (runs listeners inside `NgZone.runOutsideAngular()`), `<mj-diagnostic-recording-banner>`, `<mj-diagnostic-report-problem-dialog>`, and `<mj-diagnostic-bundle-viewer>`. |
+
+---
+
+## 2. Two-Stage Scrubbing Model
+
+Diagnostic logs and telemetry spans rarely contain raw PII, and aggressive regex redaction of emails/phones/UUIDs destroys the exact record IDs and stack traces engineers need to debug issues. MemberJunction therefore uses a **two-stage scrubbing model** in `DiagnosticScrubber`:
+
+1. **Stage 1 — Credential & Secret Scrubber (`standard` tier, always on)**:
+   - Strips high-confidence credentials across all logs, span attributes, GraphQL variables, SQL text, and HAR headers:
+     - `Authorization: Bearer ...` and `Basic ...` headers
+     - JWTs (`eyJ...`)
+     - `x-api-key`, `api_key`, `client_secret`, `password`, `secret`, `token`, `cookie`, `set-cookie` keys
+     - Database connection strings (`Server=...;Password=...;`, `postgres://user:pass@...`, `redis://:pass@...`)
+     - Cloud & AI provider keys (`sk-...`, `AKIA...`, `AIza...`, `ghp_...`, `xoxb-...`)
+     - PEM private keys (`-----BEGIN ... PRIVATE KEY-----`)
+2. **Stage 2 — Literal & Payload Scrubber (`strict` tier, opt-in)**:
+   - Replaces SQL string literals (`'...'`) and numeric literals with `?` via `NormalizeSql`.
+   - Scrubs `RunView` `ExtraFilter` literals and GraphQL variable string values while preserving structural keys, entity names, and UUID primary keys.
+
+### Suppressing Capture in Sensitive Code Paths
+
+Wrap secret-rotation or vault operations in `WithoutDiagnosticCapture` so no SQL events, logs, or spans are recorded for that async tree:
+
+```typescript
+import { WithoutDiagnosticCapture, RunDetached } from '@memberjunction/diagnostics-server';
+
+await WithoutDiagnosticCapture(async () => {
+  await rotateMasterKeys();
+});
+
+// Preserve diagnostic session correlation across detached fire-and-forget callbacks:
+RunDetached(() => {
+  void backgroundSync();
+});
+```
+
+---
+
+## 3. Submission Side: Capturing, Downloading & Sending Bundles
+
+### Capture Modes
+
+- **Snapshot**: Packages the current client and server ring buffers immediately without starting a persistent session.
+- **Record**: Starts a live session (`MJ: Diagnostic Sessions`). The browser attaches `x-mj-diag-session: <sessionId>` on GraphQL requests (`GraphQLDataProvider.Instance.SetActiveDiagnosticSessionId(sessionId)`) and flushes client buffers to the `MJ_Diagnostics` IndexedDB database every 1 second (preserved across `ResetApplication()`).
+- **Watch**: An administrator starts a server-side session targeting a specific `TargetUserID` within the same `CompanyID` tenant. Stage 2 post-auth middleware automatically attaches matching requests to the session even when the browser does not send `x-mj-diag-session`.
+
+### Remote Operations
+
+All five operations are metadata-registered under the `Diagnostics` category and enforce `Diagnostics.*` authorizations + `diagnostics:*` API scopes:
+
+- `StartDiagnosticSession` (`Diagnostics.Record` or `Diagnostics.WatchOtherUsers`)
+- `StopDiagnosticSession`
+- `CreateDiagnosticBundle` (`Diagnostics.Export`)
+- `SendDiagnosticBundleToMJC` (`Diagnostics.SendToMJC`)
+- `IssueDiagnosticBundleDownloadUrl` (`Diagnostics.Export` — mints a 60-second, single-use, user-bound HMAC-SHA256 token for `GET /diagnostics/bundles/:bundleId/download?token=...`)
+
+### Submission Instance Configuration (`MJ: Instance Configurations`)
+
+| Configuration Key | Default | Description |
+| --- | --- | --- |
+| `Diagnostics.Enabled` | `true` | Master switch for diagnostic capture and bundle creation. |
+| `Diagnostics.DefaultScrubTier` | `'standard'` | Default scrub tier (`'standard'` or `'strict'`). |
+| `Diagnostics.MaxSessionDurationSeconds` | `900` | Maximum duration (15 min) for an active `Record` or `Watch` session. |
+| `Diagnostics.MaxSessionByteCeiling` | `52428800` | Auto-stops a session when uncompressed chunks exceed 50 MB. |
+| `Diagnostics.RetentionDays` | `14` | Days before `DiagnosticRetentionScheduledJobDriver` purges bundles and sessions. |
+| `Diagnostics.StorageDriverID` | `''` | Optional `MJ: File Storage Accounts` ID for storing generated `.mjdiag` bundles on the customer instance. |
+| `Diagnostics.MJC.CollectorEndpoint` | `'https://diagnostics.memberjunction.com/diagnostics/intake/v1'` | Target MJAPI intake URL when sending bundles to support. |
+| `Diagnostics.MJC.PinnedRootVerifyKey` | `''` | Base64 SPKI Ed25519 public key used to verify the collector's signed key manifest. |
+
+---
+
+## 4. Setting Up a Receiving MJAPI Server (`/diagnostics/intake/v1`)
+
+Any MemberJunction server (`MJAPI`) can act as a secure diagnostic bundle receiver — whether for **MemberJunction Central (MJC)** or an enterprise's own internal support hub.
+
+### Step 1: Generate Collector Keys & Store in `MJ: Credentials`
+
+Generate an X25519 encryption keypair (and optional Ed25519 signing keypair) using the CLI:
+
+```bash
+npx mj diag keygen --key-id mjc-intake-2026-01 --signing
+```
+
+1. Store the **X25519 Private Key (PKCS#8 base64)** in `MJ: Credentials` (encrypted at rest via `@memberjunction/encryption`).
+2. Record the `MJ: Credentials` row ID in the `Diagnostics.Intake.KeyPairCredentialID` instance configuration setting.
+3. Publish the **X25519 Public Key (SPKI base64)** and `keyId` so submitting instances can encrypt bundles to your collector via `EncryptBundleForCollector`.
+
+### Step 2: Set Up `MJStorage` Locations (Quarantine-then-Promote)
+
+To ensure unverified or infected bytes never mingle with trusted support artifacts, configure **two separate storage locations** (`MJ: File Storage Accounts`):
+
+1. **Quarantine Storage Account** (`Diagnostics.Intake.QuarantineStorageDriverID`):
+   - Dedicated S3 bucket, Azure Blob container, or GCS bucket with **no public read access**, **no execution permissions**, and a **24-hour object lifecycle expiration rule**.
+   - Incoming encrypted uploads are staged at:
+     ```text
+     quarantine/<uploadId>/<bundleId>.mjdiag.enc
+     ```
+2. **Verified Storage Account** (`Diagnostics.Intake.VerifiedStorageDriverID`):
+   - Long-term support bucket accessible to support engineers and the `@Diagnostic Analyst` agent.
+   - Only after a bundle passes **all four verification gates** (MJDB header pre-check → AEAD AES-256-GCM decryption → `VerifyBundleArchive` ZIP/manifest verification → Malware Scan verdict `Clean`) are the decrypted `.mjdiag` bytes promoted to:
+     ```text
+     verified/<YYYY-MM-DD>/<bundleId>.mjdiag
+     ```
+   - The quarantine object is immediately deleted upon promotion or rejection.
+
+### Step 3: Configure Malware Scanning (`IDiagnosticMalwareScanner`)
+
+Configure `Diagnostics.Intake.MalwareScanProvider` in `MJ: Instance Configurations` to match your cloud infrastructure:
+
+#### Option A: Cloud-Native Object Tagging (`CloudObjectTag`) — Recommended for AWS / Azure / GCP
+When the Quarantine bucket is backed by **AWS S3 with GuardDuty Malware Protection**, **Azure Blob Storage with Microsoft Defender for Storage**, or **GCP Cloud Storage**, the cloud provider automatically scans every object written to the quarantine bucket and writes the verdict to the object's tags/metadata.
+- `CloudObjectTagMalwareScanner` polls the quarantine object's tags until a verdict appears:
+  - **AWS GuardDuty**: `GuardDutyMalwareScanStatus = 'NO_THREATS_FOUND'` → `Clean`; `'THREATS_FOUND'` → `Infected` (quarantine purged immediately).
+  - **Azure Defender**: `Malware Scanning scan result = 'No threats found'` → `Clean`; `'Malicious'` → `Infected`.
+  - **Custom Tag**: `mj-malware-scan-status = 'clean' | 'infected'`.
+
+#### Option B: ClamAV / HTTP Webhook (`ClamAVWebhook`)
+For self-hosted, Docker, or Kubernetes deployments running a ClamAV REST sidecar (e.g., `clamav-rest` or an internal scanning microservice):
+- Set `Diagnostics.Intake.MalwareScanProvider = 'ClamAVWebhook'`.
+- `ClamAvWebhookMalwareScanner` streams the archive bytes via `POST` (`application/octet-stream`) to your scanner endpoint and requires `{ "clean": true }` before promoting the bundle.
+
+#### Option C: Cryptographic + Structural Verification (`None` / `StructuralOnlyMalwareScanner`)
+Even when no external antivirus daemon is configured, the intake pipeline **always** enforces:
+1. **`MJDB` v1 Magic Header & Key ID Pre-Check** before writing to quarantine (`InspectEncryptedBundleEnvelope`) — rejects random junk uploads immediately at the HTTP edge.
+2. **X25519 + HKDF-SHA256 + AES-256-GCM AEAD Decryption** with AAD binding (`bundleId`, `manifestSha256`, `ticketNumber`, `keyId`) — proves the payload was encrypted specifically for this collector and was not tampered with in transit.
+3. **`VerifyBundleArchive` Structural Verification**:
+   - Rejects non-ZIP files, path-traversal entries (`../` or leading `/`), unexpected file extensions, compression-ratio zip bombs (`> 100:1`), and oversized archives (`> 100 MB` uncompressed).
+   - Verifies that every entry in the archive is on the `.mjdiag` allow-list (`manifest.json`, `environment.json`, `findings.json`, `traces/*.json`, `logs/*.jsonl`, `sql/*.jsonl`, `network/*.json`, `custom/*.json`), parses as valid JSON/JSONL, and matches the SHA-256 digest recorded in `manifest.json`.
+
+### Step 4: Intake Configuration Reference (`MJ: Instance Configurations`)
+
+| Configuration Key | Default | Description |
+| --- | --- | --- |
+| `Diagnostics.Intake.Enabled` | `false` | Enables `/diagnostics/intake/v1/*` routes on this MJAPI instance. |
+| `Diagnostics.Intake.QuarantineStorageDriverID` | `''` | `MJ: File Storage Accounts` ID for staging unverified encrypted uploads. |
+| `Diagnostics.Intake.VerifiedStorageDriverID` | `''` | `MJ: File Storage Accounts` ID for promoted, verified `.mjdiag` bundles. |
+| `Diagnostics.Intake.MalwareScanProvider` | `'None'` | `'CloudObjectTag'`, `'ClamAVWebhook'`, or `'None'` (`StructuralOnly`). |
+| `Diagnostics.Intake.KeyPairCredentialID` | `''` | `MJ: Credentials` ID holding the collector's X25519 private key. |
+| `Diagnostics.Intake.RequireSignature` | `false` | Require a valid Ed25519 sender signature in the `MJDB` envelope header. |
+| `Diagnostics.Intake.RequireTicketNumber` | `true` | Require a non-empty support ticket number in `POST /initiate` and AAD. |
+| `Diagnostics.Intake.MaxBundleBytes` | `104857600` | Maximum encrypted upload size in bytes (default 100 MB). |
+| `Diagnostics.Intake.PostReceiveActionID` | `''` | Optional `MJ: Actions` ID triggered automatically after a bundle is promoted to Verified storage (e.g., to run `@Diagnostic Analyst` and post findings to the support ticket). |
+
+---
+
+## 5. CLI Reference (`mj diag`)
+
+```bash
+# 1. Verify and inspect a bundle (plain .mjdiag or encrypted MJDB envelope)
+npx mj diag inspect ./bundle.mjdiag
+npx mj diag inspect ./bundle.mjdiag.enc --private-key <base64-pkcs8> --json
+
+# 2. List slow spans and SQL queries (>= 250ms)
+npx mj diag slow ./bundle.mjdiag --threshold 250
+
+# 3. View chronological merged timeline of client spans, server spans, and SQL queries
+npx mj diag timeline ./bundle.mjdiag --limit 100
+
+# 4. Re-scrub an existing bundle at strict tier before sharing externally
+npx mj diag scrub ./bundle.mjdiag --tier strict -o ./bundle.strict.mjdiag
+
+# 5. Export traces to Perfetto (https://ui.perfetto.dev) or OpenTelemetry OTLP JSON
+npx mj diag export ./bundle.mjdiag --perfetto -o ./trace.perfetto.json
+npx mj diag export ./bundle.mjdiag --otlp -o ./trace.otlp.json
+
+# 6. Generate collector X25519 + Ed25519 keypairs for an intake server
+npx mj diag keygen --key-id mjc-intake-2026-01 --signing
+```

@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "Diagnostics: Run Sessions",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to start and stop diagnostic recording sessions, build local .mjdiag bundles, preview bundle findings, and download bundles."
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-202000000001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics: Send Externally",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Diagnostics: Run Sessions",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to transmit encrypted diagnostic bundles externally to MemberJunction Central (MJC) or a configured CustomerCollector when external sharing is enabled."
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-202000000002"
+    }
+  }
+]

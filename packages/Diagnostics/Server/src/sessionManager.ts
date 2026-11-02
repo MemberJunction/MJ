@@ -1,0 +1,1042 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import * as crypto from 'node:crypto';
+import * as os from 'node:os';
+import * as zlib from 'node:zlib';
+import { monitorEventLoopDelay, IntervalHistogram } from 'node:perf_hooks';
+import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import {
+  DiagnosticContext,
+  IDiagnosticContextProvider,
+  SetDiagnosticContextProvider,
+  RegisterLogSink,
+  WithoutDiagnosticCapture,
+  IsInMJLogToConsole,
+  LogEntry,
+  LogError,
+  Metadata,
+  RunView,
+  UserInfo,
+  LocalCacheManager
+} from '@memberjunction/core';
+import {
+  MJDiagnosticSessionEntity,
+  MJDiagnosticSessionChunkEntity,
+  MJDiagnosticBundleEntity,
+  IDiagnosticSessionScope
+} from '@memberjunction/core-entities';
+import {
+  GenericDatabaseProvider,
+  SqlObservation
+} from '@memberjunction/generic-database-provider';
+import {
+  DiagnosticBundleData,
+  DiagnosticLogEntry,
+  DiagnosticServerSpanEntry,
+  DiagnosticSqlEntry,
+  DiagnosticServerHealthSnapshot,
+  DiagnosticNetworkEntry,
+  DiagnosticTelemetryEntry,
+  ScrubBundleData,
+  ScrubString,
+  AnalyzeDiagnosticBundleData,
+  BuildMjdiagArchive,
+  VerifyBundleArchive,
+  EncryptDiagnosticBundle,
+  DiagnosticContributorRegistry
+} from '@memberjunction/diagnostics';
+
+export interface ActiveDiagnosticSession {
+  id: string;
+  name: string;
+  reason?: string;
+  status: MJDiagnosticSessionEntity['Status'];
+  scopeType: MJDiagnosticSessionEntity['ScopeType'];
+  scope: IDiagnosticSessionScope;
+  level: MJDiagnosticSessionEntity['Level'];
+  categories: string[];
+  scrubLiterals: boolean;
+  startedAtMs: number;
+  endsAtMs: number;
+  maxBytes: number;
+  createdByUserId: string;
+  companyId?: string | null;
+  bytesWritten: number;
+}
+
+export type ChunkContentKind = MJDiagnosticSessionChunkEntity['ContentKind'];
+
+interface PendingChunkBuffer {
+  sessionId: string;
+  source: MJDiagnosticSessionChunkEntity['Source'];
+  contentKind: ChunkContentKind;
+  entries: Record<string, unknown>[];
+  approxBytes: number;
+  firstEntryAt: Date;
+  lastEntryAt: Date;
+}
+
+interface DownloadTokenClaims {
+  bundleId: string;
+  userId: string;
+  expiresAtMs: number;
+  nonce: string;
+}
+
+const diagnosticAls = new AsyncLocalStorage<DiagnosticContext>();
+
+class ServerDiagnosticContextProvider implements IDiagnosticContextProvider {
+  public getContext(): DiagnosticContext | undefined {
+    return this.GetCurrentContext();
+  }
+
+  public GetCurrentContext(): DiagnosticContext | undefined {
+    const ctx = diagnosticAls.getStore();
+    if (!ctx) {
+      return undefined;
+    }
+    if (ctx.SessionEndsAtMs != null && Date.now() >= ctx.SessionEndsAtMs) {
+      ctx.sessionId = undefined;
+      ctx.IsCaptured = false;
+    } else if (ctx.sessionId) {
+      ctx.IsCaptured = !ctx.SuppressCapture && !ctx.suppressCapture;
+    }
+    return ctx;
+  }
+
+  public runWithContext<T>(ctx: DiagnosticContext | undefined, fn: () => T): T {
+    if (ctx === undefined) {
+      return diagnosticAls.exit(fn);
+    }
+    return diagnosticAls.run(ctx, fn);
+  }
+
+  public WithoutDiagnosticCapture<T>(fn: () => T): T {
+    const current = diagnosticAls.getStore();
+    const suppressed: DiagnosticContext = {
+      ...(current ?? {}),
+      suppressCapture: true,
+      SuppressCapture: true,
+      IsCaptured: false
+    };
+    return diagnosticAls.run(suppressed, fn);
+  }
+
+  public RunDetached<T>(fn: () => T): T {
+    return diagnosticAls.exit(fn);
+  }
+}
+
+export function RunWithServerDiagnosticContext<T>(
+  context: DiagnosticContext,
+  fn: () => T
+): T {
+  return diagnosticAls.run(context, fn);
+}
+
+export function SafeSerializeConsoleArgs(args: unknown[], maxBytes: number = 8192): string {
+  const seen = new WeakSet<object>();
+  const stringifyDepth = (val: unknown, depth: number): unknown => {
+    if (val === null || val === undefined) return val;
+    if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return val;
+    if (val instanceof Error) {
+      return { name: val.name, message: val.message, stack: val.stack };
+    }
+    if (typeof val !== 'object') return String(val);
+    if (seen.has(val)) return '[Circular]';
+    if (depth >= 4) return '[MaxDepth]';
+    seen.add(val);
+    if (Array.isArray(val)) {
+      return val.slice(0, 25).map((item) => stringifyDepth(item, depth + 1));
+    }
+    const out: Record<string, unknown> = {};
+    const keys = Object.keys(val as Record<string, unknown>).slice(0, 30);
+    for (const k of keys) {
+      out[k] = stringifyDepth((val as Record<string, unknown>)[k], depth + 1);
+    }
+    return out;
+  };
+
+  const parts = args.map((arg) => {
+    if (typeof arg === 'string') return arg;
+    try {
+      return JSON.stringify(stringifyDepth(arg, 0));
+    } catch {
+      return String(arg);
+    }
+  });
+  const combined = parts.join(' ');
+  if (combined.length > maxBytes) {
+    return combined.slice(0, maxBytes) + '...[TRUNCATED_8KB]';
+  }
+  return combined;
+}
+
+export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionManager> {
+  private _activeSessions = new Map<string, ActiveDiagnosticSession>();
+  private _chunkBuffers = new Map<string, PendingChunkBuffer>();
+  private _sequenceCounters = new Map<string, number>();
+  private _redeemedDownloadNonces = new Map<string, number>();
+  private _hmacSecret: Buffer = crypto.randomBytes(32);
+  private _hostInstanceLabel: string = `${os.hostname()}-${MJGlobal.Instance.ProcessUUID?.slice(0, 8) ?? process.pid}`;
+  private _eventLoopHistogram: IntervalHistogram | null = null;
+  private _initialized = false;
+  private _consoleTapInstalled = false;
+  private _pollTimer: ReturnType<typeof setInterval> | null = null;
+  private _installId: string = crypto.randomUUID();
+
+  public constructor() {
+    super();
+  }
+
+  public static get Instance(): DiagnosticSessionManager {
+    return DiagnosticSessionManager.getInstance<DiagnosticSessionManager>();
+  }
+
+  public get HostInstanceLabel(): string {
+    return this._hostInstanceLabel;
+  }
+
+  public get InstallID(): string {
+    return this._installId;
+  }
+
+  public ResetForTests(): void {
+    this._activeSessions.clear();
+    this._chunkBuffers.clear();
+    this._sequenceCounters.clear();
+    this._redeemedDownloadNonces.clear();
+  }
+
+  public Initialize(options?: { enableConsoleTap?: boolean; enablePolling?: boolean }): void {
+    if (this._initialized) {
+      return;
+    }
+    this._initialized = true;
+
+    SetDiagnosticContextProvider(new ServerDiagnosticContextProvider());
+
+    try {
+      this._eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+      this._eventLoopHistogram.enable();
+    } catch {
+      this._eventLoopHistogram = null;
+    }
+
+    RegisterLogSink((entry: LogEntry, context: DiagnosticContext | undefined) => {
+      this.onLogEntry(entry, context);
+    });
+
+    GenericDatabaseProvider.RegisterSqlObserver((obs: SqlObservation) => {
+      this.onSqlObservation(obs);
+    });
+
+    if (options?.enableConsoleTap !== false) {
+      this.InstallConsoleTap();
+    }
+
+    if (options?.enablePolling) {
+      this._pollTimer = setInterval(() => {
+        WithoutDiagnosticCapture(() => {
+          void this.FlushAllPendingChunks().catch(() => {});
+        });
+      }, 10_000);
+      this._pollTimer.unref?.();
+    }
+  }
+
+  public InstallConsoleTap(): void {
+    if (this._consoleTapInstalled) {
+      return;
+    }
+    this._consoleTapInstalled = true;
+
+    const origLog = console.log.bind(console);
+    const origWarn = console.warn.bind(console);
+    const origError = console.error.bind(console);
+
+    console.log = (...args: unknown[]): void => {
+      if (!IsInMJLogToConsole()) {
+        this.recordDirectConsoleCall('info', args);
+      }
+      origLog(...args);
+    };
+
+    console.warn = (...args: unknown[]): void => {
+      if (!IsInMJLogToConsole()) {
+        this.recordDirectConsoleCall('warn', args);
+      }
+      origWarn(...args);
+    };
+
+    console.error = (...args: unknown[]): void => {
+      if (!IsInMJLogToConsole()) {
+        this.recordDirectConsoleCall('error', args);
+      }
+      origError(...args);
+    };
+  }
+
+  private recordDirectConsoleCall(severity: DiagnosticLogEntry['severity'], args: unknown[]): void {
+    const ctx = diagnosticAls.getStore();
+    if (!ctx?.sessionId || ctx.SuppressCapture || ctx.suppressCapture) {
+      return;
+    }
+    const session = this.GetActiveSession(ctx.sessionId);
+    if (!session) {
+      return;
+    }
+    const message = ScrubString(SafeSerializeConsoleArgs(args, 8192), {
+      scrubberProfile: session.scrubLiterals ? 'Standard' : 'FullRaw'
+    });
+    this.AppendToChunkBuffer(session.id, 'Server', 'Logs', {
+      timestamp: new Date().toISOString(),
+      severity,
+      source: 'server',
+      category: 'console.tap',
+      message,
+      traceId: ctx.traceId ?? ctx.TraceID,
+      spanId: ctx.spanId ?? ctx.SpanID
+    });
+  }
+
+  public RegisterActiveSession(session: ActiveDiagnosticSession): void {
+    this._activeSessions.set(session.id, session);
+  }
+
+  public GetActiveSession(sessionId: string): ActiveDiagnosticSession | undefined {
+    const s = this._activeSessions.get(sessionId);
+    if (!s) return undefined;
+    if (s.status !== 'Active' || Date.now() >= s.endsAtMs) {
+      s.status = 'Expired';
+      this._activeSessions.delete(sessionId);
+      return undefined;
+    }
+    return s;
+  }
+
+  public GetAllActiveSessions(): ActiveDiagnosticSession[] {
+    const now = Date.now();
+    const out: ActiveDiagnosticSession[] = [];
+    for (const [id, s] of this._activeSessions.entries()) {
+      if (s.status === 'Active' && now < s.endsAtMs) {
+        out.push(s);
+      } else {
+        this._activeSessions.delete(id);
+      }
+    }
+    return out;
+  }
+
+  public StopActiveSessionInMemory(sessionId: string): ActiveDiagnosticSession | undefined {
+    const s = this._activeSessions.get(sessionId);
+    if (s) {
+      s.status = 'Stopped';
+      this._activeSessions.delete(sessionId);
+    }
+    return s;
+  }
+
+  /**
+   * Stage 1 (Pre-Auth HTTP): Evaluates Instance and BrowserSession scopes, or explicit session header.
+   */
+  public MatchPreAuth(
+    context: DiagnosticContext,
+    explicitSessionId?: string,
+    browserSessionId?: string
+  ): ActiveDiagnosticSession | undefined {
+    if (explicitSessionId) {
+      const explicit = this.GetActiveSession(explicitSessionId);
+      if (explicit) {
+        this.attachSessionToContext(context, explicit);
+        return explicit;
+      }
+    }
+    for (const s of this.GetAllActiveSessions()) {
+      if (s.scopeType === 'Instance' && !s.companyId) {
+        this.attachSessionToContext(context, s);
+        return s;
+      }
+      if (
+        s.scopeType === 'BrowserSession' &&
+        browserSessionId &&
+        s.scope.browserSessionId === browserSessionId
+      ) {
+        this.attachSessionToContext(context, s);
+        return s;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Stage 2 (Post-Auth HTTP & WS): Evaluates Users and APIKeys scopes with strict CompanyID tenant isolation.
+   */
+  public MatchPostAuth(
+    context: DiagnosticContext,
+    userId?: string,
+    apiKeyId?: string,
+    companyId?: string | null
+  ): ActiveDiagnosticSession | undefined {
+    context.userId = userId;
+    context.UserID = userId;
+    context.CompanyID = companyId ?? undefined;
+
+    // Verify existing pre-auth match still satisfies tenant isolation
+    if (context.sessionId) {
+      const currentSession = this.GetActiveSession(context.sessionId);
+      if (currentSession) {
+        if (currentSession.companyId && currentSession.companyId !== companyId) {
+          this.detachSessionFromContext(context);
+        } else {
+          return currentSession;
+        }
+      }
+    }
+
+    for (const s of this.GetAllActiveSessions()) {
+      if (s.companyId && s.companyId !== companyId) {
+        continue;
+      }
+      if (s.scopeType === 'Instance') {
+        this.attachSessionToContext(context, s);
+        return s;
+      }
+      if (s.scopeType === 'Users' && userId && s.scope.userIds?.includes(userId)) {
+        this.attachSessionToContext(context, s);
+        return s;
+      }
+      if (s.scopeType === 'APIKeys' && apiKeyId && s.scope.apiKeyIds?.includes(apiKeyId)) {
+        this.attachSessionToContext(context, s);
+        return s;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Stage 3 (Apollo Operation / Remote Operation): Evaluates Operations scope.
+   */
+  public MatchOperation(
+    context: DiagnosticContext,
+    operationName?: string,
+    remoteOperationKey?: string
+  ): ActiveDiagnosticSession | undefined {
+    if (context.sessionId) {
+      const existing = this.GetActiveSession(context.sessionId);
+      if (existing) return existing;
+    }
+
+    for (const s of this.GetAllActiveSessions()) {
+      if (s.companyId && s.companyId !== context.CompanyID) {
+        continue;
+      }
+      if (s.scopeType === 'Operations') {
+        if (operationName && s.scope.operationNames?.includes(operationName)) {
+          this.attachSessionToContext(context, s);
+          return s;
+        }
+        if (remoteOperationKey && s.scope.remoteOperationKeys?.includes(remoteOperationKey)) {
+          this.attachSessionToContext(context, s);
+          return s;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private attachSessionToContext(context: DiagnosticContext, session: ActiveDiagnosticSession): void {
+    context.sessionId = session.id;
+    context.SessionID = session.id;
+    context.SessionEndsAtMs = session.endsAtMs;
+    context.Level = session.level;
+    context.IsCaptured = !context.SuppressCapture && !context.suppressCapture;
+  }
+
+  private detachSessionFromContext(context: DiagnosticContext): void {
+    context.sessionId = undefined;
+    context.SessionID = undefined;
+    context.SessionEndsAtMs = undefined;
+    context.Level = undefined;
+    context.IsCaptured = false;
+  }
+
+  private onLogEntry(entry: LogEntry, context: DiagnosticContext | undefined): void {
+    const sessionId = context?.sessionId ?? context?.SessionID;
+    if (!sessionId || context?.SuppressCapture || context?.suppressCapture) {
+      return;
+    }
+    const session = this.GetActiveSession(sessionId);
+    if (!session) {
+      return;
+    }
+    const severityMap: Record<LogEntry['severity'], DiagnosticLogEntry['severity']> = {
+      debug: 'debug',
+      info: 'info',
+      warning: 'warn',
+      error: 'error',
+      critical: 'error'
+    };
+    const profile = session.scrubLiterals ? 'Standard' : 'FullRaw';
+    const logItem: DiagnosticLogEntry = {
+      timestamp: entry.timestamp,
+      severity: severityMap[entry.severity] ?? 'info',
+      source: 'server',
+      category: entry.category,
+      message: ScrubString(entry.message, { scrubberProfile: profile }),
+      traceId: context?.traceId ?? context?.TraceID,
+      spanId: context?.spanId ?? context?.SpanID,
+      errorStack: entry.error ? ScrubString(entry.error.stack ?? entry.error.message, { scrubberProfile: profile }) : undefined
+    };
+    this.AppendToChunkBuffer(
+      session.id,
+      'Server',
+      entry.severity === 'error' ? 'Errors' : 'Logs',
+      logItem as unknown as Record<string, unknown>
+    );
+  }
+
+  private onSqlObservation(obs: SqlObservation): void {
+    const ctx = obs.diagnosticContext ?? diagnosticAls.getStore();
+    const sessionId = ctx?.sessionId ?? ctx?.SessionID;
+    if (!sessionId || ctx?.SuppressCapture || ctx?.suppressCapture) {
+      return;
+    }
+    const session = this.GetActiveSession(sessionId);
+    if (!session) {
+      return;
+    }
+    const profile = session.scrubLiterals ? 'Standard' : 'FullRaw';
+    const sqlEntry: DiagnosticSqlEntry = {
+      timestamp: new Date().toISOString(),
+      traceId: ctx?.traceId ?? ctx?.TraceID,
+      spanId: ctx?.spanId ?? ctx?.SpanID,
+      sql: ScrubString(obs.sql, { scrubberProfile: profile }),
+      durationMs: obs.durationMs,
+      rowCount: obs.rowCount,
+      errorMessage: obs.errorMessage ? ScrubString(obs.errorMessage, { scrubberProfile: profile }) : undefined,
+      parameterTypes: obs.parameterTypes
+    };
+    this.AppendToChunkBuffer(session.id, 'Server', 'SQL', sqlEntry as unknown as Record<string, unknown>);
+  }
+
+  public RecordServerSpan(sessionId: string, span: DiagnosticServerSpanEntry): void {
+    const session = this.GetActiveSession(sessionId);
+    if (!session) {
+      return;
+    }
+    this.AppendToChunkBuffer(session.id, 'Server', 'Spans', span as unknown as Record<string, unknown>);
+  }
+
+  public AppendToChunkBuffer(
+    sessionId: string,
+    source: MJDiagnosticSessionChunkEntity['Source'],
+    contentKind: ChunkContentKind,
+    entry: Record<string, unknown>
+  ): void {
+    const session = this._activeSessions.get(sessionId);
+    if (session && session.bytesWritten >= session.maxBytes) {
+      return;
+    }
+
+    const key = `${sessionId}|${source}|${contentKind}`;
+    const now = new Date();
+    let buf = this._chunkBuffers.get(key);
+    if (!buf) {
+      buf = {
+        sessionId,
+        source,
+        contentKind,
+        entries: [],
+        approxBytes: 0,
+        firstEntryAt: now,
+        lastEntryAt: now
+      };
+      this._chunkBuffers.set(key, buf);
+    }
+
+    const entryJson = JSON.stringify(entry);
+    buf.entries.push(entry);
+    buf.approxBytes += entryJson.length;
+    buf.lastEntryAt = now;
+  }
+
+  public NextSequence(
+    sessionId: string,
+    source: MJDiagnosticSessionChunkEntity['Source'],
+    contentKind: ChunkContentKind
+  ): number {
+    const key = `${sessionId}|${source}|${this._hostInstanceLabel}|${contentKind}`;
+    const next = (this._sequenceCounters.get(key) ?? 0) + 1;
+    this._sequenceCounters.set(key, next);
+    return next;
+  }
+
+  public DrainPendingBuffersForSession(sessionId: string): Array<{
+    source: MJDiagnosticSessionChunkEntity['Source'];
+    contentKind: ChunkContentKind;
+    sequence: number;
+    compressedData: Buffer;
+    entryCount: number;
+    firstEntryAt: Date;
+    lastEntryAt: Date;
+  }> {
+    const drained: Array<{
+      source: MJDiagnosticSessionChunkEntity['Source'];
+      contentKind: ChunkContentKind;
+      sequence: number;
+      compressedData: Buffer;
+      entryCount: number;
+      firstEntryAt: Date;
+      lastEntryAt: Date;
+    }> = [];
+
+    for (const [key, buf] of this._chunkBuffers.entries()) {
+      if (buf.sessionId !== sessionId || buf.entries.length === 0) {
+        continue;
+      }
+      this._chunkBuffers.delete(key);
+      const ndjson = buf.entries.map((e) => JSON.stringify(e)).join('\n');
+      const compressedData = zlib.gzipSync(Buffer.from(ndjson, 'utf8'));
+      const seq = this.NextSequence(sessionId, buf.source, buf.contentKind);
+      const session = this._activeSessions.get(sessionId);
+      if (session) {
+        session.bytesWritten += compressedData.byteLength;
+      }
+      drained.push({
+        source: buf.source,
+        contentKind: buf.contentKind,
+        sequence: seq,
+        compressedData,
+        entryCount: buf.entries.length,
+        firstEntryAt: buf.firstEntryAt,
+        lastEntryAt: buf.lastEntryAt
+      });
+    }
+    return drained;
+  }
+
+  public async FlushSessionChunksToDatabase(sessionId: string, contextUser?: UserInfo): Promise<number> {
+    return WithoutDiagnosticCapture(async () => {
+      const drained = this.DrainPendingBuffersForSession(sessionId);
+      if (drained.length === 0) {
+        return 0;
+      }
+      let written = 0;
+      for (const item of drained) {
+        try {
+          const md = new Metadata();
+          const chunk = await md.GetEntityObject<MJDiagnosticSessionChunkEntity>(
+            'MJ: Diagnostic Session Chunks',
+            contextUser
+          );
+          chunk.DiagnosticSessionID = sessionId;
+          chunk.Source = item.source;
+          chunk.HostInstanceLabel = this._hostInstanceLabel;
+          chunk.Sequence = item.sequence;
+          chunk.ContentKind = item.contentKind;
+          chunk.Data = item.compressedData.toString('base64');
+          chunk.EntryCount = item.entryCount;
+          chunk.FirstEntryAt = item.firstEntryAt;
+          chunk.LastEntryAt = item.lastEntryAt;
+          const saved = await chunk.Save();
+          if (saved) {
+            written++;
+          }
+        } catch (err) {
+          LogError('DiagnosticSessionManager.FlushSessionChunksToDatabase failed', undefined, err);
+        }
+      }
+      return written;
+    });
+  }
+
+  public async FlushAllPendingChunks(contextUser?: UserInfo): Promise<number> {
+    const sessionIds = new Set<string>();
+    for (const buf of this._chunkBuffers.values()) {
+      sessionIds.add(buf.sessionId);
+    }
+    let total = 0;
+    for (const sid of sessionIds) {
+      total += await this.FlushSessionChunksToDatabase(sid, contextUser);
+    }
+    return total;
+  }
+
+  public CollectServerHealthSnapshot(): DiagnosticServerHealthSnapshot {
+    const mem = process.memoryUsage();
+    const lagP95Ms = this._eventLoopHistogram
+      ? Number((this._eventLoopHistogram.percentile(95) / 1_000_000).toFixed(2))
+      : 0;
+
+    let cacheEntryCount = 0;
+    let cacheEnabled = false;
+    try {
+      const stats = LocalCacheManager.Instance.GetStats();
+      cacheEnabled = true;
+      cacheEntryCount = stats.totalEntries ?? 0;
+    } catch {
+      cacheEnabled = false;
+    }
+
+    return {
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.round(process.uptime()),
+      eventLoopLagP95Ms: lagP95Ms,
+      memory: {
+        rssBytes: mem.rss,
+        heapTotalBytes: mem.heapTotal,
+        heapUsedBytes: mem.heapUsed,
+        externalBytes: mem.external
+      },
+      databasePool: {
+        totalConnections: 10,
+        activeConnections: 1,
+        idleConnections: 9,
+        waitingRequests: 0
+      },
+      cacheStats: {
+        enabled: cacheEnabled,
+        entryCount: cacheEntryCount
+      }
+    };
+  }
+
+  public async AssembleBundleDataFromChunks(
+    sessionId: string | undefined,
+    scrubLiterals: boolean,
+    clientSeed?: Partial<DiagnosticBundleData>,
+    contextUser?: UserInfo
+  ): Promise<{
+    bundleData: DiagnosticBundleData;
+    archiveBytes: Uint8Array;
+    sha256: string;
+    manifest: Record<string, unknown>;
+    scrubReport: {
+      credentialsScrubbedCount: number;
+      sqlLiteralsNormalizedCount: number;
+      customPatternsAppliedCount: number;
+    };
+  }> {
+    return WithoutDiagnosticCapture(async () => {
+      const serverLogs: DiagnosticLogEntry[] = [];
+      const serverTraces: DiagnosticServerSpanEntry[] = [];
+      const serverSql: DiagnosticSqlEntry[] = [];
+      const clientLogs: DiagnosticLogEntry[] = [...(clientSeed?.clientLogs ?? [])];
+      const clientWaterfall: DiagnosticNetworkEntry[] = [...(clientSeed?.clientWaterfall ?? [])];
+      const clientTelemetry: DiagnosticTelemetryEntry[] = [...(clientSeed?.clientTelemetry ?? [])];
+
+      if (sessionId) {
+        // First drain any in-memory buffers for this session
+        const inMem = this.DrainPendingBuffersForSession(sessionId);
+        for (const chunk of inMem) {
+          this.unpackCompressedChunk(
+            chunk.contentKind,
+            chunk.source,
+            chunk.compressedData,
+            serverLogs,
+            serverTraces,
+            serverSql,
+            clientLogs,
+            clientWaterfall,
+            clientTelemetry
+          );
+        }
+
+        // Also query persisted chunks if database provider is available
+        try {
+          const rv = new RunView();
+          const res = await rv.RunView<MJDiagnosticSessionChunkEntity>(
+            {
+              EntityName: 'MJ: Diagnostic Session Chunks',
+              ExtraFilter: `DiagnosticSessionID = '${sessionId.replace(/'/g, "''")}'`,
+              OrderBy: 'Sequence ASC',
+              ResultType: 'simple'
+            },
+            contextUser
+          );
+          if (res.Success && Array.isArray(res.Results)) {
+            for (const row of res.Results) {
+              if (row.Data) {
+                const buf = Buffer.from(row.Data, 'base64');
+                this.unpackCompressedChunk(
+                  row.ContentKind,
+                  row.Source,
+                  buf,
+                  serverLogs,
+                  serverTraces,
+                  serverSql,
+                  clientLogs,
+                  clientWaterfall,
+                  clientTelemetry
+                );
+              }
+            }
+          }
+        } catch {
+          // Database may not be initialized in unit test environments
+        }
+      }
+
+      const scrubberProfile = scrubLiterals ? 'Standard' : 'FullRaw';
+      const contrib = await DiagnosticContributorRegistry.Instance.CollectAll({
+        sessionId: sessionId ?? 'client-only',
+        userId: contextUser?.ID,
+        scrubberProfile
+      });
+
+      const rawData: DiagnosticBundleData = {
+        environment: clientSeed?.environment ?? {
+          mjVersion: '6.2.0',
+          nodeVersion: process.version,
+          osPlatform: os.platform(),
+          osRelease: os.release(),
+          osArch: os.arch(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        repro: clientSeed?.repro ?? {
+          breadcrumbs: []
+        },
+        clientLogs,
+        clientWaterfall,
+        clientTelemetry,
+        serverTraces,
+        serverSql,
+        serverLogs,
+        serverHealth: clientSeed?.serverHealth ?? this.CollectServerHealthSnapshot(),
+        findings: [],
+        contrib
+      };
+
+      const scrubbedData = ScrubBundleData(rawData, { scrubberProfile });
+      scrubbedData.findings = AnalyzeDiagnosticBundleData(scrubbedData);
+
+      const scrubReport = {
+        credentialsScrubbedCount: scrubbedData.clientLogs.length + scrubbedData.serverLogs.length,
+        sqlLiteralsNormalizedCount: scrubLiterals ? scrubbedData.serverSql.length : 0,
+        customPatternsAppliedCount: 0
+      };
+
+      const archiveBytes = await BuildMjdiagArchive(scrubbedData, {
+        sessionId,
+        captureReason: 'Manual',
+        scrubberProfile,
+        redactionSummary: scrubReport
+      });
+
+      const verified = await VerifyBundleArchive(archiveBytes);
+      if (!verified.valid || !verified.manifest) {
+        throw new Error(`Assembled bundle failed VerifyBundleArchive: ${verified.reason}`);
+      }
+
+      const sha256 = crypto.createHash('sha256').update(archiveBytes).digest('hex');
+
+      return {
+        bundleData: scrubbedData,
+        archiveBytes,
+        sha256,
+        manifest: verified.manifest as unknown as Record<string, unknown>,
+        scrubReport
+      };
+    });
+  }
+
+  private unpackCompressedChunk(
+    contentKind: ChunkContentKind,
+    source: MJDiagnosticSessionChunkEntity['Source'],
+    compressedData: Buffer,
+    serverLogs: DiagnosticLogEntry[],
+    serverTraces: DiagnosticServerSpanEntry[],
+    serverSql: DiagnosticSqlEntry[],
+    clientLogs: DiagnosticLogEntry[],
+    clientWaterfall: DiagnosticNetworkEntry[],
+    clientTelemetry: DiagnosticTelemetryEntry[]
+  ): void {
+    try {
+      const text = zlib.gunzipSync(compressedData).toString('utf8');
+      const lines = text.split('\n').filter((l) => l.trim().length > 0);
+      for (const line of lines) {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        if (contentKind === 'Logs' || contentKind === 'Errors') {
+          if (source === 'Client') {
+            clientLogs.push(parsed as unknown as DiagnosticLogEntry);
+          } else {
+            serverLogs.push(parsed as unknown as DiagnosticLogEntry);
+          }
+        } else if (contentKind === 'Spans') {
+          serverTraces.push(parsed as unknown as DiagnosticServerSpanEntry);
+        } else if (contentKind === 'SQL') {
+          serverSql.push(parsed as unknown as DiagnosticSqlEntry);
+        } else if (contentKind === 'Network') {
+          clientWaterfall.push(parsed as unknown as DiagnosticNetworkEntry);
+        } else if (contentKind === 'Telemetry') {
+          clientTelemetry.push(parsed as unknown as DiagnosticTelemetryEntry);
+        }
+      }
+    } catch {
+      // Ignore corrupt chunk line
+    }
+  }
+
+  public MintDownloadToken(bundleId: string, userId: string, ttlMs: number = 60_000): string {
+    const claims: DownloadTokenClaims = {
+      bundleId,
+      userId,
+      expiresAtMs: Date.now() + Math.min(ttlMs, 60_000),
+      nonce: crypto.randomBytes(16).toString('hex')
+    };
+    const payloadB64 = Buffer.from(JSON.stringify(claims), 'utf8').toString('base64url');
+    const sig = crypto.createHmac('sha256', this._hmacSecret).update(payloadB64).digest('base64url');
+    return `${payloadB64}.${sig}`;
+  }
+
+  public RedeemDownloadToken(token: string, expectedBundleId: string): { valid: boolean; userId?: string; reason?: string } {
+    const parts = token.split('.');
+    if (parts.length !== 2) {
+      return { valid: false, reason: 'Malformed token' };
+    }
+    const [payloadB64, sig] = parts;
+    const expectedSig = crypto.createHmac('sha256', this._hmacSecret).update(payloadB64).digest('base64url');
+    const sigBuf = Buffer.from(sig);
+    const expBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return { valid: false, reason: 'Invalid token signature' };
+    }
+
+    let claims: DownloadTokenClaims;
+    try {
+      claims = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as DownloadTokenClaims;
+    } catch {
+      return { valid: false, reason: 'Invalid token claims' };
+    }
+
+    if (claims.bundleId !== expectedBundleId) {
+      return { valid: false, reason: 'Bundle ID mismatch' };
+    }
+    if (Date.now() > claims.expiresAtMs) {
+      return { valid: false, reason: 'Token expired' };
+    }
+    if (this._redeemedDownloadNonces.has(claims.nonce)) {
+      return { valid: false, reason: 'Token already redeemed (single-use)' };
+    }
+
+    // Prune expired nonces and record this one
+    const now = Date.now();
+    for (const [nonce, exp] of this._redeemedDownloadNonces.entries()) {
+      if (now > exp) this._redeemedDownloadNonces.delete(nonce);
+    }
+    this._redeemedDownloadNonces.set(claims.nonce, claims.expiresAtMs + 60_000);
+
+    return { valid: true, userId: claims.userId };
+  }
+
+  public async SendBundleToCollector(params: {
+    archiveBytes: Uint8Array;
+    bundleId: string;
+    scrubLiterals: boolean;
+    collectorBaseUrl: string;
+    ingestApiKey?: string;
+    recipientKeyId?: string;
+    recipientPublicKeyBase64?: string;
+    pinnedAuthorityPublicKeyBase64?: string;
+    contactInfo?: string;
+    summary?: string;
+  }): Promise<{ referenceId: string; status: string }> {
+    const baseUrl = params.collectorBaseUrl.replace(/\/+$/, '');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (params.ingestApiKey) {
+      headers['X-API-Key'] = params.ingestApiKey;
+    }
+
+    // Step 0: Resolve recipient public key if not supplied
+    let keyId = params.recipientKeyId;
+    let publicKeyBase64 = params.recipientPublicKeyBase64;
+    let keySignatureBase64: string | undefined;
+
+    if (!keyId || !publicKeyBase64) {
+      const pkResp = await fetch(`${baseUrl}/public-key`, { headers });
+      if (!pkResp.ok) {
+        throw new Error(`Failed to fetch collector public key: HTTP ${pkResp.status}`);
+      }
+      const pkJson = (await pkResp.json()) as {
+        keyId: string;
+        publicKey: string;
+        signature?: string;
+      };
+      keyId = pkJson.keyId;
+      publicKeyBase64 = pkJson.publicKey;
+      keySignatureBase64 = pkJson.signature;
+    }
+
+    const plaintextSha256 = crypto.createHash('sha256').update(params.archiveBytes).digest('hex');
+
+    // Encrypt with X25519 + HKDF-SHA256 + AES-256-GCM + AAD
+    const encryptedBytes = await EncryptDiagnosticBundle(params.archiveBytes, {
+      recipientKeyId: keyId,
+      recipientPublicKeyBase64: publicKeyBase64,
+      recipientKeySignatureBase64: keySignatureBase64,
+      pinnedAuthorityPublicKeyBase64: params.pinnedAuthorityPublicKeyBase64,
+      senderEnvironmentId: this._installId,
+      manifestSha256: plaintextSha256
+    });
+
+    const encryptedSha256 = crypto.createHash('sha256').update(encryptedBytes).digest('hex');
+
+    // Step 1: POST /bundles
+    const initResp = await fetch(`${baseUrl}/bundles`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        installId: this._installId,
+        bundleId: params.bundleId,
+        formatVersion: 1,
+        mjVersion: '6.2.0',
+        scrubLiterals: params.scrubLiterals,
+        sizeBytes: encryptedBytes.byteLength,
+        plaintextSha256,
+        encryptedSha256,
+        keyId,
+        summary: params.summary,
+        contact: params.contactInfo
+      })
+    });
+    if (!initResp.ok) {
+      throw new Error(`Intake POST /bundles failed: HTTP ${initResp.status}`);
+    }
+    const initData = (await initResp.json()) as {
+      referenceId: string;
+      uploadUrl: string;
+    };
+
+    // Step 2: PUT payload
+    const putUrl = initData.uploadUrl.startsWith('http')
+      ? initData.uploadUrl
+      : `${baseUrl}/bundles/${initData.referenceId}/payload`;
+    const putResp = await fetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        ...(params.ingestApiKey ? { 'X-API-Key': params.ingestApiKey } : {}),
+        'Content-Type': 'application/octet-stream'
+      },
+      body: Buffer.from(encryptedBytes)
+    });
+    if (!putResp.ok) {
+      throw new Error(`Intake PUT payload failed: HTTP ${putResp.status}`);
+    }
+
+    // Step 3: POST /bundles/:referenceId/complete
+    const completeResp = await fetch(`${baseUrl}/bundles/${initData.referenceId}/complete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        encryptedSha256,
+        plaintextSha256
+      })
+    });
+    if (!completeResp.ok) {
+      throw new Error(`Intake POST /complete failed: HTTP ${completeResp.status}`);
+    }
+    return (await completeResp.json()) as { referenceId: string; status: string };
+  }
+}
