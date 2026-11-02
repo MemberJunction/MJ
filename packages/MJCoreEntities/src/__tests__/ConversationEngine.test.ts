@@ -3033,7 +3033,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
             expect(filter).toBe(
-                `EnvironmentID='env-1' AND (UserID='user-1' OR (ProjectID IN ('proj-shared-1') AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')`
+                `EnvironmentID='env-1' AND (UserID='user-1' OR (ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')`
             );
         });
 
@@ -3441,8 +3441,11 @@ describe('ConversationEngine', () => {
             expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": true}' })).toBe(true);
             expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": true, broken' })).toBe(true);
 
-            // The SQL clause the conversation list filters on agrees with the parser on both spellings.
-            // A LIKE '%x%' pattern with no other wildcards is a substring test.
+            // The SQL clause the conversation list and search filter on is pinned to the exact opt-in predicate
+            // and agrees with the parser on both spellings.
+            expect(INHERIT_FOLDER_ACCESS_SQL_CLAUSE).toBe(
+                `(AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%')`
+            );
             const likePatterns = [...INHERIT_FOLDER_ACCESS_SQL_CLAUSE.matchAll(/LIKE '%([^%']+)%'/g)].map((m) => m[1]);
             expect(likePatterns).toHaveLength(2);
             const clauseInherits = (data: string) => likePatterns.some((pattern) => data.includes(pattern));

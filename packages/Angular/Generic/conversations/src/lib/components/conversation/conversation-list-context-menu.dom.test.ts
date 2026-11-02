@@ -682,11 +682,29 @@ describe('ConversationListComponent (DOM) — folder sharing and conversation fo
     const inheritBtn = findItem(f, 'Inherit folder access');
     expect(inheritBtn).toBeTruthy();
     inheritBtn.click();
-    await Promise.resolve();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
     expect(setInheritSpy).toHaveBeenCalledWith('A1', true, currentUser);
   });
 
-  it('badges an inheriting conversation, and its Restrict folder access calls SetConversationFolderInheritance(false)', async () => {
+  it('asks before turning on Inherit folder access in a Shared or Public folder, and leaves it off when you cancel', async () => {
+    const setInheritSpy = vi.fn().mockResolvedValue(true);
+    const { f } = render(undefined, {
+      GetProjectVisibilityTier: () => 'Shared',
+      SetConversationFolderInheritance: setInheritSpy
+    });
+    const confirm = f.debugElement.injector.get(DialogService).confirm as unknown as ReturnType<typeof vi.fn>;
+    confirm.mockResolvedValueOnce(false);
+
+    rightClickOn(f, rowFor(f, 'Work One'));
+    findItem(f, 'Inherit folder access').click();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(String(confirm.mock.calls[0][0].message)).toContain('People with access to "Work" will see this conversation');
+    expect(setInheritSpy).not.toHaveBeenCalled();
+  });
+
+  it('badges an inheriting conversation, and its Restrict folder access calls SetConversationFolderInheritance(false) without asking', async () => {
     const setInheritSpy = vi.fn().mockResolvedValue(true);
     const { f } = render((c) => {
       const engine = (c as unknown as { engine: { Conversations: MJConversationEntity[] } }).engine;
@@ -696,8 +714,10 @@ describe('ConversationListComponent (DOM) — folder sharing and conversation fo
       ];
       (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
     }, {
+      GetProjectVisibilityTier: () => 'Shared',
       SetConversationFolderInheritance: setInheritSpy
     });
+    const confirm = f.debugElement.injector.get(DialogService).confirm as unknown as ReturnType<typeof vi.fn>;
     f.detectChanges();
     expect(query(f, '.inherits-indicator')).not.toBeNull();
 
@@ -705,7 +725,9 @@ describe('ConversationListComponent (DOM) — folder sharing and conversation fo
     const restrictBtn = findItem(f, 'Restrict folder access');
     expect(restrictBtn).toBeTruthy();
     restrictBtn.click();
-    await Promise.resolve();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(confirm).not.toHaveBeenCalled();
     expect(setInheritSpy).toHaveBeenCalledWith('A1', false, currentUser);
   });
 });
+

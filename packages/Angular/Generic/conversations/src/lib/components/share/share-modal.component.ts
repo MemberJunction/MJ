@@ -12,6 +12,7 @@ import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
+import { ConfirmInheritFolderAccess } from '../../utils/folder-move';
 
 interface SharePermission {
   permissionId: string | null;
@@ -293,8 +294,13 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
 
   async OnToggleInheritFolderAccess(inherit: boolean): Promise<void> {
     if (!this.Conversation) return;
+    const engine = ConversationEngine.Instance;
+    if (inherit && !(await ConfirmInheritFolderAccess(this.dialogService, engine, this.Conversation.ProjectID))) {
+      this.InheritFolderAccess = false;
+      this.cdr.detectChanges();
+      return;
+    }
     try {
-      const engine = ConversationEngine.Instance;
       let saved = false;
       if (engine?.SetConversationFolderInheritance && engine.GetConversation(this.Conversation.ID)) {
         saved = await engine.SetConversationFolderInheritance(

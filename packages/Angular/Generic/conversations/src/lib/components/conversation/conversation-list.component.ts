@@ -11,7 +11,7 @@ import {
 } from '@memberjunction/core-entities';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
-import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
+import { ConfirmInheritFolderAccess, ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ProjectFormModalComponent } from '../project/project-form-modal.component';
@@ -2366,6 +2366,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
 
     const nextInherit = !IsInheritingFolderAccess(conversation);
+    if (nextInherit && !(await ConfirmInheritFolderAccess(this.dialogService, this.engine, conversation.ProjectID))) {
+      return;
+    }
     try {
       await this.engine.SetConversationFolderInheritance?.(conversation.ID, nextInherit, this.CurrentUser);
       this.rebuildGroups();

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { MJProjectEntity } from '@memberjunction/core-entities';
-import { ConfirmMoveIntoFolder } from '../lib/utils/folder-move';
+import { ConfirmInheritFolderAccess, ConfirmMoveIntoFolder } from '../lib/utils/folder-move';
 
 /** The question every move path asks before a conversation lands in a folder that shares it. */
 const engine = (tier: 'Private' | 'Shared' | 'Public') => ({
@@ -34,3 +34,26 @@ describe('ConfirmMoveIntoFolder', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 });
+
+describe('ConfirmInheritFolderAccess', () => {
+  it('asks before turning on inheritance in a Shared or Public folder, naming the folder', async () => {
+    for (const tier of ['Shared', 'Public'] as const) {
+      const confirm = vi.fn().mockResolvedValue(false);
+      expect(await ConfirmInheritFolderAccess({ confirm }, engine(tier), 'p1')).toBe(false);
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(confirm.mock.calls[0][0]).toEqual({
+        title: 'Inherit folder access?',
+        message: 'People with access to "Budget" will see this conversation.',
+        okText: 'Inherit',
+      });
+    }
+  });
+
+  it('turns on inheritance in a Private folder, or with no folder, without asking', async () => {
+    const confirm = vi.fn();
+    expect(await ConfirmInheritFolderAccess({ confirm }, engine('Private'), 'p1')).toBe(true);
+    expect(await ConfirmInheritFolderAccess({ confirm }, engine('Public'), null)).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+});
+

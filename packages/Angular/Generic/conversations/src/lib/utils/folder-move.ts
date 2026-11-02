@@ -1,5 +1,5 @@
 import { UUIDsEqual } from '@memberjunction/global';
-import { IsInheritingFolderAccess, type ConversationEngine } from '@memberjunction/core-entities';
+import { IsInheritingFolderAccess, type ConversationEngine, type MJProjectEntity } from '@memberjunction/core-entities';
 import type { ConfirmDialogOptions } from '../services/dialog.service';
 
 /**
@@ -29,3 +29,34 @@ export async function ConfirmMoveIntoFolder(
         okText: 'Move',
     });
 }
+
+/**
+ * Asks before turning on folder inheritance for a conversation in a folder that shares it, and returns whether
+ * the change may go ahead.
+ *
+ * A Shared or Public folder lists an inheriting conversation for everyone the folder reaches. Turning
+ * inheritance on inside a Private folder shares the conversation with no one and needs no question.
+ */
+export async function ConfirmInheritFolderAccess(
+    dialog: { confirm(options: ConfirmDialogOptions): Promise<boolean> },
+    engine: {
+        GetProjectVisibilityTier?: (projectOrId: MJProjectEntity | string) => 'Private' | 'Shared' | 'Public';
+        Projects?: ReadonlyArray<MJProjectEntity>;
+    } | null | undefined,
+    projectId: string | null | undefined,
+): Promise<boolean> {
+    if (!projectId || !engine) {
+        return true;
+    }
+    const tier = engine.GetProjectVisibilityTier?.(projectId) ?? 'Private';
+    if (tier === 'Private') {
+        return true;
+    }
+    const folder = engine.Projects?.find((p) => UUIDsEqual(p.ID, projectId));
+    return dialog.confirm({
+        title: 'Inherit folder access?',
+        message: `People with access to "${folder?.Name ?? 'this folder'}" will see this conversation.`,
+        okText: 'Inherit',
+    });
+}
+
