@@ -44,7 +44,7 @@ This guide ties together the packages that each document one layer:
 2. [The self-managing Python sidecar](#2-the-self-managing-python-sidecar)
 3. [The type contracts (`predictive-studio-core`)](#3-the-type-contracts-memberjunctionpredictive-studio-core)
 4. [The FeatureAssembly executor — the correctness backbone](#4-the-featureassembly-executor--the-correctness-backbone)
-5. [Training — immutable versioned models with honest metrics](#5-training--immutable-versioned-models-with-honest-metrics)
+5. [Training — immutable versioned models judged under an Evaluation Protocol](#5-training--immutable-versioned-models-judged-under-an-evaluation-protocol)
 6. [Scoring — a Record Set Processing work type](#6-scoring--a-record-set-processing-work-type)
 7. [The experiment engine — a generic agentic-search primitive](#7-the-experiment-engine--a-generic-agentic-search-primitive)
 8. [The data model — entities and relationships](#8-the-data-model--entities-and-relationships)
@@ -325,7 +325,7 @@ An automated feature-search agent will relentlessly exploit target leakage (a fi
 
 ---
 
-## 5. Training — immutable versioned models with honest metrics
+## 5. Training — immutable versioned models judged under an Evaluation Protocol
 
 `TrainingEngine` (`Engine/src/training/training-engine.ts`) orchestrates the whole train path:
 

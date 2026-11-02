@@ -18,7 +18,7 @@
 "@memberjunction/server-bootstrap-lite": minor
 ---
 
-Predictive Studio honest training: Prediction Units (immutable versions with outcome window, censoring and task type),
+Predictive Studio training under a declared unit and protocol: Prediction Units (immutable versions with outcome window, censoring and task type),
 as-of feature assembly over dated history with typed columns, fingerprinted Training Snapshots, Evaluation Protocols
 saved before search, a trainer that reports proper scores, baselines and intervals, and a three-outcome gate
 (model, keep-simple-baseline, no-signal). Adds a Local File System storage driver.
@@ -49,14 +49,17 @@ signal), stores that decision with its reason on the run, and renders the trust 
   `buildImprovePrompt` are removed.
 - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests
   (`test:gate-parity`, `test:gate-parity-refpipe`).
-- `@memberjunction/integration-test-suite`: seven Predictive Studio gate checks of the gate decision (how often a
-  planted null publishes, the AUC-interval and minority-class guards, the kept simple baseline, the baselines' intervals,
-  and the incumbent heuristic scored as a named comparator).
+- `@memberjunction/integration-test-suite`: the Predictive Studio gate checks over the planted-truth datasets, for
+  Prediction Units (unit rows and reference keys, censored rows excluded, label versions, task-type refusals, as-of
+  values equal to history, training/scoring parity, value provenance, the snapshot manifest and reproducible retrains)
+  and for training (date-carved, new-entity and rolling-origin holdouts, proper-score ranking per task family,
+  baselines and intervals, calibration, slices, leakage flags, inner-fold selection and optimism, protocols created
+  before their runs, determinism, and the gate decision: how often a planted null publishes, the AUC-interval and
+  minority-class guards, the kept simple baseline, the incumbent heuristic as a named comparator).
 - `@memberjunction/ng-artifacts`: the ML Experiment Results leaderboard shows each candidate's inner-fold mean with its
-  interval and tags the winner's score optimistic; `NormalizedLeaderboardRow` members are PascalCase (`Rank`,
-  `Algorithm`, `FeatureSet`, `Score`, `MetricName`, `Interval`, `Optimistic`, `ModelID`, `IsWinner`, `OptimisticTag`),
-  `LeaderboardEntryInput.cvScore` is removed, and the deprecated `formatImportance` / `formatScore` aliases of
-  `MLExperimentResultsViewerComponent` are removed.
+  interval and tags the winner's score optimistic, from rows built by the new `LeaderboardRows`
+  (`ml-leaderboard-rows.ts`, PascalCase `NormalizedLeaderboardRow` members); the deprecated `formatImportance` /
+  `formatScore` aliases of `MLExperimentResultsViewerComponent` are removed.
 - `@memberjunction/core`: listed for the Predictive Studio prompt and agent metadata corrected on this branch.
 
 Prediction Units and Evaluation Protocols are authored and viewed in Explorer, every existing pipeline migrates to
@@ -103,6 +106,5 @@ version 1 of each, and the training path without them is removed.
   key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
 - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
   pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
-  `UnitFixtures.LatestRun` returns a read-only `LatestTrainingRun` row; `ReadWorldTruth` and the W4 `StatusTimeline`
-  are `UUIDMap`s; `UnitFixtures.LoadUnitSpec` is removed.
+  `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
 - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
