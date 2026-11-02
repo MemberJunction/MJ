@@ -374,12 +374,44 @@ describe('PullService.mergeRecords — composition axes', () => {
     expect(result.collections?.Parameters.map((p) => p.fields.Name)).toEqual(['maxDepth']);
   });
 
+  it('merges embeds by name under merge: a pulled embed replaces its namesake, others are kept', async () => {
+    const pulled: RecordData = {
+      ...pulledWithoutAxes,
+      embeds: {
+        ShipToAddressID: { fields: { City: 'Boone' } },
+        BillToAddressID: { fields: { City: 'Ames' } },
+      },
+    };
+    const existing: RecordData = {
+      ...declared,
+      embeds: { ...declared.embeds, ContactID: { fields: { Name: 'Pat' } } },
+    };
+    const result = await merge(existing, pulled, 'merge');
+    expect(result.embeds).toEqual({
+      ShipToAddressID: { fields: { City: 'Boone' } },
+      ContactID: { fields: { Name: 'Pat' } },
+      BillToAddressID: { fields: { City: 'Ames' } },
+    });
+  });
+
   it('writes the pulled composition axes under overwrite', async () => {
-    const pulled: RecordData = { ...declared, collections: { Parameters: [{ fields: { Name: 'maxDepth' } }] } };
+    const pulled: RecordData = {
+      ...pulledWithoutAxes,
+      collections: { Parameters: [{ fields: { Name: 'maxDepth' } }] },
+      embeds: { ShipToAddressID: { fields: { City: 'Boone' } } },
+      extension: { entity: 'Event Order Lines', fields: { Venue: 'Annex' } },
+    };
     const result = await merge(declared, pulled, 'overwrite');
-    expect(result.collections?.Parameters.map((p) => p.fields.Name)).toEqual(['maxDepth']);
-    expect(result.embeds).toEqual(declared.embeds);
-    expect(result.extension).toEqual(declared.extension);
+    expect(result.collections).toEqual(pulled.collections);
+    expect(result.embeds).toEqual(pulled.embeds);
+    expect(result.extension).toEqual(pulled.extension);
+  });
+
+  it('drops composition axes the pull did not produce under overwrite', async () => {
+    const result = await merge(declared, pulledWithoutAxes, 'overwrite');
+    expect(result).not.toHaveProperty('collections');
+    expect(result).not.toHaveProperty('embeds');
+    expect(result).not.toHaveProperty('extension');
   });
 
   it('emits no empty composition blocks', async () => {

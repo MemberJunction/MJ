@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RunView } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RelatedRecordCollection, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import * as fs from 'fs';
 import fse from 'fs-extra';
@@ -29,7 +29,7 @@ import {
   IsMetadataKeyword,
   ExtractKeywordValue
 } from '../constants/metadata-keywords';
-import { EntityConfig, SyncConfig } from '../config';
+import { EntityConfig, FolderOverride, SyncConfig } from '../config';
 import { ResolveCollectionRelationship } from '@memberjunction/record-graph';
 
 // Type aliases for clarity
@@ -40,6 +40,8 @@ type DirectoryConfig = Partial<EntityConfig> & Pick<SyncConfig, 'directoryOrder'
 
 /** One record entry for an entity and primary key: where it starts and the raw field values it sets. */
 interface RecordClaim {
+  /** The entity folder the entry is in, by its name under the metadata root ('' for a lone folder). */
+  Folder: string;
   Path: string;
   Line: number | undefined;
   Fields: Record<string, unknown>;
@@ -56,6 +58,10 @@ export class ValidationService {
   private recordStartLines = new WeakMap<object, number>();
   /** The entity folder being validated. Push resolves record `@file:` references from it. */
   private entityDir = '';
+  /** That folder's name under the metadata root, as in `directoryOrder`. */
+  private entityFolder = '';
+  /** Each folder's `overrides`, by folder name. */
+  private folderOverrides = new Map<string, FolderOverride[]>();
   private options: ValidationOptions;
   private userRoleCache: Map<string, string[]> = new Map();
 
@@ -120,7 +126,7 @@ export class ValidationService {
 
     for (const subDir of directories) {
       const subDirPath = path.join(dir, subDir);
-      const result = await this.validateEntityDirectory(subDirPath);
+      const result = await this.validateEntityDirectory(subDirPath, subDir);
       this.warnNestedPushWhen(subDirPath);
       if (result) {
         totalFiles += result.files;
@@ -132,6 +138,9 @@ export class ValidationService {
     }
 
     await this.validateDependencyOrder(directories);
+    if (!isEntityFolder) {
+      this.validateOverrideFolders(dir, this.orderFolders(dir, config));
+    }
 
     return {
       isValid: this.errors.length === 0,
@@ -184,7 +193,7 @@ export class ValidationService {
   /**
    * Validates a single entity directory
    */
-  private async validateEntityDirectory(dir: string): Promise<{ files: number; entities: number; fileResults: Map<string, FileValidationResult> } | null> {
+  private async validateEntityDirectory(dir: string, folder: string): Promise<{ files: number; entities: number; fileResults: Map<string, FileValidationResult> } | null> {
     // The folder's entity comes from .mj-sync.json; .mj-folder.json holds only defaults
     const configPath = path.join(dir, '.mj-sync.json');
     if (!fs.existsSync(configPath)) {
@@ -232,6 +241,8 @@ export class ValidationService {
     }
 
     this.entityDir = path.resolve(dir);
+    this.entityFolder = folder;
+    this.readFolderOverrides(config.overrides, folder, entityInfo, configPath);
     const files = await this.getMatchingFiles(dir, config.filePattern);
     let totalEntities = 0;
     const fileResults = new Map<string, FileValidationResult>();
@@ -785,6 +796,7 @@ export class ValidationService {
     }
     const fields = entityData.fields;
     const claim: RecordClaim = {
+      Folder: this.entityFolder,
       Path: filePath,
       Line: this.recordStartLines.get(entityData),
       Fields: fields && typeof fields === 'object' && !Array.isArray(fields) ? fields : {},
@@ -793,7 +805,10 @@ export class ValidationService {
     const claims = this.claimedPrimaryKeys.get(claimKey) ?? [];
     for (const earlier of claims) {
       const conflictingFields = Object.keys(claim.Fields).filter(
-        (field) => Object.prototype.hasOwnProperty.call(earlier.Fields, field) && !this.jsonValuesEqual(earlier.Fields[field], claim.Fields[field]),
+        (field) =>
+          Object.prototype.hasOwnProperty.call(earlier.Fields, field) &&
+          !this.jsonValuesEqual(earlier.Fields[field], claim.Fields[field]) &&
+          !this.isDeclaredOverride(earlier, claim, field),
       );
       if (conflictingFields.length > 0) {
         this.addClaimConflictError(entityName, entityData.primaryKey, conflictingFields, earlier, claim);
@@ -832,16 +847,116 @@ export class ValidationService {
           `field "${field}" is ${this.formatClaimValue(earlier.Fields[field])} at ${earlierLocation} and ${this.formatClaimValue(later.Fields[field])} at ${laterLocation}`,
       )
       .join('; ');
+    const fix =
+      earlier.Folder === later.Folder
+        ? 'Make both entries set the same value, or set the field in one entry only.'
+        : 'Make both entries set the same value, set the field in one entry only, or, if the later folder changes it on purpose, ' +
+          `list it in "overrides" in ${path.join(later.Folder, '.mj-sync.json')}.`;
     this.addError({
       type: 'field',
       severity: 'error',
       entity: entityName,
       field: conflictingFields.length === 1 ? conflictingFields[0] : undefined,
       file: later.Path,
-      message:
-        `Conflicting values for ${entityName} record ${JSON.stringify(primaryKey)}: ${fieldText}. ` +
-        'Make both entries set the same value, or set the field in one entry only.',
+      message: `Conflicting values for ${entityName} record ${JSON.stringify(primaryKey)}: ${fieldText}. ${fix}`,
     });
+  }
+
+  /** True when the later entry's folder lists the field in its `overrides` for the earlier entry's folder. */
+  private isDeclaredOverride(earlier: RecordClaim, later: RecordClaim, field: string): boolean {
+    if (earlier.Folder === later.Folder) {
+      return false;
+    }
+    const fieldName = field.toLowerCase();
+    return (this.folderOverrides.get(later.Folder) ?? []).some(
+      (entry) => entry.folder === earlier.Folder && entry.fields.some((name) => name.toLowerCase() === fieldName),
+    );
+  }
+
+  /**
+   * Reads a folder's `overrides`. Reports an entry that is not `{ folder, fields }` and drops it.
+   * Reports a field the folder's entity does not have but keeps its entry, since such a field can
+   * never be in a conflict.
+   */
+  private readFolderOverrides(value: unknown, folder: string, entityInfo: EntityInfo, configPath: string): void {
+    if (value === undefined) {
+      return;
+    }
+    if (!Array.isArray(value)) {
+      this.addOverrideError(configPath, '"overrides" must be a list of { "folder": "<earlier folder>", "fields": ["<field>", ...] }');
+      return;
+    }
+    const kept: FolderOverride[] = [];
+    for (const entry of value) {
+      if (!this.isFolderOverride(entry)) {
+        this.addOverrideError(configPath, 'Each "overrides" entry must be { "folder": "<earlier folder>", "fields": ["<field>", ...] }');
+        continue;
+      }
+      for (const field of entry.fields) {
+        if (!entityInfo.Fields.some((f) => f.Name.toLowerCase() === field.toLowerCase())) {
+          this.addOverrideError(configPath, `"overrides" lists field "${field}", which entity "${entityInfo.Name}" does not have`);
+        }
+      }
+      kept.push(entry);
+    }
+    this.folderOverrides.set(folder, kept);
+  }
+
+  private isFolderOverride(entry: unknown): entry is FolderOverride {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      return false;
+    }
+    const { folder, fields } = entry as Record<string, unknown>;
+    return (
+      typeof folder === 'string' &&
+      folder.trim() !== '' &&
+      Array.isArray(fields) &&
+      fields.length > 0 &&
+      fields.every((field) => typeof field === 'string' && field.trim() !== '')
+    );
+  }
+
+  /**
+   * Checks that each folder in an `overrides` entry is another entity folder under the metadata
+   * root, and that push runs it before the folder that declares the entry.
+   */
+  private validateOverrideFolders(rootDir: string, pushOrder: string[]): void {
+    for (const [folder, entries] of this.folderOverrides) {
+      const configPath = path.join(rootDir, folder, '.mj-sync.json');
+      for (const entry of entries) {
+        const message = this.overrideFolderProblem(rootDir, pushOrder, folder, entry.folder);
+        if (message) {
+          this.addOverrideError(configPath, message);
+        }
+      }
+    }
+  }
+
+  /** What is wrong with `earlierFolder` as an override target of `folder`, or undefined. */
+  private overrideFolderProblem(rootDir: string, pushOrder: string[], folder: string, earlierFolder: string): string | undefined {
+    if (earlierFolder === folder) {
+      return `"overrides" names this folder itself ("${folder}"); name the earlier folder that sets the values it changes`;
+    }
+    // A folder name only, as in directoryOrder, so the check never reads outside the metadata root
+    if (earlierFolder === '.' || earlierFolder === '..' || path.basename(earlierFolder) !== earlierFolder || earlierFolder.includes('/')) {
+      return `"overrides" names "${earlierFolder}", which is not a folder name; name a folder directly under the metadata root`;
+    }
+    if (!fs.existsSync(path.join(rootDir, earlierFolder, '.mj-sync.json'))) {
+      return `"overrides" names folder "${earlierFolder}", which is not an entity folder under ${rootDir}`;
+    }
+    const earlierIndex = pushOrder.indexOf(earlierFolder);
+    if (earlierIndex === -1) {
+      return `"overrides" names folder "${earlierFolder}", which push does not visit (a dot folder, or one that matches ignoreDirectories)`;
+    }
+    const index = pushOrder.indexOf(folder);
+    if (earlierIndex > index) {
+      return `"overrides" names folder "${earlierFolder}", which push runs after "${folder}". Put "${earlierFolder}" before "${folder}" in directoryOrder`;
+    }
+    return undefined;
+  }
+
+  private addOverrideError(configPath: string, message: string): void {
+    this.addError({ type: 'validation', severity: 'error', file: configPath, message });
   }
 
   private formatClaimLocation(claim: RecordClaim): string {
@@ -1275,6 +1390,12 @@ export class ValidationService {
     rootDir: string,
     config: Pick<DirectoryConfig, 'directoryOrder' | 'ignoreDirectories'>
   ): Promise<string[]> {
+    // Apply include/exclude filters if specified
+    return this.applyDirectoryFilters(this.orderFolders(rootDir, config));
+  }
+
+  /** The folders push visits, in push order, before --include and --exclude. */
+  private orderFolders(rootDir: string, config: Pick<DirectoryConfig, 'directoryOrder' | 'ignoreDirectories'>): string[] {
     // The folders push visits: no dot folders, none that match ignoreDirectories
     const allDirs = fs
       .readdirSync(rootDir)
@@ -1290,9 +1411,7 @@ export class ValidationService {
     } else {
       orderedDirs = allDirs.sort();
     }
-
-    // Apply include/exclude filters if specified
-    return this.applyDirectoryFilters(orderedDirs);
+    return orderedDirs;
   }
 
   /**
@@ -1483,6 +1602,8 @@ export class ValidationService {
     this.entityDependencies.clear();
     this.processedEntities.clear();
     this.claimedPrimaryKeys.clear();
+    this.folderOverrides.clear();
+    this.entityFolder = '';
     this.recordStartLines = new WeakMap<object, number>();
     this.userRoleCache.clear();
   }
@@ -2167,7 +2288,7 @@ export class ValidationService {
         continue;
       }
 
-      const resolved = ResolveCollectionRelationship(entityInfo, colName);
+      const resolved = ResolveCollectionRelationship(entityInfo, colName) ?? (await this.resolveDeclaredCollection(entityInfo, colName));
       if (!resolved) {
         this.addError({
           type: 'entity',
@@ -2213,6 +2334,26 @@ export class ValidationService {
           { entity: entityInfo.Name }
         );
       }
+    }
+  }
+
+  /**
+   * Resolves a collection the entity's registered class declares in code (with
+   * `DeclareRelatedRecords`) rather than through relationship metadata, the way push finds it: by
+   * the companion's name on an entity object.
+   *
+   * @returns The related entity, or `null` when the class declares no collection by that name.
+   */
+  private async resolveDeclaredCollection(entityInfo: EntityInfo, colName: string): Promise<{ relatedEntity: string } | null> {
+    try {
+      const entity = await this.metadata.GetEntityObject(entityInfo.Name, GetSystemUser());
+      const target = colName.trim().toLowerCase();
+      const collection = entity.Companions.find(
+        (c): c is RelatedRecordCollection => c instanceof RelatedRecordCollection && c.Name.toLowerCase() === target
+      );
+      return collection ? { relatedEntity: collection.RelatedEntityName } : null;
+    } catch {
+      return null;
     }
   }
 

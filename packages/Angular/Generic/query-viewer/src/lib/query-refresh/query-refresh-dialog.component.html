@@ -1,0 +1,75 @@
+<mj-dialog [Visible]="Visible" [Title]="Title" Size="xl" (Close)="Close()">
+  <div class="qrd">
+    @if (ScopeLabel) {
+      <div class="qrd-scope"><i class="fa-solid fa-database"></i> {{ ScopeLabel }}</div>
+    }
+
+    @switch (Phase) {
+      @case ('DryRunning') {
+        <div class="qrd-progress" aria-live="polite">
+          <div class="qrd-progress-title">Checking what would change (dry run, nothing is written)…</div>
+          @if (Percent !== null) {
+            <mj-progress-bar [Value]="Percent" />
+            <div class="qrd-progress-text">{{ Processed }} of {{ Total }} queries @if (ProgressMessage) { · {{ ProgressMessage }} }</div>
+          } @else {
+            <mj-progress-bar Type="infinite" />
+          }
+        </div>
+      }
+      @case ('Applying') {
+        <div class="qrd-progress" aria-live="polite">
+          <div class="qrd-progress-title">Applying the refresh…</div>
+          @if (Percent !== null) {
+            <mj-progress-bar [Value]="Percent" />
+            <div class="qrd-progress-text">{{ Processed }} of {{ Total }} queries @if (ProgressMessage) { · {{ ProgressMessage }} }</div>
+          } @else {
+            <mj-progress-bar Type="infinite" />
+          }
+        </div>
+      }
+      @case ('Review') {
+        <div class="qrd-banner qrd-banner--info">
+          <i class="fa-solid fa-flask"></i>
+          @if (CanApply) {
+            Dry run: these are the changes a refresh would make. Nothing has been written yet.
+          } @else {
+            Dry run: the stored metadata already matches the SQL. There is nothing to apply.
+          }
+        </div>
+        <mj-query-refresh-report [Output]="Report" [AllowOpenQuery]="AllowOpenQuery" (OpenQuery)="OpenQuery.emit($event)" />
+      }
+      @case ('Done') {
+        <div class="qrd-banner qrd-banner--success">
+          <i class="fa-solid fa-circle-check"></i> The refresh was applied.
+        </div>
+        <mj-query-refresh-report [Output]="Report" [AllowOpenQuery]="AllowOpenQuery" (OpenQuery)="OpenQuery.emit($event)" />
+      }
+      @case ('Failed') {
+        <div class="qrd-banner qrd-banner--error" role="alert">
+          <i class="fa-solid fa-circle-exclamation"></i> {{ ErrorMessage }}
+        </div>
+      }
+    }
+
+    @if (AllowSkipDryRun && (Phase === 'Review' || Phase === 'Done')) {
+      <label class="qrd-setting">
+        <input type="checkbox" [checked]="SkipDryRun" (change)="OnSkipDryRunToggled($event)" />
+        Skip the dry run for future query refreshes
+      </label>
+    }
+  </div>
+
+  <mj-dialog-actions>
+    @if (Phase === 'Review') {
+      <button mjButton Variant="primary" type="button" [disabled]="!CanApply" (click)="Apply()">
+        <i class="fa-solid fa-check"></i> Apply changes
+      </button>
+    }
+    @if (Phase === 'Failed' || Phase === 'Done') {
+      <button mjButton Variant="outline" type="button" (click)="RunDryRunAgain()">
+        <i class="fa-solid fa-rotate"></i> Dry run again
+      </button>
+    }
+    <button mjButton Variant="flat" type="button" (click)="Close()">{{ Phase === 'Review' ? 'Cancel' : 'Close' }}</button>
+  </mj-dialog-actions>
+</mj-dialog>

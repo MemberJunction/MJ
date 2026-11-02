@@ -96,4 +96,47 @@ describe('dispatchRemoteOperationInProcess', () => {
         expect(result.Success).toBe(true);
         expect(result.Output).toEqual({ doubled: 8 });
     });
+
+    it('threads requestOrigin, clientIp, sessionId, apiKeyHash, and handle into RemoteOpServerContext', async () => {
+        let capturedContext: RemoteOpServerContext | undefined;
+
+        @RegisterClass(BaseRemotableOperation, 'Test.DispatchTransportContext')
+        class ContextInspectOp extends BaseRemotableOperation<EchoInput, EchoOutput> {
+            public readonly OperationKey = 'Test.DispatchTransportContext';
+            protected override async Authorize(
+                _input: EchoInput,
+                _user: UserInfo,
+                context?: RemoteOpServerContext,
+            ): Promise<boolean> {
+                capturedContext = context;
+                return context?.requestOrigin === 'https://portal.example.com';
+            }
+            protected override async InternalExecute(input: EchoInput): Promise<EchoOutput> {
+                return { doubled: input.value * 2 };
+            }
+        }
+        void ContextInspectOp;
+
+        const result = await DispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
+            'Test.DispatchTransportContext',
+            { value: 9 },
+            {
+                user: USER,
+                requestOrigin: 'https://portal.example.com',
+                clientIp: '203.0.113.42',
+                sessionId: 'sess-99',
+                apiKeyHash: 'sha256-abc',
+                handle: 'run-777',
+            },
+            PROVIDER,
+        );
+
+        expect(result.Success).toBe(true);
+        expect(result.Output).toEqual({ doubled: 18 });
+        expect(capturedContext?.requestOrigin).toBe('https://portal.example.com');
+        expect(capturedContext?.clientIp).toBe('203.0.113.42');
+        expect(capturedContext?.sessionId).toBe('sess-99');
+        expect(capturedContext?.apiKeyHash).toBe('sha256-abc');
+        expect(capturedContext?.handle).toBe('run-777');
+    });
 });

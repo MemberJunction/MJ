@@ -15,7 +15,7 @@ import type {
     DurableEntityActionSubmission,
     DurableEntityActionSubmitter,
 } from '@memberjunction/actions-base';
-import { LogError } from '@memberjunction/core';
+import { type IEntityDataProvider, type IMetadataProvider, LogError } from '@memberjunction/core';
 import { TaskNode, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { TaskGraphService, type ProviderFactory } from '@memberjunction/task-graph';
@@ -59,7 +59,9 @@ export class DurableEntityActionTaskSubmitter implements DurableEntityActionSubm
                 durable: true,
             };
 
-            const provider = await this.providerFactory.CreateProvider();
+            const provider: IMetadataProvider = isMetadataProvider(request.Provider)
+                ? request.Provider
+                : await this.providerFactory.CreateProvider();
             const result = await new TaskGraphService().Submit(spec, {
                 EnvironmentID: this.environmentID,
                 ContextUser: request.ContextUser,
@@ -75,4 +77,10 @@ export class DurableEntityActionTaskSubmitter implements DurableEntityActionSubm
             return { Success: false, ErrorMessage: message };
         }
     }
+}
+
+function isMetadataProvider(
+    provider: IMetadataProvider | IEntityDataProvider | undefined,
+): provider is IMetadataProvider {
+    return !!provider && 'GetEntityObject' in provider && typeof provider.GetEntityObject === 'function';
 }

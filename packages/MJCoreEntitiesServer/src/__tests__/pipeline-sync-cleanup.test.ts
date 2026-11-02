@@ -112,6 +112,10 @@ describe('Pipeline sync stage — stale record cleanup', () => {
             expect(fieldCleanupCall).toBeUndefined();
             expect(mockSyncFields).not.toHaveBeenCalled();
         });
+
+        // E7 (a describe failure keeps the field rows AND records it on the query) is covered where saves
+        // extract now: query-extraction-describe.test.ts ("D5: a describe failure keeps the stored fields…").
+        // This legacy pipeline is a package façade and returns no extraction status.
     });
 
     describe('when deterministic extraction produces fields (even without LLM)', () => {
@@ -181,25 +185,20 @@ describe('Pipeline sync stage — stale record cleanup', () => {
         });
     });
 
-    // The no-parameter case goes through SyncParameters with an empty list, not
-    // RemoveAllRecords. Both remove the same rows; only SyncParameters knows a row may have
-    // been declared rather than inferred, so the shortcut used to wipe declared parameters
-    // silently whenever the pipeline did not recognise their token form.
     describe('when extraction produces no parameters', () => {
-        it('should call SyncParameters with an empty list rather than RemoveAllRecords', async () => {
+        it('syncs an empty parameter list, so authored and declared rows can stay', async () => {
             // Plain SQL with no template parameters
             mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
             await RunExtractionPipeline(ctx);
 
-            expect(mockSyncParameters).toHaveBeenCalled();
-            const [queryID, params] = mockSyncParameters.mock.calls[0] as [string, unknown[]];
-            expect(queryID).toBe(QUERY_ID);
-            expect(params).toEqual([]);
+            expect(mockSyncParameters).toHaveBeenCalledTimes(1);
+            expect(mockSyncParameters.mock.calls[0][0]).toBe(QUERY_ID);
+            expect(mockSyncParameters.mock.calls[0][1]).toEqual([]);
         });
 
-        it('should NOT route parameter cleanup through RemoveAllRecords', async () => {
+        it('does not remove every parameter row outright', async () => {
             mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');

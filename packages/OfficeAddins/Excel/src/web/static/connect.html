@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in to MemberJunction</title>
+  <!-- Office Dialog initial pages on Mac/Desktop Excel must initialize office.js before redirecting. -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="pane.css">
+  <script type="module" src="connect.js"></script>
+</head>
+<body>
+  <main class="dialog-container">
+    <p class="dialog-message" id="message" role="status" aria-live="polite">Opening MemberJunction sign-in...</p>
+    <p class="dialog-message" id="fallback-wrap" hidden>
+      <a id="fallback-link" class="button button-primary" href="#">Continue to MemberJunction sign-in</a>
+    </p>
+  </main>
+</body>
+</html>

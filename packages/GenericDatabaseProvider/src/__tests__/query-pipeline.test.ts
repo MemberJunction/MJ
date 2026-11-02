@@ -22,6 +22,8 @@ import {
     LocalCacheManager,
 } from '@memberjunction/core';
 import { ComputeQueryFingerprintAsync, MJQueryEntityExtended, MJQueryParameterEntity, MJUserViewEntityExtended, QueryEngine } from '@memberjunction/core-entities';
+import { DescribeStatementFailure, DescribeStatementSuccess, type DescribeStatementResult } from '../describeStatement';
+import { TypedQueryParameter } from '../typedQueryParameter';
 
 /**
  * Test subclass exposing protected pipeline methods for testing.
@@ -261,27 +263,29 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
             expect(result.Name).toBe('My Query');
         });
 
+        // The not-found and refused messages are worded identically, so neither confirms the query exists
+        // (DISCUSSION Topic 3e item 1).
         it('should throw when query not found by ID', () => {
             provider.setMockQueries([]);
 
             expect(() => provider.testFindAndValidateQuery({ QueryID: 'nonexistent' }))
-                .toThrow(/Query with ID 'nonexistent' not found/);
+                .toThrow("Query 'nonexistent' does not exist or you do not have permission to run it.");
         });
 
         it('should throw when query not found by name', () => {
             provider.setMockQueries([]);
 
             expect(() => provider.testFindAndValidateQuery({ QueryName: 'Does Not Exist' }))
-                .toThrow(/Query 'Does Not Exist' not found/);
+                .toThrow("Query 'Does Not Exist' does not exist or you do not have permission to run it.");
         });
 
-        it('should include category path in error message when provided', () => {
+        it('should echo the category path and name the caller supplied when not found', () => {
             provider.setMockQueries([]);
 
             expect(() => provider.testFindAndValidateQuery({
                 QueryName: 'Missing',
                 CategoryPath: '/Sales/'
-            })).toThrow(/category path '\/Sales\/'/);
+            })).toThrow("Query 'Sales/Missing' does not exist or you do not have permission to run it.");
         });
 
         it('should throw when user lacks permission', () => {
@@ -290,7 +294,7 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
             provider.setMockQueries([query]);
 
             expect(() => provider.testFindAndValidateQuery({ QueryID: 'q-1' }, mockUser))
-                .toThrow(/does not have permission/);
+                .toThrow(/does not exist or you do not have permission to run it/);
         });
     });
 
@@ -402,7 +406,7 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
                 SQL: `SELECT YEAR(m.JoinDate) AS JoinYear, COUNT(*) AS MemberCount
 FROM Members m
 {% if StartDate %}
-WHERE m.JoinDate >= '{{ StartDate }}'
+WHERE m.JoinDate >= {{ StartDate | sqlString }}
 {% endif %}
 GROUP BY YEAR(m.JoinDate)
 ORDER BY JoinYear`,
@@ -414,7 +418,9 @@ ORDER BY JoinYear`,
             const outerQuery = makeQueryInfo({
                 ID: 'outer-1',
                 Name: 'Growth Report',
-                SQL: 'WITH mg AS (SELECT * FROM {{query:"Reports/Membership Growth By Period"}}) SELECT * FROM mg',
+                // Arguments are explicit (DISCUSSION §6, 2026-10-27): the outer value reaches the dependency only
+                // because the composition passes it. Was an implicit same-name flow.
+                SQL: 'WITH mg AS (SELECT * FROM {{query:"Reports/Membership Growth By Period(StartDate=StartDate)"}}) SELECT * FROM mg',
                 UsesTemplate: false,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
@@ -500,7 +506,7 @@ ORDER BY JoinYear`,
                 CategoryPath: '/Reports/',
                 SQL: `SELECT m.ID, m.Name FROM Members m
 {% if Region %}
-WHERE m.Region = '{{ Region }}'
+WHERE m.Region = {{ Region | sqlString }}
 {% endif %}`,
                 Reusable: true,
                 UsesTemplate: true,
@@ -509,7 +515,8 @@ WHERE m.Region = '{{ Region }}'
             const outerQuery = makeQueryInfo({
                 ID: 'outer-both',
                 Name: 'Member Summary',
-                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Filtered Members"}} {% if Limit %}LIMIT {{ Limit }}{% endif %}',
+                // Arguments are explicit (DISCUSSION §6, 2026-10-27); was an implicit same-name flow of Region.
+                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Filtered Members(Region=Region)"}} {% if Limit %}LIMIT {{ Limit }}{% endif %}',
                 UsesTemplate: true,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
@@ -537,7 +544,7 @@ WHERE m.Region = '{{ Region }}'
                 SQL: `SELECT m.ID, m.Name
 FROM Members m
 {% if Region %}
-WHERE m.Region = '{{ Region }}'
+WHERE m.Region = {{ Region | sqlString }}
 {% endif %}`,
                 Reusable: true,
                 UsesTemplate: true,
@@ -702,7 +709,7 @@ SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name |
             );
 
             expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toContain('not found');
+            expect(result.ErrorMessage).toContain('does not exist');
             expect(result.Results).toHaveLength(0);
         });
 
@@ -851,7 +858,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             expect(results).toHaveLength(2);
             expect(results[0].Success).toBe(true);
             expect(results[1].Success).toBe(false);
-            expect(results[1].ErrorMessage).toContain('not found');
+            expect(results[1].ErrorMessage).toContain('does not exist');
         });
     });
 
@@ -1151,8 +1158,19 @@ class TestMatPlanProvider extends TestPipelineProvider {
         return { Success: false, Results: [] as T[], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'unexpected entity' } as unknown as RunViewResult<T>;
     }
 
-    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo, contextValues?: Record<string, string>) {
-        return this.tryBuildMaterializedQueryPlan(query, params, user, contextValues);
+    /** The snapshot's column types, as `DescribeStatement` reports them for `SELECT * FROM <snapshot view>`. */
+    public columnTypes: Record<string, string> | null = { ID: 'uniqueidentifier', X: 'varchar(50)', Amount: 'decimal(18,2)', ChapterID: 'int' };
+    public readonly Described: string[] = [];
+    public override async DescribeStatement(sql: string): Promise<DescribeStatementResult> {
+        this.Described.push(sql);
+        if (!this.columnTypes) return DescribeStatementFailure('Invalid object name');
+        return DescribeStatementSuccess(Object.entries(this.columnTypes).map(([Name, SQLFullType], i) => ({
+            Name, Ordinal: i + 1, SQLBaseType: SQLFullType.replace(/\(.*$/, ''), SQLFullType, IsNullable: true, IsComputed: false, Source: null,
+        })));
+    }
+
+    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo, contextValues?: Record<string, string>, renderedSQL?: string) {
+        return this.tryBuildMaterializedQueryPlan(query, params, user, contextValues, renderedSQL);
     }
 }
 
@@ -1182,6 +1200,18 @@ describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', (
         p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
         const q = matQuery({ SQL: 'SELECT ID, X FROM __mj.t ORDER BY x', GetPlatformSQL: () => 'SELECT ID, X FROM __mj.t', QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
         expect(await p.plan(q, matParams({ x: 'a' }))).not.toBeNull();
+    });
+
+    it('a template query: the ordering check reads the rendered statement, not the template text', async () => {
+        // The template text does not read completely as SQL (`{{ … }}`), so checked as written every template
+        // query would count as ordered and never be served from its snapshot.
+        const p = new TestMatPlanProvider();
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const template = 'SELECT ID, X FROM __mj.t WHERE X = {{ x | sqlString }}';
+        const q = matQuery({ SQL: template, GetPlatformSQL: () => template, UsesTemplate: true, QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {})).toBeNull();
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {}, "SELECT ID, X FROM __mj.t WHERE X = 'a'")).not.toBeNull();
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {}, "SELECT ID, X FROM __mj.t WHERE X = 'a' ORDER BY X")).toBeNull();
     });
 
     it('FIX #4: refuses (→ live) when the spec carries a param the query no longer has (over-filter guard)', async () => {
@@ -1215,7 +1245,59 @@ describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', (
         const q = matQuery({ QueryParameters: [{ Name: 'amt', Type: 'number' }], QueryFields: [{ Name: 'ID' }, { Name: 'Amount' }] });
         const r = await p.plan(q, matParams({ amt: '42' }));
         expect(r).not.toBeNull();
-        expect(r!.parameters).toEqual([42]);
+        expect(r!.parameters).toEqual([new TypedQueryParameter('mj_p0', 'decimal(18,2)', 42)]);
+    });
+
+    it('binds each value as a named parameter of the snapshot column\'s own type (varchar stays varchar)', async () => {
+        const p = new TestMatPlanProvider();
+        p.setMatRow({ ...activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]), LastRefreshedAt: 'named-typed' });
+        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        const r = await p.plan(q, matParams({ x: 'a' }));
+        expect(r!.sql).toBe('SELECT [ID], [X] FROM [__mj].[materialized_vwT] WHERE [X] = @mj_p0 ORDER BY [__mj_MaterializedRowID]');
+        expect(r!.parameters).toEqual([new TypedQueryParameter('mj_p0', 'varchar(50)', 'a')]);
+        expect(p.Described).toEqual(['SELECT * FROM [__mj].[materialized_vwT]']);
+    });
+
+    it('casts each value to the snapshot column\'s type on PostgreSQL', async () => {
+        const p = new TestMatPlanProvider();
+        p.setPlatform('postgresql');
+        p.columnTypes = { ID: 'uuid', X: 'character varying(50)' };
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        const r = await p.plan(q, matParams({ x: 'a' }));
+        expect(r!.sql).toContain('WHERE "X" = $1::character varying(50)');
+        expect(r!.parameters).toEqual([new TypedQueryParameter('$1', 'character varying(50)', 'a')]);
+    });
+
+    it('reads the snapshot\'s column types once per refresh, and again after the snapshot is refreshed', async () => {
+        const p = new TestMatPlanProvider();
+        const row = { ...activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]), LastRefreshedAt: '2026-10-27T01:00:00.000Z' };
+        p.setMatRow(row);
+        const q = matQuery({ ID: 'q-types-once', QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        await p.plan(q, matParams({ x: 'a' }));
+        await p.plan(q, matParams({ x: 'b' }));
+        expect(p.Described).toHaveLength(1);
+        p.setMatRow({ ...row, LastRefreshedAt: '2026-10-27T02:00:00.000Z' });
+        await p.plan(q, matParams({ x: 'c' }));
+        expect(p.Described).toHaveLength(2);
+    });
+
+    it('serves live when the snapshot\'s column types cannot be read, or a filtered column has no type', async () => {
+        const p = new TestMatPlanProvider();
+        p.columnTypes = null;
+        p.setMatRow({ ...activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]), LastRefreshedAt: 'never-described' });
+        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a' }))).toBeNull();
+        p.columnTypes = { ID: 'int' };
+        p.setMatRow({ ...activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]), LastRefreshedAt: 'no-x-column' });
+        expect(await p.plan(q, matParams({ x: 'a' }))).toBeNull();
+    });
+
+    it('serves live when a value cannot be held by the column\'s type', async () => {
+        const p = new TestMatPlanProvider();
+        p.setMatRow({ ...activeSpec([{ column: 'ChapterID', operator: '=', paramName: 'c', kind: 'scalar' }]), LastRefreshedAt: 'int-column' });
+        const q = matQuery({ QueryParameters: [{ Name: 'c', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'ChapterID' }] });
+        expect(await p.plan(q, matParams({ c: 'not a number' }))).toBeNull();
     });
 
     it('a run whose template read Context is served live: the shared snapshot was not built for this user or day', async () => {
@@ -1303,7 +1385,7 @@ describe('GenericDatabaseProvider — server-set parameters and Context (#4789 A
     it("renders Context from the context user and the run's time zone, and refuses a caller's Context", async () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date('2026-10-14T23:30:00.000Z'));
-        const query = templatedQuery({ ID: 'q-mine', Name: 'Mine', SQL: "SELECT * FROM T WHERE OwnerID = {{ Context.UserID | sqlString }} AND Day = '{{ Context.Today }}'" }, []);
+        const query = templatedQuery({ ID: 'q-mine', Name: 'Mine', SQL: "SELECT * FROM T WHERE OwnerID = {{ Context.UserID | sqlString }} AND Day = {{ Context.Today | sqlString }}" }, []);
         provider.setMockQueries([query]);
 
         const tokyo = await provider.testInternalRunQuery({ QueryID: 'q-mine', TimeZone: 'Asia/Tokyo' }, mockUser);
@@ -1345,7 +1427,7 @@ describe('GenericDatabaseProvider — server-set parameters and Context (#4789 A
         p.setMatRow(activeSpec([{ column: 'ChapterID', operator: '=', paramName: 'ChapterID', kind: 'scalar' }]));
         const q = matQuery({ QueryParameters: [{ Name: 'ChapterID', Type: 'number' }], QueryFields: [{ Name: 'ID' }, { Name: 'ChapterID' }] });
         const plan = await p.plan(q, { DataSource: 'Materialized', Parameters: {}, ServerParameters: { ChapterID: 3 } } as RunQueryParams);
-        expect(plan!.parameters).toEqual([3]);
+        expect(plan!.parameters).toEqual([new TypedQueryParameter('mj_p0', 'int', 3)]);
     });
 });
 
@@ -1464,7 +1546,7 @@ describe('GenericDatabaseProvider — query cache keys cover server-set values (
     });
 
     it('never caches a result that read Context.Now, nor a RequireApproved run', async () => {
-        useQuery("SELECT * FROM T WHERE At <= '{{ Context.Now }}'");
+        useQuery("SELECT * FROM T WHERE At <= {{ Context.Now | sqlString }}");
         await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true }, mockUser);
         await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true, RequireApproved: true }, mockUser);
         expect(fingerprints).not.toHaveBeenCalled();

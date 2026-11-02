@@ -275,7 +275,8 @@ export class RecordComparisonEngine {
                 ExtraFilter: filter,
                 Fields: this.buildSelectFieldNames(entity, fields),
                 ResultType: 'simple',
-                MaxRows: keys.length
+                MaxRows: keys.length,
+                SkipTotalRowCount: true
             },
             contextUser
         );

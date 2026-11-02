@@ -107,6 +107,7 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
                 ExtraFilter: filterParts.join(' AND '),
                 OrderBy: '__mj_CreatedAt ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             this.contextUser,

@@ -55,15 +55,15 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(DetectVolatilePlaceholders(templateContent)).toEqual([]);
         expect(templateContent).toContain('Schedule Next Agent Wake');
         expect(templateContent).toContain('Configure Agent User Policy');
-        expect(templateContent).toContain('MJ_BizApps_Tasks: Tasks');
-        expect(templateContent).toContain('MJ_BizApps_Tasks: Task Check Ins');
-        expect(templateContent).toContain('MJ_BizApps_Issues: Issues');
+        // Core carries no knowledge of an Open App's entities; business data arrives through skills.
+        expect(templateContent).not.toMatch(/BizApps/i);
+        expect(templateContent).toContain('ScheduleMode: "OneShot"');
     });
 
     it('enforces onboarding policy, RLS/FLS entity narrowing, time windows, and action approval gates end-to-end', () => {
         const entityRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[] = [
             {
-                entityPattern: 'MJ_BizApps_Tasks:*',
+                entityPattern: 'Sales:*',
                 access: 'ReadWrite',
                 rlsNarrowing: {
                     whereClause: "CreatedByPersonID = 'person-exec-1'",
@@ -74,7 +74,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
                 },
             },
             {
-                entityPattern: 'MJ_BizApps_Issues:*',
+                entityPattern: 'Support:*',
                 access: 'ReadOnly',
             },
         ];
@@ -129,9 +129,9 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
 
         const engine = AgentUserPolicyEngine.Instance;
 
-        // 1. Tasks entity update allowed with narrowed RLS & FLS; Delete requires approval due to RequireApprovalForDestructiveActions; Issues write denied due to ReadOnly
+        // 1. Opportunities update allowed with narrowed RLS & FLS; Delete requires approval due to RequireApprovalForDestructiveActions; Tickets write denied due to ReadOnly
         const taskUpdate = engine.EvaluateEntityAccess({
-            entityName: 'MJ_BizApps_Tasks: Tasks',
+            entityName: 'Sales: Opportunities',
             operation: 'Update',
             contextUser,
             policy,
@@ -142,7 +142,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(taskUpdate.deniedFieldPatterns).toEqual(['InternalCostNotes']);
 
         const taskDelete = engine.EvaluateEntityAccess({
-            entityName: 'MJ_BizApps_Tasks: Tasks',
+            entityName: 'Sales: Opportunities',
             operation: 'Delete',
             contextUser,
             policy,
@@ -150,7 +150,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(taskDelete.verdict).toBe('RequireApproval');
 
         const issueUpdate = engine.EvaluateEntityAccess({
-            entityName: 'MJ_BizApps_Issues: Issues',
+            entityName: 'Support: Tickets',
             operation: 'Update',
             contextUser,
             policy,

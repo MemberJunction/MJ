@@ -11,7 +11,6 @@
  * supplied provider. Each fails if its code path goes back to the cache:
  *   - SyncParameters' loadExistingRecords
  *   - MJQueryEntityServer.upsertQuerySQLRecord
- *   - MJQuerySQLEntityServer.loadParentQuery
  *
  * See MemberJunction/MJ#4545.
  */
@@ -27,7 +26,6 @@ const DIALECT_ID = '33333333-3333-3333-3333-333333333333';
 // every top-level declaration.
 const staleEngine = vi.hoisted(() => ({
     Loaded: true,
-    Queries: [] as { ID: string; Save: () => Promise<boolean> }[],
     QuerySQLs: [] as { QueryID: string; SQLDialectID: string; SQL: string; Save: () => Promise<boolean> }[],
     QueryEntities: [] as unknown[],
     Dependencies: [] as unknown[],
@@ -43,7 +41,6 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 
 import { SyncParameters } from '../custom/query-extraction/sync';
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
-import { MJQuerySQLEntityServer } from '../custom/MJQuerySQLEntityServer.server';
 import type { ExtractedParameter } from '../custom/query-extraction/types';
 
 const CONTEXT_USER = { ID: 'user-1' } as UserInfo;
@@ -65,7 +62,6 @@ function metadataProviderSpy(): IMetadataProvider & { GetEntityObject: ReturnTyp
 
 describe('query pipeline reads through the caller provider, not the stale QueryEngine cache', () => {
     beforeEach(() => {
-        staleEngine.Queries = [];
         staleEngine.QuerySQLs = [];
     });
 
@@ -108,12 +104,13 @@ describe('query pipeline reads through the caller provider, not the stale QueryE
         staleEngine.QuerySQLs = [cachedOnOtherProvider];
         const fromProvider = { QueryID: QUERY_ID, SQLDialectID: DIALECT_ID, SQL: 'old', Save: vi.fn(async () => true) };
         const metadataProvider = metadataProviderSpy();
+        // upsertQuerySQLRecord reads and writes through `extractionProvider`, the record's own provider.
+        const extractionProvider = Object.assign(metadataProvider, runViewProviderFor({ 'MJ: Query SQLs': [fromProvider] }));
         const context = {
             ID: QUERY_ID,
             Name: 'Test Query',
             ContextCurrentUser: CONTEXT_USER,
-            ProviderToUse: metadataProvider,
-            RunViewProviderToUse: runViewProviderFor({ 'MJ: Query SQLs': [fromProvider] }),
+            extractionProvider,
         };
         const upsert = (MJQueryEntityServer.prototype as unknown as {
             upsertQuerySQLRecord: (this: typeof context, dialect: MJSQLDialectEntity, sql: string) => Promise<void>;
@@ -125,24 +122,5 @@ describe('query pipeline reads through the caller provider, not the stale QueryE
         expect(fromProvider.SQL).toBe('SELECT 1');
         expect(cachedOnOtherProvider.Save).not.toHaveBeenCalled();
         expect(metadataProvider.GetEntityObject).not.toHaveBeenCalled();
-    });
-
-    it('loadParentQuery returns the parent the supplied provider returns', async () => {
-        const cachedOnOtherProvider = { ID: QUERY_ID, Save: vi.fn(async () => true) };
-        staleEngine.Queries = [cachedOnOtherProvider];
-        const fromProvider = { ID: QUERY_ID, Save: vi.fn(async () => true) };
-        const context = {
-            QueryID: QUERY_ID,
-            ContextCurrentUser: CONTEXT_USER,
-            ProviderToUse: metadataProviderSpy(),
-            RunViewProviderToUse: runViewProviderFor({ 'MJ: Queries': [fromProvider] }),
-        };
-        const loadParentQuery = (MJQuerySQLEntityServer.prototype as unknown as {
-            loadParentQuery: (this: typeof context) => Promise<unknown>;
-        }).loadParentQuery;
-
-        const parent = await loadParentQuery.call(context);
-
-        expect(parent).toBe(fromProvider);
     });
 });

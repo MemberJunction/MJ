@@ -1195,21 +1195,16 @@ export class PullService {
     return '.' + keys.map(k => String(k).replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase()).join('-') + '.json';
   }
 
-  /** Sets each non-empty composition axis on `result`, in the order a pulled record writes them. */
-  private assignCompositionAxes(
-    result: RecordData,
-    collections: RecordData['collections'],
-    embeds: RecordData['embeds'],
-    extension: RecordData['extension']
-  ): void {
-    if (collections && Object.keys(collections).length > 0) {
-      result.collections = collections;
+  /** Copies the collections, embeds and extension a record holds onto `target`, when present. */
+  private copyCompositionAxes(target: RecordData, source: RecordData): void {
+    if (source.collections && !target.collections) {
+      target.collections = source.collections;
     }
-    if (embeds && Object.keys(embeds).length > 0) {
-      result.embeds = embeds;
+    if (source.embeds) {
+      target.embeds = source.embeds;
     }
-    if (extension && Object.keys(extension).length > 0) {
-      result.extension = extension;
+    if (source.extension) {
+      target.extension = source.extension;
     }
   }
 
@@ -1238,10 +1233,8 @@ export class PullService {
         }
       }
 
-      // Composition axes follow fields, in the order a pulled record writes them
-      this.assignCompositionAxes(result, newData.collections, newData.embeds, newData.extension);
-
-      // Add relatedEntities before primaryKey and sync
+      // Composition axes and relatedEntities before primaryKey and sync
+      this.copyCompositionAxes(result, newData);
       if (newData.relatedEntities) {
         result.relatedEntities = newData.relatedEntities;
       }
@@ -1266,18 +1259,14 @@ export class PullService {
       }
     }
 
-    // Composition axes: a pulled collection or embed replaces the existing one of the same
-    // name, and one the pull did not produce is kept. Without this, a merge drops every
-    // `collections`, `embeds` and `extension` block from a file that already exists — for
-    // example the parameters a query declares.
-    this.assignCompositionAxes(
-      result,
-      existing.collections || newData.collections ? { ...existing.collections, ...newData.collections } : undefined,
-      existing.embeds || newData.embeds ? { ...existing.embeds, ...newData.embeds } : undefined,
-      newData.extension ?? existing.extension
-    );
-
-    // Add relatedEntities before primaryKey and sync
+    // Composition axes and relatedEntities before primaryKey and sync. A collection the pull did not
+    // produce (one the author declared but the pull config does not fetch) is kept from the file;
+    // embeds merge by name the same way.
+    if (existing.collections || newData.collections) {
+      result.collections = { ...existing.collections, ...newData.collections };
+    }
+    const embeds = existing.embeds || newData.embeds ? { ...existing.embeds, ...newData.embeds } : undefined;
+    this.copyCompositionAxes(result, { fields: {}, embeds, extension: newData.extension ?? existing.extension });
     if (existing.relatedEntities || newData.relatedEntities) {
       result.relatedEntities = {
         ...existing.relatedEntities,
