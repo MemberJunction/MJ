@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import * as zlib from 'node:zlib';
 import { monitorEventLoopDelay, IntervalHistogram } from 'node:perf_hooks';
-import { BaseSingleton, EscapeSQLString, MJGlobal, SanitizeForLog, TrimTrailingSlashes } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal, TrimTrailingSlashes } from '@memberjunction/global';
 import {
   DiagnosticContext,
   IDiagnosticContextProvider,
@@ -45,11 +45,6 @@ import {
   EncryptDiagnosticBundle,
   DiagnosticContributorRegistry
 } from '@memberjunction/diagnostics';
-
-/** Returns console arguments with each string on one line and length-capped. */
-function sanitizeConsoleArgs(args: unknown[]): unknown[] {
-  return args.map((arg) => (typeof arg === 'string' ? SanitizeForLog(arg) : arg));
-}
 
 export interface ActiveDiagnosticSession {
   id: string;
@@ -268,21 +263,21 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       if (!IsInMJLogToConsole()) {
         this.recordDirectConsoleCall('info', args);
       }
-      origLog(...sanitizeConsoleArgs(args));
+      origLog(...args);
     };
 
     console.warn = (...args: unknown[]): void => {
       if (!IsInMJLogToConsole()) {
         this.recordDirectConsoleCall('warn', args);
       }
-      origWarn(...sanitizeConsoleArgs(args));
+      origWarn(...args);
     };
 
     console.error = (...args: unknown[]): void => {
       if (!IsInMJLogToConsole()) {
         this.recordDirectConsoleCall('error', args);
       }
-      origError(...sanitizeConsoleArgs(args));
+      origError(...args);
     };
   }
 

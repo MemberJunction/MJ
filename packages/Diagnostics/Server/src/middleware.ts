@@ -1,14 +1,11 @@
 import * as crypto from 'node:crypto';
 import type { ApolloServerPlugin } from '@apollo/server';
-import { RegisterClass, TrimTrailingSlashes } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import { GetDiagnosticContext, DiagnosticContext } from '@memberjunction/core';
-import { BaseServerMiddleware } from '@memberjunction/server/middleware/BaseServerMiddleware';
-
-function ApiRoute(subpath: string): string {
-  const rawRoot = (process.env.MJAPI_BASE_PATH ?? '').trim();
-  const root = rawRoot === '/' ? '' : TrimTrailingSlashes(rawRoot);
-  return `${root}${subpath}`;
-}
+import {
+  BaseServerMiddleware,
+  ServerMiddlewareContext
+} from '@memberjunction/server/middleware/BaseServerMiddleware';
 
 type MiddlewareList = ReturnType<NonNullable<BaseServerMiddleware['GetPreAuthMiddleware']>>;
 type MiddlewareHandler = MiddlewareList[number];
@@ -103,8 +100,24 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     return 'mj:diagnostics';
   }
 
-  public override async Initialize(): Promise<void> {
+  private serverContext: ServerMiddlewareContext | undefined;
+
+  public override async Initialize(context?: ServerMiddlewareContext): Promise<void> {
+    this.serverContext = context;
     DiagnosticSessionManager.Instance.Initialize({ enableConsoleTap: true, enablePolling: false });
+  }
+
+  /**
+   * Builds a route path under MJAPI's base path with the server's route builder.
+   * Throws when `Initialize` has not received a context, so a route is never registered at the wrong path.
+   */
+  private route(subpath: string): string {
+    if (!this.serverContext) {
+      throw new Error(
+        `DiagnosticsServerMiddleware cannot build route '${subpath}': Initialize() received no ServerMiddlewareContext.`
+      );
+    }
+    return this.serverContext.ApiRoute(subpath);
   }
 
   public override GetPreAuthMiddleware(): MiddlewareList {
@@ -174,10 +187,11 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     return [CreateDiagnosticsApolloPlugin()];
   }
 
-  public override ConfigureExpressApp(app: ExpressApp): void {
+  public override ConfigureExpressApp(app: ExpressApp, context?: ServerMiddlewareContext): void {
+    this.serverContext = context ?? this.serverContext;
     // 1. Single-use signed bundle download route
     app.get(
-      ApiRoute('/diagnostics/bundles/:bundleId/download'),
+      this.route('/diagnostics/bundles/:bundleId/download'),
       (req: ExpressReq, res: ExpressRes) => {
         const rawBundleId = req.params['bundleId'];
         const bundleId = Array.isArray(rawBundleId) ? rawBundleId[0] ?? '' : rawBundleId ?? '';
@@ -214,7 +228,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
 
     // 2. Standard MJAPI Intake routes (/diagnostics/intake/v1)
     app.get(
-      ApiRoute('/diagnostics/intake/v1/public-key'),
+      this.route('/diagnostics/intake/v1/public-key'),
       async (_req: ExpressReq, res: ExpressRes) => {
         if (!DiagnosticIntakeService.Instance.Enabled) {
           res.status(404).json({ error: 'Diagnostic intake is disabled on this instance.' });
@@ -226,7 +240,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     );
 
     app.post(
-      ApiRoute('/diagnostics/intake/v1/bundles'),
+      this.route('/diagnostics/intake/v1/bundles'),
       (req: ExpressReq, res: ExpressRes) => {
         const intake = DiagnosticIntakeService.Instance;
         if (!intake.Enabled) {
@@ -255,7 +269,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     );
 
     app.put(
-      ApiRoute('/diagnostics/intake/v1/bundles/:referenceId/payload'),
+      this.route('/diagnostics/intake/v1/bundles/:referenceId/payload'),
       (req: ExpressReq, res: ExpressRes) => {
         const intake = DiagnosticIntakeService.Instance;
         if (!intake.Enabled) {
@@ -301,7 +315,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     );
 
     app.post(
-      ApiRoute('/diagnostics/intake/v1/bundles/:referenceId/complete'),
+      this.route('/diagnostics/intake/v1/bundles/:referenceId/complete'),
       async (req: ExpressReq, res: ExpressRes) => {
         const intake = DiagnosticIntakeService.Instance;
         if (!intake.Enabled) {

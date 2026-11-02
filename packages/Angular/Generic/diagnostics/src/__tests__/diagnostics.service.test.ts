@@ -76,6 +76,25 @@ describe('MJDiagnosticsService', () => {
         expect(parsed.clientTelemetry[0].params?.['apiKey']).toBe('[REDACTED_KEY]');
     });
 
+    it('reports the number of credential redactions in the manifest, not the number of log lines', async () => {
+        service.RecordLogEntry({
+            timestamp: '2026-11-02T12:00:00.000Z',
+            severity: 'error',
+            source: 'client',
+            message: 'key sk-proj-1234567890abcdefghijklmnop then AKIAIOSFODNN7EXAMPLE then Password=hunter2',
+        });
+        service.RecordLogEntry({
+            timestamp: '2026-11-02T12:00:01.000Z',
+            severity: 'info',
+            source: 'client',
+            message: 'no secrets here',
+        });
+
+        const built = await service.BuildClientBundle({ scrubberProfile: 'FullRaw' });
+
+        expect(built.manifest.redactionSummary.credentialsScrubbedCount).toBe(3);
+    });
+
     it('submits a full-stack bundle from UX via UploadClientCapture -> BuildBundle -> SendBundle', async () => {
         const uploadSpy = vi
             .spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute')

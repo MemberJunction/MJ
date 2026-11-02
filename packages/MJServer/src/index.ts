@@ -302,7 +302,7 @@ import { RegisterDataHook } from '@memberjunction/core';
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
-import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
+import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
@@ -1013,8 +1013,9 @@ const setupComplete$ = new ReplaySubject(1);
   }
 
   // Initialize all middleware
+  const middlewareContext: ServerMiddlewareContext = { ApiRoute: (subpath: string) => ApiRoute(subpath) };
   for (const mw of middlewares) {
-      await mw.Initialize();
+      await mw.Initialize(middlewareContext);
       startupLog.LogIf('verbose', `  [Middleware] ${mw.Label}`);
   }
 
@@ -1036,7 +1037,7 @@ const setupComplete$ = new ReplaySubject(1);
 
       // Express app configuration escape hatch
       if (mw.ConfigureExpressApp) {
-          await mw.ConfigureExpressApp(app);
+          await mw.ConfigureExpressApp(app, middlewareContext);
       }
 
       // Extract hook methods and register in the global hook store

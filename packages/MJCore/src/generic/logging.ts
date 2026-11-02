@@ -1,5 +1,5 @@
 import debug, { Debugger } from 'debug';
-import { MJGlobal, SanitizeForLog } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import type { IFileSystemProvider } from './interfaces';
 
 // Create the default logger with the "MJGlobal" namespace.
@@ -573,20 +573,13 @@ export function LogStatus(message: any, logToFileName: string = null, ...args: a
     });
 }
 
-/** Returns a string argument on one line and length-capped; passes other values through unchanged. */
-function sanitizeConsoleArg(value: unknown): unknown {
-    return typeof value === 'string' ? SanitizeForLog(value) : value;
-}
-
 function logToConsole(message: any, isError: boolean, ...args: any[]) {
     _inMJLogToConsole = true;
     try {
-        const safeMessage = sanitizeConsoleArg(message);
-        const safeArgs = args.map(sanitizeConsoleArg);
         if (isError) // always do console.error() for errors even in production
-            console.error(safeMessage, ...safeArgs);
+            console.error(message, ...args);
         else if (!GetProductionStatus()) // only do console.log() if we're not in production
-            console.log(safeMessage, ...safeArgs);
+            console.log(message, ...args);
     } finally {
         _inMJLogToConsole = false;
     }

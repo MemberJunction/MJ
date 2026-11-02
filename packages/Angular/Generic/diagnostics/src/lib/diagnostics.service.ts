@@ -22,7 +22,7 @@ import {
     DiagnosticMode,
     DiagnosticBundleManifest,
     DiagnosticBundleData,
-    ScrubBundleData,
+    ScrubBundleDataWithCount,
     ScrubString,
     BuildMjdiagArchive,
     VerifyBundleArchive,
@@ -433,7 +433,8 @@ export class MJDiagnosticsService {
             findings: [],
         };
 
-        const scrubbed = ScrubBundleData(rawBundleData, { scrubberProfile });
+        const scrubResult = ScrubBundleDataWithCount(rawBundleData, { scrubberProfile });
+        const scrubbed = scrubResult.Data;
         scrubbed.findings = AnalyzeDiagnosticBundleData(scrubbed);
 
         const zipBytes = await BuildMjdiagArchive(scrubbed, {
@@ -442,7 +443,7 @@ export class MJDiagnosticsService {
             captureReason: options.ticketNumber ? `Ticket:${options.ticketNumber}` : 'Manual',
             scrubberProfile,
             redactionSummary: {
-                credentialsScrubbedCount: scrubbed.clientLogs.length,
+                credentialsScrubbedCount: scrubResult.CredentialsScrubbedCount,
                 sqlLiteralsNormalizedCount: 0,
                 customPatternsAppliedCount: 0,
             },

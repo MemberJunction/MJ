@@ -311,6 +311,22 @@ describe('Scrubber redaction counts', () => {
     expect(result.Text).toBe(ScrubString(threeSecretsOneLine, 'FullRaw'));
   });
 
+  it('counts a secret once when a later rule matches an earlier redaction marker', () => {
+    const key = 'sk-proj-1234567890abcdefghijklmnop';
+    expect(ScrubStringWithCount(`https://x/?token=${key}`, 'FullRaw').RedactionCount).toBe(1);
+    expect(ScrubStringWithCount(`Password=${key}`, 'FullRaw').RedactionCount).toBe(1);
+  });
+
+  it('redacts the whole value when it starts with a key an earlier rule already redacted', () => {
+    const conn = ScrubStringWithCount('Password=sk-proj-1234567890abcdefghijklmnop!hunter2tail;', 'FullRaw');
+    expect(conn.Text).not.toContain('hunter2tail');
+    expect(conn.RedactionCount).toBe(1);
+
+    const query = ScrubStringWithCount('https://x/?password=AKIAIOSFODNN7EXAMPLE.mysecretpart&x=1', 'FullRaw');
+    expect(query.Text).not.toContain('mysecretpart');
+    expect(query.RedactionCount).toBe(1);
+  });
+
   it('ScrubBundleDataWithCount counts the redactions across the whole bundle', () => {
     const data = createSampleBundleData();
     data.clientLogs = [{ timestamp: '2026-11-02T12:00:00.000Z', severity: 'info', source: 'client', message: threeSecretsOneLine }];

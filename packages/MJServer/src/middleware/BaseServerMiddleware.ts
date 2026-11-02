@@ -18,6 +18,17 @@ import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import type { RunViewParams, UserInfo, BaseEntity, RunViewResult } from '@memberjunction/core';
 
+/**
+ * What the server hands each middleware at startup.
+ */
+export interface ServerMiddlewareContext {
+    /**
+     * Builds the path of a route under MJAPI's base path (`MJAPI_BASE_PATH`).
+     * `subpath` must start with `/`. Use it for every route a middleware registers or compares against.
+     */
+    ApiRoute: (subpath: string) => string;
+}
+
 export abstract class BaseServerMiddleware {
     // --- Identity ---
 
@@ -37,9 +48,11 @@ export abstract class BaseServerMiddleware {
 
     /**
      * Optional async initialization (read config, warm caches, etc.).
-     * Called by serve() after instantiation, before middleware/hooks are extracted.
+     * Called by serve() after instantiation, before middleware/hooks are extracted,
+     * so a context stored here is available to every other hook.
+     * @param context - The server's route builder. serve() always passes it.
      */
-    async Initialize(): Promise<void> { /* no-op by default */ }
+    async Initialize(context?: ServerMiddlewareContext): Promise<void> { /* no-op by default */ }
 
     // --- Express Middleware ---
     // Each method corresponds to a named slot in the request pipeline.
@@ -73,8 +86,9 @@ export abstract class BaseServerMiddleware {
      * Called once during server setup with the Express app instance.
      * Use for: trust proxy settings, custom CORS, body parser config.
      * Return undefined to skip (default).
+     * @param context - The server's route builder. serve() always passes it.
      */
-    ConfigureExpressApp?(app: Application): void | Promise<void>;
+    ConfigureExpressApp?(app: Application, context?: ServerMiddlewareContext): void | Promise<void>;
 
     // --- Apollo / GraphQL Extensions ---
 

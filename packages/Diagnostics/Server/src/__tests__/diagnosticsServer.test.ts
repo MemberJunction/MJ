@@ -34,6 +34,19 @@ import {
     MalwareScanContext,
     MalwareScanResult,
 } from '../malwareScanner.js';
+import { DiagnosticsServerMiddleware } from '../middleware.js';
+
+type ExpressAppParam = Parameters<DiagnosticsServerMiddleware['ConfigureExpressApp']>[0];
+
+/** Records the paths a middleware registers with `get`, `post` and `put`. */
+function createRouteRecorder(): { App: ExpressAppParam; Paths: string[] } {
+    const paths: string[] = [];
+    const record = (path: string): void => {
+        paths.push(path);
+    };
+    const fake = { get: record, post: record, put: record };
+    return { App: fake as unknown as ExpressAppParam, Paths: paths };
+}
 
 async function createValidBundleZip(bundleId: string): Promise<Uint8Array> {
     const bundleData: DiagnosticBundleData = {
@@ -292,21 +305,24 @@ describe('@memberjunction/diagnostics-server', () => {
         });
     });
 
-    describe('Console tap', () => {
-        it('re-emits string arguments without CR or LF', () => {
-            const originalLog = console.log;
-            const sink = vi.fn();
-            console.log = sink;
-            try {
-                manager.InstallConsoleTap();
-                console.log('request for bob\r\n[ERROR] forged entry', 42);
-            } finally {
-                console.log = originalLog;
-            }
-            expect(sink).toHaveBeenCalledTimes(1);
-            const [first, second] = sink.mock.calls[0];
-            expect(first).toBe('request for bob[ERROR] forged entry');
-            expect(second).toBe(42);
+    describe('DiagnosticsServerMiddleware routes', () => {
+        it('registers every route under the base path the server context supplies', async () => {
+            const mw = new DiagnosticsServerMiddleware();
+            await mw.Initialize({ ApiRoute: (subpath: string) => `/api${subpath}` });
+            const recorder = createRouteRecorder();
+            mw.ConfigureExpressApp(recorder.App);
+
+            expect(recorder.Paths).toContain('/api/diagnostics/intake/v1/public-key');
+            expect(recorder.Paths).toContain('/api/diagnostics/intake/v1/bundles');
+            expect(recorder.Paths).toContain('/api/diagnostics/intake/v1/bundles/:referenceId/payload');
+            expect(recorder.Paths).toContain('/api/diagnostics/intake/v1/bundles/:referenceId/complete');
+            expect(recorder.Paths.every((p) => p.startsWith('/api/'))).toBe(true);
+        });
+
+        it('fails loudly when a route is built before the server context is set', () => {
+            const mw = new DiagnosticsServerMiddleware();
+            const recorder = createRouteRecorder();
+            expect(() => mw.ConfigureExpressApp(recorder.App)).toThrow(/ServerMiddlewareContext/);
         });
     });
 

@@ -97,16 +97,43 @@ interface RedactionTally {
 /** A Stage 1 credential pattern and the text that replaces each match. */
 interface CredentialRule {
     regex: RegExp;
-    replace: (match: string, prefix: string) => string;
+    /** Capture group that holds the secret; 0 means the whole match. */
+    secretGroup: number;
+    /** Builds the replacement from the match and its capture groups (`groups[0]` is group 1). */
+    replace: (groups: string[]) => string;
 }
 
 const CREDENTIAL_RULES: readonly CredentialRule[] = [
-    { regex: JWT_REGEX, replace: () => '[REDACTED_JWT]' },
-    { regex: BEARER_REGEX, replace: (_m, prefix) => `${prefix}[REDACTED_TOKEN]` },
-    { regex: KNOWN_API_KEY_REGEX, replace: () => '[REDACTED_API_KEY]' },
-    { regex: CONN_STRING_SECRET_REGEX, replace: (_m, name) => `${name}=[REDACTED_SECRET]` },
-    { regex: URL_QUERY_SECRET_REGEX, replace: (_m, prefix) => `${prefix}[REDACTED_QUERY_PARAM]` },
+    { regex: JWT_REGEX, secretGroup: 0, replace: () => '[REDACTED_JWT]' },
+    { regex: BEARER_REGEX, secretGroup: 0, replace: (groups) => `${groups[0]}[REDACTED_TOKEN]` },
+    { regex: KNOWN_API_KEY_REGEX, secretGroup: 0, replace: () => '[REDACTED_API_KEY]' },
+    { regex: CONN_STRING_SECRET_REGEX, secretGroup: 2, replace: (groups) => `${groups[0]}=[REDACTED_SECRET]` },
+    { regex: URL_QUERY_SECRET_REGEX, secretGroup: 2, replace: (groups) => `${groups[0]}[REDACTED_QUERY_PARAM]` },
 ];
+
+const REDACTION_MARKER_PREFIX = '[REDACTED_';
+
+/** Returns the number of capture groups in `regex`. */
+function captureGroupCount(regex: RegExp): number {
+    const emptyMatch = new RegExp(`${regex.source}|`).exec('');
+    return emptyMatch ? emptyMatch.length - 1 : 0;
+}
+
+/**
+ * Replaces every match of one rule and adds each redaction to `tally`.
+ * A match whose secret starts with a marker from an earlier rule is still replaced in full, but not counted again.
+ */
+function applyCredentialRule(input: string, rule: CredentialRule, tally: RedactionTally): string {
+    const groupCount = captureGroupCount(rule.regex);
+    return input.replace(rule.regex, (match: string, ...rest: Array<string | number | undefined>) => {
+        const groups = rest.slice(0, groupCount).map((g) => (typeof g === 'string' ? g : ''));
+        const secret = rule.secretGroup === 0 ? match : groups[rule.secretGroup - 1];
+        if (!secret.startsWith(REDACTION_MARKER_PREFIX)) {
+            tally.count++;
+        }
+        return rule.replace(groups);
+    });
+}
 
 /**
  * Returns the index just past the first PEM END marker at or after `from`, or -1 if there is none.
@@ -146,10 +173,7 @@ function redactPemPrivateKeys(input: string, tally: RedactionTally): string {
 function redactCredentials(input: string, tally: RedactionTally): string {
     let result = redactPemPrivateKeys(input, tally);
     for (const rule of CREDENTIAL_RULES) {
-        result = result.replace(rule.regex, (match: string, prefix: string) => {
-            tally.count++;
-            return rule.replace(match, prefix);
-        });
+        result = applyCredentialRule(result, rule, tally);
     }
     return result;
 }
