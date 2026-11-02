@@ -97,11 +97,31 @@ RunDetached(() => {
 
 ## 3. Submission Side: Capturing, Downloading & Sending Bundles
 
-### Capture Modes
+### Explorer UX Entry Points (`@memberjunction/ng-explorer-core` + `@memberjunction/ng-diagnostics`)
+
+Users and administrators can launch diagnostic capture or download a `.mjdiag` bundle from three places in the Explorer UI:
+
+1. **About Dialog (`About MemberJunction` → `Diagnostics`)**:
+   - Inside `AboutDialogComponent`'s collapsible **Diagnostics** accordion section, click **"Diagnostic Bundle..."** right next to **"Copy diagnostics"** to open `<mj-diagnostic-report-problem-dialog>`.
+2. **User Avatar Menu (Top-Right Header)**:
+   - Open the user profile menu and click **"Diagnostic Bundle"** (in the `system` section right above `About MemberJunction`).
+   - When the user starts a live recording session and closes the dialog to reproduce an issue, `<mj-diagnostic-recording-banner>` stays pinned in the shell with an elapsed timer and a one-click **Stop & Build** button.
+3. **Stuck-Loading Screen (Pre-Reset Capture)**:
+   - `ShellComponent.ngOnInit()` initializes `MJDiagnosticsService` immediately at boot. If startup stalls and the *"Taking longer than expected"* reset panel appears, a **"Download Diagnostic Bundle"** button is shown right next to **"Reset"** so the user can download the startup `.mjdiag` flight-recorder snapshot *before* `ResetApplication()` clears IndexedDB and caches.
+
+### Capture Modes & Submission Flows
 
 - **Snapshot**: Packages the current client and server ring buffers immediately without starting a persistent session.
-- **Record**: Starts a live session (`MJ: Diagnostic Sessions`). The browser attaches `x-mj-diag-session: <sessionId>` on GraphQL requests (`GraphQLDataProvider.Instance.SetActiveDiagnosticSessionId(sessionId)`) and flushes client buffers to the `MJ_Diagnostics` IndexedDB database every 1 second (preserved across `ResetApplication()`).
-- **Watch**: An administrator starts a server-side session targeting a specific `TargetUserID` within the same `CompanyID` tenant. Stage 2 post-auth middleware automatically attaches matching requests to the session even when the browser does not send `x-mj-diag-session`.
+- **Record**: Starts a live session (`MJ: Diagnostic Sessions`). The browser attaches `X-MJ-Diagnostic-Session: <sessionId>` on GraphQL requests (`GraphQLDataProvider.Instance.SetActiveDiagnosticSessionId(sessionId)`) and flushes client buffers to the `MJ_Diagnostics` IndexedDB database every 1 second (preserved across `ResetApplication()`).
+- **One-Click "Submit to Support" (`MJDiagnosticsService.SubmitBundleToSupport()`)**:
+  - Directly from `<mj-diagnostic-report-problem-dialog>`, clicking **"Submit to Support"** executes:
+    1. `Diagnostics.UploadClientCapture` — uploads the scrubbed client flight-recorder seed to the server.
+    2. `Diagnostics.BuildBundle` — merges client and server chunks, runs the 9 automated diagnostic rules, and verifies the `.mjdiag` archive.
+    3. `Diagnostics.SendBundle` — encrypts the `.mjdiag` archive with `MJDB` v1 hybrid encryption (`X25519` + `AES-256-GCM` with header AAD) and uploads it to the configured collector endpoint, displaying the returned `diagref_...` Support Reference ID in the dialog.
+- **Server-Initiated "Watch Sessions" + Automatic Browser Flush (`X-MJ-Diagnostic-Trigger`)**:
+  - An administrator or automated rule can arm a server-side Watch Session (`Diagnostics.StartSession`) scoped by `Users` (`UserID`, `BrowserSessionID`, `APIKeyID` isolated by `CompanyID`) or `Operations` (GraphQL operation name, error-only, or `minDurationMs` latency threshold).
+  - When `DiagnosticsServerMiddleware` matches an incoming browser request to an active Watch Session, it sets `X-MJ-Diagnostic-Trigger: <sessionId>` on the HTTP response.
+  - `MJDiagnosticsService.HandleServerTriggerHeader(sessionId)` in the browser detects this header and automatically flushes the client flight-recorder snapshot via `Diagnostics.UploadClientCapture` (deduplicated per session ID) without requiring any user interaction.
 
 ### Remote Operations
 
