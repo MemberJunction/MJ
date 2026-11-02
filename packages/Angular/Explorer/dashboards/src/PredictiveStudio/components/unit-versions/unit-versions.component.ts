@@ -60,8 +60,8 @@ export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUni
 
   /** Any version row of the lineage; null = author version 1 of a new unit. */
   @Input()
-  public get UnitID(): string | null { return this.lineageId; }
-  public set UnitID(value: string | null) { this.setLineageId(value); }
+  public get UnitID(): string | null { return this.LineageID; }
+  public set UnitID(value: string | null) { this.SetLineageID(value); }
 
   /** The user cancelled authoring version 1. */
   @Output() Cancelled = new EventEmitter<void>();
@@ -74,10 +74,10 @@ export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUni
   public async Save(request: UnitSaveRequest): Promise<void> {
     const version = this.versionToWrite(request);
     if (version === null) return;
-    await this.saveVersion(version);
+    await this.SaveVersion(version);
   }
 
-  protected readVersions(anyVersionId: string): Promise<LineageRead<VersionedUnitRow>> {
+  protected ReadVersions(anyVersionId: string): Promise<LineageRead<VersionedUnitRow>> {
     return LineageReads.ReadParsedLineage<UnitVersionRow, VersionedUnitRow>(
       this.ProviderToUse, this.EntityName, anyVersionId, UNIT_VERSION_FIELDS, (row) => {
         const parsed = PredictionUnit.ParsePredictionUnitRow(row);
@@ -86,7 +86,7 @@ export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUni
     );
   }
 
-  protected applyDraftToRow(row: MJPredictionUnitEntity, version: UnitVersionWrite): void {
+  protected ApplyDraftToRow(row: MJPredictionUnitEntity, version: UnitVersionWrite): void {
     ProtocolRows.ApplyPredictionUnitDraftToRow(row, version.Draft, version.Meta);
   }
 
@@ -98,7 +98,7 @@ export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUni
   private versionToWrite(request: UnitSaveRequest): UnitVersionWrite | null {
     const latest = this.Latest;
     if (latest === null) {
-      if (this.lineageId !== null) return null;
+      if (this.LineageID !== null) return null;
       const id = ProtocolRows.NewVersionRowID();
       return { Draft: request.Draft, Meta: { ID: id, LineageRootID: id, Version: 1, LabelVersion: 1, AuthoredBy: this.Author } };
     }

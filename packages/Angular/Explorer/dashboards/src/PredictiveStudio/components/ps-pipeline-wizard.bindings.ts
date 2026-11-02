@@ -74,7 +74,7 @@ export class PipelineWizardBindings {
       if (page.Rows.length === 0) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} returned ${read} of ${total} rows`);
       labels.push(...page.Labels);
       read += page.Rows.length;
-      afterKey = CompositeKey.FromEntityRecord(entity, page.Rows[page.Rows.length - 1]);
+      if (keyset) afterKey = CompositeKey.FromEntityRecord(entity, page.Rows[page.Rows.length - 1]);
     }
     return labels;
   }

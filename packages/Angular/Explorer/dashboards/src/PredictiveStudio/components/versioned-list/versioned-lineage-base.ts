@@ -34,9 +34,9 @@ export abstract class PSVersionedLineageBase<
   TEntity extends BaseEntity & { readonly ID: string },
   TRelated = never,
 > extends BaseAngularComponent implements OnInit {
-  protected readonly cdr = inject(ChangeDetectorRef);
+  private readonly cdr = inject(ChangeDetectorRef);
   /** Any version row of the lineage the widget shows. */
-  protected lineageId: string | null = null;
+  protected LineageID: string | null = null;
   private isInitialized = false;
   /** Increments on every load; a load whose number is no longer current drops its result. */
   private loadSeq = 0;
@@ -56,10 +56,10 @@ export abstract class PSVersionedLineageBase<
   protected abstract readonly EntityName: VersionedEntityName;
 
   /** The parsed versions of the lineage `anyVersionId` belongs to, or why they cannot be shown. */
-  protected abstract readVersions(anyVersionId: string): Promise<LineageRead<TVersion>>;
+  protected abstract ReadVersions(anyVersionId: string): Promise<LineageRead<TVersion>>;
 
   /** Writes `version` into the new, empty `row`. */
-  protected abstract applyDraftToRow(row: TEntity, version: TWrite): void;
+  protected abstract ApplyDraftToRow(row: TEntity, version: TWrite): void;
 
   public ngOnInit(): void {
     this.isInitialized = true;
@@ -83,41 +83,41 @@ export abstract class PSVersionedLineageBase<
   /** Loads every version of the lineage and what the widget shows beside it; a newer load supersedes it. */
   public async Load(): Promise<void> {
     const seq = ++this.loadSeq;
-    this.resetState();
-    const id = this.lineageId;
+    this.ResetState();
+    const id = this.LineageID;
     if (id !== null) {
       this.IsLoading = true;
       this.cdr.detectChanges();
-      const versions = await this.readVersions(id);
-      const related = versions.Ok ? await this.readRelated(versions.Rows) : null;
+      const versions = await this.ReadVersions(id);
+      const related = versions.Ok ? await this.ReadRelated(versions.Rows) : null;
       if (seq !== this.loadSeq) return;
       this.applyVersions(versions, id);
-      if (versions.Ok) this.applyRelated(related);
+      if (versions.Ok) this.ApplyRelated(related);
       this.IsLoading = false;
     }
     this.cdr.detectChanges();
   }
 
   /** Rebinds the widget to another lineage; loads it once the widget is initialized. */
-  protected setLineageId(value: string | null): void {
-    if (UUIDsEqual(value, this.lineageId)) return;
-    this.lineageId = value;
+  protected SetLineageID(value: string | null): void {
+    if (UUIDsEqual(value, this.LineageID)) return;
+    this.LineageID = value;
     // Before init the Provider input may not be bound yet; ngOnInit performs the first load.
     if (this.isInitialized) void this.Load();
   }
 
   /** Reads what the widget shows beside the versions; the base reads nothing. */
-  protected async readRelated(_versions: readonly TVersion[]): Promise<TRelated | null> {
+  protected async ReadRelated(_versions: readonly TVersion[]): Promise<TRelated | null> {
     return null;
   }
 
-  /** Shows what `readRelated` returned; the base shows nothing. */
-  protected applyRelated(_related: TRelated | null): void {
+  /** Shows what `ReadRelated` returned; the base shows nothing. */
+  protected ApplyRelated(_related: TRelated | null): void {
     // nothing is read beside the versions by default
   }
 
   /** Clears what the previous record showed, so a failed or empty load never shows it next to the new state. */
-  protected resetState(): void {
+  protected ResetState(): void {
     this.Error = null;
     this.Versions = [];
     this.Selected = null;
@@ -126,7 +126,7 @@ export abstract class PSVersionedLineageBase<
   }
 
   /** Saves `version` as a new row after a cancelable `BeforeVersionSaved`, then reloads on the saved row. */
-  protected async saveVersion(version: TWrite): Promise<void> {
+  protected async SaveVersion(version: TWrite): Promise<void> {
     const before = new BeforeVersionSavedEventArgs<TDraft>(this.EntityName, version.Meta.Version, version.Draft);
     this.BeforeVersionSaved.emit(before);
     if (before.Cancel) {
@@ -140,7 +140,7 @@ export abstract class PSVersionedLineageBase<
       this.cdr.detectChanges();
       return;
     }
-    this.lineageId = savedId;
+    this.LineageID = savedId;
     await this.Load();
   }
 
@@ -149,7 +149,7 @@ export abstract class PSVersionedLineageBase<
     const p = this.ProviderToUse;
     const row = await p.GetEntityObject<TEntity>(this.EntityName, p.CurrentUser);
     row.NewRecord();
-    this.applyDraftToRow(row, version);
+    this.ApplyDraftToRow(row, version);
     if (await row.Save()) return row.ID;
     this.Error = row.LatestResult?.CompleteMessage || 'The new version could not be saved.';
     return null;

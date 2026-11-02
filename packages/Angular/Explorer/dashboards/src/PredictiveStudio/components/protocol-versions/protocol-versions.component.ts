@@ -69,8 +69,8 @@ export class PSProtocolVersionsComponent extends PSVersionedLineageBase<
 
   /** Any version row of the lineage. */
   @Input()
-  public get EvaluationProtocolID(): string | null { return this.lineageId; }
-  public set EvaluationProtocolID(value: string | null) { this.setLineageId(value); }
+  public get EvaluationProtocolID(): string | null { return this.LineageID; }
+  public set EvaluationProtocolID(value: string | null) { this.SetLineageID(value); }
 
   public Unit: PredictionUnitSpec | null = null;
 
@@ -78,13 +78,13 @@ export class PSProtocolVersionsComponent extends PSVersionedLineageBase<
   public async Save(draft: EvaluationProtocolDraft): Promise<void> {
     const latest = this.Latest;
     if (latest === null) return;
-    await this.saveVersion({
+    await this.SaveVersion({
       Draft: draft,
       Meta: { ID: null, LineageRootID: latest.Row.LineageRootID, Version: latest.Row.Version + 1, AuthoredBy: this.Author, Description: latest.Row.Description },
     });
   }
 
-  protected readVersions(anyVersionId: string): Promise<LineageRead<VersionedProtocolRow>> {
+  protected ReadVersions(anyVersionId: string): Promise<LineageRead<VersionedProtocolRow>> {
     return LineageReads.ReadParsedLineage<ProtocolVersionRow, VersionedProtocolRow>(
       this.ProviderToUse, this.EntityName, anyVersionId, PROTOCOL_VERSION_FIELDS, (row) => {
         const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(row);
@@ -93,22 +93,22 @@ export class PSProtocolVersionsComponent extends PSVersionedLineageBase<
     );
   }
 
-  protected applyDraftToRow(row: MJEvaluationProtocolEntity, version: ProtocolVersionWrite): void {
+  protected ApplyDraftToRow(row: MJEvaluationProtocolEntity, version: ProtocolVersionWrite): void {
     ProtocolRows.ApplyProtocolDraftToRow(row, version.Draft, version.Meta);
   }
 
   /** The unit a pipeline binds any version of the lineage to: the unit-dependent checks run against it. */
-  protected override readRelated(versions: readonly VersionedProtocolRow[]): Promise<ValueRead<PredictionUnitSpec | null>> {
+  protected override ReadRelated(versions: readonly VersionedProtocolRow[]): Promise<ValueRead<PredictionUnitSpec | null>> {
     return this.readBoundUnit(versions.map((v) => v.Row.ID));
   }
 
-  protected override applyRelated(unit: ValueRead<PredictionUnitSpec | null> | null): void {
+  protected override ApplyRelated(unit: ValueRead<PredictionUnitSpec | null> | null): void {
     if (unit !== null && !unit.Ok) this.Error = unit.Error;
     this.Unit = unit !== null && unit.Ok ? unit.Value : null;
   }
 
-  protected override resetState(): void {
-    super.resetState();
+  protected override ResetState(): void {
+    super.ResetState();
     this.Unit = null;
   }
 
