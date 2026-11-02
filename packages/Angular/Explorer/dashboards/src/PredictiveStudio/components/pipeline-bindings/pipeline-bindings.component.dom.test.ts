@@ -4,8 +4,8 @@ import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjun
 import { PSPipelineBindingsComponent } from './pipeline-bindings.component';
 import type { AfterBindingChangedEventArgs, BeforeBindingChangedEventArgs } from '../ps-widget-events';
 import type { VersionRowFields } from '../versioned-list/lineage-reads';
-import { DOUBLE_USER_ID, RowsMatching, ViewResult } from '../versioned-list/version-rows.test-support';
-import { HostElement, QueryElement } from '../ps-dom-queries.test-support';
+import { VersionRowDoubles, DOUBLE_USER_ID } from '../versioned-list/version-rows.test-support';
+import { PSDomQueries } from '../ps-dom-queries.test-support';
 
 const PIPELINE_ID = 'AAAAAAAA-1111-4222-8333-444444444444';
 const UNIT_V1 = '11111111-2222-4333-8444-555555555555';
@@ -46,7 +46,7 @@ function pipelineDouble(failWith: string | null): PipelineDouble {
 function providerFor(pipeline: PipelineDouble): IMetadataProvider {
   const provider: IMetadataProvider = Object.create(null);
   const runView = async (params: RunViewParams): Promise<RunViewResult<PipelineDouble | VersionRowFields>> =>
-    params.EntityName === 'MJ: ML Training Pipelines' ? ViewResult([pipeline]) : ViewResult(RowsMatching(versionRows, params));
+    params.EntityName === 'MJ: ML Training Pipelines' ? VersionRowDoubles.ViewResult([pipeline]) : VersionRowDoubles.ViewResult(VersionRowDoubles.RowsMatching(versionRows, params));
   Object.assign(provider, {
     CurrentUser: { ID: DOUBLE_USER_ID },
     RunView: runView,
@@ -77,9 +77,9 @@ async function render(failWith: string | null = null): Promise<Rendered> {
 describe('PSPipelineBindingsComponent (DOM)', () => {
   it('shows each bound version and offers the latest unit version', async () => {
     const { Fixture } = await render();
-    const host = HostElement(Fixture);
+    const host = PSDomQueries.HostElement(Fixture);
     expect(host.querySelector('[data-testid="ps-binding-unit"]')?.textContent).toContain('Renewal v1');
-    expect(QueryElement(host, '[data-testid="ps-bind-latest-unit"]', HTMLButtonElement).textContent).toContain('Use v2');
+    expect(PSDomQueries.QueryElement(host, '[data-testid="ps-bind-latest-unit"]', HTMLButtonElement).textContent).toContain('Use v2');
     expect(host.querySelector('[data-testid="ps-bind-latest-protocol"]')).toBeNull();
   });
 
@@ -108,6 +108,6 @@ describe('PSPipelineBindingsComponent (DOM)', () => {
     Fixture.detectChanges();
     expect(Pipeline.Saves).toBe(1);
     expect([After[0]?.Success, After[0]?.ErrorMessage]).toEqual([false, 'The unit and the protocol disagree: horizon-mismatch.']);
-    expect(HostElement(Fixture).querySelector('[data-testid="ps-bindings-error"]')?.textContent).toContain('horizon-mismatch');
+    expect(PSDomQueries.HostElement(Fixture).querySelector('[data-testid="ps-bindings-error"]')?.textContent).toContain('horizon-mismatch');
   });
 });

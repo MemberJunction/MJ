@@ -5,7 +5,7 @@
  * is saved last, already bound, so no unbound pipeline is left behind; when it fails to save, the unit and protocol it
  * would have pointed at are deleted again. Browser-safe (L0): no router, no Explorer import.
  */
-import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
@@ -14,6 +14,17 @@ import {
 
 /** Rows per label page: an explicit page size, since a client view without one returns only the entity's default page. */
 const LABEL_PAGE_ROWS = 50_000;
+
+/** A target-entity row as a label page reads it: the target column and the primary key columns. */
+type LabelRow = Record<string, string | number | boolean | Date | null>;
+
+/** Which label page to read: after `Read` rows, by `AfterKey` (none on the first page) when paging by keyset. */
+interface LabelPageRequest {
+  readonly Keys: readonly string[];
+  readonly Read: number;
+  readonly Keyset: boolean;
+  readonly AfterKey: CompositeKey | undefined;
+}
 
 /** The unit draft and protocol inputs a new pipeline maps to. */
 export interface WizardBindingPlan {
@@ -46,38 +57,43 @@ export class PipelineWizardBindings {
 
   /**
    * The target's class labels for a classification (none for a regression), every row read in pages ordered by the
-   * primary key (a client view returns at most a page of rows); a read that ends short of the row count is refused
-   * rather than mapped from a sample.
+   * primary key: keyset pages (`AfterKey`) on a single-column key, `StartRow` pages on a composite one. The row count
+   * comes from the first page; a read that ends short of it is refused rather than mapped from a sample.
    */
   public static async ReadClassLabels(p: WizardPipelineFields, provider: IMetadataProvider, user: UserInfo | undefined): Promise<string[]> {
     if (p.ProblemType !== 'classification') return [];
     const entity = provider.EntityByName(p.TargetEntity);
     if (!entity) throw new Error(`Target entity "${p.TargetEntity}" is not registered`);
-    const orderBy = entity.PrimaryKeys.map((k) => k.Name).join(', ');
+    const keys = entity.PrimaryKeys.map((k) => k.Name);
+    const keyset = keys.length === 1;
     const labels: string[] = [];
+    let afterKey: CompositeKey | undefined;
     for (let read = 0, total = 1; read < total;) {
-      const page = await PipelineWizardBindings.readLabelPage(p, provider, user, orderBy, read);
-      if (page.Rows === 0) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} returned ${read} of ${page.Total} rows`);
+      const page = await PipelineWizardBindings.readLabelPage(p, provider, user, { Keys: keys, Read: read, AfterKey: afterKey, Keyset: keyset });
+      if (read === 0) total = page.Total;
+      if (page.Rows.length === 0) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} returned ${read} of ${total} rows`);
       labels.push(...page.Labels);
-      read += page.Rows;
-      total = page.Total;
+      read += page.Rows.length;
+      afterKey = CompositeKey.FromEntityRecord(entity, page.Rows[page.Rows.length - 1]);
     }
     return labels;
   }
 
-  /** One page of the target column from `startRow`: its class labels, its row count and the view's total. */
+  /** One page of the target column after `Read` rows (by `AfterKey` when keyset): its rows, class labels and the view's total. */
   private static async readLabelPage(
-    p: WizardPipelineFields, provider: IMetadataProvider, user: UserInfo | undefined, orderBy: string, startRow: number,
-  ): Promise<{ readonly Labels: string[]; readonly Rows: number; readonly Total: number }> {
-    const r = await RunView.FromMetadataProvider(provider).RunView<Record<string, string | number | boolean | Date | null>>(
-      { EntityName: p.TargetEntity, Fields: [p.TargetVariable], OrderBy: orderBy, StartRow: startRow, MaxRows: LABEL_PAGE_ROWS, ResultType: 'simple' }, user);
+    p: WizardPipelineFields, provider: IMetadataProvider, user: UserInfo | undefined, page: LabelPageRequest,
+  ): Promise<{ readonly Rows: LabelRow[]; readonly Labels: string[]; readonly Total: number }> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<LabelRow>({
+      EntityName: p.TargetEntity, Fields: [p.TargetVariable, ...page.Keys], OrderBy: page.Keys.join(', '), MaxRows: LABEL_PAGE_ROWS, ResultType: 'simple',
+      ...(page.Keyset ? { AfterKey: page.AfterKey } : { StartRow: page.Read }),
+    }, user);
     if (!r.Success) throw new Error(`Reading ${p.TargetEntity}.${p.TargetVariable} failed: ${r.ErrorMessage}`);
     const labels = r.Results.flatMap((row) => {
       const label = TaskTypeRules.ClassLabel(row[p.TargetVariable]);
       return label === null ? [] : [label];
     });
     // A view that reports no total has returned every row it holds.
-    return { Labels: labels, Rows: r.Results.length, Total: typeof r.TotalRowCount === 'number' ? r.TotalRowCount : startRow + r.Results.length };
+    return { Rows: r.Results, Labels: labels, Total: typeof r.TotalRowCount === 'number' ? r.TotalRowCount : page.Read + r.Results.length };
   }
 
   /**

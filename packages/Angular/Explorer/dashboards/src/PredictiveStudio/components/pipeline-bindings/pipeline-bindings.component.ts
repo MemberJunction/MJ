@@ -2,12 +2,12 @@ import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnInit, Outp
 import { CommonModule } from '@angular/common';
 import { RunView, type RunViewResult } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { AfterBindingChangedEventArgs, BeforeBindingChangedEventArgs, type BindingKind } from '../ps-widget-events';
-import { LineageReads, type BoundVersionRead, type BoundVersionRequest } from '../versioned-list/lineage-reads';
+import { LineageReads, type BoundVersionRead, type BoundVersionRequest, type ValueRead } from '../versioned-list/lineage-reads';
 
 /** A version a pipeline is bound to, and the latest version of its lineage. */
 export interface BoundVersion {
@@ -23,9 +23,6 @@ interface Bindings {
   readonly Unit: BoundVersion | null;
   readonly Protocol: BoundVersion | null;
 }
-
-/** A read that may fail: the value, or the error to show. */
-type Read<T> = { readonly Ok: true; readonly Value: T } | { readonly Ok: false; readonly Error: string };
 
 type PipelineBindingFields = Pick<MJMLTrainingPipelineEntity, 'ID' | 'PredictionUnitID' | 'EvaluationProtocolID'>;
 
@@ -73,7 +70,7 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent implements
   @Input()
   public get PipelineID(): string | null { return this._pipelineId; }
   public set PipelineID(value: string | null) {
-    if (value === this._pipelineId) return;
+    if (UUIDsEqual(value, this._pipelineId)) return;
     this._pipelineId = value;
     // Before init the Provider input may not be bound yet; ngOnInit performs the first load.
     if (this.isInitialized) void this.Load();
@@ -143,7 +140,7 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent implements
     this.HasLoaded = false;
   }
 
-  private applyRead(read: Read<Bindings>): void {
+  private applyRead(read: ValueRead<Bindings>): void {
     if (!read.Ok) {
       this.Error = read.Error;
       return;
@@ -167,7 +164,7 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent implements
   }
 
   /** The pipeline's two binding columns (a simple, three-field read), then the bound versions. */
-  private async readBindings(pipelineId: string): Promise<Read<Bindings>> {
+  private async readBindings(pipelineId: string): Promise<ValueRead<Bindings>> {
     const r = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<PipelineBindingFields>({
       EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID='${EscapeSQLString(pipelineId)}'`,
       Fields: ['ID', 'PredictionUnitID', 'EvaluationProtocolID'], ResultType: 'simple',
@@ -176,7 +173,7 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent implements
     return pipeline.Ok ? this.readBound(pipeline.Value) : pipeline;
   }
 
-  private async readBound(pipeline: PipelineBindingFields): Promise<Read<Bindings>> {
+  private async readBound(pipeline: PipelineBindingFields): Promise<ValueRead<Bindings>> {
     const requests: BoundVersionRequest[] = [];
     if (pipeline.PredictionUnitID) requests.push({ EntityName: 'MJ: Prediction Units', ID: pipeline.PredictionUnitID });
     if (pipeline.EvaluationProtocolID) requests.push({ EntityName: 'MJ: Evaluation Protocols', ID: pipeline.EvaluationProtocolID });
@@ -189,7 +186,7 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent implements
     return { Ok: true, Value: { Unit: of('MJ: Prediction Units'), Protocol: of('MJ: Evaluation Protocols') } };
   }
 
-  private static first<T>(r: RunViewResult<T>, pipelineId: string): Read<T> {
+  private static first<T>(r: RunViewResult<T>, pipelineId: string): ValueRead<T> {
     if (!r.Success) return { Ok: false, Error: r.ErrorMessage };
     const row = r.Results[0];
     return row === undefined ? { Ok: false, Error: `Pipeline ${pipelineId} was not found.` } : { Ok: true, Value: row };

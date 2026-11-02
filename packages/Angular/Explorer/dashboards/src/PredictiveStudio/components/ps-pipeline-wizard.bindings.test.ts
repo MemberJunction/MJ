@@ -9,7 +9,7 @@ type Cell = string | number | boolean | Date | null;
 /** A saved-row double: its columns, the order it was saved in, and whether it was deleted. */
 interface RowDouble {
   ID: string;
-  [column: string]: string | number | boolean | null | (() => unknown) | object | undefined;
+  [column: string]: string | number | boolean | null | (() => boolean) | (() => Promise<boolean>) | object | undefined;
 }
 
 /** The double's state: the rows it handed out (by entity), the save order, and the labels its view returns. */
@@ -22,6 +22,12 @@ interface WizardWorld {
   TotalRowCount: number | null;
   FailUnitSave: boolean;
 }
+
+/** The target entities the double knows: `Members` has a single-column key, `Memberships` a composite one. */
+const ENTITY_KEYS: Record<string, { readonly PrimaryKeys: readonly { readonly Name: string }[] } | undefined> = {
+  Members: { PrimaryKeys: [{ Name: 'ID' }] },
+  Memberships: { PrimaryKeys: [{ Name: 'MemberID' }, { Name: 'Year' }] },
+};
 
 /** A provider whose view returns the target labels and whose entity objects save into the world (no casts: Object.create + assign). */
 function world(labels: Cell[]): WizardWorld {
@@ -48,13 +54,15 @@ function world(labels: Cell[]): WizardWorld {
   };
   Object.assign(provider, {
     CurrentUser: { ID: 'USER-1' },
-    EntityByName: (name: string) => (name === 'Members' ? { PrimaryKeys: [{ Name: 'ID' }] } : undefined),
+    EntityByName: (name: string) => ENTITY_KEYS[name],
     RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, Cell>>> => {
       w.Reads.push(params);
       const field = params.Fields?.[0] || '';
+      const all = w.Labels.map((v, i) => ({ [field]: v, ID: `R${i}`, MemberID: `M${i}`, Year: 2026 }));
+      // keyset: the rows after the key; otherwise from StartRow
+      const start = params.AfterKey ? all.findIndex((r) => r.ID === params.AfterKey?.GetValueByFieldName('ID')) + 1 : params.StartRow || 0;
       // pages of 2 rows, as a client view returns at most a page
-      const start = params.StartRow || 0;
-      const rows = w.Labels.slice(start, start + 2).map((v) => ({ [field]: v }));
+      const rows = all.slice(start, start + 2);
       return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: w.TotalRowCount === null ? w.Labels.length : w.TotalRowCount, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     },
     GetEntityObject: async (entity: string): Promise<RowDouble> => row(entity, entity === 'MJ: Prediction Units' ? 'U' : 'EP'),
@@ -109,8 +117,13 @@ describe('PipelineWizardBindings.SaveWithBindings', () => {
     expect(await PipelineWizardBindings.SaveWithBindings(p, 'Members', w.Provider, undefined)).toEqual({ Ok: true });
     expect(w.Order).toEqual(['MJ: Prediction Units', 'MJ: Evaluation Protocols', 'MJ: ML Training Pipelines unit=U-SERVER protocol=EP-SERVER']);
     expect([p.TargetVariable, p.ProblemType]).toEqual(['Renewed within 1 days', 'classification']);
-    // every row read, in pages ordered by the key
-    expect(w.Reads.map((r) => [r.StartRow, r.OrderBy])).toEqual([[0, 'ID'], [2, 'ID']]);
+    // every row read, in keyset pages ordered by the key: the second page starts after the first page's last row
+    expect(w.Reads.map((r) => [r.AfterKey ? r.AfterKey.ToString() : null, r.StartRow, r.OrderBy])).toEqual([[null, undefined, 'ID'], ['ID=R1', undefined, 'ID']]);
+  });
+  it('pages a target entity with a composite key by StartRow', async () => {
+    const w = world(['1', '0', '1']);
+    expect(await PipelineWizardBindings.ReadClassLabels(fields({ TargetEntity: 'Memberships' }), w.Provider, undefined)).toEqual(['1', '0', '1']);
+    expect(w.Reads.map((r) => [r.AfterKey, r.StartRow, r.OrderBy])).toEqual([[undefined, 0, 'MemberID, Year'], [undefined, 2, 'MemberID, Year']]);
   });
   it('deletes the unit and protocol when the pipeline fails to save', async () => {
     const w = world(['1', '0']);

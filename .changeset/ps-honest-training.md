@@ -38,6 +38,8 @@ signal), stores that decision with its reason on the run, and renders the trust 
   `ExperimentScores.ExtractNormalizedScore(holdoutMetricsJson, successMetric)` (holdout metrics only, null when unmeasured).
 - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
   `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;
+  `BusinessPredictionInput.modelId` / `name` are renamed `ModelID` / `Name`;
+  `ImprovePromptInput.TrustGrade` is renamed `TrustTitle`;
   the deprecated lowercase helpers of the Predictive Studio agent context, models and studio resources and
   `buildImprovePrompt` are removed.
 - `@memberjunction/predictive-studio-sidecar`, `@memberjunction/predictive-studio-truth-suite`: the gate parity tests

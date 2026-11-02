@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { PSUnitEditorComponent, type UnitSaveRequest } from './unit-editor.component';
-import { HostElement, QueryElement } from '../ps-dom-queries.test-support';
+import { PSDomQueries } from '../ps-dom-queries.test-support';
 
 const v1: PredictionUnitSpec = {
   id: '11111111-2222-4333-8444-555555555555', lineageRootId: '11111111-2222-4333-8444-555555555555', version: 1, name: 'Renewal',
@@ -23,11 +23,11 @@ async function render(base: PredictionUnitSpec | null): Promise<ComponentFixture
 }
 
 function host(fixture: ComponentFixture<PSUnitEditorComponent>): HTMLElement {
-  return HostElement(fixture);
+  return PSDomQueries.HostElement(fixture);
 }
 
 function saveButton(fixture: ComponentFixture<PSUnitEditorComponent>): HTMLButtonElement {
-  return QueryElement(host(fixture), '[data-testid="ps-unit-save"]', HTMLButtonElement);
+  return PSDomQueries.QueryElement(host(fixture), '[data-testid="ps-unit-save"]', HTMLButtonElement);
 }
 
 describe('PSUnitEditorComponent (DOM)', () => {
@@ -55,7 +55,7 @@ describe('PSUnitEditorComponent (DOM)', () => {
   it('bumps the label version when the outcome window is edited in the form and emits it on save', async () => {
     const fixture = await render(v1);
     expect(host(fixture).querySelector('[data-testid="ps-unit-label-version"]')?.textContent).toContain('Label version will be 1');
-    const window = QueryElement(host(fixture), '[data-testid="ps-unit-window"]', HTMLInputElement);
+    const window = PSDomQueries.QueryElement(host(fixture), '[data-testid="ps-unit-window"]', HTMLInputElement);
     window.value = '400';
     window.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -85,7 +85,7 @@ describe('PSUnitEditorComponent (DOM)', () => {
       temporal: { timeColumn: 'Month', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'month', seasonality: null },
     };
     const fixture = await render(forecast);
-    expect(QueryElement(host(fixture), '[data-testid="ps-unit-task"]', HTMLSelectElement).disabled).toBe(true);
+    expect(PSDomQueries.QueryElement(host(fixture), '[data-testid="ps-unit-task"]', HTMLSelectElement).disabled).toBe(true);
     expect(host(fixture).querySelector('[data-testid="ps-unit-rule-carried"]')?.textContent).toContain('count of Visits.VisitDate');
     expect(saveButton(fixture).disabled).toBe(false);
   });

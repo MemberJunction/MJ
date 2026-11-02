@@ -3,14 +3,14 @@ import { TestBed } from '@angular/core/testing';
 import { PSEvaluationResultsComponent } from './evaluation-results.component';
 import { EvaluationViews } from './evaluation-view';
 import { WidgetFixtures } from './widget-fixtures';
-import { HostElement } from '../ps-dom-queries.test-support';
+import { PSDomQueries } from '../ps-dom-queries.test-support';
 
 describe('PSEvaluationResultsComponent (DOM)', () => {
   function render(json: string | null, runStatus: 'Completed' | 'Failed' | 'Running' | null = 'Completed'): HTMLElement {
     const fixture = TestBed.createComponent(PSEvaluationResultsComponent);
     fixture.componentInstance.State = EvaluationViews.DescribeRun({ ValidationResults: json, Lineage: null, RunStatus: runStatus });
     fixture.detectChanges();
-    return HostElement(fixture);
+    return PSDomQueries.HostElement(fixture);
   }
 
   it('shows the outcome, the reason, scores with intervals, baselines, calibration and leakage flags', () => {

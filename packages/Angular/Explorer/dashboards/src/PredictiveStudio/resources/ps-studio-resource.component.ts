@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLAlgorithmEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { CompositeKey, LogError } from '@memberjunction/core';
+import { MJConversationEntity, MJMLAlgorithmEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
@@ -416,17 +416,6 @@ export class PSStudioResourceComponent extends PSResourceBase {
   }
 
   // ── copilot ──────────────────────────────────────────────────────
-  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser || null; }
-
-  public get ChatEnvironmentId(): string {
-    const id = this.Data?.Configuration?.['environmentId'];
-    return typeof id === 'string' && id ? id : MJEnvironmentEntityExtended.DefaultEnvironmentID;
-  }
-
-  public get ApplicationID(): string | null {
-    const id = this.Data?.Configuration?.['applicationId'];
-    return typeof id === 'string' && id ? id : null;
-  }
   public get ModelDevAgentId(): string | null { return this._modelDevAgentId; }
 
   public get ChatAppContext(): Record<string, unknown> {

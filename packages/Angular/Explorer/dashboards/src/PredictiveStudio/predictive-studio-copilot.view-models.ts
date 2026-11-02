@@ -55,7 +55,7 @@ export interface ImprovePromptInput {
   /** The prediction's display name. */
   Name: string;
   /** Its trust verdict's title (`TrustVerdicts.OutcomeTitle`, e.g. "No signal — not usable"), when known. */
-  TrustGrade?: string | null;
+  TrustTitle?: string | null;
   /** The plain-language reason it's blocked (trust gate / leakage), when known. */
   Reason?: string | null;
 }
@@ -74,12 +74,12 @@ function ensureSentence(text: string): string {
  */
 export function BuildImprovePrompt(input: ImprovePromptInput): string {
   const name = trim(input.Name) || 'this prediction';
-  const grade = trim(input.TrustGrade);
+  const title = trim(input.TrustTitle);
   const reason = trim(input.Reason);
   const why = reason ? ` It's being held back because: ${ensureSentence(reason)}` : '';
-  const gradePart = grade ? ` (current trust: ${grade})` : '';
+  const titlePart = title ? ` (current trust: ${title})` : '';
   return (
-    `The "${name}" prediction${gradePart} isn't trustworthy enough to use yet.${why} ` +
+    `The "${name}" prediction${titlePart} isn't trustworthy enough to use yet.${why} ` +
     'Help me improve it — what would make it reliable? Consider more or cleaner training data, more history, a clearer outcome definition, or a different algorithm, then rebuild it if that helps.'
   );
 }

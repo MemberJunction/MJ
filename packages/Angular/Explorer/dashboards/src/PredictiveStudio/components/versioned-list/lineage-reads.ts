@@ -6,7 +6,7 @@
  */
 import { RunView, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { EvaluationProtocolRowTarget, PredictionUnitRowTarget } from '@memberjunction/predictive-studio-core';
+import type { EvaluationProtocolRowTarget, ParseResult, PredictionUnitRowTarget } from '@memberjunction/predictive-studio-core';
 
 /** The two versioned entities. */
 export type VersionedEntityName = 'MJ: Evaluation Protocols' | 'MJ: Prediction Units';
@@ -23,6 +23,9 @@ export interface VersionRowFields extends VersionIdentity {
   Name: string;
   __mj_CreatedAt: Date | string;
 }
+
+/** One value read, or the read's error message. */
+export type ValueRead<T> = { readonly Ok: true; readonly Value: T } | { readonly Ok: false; readonly Error: string };
 
 /** Rows read, or the read's error message. */
 export type LineageRead<T> = { readonly Ok: true; readonly Rows: readonly T[] } | { readonly Ok: false; readonly Error: string };
@@ -84,6 +87,25 @@ export class LineageReads {
       EntityName: entityName, ExtraFilter: `LineageRootID='${EscapeSQLString(current.LineageRootID)}'`, OrderBy: 'Version', Fields: [...fields], ResultType: 'simple',
     });
     return all.Success ? { Ok: true, Rows: all.Results } : { Ok: false, Error: all.ErrorMessage };
+  }
+
+  /**
+   * Every version of the lineage `anyVersionID` belongs to, oldest first, each parsed by `parse`; the read's error, or
+   * the first version that does not parse, fails the whole read.
+   */
+  public static async ReadParsedLineage<TRow extends VersionIdentity, TVersion>(
+    provider: IMetadataProvider, entityName: VersionedEntityName, anyVersionID: string, fields: readonly (keyof TRow & string)[],
+    parse: (row: TRow) => ParseResult<TVersion>,
+  ): Promise<LineageRead<TVersion>> {
+    const read = await LineageReads.ReadLineage<TRow>(provider, entityName, anyVersionID, fields);
+    if (!read.Ok) return read;
+    const versions: TVersion[] = [];
+    for (const row of read.Rows) {
+      const parsed = parse(row);
+      if (!parsed.Ok) return { Ok: false, Error: `Version ${row.Version} cannot be read: ${parsed.Errors.join('; ')}` };
+      versions.push(parsed.Value);
+    }
+    return { Ok: true, Rows: versions };
   }
 
   /** Each requested row and the latest version of its lineage: two batches whatever the number of requests. */

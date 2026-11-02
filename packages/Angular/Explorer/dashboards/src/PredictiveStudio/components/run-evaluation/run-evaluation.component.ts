@@ -2,17 +2,15 @@ import { ChangeDetectorRef, Component, inject, Input, OnInit } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { RunView, type RunViewParams } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EvaluationViews, type EvaluationRunInput, type EvaluationRunState } from '../evaluation-results/evaluation-view';
 import { PSEvaluationResultsComponent } from '../evaluation-results/evaluation-results.component';
+import type { ValueRead } from '../versioned-list/lineage-reads';
 
 type RunFields = Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ResultingModelID' | 'Status'>;
 type ModelFields = Pick<MJMLModelEntity, 'ID' | 'Lineage'>;
-
-/** A read that may fail: the value, or the error to show. */
-type Read<T> = { readonly Ok: true; readonly Value: T } | { readonly Ok: false; readonly Error: string };
 
 /** What the results state is built from when there is no run. */
 const NO_RUN: EvaluationRunInput = { ValidationResults: null, Lineage: null, RunStatus: null };
@@ -48,7 +46,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
   @Input()
   public get ModelID(): string | null { return this._modelId; }
   public set ModelID(value: string | null) {
-    if (value === this._modelId) return;
+    if (UUIDsEqual(value, this._modelId)) return;
     this._modelId = value;
     // Before init the Provider input may not be bound yet; ngOnInit performs the first load.
     if (this.isInitialized) void this.Load();
@@ -58,7 +56,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
   @Input()
   public get TrainingRunID(): string | null { return this._trainingRunId; }
   public set TrainingRunID(value: string | null) {
-    if (value === this._trainingRunId) return;
+    if (UUIDsEqual(value, this._trainingRunId)) return;
     this._trainingRunId = value;
     if (this.isInitialized) void this.Load();
   }
@@ -90,7 +88,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
   }
 
   /** The model's latest run and the model's lineage: two independent reads in one batch. */
-  private async readByModel(modelId: string): Promise<Read<EvaluationRunInput>> {
+  private async readByModel(modelId: string): Promise<ValueRead<EvaluationRunInput>> {
     const id = EscapeSQLString(modelId);
     const [runs, models] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<RunFields | ModelFields>([
       { ...PSRunEvaluationComponent.runParams(`ResultingModelID='${id}'`), OrderBy: '__mj_CreatedAt DESC', MaxRows: 1 },
@@ -106,7 +104,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
   }
 
   /** A run, then the model it produced (the run names it), if any. */
-  private async readByRun(runId: string): Promise<Read<EvaluationRunInput>> {
+  private async readByRun(runId: string): Promise<ValueRead<EvaluationRunInput>> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const runs = await rv.RunView<RunFields>(PSRunEvaluationComponent.runParams(`ID='${EscapeSQLString(runId)}'`));
     if (!runs.Success) return { Ok: false, Error: runs.ErrorMessage };

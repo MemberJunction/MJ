@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { IndexByUUID, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { MJConversationEntity, MJMLModelEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow, type OutcomeTitleText } from '@memberjunction/predictive-studio-core';
@@ -400,8 +400,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     const runByModel = IndexByUUID(this.engine.TrainingRuns, (r) => r.ResultingModelID);
     return BusinessPredictions.BuildBusinessCatalog(
       this.engine.PublishedModels.map((m: MJMLModelEntity) => ({
-        modelId: m.ID,
-        name: this.engine.ModelDisplayName(m),
+        ModelID: m.ID,
+        Name: this.engine.ModelDisplayName(m),
         // an empty column is not a stored record
         ValidationResults: runByModel.Get(m.ID)?.ValidationResults || null,
         Lineage: m.Lineage || null,
@@ -560,9 +560,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.cdrLocal.detectChanges();
     try {
       const provider = this.ProviderToUse;
-      const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, provider.CurrentUser ?? undefined, { maxRows: 1 });
+      const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, provider.CurrentUser || undefined, { maxRows: 1 });
       if (!this.isStillOpen(c)) return;
-      this.LatestRunId = runs[0]?.ID ?? null;
+      this.LatestRunId = runs[0]?.ID || null;
     } catch (err) {
       this.AtRiskError = err instanceof Error ? err.message : String(err);
       this.AtRiskLoading = false;
@@ -619,13 +619,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public get SelectedTargetEntityName(): string | null {
     if (!this.Selected) return null;
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.Selected?.modelId));
-    return this.targetEntityForModel(model)?.name ?? null;
+    return this.targetEntityForModel(model)?.name || null;
   }
 
   public get SelectedProblemType(): string | null {
     if (!this.Selected) return null;
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.Selected?.modelId));
-    return model?.ProblemType ?? null;
+    return model?.ProblemType || null;
   }
 
   private targetEntityForModel(model: MJMLModelEntity | undefined): { id: string; name: string } | null {
@@ -663,11 +663,11 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
           MaxRows: ids.length,
           SkipTotalRowCount: true,
         },
-        this.ProviderToUse.CurrentUser ?? undefined,
+        this.ProviderToUse.CurrentUser || undefined,
       );
       if (!res.Success) return;
       const byId = new Map<string, Record<string, unknown>>();
-      for (const row of res.Results ?? []) byId.set(NormalizeUUID(CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()), row);
+      for (const row of res.Results || []) byId.set(NormalizeUUID(CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()), row);
       for (const r of this.AtRiskRows) {
         const rec = byId.get(NormalizeUUID(r.RecordID));
         if (rec) r.Label = AtRiskRules.LabelFromRecord(rec, nameField);
@@ -716,7 +716,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.cdrLocal.detectChanges();
     try {
       const p = this.ProviderToUse;
-      const user = p.CurrentUser ?? undefined;
+      const user = p.CurrentUser || undefined;
       const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
       // Minute-resolution timestamp so two sends on the same day don't produce identical-named lists.
       const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -726,7 +726,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       list.RefreshMode = 'Additive';
       list.UseSnapshot = false;
       if (!(await list.Save())) {
-        this.ListResult = `Couldn't create the list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+        this.ListResult = `Couldn't create the list: ${list.LatestResult?.CompleteMessage || 'unknown error'}`;
         return;
       }
       const qualifying = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, this.AtRiskRows.length).length;
@@ -743,7 +743,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         if (await ld.Save()) {
           added++;
         } else if (!firstFailure) {
-          firstFailure = ld.LatestResult?.CompleteMessage ?? 'unknown error';
+          firstFailure = ld.LatestResult?.CompleteMessage || 'unknown error';
         }
       }
       const failed = members.length - added;
@@ -781,7 +781,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(this.Selected?.title ?? 'prediction').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-at-risk.csv`;
+    a.download = `${(this.Selected?.title || 'prediction').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-at-risk.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -803,7 +803,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public ImprovePrediction(c: BusinessPredictionCard): void {
     this.PendingPrompt = BuildImprovePrompt({
       Name: c.title,
-      TrustGrade: TrustVerdicts.OutcomeTitle(c.trust),
+      TrustTitle: TrustVerdicts.OutcomeTitle(c.trust),
       Reason: c.blockedReason || c.trust.Reason,
     });
     this.ChatOpen = true;
@@ -834,7 +834,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * the thread renders (mirrors the Form Builder co-pilot's atomic state-flip).
    */
   public OnChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
-    this.PendingPrompt = event.pendingMessage ?? null;
+    this.PendingPrompt = event.pendingMessage || null;
     this.ChatConversation = event.conversation;
     this.ChatConversationId = event.conversation.ID;
     this.ChatIsNewConversation = false;
@@ -847,17 +847,6 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.cdrLocal.detectChanges();
   }
 
-  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
-
-  public get ChatEnvironmentId(): string {
-    const id = this.Data?.Configuration?.['environmentId'];
-    return typeof id === 'string' && id ? id : MJEnvironmentEntityExtended.DefaultEnvironmentID;
-  }
-
-  public get ApplicationID(): string | null {
-    const id = this.Data?.Configuration?.['applicationId'];
-    return typeof id === 'string' && id ? id : null;
-  }
   public get ModelDevAgentId(): string | null { return this._modelDevAgentId; }
 
   public get ChatAppContext(): Record<string, unknown> {
@@ -867,9 +856,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   private async ensureModelDevAgentResolved(): Promise<void> {
     if (this._modelDevAgentId) return;
     try {
-      await AIEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser ?? undefined);
+      await AIEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser || undefined);
       this._modelDevAgentId =
-        AIEngineBase.Instance.Agents?.find((a) => a.Name?.trim().toLowerCase() === MODEL_DEV_AGENT_NAME.toLowerCase())?.ID ?? null;
+        AIEngineBase.Instance.Agents?.find((a) => a.Name?.trim().toLowerCase() === MODEL_DEV_AGENT_NAME.toLowerCase())?.ID || null;
       if (!this._modelDevAgentId) LogError(`PSPredictionsResource: '${MODEL_DEV_AGENT_NAME}' not found — chat uses default-agent routing.`);
       this.cdrLocal.detectChanges();
     } catch (err) {

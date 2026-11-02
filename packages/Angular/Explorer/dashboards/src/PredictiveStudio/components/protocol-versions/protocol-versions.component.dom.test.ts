@@ -4,8 +4,8 @@ import { EvaluationProtocolRules, ProtocolRows, type EvaluationProtocolDraft, ty
 import { PSProtocolVersionsComponent } from './protocol-versions.component';
 import type { AfterVersionSavedEventArgs, BeforeVersionSavedEventArgs } from '../ps-widget-events';
 import type { ProtocolVersionRow } from '../versioned-list/lineage-reads';
-import { CreateRowDouble, CreateVersionStoreDouble, DOUBLE_USER_ID, type VersionStoreDouble } from '../versioned-list/version-rows.test-support';
-import { HostElement } from '../ps-dom-queries.test-support';
+import { VersionRowDoubles, DOUBLE_USER_ID, type VersionStoreDouble } from '../versioned-list/version-rows.test-support';
+import { PSDomQueries } from '../ps-dom-queries.test-support';
 
 const ROOT = '33333333-4444-4555-8666-777777777777';
 const unit: PredictionUnitSpec = {
@@ -53,7 +53,7 @@ interface Rendered {
 }
 
 async function render(protocolId: string | null, rows: ProtocolVersionRow[]): Promise<Rendered> {
-  const store = CreateVersionStoreDouble(rows);
+  const store = VersionRowDoubles.CreateStore(rows);
   const fixture = TestBed.createComponent(PSProtocolVersionsComponent);
   fixture.componentInstance.Provider = store.Provider;
   fixture.componentInstance.EvaluationProtocolID = protocolId;
@@ -70,7 +70,7 @@ describe('PSProtocolVersionsComponent saves (DOM)', () => {
   it('saves the next version under the lineage root with Version + 1 and the carried description, leaving the row ID to the server', async () => {
     const { Fixture, Store, After } = await render(ROOT, [storedV1()]);
     expect(Fixture.componentInstance.Versions).toHaveLength(1);
-    const row = CreateRowDouble(Store, emptyRow('ROW-ID-BEFORE-SAVE'), 'SERVER-ID-V2');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow('ROW-ID-BEFORE-SAVE'), 'SERVER-ID-V2');
     let idWhenSaved = '';
     const save = row.Save;
     row.Save = async (): Promise<boolean> => { idWhenSaved = row.ID; return save(); };
@@ -84,17 +84,17 @@ describe('PSProtocolVersionsComponent saves (DOM)', () => {
 
   it('shows the save message when the save fails and reports it in AfterVersionSaved', async () => {
     const { Fixture, Store, After } = await render(ROOT, [storedV1()]);
-    Store.NextRow = CreateRowDouble(Store, emptyRow(''), 'UNUSED', 'An agent tool call cannot change the guard fields promotion.');
+    Store.NextRow = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'UNUSED', 'An agent tool call cannot change the guard fields promotion.');
     await Fixture.componentInstance.Save(draft);
     Fixture.detectChanges();
-    expect(HostElement(Fixture).querySelector('[data-testid="ps-protocol-versions-error"]')?.textContent).toContain('cannot change the guard fields promotion');
+    expect(PSDomQueries.HostElement(Fixture).querySelector('[data-testid="ps-protocol-versions-error"]')?.textContent).toContain('cannot change the guard fields promotion');
     expect([After[0]?.Success, After[0]?.ID]).toEqual([false, null]);
     expect(Store.Rows).toHaveLength(1);
   });
 
   it('does not save when a host cancels BeforeVersionSaved, and does not emit AfterVersionSaved', async () => {
     const { Fixture, Store, After } = await render(ROOT, [storedV1()]);
-    const row = CreateRowDouble(Store, emptyRow(''), 'SERVER-ID-V2');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'SERVER-ID-V2');
     Store.NextRow = row;
     const seen: BeforeVersionSavedEventArgs<EvaluationProtocolDraft>[] = [];
     Fixture.componentInstance.BeforeVersionSaved.subscribe((e) => { seen.push(e); e.Cancel = true; e.CancelReason = 'Held for review.'; });
@@ -107,20 +107,20 @@ describe('PSProtocolVersionsComponent saves (DOM)', () => {
   it('opened on version 1 of a longer lineage, shows version 1 and offers a new version only on the latest', async () => {
     const { Fixture } = await render(ROOT, [storedV1(), storedV2()]);
     expect(Fixture.componentInstance.Selected?.Row.Version).toBe(1);
-    expect(HostElement(Fixture).querySelector('[data-testid="ps-protocol-edit"]')).toBeNull();
-    const buttons = HostElement(Fixture).querySelectorAll('[data-testid="ps-protocol-version-list"] button');
+    expect(PSDomQueries.HostElement(Fixture).querySelector('[data-testid="ps-protocol-edit"]')).toBeNull();
+    const buttons = PSDomQueries.HostElement(Fixture).querySelectorAll('[data-testid="ps-protocol-version-list"] button');
     const v2 = buttons.item(1);
     if (!(v2 instanceof HTMLButtonElement)) throw new Error('version 2 is not listed');
     v2.click();
     await Fixture.whenStable();
     Fixture.detectChanges();
-    expect(HostElement(Fixture).querySelector('[data-testid="ps-protocol-edit"]')?.textContent).toContain('Create version 3');
+    expect(PSDomQueries.HostElement(Fixture).querySelector('[data-testid="ps-protocol-edit"]')?.textContent).toContain('Create version 3');
   });
 
   it('writes no first version: without a loaded lineage, Save writes no row and emits nothing', async () => {
     const { Fixture, Store, After } = await render('MISSING-ID', []);
     expect(Fixture.componentInstance.Error).toContain('was not found');
-    const row = CreateRowDouble(Store, emptyRow(''), 'SERVER-ID');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'SERVER-ID');
     Store.NextRow = row;
     await Fixture.componentInstance.Save(draft);
     expect([row.Version, After.length, Store.Rows.length]).toEqual([0, 0, 0]);

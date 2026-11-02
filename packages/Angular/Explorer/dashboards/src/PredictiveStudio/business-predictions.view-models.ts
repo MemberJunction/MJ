@@ -14,13 +14,10 @@ import { TrustVerdicts, type TrustInput, type TrustVerdict } from '@memberjuncti
 /** The minimal published-model slice the catalog needs: the model and its training run's stored results. */
 export interface BusinessPredictionInput extends TrustInput {
   /** The `MJ: ML Models` id. */
-  modelId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  ModelID: string;
   /** The plain-language title (the pipeline goal the agent set, or the model display name). */
-  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /**
-   * When the model was last trained/updated, for a "last run" hint. PascalCase like the `ValidationResults` member it
-   * sits beside (from `TrustInput`); the two camelCase members above keep their published names.
-   */
+  Name: string;
+  /** When the model was last trained/updated, for a "last run" hint. */
   UpdatedAt?: Date | null;
 }
 
@@ -38,14 +35,14 @@ export interface BusinessPredictionCard {
   updatedAt: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
-/** The business catalog's cards (static members on one owner). */
+/** The business Predictions catalog: published models mapped to trust-gated cards, in catalog order. */
 export class BusinessPredictions {
   /** Map a published model into a business catalog card, applying the trust gate. */
   public static ToBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
     const trust = TrustVerdicts.DeriveTrustVerdict(input);
     return {
-      modelId: input.modelId,
-      title: input.name?.trim() || 'Untitled prediction',
+      modelId: input.ModelID,
+      title: input.Name?.trim() || 'Untitled prediction',
       trust,
       canOpen: trust.CanAct,
       blockedReason: BusinessPredictions.blockedReason(trust),

@@ -5,8 +5,8 @@ import { PSUnitVersionsComponent } from './unit-versions.component';
 import type { AfterVersionSavedEventArgs, BeforeVersionSavedEventArgs } from '../ps-widget-events';
 import type { UnitVersionRow } from '../versioned-list/lineage-reads';
 import type { RunViewParams, RunViewResult } from '@memberjunction/core';
-import { CreateRowDouble, CreateVersionStoreDouble, DOUBLE_USER_ID, RowsMatching, ViewResult, type VersionStoreDouble } from '../versioned-list/version-rows.test-support';
-import { HostElement } from '../ps-dom-queries.test-support';
+import { VersionRowDoubles, DOUBLE_USER_ID, type VersionStoreDouble } from '../versioned-list/version-rows.test-support';
+import { PSDomQueries } from '../ps-dom-queries.test-support';
 
 const ROOT = '11111111-2222-4333-8444-555555555555';
 const draft: UnitDraft = {
@@ -43,7 +43,7 @@ interface Rendered {
 }
 
 async function render(unitId: string | null, rows: UnitVersionRow[]): Promise<Rendered> {
-  const store = CreateVersionStoreDouble(rows);
+  const store = VersionRowDoubles.CreateStore(rows);
   const fixture = TestBed.createComponent(PSUnitVersionsComponent);
   fixture.componentInstance.Provider = store.Provider;
   fixture.componentInstance.UnitID = unitId;
@@ -58,7 +58,7 @@ async function render(unitId: string | null, rows: UnitVersionRow[]): Promise<Re
 describe('PSUnitVersionsComponent saves (DOM)', () => {
   it('saves version 1 as its own lineage root with label version 1, then emits the ID the saved row carries', async () => {
     const { Fixture, Store, After } = await render(null, []);
-    const row = CreateRowDouble(Store, emptyRow(''), 'SERVER-MINTED-ID');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'SERVER-MINTED-ID');
     Store.NextRow = row;
     await Fixture.componentInstance.Save({ Draft: draft, LabelVersion: 7 });
     expect([row.Version, row.LabelVersion]).toEqual([1, 1]);
@@ -72,7 +72,7 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
   it('saves a later version under the lineage root with Version + 1, the requested label version and the carried description', async () => {
     const { Fixture, Store, After } = await render(ROOT, [storedV1()]);
     expect(Fixture.componentInstance.Versions).toHaveLength(1);
-    const row = CreateRowDouble(Store, emptyRow('ROW-ID-BEFORE-SAVE'), 'SERVER-ID-V2');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow('ROW-ID-BEFORE-SAVE'), 'SERVER-ID-V2');
     Store.NextRow = row;
     await Fixture.componentInstance.Save({ Draft: { ...draft, LabelWindowDays: 400 }, LabelVersion: 2 });
     expect([row.LineageRootID, row.Version, row.LabelVersion, row.LabelWindowDays]).toEqual([ROOT, 2, 2, 400]);
@@ -83,10 +83,10 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
 
   it('shows the save message when the save fails and reports it in AfterVersionSaved', async () => {
     const { Fixture, Store, After } = await render(ROOT, [storedV1()]);
-    Store.NextRow = CreateRowDouble(Store, emptyRow(''), 'UNUSED', 'LabelVersion must be 2: the outcome definition changed.');
+    Store.NextRow = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'UNUSED', 'LabelVersion must be 2: the outcome definition changed.');
     await Fixture.componentInstance.Save({ Draft: draft, LabelVersion: 1 });
     Fixture.detectChanges();
-    const host = HostElement(Fixture);
+    const host = PSDomQueries.HostElement(Fixture);
     expect(host.querySelector('[data-testid="ps-unit-versions-error"]')?.textContent).toContain('LabelVersion must be 2: the outcome definition changed.');
     expect([After[0]?.Success, After[0]?.ID, After[0]?.ErrorMessage]).toEqual([false, null, 'LabelVersion must be 2: the outcome definition changed.']);
     expect(Store.Rows).toHaveLength(1);
@@ -94,7 +94,7 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
 
   it('does not save when a host cancels BeforeVersionSaved, and does not emit AfterVersionSaved', async () => {
     const { Fixture, Store, After } = await render(ROOT, [storedV1()]);
-    const row = CreateRowDouble(Store, emptyRow(''), 'SERVER-ID-V2');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'SERVER-ID-V2');
     Store.NextRow = row;
     Fixture.componentInstance.BeforeVersionSaved.subscribe((e: BeforeVersionSavedEventArgs<UnitDraft>) => { e.Cancel = true; e.CancelReason = 'Held for review.'; });
     await Fixture.componentInstance.Save({ Draft: draft, LabelVersion: 1 });
@@ -105,7 +105,7 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
   it('never writes a new version 1 for a lineage whose versions did not load', async () => {
     const { Fixture, Store, After } = await render('MISSING-ID', []);
     expect(Fixture.componentInstance.Error).toContain('was not found');
-    const row = CreateRowDouble(Store, emptyRow(''), 'SERVER-ID');
+    const row = VersionRowDoubles.CreateRow(Store, emptyRow(''), 'SERVER-ID');
     Store.NextRow = row;
     await Fixture.componentInstance.Save({ Draft: draft, LabelVersion: 1 });
     expect([row.Version, After.length, Store.Rows.length]).toEqual([0, 0, 0]);
@@ -128,13 +128,13 @@ describe('PSUnitVersionsComponent saves (DOM)', () => {
     Object.assign(Store.Provider, {
       RunView: async (params: RunViewParams): Promise<RunViewResult<UnitVersionRow>> => {
         if (params.ExtraFilter === `ID='${ROOT}'`) await held;
-        return ViewResult(RowsMatching(Store.Rows, params));
+        return VersionRowDoubles.ViewResult(VersionRowDoubles.RowsMatching(Store.Rows, params));
       },
     });
     Fixture.componentInstance.UnitID = ROOT;
     const older = Fixture.componentInstance.Load();
     Fixture.detectChanges();
-    const host = HostElement(Fixture);
+    const host = PSDomQueries.HostElement(Fixture);
     expect(host.querySelector('mj-loading')).not.toBeNull();
     expect(host.querySelector('[data-testid="ps-unit-version-list"]')).toBeNull();
     Fixture.componentInstance.UnitID = 'ANOTHER-MISSING-ID';
