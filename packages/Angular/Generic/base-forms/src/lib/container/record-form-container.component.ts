@@ -14,7 +14,7 @@ import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-conf
 import { FormToolbarItemConfig, FormToolbarItemClickEventArgs } from '../types/form-toolbar-item';
 import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FormWidthMode } from '../types/form-types';
+import { FormWidthMode, FormModeSwitch } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
 import { SectionManagerItem, ChromeMembershipChange } from '../section-manager/section-manager.component';
 import {
@@ -618,6 +618,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Left-nav rail stays up while searching even if only one group matches. */
   get ShowChromeRail(): boolean {
     if (this.ChromeLayout !== 'left-nav') return false;
+    if (this.IsPhoneRail) {
+      return this.chrome.Spec.Groups.length > 1;
+    }
     if (this.EffectiveSearchFilter.trim()) {
       return this.ChromeFirstClassGroups.length > 0 || this.ChromeMoreItems.length > 0;
     }
@@ -683,7 +686,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     return this.ChromeFirstClassGroups.find((group) => group.Key === key)
       ?? this.ChromeMoreItems.find((item) => item.Key === key)
-      ?? null;
+      ?? this.chrome.Spec.Groups.find((group) => !group.IsMore && group.Key === key)
+      ?? (this.chrome.Spec.MoreSectionKeys.includes(key) ? this.moreItemFromKey(key) : null);
   }
 
   get ChromeActiveTitle(): string {
@@ -847,7 +851,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.restoreChromePrefs();
     this.scheduleChromeResolve();
     this.stopWatchingPhoneViewport = WatchPhoneViewport(() => {
-      this.MoreSheetOpen = false;
+      this.SectionSheetOpen = false;
       this.cdr.markForCheck();
     });
 
@@ -923,10 +927,6 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   public OnMoreFolderToggle(): void {
-    if (this.isMobileRailViewport()) {
-      this.OpenMoreSheet();
-      return;
-    }
     this.chrome.ToggleMoreFolder();
     this.persistChromePrefs();
     this.cdr.detectChanges();
@@ -1046,77 +1046,47 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
-    this.scrollActiveRailItemIntoView();
   }
 
   private isMobileRailViewport(): boolean {
     return IsPhoneViewport();
   }
 
-  /** Template-facing: the rail is the phone strip, so More opens as a sheet, not inline. */
+  /** Template-facing: on a phone, the rail renders the single section picker and bottom sheet. */
   public get IsPhoneRail(): boolean {
     return this.isMobileRailViewport();
   }
 
-  // ---- Phone More sheet ----
+  // ---- Phone Section sheet ----
 
-  /** Whether the phone's More sheet (the vertical list of More sections) is open. */
-  public MoreSheetOpen = false;
+  /** Whether the phone's Sections bottom sheet (first-class + More sections) is open. */
+  public SectionSheetOpen = false;
 
   private stopWatchingPhoneViewport: (() => void) | null = null;
 
-  /**
-   * On a phone the strip shows the active More section as one pill after the folder, so
-   * the user sees where they are without the folder's whole contents inline.
-   */
-  public get ActiveMoreItem(): FormChromeGroup | null {
-    const active = this.chrome.ActiveGroupKey;
-    if (!active) return null;
-    return this.ChromeMoreItems.find((item) => item.Key === active) ?? null;
-  }
-
-  public OpenMoreSheet(): void {
-    this.MoreSheetOpen = true;
+  public OpenSectionSheet(): void {
+    this.SectionSheetOpen = true;
     this.cdr.detectChanges();
   }
 
-  public OnMoreSheetVisibleChange(visible: boolean): void {
-    this.MoreSheetOpen = visible;
+  public OnSectionSheetVisibleChange(visible: boolean): void {
+    this.SectionSheetOpen = visible;
     this.cdr.markForCheck();
   }
 
   /**
-   * A row in the phone's More sheet was tapped: go there and put the sheet away. The sheet's
-   * search was a way to find the row, not a standing filter, so it is cleared too; left in
-   * place it would hide every other pill in the strip and hold the toolbar open for its chip.
+   * A row in the phone's Sections sheet was tapped: go there and put the sheet away. The sheet's
+   * search was a way to find the row, not a standing filter, so it is cleared too.
    */
-  public OnMoreSheetSelect(groupKey: string): void {
-    this.MoreSheetOpen = false;
+  public OnSectionSheetSelect(groupKey: string): void {
+    this.SectionSheetOpen = false;
     if (this.EffectiveSearchFilter.trim()) this.OnFilterChange('');
     this.OnChromeGroupActivate(groupKey);
   }
 
-  public OnMoreSheetSearch(event: Event): void {
+  public OnSectionSheetSearch(event: Event): void {
     const input = event.target as HTMLInputElement | null;
     this.OnFilterChange(input?.value ?? '');
-  }
-
-  private activeGroupIsInMore(): boolean {
-    const active = this.chrome.ActiveGroupKey;
-    return !!active && this.ChromeMoreItems.some((item) => item.Key === active);
-  }
-
-  /**
-   * The phone rail clips whatever does not fit its single row, so the active pill has to be
-   * brought into view on each change. Desktop shows the whole list and never needs this.
-   */
-  private scrollActiveRailItemIntoView(): void {
-    if (!this.isMobileRailViewport()) return;
-    const root: HTMLElement = this.host.nativeElement;
-    const active = root.querySelector('.mj-forms-chrome-rail-item.is-active');
-    if (active instanceof HTMLElement && typeof active.scrollIntoView === 'function') {
-      active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-    }
   }
 
   public OnChromeRailExpand(): void {
@@ -1344,8 +1314,6 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.chrome.ActiveGroupKey) {
       this.expandActiveGroupSections(this.chrome.ActiveGroupKey);
     }
-    // The rail has not drawn this spec yet; bring the active pill into view once it has.
-    setTimeout(() => { if (!this.destroyed) this.scrollActiveRailItemIntoView(); }, 0);
     this.AfterLayoutResolved.emit(new AfterLayoutResolvedEventArgs(result.Spec.Layout));
 
     if (this.Fc) this.Fc.ChromeLayout = result.Spec.Layout;
@@ -1966,11 +1934,6 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
-    // A phone rail is one horizontal strip: an expanded More folder would put every More
-    // child inline. Start it collapsed there, unless the active section lives inside it.
-    if (this.isMobileRailViewport()) {
-      this.chrome.MoreExpanded = this.activeGroupIsInMore();
-    }
     this.ChromeRailPinned = ParseRailPinnedSetting(
       UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railPinned')),
     );
@@ -3756,6 +3719,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get EffectiveCurrentVariantID(): string | null {
     return this.Fc?.CurrentVariantID ?? this.CurrentVariantID;
+  }
+
+  /**
+   * Mode switch callback supplied by the form host when a standard form
+   * alternative exists. Forwarded to the toolbar so the phone View bottom sheet
+   * can switch between the custom and standard views.
+   */
+  public get EffectiveFormModeSwitch(): FormModeSwitch | null {
+    return this.Fc?.FormModeSwitch ?? null;
   }
 
   /** Whether to show the variant picker at all. Hidden when the entity has

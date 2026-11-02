@@ -780,7 +780,7 @@ mj-collapsible-panel.mj-form-role-more {
     background: var(--mj-bg-surface);
   }
 
-  /* Reserve space on the right of the rail for the docked [Edit | •••] cap so pills clip before it */
+  /* Reserve space on the right of the rail for the docked [Edit | •••] cap so the picker clears it */
   mj-record-form-container:has(.mj-forms-toolbar-collapsed-pill) .mj-forms-chrome-rail {
     padding-right: 116px;
   }
@@ -792,94 +792,72 @@ mj-collapsible-panel.mj-form-role-more {
     display: none !important;
   }
 
-  .mj-forms-chrome-rail.is-collapsed {
-    flex: 0 0 auto;
-    width: calc(100% + 24px) !important;
-    min-width: 0 !important;
-    max-width: calc(100% + 24px) !important;
-    height: 44px;
-    padding: 0;
+  .mj-forms-section-picker {
+    display: flex;
+    align-items: center;
+    gap: var(--mj-space-2, 8px);
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 var(--mj-space-2, 8px);
+    border: 0;
+    border-radius: var(--mj-radius-md);
+    background: transparent;
+    color: var(--mj-text-primary);
+    font: inherit;
+    font-size: var(--mj-text-sm);
+    font-weight: var(--mj-font-semibold);
+    text-align: left;
+    cursor: pointer;
   }
 
-  .mj-forms-chrome-rail-spine {
-    flex-direction: row;
-    padding: 0 12px;
+  .mj-forms-section-picker:hover {
+    background: var(--mj-bg-surface-hover);
   }
 
-  .mj-forms-chrome-rail-spine-label {
-    writing-mode: horizontal-tb;
-    transform: none;
-    max-height: none;
+  .mj-forms-section-picker:focus-visible {
+    outline: none;
+    box-shadow: var(--mj-focus-ring);
   }
 
-  /* Single-row horizontal pill strip */
-  .mj-forms-chrome-rail-items {
+  .mj-forms-section-picker > i:first-child {
+    width: 1.15em;
+    flex-shrink: 0;
+    text-align: center;
+    color: var(--mj-brand-primary);
+  }
+
+  .mj-forms-section-picker-title {
     flex: 1 1 auto;
     min-width: 0;
-    height: 100%;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    gap: 6px;
-    padding: 0 4px 0 0;
-    min-height: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .mj-forms-chrome-rail-items::-webkit-scrollbar {
-    display: none;
-  }
-
-  .mj-forms-chrome-rail-item {
-    flex: 0 0 auto;
-    width: auto;
-    height: 34px;
-    min-height: 34px;
-    padding: 0 11px;
-    font-size: 12.5px;
-    border-radius: var(--mj-radius-full, 9999px);
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .mj-forms-chrome-rail-item.is-active::before {
-    display: none;
-  }
-
-  .mj-forms-chrome-rail-item.is-more-folder {
-    margin-top: 0;
-    padding-top: 0;
-    border-radius: var(--mj-radius-full, 9999px);
-  }
-
-  .mj-forms-chrome-rail-item.is-more-folder::before {
-    display: none;
-  }
-
-  /* The active More section rides along after the folder pill as one chip. */
-  .mj-forms-chrome-rail-item.is-more-child {
-    margin-left: -2px;
+  .mj-forms-section-picker-chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: var(--mj-text-xs);
+    color: var(--mj-text-muted);
   }
 }
 
 /* ============================================
-   PHONE MORE SHEET — the folder's contents as a vertical list
+   PHONE SECTION SHEET — first-class and More sections as a vertical list
    ============================================ */
-.mj-forms-more-sheet {
+.mj-forms-section-sheet {
   display: flex;
   flex-direction: column;
   gap: var(--mj-space-3, 12px);
   padding: 0 var(--mj-space-4, 16px) var(--mj-space-4, 16px);
 }
 
-.mj-forms-more-sheet-search {
+.mj-forms-section-sheet-search {
   width: 100%;
 }
 
-.mj-forms-more-sheet-list {
+.mj-forms-section-sheet-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -887,7 +865,18 @@ mj-collapsible-panel.mj-form-role-more {
   overflow-y: auto;
 }
 
-.mj-forms-more-sheet-item {
+.mj-forms-section-sheet-heading {
+  padding: var(--mj-space-2, 8px) var(--mj-space-3, 12px) var(--mj-space-1, 4px);
+  margin-top: var(--mj-space-2, 8px);
+  border-top: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mj-forms-section-sheet-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -904,33 +893,33 @@ mj-collapsible-panel.mj-form-role-more {
   cursor: pointer;
 }
 
-.mj-forms-more-sheet-item > i {
+.mj-forms-section-sheet-item > i {
   width: 1.15em;
   flex-shrink: 0;
   text-align: center;
   color: var(--mj-text-muted);
 }
 
-.mj-forms-more-sheet-item:hover {
+.mj-forms-section-sheet-item:hover {
   background: var(--mj-bg-surface-hover);
 }
 
-.mj-forms-more-sheet-item:focus-visible {
+.mj-forms-section-sheet-item:focus-visible {
   outline: none;
   box-shadow: var(--mj-focus-ring);
 }
 
-.mj-forms-more-sheet-item.is-active {
+.mj-forms-section-sheet-item.is-active {
   background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
   font-weight: var(--mj-font-semibold);
 }
 
-.mj-forms-more-sheet-item.is-active > i {
+.mj-forms-section-sheet-item.is-active > i {
   color: inherit;
 }
 
-.mj-forms-more-sheet-label {
+.mj-forms-section-sheet-label {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -938,7 +927,7 @@ mj-collapsible-panel.mj-form-role-more {
   white-space: nowrap;
 }
 
-.mj-forms-more-sheet-empty {
+.mj-forms-section-sheet-empty {
   padding: var(--mj-space-4, 16px);
   color: var(--mj-text-muted);
   font-size: var(--mj-text-sm);
