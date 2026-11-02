@@ -104,7 +104,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                         @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="MapNavigate($event)" (askAgent)="OnAskAgent($event)"></ps-home> }
                         @case ('units') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Prediction Units" (OpenRecord)="OpenVersionedRecord('MJ: Prediction Units', $event)"></mj-ps-versioned-list> }
                         @case ('protocols') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Evaluation Protocols" (OpenRecord)="OpenVersionedRecord('MJ: Evaluation Protocols', $event)"></mj-ps-versioned-list> }
-                        @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="OnAskAgent($event)" (navigate)="MapNavigate($event)"></ps-pipelines> }
+                        @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [CurrentUser]="ProviderToUse.CurrentUser" (AskAgent)="OnAskAgent($event)" (Navigate)="MapNavigate($event)"></ps-pipelines> }
                         @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="OnAskAgent($event)" (createPipeline)="OnCreatePipelineFromCatalog($event)"></ps-catalog> }
                         @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
                         @case ('compare') { <ps-compare [engine]="engine"></ps-compare> }
@@ -229,7 +229,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
   public OnCreatePipelineFromCatalog(algo: MJMLAlgorithmEntity): void {
     this.SelectSection('pipelines');
     setTimeout(() => {
-      this.PipelinesComponent?.openWizard(algo.ID);
+      this.PipelinesComponent?.OpenWizard(algo.ID);
     }, 50);
   }
 

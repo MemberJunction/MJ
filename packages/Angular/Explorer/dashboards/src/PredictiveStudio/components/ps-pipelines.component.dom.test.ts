@@ -4,7 +4,8 @@ import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, capture, fakeMetadataProvider } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { PredictiveStudioTrainModelOperation, type MJMLTrainingPipelineEntity, type PredictiveStudioTrainModelOutput } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PSPipelinesComponent } from './ps-pipelines.component';
 
 try {
@@ -16,7 +17,7 @@ try {
 /**
  * DOM coverage for <ps-pipelines> — the visual DAG builder and stage-flow over ML training pipelines.
  * The engine is an @Input; a minimal fake exposes `Pipelines` (parsed into the editable spec), `Algorithms`,
- * and `AlgorithmName`. Empty state (no pipelines) surfaces an "ask the agent" CTA that emits askAgent. A
+ * and `AlgorithmName`. Empty state (no pipelines) surfaces an "ask the agent" CTA that emits AskAgent. A
  * pipeline with one source + one step renders picker cards, stage cards, and DAG canvas on toggle. Standalone.
  */
 
@@ -43,10 +44,11 @@ const makeEngine = (pipelines: MJMLTrainingPipelineEntity[]) =>
     Algorithms: [{ ID: 'a1', Name: 'XGBoost' }],
     AlgorithmName: () => 'XGBoost',
     Models: [],
+    Config: async () => undefined,
   } as unknown as PredictiveStudioEngine);
 
 const render = (pipelines: MJMLTrainingPipelineEntity[], viewMode: 'stages' | 'dag' = 'stages') =>
-  renderComponentFixture(PSPipelinesComponent, { inputs: { engine: makeEngine(pipelines), viewMode } });
+  renderComponentFixture(PSPipelinesComponent, { inputs: { engine: makeEngine(pipelines), ViewMode: viewMode } });
 
 describe('PSPipelinesComponent (DOM)', () => {
   it('shows the empty state with an ask-agent CTA when there are no pipelines', () => {
@@ -56,9 +58,9 @@ describe('PSPipelinesComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-pipelines-ask-agent"]')).not.toBeNull();
   });
 
-  it('emits askAgent with the starter prompt from the empty-state CTA', () => {
+  it('emits AskAgent with the starter prompt from the empty-state CTA', () => {
     const fixture = render([]);
-    const asked = capture(fixture.componentInstance.askAgent);
+    const asked = capture(fixture.componentInstance.AskAgent);
     (query(fixture, '[data-testid="ps-pipelines-ask-agent"]') as HTMLElement).click();
     expect(asked.length).toBe(1);
     expect(asked[0]).toContain('training pipeline');
@@ -106,7 +108,7 @@ describe('PSPipelinesComponent (DOM)', () => {
       inputs: {
         engine: makeEngine([pipe]),
         provider: fakeProvider,
-        viewMode: 'dag',
+        ViewMode: 'dag',
       },
     });
     const nodes = queryAll(fixture, '[data-testid="ps-pipelines-node"]');
@@ -146,6 +148,28 @@ describe('PSPipelinesComponent (DOM)', () => {
     const cutoff = render([makePipeline({ AsOfStrategy: JSON.stringify({ Mode: 'column', Column: 'DecisionDate' }) })], 'dag');
     expect(query(cutoff, '[data-testid="ps-pipelines-asof-mode"]')?.textContent?.trim()).toBe('column');
     expect(query(cutoff, '[data-testid="ps-pipelines-asof-reset"]')?.textContent).toContain('Reset to none');
+  });
+
+  it('a trained run that shipped no model shows the stored reason and no version', async () => {
+    const out: PredictiveStudioTrainModelOutput = {
+      trainingRunId: 'run-1', status: 'NoSignal', leakageFlagged: false, gateOutcome: 'no-signal', gateBranch: 'c:no-signal',
+      gateReason: 'Neither the model nor any simple baseline beats the flat guess on log-loss: no signal.',
+    };
+    const execute = vi.spyOn(PredictiveStudioTrainModelOperation.prototype, 'Execute').mockResolvedValue({ Success: true, Output: out });
+    const fixture = render([makePipeline()]);
+    const notify = vi.spyOn(fixture.debugElement.injector.get(MJNotificationService), 'CreateSimpleNotification');
+    (query(fixture, '[data-testid="ps-pipelines-train"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(execute).toHaveBeenCalledWith({ pipelineId: 'p1' }, expect.anything());
+    expect(notify).toHaveBeenLastCalledWith('Trained Renewal pipeline: no model shipped. Neither the model nor any simple baseline beats the flat guess on log-loss: no signal.', 'info', 5000);
+    execute.mockRestore();
+  });
+
+  it('a trained run that produced a model shows its version', () => {
+    const out: PredictiveStudioTrainModelOutput = { modelId: 'm1', version: 3, trainingRunId: 'run-1', status: 'Draft', leakageFlagged: true };
+    expect(PSPipelinesComponent.TrainResultMessage('Renewal pipeline', out)).toBe('Trained Renewal pipeline v3 (leakage flag raised — needs sign-off). See Registry.');
+    expect(PSPipelinesComponent.TrainResultMessage('Renewal pipeline', { trainingRunId: 'run-9', status: 'NoSignal', leakageFlagged: false }))
+      .toBe('Trained Renewal pipeline: no model shipped. See training run run-9.');
   });
 
   it('Reset to none marks the pipeline dirty without saving', () => {
