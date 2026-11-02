@@ -1,4 +1,5 @@
 ---
+"@memberjunction/core-entities": patch
 "@memberjunction/actions-base": patch
 "@memberjunction/actions": patch
 "@memberjunction/core-actions": patch
@@ -10,9 +11,9 @@
 PR 1 (6.2-safe fixes) for the Always-On Agent Harness & Core Primitives plan:
 
 - **MessagingAdapters**: Messages on one Slack/Teams thread are handled one at a time, in arrival order (`inFlightThreadPromises`), so a rapid burst reuses the conversation the first message created instead of starting one conversation and one agent run per message.
-- **Primitive 2 v1 (DDL-free Trust & Taint Tracking)**:
-  - Add `ActionOutputTrustLevel` (`'Trusted' | 'SemiTrusted' | 'Untrusted'`) to `ActionResultSimple`, `ActionResult`, `ActionResultSummary`, `ClientToolMetadata`, and `ClientToolResultSummary`.
-  - Add a code-side default list of external-content actions on `BaseAgent` (web search and page content, the mail inbox action, HTTP requests, URL metadata, RSS feeds, MCP tool output), overridable via `LoopAgentTypePromptParams` (`actionTrustLevels`, then an action's own `TrustLevel`, then `trustedActionNames` / `untrustedActionNames`).
+- **Primitive 2 v1 (Metadata-Driven Trust & Taint Tracking)**:
+  - Add `IActionConfiguration` (`JSONType` on `MJ: Actions.Config`, exposed as `MJActionEntity.Config_Object`) with `outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted'`, and mark external-content ingestion actions (`Web Search`, `Web Page Content`, `Brave Search`, `Perplexity Search`, `Tavily Search`, `Google Custom Search`, `Manage My Email Inbox and Drafts`, `HTTP Request`, `URL Metadata Extractor`, `Read RSS Feed`, `Execute MCP Tool`) with `outputTrustLevel: "Untrusted"` in `/metadata/actions/`.
+  - Add `ActionOutputTrustLevel` (`'Trusted' | 'SemiTrusted' | 'Untrusted'`) to `ActionResultSummary`, `ClientToolMetadata`, and `ClientToolResultSummary`, resolved in `BaseAgent.resolveActionTrustLevel` from `Action.Config_Object?.outputTrustLevel` with optional per-agent/per-run overrides in `LoopAgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`, `untrustedActionNames`).
   - Escape closing `</untrusted_external_data>` tags and wrap `Untrusted`/`SemiTrusted` action and client-tool outputs in the `<untrusted_external_data source="..." trust="..." warning="...">` envelope in `BaseAgent.formatActionResultsAsMarkdown` and `FormatClientToolResults`.
   - Strip `AIDirectives` from `Untrusted` action outputs and track `_taintedSources` / `IsRunTainted` on `BaseAgent`; a parent run absorbs its sub-agents' sources (`ExecuteAgentResult.taintedSources`), and client-tool trust comes from the same `ResolveClientTools` list the prompt offered.
   - Land memory notes written during tainted runs with `Status = 'Pending'` and taint provenance in `Comments` (`MemoryWriteManager`).

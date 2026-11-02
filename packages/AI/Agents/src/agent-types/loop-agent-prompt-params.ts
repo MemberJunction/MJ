@@ -630,23 +630,24 @@ export interface LoopAgentTypePromptParams {
     decisionDiscovery?: boolean;
 
     /**
-     * Additional action names whose outputs should be classified as `'Untrusted'` for this agent,
-     * augmenting the built-in untrusted external action list. Untrusted action outputs are wrapped
-     * in `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the run as tainted.
+     * Action names whose outputs should be classified as `'Untrusted'` for this agent, overriding
+     * the action's `Action.Config_Object.outputTrustLevel` metadata catalog setting. Untrusted action
+     * outputs are wrapped in `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the
+     * run as tainted.
      * @default []
      */
     untrustedActionNames?: string[];
 
     /**
-     * Action names explicitly exempted from the built-in untrusted external action list and treated
-     * as `'Trusted'` for this agent.
+     * Action names explicitly treated as `'Trusted'` for this agent, overriding the action's
+     * `Action.Config_Object.outputTrustLevel` metadata catalog setting.
      * @default []
      */
     trustedActionNames?: string[];
 
     /**
      * Explicit per-action output trust level overrides keyed by action name (`'Trusted' | 'SemiTrusted' | 'Untrusted'`).
-     * Takes precedence over `untrustedActionNames`, `trustedActionNames`, and the built-in default list.
+     * Takes precedence over `untrustedActionNames`, `trustedActionNames`, and the action's `Action.Config_Object.outputTrustLevel` metadata.
      * @default {}
      */
     actionTrustLevels?: Record<string, 'Trusted' | 'SemiTrusted' | 'Untrusted'>;

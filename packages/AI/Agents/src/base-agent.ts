@@ -151,7 +151,7 @@ import {
     type TaskGraphSpecNode
 } from '@memberjunction/ai-core-plus';
 import {
-    MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    ActionEngineBase, MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
     ActionRunScopeIsBounded, type ActionRunScope, type ActionOutputTrustLevel, type ActionErrorRecovery
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -163,7 +163,6 @@ import {
     CURRENT_DATE_PLACEHOLDER,
     CURRENT_DAY_OF_WEEK_PLACEHOLDER,
     CURRENT_TIME_PLACEHOLDER,
-    DEFAULT_UNTRUSTED_ACTION_NAMES,
     RUNTIME_STATE_TAG,
     SCRATCHPAD_NOTES_PLACEHOLDER,
     SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER,
@@ -876,17 +875,6 @@ export class BaseAgent {
     }
 
     /**
-     * The actions whose output this agent treats as external content by default
-     * ({@link DEFAULT_UNTRUSTED_ACTION_NAMES}, lowercase names). A subclass that knows its own
-     * domain's ingestion actions overrides this; a single agent or run adjusts it through
-     * `AgentTypePromptParams` instead. Temporary seam until `Action.OutputTrustLevel` exists.
-     * @protected
-     */
-    protected get defaultUntrustedActionNames(): ReadonlySet<string> {
-        return DEFAULT_UNTRUSTED_ACTION_NAMES;
-    }
-
-    /**
      * Parameter-aware failure tracking per action name for the current agent run.
      * Differentiates identical retries (which trip quickly) from parameter modifications (which allow self-correction).
      * @private
@@ -1397,24 +1385,28 @@ export class BaseAgent {
     }
 
     /**
-     * Resolves the output trust classification for an action (Primitive 2 v1, DDL-free).
+     * Resolves the output trust classification for an action from its `MJ: Actions` metadata
+     * (`actionEntity.Config_Object?.outputTrustLevel`), with per-agent or per-run overrides via
+     * `AgentTypePromptParams`.
+     *
      * Precedence:
      * 1. An explicit per-action `actionTrustLevels` entry in `AgentTypePromptParams` — the operator's last word
-     * 2. The `TrustLevel` the action itself returned on its result — an action knows where its output came from,
-     *    so a name list cannot quietly un-taint it
-     * 3. The `trustedActionNames` / `untrustedActionNames` lists in `AgentTypePromptParams`
-     * 4. The code-side default list of external-content actions ({@link DEFAULT_UNTRUSTED_ACTION_NAMES})
-     * 5. `'Trusted'`
+     * 2. The `trustedActionNames` / `untrustedActionNames` lists in `AgentTypePromptParams`
+     * 3. The action's metadata catalog setting (`Action.Config_Object?.outputTrustLevel`, looking up the
+     *    action by name in `ActionEngineBase.Instance.Actions` when `actionEntity` is omitted)
+     * 4. `'Trusted'`
      * @protected
      */
     protected resolveActionTrustLevel(
         actionName: string,
         actionEntity?: MJActionEntityExtended,
-        actionResult?: ActionResult,
         params?: ExecuteAgentParams
     ): ActionOutputTrustLevel {
         const normalizedName = actionName.trim().toLowerCase();
-        const entityName = actionEntity?.Name?.trim().toLowerCase();
+        const entity = actionEntity ?? ActionEngineBase.Instance.Actions?.find(
+            a => a.Name?.trim().toLowerCase() === normalizedName
+        );
+        const entityName = entity?.Name?.trim().toLowerCase();
         const namesAction = (candidate: string): boolean => {
             const n = candidate.trim().toLowerCase();
             return n === normalizedName || (entityName !== undefined && n === entityName);
@@ -1431,12 +1423,7 @@ export class BaseAgent {
             }
         }
 
-        // 2. The action's own classification of its output
-        if (isLevel(actionResult?.TrustLevel)) {
-            return actionResult.TrustLevel;
-        }
-
-        // 3. Name lists
+        // 2. Per-agent / per-run name lists
         if (Array.isArray(promptParams?.trustedActionNames) && promptParams.trustedActionNames.some(namesAction)) {
             return 'Trusted';
         }
@@ -1444,10 +1431,16 @@ export class BaseAgent {
             return 'Untrusted';
         }
 
-        // 4. Default external-content actions
-        const defaults = this.defaultUntrustedActionNames;
-        if (defaults.has(normalizedName) || (entityName !== undefined && defaults.has(entityName))) {
-            return 'Untrusted';
+        // 3. Action metadata catalog setting (Action.Config_Object?.outputTrustLevel)
+        const metadataLevel = entity?.Config_Object?.outputTrustLevel;
+        if (isLevel(metadataLevel)) {
+            return metadataLevel;
+        }
+        if (typeof entity?.Config_ === 'string' && entity.Config_.trim().length > 0) {
+            const parsed = CleanAndParseJSON<Record<string, unknown>>(entity.Config_, false);
+            if (parsed && isLevel(parsed.outputTrustLevel)) {
+                return parsed.outputTrustLevel;
+            }
         }
 
         return 'Trusted';
@@ -19634,7 +19627,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const fileOutputs = this.detectFileOutputs(outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
-                const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, actionResult, params);
+                const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, params);
                 if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
                     this.recordTaintedSource(
                         result.stepEntity?.StepNumber ?? (stepCount + 1),
@@ -19971,7 +19964,7 @@ The context is now within limits. Please retry your request with the recovered c
             );
 
             const matchedClientToolMeta = toolsByName.get(tool.Name.trim().toLowerCase());
-            const resolvedActionTrust = this.resolveActionTrustLevel(tool.Name, undefined, undefined, params);
+            const resolvedActionTrust = this.resolveActionTrustLevel(tool.Name, undefined, params);
             const clientToolTrustLevel: ActionOutputTrustLevel =
                 resolvedActionTrust !== 'Trusted'
                     ? resolvedActionTrust

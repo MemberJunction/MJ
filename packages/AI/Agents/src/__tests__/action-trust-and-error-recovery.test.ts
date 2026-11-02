@@ -13,15 +13,15 @@ import {
     type MemoryWriteScope,
 } from '../MemoryWriteManager';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { ActionResult, ActionErrorRecovery, ActionOutputTrustLevel } from '@memberjunction/actions-base';
+import { ActionEngineBase, type ActionErrorRecovery, type ActionOutputTrustLevel, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { LoopAgentTypePromptParams } from '../agent-types/loop-agent-prompt-params';
 import type { AgentTaintedSource, ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
 /** Reaches the protected seams under test through ordinary inheritance; no cast crosses a visibility boundary. */
 class HarnessProbeAgent extends BaseAgent {
-    public ResolveTrust(actionName: string, actionResult?: ActionResult, promptParams?: Partial<LoopAgentTypePromptParams>): ActionOutputTrustLevel {
+    public ResolveTrust(actionName: string, actionEntity?: MJActionEntityExtended, promptParams?: Partial<LoopAgentTypePromptParams>): ActionOutputTrustLevel {
         const params = promptParams ? ({ data: { __agentTypePromptParams: promptParams } } as Partial<ExecuteAgentParams> as ExecuteAgentParams) : undefined;
-        return this.resolveActionTrustLevel(actionName, undefined, actionResult, params);
+        return this.resolveActionTrustLevel(actionName, actionEntity, params);
     }
 
     public RecordTaint(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
@@ -84,51 +84,73 @@ describe('Untrusted external data: envelope, trust resolution and run taint', ()
         expect(formatted).not.toContain('source="client-tool:NavigateToRecord"');
     });
 
-    it('classifies external-content actions as Untrusted and leaves senders, catalogs and internal actions Trusted', () => {
+    it('resolves outputTrustLevel from MJ: Actions metadata (Config_Object / Config_) and leaves unconfigured actions Trusted', () => {
         const agent = new HarnessProbeAgent();
 
-        expect(agent.ResolveTrust('Web Search')).toBe('Untrusted');
-        expect(agent.ResolveTrust('Web Page Content')).toBe('Untrusted');
-        expect(agent.ResolveTrust('Manage My Email Inbox and Drafts')).toBe('Untrusted');
-        expect(agent.ResolveTrust('Execute MCP Tool')).toBe('Untrusted');
-        // Sending to an external system, or listing MJ's catalog of one, is not ingesting external content.
-        expect(agent.ResolveTrust('Slack Webhook')).toBe('Trusted');
-        expect(agent.ResolveTrust('List MCP Tools')).toBe('Trusted');
-        expect(agent.ResolveTrust('Get Entity List')).toBe('Trusted');
+        const makeAction = (name: string, outputTrustLevel?: ActionOutputTrustLevel): MJActionEntityExtended =>
+            ({
+                Name: name,
+                Config_: outputTrustLevel ? JSON.stringify({ outputTrustLevel }) : null,
+                Config_Object: outputTrustLevel ? { outputTrustLevel } : null,
+            }) as Partial<MJActionEntityExtended> as MJActionEntityExtended;
+
+        const actionsSpy = vi.spyOn(ActionEngineBase.Instance, 'Actions', 'get').mockReturnValue([
+            makeAction('Web Search', 'Untrusted'),
+            makeAction('Web Page Content', 'Untrusted'),
+            makeAction('Manage My Email Inbox and Drafts', 'Untrusted'),
+            makeAction('Execute MCP Tool', 'Untrusted'),
+            makeAction('Slack Webhook'),
+            makeAction('List MCP Tools'),
+            makeAction('Get Entity List'),
+        ]);
+
+        try {
+            // Resolved via passed actionEntity
+            expect(agent.ResolveTrust('Web Search', makeAction('Web Search', 'Untrusted'))).toBe('Untrusted');
+            expect(agent.ResolveTrust('Partner Feed', makeAction('Partner Feed', 'SemiTrusted'))).toBe('SemiTrusted');
+
+            // Resolved via ActionEngineBase.Instance.Actions catalog lookup when actionEntity is omitted
+            expect(agent.ResolveTrust('Web Search')).toBe('Untrusted');
+            expect(agent.ResolveTrust('Web Page Content')).toBe('Untrusted');
+            expect(agent.ResolveTrust('Manage My Email Inbox and Drafts')).toBe('Untrusted');
+            expect(agent.ResolveTrust('Execute MCP Tool')).toBe('Untrusted');
+
+            // Sending to an external system, or listing MJ's catalog of one, has no Untrusted metadata and stays Trusted.
+            expect(agent.ResolveTrust('Slack Webhook')).toBe('Trusted');
+            expect(agent.ResolveTrust('List MCP Tools')).toBe('Trusted');
+            expect(agent.ResolveTrust('Get Entity List')).toBe('Trusted');
+        } finally {
+            actionsSpy.mockRestore();
+        }
     });
 
-    it('lets an action classify its own output, and only an explicit per-action override can overrule it', () => {
+    it('respects AgentTypePromptParams overrides over the action metadata catalog setting', () => {
         const agent = new HarnessProbeAgent();
-        const selfDeclared = (level: 'SemiTrusted' | 'Untrusted') =>
-            ({ Success: true, ResultCode: 'SUCCESS', Params: [], TrustLevel: level }) as ActionResult;
+        const untrustedWebSearch = {
+            Name: 'Web Search',
+            Config_: JSON.stringify({ outputTrustLevel: 'Untrusted' }),
+            Config_Object: { outputTrustLevel: 'Untrusted' as const },
+        } as Partial<MJActionEntityExtended> as MJActionEntityExtended;
 
-        // A result-level classification beats the default list...
-        expect(agent.ResolveTrust('Get Entity List', selfDeclared('SemiTrusted'))).toBe('SemiTrusted');
-        // ...and beats the trusted-names list: a name list cannot quietly un-taint an action that knows better.
-        expect(agent.ResolveTrust('Partner Feed', selfDeclared('Untrusted'), { trustedActionNames: ['Partner Feed'] })).toBe('Untrusted');
-        // The explicit per-action map is the operator's last word.
-        expect(agent.ResolveTrust('Partner Feed', selfDeclared('Untrusted'), { actionTrustLevels: { 'Partner Feed': 'Trusted' } })).toBe('Trusted');
-    });
-
-    it('respects the AgentTypePromptParams name lists over the default list', () => {
-        const agent = new HarnessProbeAgent();
-
-        // AgentTypePromptParams overrides
+        // Per-agent trustedActionNames can exempt an action whose metadata is Untrusted
         expect(
-            agent.ResolveTrust('Web Search', undefined, {
+            agent.ResolveTrust('Web Search', untrustedWebSearch, {
                 trustedActionNames: ['Web Search'],
             }),
         ).toBe('Trusted');
 
+        // Per-agent untrustedActionNames can mark an otherwise Trusted action as Untrusted
         expect(
             agent.ResolveTrust('Custom Partner Feed', undefined, {
                 untrustedActionNames: ['Custom Partner Feed'],
             }),
         ).toBe('Untrusted');
 
+        // Explicit actionTrustLevels map wins over both name lists and action metadata
         expect(
-            agent.ResolveTrust('Internal Forum Reader', undefined, {
-                actionTrustLevels: { 'Internal Forum Reader': 'SemiTrusted' },
+            agent.ResolveTrust('Web Search', untrustedWebSearch, {
+                trustedActionNames: ['Web Search'],
+                actionTrustLevels: { 'Web Search': 'SemiTrusted' },
             }),
         ).toBe('SemiTrusted');
     });

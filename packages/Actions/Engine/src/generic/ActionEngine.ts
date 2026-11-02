@@ -593,7 +593,6 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             ResultCode: simpleResult.ResultCode,
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
-            TrustLevel: simpleResult.TrustLevel,
             ErrorRecovery: simpleResult.ErrorRecovery,
             LogEntry: logEntry,
             Params: simpleResult.Params || params.Params,

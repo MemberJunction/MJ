@@ -164,12 +164,11 @@ How a result's trust level is decided, first match wins:
 | Precedence | Source |
 |---|---|
 | 1 | `actionTrustLevels: { "<action>": "Trusted" \| "SemiTrusted" \| "Untrusted" }` in the agent's `AgentTypePromptParams` or the run's `data.__agentTypePromptParams` |
-| 2 | The `TrustLevel` the action itself set on its result |
-| 3 | `trustedActionNames` / `untrustedActionNames` lists in the same prompt params |
-| 4 | The built-in list of external-content actions (`DEFAULT_UNTRUSTED_ACTION_NAMES`; a `BaseAgent` subclass overrides `defaultUntrustedActionNames`) |
-| 5 | `Trusted` |
+| 2 | `trustedActionNames` / `untrustedActionNames` lists in the same prompt params |
+| 3 | `Action.Config_Object?.outputTrustLevel` on the `MJ: Actions` metadata record (`IActionConfiguration` JSONType on `Action.Config`) |
+| 4 | `Trusted` |
 
-Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. The built-in list is a stopgap until `Action.OutputTrustLevel` exists on the Actions entity; it names actions that ingest external content, not actions that send to an external system or list MJ's own MCP catalog.
+Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. In the `MJ: Actions` metadata catalog, `outputTrustLevel: "Untrusted"` is set on actions that ingest external content (web search and page content, inbox reader, HTTP request, URL metadata, RSS feeds, `Execute MCP Tool`), not on actions that send to an external system or list MJ's own MCP catalog.
 
 ##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
 
