@@ -234,7 +234,7 @@ export const DecisionEvalActualOutputSchema = z.object({
     /** The agent Choice's value and confidence, or null. */
     Route: z.object({ Value: z.string(), Confidence: z.number() }).nullable(),
     /** What production would do with these answers (`InterpretRoutingAnswers`), or null without answers. */
-    RoutingVerdict: z.enum(['Routed', 'SomeoneElse', 'KeptContinuity']).nullable(),
+    RoutingVerdict: z.enum(['Routed', 'SomeoneElse', 'KeptContinuity', 'NoAgent']).nullable(),
     /**
      * The routing policy that verdict was reached under, or null without answers. Absent from runs
      * recorded before routing was calibrated: their verdicts used raw thresholds, so the scorecard

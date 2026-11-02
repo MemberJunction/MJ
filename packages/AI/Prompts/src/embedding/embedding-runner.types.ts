@@ -1,5 +1,6 @@
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { ModelInfo } from '@memberjunction/ai-core-plus';
+import type { EmbeddingInputType } from '@memberjunction/ai';
 
 /**
  * Result of an embedding execution via AIEmbeddingRunner.
@@ -61,6 +62,13 @@ export interface EmbeddingRunParams {
    * should read it from there and pass it here.
    */
   Dimensions?: number;
+  /**
+   * Optional: the retrieval role of the texts — `'query'` for search queries, `'document'` (the
+   * default) for text that is stored and searched. The runner prepends the model's catalog prefix
+   * for that role (`ModelConfiguration.Embedding`) and passes the role to the driver, so pass
+   * `'query'` on every search path and leave it unset when embedding records for storage.
+   */
+  InputType?: EmbeddingInputType;
   /** Optional metadata provider override */
   Provider?: IMetadataProvider;
   /**

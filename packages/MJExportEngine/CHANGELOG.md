@@ -1,5 +1,7 @@
 # @memberjunction/export-engine
 
+## 6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ## 6.2.0-edge.5

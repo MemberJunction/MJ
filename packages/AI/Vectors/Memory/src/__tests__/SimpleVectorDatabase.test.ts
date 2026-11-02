@@ -331,6 +331,7 @@ describe('SimpleVectorDatabase', () => {
                 Fields: ['ID', 'ProviderConfig'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, USER);
         });
 

@@ -28,6 +28,7 @@
     "integrations",
     "ai-model-types",
     "ai-usage-types",
+    "ai-model-price-unit-types",
     "ai-vendors",
     "ai-models",
     "ai-modalities",

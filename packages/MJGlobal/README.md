@@ -363,7 +363,9 @@ if (result.success) {
 }
 ```
 
-Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), `typeof`, dot-notation property access including optional chaining (`payload?.customer?.tier`), bracket-notation access with a **literal** index/key, safe string/array methods (`.includes()`, `.startsWith()`, `.some()`, `.every()`, etc.), and the safe globals exported as `SAFE_EXPRESSION_GLOBALS` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`, `isFinite` — callable as namespace methods (`Math.abs(x)`, `Object.keys(x)`) or bare functions (`Number(x)`). Regex literals, `in`/`instanceof`, and methods outside the safe list are not supported.
+Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), `typeof`, dot-notation property access including optional chaining (`payload?.customer?.tier`), bracket-notation access with a **literal** index/key, safe string/array methods (`.includes()`, `.startsWith()`, `.split()`, `.some()`, `.every()`, etc.), and the approved globals in `APPROVED_EXPRESSION_GLOBALS` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`, `isFinite` — callable as namespace methods (`Math.abs(x)`, `Object.keys(x)`) or bare functions (`Number(x)`). Regex literals, `in`/`instanceof`, and methods outside the safe list are not supported.
+
+Identifiers are allowlisted too. A free name must be a key of the evaluation context, a parameter of an enclosing arrow function, `undefined`/`NaN`/`Infinity`, or an approved global **in call position** — `Math.PI`, `items.map(Number)` and `fetch` are refused. The callback of `.some()`/`.every()`/`.find()`/`.filter()`/`.map()`/`.reduce()` must be an inline arrow function. Context keys must be plain identifiers. `SafeExpressionEvaluator.ScreenExpression(expression, allowedIdentifiers)` runs the same screen without compiling; `FieldTransformEngine` uses it for field-rule and integration formulas, with `value` and `fields` as the allowed names.
 
 ### SQLExpressionValidator
 
@@ -780,9 +782,11 @@ const changes = await new FieldRulesEvaluator().ComputeChanges(
 
 ### Safety
 
-- `Condition` expressions use the **safe** evaluator (blocklisted patterns, no statements).
-- `formula` / `custom` value expressions compile with `new Function` (the same model as the established
-  integration `custom` transform) — author them from privileged users/agents, not untrusted input.
+- `Condition` expressions use the **safe** evaluator (allowlisted constructs and identifiers, no statements).
+- `formula` / `custom` value expressions pass the same allowlist screen
+  (`SafeExpressionEvaluator.ScreenExpression`, with `value` and `fields` as the only free names) before
+  they compile with `new Function`. A rejected expression fails like a compile error, through the step's
+  `OnError` policy.
 - The engine performs **no I/O**; `lookup` reaches a database only through the resolver you inject.
 
 ### See also

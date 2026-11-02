@@ -56,13 +56,20 @@ describe('a dependency template block and the values passed to it', () => {
         expect(sql).toContain("Category = 'it''s'");
     });
 
-    it('does not rewrite an attribute or a string that only looks like the variable', () => {
+    // Render-then-compose evaluates the dependency with its arguments instead of rewriting its template
+    // text, so nothing in it can be rewritten by mistake. The attribute half of this case moved: attribute
+    // access (`Opt.Cat`) is outside the MJ Query language and the interpreter gate refuses it.
+    it('does not rewrite a string that only looks like the variable', () => {
         const dep: QueryDependencySpec = {
             ...DEP,
-            SQL: "SELECT ID FROM t WHERE 1 = 1{% if 'Cat' != Cat %} AND y = 1{% endif %}{% if Opt.Cat %} AND z = 1{% endif %}"
+            SQL: "SELECT ID FROM t WHERE 1 = 1{% if 'Cat' != Cat %} AND y = 1{% endif %}"
         };
         const sql = render(`SELECT d.ID FROM {{query:"Lib/Dep(Cat='Dog')"}} d`, {}, [dep]);
         expect(sql).toContain('y = 1');
-        expect(sql).not.toContain('z = 1');
+    });
+
+    it('refuses a dependency that uses attribute access (outside the MJ Query language)', () => {
+        const dep: QueryDependencySpec = { ...DEP, SQL: 'SELECT ID FROM t WHERE 1 = 1{% if Opt.Cat %} AND z = 1{% endif %}' };
+        expect(() => render(`SELECT d.ID FROM {{query:"Lib/Dep(Cat='Dog')"}} d`, {}, [dep])).toThrow(/MJQ_MEMBER_ACCESS/);
     });
 });

@@ -56,6 +56,11 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 
+/** What some drivers put in a failed result's `exception`: the SDK error, wrapped with more context. */
+interface DriverExceptionWrapper {
+    exception?: Error;
+}
+
 /**
  * The composed bound applied to a single model call: the caller's cancellation token (if any) merged
  * with the prompt's configured `AIPrompt.TimeoutMS` (if any).
@@ -93,8 +98,30 @@ export interface ModelVendorCandidate {
    */
   promptModelConfiguration?: AIPromptConfiguration | null;
   isPreferredVendor: boolean;
+  /**
+   * True when this candidate's vendor is the one its `AIPromptModel` row names. Selection runs it in
+   * place of the first credentialed candidate of the same model; see `PromptModelVendorIndex`.
+   */
+  isPromptModelVendor?: boolean;
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
+}
+
+/**
+ * A single candidate entry returned by {@link BaseModelRunner.PreviewModelSelection},
+ * reporting the model, vendor, driver class, and whether credentials are available.
+ */
+export interface ModelSelectionPreviewItem {
+  /** ID of the candidate AI model */
+  ModelID: string;
+  /** Display name of the candidate AI model */
+  ModelName: string;
+  /** Display name of the inference provider vendor, when available */
+  VendorName?: string;
+  /** Driver class used to invoke the model-vendor pair */
+  DriverClass: string;
+  /** Whether platform or environment credentials are available for this candidate */
+  HasCredentials: boolean;
 }
 
 /**
@@ -389,8 +416,8 @@ export abstract class BaseModelRunner {
 
     // Priority 2: PromptModel bindings (most specific) - with failover
     if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
+      const promptModel = this.getPromptModelsForPromptId(promptId).find(
+        pm => UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
@@ -641,8 +668,8 @@ export abstract class BaseModelRunner {
   private hasPlatformCredential(promptId: string | undefined, modelId: string | undefined, vendorId: string | undefined): boolean {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
+      const promptModel = this.getPromptModelsForPromptId(promptId).find(
+        pm => UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
         return true;
@@ -763,6 +790,34 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * Previews the ordered model-vendor candidate list for `prompt` (optionally scoped to
+   * `configurationId`) and checks whether credentials are available for each candidate.
+   * Performs no model call and records no prompt run.
+   *
+   * @param prompt - The AI prompt whose model selection should be previewed
+   * @param configurationId - Optional AI configuration ID for preset-scoped candidate ordering
+   * @returns Ordered array of candidate preview items with credential availability flags
+   */
+  public PreviewModelSelection(
+    prompt: MJAIPromptEntityExtended,
+    configurationId?: string
+  ): ModelSelectionPreviewItem[] {
+    const candidates = this.BuildModelVendorCandidates(prompt, undefined, configurationId);
+    return candidates.map(candidate => ({
+      ModelID: candidate.model.ID,
+      ModelName: candidate.model.Name,
+      ...(candidate.vendorName != null ? { VendorName: candidate.vendorName } : {}),
+      DriverClass: candidate.driverClass,
+      HasCredentials: this.HasCredentialsAvailable(
+        candidate.driverClass,
+        prompt.ID,
+        candidate.model.ID,
+        candidate.vendorId
+      ),
+    }));
+  }
+
+  /**
    * PHASE 1: Build candidates for explicitly specified model ID.
    * Returns candidates for the single model if it's active. Throws if the model is of a different type
    * than the runner requires: the caller asked for that model by ID, so running a different one instead
@@ -803,8 +858,8 @@ export abstract class BaseModelRunner {
     verbose?: boolean
   ): ModelVendorCandidate[] {
     // Get all active AIPromptModel records for this prompt
-    const allPromptModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview')
+    const allPromptModels = this.getPromptModelsForPromptId(prompt.ID).filter(
+      pm => pm.Status === 'Active' || pm.Status === 'Preview'
     );
 
     // Filter by configuration matching rules
@@ -1164,12 +1219,19 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * Returns all AIPromptModel rows for a prompt via AIEngine's O(1) PromptModelsByPromptID index.
+   */
+  protected getPromptModelsForPromptId(promptId: string): MJAIPromptModelEntity[] {
+    return AIEngine.Instance.PromptModelsByPromptID.get(NormalizeUUID(promptId)) ?? [];
+  }
+
+  /**
    * Helper: true if this prompt has any AIPromptModel bindings at all, regardless of Status or
    * ConfigurationID. Distinguishes "no bindings were ever configured" (general selection strategy
    * should apply) from "bindings exist but are all Inactive" (no model should be selected).
    */
   private hasAnyPromptModelBindings(prompt: MJAIPromptEntityExtended): boolean {
-    return AIEngine.Instance.PromptModels.some(pm => UUIDsEqual(pm.PromptID, prompt.ID));
+    return this.getPromptModelsForPromptId(prompt.ID).length > 0;
   }
 
   /**
@@ -1181,15 +1243,15 @@ export abstract class BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     configurationId?: string
   ): MJAIPromptModelEntity[] {
+    const forPrompt = this.getPromptModelsForPromptId(prompt.ID);
     if (configurationId) {
       // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
       const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
 
       // Walk the chain looking for prompt models
       for (const config of chain) {
-        const promptModels = AIEngine.Instance.PromptModels.filter(
-          pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-                (pm.Status === 'Active' || pm.Status === 'Preview') &&
+        const promptModels = forPrompt.filter(
+          pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
                 UUIDsEqual(pm.ConfigurationID, config.ID)
         );
 
@@ -1203,9 +1265,8 @@ export abstract class BaseModelRunner {
     }
 
     // Return null-config (universal) models
-    return AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+    return forPrompt.filter(
+      pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
   }
@@ -1235,7 +1296,7 @@ export abstract class BaseModelRunner {
           5000,
           'prompt-model',
           preferredVendorId,
-          pm.Priority
+          pm
         );
         candidates.push(...modelCandidates);
       }
@@ -1255,13 +1316,13 @@ export abstract class BaseModelRunner {
   ): void {
     const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
     const requiredTypeId = this.RequiredModelTypeID();
+    const forPrompt = this.getPromptModelsForPromptId(prompt.ID);
 
     // Add models from parent configs (skip index 0 which is the direct config, already handled)
     for (let i = 1; i < chain.length; i++) {
       const parentConfig = chain[i];
-      const parentModels = AIEngine.Instance.PromptModels.filter(
-        pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+      const parentModels = forPrompt.filter(
+        pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
               UUIDsEqual(pm.ConfigurationID, parentConfig.ID)
       );
 
@@ -1286,7 +1347,7 @@ export abstract class BaseModelRunner {
             basePriority,
             'prompt-model',
             preferredVendorId,
-            pm.Priority
+            pm
           );
           candidates.push(...modelCandidates);
         }
@@ -1294,9 +1355,8 @@ export abstract class BaseModelRunner {
     }
 
     // Finally add NULL config models (universal fallback) with lowest priority
-    const nullConfigModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+    const nullConfigModels = forPrompt.filter(
+      pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
 
@@ -1319,7 +1379,7 @@ export abstract class BaseModelRunner {
           1000, // Lowest priority tier
           'prompt-model',
           preferredVendorId,
-          pm.Priority
+          pm
         );
         candidates.push(...modelCandidates);
       }
@@ -1409,15 +1469,30 @@ export abstract class BaseModelRunner {
 
   /**
    * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
+   * `preferredVendorId` is the caller's runtime vendor override and is boosted above its own model's
+   * other vendors. A prompt-model row's `VendorID` changes no priority: that vendor's candidate is
+   * flagged `isPromptModelVendor`, and selection runs it in place of the first credentialed candidate
+   * of its model (see {@link PromptModelVendorIndex}), so the row picks the vendor but never which
+   * model runs. The row's effort level and configuration go only to the candidates the row
+   * describes: its own vendor, or every vendor of the model when it names none.
    */
   private createCandidatesForModel(
     model: MJAIModelEntityExtended,
     basePriority: number,
     source: ModelVendorCandidate['source'],
     preferredVendorId?: string,
-    promptModelPriority?: number
+    promptModel?: MJAIPromptModelEntity
   ): ModelVendorCandidate[] {
     const modelCandidates: ModelVendorCandidate[] = [];
+    const rowFields = (vendorId?: string) => {
+      const isRowVendor = !!promptModel?.VendorID && UUIDsEqual(vendorId, promptModel.VendorID);
+      const applies = !!promptModel && (!promptModel.VendorID || isRowVendor);
+      return {
+        effortLevel: applies ? promptModel?.EffortLevel ?? undefined : undefined,
+        promptModelConfiguration: applies ? promptModel?.PromptConfigurationObject : undefined,
+        isPromptModelVendor: isRowVendor
+      };
+    };
 
     // Get all vendors for this model - filter for inference providers only.
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
@@ -1439,7 +1514,8 @@ export abstract class BaseModelRunner {
           supportsEffortLevel: preferredVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: true,
           priority: basePriority + 1000, // Boost priority for preferred vendor
-          source
+          source,
+          ...rowFields(preferredVendor.VendorID)
         });
       }
     }
@@ -1456,7 +1532,8 @@ export abstract class BaseModelRunner {
           supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: false,
           priority: basePriority + (vendor.Priority || 0),
-          source
+          source,
+          ...rowFields(vendor.VendorID)
         });
       }
     }
@@ -1470,16 +1547,87 @@ export abstract class BaseModelRunner {
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
         priority: basePriority,
-        source
+        source,
+        ...rowFields(undefined)
       });
     }
 
     // Apply prompt model priority if provided (legacy blended approach)
-    if (promptModelPriority !== undefined) {
-      modelCandidates.forEach(c => c.priority += promptModelPriority * 10);
+    if (promptModel) {
+      modelCandidates.forEach(c => c.priority += promptModel.Priority * 10);
     }
 
     return modelCandidates;
+  }
+
+  /**
+   * Where a candidate list runs the prompt-model row's vendor in place of `candidates[index]`.
+   *
+   * Call it when `candidates[index]` is the first credentialed candidate a walk reaches. If that
+   * candidate is neither the caller's runtime override nor a row vendor, and a later candidate of the
+   * same model is its prompt-model row's vendor with credentials, returns that candidate's index;
+   * otherwise -1. The caller moves it into `index`. So the ranked order still decides which model
+   * runs, credentials included, and the row only decides which of that model's vendors serves it.
+   */
+  protected PromptModelVendorIndex(
+    candidates: ModelVendorCandidate[],
+    index: number,
+    hasCredentials: (candidate: ModelVendorCandidate) => boolean
+  ): number {
+    const current = candidates[index];
+    if (!current || current.isPreferredVendor || current.isPromptModelVendor) {
+      return -1;
+    }
+    for (let j = index + 1; j < candidates.length; j++) {
+      const candidate = candidates[j];
+      if (candidate.isPromptModelVendor && UUIDsEqual(candidate.model.ID, current.model.ID) && hasCredentials(candidate)) {
+        return j;
+      }
+    }
+    return -1;
+  }
+
+  /** The key credential probes are cached under: driver, model and vendor. */
+  protected CandidateKey(candidate: ModelVendorCandidate): string {
+    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
+  }
+
+  /**
+   * Picks the candidate a run uses: the first with credentials, or that model's prompt-model-row vendor
+   * when it has credentials too (see {@link PromptModelVendorIndex}). Every runner selects here, so the
+   * vendor is the same whether or not failover runs. Probing stops at the pick unless `probeAll` asks
+   * for every candidate (a selection report). Returns the probes made, keyed by {@link CandidateKey},
+   * for failover to reuse.
+   *
+   * Failover walks the same rule, so a model with two prompt-model rows naming two vendors has two
+   * row-vendor candidates and the whole call budget can land on that one model: better for a vendor
+   * outage, worse for a model-level failure (retired APIName, refusal, bad ModelConfiguration). Calls
+   * that span several driver classes also skip the last-resort cross-provider attempt.
+   */
+  protected SelectCandidate(
+    candidates: ModelVendorCandidate[],
+    hasCredentials: (candidate: ModelVendorCandidate) => boolean,
+    probeAll = false
+  ): { Candidate: ModelVendorCandidate | null; CredentialAvailability: Map<string, boolean> } {
+    const availability = new Map<string, boolean>();
+    const probe = (candidate: ModelVendorCandidate): boolean => {
+      const key = this.CandidateKey(candidate);
+      let available = availability.get(key);
+      if (available === undefined) {
+        available = hasCredentials(candidate);
+        availability.set(key, available);
+      }
+      return available;
+    };
+    const first = candidates.findIndex(probe);
+    const rowVendor = first < 0 ? -1 : this.PromptModelVendorIndex(candidates, first, probe);
+    if (probeAll) {
+      candidates.forEach(probe);
+    }
+    return {
+      Candidate: first < 0 ? null : candidates[rowVendor >= 0 ? rowVendor : first],
+      CredentialAvailability: availability
+    };
   }
 
   /**
@@ -1778,7 +1926,7 @@ export abstract class BaseModelRunner {
       ? new Map<string, boolean>(credentialAvailability)
       : new Map<string, boolean>();
     const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
-      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+      const key = this.CandidateKey(c);
       let has = failoverCredentialCache.get(key);
       if (has === undefined) {
         has = this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
@@ -1831,6 +1979,16 @@ export abstract class BaseModelRunner {
       // highest-priority-with-credentials rule).
       if (!candidateHasCredentials(candidate)) {
         skippedForCredentials++;
+        continue;
+      }
+
+      // The model is decided; its prompt-model row's vendor serves it when that vendor has credentials.
+      // Move it into this slot (on a copy) and re-run the index, so the displaced candidate follows it.
+      const rowVendorIndex = this.PromptModelVendorIndex(allCandidates, i, candidateHasCredentials);
+      if (rowVendorIndex > i) {
+        allCandidates = [...allCandidates];
+        allCandidates.splice(i, 0, ...allCandidates.splice(rowVendorIndex, 1));
+        i--;
         continue;
       }
 
@@ -1930,7 +2088,7 @@ export abstract class BaseModelRunner {
         // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
         // instead of throwing, so we must check result.success here.
         if (!result.success && result.errorInfo?.canFailover) {
-          lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
+          lastError = this.failedResultError(result);
 
           // Use shared failover error handling logic
           const decision = await this.processFailoverError(
@@ -2309,6 +2467,29 @@ export abstract class BaseModelRunner {
     }
     const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
     wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError({ ...caught, message: caught?.errorMessage });
+    return wrapped;
+  }
+
+  /**
+   * The Error a failover attempt records for a failed result. A driver may put something other than
+   * an Error in `exception` (the Anthropic driver wraps the SDK error with the result it was building),
+   * and reading `.message` off that gave undefined, so both the run's error and its stored
+   * `FailoverErrors` said "Unknown error" instead of what the provider said. An Error is used as it
+   * is, and an Error inside such a wrapper is unwrapped; anything else becomes an Error carrying the
+   * result's own message, with the result's classification kept on it.
+   */
+  private failedResultError(result: BaseResult): Error {
+    const exception: Error | DriverExceptionWrapper | string | null | undefined = result.exception;
+    if (exception instanceof Error) {
+      return exception;
+    }
+    if (exception && typeof exception === 'object' && exception.exception instanceof Error) {
+      return exception.exception;
+    }
+    const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(result.errorMessage || 'Model execution failed');
+    if (result.errorInfo) {
+      wrapped.errorInfo = result.errorInfo;
+    }
     return wrapped;
   }
 

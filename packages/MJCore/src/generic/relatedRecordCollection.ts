@@ -293,6 +293,14 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         return this.options.Load ?? 'explicit';
     }
 
+    /**
+     * The automatic sequence numbering this collection applies, if declared. When set, every
+     * `Add`/`Create`/`Remove` renumbers the children's sequence field from their position.
+     */
+    public get SequenceOptions(): Readonly<RelatedRecordSequence> | undefined {
+        return this.options.Sequence;
+    }
+
     /** What removal means for this collection. */
     public get RemovalMode(): RelatedRecordRemovalMode {
         return this.options.OnRemove ?? 'delete';
@@ -571,7 +579,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             );
         }
 
-        this.items = result.Results ?? [];
+        // A copy: a RunView served from a cache slot can hand back a frozen array, and the
+        // collection appends to and removes from its own list.
+        this.items = [...(result.Results ?? [])];
         this.removed = [];
         this.loaded = true;
         this.sharesEngineInstances = false;
@@ -593,7 +603,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @param items - The children belonging to this parent.
      */
     public SetLoadedItems(items: T[]): void {
-        this.items = items ?? [];
+        this.items = [...(items ?? [])];
         this.removed = [];
         this.loaded = true;
         this.sharesEngineInstances = false;

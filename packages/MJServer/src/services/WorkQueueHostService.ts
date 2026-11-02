@@ -28,13 +28,25 @@ export interface StartableWorkQueueHost {
 export interface WorkQueueHostStartDependencies {
     Env: EnvironmentVariables;
     FindUserByEmail(email: string): UserInfo | undefined;
+    FindSystemUser?(): UserInfo | undefined;
     ConfigureEngine(user: UserInfo, provider: DatabaseProviderBase): Promise<WorkQueueEngine>;
     CreateHost(config: WorkQueueHostConfig, engine: WorkQueueEngine, user: UserInfo, provider: DatabaseProviderBase, providerSource: WorkQueueProviderSource): StartableWorkQueueHost;
+}
+
+const DEFAULT_SYSTEM_USER_EMAILS = new Set(['system@memberjunction.org', 'not.set@nowhere.com']);
+
+type IndependentProviderCapable = IMetadataProvider & {
+    CreateIndependentInstance(): Promise<IMetadataProvider>;
+};
+
+function hasCreateIndependentInstance(provider: IMetadataProvider): provider is IndependentProviderCapable {
+    return 'CreateIndependentInstance' in provider && typeof provider.CreateIndependentInstance === 'function';
 }
 
 export const DEFAULT_WORK_QUEUE_HOST_START_DEPENDENCIES: WorkQueueHostStartDependencies = {
     Env: process.env,
     FindUserByEmail: email => UserCache.Users.find(user => user.Email?.trim().toLowerCase() === email.trim().toLowerCase()),
+    FindSystemUser: () => UserCache.Instance.GetSystemUser(),
     ConfigureEngine: async (user, provider) => {
         await WorkQueueEngine.Instance.Config(false, user, provider);
         await ReportTopologyIssues(WorkQueueEngine.Instance);
@@ -89,7 +101,7 @@ export function BuildWorkQueueHostConfig(config: WorkQueueConfig, instanceID: st
     };
 }
 
-/** A fresh SQL Server provider per delivery over the shared pool; the server provider otherwise. */
+/** A fresh SQL Server or PostgreSQL provider per delivery over the shared pool; the server provider otherwise. */
 export class MJServerWorkQueueProviderSource implements WorkQueueProviderSource {
     private readonly factory: TaskGraphProviderFactory | null;
 
@@ -97,8 +109,14 @@ export class MJServerWorkQueueProviderSource implements WorkQueueProviderSource 
         this.factory = pool ? new TaskGraphProviderFactory(pool) : null;
     }
 
-    public CreateProvider(): Promise<IMetadataProvider> {
-        return this.factory ? this.factory.CreateProvider() : Promise.resolve(this.fallback);
+    public async CreateProvider(): Promise<IMetadataProvider> {
+        if (this.factory) {
+            return this.factory.CreateProvider();
+        }
+        if (hasCreateIndependentInstance(this.fallback)) {
+            return this.fallback.CreateIndependentInstance();
+        }
+        return this.fallback;
     }
 }
 
@@ -116,7 +134,11 @@ export async function StartWorkQueueHost(
         LogStatus(`[WorkQueue] Host disabled by ${WORK_QUEUE_DISABLE_ENV}=1 — this process publishes but runs no subscriptions.`);
         return null;
     }
-    const user = dependencies.FindUserByEmail(config.systemUserEmail);
+    const configuredEmail = config.systemUserEmail?.trim() ?? '';
+    let user = configuredEmail ? dependencies.FindUserByEmail(configuredEmail) : undefined;
+    if (!user && (!configuredEmail || DEFAULT_SYSTEM_USER_EMAILS.has(configuredEmail.toLowerCase()))) {
+        user = dependencies.FindSystemUser?.();
+    }
     if (!user) {
         throw new Error(`[WorkQueue] System user not found with email: ${config.systemUserEmail} — set workQueue.systemUserEmail in mj.config.cjs`);
     }

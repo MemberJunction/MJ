@@ -1527,6 +1527,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
           Fields: ['RecordingFileID'],
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'simple',
         },
         this.ProviderToUse.CurrentUser,

@@ -3,7 +3,7 @@
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
- *    wiring (RD2), the co-agent pairing junction (RD3) — each skips-as-pass LOUDLY when the
+ *    wiring (RD2), the co-agent pairing junction (RD3) — each skips (SkipCheck) when the
  *    deployment has not seeded that slice,
  *  - agent-session row lifecycle via a tagged fixture (RD4) — also PINS the fact that agent
  *    sessions have NO *EntityServer invariants (a direct Save bypasses SessionManager entirely),
@@ -96,7 +96,7 @@ import { HandoffOfferRegistry, LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVE
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
 import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@memberjunction/predictive-studio';
 import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, type IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { DeepDeleteRunTrees } from './_it-live-agent-harness';
@@ -969,9 +969,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             );
             Assert(r.Success, `channels load failed: ${r.ErrorMessage}`);
             if (r.Results.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD1 SKIPPED — no MJ: AI Agent Channels seeded in this deployment '
+                SkipCheck('no MJ: AI Agent Channels seeded in this deployment '
                     + '(push metadata/ai-agent-channels to exercise this check)');
-                return;
             }
             for (const channel of r.Results) {
                 Assert(channel.Name.trim().length > 0, `channel ${channel.ID} has an empty Name`);
@@ -996,8 +995,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const realtimeTypeID = await firstID('MJ: AI Model Types', ctx.User, `Name='Realtime'`);
             if (!realtimeTypeID) {
-                console.warn("  ⚠ realtime-deterministic.RD2 SKIPPED — no 'Realtime' row in MJ: AI Model Types (realtime stack not seeded)");
-                return;
+                SkipCheck("no 'Realtime' row in MJ: AI Model Types (realtime stack not seeded)");
             }
             const models = await new RunView().RunView<{ ID: string; Name: string }>(
                 {
@@ -1009,8 +1007,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             );
             Assert(models.Success, `realtime models load failed: ${models.ErrorMessage}`);
             if (models.Results.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD2 SKIPPED — no active Realtime models seeded');
-                return;
+                SkipCheck('no active Realtime models seeded');
             }
             const idList = models.Results.map(m => `'${m.ID}'`).join(',');
             const vendors = await new RunView().RunView<MJAIModelVendorEntity>(
@@ -1034,8 +1031,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             );
             Assert(r.Success, `co-agent junction load failed: ${r.ErrorMessage}`);
             if (r.Results.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD3 SKIPPED — no MJ: AI Agent Co Agents rows seeded');
-                return;
+                SkipCheck('no MJ: AI Agent Co Agents rows seeded');
             }
             const pairKeys = new Set<string>();
             const defaultsPerCoAgentType = new Map<string, number>();
@@ -1062,8 +1058,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
-                console.warn('  ⚠ realtime-deterministic.RD4 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
             }
             try {
                 Assert(await session.Save(), `session fixture save failed: ${session.LatestResult?.CompleteMessage}`);
@@ -1101,13 +1096,11 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: AI Bridge Providers';
             if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
-                console.warn(`  ⚠ realtime-deterministic.RD5 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
-                return;
+                SkipCheck(`entity '${entityName}' not in metadata (bridge stack not installed)`);
             }
             if (!serverInvariantsActive(ctx.Provider.ProviderType, entityName)) {
-                console.warn('  ⚠ realtime-deterministic.RD5 SKIPPED — the bridge *EntityServer subclass is not registered in this '
+                SkipCheck('the bridge *EntityServer subclass is not registered in this '
                     + 'process and the run is not over the wire, so invariants cannot be observed');
-                return;
             }
 
             // Negative 1: unknown feature flag must be refused (never persisted).
@@ -1147,18 +1140,15 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: AI Agent Session Bridges';
             if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
-                console.warn(`  ⚠ realtime-deterministic.RD6 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
-                return;
+                SkipCheck(`entity '${entityName}' not in metadata (bridge stack not installed)`);
             }
             if (!serverInvariantsActive(ctx.Provider.ProviderType, entityName)) {
-                console.warn('  ⚠ realtime-deterministic.RD6 SKIPPED — the session-bridge *EntityServer subclass is not registered '
+                SkipCheck('the session-bridge *EntityServer subclass is not registered '
                     + 'in this process and the run is not over the wire');
-                return;
             }
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
-                console.warn('  ⚠ realtime-deterministic.RD6 SKIPPED — no MJ: AI Agents row available to anchor the session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor the session fixture');
             }
             const provider = await buildProviderFixture(ctx.User);
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
@@ -1354,8 +1344,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Interactions') || !md.EntityByName('MJ: Interaction Events')) {
-                console.warn('  ⚠ realtime-deterministic.RD10 SKIPPED — MJ: Interactions not in metadata');
-                return;
+                SkipCheck('MJ: Interactions not in metadata');
             }
 
             const lifecycle = InteractionLifecycleService.Instance;
@@ -1476,8 +1465,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Interaction Offers')) {
-                console.warn('  ⚠ realtime-deterministic.RD11 SKIPPED — MJ: Interaction Offers not in metadata');
-                return;
+                SkipCheck('MJ: Interaction Offers not in metadata');
             }
 
             const registry = HandoffOfferRegistry.Instance;
@@ -1618,8 +1606,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Meetings') || !md.EntityByName('MJ: Meeting Participants')) {
-                console.warn('  ⚠ realtime-deterministic.RD12 SKIPPED — MJ: Meetings not in metadata');
-                return;
+                SkipCheck('MJ: Meetings not in metadata');
             }
 
             const authService = RoomAuthorizationService.Instance;
@@ -1727,8 +1714,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const deployment = findAvatarFixtureAnchors(AIEngineBase.Instance);
             if (typeof deployment === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD13 SKIPPED — ${deployment}`);
-                return;
+                SkipCheck(deployment);
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const fixture: AvatarFixture = { Check: 'RD13', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd13-persona-${stamp} ${TAG}` };
@@ -1756,8 +1742,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const rows = realtimeVendorRows(AIEngineBase.Instance).flatMap(({ Model, Rows }) => Rows.map((row) => ({ Model, Row: row })));
             if (rows.length === 0) {
-                console.warn('  ⚠ realtime-deterministic.RD14 SKIPPED — no Active realtime model has an Active vendor row with a DriverClass');
-                return;
+                SkipCheck('no Active realtime model has an Active vendor row with a DriverClass');
             }
             const checked = rows.filter(({ Row }) => !RD14_NOT_IN_THIS_PROCESS.has(Row.DriverClass!.trim()));
             const unresolved = checked.filter(({ Row }) => !resolvesRealtimeDriver(Row.DriverClass!)).map(({ Model, Row }) => `${Model.Name} → ${Row.DriverClass}`);
@@ -1774,9 +1759,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const fixture = findBridgedUsageFixture();
             if (!fixture) {
-                console.warn('  ⚠ realtime-deterministic.RD15 SKIPPED — no Active Realtime co-agent with a system prompt, '
+                SkipCheck('no Active Realtime co-agent with a system prompt, '
                     + 'or no Realtime model-vendor row, in this deployment');
-                return;
             }
             const cleanup: string[] = [];
             try {
@@ -1797,8 +1781,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const anchors = await findAvatarPricingAnchors(AIEngineBase.Instance, ctx.User);
             if (typeof anchors === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD16 SKIPPED — ${anchors}`);
-                return;
+                SkipCheck(anchors);
             }
             const service = new RealtimeClientSessionService();
             let runID: string | undefined;
@@ -1827,8 +1810,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: AI Bridge Providers';
             if (!new Metadata().EntityByName(entityName)) { // global-provider-ok: integration test script — single-provider process by design
-                console.warn(`  ⚠ realtime-deterministic.RD17 SKIPPED — entity '${entityName}' not in metadata (bridge stack not installed)`);
-                return;
+                SkipCheck(`entity '${entityName}' not in metadata (bridge stack not installed)`);
             }
             const result = await new RunView().RunView<MJAIBridgeProviderEntity>(
                 { EntityName: entityName, ExtraFilter: `DriverClass='${LIVEKIT_BRIDGE_DRIVER_CLASS}' AND Status='Active'`, ResultType: 'entity_object' },
@@ -1837,8 +1819,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             Assert(result.Success, `RD17: loading the LiveKit bridge provider failed: ${result.ErrorMessage}`);
             const provider = result.Results?.[0];
             if (!provider) {
-                console.warn(`  ⚠ realtime-deterministic.RD17 SKIPPED — no Active '${LIVEKIT_BRIDGE_DRIVER_CLASS}' provider seeded`);
-                return;
+                SkipCheck(`no Active '${LIVEKIT_BRIDGE_DRIVER_CLASS}' provider seeded`);
             }
             AssertEqual(provider.SupportedFeaturesObject?.VideoOut, true,
                 "RD17: the LiveKit provider must allow VideoOut: an agent's avatar is published on video-out, and the bridge drops it otherwise");
@@ -1856,8 +1837,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
             const deployment = findModalitiesGateAnchors(AIEngineBase.Instance);
             if (typeof deployment === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD18 SKIPPED — ${deployment}`);
-                return;
+                SkipCheck(deployment);
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const fixture: AvatarFixture = { Check: 'RD18', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd18-persona-${stamp} ${TAG}` };
@@ -1881,14 +1861,12 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Name: 'RD19: a stale session save from an app subclass leaves the recording ledger alone (#6010)',
         Fn: async (ctx): Promise<void> => {
             if (!(ctx.Provider instanceof DatabaseProviderBase)) {
-                console.warn('  ⚠ realtime-deterministic.RD19 SKIPPED — the recording ledger needs a server-side database provider');
-                return;
+                SkipCheck('the recording ledger needs a server-side database provider');
             }
             const provider = ctx.Provider;
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
-                console.warn('  ⚠ realtime-deterministic.RD19 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
             }
             try {
                 // 1. A recorded session whose terminal has not landed yet: no expected count, no captured samples.
@@ -1933,8 +1911,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const session = await buildSessionFixture(ctx.User);
             if (!session) {
-                console.warn('  ⚠ realtime-deterministic.RD20 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
-                return;
+                SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
             }
             const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
             conversation.NewRecord();

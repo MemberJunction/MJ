@@ -1532,7 +1532,7 @@ interface InternalResult {
   Success: boolean;
   ErrorMessage?: string;
   AppId?: string;
-  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>;
+  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string; Version?: string }>;
   /** True when package.json was updated but npm install failed (e.g., auth issue) */
   PackageJsonUpdated?: boolean;
   /** True when a NEW schema was actually created (vs an existing one reused) — for rollback (B18). */
@@ -1579,25 +1579,31 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     Dependencies: dependencies,
   };
 
-  const result = await ResolveDependencyGraph(root, installedMap, BuildManifestFetcher(context));
+  const result = await ResolveDependencyGraph(
+    root,
+    installedMap,
+    BuildManifestFetcher(context),
+    (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions),
+  );
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
 
   const depsToInstall = (result.InstallOrder ?? [])
     .filter((d) => !d.AlreadyInstalled)
-    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath }));
+    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath, Version: d.ResolvedVersion }));
 
   return { Success: true, DepsToInstall: depsToInstall };
 }
 
 /**
  * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
- * manifest from GitHub. Used by the graph builder to walk transitive deps.
+ * manifest from GitHub (at the resolved version when given). Used by the graph
+ * builder to walk transitive deps.
  */
 function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
-  return async (repoUrl: string, subpath?: string) => {
-    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions, subpath);
+  return async (repoUrl: string, subpath?: string, version?: string) => {
+    const fetched = await FetchManifestFromGitHub(repoUrl, version, context.GitHubOptions, subpath);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -1610,6 +1616,7 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
       Manifest: {
         name: parsed.Manifest.name,
         repository: parsed.Manifest.repository,
+        version: parsed.Manifest.version,
         dependencies: (parsed.Manifest.dependencies ?? {}) as Record<string, DependencyValue>,
       },
     };
@@ -1627,13 +1634,13 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * Inherited options that affect install BEHAVIOR (verbosity, the schema-name
  * override) are forwarded from the parent so a flag set on the top-level call
  * also governs the dependency installs. App-identity options (Source, Version)
- * are NOT forwarded — each dependency has its own source and installs its own
- * latest release rather than inheriting the parent's pin. The forwarded set is
- * explicit so new flags require a deliberate decision about whether they apply
- * to dependencies.
+ * are NOT forwarded — each dependency has its own source and installs at the
+ * version the graph resolution chose for it, rather than inheriting the parent's
+ * pin. The forwarded set is explicit so new flags require a deliberate decision
+ * about whether they apply to dependencies.
  */
 async function InstallDependencies(
-  deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>,
+  deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string; Version?: string }>,
   context: OrchestratorContext,
   inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
@@ -1645,21 +1652,15 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    // Resolve the highest published version that satisfies the declared range, and pin the
-    // install to it. Previously the dependency installed with no Version → whatever the
-    // default-branch manifest reported, so a `>=1.0 <2.0` requirement could silently pull
-    // 3.0 (B26). A range with no satisfying version now fails loudly rather than installing
-    // the wrong major.
-    const resolved = await ResolveDependencyVersion(dep.Repository, dep.VersionRange, context.GitHubOptions);
-    if (resolved.ErrorMessage) {
-      return { Success: false, ErrorMessage: `Cannot install dependency '${dep.AppName}': ${resolved.ErrorMessage}` };
-    }
+    // The graph resolution already resolved the highest published version satisfying the
+    // declared range, fetched that version's manifest and checked it against every other
+    // parent's range — install exactly that version so the installed app matches the graph.
     const result = await InstallApp(
       {
         Source: dep.Repository,
         Subpath: dep.Subpath,
         // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
-        Version: resolved.Version,
+        Version: dep.Version,
         _skipDependencyResolution: true,
         AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
         Verbose: inherited.Verbose,

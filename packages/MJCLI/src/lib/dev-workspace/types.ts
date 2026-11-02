@@ -1,9 +1,9 @@
 /**
  * Shared types for the `mj dev workspace` generator.
  *
- * The generator creates the four ephemeral files that join sibling repo checkouts
+ * The generator creates the three ephemeral files that join sibling repo checkouts
  * into a single pnpm workspace at their common parent directory:
- * `pnpm-workspace.yaml`, `.npmrc`, `package.json`, `turbo.json`.
+ * `pnpm-workspace.yaml`, `.npmrc`, `package.json`.
  *
  * The generated contents reproduce the manual setup this command replaces: every
  * value was proven by joining these repos by hand before it was automated.
@@ -44,6 +44,13 @@ export interface MemberPackageJson {
   devDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   peerDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   pnpm?: MemberPnpmBlock;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Read by doctor's build-output check: a package with no `build` script has no output to check. */
+  scripts?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Entry points, read by doctor's build-output check to find where a package builds to. */
+  main?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  module?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** A string, or a conditions object whose `.` entry names the root export — any other shape is ignored. */
+  exports?: unknown;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** One package.json found under a member repo's workspace globs. */
@@ -158,12 +165,33 @@ export interface ClientPackageCensus {
    * Members whose `mj-app.json` could not be parsed, so their declarations are unknown.
    *
    * Carried rather than thrown because `doctor` diagnoses where `generate` writes: aborting the
-   * whole report over one unreadable file costs the nine checks that have nothing to do with it —
+   * whole report over one unreadable file costs the ten checks that have nothing to do with it —
    * the one-copy census and standalone-install detection especially, which are the reason someone
    * runs doctor in the first place. `generate` still refuses outright, which is correct: it emits a
    * manifest and must not do so from a declaration it could not read.
    */
   Unreadable: Array<{ Repo: string; Message: string }>;
+}
+
+/**
+ * Build state of one member package, as doctor's build-output check reads it.
+ *
+ * `missing`: the package's entry file (or, with no entry declared, its `dist/`) does not exist.
+ * `stale`: a source file is newer than every file in the output folder.
+ * `fresh`: the output exists and is at least as new as the newest source file.
+ */
+export type BuildOutputState = 'missing' | 'stale' | 'fresh';
+
+/** One member package that has a `build` script and a `src/` folder, with its build state. */
+export interface BuildOutputEntry {
+  Package: string;
+  /** Member repo directory that provides it. */
+  Repo: string;
+  /** Package directory relative to the repo root, e.g. `packages/Angular`. */
+  RelPath: string;
+  /** Output folder relative to the package directory, e.g. `dist`. */
+  OutputDir: string;
+  State: BuildOutputState;
 }
 
 /** One dependency resolution read from a member's committed lockfile. */
@@ -181,6 +209,8 @@ export interface ResolvedLockEntry {
    * workspace-linked, so they are not pin authority.
    */
   Dependents?: string[];
+  /** For DIRECT entries only: the importer that declares it, repo-relative (`.` = the repo root). */
+  Importer?: string;
 }
 
 /** A lockfile entry the pin derivation dropped — always carried to output, never silent. */
@@ -254,8 +284,6 @@ export interface CandidateRepo {
   AppGlobs?: string[];
   /** The member's committed lockfile data, an unsupported-format marker, or null when the repo commits none. */
   Lockfile: MemberLockfile | UnsupportedLockfile | null;
-  /** Raw contents of the repo's root `turbo.json`, or null when absent. */
-  TurboJson: string | null;
   /**
    * Why the member's `mj-app.json` could not be parsed, or null when it parsed (or is absent).
    *
@@ -381,13 +409,6 @@ export interface RootPackageJsonResult {
   Pin: string;
   /** Every absorption decision the assembly made. */
   Report: ParentManifestReport;
-}
-
-/** Result of picking the parent `turbo.json`. */
-export interface TurboJsonResult {
-  Content: string;
-  /** Member repo the file was copied from, or 'generator fallback'. */
-  Source: string;
 }
 
 /** One generated file, by name relative to the parent directory. */
