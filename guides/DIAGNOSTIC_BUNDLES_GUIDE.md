@@ -5,7 +5,7 @@ This guide covers the **MemberJunction Diagnostic Bundles** subsystem end-to-end
 2. How `.mjdiag` archives are scrubbed, verified, and encrypted (`MJDB` v1 envelope)
 3. How to configure an MJ instance to **submit** diagnostic bundles (or download them locally)
 4. How to set up any MJAPI instance as a **receiving server** (`/diagnostics/intake/v1`), including **MJStorage Quarantine-then-Promote locations**, **Malware Scanning** (AWS GuardDuty, Azure Defender, ClamAV/Webhook, and structural verification), and **Collector Key Custody** (`MJ: Credentials`)
-5. How to inspect, re-scrub, and export bundles with the `mj diag` CLI and the `@Diagnostic Analyst` agent
+5. How to inspect, re-scrub, and export bundles with the `mj diag` CLI
 
 ---
 
@@ -107,7 +107,7 @@ Users and administrators can launch diagnostic capture or download a `.mjdiag` b
    - Inside `AboutDialogComponent`'s collapsible **Diagnostics** accordion section, click **"Diagnostic Bundle..."** right next to **"Copy diagnostics"** to open `<mj-diagnostic-report-problem-dialog>`.
 2. **User Avatar Menu (Top-Right Header)**:
    - Open the user profile menu and click **"Diagnostic Bundle"** (in the `system` section right above `About MemberJunction`).
-   - When the user starts a live recording session and closes the dialog to reproduce an issue, `<mj-diagnostic-recording-banner>` stays pinned in the shell with an elapsed timer and a one-click **Stop & Build** button.
+   - When the user starts a live recording session and closes the dialog to reproduce an issue, `<mj-diagnostic-recording-banner>` stays pinned in the shell with a **Stop & Package** button. It stops the recording, builds the snapshot for that session, and reopens the dialog with the result.
 3. **Stuck-Loading Screen (Pre-Reset Capture)**:
    - `ShellComponent.ngOnInit()` initializes `MJDiagnosticsService` immediately at boot. If startup stalls and the *"Taking longer than expected"* reset panel appears, a **"Download Diagnostic Bundle"** button is shown right next to **"Reset"** so the user can download the startup `.mjdiag` flight-recorder snapshot *before* `ResetApplication()` clears IndexedDB and caches.
 
@@ -179,7 +179,7 @@ To ensure unverified or infected bytes never mingle with trusted support artifac
      quarantine/<referenceId>.mjdiag.enc
      ```
 2. **Verified Storage Provider** (`Diagnostics.Intake.StorageProviderID`):
-   - Long-term support bucket accessible to support engineers and the `@Diagnostic Analyst` agent.
+   - Long-term support bucket accessible to support engineers.
    - Only after a bundle passes **all four verification gates** (MJDB header pre-check → AEAD AES-256-GCM decryption → `VerifyBundleArchive` ZIP/manifest verification → Malware Scan verdict `Clean`) are the decrypted `.mjdiag` bytes promoted to:
      ```text
      verified/<YYYY-MM-DD>/<referenceId>.mjdiag

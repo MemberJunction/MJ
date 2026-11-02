@@ -20,6 +20,7 @@ import { FieldRulesBulkUpdateChecks } from '../checks/field-rules-bulk-update.ch
 import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
 import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
+import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
@@ -174,6 +175,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-operations', RemoteOperationsChecks, 7],
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
+        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT162)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
@@ -373,6 +375,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
+        'diagnostics': 4,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -519,7 +522,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(177);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(178);
     });
 });
 

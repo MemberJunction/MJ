@@ -1,5 +1,5 @@
 import { Injectable, NgZone, inject } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import {
     RegisterLogSink,
     TelemetryManager,
@@ -54,6 +54,8 @@ export interface ClientBundleBuildOptions {
     note?: string;
     reason?: string;
     ticketNumber?: string;
+    /** Session recorded in the manifest. Defaults to the active recording session. */
+    sessionId?: string;
     createdByUserId?: string;
     mjVersion?: string;
 }
@@ -122,6 +124,7 @@ export class MJDiagnosticsService {
     });
 
     private readonly reportDialogOpenSubject = new BehaviorSubject<boolean>(false);
+    private readonly packageRequestSubject = new Subject<ActiveRecordingState>();
 
     private initialized = false;
     private unregisterLoggerSink: (() => void) | null = null;
@@ -140,6 +143,14 @@ export class MJDiagnosticsService {
 
     public get ReportDialogOpen$(): Observable<boolean> {
         return this.reportDialogOpenSubject.asObservable();
+    }
+
+    /**
+     * Emits the stopped recording's state each time a recording is stopped for packaging.
+     * The report-problem dialog listens to this to build and show the snapshot.
+     */
+    public get PackageRequests$(): Observable<ActiveRecordingState> {
+        return this.packageRequestSubject.asObservable();
     }
 
     /**
@@ -246,6 +257,17 @@ export class MJDiagnosticsService {
         if (this.sessionIdHook) {
             this.sessionIdHook(null);
         }
+    }
+
+    /**
+     * Stops the active recording, opens the report-problem dialog and asks it to build
+     * a snapshot for the stopped session.
+     */
+    public StopAndPackageRecording(): void {
+        const stopped = this.recordingStateSubject.value;
+        this.StopRecording();
+        this.OpenReportProblemDialog();
+        this.packageRequestSubject.next(stopped);
     }
 
     public RecordLogEntry(entry: DiagnosticLogEntry): void {
@@ -447,7 +469,7 @@ export class MJDiagnosticsService {
 
         const zipBytes = await BuildMjdiagArchive(scrubbed, {
             bundleId,
-            sessionId: this.recordingStateSubject.value.sessionId ?? undefined,
+            sessionId: options.sessionId ?? this.recordingStateSubject.value.sessionId ?? undefined,
             captureReason: options.ticketNumber ? `Ticket:${options.ticketNumber}` : 'Manual',
             scrubberProfile,
             redactionSummary: {

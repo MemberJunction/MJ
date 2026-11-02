@@ -25,12 +25,11 @@ import { MJDiagnosticsService, ActiveRecordingState } from './diagnostics.servic
                         <code>({{ RecordingState.sessionId }})</code>
                     }
                 </span>
-                <button
-                    type="button"
-                    class="mj-diag-stop-btn"
-                    (click)="OnStopClicked()">
-                    Stop &amp; Package
-                </button>
+                <span class="mj-diag-stop-action">
+                    <button type="button" mjButton variant="danger" size="sm" (click)="OnStopClicked()">
+                        Stop &amp; Package
+                    </button>
+                </span>
             </div>
         }
     `,
@@ -38,30 +37,22 @@ import { MJDiagnosticsService, ActiveRecordingState } from './diagnostics.servic
         .mj-diag-recording-banner {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 6px 14px;
-            background: var(--mj-status-error-surface, #fef2f2);
-            color: var(--mj-status-error-text, #991b1b);
-            border-bottom: 1px solid var(--mj-status-error-border, #fecaca);
+            gap: var(--mj-space-2-5);
+            padding: var(--mj-space-1-5) var(--mj-space-3-5);
+            background: var(--mj-status-error-bg);
+            color: var(--mj-status-error-text);
+            border-bottom: 1px solid var(--mj-status-error-border);
             font-size: 13px;
             font-weight: 500;
         }
         .mj-diag-pulse-dot {
             width: 8px;
             height: 8px;
-            border-radius: 50%;
-            background: var(--mj-status-error, #dc2626);
+            border-radius: var(--mj-radius-full);
+            background: var(--mj-status-error);
         }
-        .mj-diag-stop-btn {
+        .mj-diag-stop-action {
             margin-left: auto;
-            padding: 4px 10px;
-            border-radius: 4px;
-            border: 1px solid var(--mj-status-error-border, #fca5a5);
-            background: var(--mj-bg-surface, #ffffff);
-            color: var(--mj-status-error-text, #991b1b);
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
         }
     `],
 })
@@ -88,9 +79,10 @@ export class MJDiagnosticRecordingBannerComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** Stops recording and hands the session to the report-problem dialog to package. */
     public OnStopClicked(): void {
         const snapshot = this.RecordingState;
-        this.diagnosticsService.StopRecording();
+        this.diagnosticsService.StopAndPackageRecording();
         this.StopRecordingRequested.emit(snapshot);
     }
 }

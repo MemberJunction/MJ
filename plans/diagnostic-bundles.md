@@ -16,7 +16,7 @@ MJ is moving into many more, and much larger, production deployments. When a cus
 
 This plan adds an on-demand **diagnostic bundle**: a credential-scrubbed, local capture of one incident from both MJ Explorer and MJAPI. A user can download their client-side capture from Explorer. An admin can start a scoped, time-boxed server diagnostic session, combine both halves into one structured `.mjdiag` file, preview exactly what it contains, and then download it or send it encrypted to MemberJunction Central (**MJC**) or to their own central MJ collector instance.
 
-Crucially, **both the send side and the receive (intake) side are standard MJAPI functionality** in `@memberjunction/diagnostics-server`. Any MJAPI instance can be configured to receive encrypted bundles, verify and optionally decrypt them into `MJStorage` and the `DiagnosticBundle` table, view them in the Explorer Diagnostics dashboard, analyze them with the Diagnostic Analyst agent, and trigger a post-intake Action (which MJC uses to file a `bizapps-issues` record and alert maintainers).
+Crucially, **both the send side and the receive (intake) side are standard MJAPI functionality** in `@memberjunction/diagnostics-server`. Any MJAPI instance can be configured to receive encrypted bundles, verify and optionally decrypt them into `MJStorage` and the `DiagnosticBundle` table, view them in the Explorer Diagnostics dashboard, and trigger a post-intake Action (which MJC uses to file a `bizapps-issues` record and alert maintainers).
 
 The bundle is deliberately separate from Phone Home (#2970), which is continuous, de-identified, aggregate telemetry. The bundle is per incident, actionable (preserving real UUIDs, SQL statements, and filters by default while scrubbing credentials and omitting mutation parameter values), customer-reviewed, and never sent without an admin's action. The two share building blocks, so Phone Home and the OpenTelemetry exporter (#2281) can be built on this work later: one entry format (OpenTelemetry field names), one trace ID, one runtime-minted install ID, consent recorded as Audit Log rows, and one transport.
 
@@ -36,7 +36,7 @@ The bundle is deliberately separate from Phone Home (#2970), which is continuous
 - One `.mjdiag` file holds both halves, in a documented format that standard tools can read, keeping real UUIDs, SQL text, and filters actionable while scrubbing credentials and omitting mutation parameter values.
 - Nothing leaves an instance unless an admin holding a dedicated authorization previews a bundle and sends it, to a destination the instance has opted in to.
 - Any MJAPI instance can opt in to **receive** bundles (`Diagnostics.Intake.Enabled`), powering both MJC's central support intake and enterprise customers' self-hosted hub-and-spoke collection.
-- MJ ships tooling to analyze a bundle (rules-based findings, CLI, Explorer viewer, analyst agent), usable by customers on local bundles and by maintainers on received bundles alike.
+- MJ ships tooling to analyze a bundle (rules-based findings, CLI, Explorer viewer), usable by customers on local bundles and by maintainers on received bundles alike.
 - Zero measurable overhead when no session is active; low overhead for the requests a session targets.
 
 ### Non-Goals
@@ -131,7 +131,7 @@ flowchart TD
         AS["BuildBundle<br/>flush instances, assemble, scrub credentials, findings"]
         PV{"Admin previews<br/>and approves"}
         DL["Download .mjdiag"]
-        LA["Analyze locally<br/>viewer, mj diag, analyst agent"]
+        LA["Analyze locally<br/>viewer, mj diag"]
         SE["SendBundle<br/>encrypt to receiver's X25519 key"]
         FR -- "UploadClientCapture" --> CH
         SS --> CH
@@ -144,7 +144,7 @@ flowchart TD
         IN["Standard MJAPI Intake<br/>/diagnostics/intake/v1"]
         ST[("MJStorage + DiagnosticBundle<br/>(Direction = 'Received')")]
         HK["Optional Post-Intake Action<br/>(e.g. MJC creates bizapps-issues)"]
-        VW["Explorer Diagnostics Viewer<br/>+ Diagnostic Analyst Agent"]
+        VW["Explorer Diagnostics Viewer"]
         IN --> ST
         ST --> HK
         ST --> VW
@@ -393,7 +393,6 @@ Instead of building a bespoke, MJC-only intake service outside the repo, **recei
 - **Rules first** (in the core package, run at export and in every viewer): slow requests with their SQL, N+1 and duplicate RunViews (reuse `TelemetryManager` analyzers), event-loop stalls with work in flight, cache miss rates, oversized payloads, startup phases over budget, socket drops, client errors correlated to server errors by trace ID. Output `findings.json` with rule ID, severity, evidence pointers (trace IDs) and a remediation hint.
 - **Explorer viewer**: client-plus-server waterfall by trace ID, findings, environment. Opens a local bundle, a **received bundle** (when intake is enabled on the instance), or a `.mjdiag` file dropped from disk.
 - **Exports**: Chrome Trace Event JSON (opens in Perfetto or Speedscope), OTLP JSON (Jaeger, Grafana Tempo).
-- **Diagnostic Analyst agent**, shipped as metadata: reads findings and summaries, never raw logs; explains likely causes and environment changes (for example separating worker and API roles per #5510). Runs on the instance's configured models (usable by customers locally and by maintainers on MJC).
 - **Maintainer skill** in this repo (`.claude/skills/analyze-diagnostic-bundle/`), modeled on `.claude/commands/debug-agent-run.md`: maps findings to source files and known issues.
 
 ### Open App extension point
@@ -455,9 +454,8 @@ Instead of building a bespoke, MJC-only intake service outside the repo, **recei
 3. Findings rules v1.
 4. Bundle viewer (L2) used by the Diagnostics dashboard for both local and received bundles; open local `.mjdiag` files from disk.
 5. Perfetto and OTLP exports; `mj diag timeline`, `slow`, `export`.
-6. Diagnostic Analyst agent (metadata).
-7. Maintainer skill (`.claude/skills/analyze-diagnostic-bundle/`).
-8. Open App contributors (in their repos).
+6. Maintainer skill (`.claude/skills/analyze-diagnostic-bundle/`).
+7. Open App contributors (in their repos).
 
 ### Phase 4: Converge (later, separate plans)
 OpenTelemetry exporter (#2281) on `TelemetryManager.OnEvent` and the same trace IDs; Phone Home (#2970) on the same install ID, consent records and MJC transport.
@@ -612,7 +610,6 @@ Entity & binary storage rules (via `metadata/`, not migration inserts):
 | `metadata/api-scopes/` | `diagnostics:read`, `diagnostics:manage`, `diagnostics:send`, `diagnostics:ingest` scopes |
 | `metadata/audit-log-types/` | Diagnostics audit types (including `Bundle Downloaded` and `Bundle Received`) |
 | `metadata/remote-operation-categories/`, `metadata/remote-operations/` | Category, seven operations, type files |
-| `metadata/agents/` (or equivalent) | Diagnostic Analyst agent |
 | `.claude/skills/analyze-diagnostic-bundle/` | Maintainer skill |
 | `guides/DIAGNOSTIC_BUNDLES_GUIDE.md` + `guides/README.md` | Operator and developer guide (including MJC & enterprise collector intake setup) |
 

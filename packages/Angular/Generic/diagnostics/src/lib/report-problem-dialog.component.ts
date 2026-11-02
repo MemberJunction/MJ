@@ -5,215 +5,150 @@ import {
     Input,
     Output,
     EventEmitter,
+    OnInit,
+    OnDestroy,
     inject,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { DiagnosticScrubberProfile } from '@memberjunction/diagnostics';
 import {
     MJDiagnosticsService,
     DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE,
     ClientBundleBuildResult,
     SubmitBundleToSupportResult,
+    ActiveRecordingState,
 } from './diagnostics.service';
+
+function errorText(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+}
 
 @Component({
     selector: 'mj-diagnostic-report-problem-dialog',
     standalone: false,
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        @if (IsVisible) {
-            <div class="mj-diag-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Report a Problem">
-                <div class="mj-diag-dialog-panel">
-                    <header class="mj-diag-dialog-header">
-                        <h3>Report a Problem / Export Diagnostic Bundle</h3>
-                        <button type="button" class="mj-diag-close-btn" (click)="OnClose()">✕</button>
-                    </header>
+        <mj-dialog
+            [Visible]="IsVisible"
+            Title="Report a Problem / Export Diagnostic Bundle"
+            Size="md"
+            (Close)="OnClose()">
+            <div class="mj-diag-dialog-body">
+                <div class="mj-diag-field">
+                    <label for="mj-diag-ticket">Support Ticket Number (optional)</label>
+                    <input
+                        id="mj-diag-ticket"
+                        class="mj-input"
+                        type="text"
+                        [value]="TicketNumber"
+                        (input)="OnTicketInput($event)"
+                        placeholder="e.g. SUP-1042" />
+                </div>
 
-                    <div class="mj-diag-dialog-body">
-                        <div class="mj-diag-field">
-                            <label for="mj-diag-ticket">Support Ticket Number (optional)</label>
-                            <input
-                                id="mj-diag-ticket"
-                                type="text"
-                                [value]="TicketNumber"
-                                (input)="OnTicketInput($event)"
-                                placeholder="e.g. SUP-1042" />
-                        </div>
+                <div class="mj-diag-field">
+                    <label for="mj-diag-note">What happened?</label>
+                    <textarea
+                        id="mj-diag-note"
+                        class="mj-textarea"
+                        rows="3"
+                        [value]="Note"
+                        (input)="OnNoteInput($event)"
+                        placeholder="Describe the steps or unexpected behavior..."></textarea>
+                </div>
 
-                        <div class="mj-diag-field">
-                            <label for="mj-diag-note">What happened?</label>
-                            <textarea
-                                id="mj-diag-note"
-                                rows="3"
-                                [value]="Note"
-                                (input)="OnNoteInput($event)"
-                                placeholder="Describe the steps or unexpected behavior..."></textarea>
-                        </div>
+                <div class="mj-diag-field">
+                    <label for="mj-diag-scrub-tier">Scrubbing Level</label>
+                    <select
+                        id="mj-diag-scrub-tier"
+                        class="mj-input"
+                        [value]="ScrubberProfile"
+                        (change)="OnScrubberProfileChange($event)">
+                        <option value="FullRaw">FullRaw (default): credentials removed, SQL and filter literals kept</option>
+                        <option value="Standard">Standard: credentials removed, SQL and filter literals replaced with ?</option>
+                    </select>
+                </div>
 
-                        <div class="mj-diag-field">
-                            <label for="mj-diag-scrub-tier">Scrubbing Level</label>
-                            <select
-                                id="mj-diag-scrub-tier"
-                                [value]="ScrubberProfile"
-                                (change)="OnScrubberProfileChange($event)">
-                                <option value="FullRaw">FullRaw (default): credentials removed, SQL and filter literals kept</option>
-                                <option value="Standard">Standard: credentials removed, SQL and filter literals replaced with ?</option>
-                            </select>
-                        </div>
+                @if (ErrorMessage) {
+                    <mj-alert Variant="error" Role="alert" [Message]="ErrorMessage"></mj-alert>
+                }
 
-                        @if (LastResult) {
-                            <div class="mj-diag-summary-box">
-                                <strong>Bundle Downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
-                                ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings,
-                                scrubbing: {{ LastResult.manifest.scrubberProfile }})
-                                <button type="button" class="mj-diag-link-btn" (click)="OnDownloadSnapshot()">
-                                    Download Again
-                                </button>
-                            </div>
-                        }
+                @if (LastResult) {
+                    <div class="mj-diag-summary-box">
+                        <strong>Bundle Downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
+                        ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings,
+                        scrubbing: {{ LastResult.manifest.scrubberProfile }})
+                        <button type="button" mjButton variant="flat" size="sm" (click)="OnDownloadSnapshot()">
+                            Download Again
+                        </button>
+                    </div>
+                }
 
-                        @if (BuildError) {
-                            <div class="mj-diag-summary-box">
-                                <strong>Download Error:</strong> <span>{{ BuildError }}</span>
-                            </div>
-                        }
-
-                        @if (LastSubmission) {
-                            <div class="mj-diag-summary-box">
-                                <strong>Submitted ({{ LastSubmission.status }}):</strong>
-                                @if (LastSubmission.externalReferenceId) {
-                                    Reference ID: <code>{{ LastSubmission.externalReferenceId }}</code>
-                                } @else if (LastSubmission.errorMessage) {
-                                    <span>{{ LastSubmission.errorMessage }}</span>
-                                }
-                            </div>
+                @if (LastSubmission) {
+                    <div class="mj-diag-summary-box">
+                        <strong>Submitted ({{ LastSubmission.status }}):</strong>
+                        @if (LastSubmission.externalReferenceId) {
+                            Reference ID: <code>{{ LastSubmission.externalReferenceId }}</code>
+                        } @else if (LastSubmission.errorMessage) {
+                            <span>{{ LastSubmission.errorMessage }}</span>
                         }
                     </div>
-
-                    <footer class="mj-diag-dialog-footer">
-                        <button type="button" class="mj-diag-secondary-btn" (click)="OnStartRecording()">
-                            Start Live Recording
-                        </button>
-                        <button
-                            type="button"
-                            class="mj-diag-secondary-btn"
-                            [disabled]="IsBuilding"
-                            (click)="OnBuildSnapshot()">
-                            {{ IsBuilding ? 'Building...' : 'Download .mjdiag Snapshot' }}
-                        </button>
-                        <button
-                            type="button"
-                            class="mj-diag-primary-btn"
-                            [disabled]="IsSubmitting"
-                            (click)="OnSubmitToSupport()">
-                            {{ IsSubmitting ? 'Submitting...' : 'Submit to Support' }}
-                        </button>
-                    </footer>
-                </div>
+                }
             </div>
-        }
+
+            <mj-dialog-actions>
+                <button
+                    type="button"
+                    mjButton
+                    variant="primary"
+                    size="md"
+                    [disabled]="IsSubmitting"
+                    (click)="OnSubmitToSupport()">
+                    {{ IsSubmitting ? 'Submitting...' : 'Submit to Support' }}
+                </button>
+                <button
+                    type="button"
+                    mjButton
+                    variant="secondary"
+                    size="md"
+                    [disabled]="IsBuilding"
+                    (click)="OnBuildSnapshot()">
+                    {{ IsBuilding ? 'Building...' : 'Download .mjdiag Snapshot' }}
+                </button>
+                <button type="button" mjButton variant="secondary" size="md" (click)="OnStartRecording()">
+                    Start Live Recording
+                </button>
+                <button type="button" mjButton variant="outline" size="md" (click)="OnClose()">
+                    Cancel
+                </button>
+            </mj-dialog-actions>
+        </mj-dialog>
     `,
     styles: [`
-        .mj-diag-dialog-backdrop {
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.45);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        }
-        .mj-diag-dialog-panel {
-            width: 100%;
-            max-width: 540px;
-            background: var(--mj-bg-surface, #ffffff);
-            color: var(--mj-text-primary, #0f172a);
-            border-radius: 8px;
-            border: 1px solid var(--mj-border-default, #e2e8f0);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
-            overflow: hidden;
-        }
-        .mj-diag-dialog-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 18px;
-            border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-        }
-        .mj-diag-dialog-header h3 {
-            margin: 0;
-            font-size: 16px;
-        }
         .mj-diag-dialog-body {
-            padding: 16px 18px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: var(--mj-space-3);
         }
         .mj-diag-field {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            font-size: 13px;
-        }
-        .mj-diag-field input,
-        .mj-diag-field textarea,
-        .mj-diag-field select {
-            padding: 7px 10px;
-            border-radius: 6px;
-            border: 1px solid var(--mj-border-default, #cbd5e1);
+            gap: var(--mj-space-1);
             font-size: 13px;
         }
         .mj-diag-summary-box {
-            padding: 10px 12px;
-            border-radius: 6px;
-            background: var(--mj-bg-surface-sunken, #f8fafc);
+            padding: var(--mj-space-2-5) var(--mj-space-3);
+            border-radius: var(--mj-radius-sm);
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-primary);
             font-size: 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--mj-space-2);
             flex-wrap: wrap;
-        }
-        .mj-diag-link-btn {
-            background: transparent;
-            border: 1px solid var(--mj-brand-primary, #2563eb);
-            color: var(--mj-brand-primary, #2563eb);
-            border-radius: 4px;
-            padding: 2px 8px;
-            font-size: 11px;
-            cursor: pointer;
-        }
-        .mj-diag-dialog-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            padding: 12px 18px;
-            border-top: 1px solid var(--mj-border-default, #e2e8f0);
-        }
-        .mj-diag-primary-btn {
-            padding: 7px 14px;
-            border-radius: 6px;
-            border: none;
-            background: var(--mj-brand-primary, #2563eb);
-            color: #ffffff;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .mj-diag-secondary-btn {
-            padding: 7px 14px;
-            border-radius: 6px;
-            border: 1px solid var(--mj-border-default, #cbd5e1);
-            background: var(--mj-bg-surface, #ffffff);
-            cursor: pointer;
-        }
-        .mj-diag-close-btn {
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
         }
     `],
 })
-export class MJDiagnosticReportProblemDialogComponent {
+export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestroy {
     @Input() public IsVisible = false;
     @Output() public Closed = new EventEmitter<void>();
     @Output() public BundleBuilt = new EventEmitter<ClientBundleBuildResult>();
@@ -222,15 +157,27 @@ export class MJDiagnosticReportProblemDialogComponent {
 
     private readonly diagnosticsService = inject(MJDiagnosticsService);
     private readonly cdr = inject(ChangeDetectorRef);
+    private packageSub: Subscription | null = null;
 
     public TicketNumber = '';
     public Note = '';
     public ScrubberProfile: DiagnosticScrubberProfile = DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
     public LastResult: ClientBundleBuildResult | null = null;
     public LastSubmission: SubmitBundleToSupportResult | null = null;
-    public BuildError: string | null = null;
+    public ErrorMessage: string | null = null;
     public IsBuilding = false;
     public IsSubmitting = false;
+
+    public ngOnInit(): void {
+        this.packageSub = this.diagnosticsService.PackageRequests$.subscribe((state) => {
+            void this.packageRecording(state);
+        });
+    }
+
+    public ngOnDestroy(): void {
+        this.packageSub?.unsubscribe();
+        this.packageSub = null;
+    }
 
     public OnTicketInput(event: Event): void {
         const target = event.target as HTMLInputElement | null;
@@ -251,25 +198,7 @@ export class MJDiagnosticReportProblemDialogComponent {
     }
 
     public async OnBuildSnapshot(): Promise<void> {
-        this.IsBuilding = true;
-        this.BuildError = null;
-        this.cdr.markForCheck();
-        try {
-            const result = await this.diagnosticsService.BuildClientBundle({
-                scrubberProfile: this.ScrubberProfile,
-                ticketNumber: this.TicketNumber.trim() || undefined,
-                note: this.Note.trim() || undefined,
-                includeHar: true,
-            });
-            this.LastResult = result;
-            this.diagnosticsService.DownloadClientBundle(result);
-            this.BundleBuilt.emit(result);
-        } catch (err) {
-            this.BuildError = err instanceof Error ? err.message : String(err);
-        } finally {
-            this.IsBuilding = false;
-            this.cdr.markForCheck();
-        }
+        await this.buildSnapshot(undefined);
     }
 
     public OnDownloadSnapshot(): void {
@@ -280,6 +209,7 @@ export class MJDiagnosticReportProblemDialogComponent {
 
     public async OnSubmitToSupport(): Promise<void> {
         this.IsSubmitting = true;
+        this.ErrorMessage = null;
         this.cdr.markForCheck();
         try {
             const submitted = await this.diagnosticsService.SubmitBundleToSupport({
@@ -290,6 +220,8 @@ export class MJDiagnosticReportProblemDialogComponent {
             });
             this.LastSubmission = submitted;
             this.BundleSubmitted.emit(submitted);
+        } catch (err) {
+            this.ErrorMessage = `Submit failed: ${errorText(err)}`;
         } finally {
             this.IsSubmitting = false;
             this.cdr.markForCheck();
@@ -301,6 +233,38 @@ export class MJDiagnosticReportProblemDialogComponent {
         this.diagnosticsService.StartRecording(sessionId, this.ScrubberProfile);
         this.RecordingStarted.emit(sessionId);
         this.OnClose();
+    }
+
+    /** Shows the dialog and builds a snapshot for a recording that was just stopped. */
+    private async packageRecording(state: ActiveRecordingState): Promise<void> {
+        this.IsVisible = true;
+        this.ScrubberProfile = state.scrubberProfile;
+        this.cdr.markForCheck();
+        await this.buildSnapshot(state.sessionId ?? undefined);
+    }
+
+    /** Builds and downloads a client snapshot; a failure is shown in the error area. */
+    private async buildSnapshot(sessionId: string | undefined): Promise<void> {
+        this.IsBuilding = true;
+        this.ErrorMessage = null;
+        this.cdr.markForCheck();
+        try {
+            const result = await this.diagnosticsService.BuildClientBundle({
+                scrubberProfile: this.ScrubberProfile,
+                ticketNumber: this.TicketNumber.trim() || undefined,
+                note: this.Note.trim() || undefined,
+                includeHar: true,
+                sessionId,
+            });
+            this.LastResult = result;
+            this.diagnosticsService.DownloadClientBundle(result);
+            this.BundleBuilt.emit(result);
+        } catch (err) {
+            this.ErrorMessage = `Snapshot failed: ${errorText(err)}`;
+        } finally {
+            this.IsBuilding = false;
+            this.cdr.markForCheck();
+        }
     }
 
     public OnClose(): void {

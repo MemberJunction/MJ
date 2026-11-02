@@ -19,9 +19,11 @@ import {
     template: `
         <div class="mj-diag-viewer">
             @if (VerificationError) {
-                <div class="mj-diag-error" role="alert">
-                    <strong>Archive Verification Failed:</strong> {{ VerificationError }}
-                </div>
+                <mj-alert
+                    Variant="error"
+                    Role="alert"
+                    Title="Archive Verification Failed"
+                    [Message]="VerificationError"></mj-alert>
             }
 
             @if (Manifest) {
@@ -67,9 +69,9 @@ import {
         }
         .mj-diag-section {
             padding: 12px;
-            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border: 1px solid var(--mj-border-default);
             border-radius: 6px;
-            background: var(--mj-bg-surface, #ffffff);
+            background: var(--mj-bg-surface);
         }
         .mj-diag-section h4 {
             margin: 0 0 10px 0;
@@ -91,14 +93,8 @@ import {
             font-weight: 700;
             margin-right: 6px;
         }
-        .mj-diag-error {
-            padding: 10px 12px;
-            border-radius: 6px;
-            background: var(--mj-status-error-surface, #fef2f2);
-            color: var(--mj-status-error-text, #991b1b);
-        }
         .mj-diag-muted {
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
             margin: 0;
         }
     `],
