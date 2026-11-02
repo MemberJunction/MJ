@@ -65,6 +65,7 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
                 ExtraFilter: `Status='Published' AND ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, this.ProviderToUse.CurrentUser);
             if (!published.Success) {
                 const message = 'ErrorMessage' in published ? published.ErrorMessage : '';

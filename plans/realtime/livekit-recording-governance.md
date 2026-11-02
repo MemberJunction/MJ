@@ -74,6 +74,28 @@ roomName })` **before** invoking egress; returns a clear error when `forbidden`.
 - **RTMP / stream egress:** add `StartStreamEgress(rtmpUrl)` for live restreaming.
 - All behind the same policy gate.
 
+### Agent avatars in recordings
+
+An agent with an avatar publishes the avatar's video as an ordinary **camera** track named `agent-avatar`
+(`REALTIME_AGENT_AVATAR_TRACK_NAME`, published by the LiveKit-native bridge's `RtcNodeAvatarOutlet`). Room
+composite egress (`StartRoomRecording`) records every subscribed camera, screen-share and unknown-source video
+track, so **the recording includes the agent's avatar as a participant tile**, the same as a person's camera.
+This is accepted behavior, not a defect:
+
+- The avatar is **not excluded** from the recording and **not badged**: no "AI" or "synthetic" mark is
+  drawn on its tile. The in-room UI marks the agent; the recorded file does not.
+- **Participant names are not shown.** LiveKit's default composite template (`livekit/egress`,
+  `template-default`) hides the tile metadata that carries the name (`.lk-participant-metadata { display:
+  none }` in `App.css`, commented "things like name, connection quality, etc make less sense in a recording").
+  In the speaker layouts a lone video track and the single-speaker layout render a bare video with no tile
+  overlay at all. So a viewer of the file sees the avatar's face with nothing labelling it as the agent. A
+  deployment that sets a custom egress template can change this; MJ uses the default (`speaker-dark` unless
+  `Layout` is passed).
+- **Disclosure.** Because the file does not say the avatar is synthetic, operators who deploy agent avatars
+  in recorded rooms should tell participants, and anyone the recording is shared with, that recordings
+  include the agent's synthetic video. The consent banner in §4 is the natural place for that line where
+  avatars are enabled.
+
 ## 6. Client-direct realtime sessions (phase 2)
 
 The voice co-agent sessions (PR #2787) are **browser ↔ model**, not LiveKit — no SFU/egress. Options:

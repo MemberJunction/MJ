@@ -253,6 +253,14 @@
 .board-toast .undo:hover {
   color: var(--mj-text-primary);
 }
+/* the widget toast: dashed edge marks "acted inside a widget" (no Undo); it rises above the
+   board-edit toast when both are showing, so the two never overlap or merge */
+.board-toast--widget {
+  border-style: dashed;
+}
+.board-toast--stacked {
+  bottom: 108px;
+}
 
 /* ---------- board status footer ---------- */
 .board-status {

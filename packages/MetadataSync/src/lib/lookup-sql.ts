@@ -15,7 +15,7 @@
  */
 import type { BaseEntity, EntityFieldInfo, EntityInfo } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
-import { IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
+import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { IsALevels, OwningLevel, SaveCallHashesIn, SetLinePattern, SqlLiteralsOf } from './sql-set-line';
 import type { SyncEngine } from './sync-engine';
 
@@ -47,8 +47,9 @@ export type EntityInfoLookup = (entityName: string) => EntityInfo | null | undef
 
 /**
  * Builds `(SELECT [PK] FROM [schema].[BaseTable] WHERE …)` for a lookup source. Each criterion is
- * matched with `=` on the entity's own table (SQL Server's default collation is case-insensitive,
- * as the push lookup is). `null` matches `IS NULL`. A criterion must be a column of the entity's
+ * matched with `=` on the entity's own table. A string criterion compares both sides lower-cased,
+ * as the push lookup does, so the replay finds the same row whatever the column's collation (a
+ * case-sensitive SQL Server column, or PostgreSQL once converted). `null` matches `IS NULL`. A criterion must be a column of the entity's
  * own table: a virtual field or one an IS-A parent holds has no column there.
  */
 export class LookupSubqueryBuilder {
@@ -104,8 +105,21 @@ export class LookupSubqueryBuilder {
     if (literal === null) {
       return { Problem: `the value of ${info.Name}.${field.Name} cannot be written as a ${field.Type} literal` };
     }
-    return { Sql: `[${field.Name}] = ${literal}` };
+    return { Sql: criterionComparison(field, `[${field.Name}]`, literal) };
   }
+}
+
+/** The SQL Server dialect: the log holds SQL Server statements, and the converter carries them to PostgreSQL. */
+const LOG_DIALECT = GetDialect('sqlserver');
+
+/**
+ * `column = literal`, lower-casing both sides for a string field, as `SyncEngine`'s push lookup
+ * does. A uuid or date field is compared as is: PostgreSQL has no `lower(uuid)`, and one failing
+ * statement aborts the whole replay.
+ */
+function criterionComparison(field: EntityFieldInfo, column: string, literal: string): string {
+  const isString = field.NeedsQuotes && !IsUuidSQLType(field.Type) && !IsDateSQLType(field.Type);
+  return isString ? `${LOG_DIALECT.LowerCase(column)} = ${LOG_DIALECT.LowerCase(literal)}` : `${column} = ${literal}`;
 }
 
 /** The SQL Server literal for a criterion value, or null when the value does not fit the field type. */

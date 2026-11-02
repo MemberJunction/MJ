@@ -87,8 +87,13 @@ function stripPeerSuffix(version: string): string {
   return paren >= 0 ? version.slice(0, paren) : version;
 }
 
+/** The importer path recorded on a direct entry: repo-relative, `.` for the repo root (npm writes `''`). */
+function importerPath(key: string): string {
+  return key === '' ? '.' : key;
+}
+
 /** Classifies one importer resolution: a usable entry, or a skip with the reason. */
-function classifyResolution(name: string, rawVersion: string): { Entry?: ResolvedLockEntry; Skip?: LockfileSkip } {
+function classifyResolution(name: string, rawVersion: string, importer: string): { Entry?: ResolvedLockEntry; Skip?: LockfileSkip } {
   const version = stripPeerSuffix(rawVersion);
   if (version.startsWith('link:')) {
     return { Skip: { Name: name, Version: version, Reason: 'workspace-internal link' } };
@@ -99,7 +104,7 @@ function classifyResolution(name: string, rawVersion: string): { Entry?: Resolve
   if (!IsResolvedVersion(version)) {
     return { Skip: { Name: name, Version: version, Reason: 'non-semver resolution (npm alias / catalog / file)' } };
   }
-  return { Entry: { Name: name, Version: version } };
+  return { Entry: { Name: name, Version: version, Importer: importer } };
 }
 
 /** Strips surrounding single/double quotes off a YAML key. */
@@ -137,6 +142,7 @@ function parsePnpmImporters(lines: readonly string[]): { Direct: ResolvedLockEnt
   const direct: ResolvedLockEntry[] = [];
   const skipped: LockfileSkip[] = [];
   let inImporters = false;
+  let currentImporter = '.';
   let currentDep: string | null = null;
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -146,11 +152,13 @@ function parsePnpmImporters(lines: readonly string[]): { Direct: ResolvedLockEnt
     }
     if (!inImporters) continue;
     if (line.length > 0 && !line.startsWith(' ')) break; // next top-level key ends the section
+    const importerKey = keyAtIndent(line, 2);
+    if (importerKey !== null) currentImporter = importerPath(importerKey);
     const depName = keyAtIndent(line, 6);
     if (depName !== null) currentDep = depName;
     const versionMatch = /^ {8}version: (.+)$/.exec(line);
     if (versionMatch === null || currentDep === null) continue;
-    const classified = classifyResolution(currentDep, versionMatch[1].trim());
+    const classified = classifyResolution(currentDep, versionMatch[1].trim(), currentImporter);
     if (classified.Entry) direct.push(classified.Entry);
     if (classified.Skip) skipped.push(classified.Skip);
     currentDep = null;
@@ -258,7 +266,12 @@ function resolveNpmDep(packages: Record<string, NpmLockPackageEntry>, importerKe
 }
 
 /** Classifies one npm importer dependency: entry, or skip with a stated reason. */
-function classifyNpmDep(name: string, declaredSpec: string, entry: NpmLockPackageEntry | null): { Entry?: ResolvedLockEntry; Skip?: LockfileSkip } {
+function classifyNpmDep(
+  name: string,
+  declaredSpec: string,
+  entry: NpmLockPackageEntry | null,
+  importer: string
+): { Entry?: ResolvedLockEntry; Skip?: LockfileSkip } {
   if (GIT_OR_URL_SPECIFIER.test(declaredSpec)) {
     return { Skip: { Name: name, Version: declaredSpec, Reason: 'git/url specifier' } };
   }
@@ -275,7 +288,7 @@ function classifyNpmDep(name: string, declaredSpec: string, entry: NpmLockPackag
   if (!IsResolvedVersion(version)) {
     return { Skip: { Name: name, Version: version, Reason: 'non-semver resolution' } };
   }
-  return { Entry: { Name: name, Version: version } };
+  return { Entry: { Name: name, Version: version, Importer: importer } };
 }
 
 /** Collects direct-dep resolutions for one npm importer entry. */
@@ -288,7 +301,7 @@ function collectNpmImporterDeps(
 ): void {
   const declared = { ...importer.dependencies, ...importer.devDependencies, ...importer.optionalDependencies };
   for (const [name, spec] of Object.entries(declared)) {
-    const classified = classifyNpmDep(name, spec, resolveNpmDep(packages, importerKey, name));
+    const classified = classifyNpmDep(name, spec, resolveNpmDep(packages, importerKey, name), importerPath(importerKey));
     if (classified.Entry) direct.push(classified.Entry);
     if (classified.Skip) skipped.push(classified.Skip);
   }
@@ -386,6 +399,13 @@ export interface LockfilePinsResult {
 export interface MemberLockfileCandidates {
   Repo: string;
   Lockfile: MemberLockfile;
+  /**
+   * Importer paths (repo-relative, `.` for the root) the generated workspace actually includes for
+   * this member. When given, a direct declaration from any other importer does not vote (#4129): an
+   * app shell the workspace drops by design (`apps/*`) must not decide the workspace's pins.
+   * Undefined = every importer votes.
+   */
+  IncludedImporters?: ReadonlySet<string>;
 }
 
 /**
@@ -418,7 +438,8 @@ function decideMajorPin(key: string, candidates: Array<{ Repo: string; Version: 
  * Pure.
  *
  * AUTHORITY RULE (adversarial-review round 3): a version may vote only where a
- * member DIRECTLY declares the name (its importers resolve it), plus `@types/*`
+ * member DIRECTLY declares the name in an importer the workspace INCLUDES
+ * ({@link MemberLockfileCandidates.IncludedImporters}, #4129), plus `@types/*`
  * at any depth minus those parented solely by registry copies of family
  * packages. At-depth resolutions of ordinary packages are NOT candidates — a
  * bizapps lockfile resolved with registry `@memberjunction/*` describes a graph
@@ -440,7 +461,9 @@ export function DeriveLockfilePins(members: readonly MemberLockfileCandidates[],
   const byNameMajor = new Map<string, Map<number, Array<{ Repo: string; Version: string }>>>();
   for (const member of sorted) {
     const legitimateTypes = member.Lockfile.Types.filter((t) => isLegitimateTypesAuthority(t, familyNames));
-    for (const entry of [...member.Lockfile.Direct, ...legitimateTypes]) {
+    const included = member.IncludedImporters;
+    const direct = included === undefined ? member.Lockfile.Direct : member.Lockfile.Direct.filter((d) => d.Importer !== undefined && included.has(d.Importer));
+    for (const entry of [...direct, ...legitimateTypes]) {
       if (familyNames.has(entry.Name)) {
         excludedFamily.add(entry.Name);
         continue;

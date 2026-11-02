@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [4283a82]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [c018cb9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

@@ -26,6 +26,7 @@ import { BuildDashboardTabAgentContext, BuildDashboardTabAgentTools, SummarizeDa
 import type { DashboardPanelSummary, DashboardTabAgentHost, DashboardTabDashboard } from './dashboard-tab-agent';
 import { BuildDashboardStudioTools } from './dashboard-studio-tools';
 import type { DashboardStudioHost } from './dashboard-studio-tools';
+import { BuildDashboardClassNotRegisteredMessage } from './dashboard-class-resolution';
 import { SearchDashboardSources, SOURCE_KINDS } from './dashboard-source-search';
 import type { SourceKind, SourceSearchDeps, SourceSearchResult } from './dashboard-source-search';
 import {
@@ -1716,7 +1717,10 @@ export class DashboardResource extends BaseResourceComponent {
             );
 
             if (!classReg?.SubClass) {
-                throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);
+                throw new Error(BuildDashboardClassNotRegisteredMessage(
+                    dashboard.DriverClass,
+                    MJGlobal.Instance.ClassFactory.DescribeMissingRegistration(BaseDashboard, dashboard.DriverClass)
+                ));
             }
 
             // Create the component instance

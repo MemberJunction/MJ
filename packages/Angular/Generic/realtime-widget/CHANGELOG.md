@@ -1,5 +1,62 @@
 # @memberjunction/ng-realtime-widget
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- efbe5f5: The realtime runtime now runs the session-deadline alarm. `SetSessionDeadline(deadline, { autoEnd?, warnBeforeMs? })` arms it; `SessionDeadlineWarning$` fires once per offset and `SessionDeadlineReached$` at the deadline, then (unless `autoEnd: false`) the runtime ends the call with the new `SessionEndReason` `'deadline'`. A server-verified deadline (`identity.verified`) also arms the alarm with the current options, so a host that receives one now gets the call ended at that deadline unless it calls `SetSessionDeadline(d, { autoEnd: false })`. A deadline reached before the call goes live (while it is minted, or while the microphone and connect are in flight) is announced only after `SessionStarted$`, with the call live, and then ends it. `EndRealtimeSession('deadline')` lets a host that owns the hang-up report the same end. A deadline end claims `CloseReason` `TimeLimit`; `CloseAgentSession` accepts the claim and `SessionManager.CloseSession` verifies it against the session's stored deadline (passed or within 60 s), otherwise records `Explicit` and logs it, so a deadline known only to the browser records `Explicit`; channel plugins are told the verified reason. `RealtimeSessionStartOptions.SessionDeadline` hands the deadline in with the start: the runtime arms it in the same tick it takes the call slot, so a start refused on a busy runtime never arms it. The realtime widget drops its own deadline timer, reports the runtime's `'deadline'`, and passes its guest deadline with the start, so it never sets, clears or replaces the deadline of a call it does not own; the conversations chat area shows no failure notice for a deadline end; the sessions adapter's `SessionEndReason` gains `'deadline'`.
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [1ea684f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [9d6f675]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [b081ac9]
+- Updated dependencies [6779eed]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [6b0de38]
+- Updated dependencies [5984aea]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [da449bb]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [f8ddfdc]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/ng-conversations@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.7
+  - @memberjunction/realtime-runtime@6.2.0-edge.7
+  - @memberjunction/ng-shared-generic@6.2.0-edge.7
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes
