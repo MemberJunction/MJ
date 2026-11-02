@@ -35,6 +35,23 @@
   min-width: 0;
 }
 
+/* Phone: the strip is just the Custom / Standard toggle, stretched edge to edge. */
+.mj-form-host-mode-strip--phone {
+  padding: 8px 16px;
+}
+
+.mj-form-host-mode-strip--phone mj-view-toggle,
+.mj-form-host-mode-strip--phone ::ng-deep .mj-view-toggle {
+  display: flex;
+  width: 100%;
+}
+
+.mj-form-host-mode-strip--phone ::ng-deep .mj-view-toggle-btn {
+  flex: 1 1 0;
+  justify-content: center;
+  min-height: 44px;
+}
+
 .mj-form-host-loading {
   display: flex;
   align-items: center;

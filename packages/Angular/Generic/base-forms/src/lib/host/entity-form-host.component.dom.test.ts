@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, text, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { BaseEntity, EntityInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJViewToggleComponent } from '@memberjunction/ng-ui-components';
 import { MjEntityFormHostComponent } from './entity-form-host.component';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
@@ -166,7 +166,7 @@ async function mountSwitchHost(opts: {
   const provider = opts.provider ?? createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) });
   const recordInput = opts.provider ? {} : { Record: opts.record ?? makeRecord(entityInfo) };
   const f = renderComponentFixture(MjEntityFormHostComponent, {
-    imports: [StubLoadingComponent, MJButtonDirective],
+    imports: [StubLoadingComponent, MJButtonDirective, MJViewToggleComponent],
     declarations: [MjEntityFormHostComponent],
     providers: [{
       provide: FormResolverService,
@@ -597,7 +597,7 @@ describe('MjEntityFormHostComponent — overlapping loads (DOM)', () => {
   });
 });
 
-describe('MjEntityFormHostComponent — phone width mounts the user\'s mode and hides the strip (DOM)', () => {
+describe('MjEntityFormHostComponent — phone width mounts the user\'s mode behind a compact toggle (DOM)', () => {
   const useViewport = (mobile: boolean) => {
     window.matchMedia = ((q: string) => ({
       matches: mobile && q.includes('768'),
@@ -608,21 +608,46 @@ describe('MjEntityFormHostComponent — phone width mounts the user\'s mode and 
   };
   afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
 
-  it('phone width mounts the user\'s mode and hides the strip', async () => {
+  const toggleButtons = (f: ComponentFixture<MjEntityFormHostComponent>): HTMLButtonElement[] =>
+    Array.from(f.nativeElement.querySelectorAll('.mj-form-host-mode-strip--phone .mj-view-toggle-btn')) as HTMLButtonElement[];
+
+  it('phone width mounts the user\'s mode under a compact Custom / Standard toggle, with no sentence', async () => {
     useViewport(true);
     const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
     expect(query(f, '.custom')).not.toBeNull();
     expect(query(f, '.gen')).toBeNull();
-    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    expect(query(f, '.mj-form-host-mode-strip--phone')).not.toBeNull();
+    expect(query(f, '.mj-form-host-mode-text')).toBeNull();
+    expect(switchButton(f)).toBeNull();
+    const labels = toggleButtons(f).map((b) => b.textContent?.trim());
+    expect(labels).toEqual(['Custom view', 'Standard form']);
+    expect(toggleButtons(f)[0].getAttribute('aria-pressed')).toBe('true');
     expect(modeChanges).toEqual([]);
     expect(f.componentInstance.FormMode).toBe('default');
   });
 
-  it('phone width with FormMode "standard" mounts the standard form and hides the strip', async () => {
+  it('tapping Standard form in the phone toggle mounts the standard form and emits', async () => {
+    useViewport(true);
+    const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    toggleButtons(f)[1].click();
+    await settle(f);
+    expect(query(f, '.gen')).not.toBeNull();
+    expect(query(f, '.custom')).toBeNull();
+    expect(modeChanges).toEqual(['standard']);
+    expect(toggleButtons(f)[1].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('phone width with FormMode "standard" mounts the standard form with Standard pressed', async () => {
     useViewport(true);
     const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), inputs: { FormMode: 'standard' } });
     expect(query(f, '.gen')).not.toBeNull();
     expect(query(f, '.custom')).toBeNull();
+    expect(toggleButtons(f)[1].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('phone width shows no toggle when the only form is the generated one', async () => {
+    useViewport(true);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm, GenForm) });
     expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
   });
 
