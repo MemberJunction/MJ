@@ -20,6 +20,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Video Archetypes&Name=BeatTemplate"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:54:25.163Z",
+            "checksum": "f2ea7792ae32114fae46ae005612892a1138819435879cd1b9e34c8c5f484068"
           }
         },
         {
@@ -33,6 +37,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Video Archetypes&Name=Pacing"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:54:25.172Z",
+            "checksum": "e200bf5f7e4b7e0c511783611c98c16f745057d2178428d3573c471976e066fd"
           }
         }
       ]

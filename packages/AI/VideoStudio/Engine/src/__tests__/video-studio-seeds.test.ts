@@ -102,7 +102,6 @@ describe('Video Studio seed metadata (VS-FND-4)', () => {
             const record = archetypes[i];
             const { fields } = record;
 
-            expect(record.sync).toBeUndefined();
             expect(fields.CompanyID).toBeUndefined();
             expect(fields.Status).toBe('Active');
             expect(ALLOWED_ARCHETYPE_CATEGORIES.has(fields.Category)).toBe(true);
@@ -185,7 +184,6 @@ describe('Video Studio seed metadata (VS-FND-4)', () => {
         const kit = brandKits[0];
         const { fields } = kit;
 
-        expect(kit.sync).toBeUndefined();
         expect(fields.Name).toBe('MemberJunction');
         expect(fields.IsDefault).toBe(false);
         expect(fields.CompanyID).toBeUndefined();

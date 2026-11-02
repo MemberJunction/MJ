@@ -1,5 +1,58 @@
 # @memberjunction/conversations-runtime
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- ecf36eb: `AIAgentSession.CloseReason` now accepts `TimeLimit` (the session's authored deadline passed) and `Idle` (no activity beyond the idle threshold), so an expiry close records why the session ended instead of the generic `Janitor`. `RealtimeChannelCloseReason` in `@memberjunction/ai` widens to the same six values. The realtime dashboards, the session review and agent banner in conversations, and the conversations-runtime session timeline label the two new reasons, and the realtime overview's KPI, now named "System closes", counts every close not made by a person (orphan, idle and time-limit); a time-limit close is not titled as a janitor close, since the browser's verified deadline alarm records it too. A stale session whose `LastActiveAt` will not parse now closes as `Idle` with a logged error instead of staying open.
+- efbe5f5: The realtime runtime now runs the session-deadline alarm. `SetSessionDeadline(deadline, { autoEnd?, warnBeforeMs? })` arms it; `SessionDeadlineWarning$` fires once per offset and `SessionDeadlineReached$` at the deadline, then (unless `autoEnd: false`) the runtime ends the call with the new `SessionEndReason` `'deadline'`. A server-verified deadline (`identity.verified`) also arms the alarm with the current options, so a host that receives one now gets the call ended at that deadline unless it calls `SetSessionDeadline(d, { autoEnd: false })`. A deadline reached before the call goes live (while it is minted, or while the microphone and connect are in flight) is announced only after `SessionStarted$`, with the call live, and then ends it. `EndRealtimeSession('deadline')` lets a host that owns the hang-up report the same end. A deadline end claims `CloseReason` `TimeLimit`; `CloseAgentSession` accepts the claim and `SessionManager.CloseSession` verifies it against the session's stored deadline (passed or within 60 s), otherwise records `Explicit` and logs it, so a deadline known only to the browser records `Explicit`; channel plugins are told the verified reason. `RealtimeSessionStartOptions.SessionDeadline` hands the deadline in with the start: the runtime arms it in the same tick it takes the call slot, so a start refused on a busy runtime never arms it. The realtime widget drops its own deadline timer, reports the runtime's `'deadline'`, and passes its guest deadline with the start, so it never sets, clears or replaces the deadline of a call it does not own; the conversations chat area shows no failure notice for a deadline end; the sessions adapter's `SessionEndReason` gains `'deadline'`.
+
+### Patch Changes
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/ai-agent-client@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

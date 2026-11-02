@@ -11,6 +11,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent User Policies&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:54:26.915Z",
+      "checksum": "ac9a8ed62d0b4e61625fdb404671b4e64739ce8de197c00c2dfd44b712d90cab"
     }
   },
   {
@@ -25,6 +29,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Requests&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:54:26.925Z",
+      "checksum": "a244bace985daf371f11047ee2c0c98c12b4e2b282fa06507856fe0aff237686"
     }
   }
 ]
