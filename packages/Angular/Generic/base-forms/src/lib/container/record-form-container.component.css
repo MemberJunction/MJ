@@ -742,28 +742,50 @@ mj-collapsible-panel.mj-form-role-more {
   order: 2;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
+  /* Let the container scroll naturally on mobile instead of locking overflow: hidden */
+  .mj-forms-panels-container:has(.mj-forms-layout--left-nav) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 8px 12px 28px;
+  }
+
+  .mj-forms-layout-row.mj-forms-layout--left-nav,
   .mj-forms-layout--left-nav {
     flex-direction: column;
+    gap: var(--mj-space-2, 8px);
   }
 
   .mj-forms-chrome-rail {
-    flex: 1 1 auto;
-    width: 100%;
-    position: static;
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
+    width: 100% !important; /* Beat inline [style.width.px] on mobile */
+    min-width: 0 !important;
+    max-width: 100% !important;
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    padding: 6px 8px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
   }
 
-  .mj-forms-chrome-rail-resizer {
-    display: none;
+  /* Hide desktop-only resizer, pin/collapse header, and drag handles on touch/mobile */
+  .mj-forms-chrome-rail-resizer,
+  .mj-forms-chrome-rail-toolbar,
+  .mj-forms-chrome-rail-handle {
+    display: none !important;
   }
 
   .mj-forms-chrome-rail.is-collapsed {
     flex: 0 0 auto;
-    width: 100%;
-    min-width: 0;
-    max-width: none;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
     height: 36px;
     padding: 0;
   }
@@ -779,22 +801,57 @@ mj-collapsible-panel.mj-form-role-more {
     max-height: none;
   }
 
-  .mj-forms-chrome-rail-toolbar {
-    width: 100%;
+  /* Single-row horizontal pill strip */
+  .mj-forms-chrome-rail-items {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 6px;
+    padding-bottom: 2px;
+    padding-right: 112px; /* Leave room at scroll end for the collapsed Edit/More pill */
+    min-height: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mj-forms-chrome-rail-items::-webkit-scrollbar {
+    display: none;
   }
 
   .mj-forms-chrome-rail-item {
+    flex: 0 0 auto;
     width: auto;
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: var(--mj-radius-full, 9999px);
+    white-space: nowrap;
   }
 
-  /* Phones: the rail is a wrapping row of chips, so the items wrapper must
-     wrap too — a column here stacks one chip per row and grows past the
-     rail (no scroll, body pushed out). */
-  .mj-forms-chrome-rail-items {
+  .mj-forms-chrome-rail-item.is-active::before {
+    display: none;
+  }
+
+  .mj-forms-chrome-rail-item.is-more-folder {
+    margin-top: 0;
+    padding-top: 6px;
+    border-radius: var(--mj-radius-full, 9999px);
+  }
+
+  .mj-forms-chrome-rail-item.is-more-folder::before {
+    display: none;
+  }
+
+  /* When More is expanded on mobile, keep children in the horizontal pill flow */
+  .mj-forms-chrome-rail-more-tree {
+    display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
-    overflow: visible;
-    min-height: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-left: 0;
+    padding-left: 4px;
+    border-left: 2px solid var(--mj-border-default);
   }
 }
 

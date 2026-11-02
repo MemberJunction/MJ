@@ -918,3 +918,115 @@
   border: 1px solid color-mix(in srgb, var(--mj-status-warning, #f59e0b) 40%, transparent);
 }
 
+/* ============================================
+   COLLAPSED READ-MODE TRIGGER PILL
+   Zero-layout-height corner pill ([✎ Edit | •••])
+   ============================================ */
+.mj-forms-toolbar-collapsed-pill {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface-card));
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full, 9999px);
+  box-shadow: var(--mj-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
+  padding: 2px;
+  gap: 2px;
+}
+
+.mj-forms-collapsed-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: var(--mj-font-semibold, 600);
+  line-height: 1;
+  color: var(--mj-text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--mj-radius-full, 9999px);
+  cursor: pointer;
+  transition: background var(--mj-transition-base, 150ms) ease, color var(--mj-transition-base, 150ms) ease;
+  white-space: nowrap;
+}
+
+.mj-forms-collapsed-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-forms-collapsed-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+.mj-forms-collapsed-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mj-forms-collapsed-btn--edit {
+  color: var(--mj-brand-primary);
+  padding: 5px 12px;
+}
+
+.mj-forms-collapsed-btn--edit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+}
+
+.mj-forms-collapsed-btn--edit + .mj-forms-collapsed-btn--expand {
+  position: relative;
+}
+
+.mj-forms-collapsed-btn--edit + .mj-forms-collapsed-btn--expand::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--mj-border-default);
+}
+
+/* ============================================
+   MOBILE TOOLBAR & EDIT BANNER DENSITY (<= 768px)
+   ============================================ */
+@media (max-width: 768px) {
+  .mj-forms-toolbar-collapsed-pill {
+    top: 6px;
+    right: 10px;
+  }
+
+  .mj-forms-toolbar {
+    padding: 8px 12px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .mj-forms-edit-banner {
+    padding: 8px 12px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  /* Hide verbose record subtitle in mobile edit banner so Save/Discard fit on 1 row */
+  .mj-forms-edit-banner-record-name,
+  .mj-forms-dirty-chips {
+    display: none;
+  }
+
+  .mj-forms-menu {
+    min-width: min(260px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+}
+

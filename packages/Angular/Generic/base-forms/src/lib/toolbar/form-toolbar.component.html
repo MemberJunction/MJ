@@ -8,11 +8,11 @@
       <span class="mj-forms-edit-banner-dirty">
         <strong>{{ DirtyFieldDisplayNames.length }}</strong>
         field{{ DirtyFieldDisplayNames.length === 1 ? '' : 's' }} modified
-        &mdash; {{ DirtyFieldDisplayNames.join(', ') }}
+        <span class="mj-forms-dirty-chips">&mdash; {{ DirtyFieldDisplayNames.join(', ') }}</span>
       </span>
     } @else {
       <i class="fa-solid fa-pen-to-square"></i>
-      <span class="mj-forms-edit-banner-text">Editing: {{ RecordDisplayName }}</span>
+      <span class="mj-forms-edit-banner-text">Editing<span class="mj-forms-edit-banner-record-name">: {{ RecordDisplayName }}</span></span>
     }
     @if (EffectiveConflictCount > 0) {
       <span class="mj-forms-edit-banner-conflicts" role="status">
@@ -90,6 +90,27 @@
      chooses, the configured defaults (Favorite and History) are pinned.
      ============================================ -->
 @if (!EditMode) {
+  @if (!IsToolbarExpanded) {
+    <div class="mj-forms-toolbar-collapsed-pill" role="toolbar" aria-label="Form actions">
+      @if (EditActionItem; as editItem) {
+        <button type="button"
+          class="mj-forms-collapsed-btn mj-forms-collapsed-btn--edit"
+          [disabled]="editItem.Disabled || editItem.IsLoading"
+          [title]="editItem.Description"
+          (click)="OnToolbarItemClick(editItem, $event)">
+          <i class="fa-solid fa-pen"></i>
+          <span>Edit</span>
+        </button>
+      }
+      <button type="button"
+        class="mj-forms-collapsed-btn mj-forms-collapsed-btn--expand"
+        (click)="ExpandToolbarForSession()"
+        aria-label="Show form toolbar"
+        title="Show toolbar actions and view options">
+        <i class="fa-solid fa-ellipsis"></i>
+      </button>
+    </div>
+  } @else {
   <div class="mj-forms-toolbar" [class.mj-forms-toolbar--sticky]="Config.StickyToolbar">
 
     <div class="mj-forms-toolbar-group">
@@ -299,6 +320,35 @@
                 </button>
               }
             }
+            <div class="mj-forms-menu-heading">Toolbar</div>
+            @if (CurrentEntityName) {
+              <button class="mj-forms-menu-item" type="button"
+                data-toolbar-pin="entity"
+                [attr.aria-pressed]="IsToolbarPinnedOpen && EntityToolbarPinState === true"
+                (click)="ToggleEntityToolbarPin()">
+                <span class="mj-forms-menu-icon"><i class="fa-solid fa-thumbtack"></i></span>
+                <span class="mj-forms-menu-label">{{ IsToolbarPinnedOpen ? 'Unpin toolbar for ' + CurrentEntityDisplayName : 'Pin toolbar for ' + CurrentEntityDisplayName }}</span>
+                @if (EntityToolbarPinState !== undefined) {
+                  <span class="mj-forms-menu-badge">{{ EntityToolbarPinState ? 'Pinned' : 'Auto-hide' }}</span>
+                }
+              </button>
+            }
+            <button class="mj-forms-menu-item" type="button"
+              data-toolbar-pin="global"
+              [attr.aria-pressed]="IsGlobalToolbarPinned"
+              (click)="ToggleGlobalToolbarPin()">
+              <span class="mj-forms-menu-icon"><i class="fa-solid fa-globe"></i></span>
+              <span class="mj-forms-menu-label">{{ IsGlobalToolbarPinned ? 'Unpin toolbar on all forms' : 'Pin toolbar on all forms' }}</span>
+              @if (IsGlobalToolbarPinned) {
+                <span class="mj-forms-menu-badge">Pinned</span>
+              }
+            </button>
+            <button class="mj-forms-menu-item" type="button"
+              data-toolbar-collapse="menu"
+              (click)="CollapseToolbarForSession()">
+              <span class="mj-forms-menu-icon"><i class="fa-solid fa-eye-slash"></i></span>
+              <span class="mj-forms-menu-label">Hide toolbar now</span>
+            </button>
           </div>
         }
       </div>
@@ -309,7 +359,16 @@
       <ng-container [ngTemplateOutlet]="AdditionalActionsTemplate"></ng-container>
     }
     <ng-content select="[toolbar-additional-controls]"></ng-content>
+
+    <button class="mj-forms-btn mj-forms-btn--icon-only mj-forms-toolbar-collapse-btn"
+      type="button"
+      aria-label="Hide form toolbar"
+      title="Hide toolbar"
+      (click)="CollapseToolbarForSession()">
+      <i class="fa-solid fa-chevron-up"></i>
+    </button>
   </div>
+  }
 
   <!-- IS-A Entity Hierarchy Breadcrumb: its own row, only for entities in a hierarchy -->
   @if (Config.ShowEntityHierarchy && IsInHierarchy) {

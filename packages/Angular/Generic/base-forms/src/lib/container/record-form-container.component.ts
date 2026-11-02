@@ -1029,12 +1029,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.chrome.SetActiveGroup(groupKey);
     this.expandActiveGroupSections(groupKey);
     this.applyChromeVisibility();
-    if (!this.ChromeRailPinned && previous !== groupKey) {
+    if (!this.ChromeRailPinned && previous !== groupKey && !this.isMobileRailViewport()) {
       this.chromeRailExpanded = false;
     }
     this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
+  }
+
+  private isMobileRailViewport(): boolean {
+    return typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(max-width: 768px)').matches;
   }
 
   public OnChromeRailExpand(): void {

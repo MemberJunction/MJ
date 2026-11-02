@@ -28,6 +28,22 @@ import {
 /** User setting that stores the toolbar actions a user pinned, shared across every form. */
 export const TOOLBAR_PINS_SETTING_KEY = 'mj.form.toolbar.pinnedActions';
 
+/** User setting that stores whether the form toolbar stays pinned open in Read Mode (global + per-entity). */
+export const TOOLBAR_VISIBILITY_SETTING_KEY = 'mj.form.toolbar.visibility';
+
+export interface FormToolbarVisibilitySetting {
+  Version: 1;
+  /** When true, the full toolbar stays expanded in Read Mode across all entities by default. */
+  GlobalPinned: boolean;
+  /**
+   * Per-entity overrides keyed by EntityInfo.Name (e.g. "MJ: Entities": true).
+   * - true: always expanded on this entity
+   * - false: always collapsed on this entity (even when GlobalPinned is true)
+   * - omitted: inherits GlobalPinned (which defaults to false)
+   */
+  EntityPinned?: Record<string, boolean>;
+}
+
 /** Built-in actions that start pinned for a user who has not chosen pins. */
 export const DEFAULT_PINNED_TOOLBAR_ACTIONS: readonly string[] = ['favorite', 'history'];
 
@@ -353,6 +369,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.checkDescendantChains();
     this.checkCloneCapability();
     this.checkPinsChanged();
+    this.checkVisibilityChanged();
   }
 
   /** Redraws when the saved pins changed elsewhere (another open form, another tab). */
@@ -360,6 +377,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     const before = this._pinsRaw;
     this.readPins();
     if (this._pinsRaw !== before) {
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Redraws when the toolbar visibility setting changed elsewhere. */
+  private checkVisibilityChanged(): void {
+    const before = this._visibilityRaw;
+    this.readVisibilitySetting();
+    if (this._visibilityRaw !== before) {
       this.cdr.markForCheck();
     }
   }
@@ -1080,6 +1106,148 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.ResolvedActionItems.filter(item => !item.Pinnable);
   }
 
+  /** The resolved 'edit' action item when visible in read mode (used by the collapsed trigger pill). */
+  public get EditActionItem(): ResolvedToolbarItem | undefined {
+    return this.ResolvedActionItems.find(item => item.Key === 'edit');
+  }
+
+  // ── Toolbar Auto-Hide & Visibility Pinning ──────────────────────
+
+  /** Whether the user expanded the full toolbar for the current viewing session in Read Mode. */
+  public ToolbarSessionExpanded = false;
+
+  private _visibilityRaw: string | undefined;
+  private _visibilityParsed: FormToolbarVisibilitySetting | null = null;
+  private _localVisibility: FormToolbarVisibilitySetting | null = null;
+  private _visibilityRawAtWrite: string | undefined;
+
+  /** Name of the current entity from EntityInfo input or Record.EntityInfo. */
+  public get CurrentEntityName(): string | null {
+    return this.EntityInfo?.Name ?? this.Record?.EntityInfo?.Name ?? null;
+  }
+
+  /** Display name of the current entity for UI labels. */
+  public get CurrentEntityDisplayName(): string {
+    return this.EntityInfo?.DisplayNameOrName ?? this.Record?.EntityInfo?.DisplayNameOrName ?? 'this entity';
+  }
+
+  /** Current resolved toolbar visibility setting. */
+  public get ToolbarVisibilitySetting(): FormToolbarVisibilitySetting {
+    return this.readVisibilitySetting() ?? { Version: 1, GlobalPinned: false };
+  }
+
+  /** True when the user has pinned the toolbar globally across all forms. */
+  public get IsGlobalToolbarPinned(): boolean {
+    return this.ToolbarVisibilitySetting.GlobalPinned === true;
+  }
+
+  /**
+   * Per-entity toolbar pin override for the current entity:
+   * - `true`: pinned open on this entity
+   * - `false`: explicitly unpinned/collapsed on this entity (overrides GlobalPinned)
+   * - `undefined`: no entity override (inherits GlobalPinned)
+   */
+  public get EntityToolbarPinState(): boolean | undefined {
+    const entityName = this.CurrentEntityName;
+    if (!entityName) return undefined;
+    const state = this.ToolbarVisibilitySetting.EntityPinned?.[entityName];
+    return typeof state === 'boolean' ? state : undefined;
+  }
+
+  /**
+   * Whether the toolbar is pinned open for the current form:
+   * 1. Look up `EntityPinned?.[entityName]`. If boolean (`true` or `false`), return it.
+   * 2. Otherwise return `GlobalPinned ?? false`.
+   */
+  public get IsToolbarPinnedOpen(): boolean {
+    const entityState = this.EntityToolbarPinState;
+    if (typeof entityState === 'boolean') {
+      return entityState;
+    }
+    return this.IsGlobalToolbarPinned;
+  }
+
+  /**
+   * Whether the full toolbar renders (`true`) vs. the compact Read-Mode trigger pill (`false`).
+   */
+  public get IsToolbarExpanded(): boolean {
+    if (this.EditMode) return true;
+    if (this.SearchFilter.trim().length > 0) return true;
+    if (this.IsInHierarchy && this.Config.ShowEntityHierarchy) return true;
+    if (this.IsToolbarPinnedOpen) return true;
+    if (this.ToolbarSessionExpanded) return true;
+    return false;
+  }
+
+  /** Expands the full toolbar in Read Mode for the current viewing session. */
+  public ExpandToolbarForSession(): void {
+    this.ToolbarSessionExpanded = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Collapses the full toolbar back to the compact Read-Mode trigger pill.
+   * If the toolbar was pinned open, unpins it for the current context so it collapses immediately.
+   */
+  public CollapseToolbarForSession(): void {
+    this.ToolbarSessionExpanded = false;
+    this.CloseMenus();
+    if (this.IsToolbarPinnedOpen) {
+      const current = this.ToolbarVisibilitySetting;
+      const entityName = this.CurrentEntityName;
+      if (entityName && current.EntityPinned?.[entityName] === true) {
+        const nextEntityPinned = { ...current.EntityPinned };
+        if (current.GlobalPinned) {
+          nextEntityPinned[entityName] = false;
+        } else {
+          delete nextEntityPinned[entityName];
+        }
+        this.writeVisibilitySetting({
+          Version: 1,
+          GlobalPinned: current.GlobalPinned,
+          EntityPinned: nextEntityPinned,
+        });
+      } else {
+        this.writeVisibilitySetting({
+          Version: 1,
+          GlobalPinned: false,
+          EntityPinned: current.EntityPinned,
+        });
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Toggles pinning the toolbar open globally across all forms. */
+  public ToggleGlobalToolbarPin(): void {
+    const current = this.ToolbarVisibilitySetting;
+    const nextGlobal = !current.GlobalPinned;
+    this.writeVisibilitySetting({
+      Version: 1,
+      GlobalPinned: nextGlobal,
+      EntityPinned: current.EntityPinned,
+    });
+    this.ToolbarSessionExpanded = nextGlobal;
+    this.cdr.markForCheck();
+  }
+
+  /** Toggles pinning the toolbar open specifically for the current entity (overrides GlobalPinned). */
+  public ToggleEntityToolbarPin(): void {
+    const entityName = this.CurrentEntityName;
+    if (!entityName) return;
+    const current = this.ToolbarVisibilitySetting;
+    const nextEntityPinned = { ...(current.EntityPinned ?? {}) };
+    const nextState = !this.IsToolbarPinnedOpen;
+    nextEntityPinned[entityName] = nextState;
+    this.writeVisibilitySetting({
+      Version: 1,
+      GlobalPinned: current.GlobalPinned,
+      EntityPinned: nextEntityPinned,
+    });
+    this.ToolbarSessionExpanded = nextState;
+    this.cdr.markForCheck();
+  }
+
   /** Pinned actions this form offers, in pin order, up to MaxPinnedActions. Computed once per pass. */
   public get PinnedActionItems(): ResolvedToolbarItem[] {
     return (this._pinnedItems ??= this.resolvePinnedItems()).Items;
@@ -1315,6 +1483,67 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this.userInfoEngine.SetSettingDebounced(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: pins }));
     } catch {
       // No user context (tests, anonymous hosts): the pins still apply for this session.
+    }
+  }
+
+  private safeGetRawVisibility(): string | undefined {
+    try {
+      return this.userInfoEngine.GetSetting(TOOLBAR_VISIBILITY_SETTING_KEY);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private readVisibilitySetting(): FormToolbarVisibilitySetting | null {
+    const raw = this.safeGetRawVisibility();
+    if (this._localVisibility !== null) {
+      if (raw === this._visibilityRawAtWrite) {
+        return this._localVisibility;
+      }
+      this._localVisibility = null;
+      this._visibilityRawAtWrite = undefined;
+    }
+    if (raw !== this._visibilityRaw) {
+      this._visibilityRaw = raw;
+      this._visibilityParsed = null;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Partial<FormToolbarVisibilitySetting>;
+          const entityPinned: Record<string, boolean> = {};
+          if (parsed.EntityPinned && typeof parsed.EntityPinned === 'object') {
+            for (const [k, v] of Object.entries(parsed.EntityPinned)) {
+              if (typeof v === 'boolean') {
+                entityPinned[k] = v;
+              }
+            }
+          }
+          this._visibilityParsed = {
+            Version: 1,
+            GlobalPinned: parsed.GlobalPinned === true,
+            ...(Object.keys(entityPinned).length > 0 ? { EntityPinned: entityPinned } : {}),
+          };
+        } catch {
+          this._visibilityParsed = null;
+        }
+      }
+    }
+    return this._visibilityParsed;
+  }
+
+  private writeVisibilitySetting(setting: FormToolbarVisibilitySetting): void {
+    const normalized: FormToolbarVisibilitySetting = {
+      Version: 1,
+      GlobalPinned: setting.GlobalPinned === true,
+      ...(setting.EntityPinned && Object.keys(setting.EntityPinned).length > 0
+        ? { EntityPinned: { ...setting.EntityPinned } }
+        : {}),
+    };
+    this._localVisibility = normalized;
+    this._visibilityRawAtWrite = this.safeGetRawVisibility();
+    try {
+      this.userInfoEngine.SetSettingDebounced(TOOLBAR_VISIBILITY_SETTING_KEY, JSON.stringify(normalized));
+    } catch {
+      // No user context (tests, anonymous hosts): setting still applies for this session.
     }
   }
 

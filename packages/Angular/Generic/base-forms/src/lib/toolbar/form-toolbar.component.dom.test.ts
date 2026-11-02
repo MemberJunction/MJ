@@ -7,7 +7,7 @@ import type { BeforeSaveEventArgs, BeforeRefreshEventArgs, BeforeCloneEventArgs 
 import type { FormToolbarItemConfig } from '../types/form-toolbar-item';
 import { RecordCloneService, RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { TOOLBAR_PINS_SETTING_KEY } from './form-toolbar.component';
+import { TOOLBAR_PINS_SETTING_KEY, TOOLBAR_VISIBILITY_SETTING_KEY } from './form-toolbar.component';
 import type { RecordNavigationEvent } from '../types/navigation-events';
 
 /**
@@ -19,7 +19,7 @@ import type { RecordNavigationEvent } from '../types/navigation-events';
  * delete/discard confirm dialogs and the section-filter controls.
  */
 
-const ENTITY_INFO = { TrackRecordChanges: true, ParentChain: [], ChildEntities: [], Fields: [], NameField: null } as unknown as EntityInfo;
+const ENTITY_INFO = { Name: 'MJ: Entities', DisplayNameOrName: 'Entities', TrackRecordChanges: true, ParentChain: [], ChildEntities: [], Fields: [], NameField: null } as unknown as EntityInfo;
 const RECORD = {
   EntityInfo: ENTITY_INFO,
   IsSaved: true,
@@ -31,7 +31,7 @@ const RECORD = {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-const render = (inputs: Record<string, unknown> = {}) =>
+const renderRaw = (inputs: Record<string, unknown> = {}) =>
   renderComponentFixture(MjFormToolbarComponent, {
     declarations: [MjFormToolbarComponent],
     inputs: {
@@ -43,6 +43,13 @@ const render = (inputs: Record<string, unknown> = {}) =>
       ...inputs,
     },
   });
+
+const render = (inputs: Record<string, unknown> = {}) => {
+  const f = renderRaw(inputs);
+  f.componentInstance.ExpandToolbarForSession();
+  f.detectChanges();
+  return f;
+};
 
 type Fx = ReturnType<typeof render>;
 const btn = (f: Fx, sel: string) => query(f, sel) as HTMLElement | null;
@@ -589,6 +596,8 @@ describe('MjFormToolbarComponent (DOM)', () => {
         providers: [{ provide: RecordCloneService, useValue: service }],
         inputs: { Record: CLONE_RECORD, EntityInfo: CLONE_ENTITY, UserCanEdit: true, Config: CLONE_ON, ...inputs },
       });
+      f.componentInstance.ExpandToolbarForSession();
+      f.detectChanges();
       return { f, service };
     };
     const settle = async (f: Fx) => { f.detectChanges(); await tick(); f.detectChanges(); };
@@ -808,6 +817,101 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(clicked).toBe(true);
       expect(out.length).toBe(1);
       expect(out[0].ItemKey).toBe('custom-action');
+    });
+  });
+
+  describe('toolbar auto-hide and visibility pinning', () => {
+    it('defaults to collapsed pill in Read Mode when mj.form.toolbar.visibility is unset', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+      expect(query(f, '.mj-forms-toolbar-collapsed-pill')).not.toBeNull();
+      expect(query(f, '.mj-forms-toolbar')).toBeNull();
+    });
+
+    it('emits EditModeChange(true) in 1 click when Edit on the collapsed pill is clicked', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      const out = capture(f.componentInstance.EditModeChange);
+      const pillEditBtn = btn(f, '.mj-forms-collapsed-btn--edit');
+      expect(pillEditBtn).not.toBeNull();
+      pillEditBtn!.click();
+      expect(out).toEqual([true]);
+    });
+
+    it('reveals the full .mj-forms-toolbar for the session when the expand button is clicked', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      const expandBtn = btn(f, '.mj-forms-collapsed-btn--expand');
+      expect(expandBtn).not.toBeNull();
+      expandBtn!.click();
+      f.detectChanges();
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      expect(query(f, '.mj-forms-toolbar')).not.toBeNull();
+      expect(query(f, '.mj-forms-toolbar-collapsed-pill')).toBeNull();
+    });
+
+    it('always renders the edit banner when EditMode is true, regardless of pin state', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: true });
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      expect(query(f, '.mj-forms-edit-banner')).not.toBeNull();
+      expect(btn(f, 'button[title="Save Changes"]')).not.toBeNull();
+      expect(btn(f, 'button[title="Discard Changes"]')).not.toBeNull();
+    });
+
+    it('ToggleGlobalToolbarPin() writes GlobalPinned: true to UserInfoEngine under mj.form.toolbar.visibility', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = renderRaw({ EditMode: false });
+
+      f.componentInstance.ToggleGlobalToolbarPin();
+      f.detectChanges();
+
+      expect(f.componentInstance.IsGlobalToolbarPinned).toBe(true);
+      expect(f.componentInstance.IsToolbarPinnedOpen).toBe(true);
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      expect(save).toHaveBeenCalledWith(
+        TOOLBAR_VISIBILITY_SETTING_KEY,
+        JSON.stringify({ Version: 1, GlobalPinned: true })
+      );
+    });
+
+    it('ToggleEntityToolbarPin() writes EntityPinned[entityName] to UserInfoEngine and overrides GlobalPinned', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_VISIBILITY_SETTING_KEY
+          ? JSON.stringify({ Version: 1, GlobalPinned: true })
+          : undefined
+      );
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = renderRaw({ EditMode: false });
+
+      expect(f.componentInstance.IsGlobalToolbarPinned).toBe(true);
+      expect(f.componentInstance.IsToolbarPinnedOpen).toBe(true);
+
+      // Toggling entity pin when GlobalPinned is true sets EntityPinned['MJ: Entities'] = false, overriding GlobalPinned
+      f.componentInstance.ToggleEntityToolbarPin();
+      f.detectChanges();
+
+      expect(f.componentInstance.EntityToolbarPinState).toBe(false);
+      expect(f.componentInstance.IsToolbarPinnedOpen).toBe(false);
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+      expect(save).toHaveBeenLastCalledWith(
+        TOOLBAR_VISIBILITY_SETTING_KEY,
+        JSON.stringify({ Version: 1, GlobalPinned: true, EntityPinned: { 'MJ: Entities': false } })
+      );
+
+      // Toggling entity pin again flips EntityPinned['MJ: Entities'] = true
+      f.componentInstance.ToggleEntityToolbarPin();
+      f.detectChanges();
+
+      expect(f.componentInstance.EntityToolbarPinState).toBe(true);
+      expect(f.componentInstance.IsToolbarPinnedOpen).toBe(true);
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      expect(save).toHaveBeenLastCalledWith(
+        TOOLBAR_VISIBILITY_SETTING_KEY,
+        JSON.stringify({ Version: 1, GlobalPinned: true, EntityPinned: { 'MJ: Entities': true } })
+      );
     });
   });
 });
