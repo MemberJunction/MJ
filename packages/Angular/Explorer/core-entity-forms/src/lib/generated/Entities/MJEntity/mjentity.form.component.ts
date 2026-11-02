@@ -113,6 +113,9 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
             { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
             { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false },
+            { sectionKey: 'mJGraphEdgesSourceEntityID', sectionName: 'Graph Edges (Source Entity)', isExpanded: false },
+            { sectionKey: 'mJGraphEdgesTargetEntityID', sectionName: 'Graph Edges (Target Entity)', isExpanded: false },
+            { sectionKey: 'mJGraphEdgeTypeEndpoints', sectionName: 'Graph Edge Type Endpoints', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

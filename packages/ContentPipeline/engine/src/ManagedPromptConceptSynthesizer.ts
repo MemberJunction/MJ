@@ -3,7 +3,7 @@
  *
  * Synthesizes `MJ: Graph Concepts` and `MJ: Graph Edges` from a {@link ConceptSeedCluster},
  * combining deterministic authority-ranked specification assembly, schema-grounding alignment,
- * and cross-chunk contradiction edge generation with an optional pluggable prompt runner hook.
+ * and cross-chunk contradiction edge generation.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -11,119 +11,98 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseConceptSynthesizer,
-    ConceptCitation,
+    ConceptChunkCitation,
     ConceptSeedCluster,
-    ConceptSynthesizeRequest,
-    ConceptSynthesizeResult,
-    ExistingGraphConceptSummary,
     GetAuthorityTierRank,
-    SchemaGroundingCandidate,
+    SynthesizeConceptRequest,
+    SynthesizeConceptResult,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
-    TokenizeConceptPhrase,
 } from '@memberjunction/content-pipeline-base';
 
 /** Registration key for the default concept synthesizer. */
 export const MANAGED_PROMPT_CONCEPT_SYNTHESIZER = 'ManagedPrompt';
 
 /**
- * Optional callback signature that callers or host services can supply in
- * `ConceptSynthesizeRequest.Parameters.PromptRunner` to refine the deterministic
- * synthesis via a managed AI prompt.
- */
-export type ConceptSynthesisPromptRunner = (
-    request: ConceptSynthesizeRequest,
-    baseline: ConceptSynthesizeResult,
-) => Promise<ConceptSynthesizeResult>;
-
-/**
  * Default {@link BaseConceptSynthesizer} registered under `'ManagedPrompt'`.
  *
- * Produces a complete, deterministic {@link ConceptSynthesizeResult} from the cluster's
- * supporting chunks, tags, authority tiers, threshold conflicts, and schema grounding
- * candidates, and optionally delegates refinement to a configured {@link ConceptSynthesisPromptRunner}.
+ * Produces a complete, deterministic {@link SynthesizeConceptResult} from the cluster's
+ * supporting chunks, tags, authority tiers, threshold conflicts, and schema grounding matches.
  */
 @RegisterClass(BaseConceptSynthesizer, MANAGED_PROMPT_CONCEPT_SYNTHESIZER)
 export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
     public readonly Key = MANAGED_PROMPT_CONCEPT_SYNTHESIZER;
 
-    public async Synthesize(request: ConceptSynthesizeRequest): Promise<ConceptSynthesizeResult> {
-        const baseline = this.SynthesizeDeterministically(request);
-        const promptRunner = this.extractPromptRunner(request.Parameters);
-        if (promptRunner) {
-            return promptRunner(request, baseline);
-        }
-        return baseline;
+    public async SynthesizeCluster(request: SynthesizeConceptRequest): Promise<SynthesizeConceptResult> {
+        return this.SynthesizeDeterministically(request);
     }
 
     /**
      * Deterministic synthesis of a concept and its outbound/inbound graph edges from a seed cluster.
      */
-    public SynthesizeDeterministically(request: ConceptSynthesizeRequest): ConceptSynthesizeResult {
-        const { Cluster, OverlayConfig, ExistingConcepts, GroundingCandidates } = request;
+    public SynthesizeDeterministically(request: SynthesizeConceptRequest): SynthesizeConceptResult {
+        const { SeedCluster: cluster, OverlayConfig } = request;
 
-        // Sort supporting chunks by AuthorityTier precedence (highest authority first)
-        const sortedChunks = [...Cluster.SupportingChunks].sort((a, b) => {
-            const tierDiff = GetAuthorityTierRank(a.AuthorityTier) - GetAuthorityTierRank(b.AuthorityTier);
+        // Chunks are already sorted highest authority first, but guarantee deterministic ordering
+        const sortedChunks = [...cluster.Chunks].sort((a, b) => {
+            const tierDiff = GetAuthorityTierRank(b.AuthorityTier) - GetAuthorityTierRank(a.AuthorityTier);
             if (tierDiff !== 0) {
                 return tierDiff;
             }
-            return a.ChunkIndex - b.ChunkIndex;
+            return (a.Sequence ?? 0) - (b.Sequence ?? 0);
         });
 
-        const citations: ConceptCitation[] = sortedChunks.slice(0, 8).map((chunk) => ({
+        const citations: ConceptChunkCitation[] = sortedChunks.slice(0, 8).map((chunk) => ({
             ChunkID: chunk.ChunkID,
             ContentItemID: chunk.ContentItemID,
-            ContentSourceID: chunk.ContentSourceID,
-            SectionHeading: chunk.HeadingText,
-            QuoteExcerpt: this.buildExcerpt(chunk.Text, 240),
-            AuthorityTier: chunk.AuthorityTier,
+            HeadingPath: chunk.HeadingPath ?? null,
+            AuthorityTier: chunk.AuthorityTier ?? OverlayConfig.AuthorityTier,
+            Excerpt: this.buildExcerpt(chunk.Text, 240),
         }));
 
-        const existingMatch = Cluster.MatchedExistingConceptID
-            ? ExistingConcepts.find((c) => c.ID === Cluster.MatchedExistingConceptID)
-            : undefined;
+        const existingMatch = cluster.MatchedExistingConcept;
+        const parentConceptName = this.extractParentConceptName(sortedChunks);
+        const description = this.buildDescription(cluster, sortedChunks);
+        const specification = this.buildSpecification(cluster, sortedChunks);
+        const confidence = existingMatch
+            ? Math.max(0.75, cluster.ExistingConceptMatchScore)
+            : Math.min(0.95, 0.6 + Math.min(0.35, sortedChunks.length * 0.1));
 
-        const status: SynthesizedGraphConcept['Status'] = existingMatch
-            ? existingMatch.Status
-            : OverlayConfig.ConceptTaxonomyMode === 'propose-only'
-              ? 'Proposed'
-              : 'Approved';
-
-        const parentConceptID = this.resolveParentConceptID(Cluster, ExistingConcepts);
-        const description = this.buildDescription(Cluster, sortedChunks, existingMatch);
-        const specification = this.buildSpecification(Cluster, sortedChunks, existingMatch);
+        const conceptName = existingMatch ? existingMatch.Name : cluster.ConceptName;
+        const conceptRecordPlaceholder = existingMatch?.ConceptID ?? `concept:${conceptName}`;
 
         const concept: SynthesizedGraphConcept = {
-            ExistingConceptID: Cluster.MatchedExistingConceptID,
-            Name: existingMatch ? existingMatch.Name : Cluster.CanonicalName,
-            ConceptType: existingMatch ? existingMatch.ConceptType : Cluster.InferredConceptType,
+            ExistingConceptID: existingMatch?.ConceptID,
+            Name: conceptName,
+            ConceptType: existingMatch ? existingMatch.ConceptType : cluster.InferredConceptType,
             Description: description,
             Specification: specification,
-            Synonyms: this.mergeSynonyms(Cluster.Synonyms, existingMatch?.Synonyms ?? []),
-            AuthorityTier: Cluster.HighestAuthorityTier,
-            Status: status,
-            ParentConceptID: parentConceptID,
+            Synonyms: this.mergeSynonyms(cluster.AssociatedTags, existingMatch?.Synonyms ?? [], conceptName),
+            ParentConceptName: parentConceptName,
+            AuthorityTier: cluster.HighestAuthorityTier,
+            Confidence: Number(confidence.toFixed(4)),
             Citations: citations,
         };
 
         const edges: SynthesizedGraphEdge[] = [];
 
-        // 1. Provenance edges: Graph Concept -> Content Item Chunks & Content Items
+        // 1. Provenance edges: Graph Concept -> Content Item Chunks (SourcedFrom) & Content Items -> Graph Concept (Mentions)
         const seenItems = new Set<string>();
         for (const chunk of sortedChunks) {
             edges.push({
                 EdgeTypeName: 'SourcedFrom',
-                Direction: 'Outbound',
+                SourceEntityName: 'MJ: Graph Concepts',
+                SourceRecordID: conceptRecordPlaceholder,
                 TargetEntityName: 'MJ: Content Item Chunks',
                 TargetRecordID: chunk.ChunkID,
                 Weight: 1.0,
-                Source: 'System',
-                Properties: {
+                Confidence: 1.0,
+                Description: `Concept '${conceptName}' is sourced from chunk '${chunk.ChunkID}'.`,
+                Attributes: {
                     contentItemID: chunk.ContentItemID,
                     contentSourceID: chunk.ContentSourceID,
-                    authorityTier: chunk.AuthorityTier,
-                    heading: chunk.HeadingText,
+                    authorityTier: chunk.AuthorityTier ?? OverlayConfig.AuthorityTier,
+                    headingPath: chunk.HeadingPath ?? null,
                 },
             });
 
@@ -131,61 +110,78 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                 seenItems.add(chunk.ContentItemID);
                 edges.push({
                     EdgeTypeName: 'Mentions',
-                    Direction: 'Inbound',
-                    TargetEntityName: 'MJ: Content Items',
-                    TargetRecordID: chunk.ContentItemID,
-                    Weight: Number(Math.min(1, Cluster.Confidence).toFixed(4)),
-                    Source: 'Inferred',
-                    Properties: {
+                    SourceEntityName: 'MJ: Content Items',
+                    SourceRecordID: chunk.ContentItemID,
+                    TargetEntityName: 'MJ: Graph Concepts',
+                    TargetRecordID: conceptRecordPlaceholder,
+                    Weight: Number(Math.min(1, confidence).toFixed(4)),
+                    Confidence: Number(Math.min(1, confidence).toFixed(4)),
+                    Description: `Content item '${chunk.ContentItemID}' mentions concept '${conceptName}'.`,
+                    Attributes: {
                         contentSourceID: chunk.ContentSourceID,
-                        authorityTier: chunk.AuthorityTier,
+                        authorityTier: chunk.AuthorityTier ?? OverlayConfig.AuthorityTier,
                     },
                 });
             }
         }
 
         // 2. Hierarchy edge: Parent Concept -> This Concept (Broader Than)
-        if (parentConceptID) {
+        if (parentConceptName) {
             edges.push({
                 EdgeTypeName: 'Broader Than',
-                Direction: 'Inbound',
+                SourceEntityName: 'MJ: Graph Concepts',
+                SourceRecordID: `concept:${parentConceptName}`,
                 TargetEntityName: 'MJ: Graph Concepts',
-                TargetRecordID: parentConceptID,
+                TargetRecordID: conceptRecordPlaceholder,
                 Weight: 0.9,
-                Source: 'Inferred',
+                Confidence: 0.85,
+                Description: `Parent concept '${parentConceptName}' is broader than '${conceptName}'.`,
             });
         }
 
         // 3. Schema & Operational Grounding edges (when GroundingMode !== 'none')
-        if (OverlayConfig.GroundingMode !== 'none' && GroundingCandidates.length > 0) {
-            const groundingEdges = this.inferSchemaGroundingEdges(
-                concept,
-                Cluster,
-                GroundingCandidates,
-                OverlayConfig.GroundingMode,
-            );
-            edges.push(...groundingEdges);
+        if (OverlayConfig.GroundingMode !== 'none' && cluster.GroundingMatches.length > 0) {
+            for (const match of cluster.GroundingMatches) {
+                const isOperational =
+                    match.Target.EntityName === 'MJ: AI Skills' || match.Target.EntityName === 'MJ: Actions';
+                if (OverlayConfig.GroundingMode === 'schema-and-queries' && isOperational) {
+                    continue;
+                }
+                edges.push({
+                    EdgeTypeName: match.SuggestedEdgeType,
+                    SourceEntityName: 'MJ: Graph Concepts',
+                    SourceRecordID: conceptRecordPlaceholder,
+                    TargetEntityName: match.Target.EntityName,
+                    TargetRecordID: match.Target.RecordID,
+                    Weight: Number(Math.min(1, match.MatchScore).toFixed(4)),
+                    Confidence: Number(Math.min(1, match.MatchScore).toFixed(4)),
+                    Description: `Concept '${conceptName}' ${match.SuggestedEdgeType.toLowerCase()} ${match.Target.EntityName} '${match.Target.Name}'.`,
+                    Attributes: {
+                        targetName: match.Target.Name,
+                        matchScore: match.MatchScore,
+                    },
+                });
+            }
         }
 
-        // 4. Contradiction detection edges
-        if (OverlayConfig.DetectContradictions && Cluster.DetectedConflicts.length > 0) {
-            for (const conflict of Cluster.DetectedConflicts) {
+        // 4. Contradiction detection edges across chunks of differing authority tiers
+        if (cluster.PotentialConflicts.length > 0) {
+            for (const conflict of cluster.PotentialConflicts) {
                 edges.push({
                     EdgeTypeName: 'Contradicts',
-                    Direction: 'Outbound',
+                    SourceEntityName: 'MJ: Content Item Chunks',
+                    SourceRecordID: conflict.LowerAuthorityChunkID,
                     TargetEntityName: 'MJ: Content Item Chunks',
-                    TargetRecordID: conflict.LowerAuthorityChunkID,
+                    TargetRecordID: conflict.HigherAuthorityChunkID,
                     Weight: 1.0,
-                    Source: 'Inferred',
-                    Properties: {
-                        subjectTokens: conflict.SubjectTokens,
+                    Confidence: 0.9,
+                    Description: conflict.Reason,
+                    Attributes: {
                         higherAuthorityChunkID: conflict.HigherAuthorityChunkID,
                         higherAuthorityTier: conflict.HigherAuthorityTier,
-                        higherAuthorityValue: conflict.HigherAuthorityValue,
                         lowerAuthorityChunkID: conflict.LowerAuthorityChunkID,
                         lowerAuthorityTier: conflict.LowerAuthorityTier,
-                        lowerAuthorityValue: conflict.LowerAuthorityValue,
-                        summary: conflict.Summary,
+                        reason: conflict.Reason,
                     },
                 });
             }
@@ -198,19 +194,6 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
         };
     }
 
-    private extractPromptRunner(
-        parameters: Record<string, unknown> | undefined,
-    ): ConceptSynthesisPromptRunner | undefined {
-        if (!parameters) {
-            return undefined;
-        }
-        const candidate = parameters['PromptRunner'];
-        if (typeof candidate === 'function') {
-            return candidate as ConceptSynthesisPromptRunner;
-        }
-        return undefined;
-    }
-
     private buildExcerpt(text: string, maxLength: number): string {
         const normalized = text.replace(/\s+/g, ' ').trim();
         if (normalized.length <= maxLength) {
@@ -221,17 +204,18 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
 
     private buildDescription(
         cluster: ConceptSeedCluster,
-        sortedChunks: ConceptSeedCluster['SupportingChunks'],
-        existing?: ExistingGraphConceptSummary,
+        sortedChunks: ConceptSeedCluster['Chunks'],
     ): string {
-        if (existing?.Description && existing.Description.trim().length > 0) {
-            return existing.Description;
+        if (
+            cluster.MatchedExistingConcept?.Description &&
+            cluster.MatchedExistingConcept.Description.trim().length > 0
+        ) {
+            return cluster.MatchedExistingConcept.Description;
         }
         const primaryChunk = sortedChunks[0];
         if (!primaryChunk) {
-            return `${cluster.CanonicalName} (${cluster.InferredConceptType}) synthesized from content pipeline.`;
+            return `${cluster.ConceptName} (${cluster.InferredConceptType}) synthesized from content pipeline.`;
         }
-        // Take first 1-2 sentences of the highest-authority chunk
         const cleanText = primaryChunk.Text.replace(/\s+/g, ' ').trim();
         const sentences = cleanText.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
         const summary = sentences.slice(0, 2).join(' ');
@@ -240,13 +224,15 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
 
     private buildSpecification(
         cluster: ConceptSeedCluster,
-        sortedChunks: ConceptSeedCluster['SupportingChunks'],
-        existing?: ExistingGraphConceptSummary,
+        sortedChunks: ConceptSeedCluster['Chunks'],
     ): string {
         const sections: string[] = [];
 
-        if (existing?.Specification && existing.Specification.trim().length > 0) {
-            sections.push(existing.Specification.trim());
+        if (
+            cluster.MatchedExistingConcept?.Specification &&
+            cluster.MatchedExistingConcept.Specification.trim().length > 0
+        ) {
+            sections.push(cluster.MatchedExistingConcept.Specification.trim());
         }
 
         sections.push(
@@ -257,28 +243,32 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
         );
 
         const topPassages = sortedChunks.slice(0, 3).map((chunk, idx) => {
-            const headingLabel = chunk.HeadingText ? ` (${chunk.HeadingText})` : '';
-            return `${idx + 1}. **[${chunk.AuthorityTier}]${headingLabel}**: ${this.buildExcerpt(chunk.Text, 300)}`;
+            const headingLabel = chunk.HeadingPath ? ` (${chunk.HeadingPath})` : '';
+            const tierLabel = chunk.AuthorityTier ?? cluster.HighestAuthorityTier;
+            return `${idx + 1}. **[${tierLabel}]${headingLabel}**: ${this.buildExcerpt(chunk.Text, 300)}`;
         });
 
         if (topPassages.length > 0) {
             sections.push(`### Authoritative Excerpts\n${topPassages.join('\n')}`);
         }
 
-        if (cluster.DetectedConflicts.length > 0) {
-            const conflictLines = cluster.DetectedConflicts.map(
-                (c) => `- **Conflict**: ${c.Summary}`,
-            );
+        if (cluster.PotentialConflicts.length > 0) {
+            const conflictLines = cluster.PotentialConflicts.map((c) => `- **Conflict**: ${c.Reason}`);
             sections.push(`### Detected Authority Conflicts\n${conflictLines.join('\n')}`);
         }
 
         return sections.join('\n\n');
     }
 
-    private mergeSynonyms(clusterSynonyms: string[], existingSynonyms: string[]): string[] {
-        const seen = new Set<string>();
+    private mergeSynonyms(
+        associatedTags: readonly string[],
+        existingSynonyms: readonly string[],
+        canonicalName: string,
+    ): string[] {
+        const canonicalLower = canonicalName.trim().toLowerCase();
+        const seen = new Set<string>([canonicalLower]);
         const merged: string[] = [];
-        for (const syn of [...existingSynonyms, ...clusterSynonyms]) {
+        for (const syn of [...existingSynonyms, ...associatedTags]) {
             const trimmed = syn.trim();
             const key = trimmed.toLowerCase();
             if (trimmed.length > 0 && !seen.has(key)) {
@@ -289,125 +279,19 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
         return merged;
     }
 
-    private resolveParentConceptID(
-        cluster: ConceptSeedCluster,
-        existingConcepts: ExistingGraphConceptSummary[],
-    ): string | null {
-        // Check if any supporting chunk has a multi-level breadcrumb where the parent segment matches an existing concept
-        for (const chunk of cluster.SupportingChunks) {
-            if (!chunk.HeadingText) {
+    private extractParentConceptName(sortedChunks: ConceptSeedCluster['Chunks']): string | null {
+        for (const chunk of sortedChunks) {
+            if (!chunk.HeadingPath) {
                 continue;
             }
-            const parts = chunk.HeadingText
+            const parts = chunk.HeadingPath
                 .split(/\s*(?:>|\/|»|::|—|--)\s*/)
                 .map((p) => p.replace(/^#+\s*/, '').trim())
                 .filter((p) => p.length > 0);
             if (parts.length >= 2) {
-                const parentSegment = parts[parts.length - 2].toLowerCase();
-                const match = existingConcepts.find(
-                    (c) =>
-                        c.ID !== cluster.MatchedExistingConceptID &&
-                        (c.Name.toLowerCase() === parentSegment ||
-                            c.Synonyms.some((s) => s.toLowerCase() === parentSegment)),
-                );
-                if (match) {
-                    return match.ID;
-                }
+                return parts[parts.length - 2];
             }
         }
         return null;
-    }
-
-    private inferSchemaGroundingEdges(
-        concept: SynthesizedGraphConcept,
-        cluster: ConceptSeedCluster,
-        candidates: SchemaGroundingCandidate[],
-        groundingMode: 'schema-only' | 'full-canon',
-    ): SynthesizedGraphEdge[] {
-        const conceptTokens = new Set<string>(
-            TokenizeConceptPhrase([concept.Name, ...concept.Synonyms].join(' ')),
-        );
-        // Also collect high-frequency tokens from supporting tags
-        for (const tag of cluster.SupportingTags) {
-            for (const t of TokenizeConceptPhrase(tag.TagName)) {
-                conceptTokens.add(t);
-            }
-        }
-
-        if (conceptTokens.size === 0) {
-            return [];
-        }
-
-        const edges: SynthesizedGraphEdge[] = [];
-        for (const candidate of candidates) {
-            const isOperationalTarget =
-                candidate.EntityName === 'MJ: Skills' || candidate.EntityName === 'MJ: Actions';
-            if (groundingMode === 'schema-only' && isOperationalTarget) {
-                continue;
-            }
-
-            const candidateTokens = TokenizeConceptPhrase(
-                `${candidate.DisplayName} ${candidate.Description ?? ''}`,
-            );
-            if (candidateTokens.length === 0) {
-                continue;
-            }
-
-            // Compute token overlap with emphasis on DisplayName tokens
-            const nameTokens = TokenizeConceptPhrase(candidate.DisplayName);
-            let matchedNameTokens = 0;
-            for (const nt of nameTokens) {
-                if (conceptTokens.has(nt)) {
-                    matchedNameTokens++;
-                }
-            }
-
-            if (nameTokens.length === 0 || matchedNameTokens === 0) {
-                continue;
-            }
-
-            const nameCoverage = matchedNameTokens / nameTokens.length;
-            if (nameCoverage < 0.5) {
-                continue;
-            }
-
-            const edgeTypeName = this.selectGroundingEdgeType(concept.ConceptType, candidate.EntityName);
-            edges.push({
-                EdgeTypeName: edgeTypeName,
-                Direction: 'Outbound',
-                TargetEntityName: candidate.EntityName,
-                TargetRecordID: candidate.RecordID,
-                Weight: Number(Math.min(1, 0.5 + nameCoverage * 0.5).toFixed(4)),
-                Source: 'Inferred',
-                Properties: {
-                    targetDisplayName: candidate.DisplayName,
-                    matchedNameCoverage: Number(nameCoverage.toFixed(4)),
-                },
-            });
-        }
-
-        return edges;
-    }
-
-    private selectGroundingEdgeType(
-        conceptType: SynthesizedGraphConcept['ConceptType'],
-        targetEntityName: SchemaGroundingCandidate['EntityName'],
-    ): string {
-        switch (targetEntityName) {
-            case 'MJ: Entities':
-                return 'Describes';
-            case 'MJ: Entity Fields':
-                return 'Defines';
-            case 'MJ: Queries':
-            case 'MJ: Entity Alternate Base Views':
-                return conceptType === 'Metric' ? 'Measures' : 'Defines';
-            case 'MJ: Skills':
-            case 'MJ: Actions':
-                return 'Implements';
-            default: {
-                const _exhaustive: never = targetEntityName;
-                return _exhaustive;
-            }
-        }
     }
 }

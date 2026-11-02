@@ -1,56 +1,73 @@
 /**
- * @fileoverview The `Graph` stage of the content pipeline.
+ * @fileoverview The `Graph` stage of the content pipeline (`GraphStage`).
  *
  * Runs as an opt-in GraphRAG / Canon overlay after `Segment`, `Tag`, and `Embed`:
- *   1. Resolves {@link ResolvedGraphOverlayConfig} from `ContentSource.Configuration.GraphOverlay`
- *      and stage options.
- *   2. Collects the item's `MJ: Content Item Chunks` and `MJ: Content Item Tags` (from working-record
- *      extensions when chained in-memory, or via `RunView` / {@link IGraphOverlayStore} when run standalone).
+ *   1. Resolves {@link ResolvedGraphOverlayConfig} from `ContentSource.Configuration` (`GraphOverlay`)
+ *      and `context.Configuration`.
+ *   2. Collects the item's `MJ: Content Item Chunks` and `MJ: Content Item Tags` (from `record.Children`
+ *      and `record.GetExtension('Tag', 'tags')` when chained in-memory, or via `RunView` /
+ *      {@link IGraphOverlayStore} when run standalone).
  *   3. Deterministically clusters chunks, headings, and tags into {@link ConceptSeedCluster}s via
  *      {@link ClusterContentIntoConceptSeeds}, including cross-chunk authority conflict detection.
  *   4. Synthesizes `MJ: Graph Concepts` and `MJ: Graph Edges` via {@link BaseConceptSynthesizer}.
  *   5. Persists or updates concepts and edges via {@link IGraphOverlayStore} (when not in dry-run/test mode)
- *      and attaches the full {@link GraphStageExecutionSummary} to `record.SetExtension('graphOverlay', ...)`.
+ *      and attaches the full {@link GraphStageExecutionSummary} to `record.SetExtension('Graph', 'summary', ...)`.
  *
  * @module @memberjunction/content-pipeline
  */
 
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { MJContentItemChunkEntity, MJContentItemTagEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import {
+    KnowledgeHubMetadataEngine,
+    MJContentItemChunkEntity,
+    MJContentItemTagEntity,
+    type MJGraphConceptEntity,
+    type MJGraphEdgeEntity,
+} from '@memberjunction/core-entities';
+import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseConceptSynthesizer,
     BasePipelineStage,
-    ChunkConceptInput,
     ClassifiedTag,
     ClusterContentIntoConceptSeeds,
+    ConceptClusteringResult,
     ConceptSeedCluster,
-    ConceptSynthesizeResult,
-    ExistingGraphConceptSummary,
+    ContentChunkSeedInput,
+    ExistingGraphConceptSeed,
     FatalStageError,
     GraphAuthorityTier,
+    Outcome,
     ResolvedGraphOverlayConfig,
     ResolveGraphOverlayConfig,
-    SchemaGroundingCandidate,
+    SchemaGroundingTarget,
     StageContext,
-    StageResult,
+    StageDeclaration,
+    StageOutcome,
+    SynthesizeConceptResult,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
-    TagConceptInput,
     WorkingRecord,
+    WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
-import { ResolveConfigurationForItem } from '../ContentSourceConfigurationResolver.js';
-import { CONTENT_ITEM } from '../EntityFieldMap.js';
-import { MANAGED_PROMPT_CONCEPT_SYNTHESIZER } from '../ManagedPromptConceptSynthesizer.js';
+import { MANAGED_PROMPT_CONCEPT_SYNTHESIZER, ManagedPromptConceptSynthesizer } from '../ManagedPromptConceptSynthesizer.js';
+import { TAG_STAGE } from './TagStage.js';
+
+void ManagedPromptConceptSynthesizer;
 
 /** Stage registration key for the Graph overlay stage. */
 export const GRAPH_STAGE = 'Graph';
 
 /**
+ * Governance lifecycle status shared by synthesized `MJ: Graph Concepts` and `MJ: Graph Edges`,
+ * derived directly from the generated entity field types (`MJGraphConceptEntity['Status']` and `MJGraphEdgeEntity['Status']`).
+ */
+export type GraphStageUpsertStatus = Extract<MJGraphConceptEntity['Status'], MJGraphEdgeEntity['Status']>;
+
+/**
  * Strongly-typed persistence & lookup adapter for `MJ: Graph Concepts` and `MJ: Graph Edges`.
  *
- * Decouples `GraphStage` from direct `BaseEntity.Get()` / `.Set()` calls before or after CodeGen
- * and allows deterministic in-memory stores in unit tests and dry runs.
+ * Decouples `GraphStage` from direct `BaseEntity.Get()` / `.Set()` calls and allows deterministic
+ * in-memory stores in unit tests and dry runs.
  */
 export interface IGraphOverlayStore {
     /** Load existing concepts in the target graph for deduplication and hierarchy resolution. */
@@ -58,35 +75,38 @@ export interface IGraphOverlayStore {
         graphID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<ExistingGraphConceptSummary[]>;
+    ): Promise<ExistingGraphConceptSeed[]>;
 
     /** Load candidate MJ schema/operational targets for grounding edges (`Describes`, `Defines`, `Measures`, `Implements`). */
-    LoadGroundingCandidates?(
+    LoadGroundingTargets?(
         groundingMode: ResolvedGraphOverlayConfig['GroundingMode'],
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<SchemaGroundingCandidate[]>;
+    ): Promise<SchemaGroundingTarget[]>;
 
-    /** Optional override for loading chunks when not present on the working record. */
+    /** Optional override for loading chunks when not present on `record.Children`. */
     LoadItemChunks?(
         contentItemID: string,
-        contentSourceID: string | null,
+        contentSourceID: string,
+        contentItemTitle: string | null,
+        tags: readonly string[],
         authorityTier: GraphAuthorityTier,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<ChunkConceptInput[]>;
+    ): Promise<ContentChunkSeedInput[]>;
 
-    /** Optional override for loading tags when not present on the working record. */
+    /** Optional override for loading tag names when not present on `record.GetExtension('Tag', 'tags')`. */
     LoadItemTags?(
         contentItemID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<TagConceptInput[]>;
+    ): Promise<string[]>;
 
     /** Upsert a synthesized concept into the target graph and return its persisted record ID. */
     UpsertConcept(
         graphID: string,
         concept: SynthesizedGraphConcept,
+        status: GraphStageUpsertStatus,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string>;
@@ -95,36 +115,29 @@ export interface IGraphOverlayStore {
     UpsertEdges(
         graphID: string,
         conceptID: string,
-        edges: SynthesizedGraphEdge[],
+        edges: readonly SynthesizedGraphEdge[],
+        status: GraphStageUpsertStatus,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<number>;
 }
 
 /**
- * Summary attached to `record.SetExtension('graphOverlay', summary)` after `GraphStage` executes.
+ * Summary attached to `record.SetExtension('Graph', 'summary', summary)` after `GraphStage` executes.
  */
 export interface GraphStageExecutionSummary {
     GraphID: string;
     OverlayConfig: ResolvedGraphOverlayConfig;
-    SeedClusters: ConceptSeedCluster[];
+    ClusteringResult: ConceptClusteringResult;
     SynthesizedResults: Array<{
         ConceptID: string;
+        Status: GraphStageUpsertStatus;
         Concept: SynthesizedGraphConcept;
-        Edges: SynthesizedGraphEdge[];
+        Edges: readonly SynthesizedGraphEdge[];
         PromptRunID: string | null;
     }>;
-    SkippedLockedClusters: string[];
     PersistedConceptCount: number;
     PersistedEdgeCount: number;
-}
-
-/** Shape of an in-memory segment placed on `record.GetExtension('segments')` by `SegmentStage`. */
-interface WorkingSegmentExtensionItem {
-    ID?: string;
-    Index?: number;
-    Text?: string;
-    Decorator?: string | null;
 }
 
 /**
@@ -133,6 +146,8 @@ interface WorkingSegmentExtensionItem {
 @RegisterClass(BasePipelineStage, GRAPH_STAGE)
 export class GraphStage extends BasePipelineStage {
     public readonly Name = GRAPH_STAGE;
+    public readonly Entity: WorkingRecordEntity = 'Content Item';
+    public readonly StatusField: string | null = null;
 
     private static _defaultStore: IGraphOverlayStore | null = null;
 
@@ -146,25 +161,33 @@ export class GraphStage extends BasePipelineStage {
         return GraphStage._defaultStore;
     }
 
-    public async Execute(record: WorkingRecord, context: StageContext): Promise<StageResult> {
-        const sourceID = (record.Current(CONTENT_ITEM.ContentSource) as string | undefined) ?? null;
-        const sourceConfig = await ResolveConfigurationForItem(record, context.Provider, context.ContextUser);
-        const overlayConfig = ResolveGraphOverlayConfig(sourceConfig, context.Configuration);
+    public override get Declaration(): StageDeclaration {
+        return {
+            Reads: ['Text', 'Title', 'Decorator'],
+            Writes: [],
+            ReadsExtensions: ['Pipeline.contentSourceID', `${TAG_STAGE}.tags`],
+            WritesExtensions: [`${GRAPH_STAGE}.summary`],
+        };
+    }
 
-        if (!overlayConfig.Enabled) {
-            return {
-                Skipped: true,
-                SkipReason: 'Graph overlay is disabled for this content source',
-            };
+    public async Run(record: WorkingRecord, context: StageContext): Promise<StageOutcome> {
+        if (context.Signal.aborted) {
+            return Outcome.Retry('cancelled before graph overlay started');
         }
 
-        if (!overlayConfig.TargetGraphID) {
-            return {
-                Skipped: true,
-                SkipReason: 'Graph overlay is enabled but no TargetGraphID is configured',
-            };
+        const sourceID = record.GetExtension<string>('Pipeline', 'contentSourceID') ?? null;
+        const { explicitGraphID, sourceConfig } = await this.resolveSourceConfiguration(sourceID, context);
+        const overlayConfig = ResolveGraphOverlayConfig(explicitGraphID, sourceConfig, context.Configuration);
+
+        if (!overlayConfig.EnableGraphOverlay) {
+            return Outcome.Skipped('Graph overlay is disabled for this content source');
         }
 
+        if (!overlayConfig.GraphID) {
+            return Outcome.Skipped('Graph overlay is enabled but no GraphID is configured');
+        }
+
+        const targetGraphID = overlayConfig.GraphID;
         const synthesizerKey = overlayConfig.SynthesizerKey || MANAGED_PROMPT_CONCEPT_SYNTHESIZER;
         const synthesizer = BaseConceptSynthesizer.Resolve(synthesizerKey);
         if (!synthesizer) {
@@ -172,141 +195,123 @@ export class GraphStage extends BasePipelineStage {
         }
 
         const store = this.resolveStore(context.Configuration);
+        const tagNames = await this.loadTagsForRecord(record, store, context);
         const chunks = await this.loadChunksForRecord(
             record,
-            sourceID,
-            overlayConfig.SourceAuthorityTier,
+            sourceID ?? 'unscoped-source',
+            tagNames,
+            overlayConfig.AuthorityTier,
             store,
             context,
         );
         if (chunks.length === 0) {
-            return {
-                Skipped: true,
-                SkipReason: 'Content Item has no chunks to build graph concepts from',
-            };
+            return Outcome.Skipped('Content Item has no chunks to build graph concepts from');
         }
 
-        const tags = await this.loadTagsForRecord(record, store, context);
         const existingConcepts = store
-            ? await store.LoadExistingConcepts(overlayConfig.TargetGraphID, context.ContextUser, context.Provider)
+            ? await store.LoadExistingConcepts(targetGraphID, context.ContextUser, context.Provider)
             : [];
-        const groundingCandidates =
-            store?.LoadGroundingCandidates && overlayConfig.GroundingMode !== 'none'
-                ? await store.LoadGroundingCandidates(
+        const groundingTargets =
+            store?.LoadGroundingTargets && overlayConfig.GroundingMode !== 'none'
+                ? await store.LoadGroundingTargets(
                       overlayConfig.GroundingMode,
                       context.ContextUser,
                       context.Provider,
                   )
                 : [];
 
-        const seedClusters = ClusterContentIntoConceptSeeds({
-            Chunks: chunks,
-            Tags: tags,
-            ExistingConcepts: existingConcepts,
-            MinSeedConfidence: overlayConfig.MinConceptConfidence,
+        const clusteringResult = ClusterContentIntoConceptSeeds(chunks, existingConcepts, {
+            taxonomyMode: overlayConfig.ConceptTaxonomyMode,
+            conceptMatchThreshold: overlayConfig.ConceptMatchThreshold,
+            maxNewConcepts: overlayConfig.MaxNewConceptsPerRun,
+            groundingTargets: groundingTargets,
         });
 
-        if (seedClusters.length === 0) {
-            return {
-                Skipped: true,
-                SkipReason: 'No concept seed clusters met the minimum confidence threshold',
-            };
+        if (clusteringResult.Clusters.length === 0) {
+            return Outcome.Skipped('No concept seed clusters matched or met the clustering criteria');
         }
 
         const synthesizedResults: GraphStageExecutionSummary['SynthesizedResults'] = [];
-        const skippedLockedClusters: string[] = [];
         let persistedConceptCount = 0;
         let persistedEdgeCount = 0;
 
-        // Maintain a live view of concepts so child clusters within the same batch can resolve parents
-        const liveExistingConcepts: ExistingGraphConceptSummary[] = [...existingConcepts];
+        const targetStatus: 'Proposed' | 'Approved' =
+            overlayConfig.ConceptTaxonomyMode === 'propose-only' ? 'Proposed' : 'Approved';
 
-        for (const cluster of seedClusters) {
+        for (const cluster of clusteringResult.Clusters) {
             if (context.Signal.aborted) {
-                break;
+                return Outcome.Retry('cancelled during concept synthesis');
             }
 
-            if (overlayConfig.ConceptTaxonomyMode === 'locked' && !cluster.MatchedExistingConceptID) {
-                skippedLockedClusters.push(cluster.CanonicalName);
+            const synthResult: SynthesizeConceptResult = await synthesizer.SynthesizeCluster({
+                GraphID: targetGraphID,
+                OverlayConfig: overlayConfig,
+                SeedCluster: cluster,
+                ContextUser: context.ContextUser,
+                Provider: context.Provider,
+                Signal: context.Signal,
+                ReportProgress: (m) => context.ReportProgress(m),
+            });
+
+            if (!synthResult.Concept) {
                 continue;
             }
 
-            const synthResult: ConceptSynthesizeResult = await synthesizer.Synthesize({
-                Cluster: cluster,
-                OverlayConfig: overlayConfig,
-                ExistingConcepts: liveExistingConcepts,
-                GroundingCandidates: groundingCandidates,
-                ContextUser: context.ContextUser,
-                Provider: context.Provider,
-                Parameters: overlayConfig.SynthesisParameters,
-            });
+            const conceptStatus: 'Proposed' | 'Approved' = synthResult.Concept.ExistingConceptID
+                ? 'Approved'
+                : targetStatus;
 
             let conceptID =
                 synthResult.Concept.ExistingConceptID ??
-                `ephemeral-concept:${overlayConfig.TargetGraphID}:${ synthResult.Concept.Name.toLowerCase().replace(/\s+/g, '-') }`;
+                `ephemeral-concept:${targetGraphID}:${synthResult.Concept.Name.toLowerCase().replace(/\s+/g, '-')}`;
 
             if (!context.IsTest && store) {
                 conceptID = await store.UpsertConcept(
-                    overlayConfig.TargetGraphID,
+                    targetGraphID,
                     synthResult.Concept,
+                    conceptStatus,
                     context.ContextUser,
                     context.Provider,
                 );
                 persistedConceptCount++;
 
                 const savedEdges = await store.UpsertEdges(
-                    overlayConfig.TargetGraphID,
+                    targetGraphID,
                     conceptID,
                     synthResult.Edges,
+                    conceptStatus,
                     context.ContextUser,
                     context.Provider,
                 );
                 persistedEdgeCount += savedEdges;
             }
 
-            // Make newly synthesized/updated concept visible to subsequent clusters in this run
-            const existingIdx = liveExistingConcepts.findIndex((c) => c.ID === conceptID);
-            const summaryEntry: ExistingGraphConceptSummary = {
-                ID: conceptID,
-                GraphID: overlayConfig.TargetGraphID,
-                Name: synthResult.Concept.Name,
-                ConceptType: synthResult.Concept.ConceptType,
-                Synonyms: synthResult.Concept.Synonyms,
-                AuthorityTier: synthResult.Concept.AuthorityTier,
-                Status: synthResult.Concept.Status,
-                Description: synthResult.Concept.Description,
-                Specification: synthResult.Concept.Specification,
-            };
-            if (existingIdx >= 0) {
-                liveExistingConcepts[existingIdx] = summaryEntry;
-            } else {
-                liveExistingConcepts.push(summaryEntry);
-            }
-
             synthesizedResults.push({
                 ConceptID: conceptID,
+                Status: conceptStatus,
                 Concept: synthResult.Concept,
                 Edges: synthResult.Edges,
-                PromptRunID: synthResult.PromptRunID,
+                PromptRunID: synthResult.PromptRunID ?? null,
             });
         }
 
         const summary: GraphStageExecutionSummary = {
-            GraphID: overlayConfig.TargetGraphID,
+            GraphID: targetGraphID,
             OverlayConfig: overlayConfig,
-            SeedClusters: seedClusters,
+            ClusteringResult: clusteringResult,
             SynthesizedResults: synthesizedResults,
-            SkippedLockedClusters: skippedLockedClusters,
             PersistedConceptCount: persistedConceptCount,
             PersistedEdgeCount: persistedEdgeCount,
         };
 
-        record.SetExtension('graphOverlay', summary);
-        context.ReportProgress(1, 1);
+        record.SetExtension(GRAPH_STAGE, 'summary', summary);
+        context.ReportProgress(
+            `synthesized ${synthesizedResults.length} concept(s) into graph '${targetGraphID}'`,
+        );
 
-        return {
-            Skipped: false,
-        };
+        return Outcome.Complete(
+            `synthesized ${synthesizedResults.length} concept(s) (${persistedConceptCount} persisted, ${persistedEdgeCount} edge(s))`,
+        );
     }
 
     private resolveStore(configuration: Record<string, unknown>): IGraphOverlayStore | null {
@@ -317,52 +322,90 @@ export class GraphStage extends BasePipelineStage {
         return GraphStage._defaultStore;
     }
 
+    private async resolveSourceConfiguration(
+        contentSourceID: string | null,
+        context: StageContext,
+    ): Promise<{ explicitGraphID: string | null; sourceConfig: Record<string, unknown> | undefined }> {
+        if (!contentSourceID) {
+            return { explicitGraphID: null, sourceConfig: undefined };
+        }
+        try {
+            const knowledge = KnowledgeHubMetadataEngine.Instance;
+            await knowledge.Config(false, context.ContextUser, context.Provider);
+            const source = knowledge.ContentSources.find((c) => UUIDsEqual(c.ID, contentSourceID));
+            if (!source) {
+                return { explicitGraphID: null, sourceConfig: undefined };
+            }
+            const parsedConfig = source.Configuration
+                ? (SafeJSONParse<Record<string, unknown>>(source.Configuration) ?? undefined)
+                : undefined;
+            return {
+                explicitGraphID: source.GraphID ?? null,
+                sourceConfig: parsedConfig,
+            };
+        } catch {
+            return { explicitGraphID: null, sourceConfig: undefined };
+        }
+    }
+
     private async loadChunksForRecord(
         record: WorkingRecord,
-        contentSourceID: string | null,
+        contentSourceID: string,
+        tags: readonly string[],
         authorityTier: GraphAuthorityTier,
         store: IGraphOverlayStore | null,
         context: StageContext,
-    ): Promise<ChunkConceptInput[]> {
-        const itemID = record.Identity.ExistingRecordID ?? record.Identity.SourceKey;
-        const itemName = (record.Current(CONTENT_ITEM.Name) as string | undefined) ?? null;
+    ): Promise<ContentChunkSeedInput[]> {
+        const itemID = record.Identity.RecordID ?? record.Identity.EphemeralID;
+        const itemTitle = (record.Get('Title') as string | null) ?? null;
+        const itemDecorator = (record.Get('Decorator') as string | null) ?? itemTitle;
 
-        // 1. Check in-memory segments extension (when chained right after SegmentStage)
-        const extensionSegments = record.GetExtension<WorkingSegmentExtensionItem[]>('segments');
-        if (Array.isArray(extensionSegments) && extensionSegments.length > 0) {
-            return extensionSegments
-                .filter((seg) => typeof seg.Text === 'string' && seg.Text.trim().length > 0)
-                .map((seg, idx) => ({
-                    ChunkID: seg.ID ?? `${itemID}:chunk:${seg.Index ?? idx}`,
-                    ContentItemID: itemID,
-                    ContentSourceID: contentSourceID,
-                    Text: seg.Text ?? '',
-                    HeadingText: seg.Decorator ?? itemName,
-                    AuthorityTier: authorityTier,
-                    ChunkIndex: seg.Index ?? idx,
-                }));
+        // 1. Check in-memory child chunk WorkingRecords (populated when chained after SegmentStage)
+        const childChunks = record.Children.filter((child) => child.Identity.Entity === 'Content Item Chunk');
+        if (childChunks.length > 0) {
+            return childChunks
+                .map((child, idx) => {
+                    const text = (child.Get('Text') as string | null) ?? '';
+                    const decorator = (child.Get('Decorator') as string | null) ?? itemDecorator;
+                    const cols = child.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
+                    const seq = typeof cols?.Sequence === 'number' ? cols.Sequence : idx;
+                    return {
+                        ChunkID: child.Identity.RecordID ?? child.Identity.EphemeralID,
+                        ContentItemID: itemID,
+                        ContentSourceID: contentSourceID,
+                        ContentItemTitle: itemTitle,
+                        Text: text,
+                        HeadingPath: decorator,
+                        Sequence: seq,
+                        Tags: tags,
+                        AuthorityTier: authorityTier,
+                    };
+                })
+                .filter((c) => c.Text.trim().length > 0);
         }
 
         // 2. Delegate to store if it provides a custom chunk loader
-        if (store?.LoadItemChunks && record.Identity.ExistingRecordID) {
+        if (store?.LoadItemChunks && record.Identity.RecordID) {
             return store.LoadItemChunks(
-                record.Identity.ExistingRecordID,
+                record.Identity.RecordID,
                 contentSourceID,
+                itemTitle,
+                tags,
                 authorityTier,
                 context.ContextUser,
                 context.Provider,
             );
         }
 
-        // 3. Query persisted MJ: Content Item Chunks via RunView when an ExistingRecordID is present
-        if (record.Identity.ExistingRecordID) {
+        // 3. Query persisted MJ: Content Item Chunks via RunView when a RecordID is present
+        if (record.Identity.RecordID) {
             const rv = new RunView(context.Provider as never);
-            const escapedID = record.Identity.ExistingRecordID.replace(/'/g, "''");
+            const escapedID = record.Identity.RecordID.replace(/'/g, "''");
             const res = await rv.RunView<MJContentItemChunkEntity>(
                 {
                     EntityName: 'MJ: Content Item Chunks',
                     ExtraFilter: `ContentItemID = '${escapedID}'`,
-                    OrderBy: 'ItemSequence ASC',
+                    OrderBy: 'Sequence ASC',
                     ResultType: 'simple',
                 },
                 context.ContextUser,
@@ -372,26 +415,30 @@ export class GraphStage extends BasePipelineStage {
                     ChunkID: row.ID,
                     ContentItemID: row.ContentItemID,
                     ContentSourceID: contentSourceID,
+                    ContentItemTitle: itemTitle,
                     Text: row.Text,
-                    HeadingText: row.Decorator ?? itemName,
+                    HeadingPath: itemDecorator,
+                    Sequence: idx,
+                    Tags: tags,
                     AuthorityTier: authorityTier,
-                    ChunkIndex: row.ItemSequence ?? idx,
                 }));
             }
         }
 
         // 4. Fallback: if the record has extracted Text on it directly, treat it as a single chunk
-        const rawText = (record.Current(CONTENT_ITEM.Text) as string | undefined) ?? null;
+        const rawText = (record.Get('Text') as string | null) ?? null;
         if (rawText && rawText.trim().length > 0) {
             return [
                 {
-                    ChunkID: `${itemID}:chunk:0`,
+                    ChunkID: `${itemID}#chunk-0`,
                     ContentItemID: itemID,
                     ContentSourceID: contentSourceID,
+                    ContentItemTitle: itemTitle,
                     Text: rawText,
-                    HeadingText: itemName,
+                    HeadingPath: itemDecorator,
+                    Sequence: 0,
+                    Tags: tags,
                     AuthorityTier: authorityTier,
-                    ChunkIndex: 0,
                 },
             ];
         }
@@ -403,29 +450,22 @@ export class GraphStage extends BasePipelineStage {
         record: WorkingRecord,
         store: IGraphOverlayStore | null,
         context: StageContext,
-    ): Promise<TagConceptInput[]> {
-        const itemID = record.Identity.ExistingRecordID ?? record.Identity.SourceKey;
-
-        // 1. Check in-memory tags extension placed by TagStage
-        const extensionTags = record.GetExtension<ClassifiedTag[]>('tags');
+    ): Promise<string[]> {
+        // 1. Check in-memory tags extension placed by TagStage ('Tag', 'tags')
+        const extensionTags = record.GetExtension<ClassifiedTag[]>(TAG_STAGE, 'tags');
         if (Array.isArray(extensionTags) && extensionTags.length > 0) {
-            return extensionTags.map((t) => ({
-                ContentItemID: itemID,
-                TagName: t.Name,
-                Weight: t.Score,
-                ParentTagName: t.Parent ?? null,
-            }));
+            return extensionTags.map((t) => t.Name);
         }
 
         // 2. Delegate to store if it provides a custom tag loader
-        if (store?.LoadItemTags && record.Identity.ExistingRecordID) {
-            return store.LoadItemTags(record.Identity.ExistingRecordID, context.ContextUser, context.Provider);
+        if (store?.LoadItemTags && record.Identity.RecordID) {
+            return store.LoadItemTags(record.Identity.RecordID, context.ContextUser, context.Provider);
         }
 
         // 3. Query persisted MJ: Content Item Tags via RunView
-        if (record.Identity.ExistingRecordID) {
+        if (record.Identity.RecordID) {
             const rv = new RunView(context.Provider as never);
-            const escapedID = record.Identity.ExistingRecordID.replace(/'/g, "''");
+            const escapedID = record.Identity.RecordID.replace(/'/g, "''");
             const res = await rv.RunView<MJContentItemTagEntity>(
                 {
                     EntityName: 'MJ: Content Item Tags',
@@ -435,11 +475,7 @@ export class GraphStage extends BasePipelineStage {
                 context.ContextUser,
             );
             if (res.Success && Array.isArray(res.Results)) {
-                return res.Results.map((row) => ({
-                    ContentItemID: row.ItemID,
-                    TagName: row.Tag,
-                    Weight: row.Weight ?? 0.7,
-                }));
+                return res.Results.map((row) => row.Tag);
             }
         }
 

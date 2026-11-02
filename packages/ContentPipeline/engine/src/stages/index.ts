@@ -13,6 +13,7 @@ export * from './ExtractStage.js';
 export * from './TagStage.js';
 export * from './SegmentStage.js';
 export * from './EmbedStage.js';
+export * from './GraphStage.js';
 export * from './DeleteStage.js';
 
 /** Static import target that keeps the built-in stages out of the bundler's tree-shaker. */
