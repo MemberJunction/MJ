@@ -628,6 +628,28 @@ export interface LoopAgentTypePromptParams {
      * @default false
      */
     decisionDiscovery?: boolean;
+
+    /**
+     * Additional action names whose outputs should be classified as `'Untrusted'` for this agent,
+     * augmenting the built-in untrusted external action list. Untrusted action outputs are wrapped
+     * in `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the run as tainted.
+     * @default []
+     */
+    untrustedActionNames?: string[];
+
+    /**
+     * Action names explicitly exempted from the built-in untrusted external action list and treated
+     * as `'Trusted'` for this agent.
+     * @default []
+     */
+    trustedActionNames?: string[];
+
+    /**
+     * Explicit per-action output trust level overrides keyed by action name (`'Trusted' | 'SemiTrusted' | 'Untrusted'`).
+     * Takes precedence over `untrustedActionNames`, `trustedActionNames`, and the built-in default list.
+     * @default {}
+     */
+    actionTrustLevels?: Record<string, 'Trusted' | 'SemiTrusted' | 'Untrusted'>;
 }
 
 /**
@@ -704,5 +726,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1,
     clientToolResultMaxChars: -1,
-    decisionDiscovery: false
+    decisionDiscovery: false,
+    untrustedActionNames: [],
+    trustedActionNames: [],
+    actionTrustLevels: {}
 };

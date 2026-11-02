@@ -152,7 +152,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
     MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
-    ActionRunScopeIsBounded, type ActionRunScope
+    ActionRunScopeIsBounded, type ActionRunScope, type ActionOutputTrustLevel, type ActionErrorRecovery
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
@@ -247,7 +247,7 @@ import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
-import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData } from './client-tool-results';
 import {
     CanAgentOwnSubAgentConsults,
     DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
@@ -347,6 +347,10 @@ interface ActionResultSummary {
     aiDirectives?: AIDirective[];
     /** Set when the circuit breaker blocked the call without dispatching it. */
     breakerReason?: ActionCircuitBreakerReason;
+    /** Trust classification of the action's output ('Trusted' | 'SemiTrusted' | 'Untrusted'). */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Structured recovery hints returned on action failure. */
+    errorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -562,7 +566,13 @@ export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'identical-argum
  * the user's agent policy (`'policy'` — governance, not a parameter error, so the guidance must not tell the model
  * to adjust its arguments and retry), or a plain `'warning'`.
  */
-export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'warning';
+export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'non-retryable' | 'warning';
+
+/** Result codes that are structurally non-retryable (permission or run-scope refusals). */
+export const NON_RETRYABLE_RESULT_CODES: ReadonlySet<string> = new Set([
+    'PERMISSION_DENIED',
+    'RUN_SCOPE_UNSUPPORTED',
+]);
 
 /** Result code of a call the user's agent policy denies outright (`checkUserActionPolicy`). */
 export const POLICY_DENIED_RESULT_CODE = 'POLICY_DENIED';
@@ -839,6 +849,65 @@ export class BaseAgent {
      * @private
      */
     private _runScope: ActionRunScope | undefined;
+
+    /**
+     * External/untrusted data sources ingested during the current agent run (Primitive 2).
+     * Once non-empty, {@link IsRunTainted} is true for the remainder of the run and any memory
+     * notes written by the run land as `Status = 'Pending'` with taint provenance in `Comments`.
+     * @protected
+     */
+    protected _taintedSources: Array<{ stepNumber: number; sourceName: string; trustLevel: 'SemiTrusted' | 'Untrusted' }> = [];
+
+    /**
+     * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
+     * action or client-tool result.
+     */
+    public get IsRunTainted(): boolean {
+        return this._taintedSources.length > 0;
+    }
+
+    /**
+     * Read-only view of all `'Untrusted'` and `'SemiTrusted'` sources ingested during the current run.
+     */
+    public get TaintedSources(): ReadonlyArray<{ stepNumber: number; sourceName: string; trustLevel: 'SemiTrusted' | 'Untrusted' }> {
+        return this._taintedSources;
+    }
+
+    /**
+     * Default code-side set of actions whose output originates from external, unverified sources
+     * (Primitive 2 v1, DDL-free). Lowercase-normalized for case-insensitive matching; overridable
+     * per agent or run via `AgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`,
+     * `untrustedActionNames`).
+     * @protected
+     */
+    protected static readonly DEFAULT_UNTRUSTED_ACTION_NAMES: ReadonlySet<string> = new Set([
+        'web search',
+        'web page content',
+        'get my inbox messages',
+        'manage my email inbox and drafts',
+        'brave search',
+        'perplexity search',
+        'tavily search',
+        'http request',
+        'url metadata extractor',
+        'rss feed',
+        'slack webhook',
+        'teams webhook',
+        'execute mcp tool',
+        'list mcp tools',
+        'sync mcp tools',
+        'test mcp connection',
+    ]);
+
+    /**
+     * Context utilization threshold (fraction of the resolved token budget) required before
+     * mid-loop tool-argument compaction (`CompactAnsweredToolCallArguments`) and mid-loop
+     * message expiry (`pruneAndCompactExpiredMessages`) mutate earlier turns (Lesson 1 Vector 2).
+     * Keeping earlier turns untouched below this threshold preserves the provider's byte-exact
+     * prompt cache prefix across routine tool loops.
+     * @protected
+     */
+    protected static readonly MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD = 0.65;
 
     /**
      * Parameter-aware failure tracking per action name for the current agent run.
@@ -1280,6 +1349,9 @@ export class BaseAgent {
         if (POLICY_REFUSAL_RESULT_CODES.has(summary.resultCode)) {
             return 'policy';
         }
+        if (NON_RETRYABLE_RESULT_CODES.has(summary.resultCode) || summary.errorRecovery?.Retryable === false) {
+            return 'non-retryable';
+        }
         if (record && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
             return 'identical-arguments';
         }
@@ -1316,6 +1388,15 @@ export class BaseAgent {
         switch (this.classifyActionFailure(summary)) {
             case 'policy':
                 return this.formatPolicyRefusalDirective(summary);
+            case 'non-retryable': {
+                const suggestion = summary.errorRecovery?.RecoverySuggestion
+                    ? ` ${summary.errorRecovery.RecoverySuggestion}`
+                    : '';
+                const nextActions = summary.errorRecovery?.SuggestedNextActions?.length
+                    ? ` Suggested alternative actions: ${summary.errorRecovery.SuggestedNextActions.map(a => `\`${a}\``).join(', ')}.`
+                    : '';
+                return `[CRITICAL/NON_RETRYABLE_FAILURE] Action '${name}' failed with non-retryable error (${summary.resultCode}): "${summary.message}".${suggestion}${nextActions} DO NOT retry calling '${name}'; pivot to an alternative tool or inform the user.`;
+            }
             case 'audience':
                 return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
                     `returns could not be limited to what everyone in it may see ("${summary.message}"). It is not broken or misconfigured. ` +
@@ -1326,8 +1407,97 @@ export class BaseAgent {
                 return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${name}' has failed ${record?.totalConsecutiveFailures ?? ACTION_FAILURE_BUDGET} consecutive times: "${summary.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
             case 'identical-arguments':
                 return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${name}' failed again with the EXACT SAME arguments: "${summary.message}". Calling '${name}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
-            default:
-                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}". Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+            default: {
+                const suggestion = summary.errorRecovery?.RecoverySuggestion
+                    ? ` ${summary.errorRecovery.RecoverySuggestion}`
+                    : '';
+                const suggestedValues = summary.errorRecovery?.SuggestedValues?.length
+                    ? ` Valid alternatives: ${summary.errorRecovery.SuggestedValues.join(', ')}.`
+                    : '';
+                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}".${suggestion}${suggestedValues} Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+            }
+        }
+    }
+
+    /**
+     * Resolves the output trust classification for an action (Primitive 2 v1, DDL-free).
+     * Precedence:
+     * 1. `AgentTypePromptParams` overrides (`actionTrustLevels`, `trustedActionNames`, `untrustedActionNames`)
+     * 2. Explicit `actionResult.TrustLevel` returned by the action implementation
+     * 3. Code-side default untrusted action names ({@link DEFAULT_UNTRUSTED_ACTION_NAMES}) and webhook/MCP heuristics
+     * 4. `'Trusted'`
+     * @protected
+     */
+    protected resolveActionTrustLevel(
+        actionName: string,
+        actionEntity?: MJActionEntityExtended,
+        actionResult?: ActionResult,
+        params?: ExecuteAgentParams
+    ): ActionOutputTrustLevel {
+        const normalizedName = actionName.trim().toLowerCase();
+        const entityName = actionEntity?.Name?.trim().toLowerCase();
+
+        // 1. Check AgentTypePromptParams overrides (merged run params or per-run data override)
+        const promptParams = (params?.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Partial<LoopAgentTypePromptParams> | undefined;
+        if (promptParams) {
+            if (promptParams.actionTrustLevels && typeof promptParams.actionTrustLevels === 'object') {
+                for (const [key, level] of Object.entries(promptParams.actionTrustLevels)) {
+                    const normalizedKey = key.trim().toLowerCase();
+                    if ((normalizedKey === normalizedName || (entityName && normalizedKey === entityName))
+                        && (level === 'Trusted' || level === 'SemiTrusted' || level === 'Untrusted')) {
+                        return level;
+                    }
+                }
+            }
+            if (Array.isArray(promptParams.trustedActionNames)) {
+                const isExplicitlyTrusted = promptParams.trustedActionNames.some(name => {
+                    const n = String(name).trim().toLowerCase();
+                    return n === normalizedName || (entityName !== undefined && n === entityName);
+                });
+                if (isExplicitlyTrusted) {
+                    return 'Trusted';
+                }
+            }
+            if (Array.isArray(promptParams.untrustedActionNames)) {
+                const isExplicitlyUntrusted = promptParams.untrustedActionNames.some(name => {
+                    const n = String(name).trim().toLowerCase();
+                    return n === normalizedName || (entityName !== undefined && n === entityName);
+                });
+                if (isExplicitlyUntrusted) {
+                    return 'Untrusted';
+                }
+            }
+        }
+
+        // 2. Explicit trust level set on ActionResult / ActionResultSimple by the action itself
+        if (actionResult?.TrustLevel === 'Trusted' || actionResult?.TrustLevel === 'SemiTrusted' || actionResult?.TrustLevel === 'Untrusted') {
+            return actionResult.TrustLevel;
+        }
+
+        // 3. Default untrusted action set + webhook / MCP heuristics
+        if (BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(normalizedName)
+            || (entityName && BaseAgent.DEFAULT_UNTRUSTED_ACTION_NAMES.has(entityName))) {
+            return 'Untrusted';
+        }
+        const driverClass = actionEntity?.DriverClass?.trim() ?? '';
+        const categoryName = actionEntity?.Category?.trim() ?? '';
+        if (/\b(?:webhook|mcp)\b/i.test(actionName)
+            || (actionEntity?.Name && /\b(?:webhook|mcp)\b/i.test(actionEntity.Name))
+            || /(?:webhook|mcp)/i.test(driverClass)
+            || /\b(?:webhook|mcp)\b/i.test(categoryName)) {
+            return 'Untrusted';
+        }
+
+        return 'Trusted';
+    }
+
+    /**
+     * Records a tainted source ingested during the current agent run.
+     * @protected
+     */
+    protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: 'SemiTrusted' | 'Untrusted'): void {
+        if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
+            this._taintedSources.push({ stepNumber, sourceName, trustLevel });
         }
     }
 
@@ -2771,6 +2941,7 @@ export class BaseAgent {
             this._handoffResult = null;
             this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
+            this._taintedSources = [];
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -2833,6 +3004,12 @@ export class BaseAgent {
             // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
             const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
 
+            // Stage Phase 2 system message injections in isolated arrays so their prefix order is
+            // 100% deterministic regardless of Promise.all completion timing (Lesson 1 Vector 5).
+            const memoryStagedMessages: ChatMessage[] = [];
+            const ragStagedMessages: ChatMessage[] = [];
+            const discoveryStagedMessages: ChatMessage[] = [];
+
             // Positions matter: [0] is the config, [5] the stopped-run continuation, and [7] open sub-agent consults.
             const [config, , , , , stoppedRunContinuation, , openConsults] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
@@ -2843,7 +3020,7 @@ export class BaseAgent {
                     userId,
                     companyId,
                     params.contextUser,
-                    wrappedParams.conversationMessages,
+                    memoryStagedMessages,
                     runScope.EntityID,
                     runScope.RecordID,
                     runScope.Secondary,
@@ -2855,7 +3032,7 @@ export class BaseAgent {
                     typeof inputText === 'string' ? inputText : '',
                     params.agent,
                     params.contextUser,
-                    wrappedParams.conversationMessages,
+                    ragStagedMessages,
                     params.conversationMessages,
                     runScope.EntityID,
                     runScope.RecordID,
@@ -2875,11 +3052,19 @@ export class BaseAgent {
                 this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
-                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data),
+                this.InjectDecisionDiscovery(params.agent, params.contextUser, discoveryStagedMessages, params.data),
                 // If this run resumes a prior run that paused with FinalStep === 'Chat', reload any unanswered
                 // sub-agent consults so the caller's answer can be relayed back to the waiting sub-agent.
                 this.loadOpenConsults(wrappedParams)
             ]);
+
+            if (memoryStagedMessages.length > 0 || ragStagedMessages.length > 0 || discoveryStagedMessages.length > 0) {
+                wrappedParams.conversationMessages.unshift(
+                    ...memoryStagedMessages,
+                    ...ragStagedMessages,
+                    ...discoveryStagedMessages
+                );
+            }
 
             // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
             this.applyStoppedRunContinuation(wrappedParams, stoppedRunContinuation, continuationMessage);
@@ -6267,9 +6452,12 @@ export class BaseAgent {
         // Last gate before the history goes back to the model: no tool call may be left dangling.
         this.reconcileUnansweredToolCalls(params);
         if (this.GetNativeControlConfig(params).CompactToolArguments) {
-            const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
-            if (compacted > 0) {
-                this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+            const compactionBudget = this.resolveCompactionBudget(params, config);
+            if (compactionBudget.BoundedBy === 'Default' || this.isMidLoopCompactionThresholdReached(params)) {
+                const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
+                if (compacted > 0) {
+                    this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+                }
             }
         }
         promptParams.conversationMessages = params.conversationMessages;
@@ -11392,6 +11580,8 @@ The context is now within limits. Please retry your request with the recovered c
             companyId: params.companyId,
             verbose: params.verbose,
             provider: this.ProviderToUse,
+            isRunTainted: this.IsRunTainted,
+            taintedSources: this._taintedSources,
         };
     }
 
@@ -14721,6 +14911,31 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`## ${a.actionName} ${marker}`);
             lines.push(`**Result:** ${a.resultCode} — ${a.message || '(no message)'}`);
 
+            if (!a.success && a.errorRecovery) {
+                const er = a.errorRecovery;
+                if (er.Retryable !== undefined) {
+                    lines.push(`**Retryable:** ${er.Retryable ? 'Yes (adjust parameters before retrying)' : 'No (do not retry this action with the same goal)'}`);
+                }
+                if (er.RecoverySuggestion) {
+                    lines.push(`**How to Recover:** ${er.RecoverySuggestion}`);
+                }
+                if (er.SuggestedValues && er.SuggestedValues.length > 0) {
+                    lines.push(`**Did You Mean:** ${er.SuggestedValues.map(v => `\`${v}\``).join(', ')}`);
+                }
+                if (er.InvalidParams && er.InvalidParams.length > 0) {
+                    lines.push('**Invalid Parameters:**');
+                    for (const ip of er.InvalidParams) {
+                        lines.push(`• \`${ip.ParamName}\`: ${ip.Reason}`);
+                    }
+                }
+                if (er.ValidParameterExample) {
+                    lines.push(`**Valid Example:** \`${JSON.stringify(er.ValidParameterExample)}\``);
+                }
+                if (er.SuggestedNextActions && er.SuggestedNextActions.length > 0) {
+                    lines.push(`**Suggested Next Actions:** ${er.SuggestedNextActions.map(v => `\`${v}\``).join(', ')}`);
+                }
+            }
+
             // Format output params as bullet list. An exempt action's values go out verbatim.
             if (a.params && a.params.length > 0) {
                 const crush = !this._actionResultCrush?.exemptActions?.has(a.actionName);
@@ -14730,7 +14945,11 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            return lines.join('\n');
+            const formatted = lines.join('\n');
+            if (a.trustLevel === 'Untrusted' || a.trustLevel === 'SemiTrusted') {
+                return WrapUntrustedExternalData(formatted, `action:${a.actionName}`, a.trustLevel);
+            }
+            return formatted;
         }).join('\n\n');
     }
 
@@ -15192,6 +15411,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._templateEngineConfiguredForRun = false;
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
+        this._taintedSources = [];
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -19422,6 +19642,15 @@ The context is now within limits. Please retry your request with the recovered c
                 const fileOutputs = this.detectFileOutputs(outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
+                const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, actionResult, params);
+                if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
+                    this.recordTaintedSource(
+                        result.stepEntity?.StepNumber ?? (stepCount + 1),
+                        `action:${result.action.name}`,
+                        trustLevel
+                    );
+                }
+
                 return {
                     actionName: result.action.name,
                     success: isActionSuccess,
@@ -19432,8 +19661,11 @@ The context is now within limits. Please retry your request with the recovered c
                     resultCode: actionResult?.Result?.ResultCode || actionResult?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
                     message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
                     // Kept on failure too: an action's recovery guidance is most useful when it failed.
-                    aiDirectives: actionResult?.AIDirectives,
-                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined
+                    // Stripped on Untrusted actions (Primitive 2) so external payloads cannot inject high-priority AI directives.
+                    aiDirectives: trustLevel === 'Untrusted' ? undefined : actionResult?.AIDirectives,
+                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined,
+                    trustLevel,
+                    errorRecovery: actionResult?.ErrorRecovery,
                 };
             });
             
@@ -19740,12 +19972,32 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             );
 
+            const sessionTools = params.sessionID ? ClientToolRequestManager.Instance.GetSessionTools(params.sessionID) : [];
+            const appTools = (params.data?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined)?.Capabilities?.Tools ?? [];
+            const overrideTools = (params.data?.clientTools as ClientToolMetadata[] | undefined) ?? [];
+            const matchedClientToolMeta = [...overrideTools, ...sessionTools, ...appTools].find(
+                t => t?.Name?.trim().toLowerCase() === tool.Name.trim().toLowerCase()
+            );
+            const resolvedActionTrust = this.resolveActionTrustLevel(tool.Name, undefined, undefined, params);
+            const clientToolTrustLevel: ActionOutputTrustLevel =
+                resolvedActionTrust !== 'Trusted'
+                    ? resolvedActionTrust
+                    : (matchedClientToolMeta?.TrustLevel ?? 'Trusted');
+            if (clientToolTrustLevel === 'Untrusted' || clientToolTrustLevel === 'SemiTrusted') {
+                this.recordTaintedSource(
+                    stepEntity?.StepNumber ?? (stepCount + 1),
+                    `client-tool:${tool.Name}`,
+                    clientToolTrustLevel
+                );
+            }
+
             results.push({
                 ToolName: tool.Name,
                 Success: response.Success,
                 Result: response.Result,
                 Media: response.Media,
-                ErrorMessage: response.ErrorMessage
+                ErrorMessage: response.ErrorMessage,
+                TrustLevel: clientToolTrustLevel,
             });
         }
 
@@ -22723,6 +22975,37 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Evaluates whether the conversation's estimated token footprint has reached or exceeded
+     * {@link MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD} (65%) of the resolved context budget
+     * (Lesson 1 Vector 2). Below this threshold, mid-loop tool-argument compaction and message
+     * expiration are deferred so the provider's KV-cached prompt prefix remains byte-stable.
+     * @protected
+     */
+    protected isMidLoopCompactionThresholdReached(params: ExecuteAgentParams): boolean {
+        const messages = params?.conversationMessages;
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return false;
+        }
+        const budget = this.resolveCompactionBudget(params, this._agentConfig);
+        const maxTokens = budget.MaxTokens;
+        if (!maxTokens || maxTokens <= 0) {
+            return false;
+        }
+        let estimatedTokens = this.estimateConversationTokens(messages);
+        for (const msg of messages) {
+            const toolCalls = (msg as AgentChatMessage).toolCalls;
+            if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+                for (const call of toolCalls) {
+                    if (call?.arguments !== undefined) {
+                        estimatedTokens += this.estimateTokens(JSON.stringify(call.arguments));
+                    }
+                }
+            }
+        }
+        return estimatedTokens >= Math.floor(maxTokens * BaseAgent.MID_LOOP_COMPACTION_UTILIZATION_THRESHOLD);
+    }
+
+    /**
      * Prunes and compacts expired messages in the conversation based on configured expiration rules.
      * Processes messages in three phases: identification, compaction, and removal.
      *
@@ -22734,6 +23017,12 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         currentTurn: number
     ): Promise<void> {
+        // Lesson 1 Vector 2: during a live agent run (_agentRun !== null) without an explicit
+        // caller messageExpirationOverride, defer mid-loop message expiry until context utilization
+        // reaches the threshold so routine turns do not invalidate the provider's prompt cache.
+        if (this._agentRun !== null && !params.messageExpirationOverride && !this.isMidLoopCompactionThresholdReached(params)) {
+            return;
+        }
         const messagesToCompact: Array<{
             index: number;
             message: AgentChatMessage;

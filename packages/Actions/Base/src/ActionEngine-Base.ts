@@ -81,6 +81,39 @@ export interface AIDirective {
 }
 
 /**
+ * Trust classification for an action's output when returned to an AI agent.
+ * - `'Trusted'`: Internal structured data or platform-validated output (default).
+ * - `'SemiTrusted'`: Output that may contain user-authored or partner content and should be wrapped in a data envelope.
+ * - `'Untrusted'`: External content (web pages, search results, emails, webhooks, MCP tools) that must be wrapped in
+ *   `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the agent run as tainted.
+ */
+export type ActionOutputTrustLevel = 'Trusted' | 'SemiTrusted' | 'Untrusted';
+
+/**
+ * Structured recovery guidance returned by an action when it fails, enabling an AI agent
+ * to self-heal on retryable parameter errors or stop immediately on non-retryable failures.
+ */
+export interface ActionErrorRecovery {
+    /** Whether retrying the action with modified parameters can succeed in this run. */
+    Retryable: boolean;
+    /** Actionable human/LLM-readable explanation of how to recover or why retry is futile. */
+    RecoverySuggestion: string;
+    /** Optional fuzzy-matched candidate values (e.g., closest entity or field names). */
+    SuggestedValues?: string[];
+    /** Optional breakdown of specific parameters that failed validation. */
+    InvalidParams?: Array<{
+        ParamName: string;
+        Reason: string;
+        ExpectedFormat?: string;
+        AllowedValues?: string[];
+    }>;
+    /** Optional example of a valid parameter payload. */
+    ValidParameterExample?: Record<string, unknown>;
+    /** Optional names of alternative actions to call instead or beforehand. */
+    SuggestedNextActions?: string[];
+}
+
+/**
  * Class that has the result of the individual action execution and used by the engine or other caller
  */
 
@@ -112,6 +145,18 @@ export class ActionResultSimple {
     * (instruction, constraint, context, suggestion) and priority level.
     */
    public AIDirectives?: AIDirective[];
+
+   /**
+    * Optional trust level classification for the action's output.
+    * When `'Untrusted'` or `'SemiTrusted'`, the agent framework wraps the output
+    * in an `<untrusted_external_data>` envelope and tracks run taint.
+    */
+   public TrustLevel?: ActionOutputTrustLevel;
+
+   /**
+    * Optional structured error recovery guidance when `Success` is `false`.
+    */
+   public ErrorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -171,6 +216,18 @@ export class ActionResult {
     * Propagated from ActionResultSimple.AIDirectives returned by the action implementation.
     */
    public AIDirectives?: AIDirective[];
+
+   /**
+    * Optional trust level classification for the action's output.
+    * Propagated from ActionResultSimple.TrustLevel returned by the action implementation.
+    */
+   public TrustLevel?: ActionOutputTrustLevel;
+
+   /**
+    * Optional structured error recovery guidance when `Success` is `false`.
+    * Propagated from ActionResultSimple.ErrorRecovery returned by the action implementation.
+    */
+   public ErrorRecovery?: ActionErrorRecovery;
 }
 
 /**

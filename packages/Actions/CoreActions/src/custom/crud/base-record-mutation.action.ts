@@ -147,11 +147,30 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         const entityInfo = md.EntityByName(entityName);
 
         if (!entityInfo) {
+            const candidateEntities = Array.isArray((md as Partial<Pick<IMetadataProvider, 'Entities'>>).Entities)
+                ? (md.Entities as EntityInfo[]).map(e => e?.Name).filter((n): n is string => typeof n === 'string' && n.length > 0)
+                : [];
+            const suggestedEntities = this.findClosestMatches(entityName, candidateEntities, 5);
+            const didYouMeanSuffix = suggestedEntities.length > 0
+                ? `. Did you mean: ${suggestedEntities.join(', ')}?`
+                : '';
             return {
                 error: {
                     Success: false,
                     ResultCode: 'ENTITY_NOT_FOUND',
-                    Message: `Entity '${entityName}' not found in metadata`
+                    Message: `Entity '${entityName}' not found in metadata${didYouMeanSuffix}`,
+                    ErrorRecovery: {
+                        Retryable: true,
+                        RecoverySuggestion: suggestedEntities.length > 0
+                            ? `Entity '${entityName}' does not exist in metadata. Retry with one of the suggested entity names: ${suggestedEntities.join(', ')}.`
+                            : `Entity '${entityName}' does not exist in metadata. Verify the exact MemberJunction entity name before retrying.`,
+                        SuggestedValues: suggestedEntities.length > 0 ? suggestedEntities : undefined,
+                        InvalidParams: [{
+                            ParamName: 'EntityName',
+                            Reason: `Entity '${entityName}' was not found in metadata.`,
+                            AllowedValues: suggestedEntities.length > 0 ? suggestedEntities : undefined
+                        }]
+                    }
                 }
             };
         }
@@ -220,7 +239,11 @@ export abstract class BaseRecordMutationAction extends BaseAction {
             return {
                 Success: false,
                 ResultCode: 'PERMISSION_DENIED',
-                Message: `Permission denied accessing ${entityName} record`
+                Message: `Permission denied accessing ${entityName} record`,
+                ErrorRecovery: {
+                    Retryable: false,
+                    RecoverySuggestion: `The current user does not have permission to access this '${entityName}' record. Do not retry this operation.`
+                }
             };
         }
         return {
@@ -279,13 +302,114 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         if (unknown.length === 0) {
             return null;
         }
+        const updatable = this.updatableFieldNames(entityInfo);
+        const suggestedSet = new Set<string>();
+        const invalidParams = unknown.map(fieldName => {
+            const matches = this.findClosestMatches(fieldName, updatable, 3);
+            for (const m of matches) {
+                suggestedSet.add(m);
+            }
+            return {
+                ParamName: `Fields.${fieldName}`,
+                Reason: matches.length > 0
+                    ? `Field '${fieldName}' does not exist on '${entityInfo.Name}'. Did you mean '${matches[0]}'?`
+                    : `Field '${fieldName}' does not exist on '${entityInfo.Name}'.`,
+                AllowedValues: matches.length > 0 ? matches : updatable.slice(0, 10)
+            };
+        });
+        const suggestedFields = [...suggestedSet];
+        const didYouMeanClause = suggestedFields.length > 0
+            ? ` (did you mean: ${suggestedFields.join(', ')}?)`
+            : '';
         return {
             Success: false,
             ResultCode: 'INVALID_FIELD_NAMES',
             Message:
-                `Unknown field(s) for entity '${entityInfo.Name}': ${unknown.join(', ')}. ` +
-                `Valid updatable fields: ${this.updatableFieldNames(entityInfo).join(', ')}`
+                `Unknown field(s) for entity '${entityInfo.Name}': ${unknown.join(', ')}${didYouMeanClause}. ` +
+                `Valid updatable fields: ${updatable.join(', ')}`,
+            ErrorRecovery: {
+                Retryable: true,
+                RecoverySuggestion: suggestedFields.length > 0
+                    ? `Unknown field(s) ${unknown.map(f => `'${f}'`).join(', ')} on '${entityInfo.Name}'. Did you mean: ${suggestedFields.join(', ')}? Retry using valid updatable field names.`
+                    : `Unknown field(s) ${unknown.map(f => `'${f}'`).join(', ')} on '${entityInfo.Name}'. Retry using only valid updatable fields: ${updatable.join(', ')}.`,
+                SuggestedValues: suggestedFields.length > 0 ? suggestedFields : updatable.slice(0, 10),
+                InvalidParams: invalidParams
+            }
         };
+    }
+
+    /**
+     * Finds the closest matching candidate names for a mistyped entity or field name using
+     * normalized substring containment and Levenshtein edit distance.
+     */
+    protected findClosestMatches(target: string, candidates: readonly string[], maxSuggestions: number = 5): string[] {
+        const normTarget = target.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!normTarget || candidates.length === 0) {
+            return [];
+        }
+
+        const scored: Array<{ candidate: string; score: number; lengthDiff: number }> = [];
+        for (const candidate of candidates) {
+            const normCandidate = candidate.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!normCandidate) {
+                continue;
+            }
+            const distance = this.levenshteinDistance(normTarget, normCandidate);
+            const maxLen = Math.max(normTarget.length, normCandidate.length);
+            const editSimilarity = maxLen > 0 ? 1 - distance / maxLen : 0;
+            const isSubstring =
+                (normTarget.length >= 3 && normCandidate.includes(normTarget)) ||
+                (normCandidate.length >= 3 && normTarget.includes(normCandidate));
+            const score = isSubstring ? Math.max(editSimilarity, 0.75) : editSimilarity;
+
+            if (score >= 0.5 || (normTarget.length >= 4 && distance <= 2)) {
+                scored.push({
+                    candidate,
+                    score,
+                    lengthDiff: Math.abs(normTarget.length - normCandidate.length)
+                });
+            }
+        }
+
+        scored.sort((a, b) => {
+            if (b.score !== a.score) {
+                return b.score - a.score;
+            }
+            if (a.lengthDiff !== b.lengthDiff) {
+                return a.lengthDiff - b.lengthDiff;
+            }
+            return a.candidate.localeCompare(b.candidate);
+        });
+
+        return scored.slice(0, maxSuggestions).map(s => s.candidate);
+    }
+
+    /** Standard dynamic-programming Levenshtein edit distance between two normalized strings. */
+    private levenshteinDistance(a: string, b: string): number {
+        if (a === b) return 0;
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+
+        const prev = new Array<number>(b.length + 1);
+        const curr = new Array<number>(b.length + 1);
+        for (let j = 0; j <= b.length; j++) {
+            prev[j] = j;
+        }
+        for (let i = 1; i <= a.length; i++) {
+            curr[0] = i;
+            for (let j = 1; j <= b.length; j++) {
+                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                curr[j] = Math.min(
+                    prev[j] + 1,
+                    curr[j - 1] + 1,
+                    prev[j - 1] + cost
+                );
+            }
+            for (let j = 0; j <= b.length; j++) {
+                prev[j] = curr[j];
+            }
+        }
+        return prev[b.length];
     }
 
     /** Field names a caller may set: not read-only, not virtual, not part of the primary key. */
@@ -353,7 +477,13 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         return {
             Success: false,
             ResultCode: resultCode,
-            Message: message
+            Message: message,
+            ErrorRecovery: resultCode === 'PERMISSION_DENIED'
+                ? {
+                    Retryable: false,
+                    RecoverySuggestion: `The current user does not have permission to ${operation} this '${entityName}' record. Do not retry this operation.`
+                }
+                : undefined
         };
     }
 

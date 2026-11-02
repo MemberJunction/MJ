@@ -332,6 +332,8 @@ export interface ClientToolMetadata {
     Category?: string;
     /** Default timeout in ms for this specific tool (overrides agent default) */
     DefaultTimeoutMs?: number;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
 }
 
 /**
@@ -411,6 +413,8 @@ export interface ClientToolResultSummary {
     Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
 }
 
 /**
