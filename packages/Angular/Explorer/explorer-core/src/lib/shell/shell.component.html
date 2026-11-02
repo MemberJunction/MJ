@@ -3,6 +3,9 @@
        Consuming apps that added their own skip link should remove it on upgrade. -->
   <a class="mj-skip-link" href="#mj-main-content" (click)="skipToMainContent($event)">Skip to main content</a>
 
+  <!-- Diagnostic Recording Banner — inside the clipped shell container so its Stop control is visible -->
+  <mj-diagnostic-recording-banner></mj-diagnostic-recording-banner>
+
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -435,8 +438,7 @@
   </div>
 }
 
-<!-- Diagnostic Recording Banner & Report Problem Dialog -->
-<mj-diagnostic-recording-banner></mj-diagnostic-recording-banner>
+<!-- Report Problem Dialog -->
 <mj-diagnostic-report-problem-dialog
   [IsVisible]="DiagnosticDialogOpen"
   (Closed)="DiagnosticDialogOpen = false">

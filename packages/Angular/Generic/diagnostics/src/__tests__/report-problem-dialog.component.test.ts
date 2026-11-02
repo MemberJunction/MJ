@@ -55,4 +55,23 @@ describe('MJDiagnosticReportProblemDialogComponent', () => {
         dialog.ngOnDestroy();
         banner.ngOnDestroy();
     });
+    it('offers Stop & Package while a recording runs and stops it from the dialog', async () => {
+        const buildSpy = vi.spyOn(service, 'BuildClientBundle');
+        const dialog = runInInjectionContext(injector, () => new MJDiagnosticReportProblemDialogComponent());
+        dialog.ngOnInit();
+        expect(dialog.IsRecording).toBe(false);
+
+        service.StartRecording('rec-7', 'Standard');
+        expect(dialog.IsRecording).toBe(true);
+        const built = firstValueFrom(dialog.BundleBuilt);
+
+        dialog.OnStopRecording();
+        await built;
+
+        expect(service.CurrentRecordingState.isRecording).toBe(false);
+        expect(dialog.IsRecording).toBe(false);
+        expect(buildSpy).toHaveBeenCalledTimes(1);
+        expect(dialog.LastResult?.manifest.sessionId).toBe('rec-7');
+        dialog.ngOnDestroy();
+    });
 });

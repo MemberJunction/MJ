@@ -114,9 +114,15 @@ function errorText(err: unknown): string {
                     (click)="OnBuildSnapshot()">
                     {{ IsBuilding ? 'Building...' : 'Download .mjdiag Snapshot' }}
                 </button>
-                <button type="button" mjButton Variant="secondary" Size="md" (click)="OnStartRecording()">
-                    Start Live Recording
-                </button>
+                @if (IsRecording) {
+                    <button type="button" mjButton Variant="danger" Size="md" [disabled]="IsBuilding" (click)="OnStopRecording()">
+                        Stop &amp; Package Recording
+                    </button>
+                } @else {
+                    <button type="button" mjButton Variant="secondary" Size="md" (click)="OnStartRecording()">
+                        Start Live Recording
+                    </button>
+                }
                 <button type="button" mjButton Variant="outline" Size="md" (click)="OnClose()">
                     Cancel
                 </button>
@@ -158,6 +164,7 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
     private readonly diagnosticsService = inject(MJDiagnosticsService);
     private readonly cdr = inject(ChangeDetectorRef);
     private packageSub: Subscription | null = null;
+    private recordingSub: Subscription | null = null;
     private queuedPackage: ActiveRecordingState | null = null;
 
     public TicketNumber = '';
@@ -168,16 +175,24 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
     public ErrorMessage: string | null = null;
     public IsBuilding = false;
     public IsSubmitting = false;
+    /** True while a live recording runs; the dialog then offers Stop & Package instead of Start. */
+    public IsRecording = false;
 
     public ngOnInit(): void {
         this.packageSub = this.diagnosticsService.PackageRequests$.subscribe((state) => {
             void this.packageRecording(state);
+        });
+        this.recordingSub = this.diagnosticsService.RecordingState$.subscribe((state) => {
+            this.IsRecording = state.isRecording;
+            this.cdr.markForCheck();
         });
     }
 
     public ngOnDestroy(): void {
         this.packageSub?.unsubscribe();
         this.packageSub = null;
+        this.recordingSub?.unsubscribe();
+        this.recordingSub = null;
         this.queuedPackage = null;
     }
 
@@ -240,6 +255,12 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
             this.ErrorMessage = `Start recording failed: ${errorText(err)}`;
             this.cdr.markForCheck();
         }
+    }
+
+    /** Stops the running recording; the package request it raises builds and downloads the snapshot. */
+    public OnStopRecording(): void {
+        this.ErrorMessage = null;
+        this.diagnosticsService.StopAndPackageRecording();
     }
 
     /**
