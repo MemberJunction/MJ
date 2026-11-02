@@ -17601,7 +17601,7 @@
       "PowerRank": 19,
       "Description": "Alibaba Cloud's top-tier flagship Qwen model released April 27, 2026. Proprietary, approximately 1T parameter MoE with 262K token context window. Scores #1 on six coding benchmarks. Highest capability tier in the Qwen 3.6 family. Available via Alibaba's DashScope API.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 6,
       "InheritTypeModalities": true,
@@ -29112,7 +29112,7 @@
             "ProcessingType": "Realtime",
             "CacheReadPricePerUnit": 0.15,
             "CacheWritePricePerUnit": null,
-            "Comments": "Muse Spark Open on OpenRouter (meta/muse-spark-open): $1.25/$4.25 per 1M with 1M context, listed as released 2026-10-15. Together AI publishes the same $1.25/$4.25 with $0.15/1M cached input, and the cache-read figure here comes from that Together AI rate card rather than from OpenRouter, which did not publish one — treat it as indicative for this route. MaxOutputTokens (943,718) is top_provider.max_completion_tokens from a live read of openrouter.ai/api/v1/models on 2026-10-20, which also lists input_cache_read at $0.15/1M, confirming the cache-read figure for this route. A cheaper \"Contributor\" tier ($0.10/$0.20) exists on the Muse Spark line in exchange for letting Meta train on your traffic, with a 60 rpm cap; it is a separate SKU and is not modelled. OpenRouter was unreachable from the 2026-10-19 research session, so these figures come from its indexed listing page rather than a live read of /api/v1/models. Source: https://openrouter.ai/meta/muse-spark-open"
+            "Comments": "Muse Spark Open on OpenRouter (meta/muse-spark-open): $1.25/$4.25 per 1M with 1M context, listed as released 2026-10-15. Together AI publishes the same $1.25/$4.25 with $0.15/1M cached input; the cache-read figure was first taken from that Together AI rate card because OpenRouter's indexed listing page did not show one during the 2026-10-19 session. MaxOutputTokens (943,718) is top_provider.max_completion_tokens from a live read of openrouter.ai/api/v1/models on 2026-10-20, which also lists input_cache_read at $0.15/1M, confirming the cache-read figure for this route. A cheaper \"Contributor\" tier ($0.10/$0.20) exists on the Muse Spark line in exchange for letting Meta train on your traffic, with a 60 rpm cap; it is a separate SKU and is not modelled. OpenRouter was unreachable from the 2026-10-19 research session, so the input and output prices recorded that day came from its indexed listing page; the 2026-10-20 live read above supersedes that for MaxOutputTokens and cache read. Source: https://openrouter.ai/meta/muse-spark-open"
           },
           "primaryKey": {
             "ID": "DF04F33C-02C0-414A-8E25-E9612DF356F5"
@@ -29294,7 +29294,7 @@
     "fields": {
       "Name": "Muse Wonder",
       "PowerRank": 24,
-      "Description": "Meta's frontier reasoning model for complex personal and professional agentic tasks (snapshot and OpenRouter listing 2026-10-12). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video, audio and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter. Effort levels run from minimal to max.",
+      "Description": "Meta's frontier reasoning model for complex personal and professional agentic tasks (snapshot and OpenRouter listing 2026-10-12). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video, audio and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 6,

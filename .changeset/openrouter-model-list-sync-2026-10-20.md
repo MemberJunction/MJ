@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ai": patch
+"@memberjunction/ai": minor
 ---
 
 Sync MJ's OpenRouter routes against a live read of `openrouter.ai/api/v1/models` (2026-10-20).
