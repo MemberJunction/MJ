@@ -250,6 +250,7 @@ export class WorkspaceInitializerService {
         EntityName: 'MJ: Themes',
         ExtraFilter: selectedId ? `ID = '${selectedId}' AND Status = 'Active'` : "IsDefault = 1 AND Status = 'Active'",
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       });
       let theme = result.Success ? result.Results?.[0] : undefined;
@@ -260,6 +261,7 @@ export class WorkspaceInitializerService {
           EntityName: 'MJ: Themes',
           ExtraFilter: "IsDefault = 1 AND Status = 'Active'",
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object',
         });
         theme = result.Success ? result.Results?.[0] : undefined;

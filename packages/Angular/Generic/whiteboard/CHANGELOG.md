@@ -1,5 +1,26 @@
 # @memberjunction/ng-whiteboard
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- f8ddfdc: Realtime agents can now inspect, operate and call actions inside live whiteboard HTML widgets, and widget state persists. Three new tools (`Whiteboard_InspectWidget`, `Whiteboard_OperateWidget`, `Whiteboard_CallWidget`) run over a two-way bridge into the sandboxed iframe (the sandbox stays `allow-scripts` only). Widgets can register actions (`MJWhiteboard.onAction`) and save state (`setState`/`onRestore`); widgets that don't get automatic form state, so answers survive re-mounts, page switches, `UpdateContent` and session resume, while undo never rewinds them and they stay out of `ToJSON` (LiveKit sync and artifacts). Widget submit and interaction events carry an optional `Author` (`'agent'` when an agent's command caused them), and the channel no longer reports an agent's own submit back to it as the user's. Access is controlled by the channel config key `widgetAccess` (`full` | `inspect-only` | `off`), `persistWidgetState`, protected subclass hooks (`MaxWidgetAccess`, `ResolveWidgetAccess()`, `OnBeforeWidgetCommand()`), per-widget opt-outs, and exposure (`ReturnsChannelData: 'state'`).
+
+  Note for subclasses of `RealtimeWhiteboardChannel`: `ApplyAgentTool` now returns `string | Promise<string>` (board tools stay synchronous; the three widget tools are async). Code that assigns `super.ApplyAgentTool(...)` to a `string` should route `IsWhiteboardWidgetToolName(toolName)` calls straight to `super`; see the Realtime Channels Guide.
+
+- 17d1336: Whiteboard export emits item author, font weight and font family only from their literal sets, and board loading coerces those fields on persisted items, so a crafted shared board cannot inject markup into exported or printed HTML (CodeQL #366, #367; #5569).
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [4283a82]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ng-code-editor@6.2.0-edge.7
+  - @memberjunction/ng-markdown@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

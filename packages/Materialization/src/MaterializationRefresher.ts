@@ -1222,6 +1222,7 @@ export class MaterializationRefresher {
                 Fields: ['QueryID'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );

@@ -48,6 +48,7 @@ const REALTIME_GLOBAL_TOOL_OWNER = 'explorer.global';
 const REALTIME_SURFACE_TOOL_OWNER = 'explorer.surface';
 
 import { CarryAdditionalContext, SurfaceContextTracker } from './app-context-snapshot';
+import { IsStandaloneRoute } from './standalone-routes';
 
 /**
  * A surface tool result without its images (`Media`), for the realtime session: a voice model reads a
@@ -259,8 +260,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public set showValidationOnly(value) {
     this.ShowValidationOnly = value;
   }
-  /** True when the current URL is the OAuth callback route - used for conditional rendering */
+  /** True when the current URL is the OAuth callback route */
   public IsOAuthCallback = false;
+  /**
+   * True on a route that renders on its own, with no shell or login screen (the OAuth callback and the
+   * Excel add-in's connect page). Drives the template; follows navigation, since some identity providers
+   * return to the page through the router rather than by reloading it.
+   */
+  public IsStandaloneRoute = false;
 
   /** @deprecated Use {@link IsOAuthCallback}. */
   public get isOAuthCallback() {
@@ -285,6 +292,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
+
+  /**
+   * True when the active resource surface publishes `SuppressChatOverlay: true` in its agent
+   * context because it hosts its own right-edge conversation slide-in, preventing two right-edge
+   * chat entry points from appearing at the same time.
+   */
+  public get IsChatOverlaySuppressedBySurface(): boolean {
+    const additional = this.AppContextSnapshot?.AdditionalContext;
+    if (!additional || typeof additional !== 'object') {
+      return false;
+    }
+    const record = additional as Record<string, unknown>;
+    return record['SuppressChatOverlay'] === true;
+  }
+
 
   /**
    * Instance-config chrome flags, resolved once and cached. The getters below are
@@ -690,9 +712,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // channel can source video is decided at mint. Hosts that do not call this keep state-only perception.
     EnableChannelFrameCapture();
 
-    // Check if this is the OAuth callback route - used for conditional rendering in template
+    // Standalone routes (OAuth callback, Excel connect page) render without the shell or login screen.
     // Note: We still run setupAuth() to restore the user's session
     this.IsOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+    this.IsStandaloneRoute = IsStandaloneRoute(window.location.pathname, new URL(document.baseURI).pathname);
 
     // Resume sign-in when a picker choice required a provider switch (and therefore a reload),
     // so switching providers stays a single user action.
@@ -706,6 +729,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       )
       .subscribe((event) => {
         const url = (event as NavigationEnd).urlAfterRedirects || (event as NavigationEnd).url;
+        this.updateStandaloneRoute(url);
         const nowChatRoute = url.includes('/chat') || url.includes('/conversations');
         const activeConvoId = this.bridge.ActiveConversationID$.value;
         // Symmetric conversation handoff across the chat-route boundary, so a live call / chat
@@ -768,6 +792,15 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
     this.SetupAuth();
+  }
+
+  /** Re-evaluates {@link IsStandaloneRoute} after a navigation; router URLs never carry the base href. */
+  private updateStandaloneRoute(url: string): void {
+    const standalone = IsStandaloneRoute(url);
+    if (standalone !== this.IsStandaloneRoute) {
+      this.IsStandaloneRoute = standalone;
+      this.cdr.detectChanges();
+    }
   }
 
   ngOnDestroy() {

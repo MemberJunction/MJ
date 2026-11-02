@@ -184,6 +184,7 @@ export class DefaultAgentResolver {
                     EntityName: 'MJ: Applications',
                     ExtraFilter: `ID = '${applicationId}'`,
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                 },
                 contextUser

@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // empty catalog so the tests below exercise the tool set without a database.
 vi.mock('@memberjunction/aiengine', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
-    return { ...actual, AIEngine: { Instance: { AgentActions: [] } } };
+    return { ...actual, AIEngine: { Instance: { AgentActions: [], GetAgentConfigurationPresets: (): unknown[] => [] } } };
 });
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';

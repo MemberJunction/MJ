@@ -1,5 +1,167 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- 953086f: Chief of Staff cockpit: the Priorities & OKRs tab failed with `Invalid column name 'PersonID'` as soon as the signed-in user had a linked `MJ_BizApps_Common: People` record. `ResolvePersonTaskScope` now matches `MJ_BizApps_Tasks: Task Assignments` on the polymorphic assignee pair (`AssigneeEntityID` = the People entity, `AssigneeRecordID` = the person) and takes the People entity ID as a parameter; the cockpit resolves it through its provider and reports no linked person when the BizApps Common app is not installed.
+
+  The cockpit also falls back to an exact, case-insensitive match on the user's email when no People record is linked to their user, so an administrator-entered person works without a manual link.
+
+  The task scope now covers the whole tree of every root objective the person owns: milestones added under their objective by an administrator, a teammate or the agent load with it, whoever created them. Children of a task the person is only assigned to are not pulled in.
+
+  Chief of Staff prompt (metadata): the agent resolves the user's People record (`LinkedUserID`, then email) before reading or writing tasks, sets `CreatedByPersonID` on every task or issue it creates so the cockpit can show them, and, when no person exists, says so and offers to create one, deferring to an administrator on `PERMISSION_DENIED`. The built-in agents guide documents the People record as a setup step. The prompt also tells the user that a scheduled wake reports in the routine's own conversation and a notification rather than in the chat it was asked from, and no longer creates new recurring routines on its own at the end of a wake; the guide documents where wake output lands.
+
+  Chat area: a reply whose row had already settled could stay in the in-flight list, so the composer kept showing "<agent> is working" with a running timer and a Stop button long after the run finished (seen in the overlay after Regenerate-as-fork). Every reconcile path scanned the rows for `In-Progress`, so nothing ever looked at that ID again. The chat area now drops any in-flight ID whose row has settled: after a completion is handled, whatever the context check said after the row was loaded; when a settled row arrives through `OnMessageSent`; and before the reconnect scan.
+
+  A routine run's output is now reachable by click. The dispatcher's in-app notification carries the routine's `conversationId`; clicking it opens that conversation in the Chat app (a notification written before the field existed reads it off the routine, and a routine with no conversation opens in the Routines app). The Routines app's "Conversation" button, which Explorer never handled, deep-links into the Chat app the same way. The Chat app's Conversations resource loads a selected conversation the sidebar does not list (an application-scoped one, such as a wake thread) through the engine, so the title and pinned agent show.
+
+  Chief of Staff cockpit: every wake routine card has "Read Briefing", which opens the routine's conversation in a slide-in reader inside the cockpit (read-only, the embedded chat area), and "Open in Chat", which deep-links into the Chat app. Both are disabled until the routine has run once, since the conversation is created on the first run. The Overview tab's routine list gets the same "Read" button.
+
+  Chief of Staff cockpit: reloads itself when something it shows changes. MJAPI broadcasts every entity save and delete to browsers (a wake run creating an approval request included) as a `remote-invalidate` event; the cockpit now listens for its own entities, reloads once per burst, and defers the reload while its tab is detached.
+
+  Chief of Staff cockpit: a person assigned to a milestone now sees the objective it belongs to. The task scope adds the root above every assigned milestone (read off `RootParentID`), so the assignee's Priorities tab shows the objective card. The objective is shared context, the milestone list is not: the objective's owner (its creator, or a person assigned to the objective itself) sees every milestone, while anyone else sees only the milestones assigned to them, with a "Yours: n of m" note; progress always counts all milestones. Each objective card names its owner (the creator, from the Tasks view's `CreatedByPerson`) beside the people assigned to it. Objective cards and milestone rows show who is assigned, from `MJ_BizApps_Tasks: Task Assignments`, with the signed-in person's own rows highlighted.
+
+  Chief of Staff: to-dos and reminders. The prompt turns a request like "remind me to call Mom on Wednesday" into a General task with a due date (no objective fields) plus a one-shot wake at that time whose reply is the reminder itself. The cockpit Overview gets a "To-dos & Reminders" panel listing open root tasks of to-do types (General, Action Item, Follow-up, Reminder) soonest due first, with overdue and due-today marking and a tick control that marks the task Completed through the `Update Record` action.
+
+  Chief of Staff for regular users: a user with only the `UI` role could not complete onboarding because that role was read-only on `MJ: AI Agent User Policies`, so Configure Agent User Policy failed and the agent claimed to have kept the preferences "in durable memory", which nothing did. The same role could not create `MJ: AI Agent Requests`, so no approval could be raised for such a user. New metadata grants the UI role Create + Update on both entities (`metadata/entity-permissions/.chief-of-staff-permissions.json`). Two server-side entity subclasses keep the rows private: `MJAIAgentUserPolicyEntityServer` (new, in core-entities-server) lets a non-Owner user save only their own policy and defaults `UserID` to the context user on first save; `MJAIAgentRequestEntityServer` now lets a non-Owner user create requests only for themselves and update only requests that were already theirs, judged by the pre-save `RequestForUserID`. Owner-type users and the scheduler's system user are exempt. The prompt tells the agent to report a failed policy save plainly and never to claim the preferences were stored elsewhere.
+
+  Wake routines: "Wake Now" no longer spends a one-shot. It used to set `NextRunAt` to now, which made the dispatcher claim the routine on its next sweep, and a claimed one-shot is Disabled after it runs, so a reminder wanted tomorrow fired today and never again. The scheduling engine gains `UserRoutineDispatcherDriver.RunRoutineNow`, a manual-run path that skips the claim and the wake gate, and a `Run User Routine Now` action (metadata in `metadata/actions/.user-routine-actions.json`) that the cockpit's Wake Now now calls; the caller must own the routine, bookkeeping runs as the scheduler's system user and the target as the owner. The cockpit shows a spent one-shot as "Fired" with the time it ran instead of "Disabled", sorts it below the live schedule, hides Pause/Resume on it, and keeps fired wakes behind a "Show fired" toggle.
+
+  Chief of Staff email: a new outbound email could never become an approval. `Manage My Email Inbox and Drafts` had no send operation (only draft, reply and forward), the prompt named operations the action did not recognise, and the approval request was queued only after a mail provider and the mailbox gate had passed, so a blocked mailbox silently prevented the approval and the agent pasted a draft into the chat instead. The action gains `Send`, accepts the older operation names, and for any sending operation under a sending mode with `RequireApprovalForExternalComms` queues the approval before touching a provider (`APPROVAL_REQUIRED`); on the approved request it is called again with `ConfirmedApprovalRequestID` and only then resolves the provider, failing honestly (`NO_EMAIL_PROVIDER`) when none can act. Metadata declares `Send`, `ConfirmedApprovalRequestID`, `ApprovalRequestID` and the two result codes. The prompt tells the agent to send through the action rather than pre-empt it with a draft when the mailbox preflight looks blocked, and how to act on the approved request.
+
+  Chief of Staff cockpit: an approval request that carries an outbound email can be opened on its card. "View draft" shows To, CC, From, Subject and the body inline, read from the request's `Comments` JSON, and "Copy" puts the draft on the clipboard as plain text (headers, a blank line, the body) for pasting into a mail client. Requests that are not emails are unchanged.
+
+  Chief of Staff email: the provider chooser took the first Active provider named Gmail or Microsoft Graph and gave up when that provider's class was not loaded in the server, so a database with Gmail Active but only Graph and SendGrid installed could never draft or send ("No active communication provider is configured"). Active providers are now tried in preference order, skipping those this server cannot load, and the failure message names what was tried.
+
+  Agent user policies: the `AgentUserPolicyEngine` cache now follows the entity layer. A policy saved anywhere in the process (the cockpit's Governance tab through GraphQL, a script) replaces the cached copy, a delete evicts it, and a remote invalidation from another server clears the cache. Before this the agent kept running on the policy it first loaded until the API restarted, so a Governance edit (DraftOnly to Send on Behalf of User, say) showed on the page but never reached the agent.
+
+  User routines: a one-shot routine created through the entity layer with an explicit `NextRunAt` lost it when a schedule field had been written twice before the first save (for example a default cron cleared to null). After `NewRecord()` a field's first write also becomes its old value, so the cron read dirty while `NextRunAt` did not; the entity server recomputed the time, which for a one-shot with no cron is null, and the dispatcher then disabled the routine after its next run. On an unsaved record a non-null `NextRunAt` now counts as explicit. Found by the new IT22 check. `Run User Routine Now` also returns `ROUTINE_NOT_FOUND` instead of throwing when the caller cannot read the routine.
+
+  Review follow-ups: `Manage My Email Inbox and Drafts` returns `INVALID_OPERATION` for an operation it does not recognise instead of silently listing messages. In the cockpit the to-do done control is an `mjButton` icon button and the "Show fired" toggle is an `mj-filter-chip`.
+
+- 555a3f3: Add the Excel add-in's first release: a unified **Export ▾** toolbar menu across entity grids (both `(Default)` entity views and saved views) and query results grids offers **Open in Excel** alongside snapshot export, downloading a connected workbook that holds no rows and fills, in Excel, with what the person who opens it can see. Inside Excel, the MemberJunction task pane supports connecting to any MemberJunction server (via Office Dialog sign-in or external-browser encrypted connection-code handoff), browsing Applications, Entities, Saved Views, and Query Categories/Saved Queries with parameters directly from any workbook, and managing/refreshing all connected worksheets. New packages `@memberjunction/excel-addin` (workbook contract, typed `ExcelAddin.*` Remote Operations, encrypted sign-in handoff, the add-in pane) and `@memberjunction/excel-addin-server` (a Server Extension that serves the add-in and a per-host manifest, plus the operations' server bodies). Excel signs in through Explorer's new `office/connect` page, which Explorer renders on its own like the OAuth callback, and holds a per-user API key scoped to `view:run` and `query:run`. Off until a host configures the `ExcelAddinServerExtension`; see `guides/EXCEL_ADDIN_GUIDE.md`.
+- 42df19d: Explorer surfaces stop reporting state the server never sent:
+  - A client holding a metadata snapshot keeps serving it when the metadata status check cannot reach the server (connection refused, DNS failure, offline, or a gateway/timeout status), instead of failing with "System Error". Only a transport failure degrades this way (`IsTransportError` in `@memberjunction/core`; `SafeGraphQLError.IsTransportFailure` carries the verdict past the GraphQL error sanitizer); a server that answered — an access denial, a validation rejection — propagates as before.
+  - A run the server force-failed no longer keeps spinning, and an agent run that ended by asking the user a question (AwaitingFeedback) or is parked on a workflow (Paused) is no longer painted as a failure.
+  - A dashboard no longer reports 0% for a run of successes, and global search reports incomplete results through `EntitySearchProvider.OnIncompleteResults` and the log instead of dropping them silently (no UI shows the report yet).
+  - An app with more than 1000 entities shows all of them, and an unwarmed template cache no longer crashes the form that fixes it.
+  - Opening a record works on entities whose primary key is not called `ID`.
+  - List membership filters run on PostgreSQL for uuid and integer keys (`ListMembershipFilter` in `@memberjunction/core`).
+  - List sources resolve every match as the acting user, not the entity's UserViewMaxRows page.
+- 4ef13d6: Warn when magic-link signing keys are ephemeral outside local dev (and expose `MagicLinkKeyManager.IsEphemeral`); explain unregistered dashboard classes with the registered keys and likely causes via the new `ClassFactory.DescribeMissingRegistration`.
+- 19119a8: Replace CSS keyword colours (`white`, `darkblue`) with design tokens: text on brand-primary backgrounds uses `--mj-brand-on-primary`, text on status and muted backgrounds uses `--mj-text-inverse`, and link text uses `--mj-text-link`.
+- Updated dependencies [1419ba7]
+- Updated dependencies [7d0885a]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [1ea684f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [9d6f675]
+- Updated dependencies [3bace5a]
+- Updated dependencies [709f269]
+- Updated dependencies [0cd4b44]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [555a3f3]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [af9269e]
+- Updated dependencies [4a30c52]
+- Updated dependencies [0fb3649]
+- Updated dependencies [2c38278]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [b081ac9]
+- Updated dependencies [eedb293]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [5984aea]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [da449bb]
+- Updated dependencies [19119a8]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [f8ddfdc]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ng-realtime-media@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/ng-dashboards@6.2.0-edge.7
+  - @memberjunction/ng-conversations@6.2.0-edge.7
+  - @memberjunction/conversations-runtime@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.7
+  - @memberjunction/ng-base-application@6.2.0-edge.7
+  - @memberjunction/templates-base-types@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/excel-addin@6.2.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.7
+  - @memberjunction/ng-export-service@6.2.0-edge.7
+  - @memberjunction/ng-query-viewer@6.2.0-edge.7
+  - @memberjunction/ng-list-detail-grid@6.2.0-edge.7
+  - @memberjunction/ng-base-forms@6.2.0-edge.7
+  - @memberjunction/interactive-component-types@6.2.0-edge.7
+  - @memberjunction/ng-auth-services@6.2.0-edge.7
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.7
+  - @memberjunction/ng-artifacts@6.2.0-edge.7
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.7
+  - @memberjunction/ng-list-management@6.2.0-edge.7
+  - @memberjunction/ng-mj-livekit-room@6.2.0-edge.7
+  - @memberjunction/ng-shared-generic@6.2.0-edge.7
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.7
+  - @memberjunction/ng-file-storage@6.2.0-edge.7
+  - @memberjunction/ng-shared@6.2.0-edge.7
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.7
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.7
+  - @memberjunction/ng-base-types@6.2.0-edge.7
+  - @memberjunction/ng-composer@6.2.0-edge.7
+  - @memberjunction/ng-container-directives@6.2.0-edge.7
+  - @memberjunction/ng-conversation-offers@6.2.0-edge.7
+  - @memberjunction/ng-notifications@6.2.0-edge.7
+  - @memberjunction/ng-react@6.2.0-edge.7
+  - @memberjunction/ng-record-changes@6.2.0-edge.7
+  - @memberjunction/ng-record-selector@6.2.0-edge.7
+  - @memberjunction/ng-record-tags@6.2.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.7
+  - @memberjunction/ng-search@6.2.0-edge.7
+  - @memberjunction/ng-user-avatar@6.2.0-edge.7
+  - @memberjunction/communication-types@6.2.0-edge.7
+  - @memberjunction/entity-communications-client@6.2.0-edge.7
+  - @memberjunction/ng-feedback@6.2.0-edge.7
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.7
+  - @memberjunction/ng-markdown@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+  - @memberjunction/ng-word-cloud@6.2.0-edge.7
+  - @memberjunction/ng-pagination@6.2.0-edge.7
+  - @memberjunction/lists-base@6.2.0-edge.7
+  - @memberjunction/export-engine@6.2.0-edge.7
+  - @memberjunction/theme-engine@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Minor Changes

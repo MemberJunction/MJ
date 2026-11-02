@@ -639,6 +639,7 @@ export class DuplicateRecordDetector extends VectorBase {
             Fields: [...new Set([...entityInfo.PrimaryKeys.map(pk => pk.Name), ...nameFields.map(f => f.Name)])],
             ResultType: 'simple',
             MaxRows: candidates.length,
+            SkipTotalRowCount: true,
         }, contextUser);
         if (!result.Success) {
             LogError(`Duplicate entry check: could not confirm which ${entityInfo.Name} candidates are readable: ${result.ErrorMessage}`);
