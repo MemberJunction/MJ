@@ -22,11 +22,11 @@ The protocol's `innerValidation` is not read here: the inner origins are the for
 Every outer origin scores the finalist, the training-window mean (the gate's dummy), the naive and the seasonal-naive
 forecasts, each fitted on that origin's window (`temporal.backtest`), and every declared incumbent heuristic, read
 from the snapshot's incumbent-score column at the origin's test periods (as the tabular path reads it; a declared
-heuristic without that column fails at `baselines`). Naive, seasonal naive and the heuristics are the gate's simple
-set. With a `mase` primary score every member's errors are scaled by the origin's own in-sample seasonal-naive MAE;
-with `rmse` they are not scaled. The gate and
-every interval resample whole origins (block bootstrap by origin), which is why a forecast protocol must declare
-`block-bootstrap`; the Diebold-Mariano test of the model against seasonal naive is reported beside the gate's
+heuristic without that column fails at `baselines`). The declared naive, seasonal-naive and heuristic baselines are
+the gate's simple set (an undeclared naive is forecast and reported per origin, never gated). With a `mase` primary
+score every member's errors are scaled by the origin's own in-sample seasonal-naive MAE; with `rmse` they are not
+scaled. The gate and every interval resample whole origins (block bootstrap by origin), which is why a forecast
+protocol must declare `block-bootstrap`; the Diebold-Mariano test of the model against seasonal naive is reported beside the gate's
 comparisons whatever `pairedTest` declares. Residual ACF and Ljung-Box of the finalist at the final origin are
 reported when the protocol declares residual diagnostics.
 
@@ -357,8 +357,8 @@ def _heuristics(req: TrainerRequest, snap: SN.Snapshot, fit: _Fitter) -> List[_H
 
 @dataclass(frozen=True)
 class _Outer:
-    """The outer origins' scores, the gate's rows and per-member predictions, the gate's simple set (naive, seasonal
-    naive, then the heuristics), each declared baseline's member, and the origin-block groups."""
+    """The outer origins' scores, the gate's rows and per-member predictions, the gate's simple set (the declared
+    naive, seasonal-naive and heuristic baselines), each declared baseline's member, and the origin-block groups."""
 
     scored: List[T.OriginScores]
     y: FArr
@@ -388,8 +388,14 @@ def _score_outer(req: TrainerRequest, fit: _Fitter, design: _Design, spec: Candi
     members = {i: BASELINE_MEMBER[b.kind] for i, b in enumerate(req.protocol.baselines) if b.kind in BASELINE_MEMBER}
     members.update({hz.declared_index: hz.name for hz in heuristics})
     groups = [str(o.k) for o in scored for _ in o.origin.test]
-    return _Outer(scored, y, pred, list(SIMPLE_MEMBERS) + [hz.name for hz in heuristics], members, groups,
-                  accessed_at)
+    return _Outer(scored, y, pred, _simple_set(req, members), members, groups, accessed_at)
+
+
+def _simple_set(req: TrainerRequest, members: Dict[int, str]) -> List[str]:
+    """The gate's simple set: the member of every declared baseline other than the dummy, in declared order, each
+    once. The engine reads its simple members from the result's `simple` baselines, which are exactly these, so an
+    undeclared naive member never decides the sidecar's gate."""
+    return list(dict.fromkeys(members[i] for i in sorted(members) if req.protocol.baselines[i].kind != "dummy"))
 
 
 def _origin_results(scored: Sequence[T.OriginScores], s: _Series) -> List[RollingOriginResult]:
@@ -401,9 +407,9 @@ def _origin_results(scored: Sequence[T.OriginScores], s: _Series) -> List[Rollin
 
 
 def _gate(req: TrainerRequest, primary: scores.PrimaryScore, finalist: str, out: _Outer) -> GateRun:
-    """The publishing gate on the origins' rows: dummy = training-window mean, simple set = naive, seasonal naive and
-    the declared heuristics, each comparison a block bootstrap by origin at the protocol's margin and lower-bound
-    level."""
+    """The publishing gate on the origins' rows: dummy = training-window mean, simple set = the declared naive,
+    seasonal-naive and heuristic baselines, each comparison a block bootstrap by origin at the protocol's margin and
+    lower-bound level."""
     p = req.protocol
     return run_gate(out.y, primary.aggregate, finalist, out.pred[MODEL], out.pred[MEAN_MEMBER],
                     [(m, out.pred[m]) for m in out.simple], None, p.promotion.margin, p.intervals.resamples,

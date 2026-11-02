@@ -19,6 +19,7 @@ from scipy import stats
 from app import artifacts, artifacts_v2, calibration as CAL, evaluation as EV, forecast as FC, intervals as IV, scores
 from app import snapshot as SN, temporal as T, trainer as TR
 from app.baselines import NIL_UUID
+from app.gate import gate_decision
 from app.encoding import ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol, TrainerCompleted, TrainerFailed, TrainerRequest
@@ -769,6 +770,43 @@ def test_a_forecast_without_a_declared_dummy_fails_at_baselines(server: FileServ
                       [{"kind": "naive"}, {"kind": "seasonal-naive", "season": 12}])
     r = _failed(req)
     assert r.stage == "baselines" and "declares no dummy baseline" in r.message, r.message
+
+
+# The comparison-key name of each declared baseline kind (Core `GateRules.BaselineMemberName`).
+_MEMBER_NAME = {"naive": "naive", "seasonal-naive": "seasonalNaive", "glm": "glm", "one-feature": "oneFeature"}
+
+
+def _engine_gate(r: TrainerCompleted) -> tuple[str, str, str | None]:
+    """The engine's reading of a completed result without heuristics (Core `GateRules.StoredGateIntervalsFromResult`,
+    then the decision table): the simple members are the result's `simple` baselines, judged by their comparisons."""
+    scores_ = {_MEMBER_NAME[b.baseline.kind]: b.holdout.value for b in r.baselines if b.role == "simple"}
+    member_beats = {n: r.comparisons[f"{n}VsDummy"].beats for n in scores_}
+    best = min(sorted(scores_), key=lambda k: scores_[k]) if scores_ else None
+    beats_best = best is not None and r.comparisons[f"modelVs:{best}"].beats
+    delivered = r.finalist if r.finalist in scores_ else None
+    return gate_decision(r.comparisons["modelVsDummy"].beats, beats_best, member_beats, scores_, delivered)
+
+
+def _random_walk(n: int = 96, seed: int = 3) -> pd.DataFrame:
+    """One monthly random walk from January 2015 with a 12-month season too weak to matter: last month's value is the
+    best simple forecast, and the value twelve months back is a poor one."""
+    rng = np.random.default_rng(seed)
+    y = 100 + np.cumsum(rng.normal(size=n)) + 0.2 * np.sin(2 * np.pi * np.arange(n) / 12)
+    days = [f"{2015 + i // 12}-{i % 12 + 1:02d}-01" for i in range(n)]
+    return pd.DataFrame({"ID": [f"s{i}" for i in range(n)], "EntityKey": "series", "T": days, "Period": days,
+                         "Target": y})
+
+
+def test_a_forecast_gate_counts_only_the_declared_simple_baselines(server: FileServer) -> None:
+    """A protocol declaring [dummy, seasonal-naive] (valid on both sides): the sidecar's gate has no `naive` member,
+    so its decision is the one the engine reads from the result's baselines and comparisons."""
+    req = _with_proto(_forecast_request(server, _random_walk(), "fc-no-naive"), "baselines",
+                      [{"kind": "dummy", "name": "training-window-mean"}, {"kind": "seasonal-naive", "season": 12}])
+    r = _completed(req)
+    assert [b.baseline.kind for b in r.baselines] == ["dummy", "seasonal-naive"]
+    shipped = r.gate.shipped if r.gate.outcome == "keep-simple-baseline" else None
+    assert (r.gate.outcome, r.gate.branch, shipped) == _engine_gate(r)
+    assert "naiveVsDummy" not in r.comparisons and "modelVs:naive" not in r.comparisons
 
 
 # ------------------------------------------------------------------------------------------ entity panels ---------
