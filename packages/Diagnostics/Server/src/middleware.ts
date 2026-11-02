@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import type { ApolloServerPlugin } from '@apollo/server';
 import { RegisterClass } from '@memberjunction/global';
-import { GetDiagnosticContext, DiagnosticContext } from '@memberjunction/core';
+import { GetDiagnosticContext, DiagnosticContext, LogError, UserInfo } from '@memberjunction/core';
 import {
   BaseServerMiddleware,
   ServerMiddlewareContext
@@ -26,6 +26,8 @@ import {
 import { GetInMemoryDiagnosticBundle } from './remoteOperations.js';
 import { DiagnosticsSettings } from './settings.js';
 import { ConfigureIntakeFromSettings } from './intakeStartup.js';
+import { SetDiagnosticsApiRoute } from './apiRoute.js';
+import { RestoreActiveSessions } from './sessionStore.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 export function ParseTraceparentHeader(headerValue?: string): { traceId: string; spanId: string } {
@@ -106,15 +108,40 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
   private serverContext: ServerMiddlewareContext | undefined;
 
   /**
-   * Starts the session manager, loads the `Diagnostics.*` settings and configures intake from them.
-   * MJServer calls this after metadata and the user cache are loaded.
+   * Starts the session manager, loads the `Diagnostics.*` settings, configures intake from them and
+   * loads the active sessions. MJServer calls this after metadata and the user cache are loaded.
+   * When the settings fail to load, the error is logged and capture and intake stay off.
    */
   public override async Initialize(context?: ServerMiddlewareContext): Promise<void> {
     this.serverContext = context;
+    SetDiagnosticsApiRoute(context?.ApiRoute);
     DiagnosticSessionManager.Instance.Initialize({ enableConsoleTap: true, enablePolling: false });
     const systemUser = UserCache.Instance.GetSystemUser();
-    const settings = await DiagnosticsSettings.Load(systemUser);
+    const settings = await this.loadSettings(systemUser);
+    if (!settings) {
+      return;
+    }
     await ConfigureIntakeFromSettings(settings, systemUser);
+    await this.restoreSessions(systemUser);
+  }
+
+  private async loadSettings(systemUser: UserInfo | undefined): Promise<DiagnosticsSettings | null> {
+    try {
+      return await DiagnosticsSettings.Load(systemUser);
+    } catch (err) {
+      LogError(
+        `Diagnostics capture and intake are off: the Diagnostics settings could not be loaded: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return null;
+    }
+  }
+
+  private async restoreSessions(systemUser: UserInfo | undefined): Promise<void> {
+    try {
+      await RestoreActiveSessions(systemUser);
+    } catch (err) {
+      LogError(`Could not load the active diagnostic sessions: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /**
@@ -197,6 +224,9 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
 
   public override ConfigureExpressApp(app: ExpressApp, context?: ServerMiddlewareContext): void {
     this.serverContext = context ?? this.serverContext;
+    if (context) {
+      SetDiagnosticsApiRoute(context.ApiRoute);
+    }
     // 1. Single-use signed bundle download route
     app.get(
       this.route('/diagnostics/bundles/:bundleId/download'),
@@ -230,7 +260,9 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
           res.status(200).send(Buffer.from(received.decryptedZipBytes));
           return;
         }
-        res.status(404).json({ error: 'Bundle binary not found in memory cache' });
+        res.status(410).json({
+          error: 'The bundle bytes are no longer available on this instance; rebuild the bundle.'
+        });
       }
     );
 

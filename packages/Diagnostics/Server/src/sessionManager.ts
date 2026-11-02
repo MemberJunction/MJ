@@ -85,6 +85,9 @@ interface DownloadTokenClaims {
   nonce: string;
 }
 
+/** A chunk buffer taken out of memory, compressed and numbered, ready to save. */
+type DrainedChunk = ReturnType<DiagnosticSessionManager['DrainPendingBuffersForSession']>[number];
+
 const diagnosticAls = new AsyncLocalStorage<DiagnosticContext>();
 
 class ServerDiagnosticContextProvider implements IDiagnosticContextProvider {
@@ -179,10 +182,7 @@ export function SafeSerializeConsoleArgs(args: unknown[], maxBytes: number = 819
 }
 
 export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionManager> {
-  private static readonly MAX_ENDED_SESSIONS = 1000;
   private _activeSessions = new Map<string, ActiveDiagnosticSession>();
-  /** Sessions that stopped or expired in this process, kept so their owner can still be checked. */
-  private _endedSessions = new Map<string, ActiveDiagnosticSession>();
   private _chunkBuffers = new Map<string, PendingChunkBuffer>();
   private _sequenceCounters = new Map<string, number>();
   private _redeemedDownloadNonces = new Map<string, number>();
@@ -212,7 +212,6 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
 
   public ResetForTests(): void {
     this._activeSessions.clear();
-    this._endedSessions.clear();
     this._chunkBuffers.clear();
     this._sequenceCounters.clear();
     this._redeemedDownloadNonces.clear();
@@ -319,24 +318,18 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     if (!s) return undefined;
     if (s.status !== 'Active' || Date.now() >= s.endsAtMs) {
       s.status = 'Expired';
-      this.moveToEnded(s);
+      this._activeSessions.delete(s.id);
       return undefined;
     }
     return s;
   }
 
-  /** Returns a session that is active, or that stopped or expired in this process. */
+  /**
+   * Returns the session this process holds, even when its end time has passed.
+   * A session that ended is no longer held; its `MJ: Diagnostic Sessions` row is the record.
+   */
   public GetSessionRecord(sessionId: string): ActiveDiagnosticSession | undefined {
-    return this._activeSessions.get(sessionId) ?? this._endedSessions.get(sessionId);
-  }
-
-  private moveToEnded(session: ActiveDiagnosticSession): void {
-    this._activeSessions.delete(session.id);
-    this._endedSessions.set(session.id, session);
-    if (this._endedSessions.size > DiagnosticSessionManager.MAX_ENDED_SESSIONS) {
-      const oldest = this._endedSessions.keys().next().value;
-      if (oldest !== undefined) this._endedSessions.delete(oldest);
-    }
+    return this._activeSessions.get(sessionId);
   }
 
   public GetAllActiveSessions(): ActiveDiagnosticSession[] {
@@ -346,7 +339,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       if (s.status === 'Active' && now < s.endsAtMs) {
         out.push(s);
       } else {
-        this.moveToEnded(s);
+        this._activeSessions.delete(s.id);
       }
     }
     return out;
@@ -355,42 +348,37 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   public StopActiveSessionInMemory(sessionId: string): ActiveDiagnosticSession | undefined {
     const s = this._activeSessions.get(sessionId);
     if (s) {
-      s.status = 'Stopped';
-      this.moveToEnded(s);
+      s.status = Date.now() >= s.endsAtMs ? 'Expired' : 'Stopped';
+      this._activeSessions.delete(s.id);
     }
     return s;
   }
 
   /**
-   * Stage 1 (Pre-Auth HTTP): Evaluates Instance and BrowserSession scopes, or explicit session header.
+   * Stage 1 (Pre-Auth HTTP): Evaluates Instance and BrowserSession scopes.
+   * The explicit session header picks a session only when that session is active and targets
+   * this request before auth (the whole instance, or this browser session); otherwise it is ignored.
    */
   public MatchPreAuth(
     context: DiagnosticContext,
     explicitSessionId?: string,
     browserSessionId?: string
   ): ActiveDiagnosticSession | undefined {
-    if (explicitSessionId) {
-      const explicit = this.GetActiveSession(explicitSessionId);
-      if (explicit) {
-        this.attachSessionToContext(context, explicit);
-        return explicit;
-      }
+    const explicit = explicitSessionId ? this.GetActiveSession(explicitSessionId) : undefined;
+    const candidates = explicit ? [explicit, ...this.GetAllActiveSessions()] : this.GetAllActiveSessions();
+    const matched = candidates.find((s) => this.targetsRequestBeforeAuth(s, browserSessionId));
+    if (matched) {
+      this.attachSessionToContext(context, matched);
     }
-    for (const s of this.GetAllActiveSessions()) {
-      if (s.scopeType === 'Instance' && !s.companyId) {
-        this.attachSessionToContext(context, s);
-        return s;
-      }
-      if (
-        s.scopeType === 'BrowserSession' &&
-        browserSessionId &&
-        s.scope.browserSessionId === browserSessionId
-      ) {
-        this.attachSessionToContext(context, s);
-        return s;
-      }
+    return matched;
+  }
+
+  /** True when a session captures a request before auth: instance-wide (no tenant) or this browser session. */
+  private targetsRequestBeforeAuth(session: ActiveDiagnosticSession, browserSessionId?: string): boolean {
+    if (session.scopeType === 'Instance') {
+      return !session.companyId;
     }
-    return undefined;
+    return session.scopeType === 'BrowserSession' && Boolean(browserSessionId) && session.scope.browserSessionId === browserSessionId;
   }
 
   /**
@@ -605,15 +593,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     firstEntryAt: Date;
     lastEntryAt: Date;
   }> {
-    const drained: Array<{
-      source: MJDiagnosticSessionChunkEntity['Source'];
-      contentKind: ChunkContentKind;
-      sequence: number;
-      compressedData: Buffer;
-      entryCount: number;
-      firstEntryAt: Date;
-      lastEntryAt: Date;
-    }> = [];
+    const drained: DrainedChunk[] = [];
 
     for (const [key, buf] of this._chunkBuffers.entries()) {
       if (buf.sessionId !== sessionId || buf.entries.length === 0) {
@@ -660,34 +640,49 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         return 0;
       }
       let written = 0;
+      const failures: string[] = [];
       for (const item of drained) {
-        try {
-          const chunk = await md.GetEntityObject<MJDiagnosticSessionChunkEntity>(
-            'MJ: Diagnostic Session Chunks',
-            contextUser
-          );
-          if (!chunk) {
-            continue;
-          }
-          chunk.DiagnosticSessionID = sessionId;
-          chunk.Source = item.source;
-          chunk.HostInstanceLabel = this._hostInstanceLabel;
-          chunk.Sequence = item.sequence;
-          chunk.ContentKind = item.contentKind;
-          chunk.Data = item.compressedData.toString('base64');
-          chunk.EntryCount = item.entryCount;
-          chunk.FirstEntryAt = item.firstEntryAt;
-          chunk.LastEntryAt = item.lastEntryAt;
-          const saved = await chunk.Save();
-          if (saved) {
-            written++;
-          }
-        } catch (err) {
-          LogError('DiagnosticSessionManager.FlushSessionChunksToDatabase failed', undefined, err);
+        const failure = await this.saveChunk(md, sessionId, item, contextUser);
+        if (failure === null) {
+          written++;
+        } else {
+          failures.push(failure);
         }
+      }
+      if (failures.length > 0) {
+        LogError(
+          `Diagnostic session '${sessionId}': ${failures.length} of ${drained.length} chunk saves failed. First error: ${failures[0]}`
+        );
       }
       return written;
     });
+  }
+
+  /** Saves one drained chunk. Returns `null` on success, otherwise the error message. */
+  private async saveChunk(
+    md: IMetadataProvider,
+    sessionId: string,
+    item: DrainedChunk,
+    contextUser?: UserInfo
+  ): Promise<string | null> {
+    try {
+      const chunk = await md.GetEntityObject<MJDiagnosticSessionChunkEntity>('MJ: Diagnostic Session Chunks', contextUser);
+      chunk.DiagnosticSessionID = sessionId;
+      chunk.Source = item.source;
+      chunk.HostInstanceLabel = this._hostInstanceLabel;
+      chunk.Sequence = item.sequence;
+      chunk.ContentKind = item.contentKind;
+      chunk.Data = item.compressedData.toString('base64');
+      chunk.EntryCount = item.entryCount;
+      chunk.FirstEntryAt = item.firstEntryAt;
+      chunk.LastEntryAt = item.lastEntryAt;
+      if (await chunk.Save()) {
+        return null;
+      }
+      return chunk.LatestResult?.CompleteMessage ?? 'unknown error';
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
   }
 
   public async FlushAllPendingChunks(contextUser?: UserInfo): Promise<number> {

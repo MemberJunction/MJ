@@ -22,6 +22,9 @@ export const DIAGNOSTICS_SETTING_KEYS = {
 
 const keys = DIAGNOSTICS_SETTING_KEYS;
 
+/** False after a settings load failed and before the next one succeeds. */
+let settingsAvailable = true;
+
 /**
  * Typed view of the `Diagnostics.*` instance settings.
  * Each getter reads the current cached value and falls back to the seeded default.
@@ -33,9 +36,18 @@ export class DiagnosticsSettings {
     this.engine = engine;
   }
 
-  /** Makes sure the instance settings are loaded (a no-op when they are), then returns the settings. */
+  /**
+   * Makes sure the instance settings are loaded (a no-op when they are), then returns the settings.
+   * A failed load throws, and capture and intake read as disabled until a later load succeeds.
+   */
   public static async Load(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<DiagnosticsSettings> {
-    await InstanceConfigEngine.Instance.Config(false, contextUser, provider);
+    try {
+      await InstanceConfigEngine.Instance.Config(false, contextUser, provider);
+    } catch (err) {
+      settingsAvailable = false;
+      throw err;
+    }
+    settingsAvailable = true;
     return DiagnosticsSettings.Current();
   }
 
@@ -44,8 +56,9 @@ export class DiagnosticsSettings {
     return new DiagnosticsSettings(InstanceConfigEngine.Instance);
   }
 
+  /** False when the settings could not be loaded. */
   public get CaptureEnabled(): boolean {
-    return this.engine.GetBoolean(keys.CaptureEnabled, true);
+    return settingsAvailable && this.engine.GetBoolean(keys.CaptureEnabled, true);
   }
 
   public get SelfServiceRecording(): boolean {
@@ -78,8 +91,9 @@ export class DiagnosticsSettings {
     return this.positiveNumber(keys.RetentionDays, 14);
   }
 
+  /** False when the settings could not be loaded. */
   public get IntakeEnabled(): boolean {
-    return this.engine.GetBoolean(keys.IntakeEnabled, false);
+    return settingsAvailable && this.engine.GetBoolean(keys.IntakeEnabled, false);
   }
 
   public get IntakeStorageProviderID(): string {

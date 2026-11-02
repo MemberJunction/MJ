@@ -28,7 +28,8 @@ import {
   DiagnosticsGetBundlePreviewOutput,
   DiagnosticsSendBundleOperation,
   DiagnosticsSendBundleInput,
-  DiagnosticsSendBundleOutput
+  DiagnosticsSendBundleOutput,
+  MJDiagnosticBundleEntity
 } from '@memberjunction/core-entities';
 import {
   DiagnosticSessionManager,
@@ -38,6 +39,16 @@ import { DiagnosticIntakeService } from './intakeService.js';
 import { EncryptDiagnosticBundle } from '@memberjunction/diagnostics';
 import { DIAGNOSTICS_SETTING_KEYS, DiagnosticsSettings } from './settings.js';
 import { MJ_VERSION } from './version.js';
+import { EndSessionRow, FindSession, NewDiagnosticSession, SaveNewSession } from './sessionStore.js';
+import {
+  CreateLocalBundleRow,
+  LoadBundleRow,
+  MarkBundleFailed,
+  MarkBundleReady,
+  MarkBundleSending,
+  MarkBundleSent
+} from './bundleStore.js';
+import { BundleDownloadUrl, GetDiagnosticsApiRoute } from './apiRoute.js';
 
 function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
   if (!user) return true;
@@ -129,7 +140,7 @@ async function isSelfServiceAllowed(user: UserInfo | undefined, provider?: IMeta
  */
 async function authorizeSessionAccess(user: UserInfo, sessionId: string | undefined, provider?: IMetadataProvider): Promise<boolean> {
   if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', provider)) return true;
-  const session = sessionId ? DiagnosticSessionManager.Instance.GetSessionRecord(sessionId) : undefined;
+  const session = sessionId ? await FindSession(sessionId, user, provider) : undefined;
   if (!session || !isOwnSelfServiceSession(session, user)) return false;
   return isSelfServiceAllowed(user, provider);
 }
@@ -167,37 +178,35 @@ export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSess
     if (!settings.CaptureEnabled) {
       throw new Error(`Diagnostic capture is disabled on this instance (${DIAGNOSTICS_SETTING_KEYS.CaptureEnabled} is false).`);
     }
-    const sessionId = crypto.randomUUID();
+    const session = await SaveNewSession(this.newSession(input, user, settings), user, provider);
+    DiagnosticSessionManager.Instance.RegisterActiveSession(session);
+
+    return {
+      SessionID: session.id,
+      Status: 'Active',
+      StartedAt: new Date(session.startedAtMs).toISOString(),
+      EndsAt: new Date(session.endsAtMs).toISOString(),
+      ScrubLiterals: session.scrubLiterals
+    };
+  }
+
+  private newSession(input: DiagnosticsStartSessionInput, user: UserInfo, settings: DiagnosticsSettings): NewDiagnosticSession {
     const nowMs = Date.now();
     const durationMinutes = Math.min(Math.max(input.DurationMinutes ?? 15, 1), settings.MaxSessionMinutes);
-    const endsAtMs = nowMs + durationMinutes * 60_000;
-    const scrubLiterals = settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false);
-
-    const session: ActiveDiagnosticSession = {
-      id: sessionId,
-      name: input.Name || `Session-${sessionId.slice(0, 8)}`,
+    return {
+      name: input.Name || `Session-${new Date(nowMs).toISOString()}`,
       reason: input.Reason,
       status: 'Active',
       scopeType: input.ScopeType,
       scope: input.Scope ?? (input.ScopeType === 'Users' ? { userIds: [user.ID] } : {}),
       level: input.Level ?? 'Standard',
       categories: input.Categories ?? ['Logs', 'SQL', 'Spans', 'Network', 'Telemetry'],
-      scrubLiterals,
+      scrubLiterals: settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false),
       startedAtMs: nowMs,
-      endsAtMs,
+      endsAtMs: nowMs + durationMinutes * 60_000,
       maxBytes: input.MaxBytes ?? 52_428_800,
       createdByUserId: user.ID,
       bytesWritten: 0
-    };
-
-    DiagnosticSessionManager.Instance.RegisterActiveSession(session);
-
-    return {
-      SessionID: sessionId,
-      Status: 'Active',
-      StartedAt: new Date(nowMs).toISOString(),
-      EndsAt: new Date(endsAtMs).toISOString(),
-      ScrubLiterals: scrubLiterals
     };
   }
 }
@@ -223,6 +232,7 @@ export class DiagnosticsStopSessionServerOperation extends DiagnosticsStopSessio
       user,
       provider
     );
+    await EndSessionRow(input.SessionID, user, provider);
     return {
       SessionID: input.SessionID,
       Status: 'Stopped',
@@ -335,7 +345,10 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
       mgr.AppendToChunkBuffer(sessionId, 'Client', 'Telemetry', tel);
     }
 
-    void mgr.FlushSessionChunksToDatabase(sessionId, user, provider).catch(() => {});
+    // Without a session row the chunks stay in memory for BuildBundle; saving them would break the session foreign key.
+    if (input.SessionID) {
+      void mgr.FlushSessionChunksToDatabase(sessionId, user, provider).catch(() => {});
+    }
 
     return {
       SessionID: sessionId,
@@ -360,44 +373,78 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
     provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsBuildBundleOutput> {
+    const route = GetDiagnosticsApiRoute();
     const settings = await DiagnosticsSettings.Load(user, provider);
-    const bundleId = crypto.randomUUID();
     const scrubLiterals = settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false);
-
-    const assembled = await DiagnosticSessionManager.Instance.AssembleBundleDataFromChunks(
-      input.SessionID,
-      scrubLiterals,
-      undefined,
+    const session = input.SessionID ? await FindSession(input.SessionID, user, provider) : undefined;
+    const row = await CreateLocalBundleRow(
+      {
+        Name: input.Name ?? `Bundle-${new Date().toISOString()}`,
+        Description: input.Description,
+        SessionID: session?.id ?? null,
+        ScrubLiterals: scrubLiterals,
+        RetentionDays: settings.RetentionDays
+      },
       user,
       provider
     );
+    const item = await this.assembleIntoRow(row, input, scrubLiterals, user, provider);
+    inMemoryBundles.set(item.bundleId, item);
 
-    inMemoryBundles.set(bundleId, {
-      bundleId,
-      sessionId: input.SessionID,
-      name: input.Name ?? `Bundle-${bundleId.slice(0, 8)}`,
-      direction: 'Local',
-      status: 'Ready',
-      scrubLiterals,
-      sizeBytes: assembled.archiveBytes.byteLength,
-      sha256: assembled.sha256,
-      archiveBytes: assembled.archiveBytes,
-      manifest: assembled.manifest,
-      scrubReport: assembled.scrubReport,
-      findings: assembled.bundleData.findings as unknown as Array<Record<string, unknown>>
-    });
-
-    const downloadToken = DiagnosticSessionManager.Instance.MintDownloadToken(bundleId, user.ID);
-
+    const downloadToken = DiagnosticSessionManager.Instance.MintDownloadToken(item.bundleId, user.ID);
     return {
-      BundleID: bundleId,
+      BundleID: item.bundleId,
       Status: 'Ready',
-      SizeBytes: assembled.archiveBytes.byteLength,
-      SHA256: assembled.sha256,
-      FindingsCount: assembled.bundleData.findings.length,
+      SizeBytes: item.sizeBytes,
+      SHA256: item.sha256,
+      FindingsCount: item.findings.length,
       DownloadToken: downloadToken,
-      DownloadUrl: `/diagnostics/bundles/${bundleId}/download?token=${encodeURIComponent(downloadToken)}`
+      DownloadUrl: BundleDownloadUrl(route, item.bundleId, downloadToken)
     };
+  }
+
+  /** Assembles the bundle and marks its row `Ready`, or `Failed` with the reason when assembly fails. */
+  private async assembleIntoRow(
+    row: MJDiagnosticBundleEntity,
+    input: DiagnosticsBuildBundleInput,
+    scrubLiterals: boolean,
+    user: UserInfo,
+    provider: IMetadataProvider
+  ): Promise<InMemoryBundleStoreItem> {
+    try {
+      const assembled = await DiagnosticSessionManager.Instance.AssembleBundleDataFromChunks(
+        input.SessionID,
+        scrubLiterals,
+        undefined,
+        user,
+        provider
+      );
+      const item: InMemoryBundleStoreItem = {
+        bundleId: row.ID,
+        sessionId: input.SessionID,
+        name: row.Name,
+        direction: 'Local',
+        status: 'Ready',
+        scrubLiterals,
+        sizeBytes: assembled.archiveBytes.byteLength,
+        sha256: assembled.sha256,
+        archiveBytes: assembled.archiveBytes,
+        manifest: assembled.manifest,
+        scrubReport: assembled.scrubReport,
+        findings: assembled.bundleData.findings as unknown as Array<Record<string, unknown>>
+      };
+      await MarkBundleReady(row, {
+        SizeBytes: item.sizeBytes,
+        SHA256: item.sha256,
+        Manifest: item.manifest,
+        ScrubReport: item.scrubReport,
+        Findings: item.findings
+      });
+      return item;
+    } catch (err) {
+      await MarkBundleFailed(row, err instanceof Error ? err.message : String(err));
+      throw err;
+    }
   }
 }
 
@@ -436,9 +483,7 @@ export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBu
         Findings: local.findings,
         ReadmeText: `MemberJunction Diagnostic Bundle (${local.bundleId})\nSize: ${local.sizeBytes} bytes\nSHA-256: ${local.sha256}\nFindings: ${local.findings.length}`,
         DownloadToken: token,
-        DownloadUrl: token
-          ? `/diagnostics/bundles/${local.bundleId}/download?token=${encodeURIComponent(token)}`
-          : undefined
+        DownloadUrl: token ? BundleDownloadUrl(GetDiagnosticsApiRoute(), local.bundleId, token) : undefined
       };
     }
 
@@ -486,70 +531,27 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
 
     const settings = await DiagnosticsSettings.Load(user, provider);
     const collectorUrl = input.CollectorUrlOverride || settings.ExternalCollectorUrl;
-    let referenceId: string;
-
     if (collectorUrl) {
       assertExternalSendAllowed(settings, input.Destination);
-      const result = await DiagnosticSessionManager.Instance.SendBundleToCollector({
-        archiveBytes: local.archiveBytes,
-        bundleId: local.bundleId,
-        scrubLiterals: local.scrubLiterals,
-        collectorBaseUrl: collectorUrl,
-        ingestApiKey: process.env.MJ_DIAGNOSTICS_INGEST_API_KEY,
-        contactInfo: input.ContactInfo,
-        summary: input.Summary
-      });
-      referenceId = result.referenceId;
-    } else {
-      // No external collector URL configured: route through local DiagnosticIntakeService
-      // using the full X25519-HKDF-SHA256-AES256GCM encryption + 4-layer verification & malware scan pipeline
-      const intake = DiagnosticIntakeService.Instance;
-      if (!intake.Enabled) {
-        intake.Configure({ enabled: true });
-      }
-      const pk = await intake.GetPublicKeyDescriptor();
-      const plaintextSha256 = crypto.createHash('sha256').update(local.archiveBytes).digest('hex');
-      const encryptedBytes = await EncryptDiagnosticBundle(local.archiveBytes, {
-        recipientKeyId: pk.keyId,
-        recipientPublicKeyBase64: pk.publicKey,
-        recipientKeySignatureBase64: pk.signature,
-        senderEnvironmentId: DiagnosticSessionManager.Instance.InstallID,
-        manifestSha256: plaintextSha256
-      });
-      const encryptedSha256 = crypto.createHash('sha256').update(encryptedBytes).digest('hex');
-
-      const initiated = intake.InitiateBundleIntake({
-        installId: DiagnosticSessionManager.Instance.InstallID,
-        bundleId: local.bundleId,
-        formatVersion: 1,
-        mjVersion: MJ_VERSION,
-        scrubLiterals: local.scrubLiterals,
-        sizeBytes: encryptedBytes.byteLength,
-        plaintextSha256,
-        encryptedSha256,
-        keyId: pk.keyId,
-        summary: input.Summary,
-        contact: input.ContactInfo
-      });
-
-      const uploaded = await intake.UploadEncryptedPayload(initiated.referenceId, encryptedBytes);
-      if (!uploaded.accepted) {
-        throw new Error(uploaded.reason ?? 'Local intake rejected encrypted payload');
-      }
-
-      const completed = await intake.CompleteBundleIntake(initiated.referenceId, {
-        encryptedSha256,
-        plaintextSha256
-      });
-      if (completed.status !== 'received') {
-        throw new Error(completed.reason ?? 'Local intake rejected bundle during verification');
-      }
-      referenceId = completed.referenceId;
     }
 
+    const row = await LoadBundleRow(local.bundleId, user, provider);
+    await MarkBundleSending(row, input.Destination);
+    let referenceId: string;
+    try {
+      referenceId = collectorUrl
+        ? await this.sendToCollector(local, input, collectorUrl)
+        : await this.sendToLocalIntake(local, input);
+    } catch (err) {
+      await MarkBundleFailed(row, err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+
+    const sentAt = new Date();
+    await MarkBundleSent(row, referenceId, sentAt);
     local.status = 'Sent';
     local.externalReferenceId = referenceId;
-    local.sentAt = new Date().toISOString();
+    local.sentAt = sentAt.toISOString();
 
     return {
       BundleID: local.bundleId,
@@ -558,5 +560,68 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
       ExternalReferenceID: referenceId,
       SentAt: local.sentAt
     };
+  }
+
+  /** Sends the bundle to an external collector and returns its reference ID. */
+  private async sendToCollector(
+    local: InMemoryBundleStoreItem,
+    input: DiagnosticsSendBundleInput,
+    collectorUrl: string
+  ): Promise<string> {
+    const result = await DiagnosticSessionManager.Instance.SendBundleToCollector({
+      archiveBytes: local.archiveBytes,
+      bundleId: local.bundleId,
+      scrubLiterals: local.scrubLiterals,
+      collectorBaseUrl: collectorUrl,
+      ingestApiKey: process.env.MJ_DIAGNOSTICS_INGEST_API_KEY,
+      contactInfo: input.ContactInfo,
+      summary: input.Summary
+    });
+    return result.referenceId;
+  }
+
+  /**
+   * Sends the bundle through this instance's `DiagnosticIntakeService` (full encryption,
+   * verification and malware scan) when no external collector URL is set. Returns the reference ID.
+   */
+  private async sendToLocalIntake(local: InMemoryBundleStoreItem, input: DiagnosticsSendBundleInput): Promise<string> {
+    const intake = DiagnosticIntakeService.Instance;
+    if (!intake.Enabled) {
+      intake.Configure({ enabled: true });
+    }
+    const pk = await intake.GetPublicKeyDescriptor();
+    const plaintextSha256 = crypto.createHash('sha256').update(local.archiveBytes).digest('hex');
+    const encryptedBytes = await EncryptDiagnosticBundle(local.archiveBytes, {
+      recipientKeyId: pk.keyId,
+      recipientPublicKeyBase64: pk.publicKey,
+      recipientKeySignatureBase64: pk.signature,
+      senderEnvironmentId: DiagnosticSessionManager.Instance.InstallID,
+      manifestSha256: plaintextSha256
+    });
+    const encryptedSha256 = crypto.createHash('sha256').update(encryptedBytes).digest('hex');
+
+    const initiated = intake.InitiateBundleIntake({
+      installId: DiagnosticSessionManager.Instance.InstallID,
+      bundleId: local.bundleId,
+      formatVersion: 1,
+      mjVersion: MJ_VERSION,
+      scrubLiterals: local.scrubLiterals,
+      sizeBytes: encryptedBytes.byteLength,
+      plaintextSha256,
+      encryptedSha256,
+      keyId: pk.keyId,
+      summary: input.Summary,
+      contact: input.ContactInfo
+    });
+
+    const uploaded = await intake.UploadEncryptedPayload(initiated.referenceId, encryptedBytes);
+    if (!uploaded.accepted) {
+      throw new Error(uploaded.reason ?? 'Local intake rejected encrypted payload');
+    }
+    const completed = await intake.CompleteBundleIntake(initiated.referenceId, { encryptedSha256, plaintextSha256 });
+    if (completed.status !== 'received') {
+      throw new Error(completed.reason ?? 'Local intake rejected bundle during verification');
+    }
+    return completed.referenceId;
   }
 }

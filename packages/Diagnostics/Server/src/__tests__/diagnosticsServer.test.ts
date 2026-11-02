@@ -7,6 +7,7 @@ import {
     RunDetachedDiagnosticContext,
     DiagnosticContext,
     IMetadataProvider,
+    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
@@ -44,17 +45,134 @@ import {
 } from '../malwareScanner.js';
 import { DiagnosticsServerMiddleware } from '../middleware.js';
 import { MJ_VERSION } from '../version.js';
+import { DiagnosticsSettings } from '../settings.js';
 
 type ExpressAppParam = Parameters<DiagnosticsServerMiddleware['ConfigureExpressApp']>[0];
 
-/** Records the paths a middleware registers with `get`, `post` and `put`. */
-function createRouteRecorder(): { App: ExpressAppParam; Paths: string[] } {
+/** A response stand-in that records the status and JSON body a route handler sends. */
+interface FakeResponse {
+    StatusCode: number;
+    Body: { error?: string } | undefined;
+    status: (code: number) => FakeResponse;
+    json: (body: { error?: string }) => FakeResponse;
+    send: () => FakeResponse;
+    setHeader: () => void;
+}
+type FakeRequest = { params: Record<string, string>; query: Record<string, string>; headers: Record<string, string> };
+type RouteHandler = (req: FakeRequest, res: FakeResponse) => void;
+
+/** Records the paths and handlers a middleware registers with `get`, `post` and `put`. */
+function createRouteRecorder(): { App: ExpressAppParam; Paths: string[]; Handlers: Map<string, RouteHandler> } {
     const paths: string[] = [];
-    const record = (path: string): void => {
+    const handlers = new Map<string, RouteHandler>();
+    const record = (path: string, handler: RouteHandler): void => {
         paths.push(path);
+        handlers.set(path, handler);
     };
     const fake = { get: record, post: record, put: record };
-    return { App: fake as unknown as ExpressAppParam, Paths: paths };
+    return { App: fake as unknown as ExpressAppParam, Paths: paths, Handlers: handlers };
+}
+
+function createFakeResponse(): FakeResponse {
+    const res: FakeResponse = {
+        StatusCode: 200,
+        Body: undefined,
+        status: (code) => {
+            res.StatusCode = code;
+            return res;
+        },
+        json: (body) => {
+            res.Body = body;
+            return res;
+        },
+        send: () => res,
+        setHeader: () => undefined,
+    };
+    return res;
+}
+
+type FakeFieldValue = string | number | boolean | Date | null | undefined;
+
+/** An entity stand-in: plain field properties plus `Save`/`Load` backed by an in-memory table. */
+interface FakeRow {
+    ID: string;
+    LatestResult: { CompleteMessage: string };
+    Save: () => Promise<boolean>;
+    Load: (id: string) => Promise<boolean>;
+    [field: string]: FakeFieldValue | FakeRow['LatestResult'] | FakeRow['Save'] | FakeRow['Load'];
+}
+
+type FieldSnapshot = Record<string, FakeFieldValue>;
+
+/** A provider whose entity objects save to and load from in-memory tables. */
+interface FakeDiagnosticsProvider {
+    Provider: IMetadataProvider;
+    /** Every successful save of an entity, in order, as a snapshot of its fields. */
+    SaveHistory: (entityName: string) => FieldSnapshot[];
+    /** The latest saved fields of a record. */
+    Stored: (entityName: string, id: string) => FieldSnapshot | undefined;
+    /** Inserts a record as if it were already in the database. */
+    Seed: (entityName: string, fields: FieldSnapshot & { ID: string }) => void;
+    /** Returns true for a save that must fail. */
+    FailSave: (entityName: string, fields: FieldSnapshot) => boolean;
+}
+
+function fieldsOf(row: FakeRow): FieldSnapshot {
+    const out: FieldSnapshot = {};
+    for (const [key, value] of Object.entries(row)) {
+        if (typeof value !== 'function' && key !== 'LatestResult') out[key] = value as FakeFieldValue;
+    }
+    return out;
+}
+
+function createFakeDiagnosticsProvider(): FakeDiagnosticsProvider {
+    const tables = new Map<string, Map<string, FieldSnapshot>>();
+    const history = new Map<string, FieldSnapshot[]>();
+    const tableOf = (name: string): Map<string, FieldSnapshot> => {
+        if (!tables.has(name)) tables.set(name, new Map());
+        return tables.get(name)!;
+    };
+    const fake: FakeDiagnosticsProvider = {
+        Provider: emptyProvider,
+        SaveHistory: (name) => history.get(name) ?? [],
+        Stored: (name, id) => tableOf(name).get(id),
+        Seed: (name, fields) => {
+            tableOf(name).set(fields.ID, { ...fields });
+        },
+        FailSave: () => false,
+    };
+    const createRow = (entityName: string): FakeRow => {
+        const row: FakeRow = {
+            ID: '',
+            LatestResult: { CompleteMessage: `${entityName} save rejected by the database` },
+            Save: async () => {
+                if (fake.FailSave(entityName, fieldsOf(row))) return false;
+                if (!row.ID) row.ID = crypto.randomUUID().toUpperCase();
+                const snapshot = fieldsOf(row);
+                tableOf(entityName).set(row.ID, snapshot);
+                history.set(entityName, [...fake.SaveHistory(entityName), snapshot]);
+                return true;
+            },
+            Load: async (id: string) => {
+                const stored = tableOf(entityName).get(id);
+                if (!stored) return false;
+                Object.assign(row, stored);
+                return true;
+            },
+        };
+        return row;
+    };
+    fake.Provider = {
+        GetEntityObject: async (entityName: string) => createRow(entityName),
+        EntityByName: (entityName: string) => ({ Name: entityName }),
+    } as unknown as IMetadataProvider;
+    return fake;
+}
+
+/** Makes every RunView return the given rows. */
+function mockRunViewRows(rows: FakeRow[] = []): void {
+    const fakeRunView = { RunView: async () => ({ Success: true, Results: rows, ErrorMessage: '' }) };
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView as unknown as RunView);
 }
 
 /** Makes `InstanceConfigEngine` return the given values; unlisted keys fall back to their defaults. */
@@ -116,12 +234,16 @@ async function createValidBundleZip(bundleId: string): Promise<Uint8Array> {
 
 describe('@memberjunction/diagnostics-server', () => {
     let manager: DiagnosticSessionManager;
+    let fake: FakeDiagnosticsProvider;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         manager = DiagnosticSessionManager.Instance;
         manager.Initialize({ enableConsoleTap: false, enablePolling: false });
         manager.ResetForTests();
         mockInstanceSettings();
+        mockRunViewRows();
+        fake = createFakeDiagnosticsProvider();
+        await new DiagnosticsServerMiddleware().Initialize({ ApiRoute: (subpath: string) => subpath });
     });
 
     afterEach(() => {
@@ -670,7 +792,6 @@ describe('@memberjunction/diagnostics-server', () => {
                 Type: 'Owner',
                 UserRoles: [{ Role: 'Developer' }],
             } as unknown as UserInfo;
-            const mockProvider = {} as unknown as IMetadataProvider;
 
             const uploadOp = new DiagnosticsUploadClientCaptureServerOperation();
             const uploadRes = await uploadOp.ExecuteServer(
@@ -687,7 +808,7 @@ describe('@memberjunction/diagnostics-server', () => {
                         },
                     ],
                 },
-                { provider: mockProvider, user: mockOwnerUser }
+                { provider: fake.Provider, user: mockOwnerUser }
             );
             expect(uploadRes.Success).toBe(true);
             expect(uploadRes.Output?.SessionID).toBeTruthy();
@@ -699,7 +820,7 @@ describe('@memberjunction/diagnostics-server', () => {
                     Name: 'Explorer Support Bundle',
                     ScrubLiterals: true,
                 },
-                { provider: mockProvider, user: mockOwnerUser }
+                { provider: fake.Provider, user: mockOwnerUser }
             );
             expect(buildRes.Success).toBe(true);
             expect(buildRes.Output?.Status).toBe('Ready');
@@ -711,7 +832,7 @@ describe('@memberjunction/diagnostics-server', () => {
                     Destination: 'MJC',
                     Summary: 'Smoke test from Explorer dialog',
                 },
-                { provider: mockProvider, user: mockOwnerUser }
+                { provider: fake.Provider, user: mockOwnerUser }
             );
             expect(sendRes.Success).toBe(true);
             expect(sendRes.Output?.Status).toBe('Sent');
@@ -725,7 +846,7 @@ describe('@memberjunction/diagnostics-server', () => {
             const op = new DiagnosticsStartSessionServerOperation();
             const res = await op.ExecuteServer(
                 { Name: 'Capture off', ScopeType: 'Users' },
-                { provider: emptyProvider, user: ownerUser }
+                { provider: fake.Provider, user: ownerUser }
             );
             expect(res.Success).toBe(false);
             expect(res.ErrorMessage).toMatch(/Diagnostics\.Capture\.Enabled/);
@@ -736,13 +857,13 @@ describe('@memberjunction/diagnostics-server', () => {
             mockInstanceSettings({ 'Diagnostics.RequireLiteralScrubbing': 'true' });
             const startRes = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
                 { Name: 'Forced scrub', ScopeType: 'Users', ScrubLiterals: false },
-                { provider: emptyProvider, user: ownerUser }
+                { provider: fake.Provider, user: ownerUser }
             );
             expect(startRes.Output?.ScrubLiterals).toBe(true);
 
             const buildRes = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
                 { SessionID: startRes.Output!.SessionID, ScrubLiterals: false },
-                { provider: emptyProvider, user: ownerUser }
+                { provider: fake.Provider, user: ownerUser }
             );
             expect(buildRes.Success).toBe(true);
             expect(GetInMemoryDiagnosticBundle(buildRes.Output!.BundleID)?.scrubLiterals).toBe(true);
@@ -757,15 +878,15 @@ describe('@memberjunction/diagnostics-server', () => {
             try {
                 const uploadRes = await new DiagnosticsUploadClientCaptureServerOperation().ExecuteServer(
                     { ClientLogs: [{ timestamp: new Date().toISOString(), severity: 'error', source: 'client', message: 'x' }] },
-                    { provider: emptyProvider, user: ownerUser }
+                    { provider: fake.Provider, user: ownerUser }
                 );
                 const buildRes = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
                     { SessionID: uploadRes.Output!.SessionID },
-                    { provider: emptyProvider, user: ownerUser }
+                    { provider: fake.Provider, user: ownerUser }
                 );
                 const sendRes = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
                     { BundleID: buildRes.Output!.BundleID, Destination: 'CustomerCollector' },
-                    { provider: emptyProvider, user: ownerUser }
+                    { provider: fake.Provider, user: ownerUser }
                 );
                 expect(sendRes.Success).toBe(false);
                 expect(sendRes.ErrorMessage).toMatch(/Diagnostics\.External\.Enabled/);
@@ -841,7 +962,7 @@ describe('@memberjunction/diagnostics-server', () => {
 
         it('lets a self-service user stop, build and preview a session they started', async () => {
             mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
-            const ctx = { provider: emptyProvider, user: selfUser };
+            const ctx = { provider: fake.Provider, user: selfUser };
             const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
                 { Name: 'My problem', ScopeType: 'Users' },
                 ctx
@@ -864,7 +985,7 @@ describe('@memberjunction/diagnostics-server', () => {
 
         it("refuses a self-service user on another user's session", async () => {
             mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
-            const ctx = { provider: emptyProvider, user: selfUser };
+            const ctx = { provider: fake.Provider, user: selfUser };
             registerSession('other-users-session', otherUserId, [otherUserId]);
             registerSession('admin-session-on-me', otherUserId, [selfUser.ID]);
 
@@ -879,7 +1000,7 @@ describe('@memberjunction/diagnostics-server', () => {
 
             const ownerBuilt = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
                 { SessionID: 'other-users-session' },
-                { provider: emptyProvider, user: ownerUser }
+                { provider: fake.Provider, user: ownerUser }
             );
             const preview = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer(
                 { BundleID: ownerBuilt.Output!.BundleID },
@@ -887,6 +1008,302 @@ describe('@memberjunction/diagnostics-server', () => {
             );
             expect(preview.Success).toBe(false);
             expect(preview.ErrorMessage).toMatch(/Not authorized/);
+        });
+
+        it('lets the owner build from a stopped session after a restart', async () => {
+            mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
+            const ctx = { provider: fake.Provider, user: selfUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: 'Before restart', ScopeType: 'Users' },
+                ctx
+            );
+            const sessionId = started.Output!.SessionID;
+            await new DiagnosticsStopSessionServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+
+            manager.ResetForTests();
+
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+            expect(built.Success).toBe(true);
+        });
+    });
+
+    describe('Persisted sessions', () => {
+        const sessionEntity = 'MJ: Diagnostic Sessions';
+
+        async function startSession(name = 'Persisted'): Promise<string> {
+            const res = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: name, ScopeType: 'Users', ScrubLiterals: true },
+                { provider: fake.Provider, user: ownerUser }
+            );
+            expect(res.Success).toBe(true);
+            return res.Output!.SessionID;
+        }
+
+        it('StartSession saves a session row and uses its ID', async () => {
+            const sessionId = await startSession();
+
+            const row = fake.Stored(sessionEntity, sessionId);
+            expect(row).toBeDefined();
+            expect(row).toMatchObject({
+                Name: 'Persisted',
+                Status: 'Active',
+                ScopeType: 'Users',
+                Level: 'Standard',
+                ScrubLiterals: true,
+                CreatedByUserID: ownerUser.ID,
+            });
+            expect(JSON.parse(String(row!.ScopeJSON))).toEqual({ userIds: [ownerUser.ID] });
+            expect(row!.EndsAt).toBeInstanceOf(Date);
+            expect(manager.GetActiveSession(sessionId)?.id).toBe(sessionId);
+        });
+
+        it('StartSession fails with the save message when the row is not saved', async () => {
+            fake.FailSave = (name) => name === sessionEntity;
+            const res = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: 'Rejected', ScopeType: 'Users' },
+                { provider: fake.Provider, user: ownerUser }
+            );
+            expect(res.Success).toBe(false);
+            expect(res.ErrorMessage).toContain('MJ: Diagnostic Sessions save rejected by the database');
+            expect(manager.GetAllActiveSessions()).toHaveLength(0);
+        });
+
+        it('StopSession marks the row Stopped with a stop time', async () => {
+            const sessionId = await startSession();
+            const res = await new DiagnosticsStopSessionServerOperation().ExecuteServer(
+                { SessionID: sessionId },
+                { provider: fake.Provider, user: ownerUser }
+            );
+            expect(res.Success).toBe(true);
+            expect(fake.Stored(sessionEntity, sessionId)?.Status).toBe('Stopped');
+            expect(fake.Stored(sessionEntity, sessionId)?.StoppedAt).toBeInstanceOf(Date);
+        });
+
+        it('StopSession marks a session that ran past its end time Expired', async () => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            try {
+                const sessionId = await startSession();
+                vi.setSystemTime(Date.now() + 2 * 60 * 60_000);
+                await new DiagnosticsStopSessionServerOperation().ExecuteServer(
+                    { SessionID: sessionId },
+                    { provider: fake.Provider, user: ownerUser }
+                );
+                expect(fake.Stored(sessionEntity, sessionId)?.Status).toBe('Expired');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('counts only saved chunks and logs one line with the save message when a chunk save fails', async () => {
+            const sessionId = await startSession();
+            manager.AppendToChunkBuffer(sessionId, 'Server', 'Logs', { message: 'kept' });
+            manager.AppendToChunkBuffer(sessionId, 'Server', 'SQL', { sql: 'SELECT 1' });
+            manager.AppendToChunkBuffer(sessionId, 'Server', 'Spans', { name: 'span' });
+            fake.FailSave = (name, fields) => name === 'MJ: Diagnostic Session Chunks' && fields.ContentKind !== 'Logs';
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const written = await manager.FlushSessionChunksToDatabase(sessionId, ownerUser, fake.Provider);
+
+            expect(written).toBe(1);
+            const chunkLines = logged.mock.calls.filter((c) => c.join(' ').includes('MJ: Diagnostic Session Chunks save rejected'));
+            expect(chunkLines).toHaveLength(1);
+        });
+
+        it('loads Active sessions at startup and expires the ones whose end time has passed', async () => {
+            const live = createFakeDiagnosticsProvider();
+            const rowFor = async (id: string, endsAt: Date): Promise<FakeRow> => {
+                live.Seed(sessionEntity, {
+                    ID: id,
+                    Name: id,
+                    Status: 'Active',
+                    ScopeType: 'Instance',
+                    ScopeJSON: '{}',
+                    Level: 'Standard',
+                    CategoriesJSON: '["Logs"]',
+                    ScrubLiterals: true,
+                    StartedAt: new Date(Date.now() - 60_000),
+                    EndsAt: endsAt,
+                    MaxBytes: 1000,
+                    CreatedByUserID: ownerUser.ID,
+                    CompanyID: null,
+                });
+                const row = (await live.Provider.GetEntityObject(sessionEntity)) as unknown as FakeRow;
+                await row.Load(id);
+                return row;
+            };
+            const liveRow = await rowFor('LIVE-SESSION', new Date(Date.now() + 60_000));
+            const staleRow = await rowFor('STALE-SESSION', new Date(Date.now() - 1_000));
+            mockRunViewRows([liveRow, staleRow]);
+
+            await new DiagnosticsServerMiddleware().Initialize({ ApiRoute: (p: string) => p });
+
+            expect(manager.GetActiveSession('LIVE-SESSION')?.scopeType).toBe('Instance');
+            expect(manager.GetActiveSession('STALE-SESSION')).toBeUndefined();
+            expect(live.Stored(sessionEntity, 'STALE-SESSION')?.Status).toBe('Expired');
+        });
+    });
+
+    describe('Persisted local bundles', () => {
+        const bundleEntity = 'MJ: Diagnostic Bundles';
+
+        async function buildBundle(): Promise<{ sessionId: string; bundleId: string }> {
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'B', ScopeType: 'Users' }, ctx);
+            const sessionId = started.Output!.SessionID;
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: sessionId, Name: 'My bundle' }, ctx);
+            expect(built.Success).toBe(true);
+            return { sessionId, bundleId: built.Output!.BundleID };
+        }
+
+        it('BuildBundle saves a Local bundle row through Building to Ready', async () => {
+            const { sessionId, bundleId } = await buildBundle();
+
+            const saves = fake.SaveHistory(bundleEntity);
+            expect(saves.map((s) => s.Status)).toEqual(['Building', 'Ready']);
+            const row = fake.Stored(bundleEntity, bundleId);
+            expect(row).toMatchObject({
+                Name: 'My bundle',
+                Direction: 'Local',
+                Status: 'Ready',
+                DiagnosticSessionID: sessionId,
+                CreatedByUserID: ownerUser.ID,
+                SHA256: GetInMemoryDiagnosticBundle(bundleId)?.sha256,
+            });
+            expect(Number(row!.SizeBytes)).toBeGreaterThan(0);
+            expect(JSON.parse(String(row!.ManifestJSON))).toHaveProperty('bundleId');
+            expect(Array.isArray(JSON.parse(String(row!.FindingsJSON)))).toBe(true);
+            expect(JSON.parse(String(row!.ScrubReportJSON))).toHaveProperty('credentialsScrubbedCount');
+            expect(row!.ExpiresAt).toBeInstanceOf(Date);
+            expect(row!.Data ?? null).toBeNull();
+        });
+
+        it('SendBundle moves the row through Sending to Sent with the reference ID', async () => {
+            DiagnosticIntakeService.Instance.ResetForTests();
+            const { bundleId } = await buildBundle();
+            const sent = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
+                { BundleID: bundleId, Destination: 'MJC' },
+                { provider: fake.Provider, user: ownerUser }
+            );
+            expect(sent.Success).toBe(true);
+
+            const statuses = fake.SaveHistory(bundleEntity).map((s) => s.Status);
+            expect(statuses.slice(-2)).toEqual(['Sending', 'Sent']);
+            expect(fake.Stored(bundleEntity, bundleId)).toMatchObject({
+                Destination: 'MJC',
+                ExternalReferenceID: sent.Output!.ExternalReferenceID,
+            });
+            expect(fake.Stored(bundleEntity, bundleId)?.SentAt).toBeInstanceOf(Date);
+        });
+
+        it('SendBundle marks the row Failed with the reason when the send fails', async () => {
+            mockInstanceSettings({ 'Diagnostics.External.Enabled': 'true' });
+            vi.stubGlobal('fetch', vi.fn(async () => {
+                throw new Error('collector unreachable');
+            }));
+            try {
+                const { bundleId } = await buildBundle();
+                const sent = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
+                    { BundleID: bundleId, Destination: 'CustomerCollector', CollectorUrlOverride: 'https://collector.example' },
+                    { provider: fake.Provider, user: ownerUser }
+                );
+                expect(sent.Success).toBe(false);
+                expect(fake.Stored(bundleEntity, bundleId)?.Status).toBe('Failed');
+                expect(String(fake.Stored(bundleEntity, bundleId)?.FailureReason)).toContain('collector unreachable');
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('answers a download with a clear message when the bundle bytes are not on this instance', () => {
+            const mw = new DiagnosticsServerMiddleware();
+            const recorder = createRouteRecorder();
+            mw.ConfigureExpressApp(recorder.App, { ApiRoute: (p: string) => p });
+            const download = recorder.Handlers.get('/diagnostics/bundles/:bundleId/download')!;
+            const token = manager.MintDownloadToken('BUNDLE-FROM-BEFORE-RESTART', ownerUser.ID);
+            const res = createFakeResponse();
+
+            download({ params: { bundleId: 'BUNDLE-FROM-BEFORE-RESTART' }, query: { token }, headers: {} }, res);
+
+            expect(res.StatusCode).not.toBe(404);
+            expect(res.Body?.error).toMatch(/no longer available on this instance; rebuild the bundle/);
+        });
+    });
+
+    describe('Bundle download URL', () => {
+        it('builds the download URL under the API base path', async () => {
+            await new DiagnosticsServerMiddleware().Initialize({ ApiRoute: (subpath: string) => `/api${subpath}` });
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'U', ScopeType: 'Users' }, ctx);
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: started.Output!.SessionID }, ctx);
+            expect(built.Output?.DownloadUrl).toMatch(/^\/api\/diagnostics\/bundles\//);
+
+            const preview = await new DiagnosticsGetBundlePreviewServerOperation().ExecuteServer(
+                { BundleID: built.Output!.BundleID, MintDownloadToken: true },
+                ctx
+            );
+            expect(preview.Output?.DownloadUrl).toMatch(/^\/api\/diagnostics\/bundles\//);
+        });
+
+        it('fails BuildBundle loudly when the server gave no route builder', async () => {
+            await new DiagnosticsServerMiddleware().Initialize();
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({}, ctx);
+            expect(built.Success).toBe(false);
+            expect(built.ErrorMessage).toMatch(/ApiRoute/);
+        });
+    });
+
+    describe('Server startup robustness', () => {
+        it('keeps starting with capture and intake off when the settings fail to load', async () => {
+            DiagnosticIntakeService.Instance.ResetForTests();
+            vi.spyOn(InstanceConfigEngine.Instance, 'Config').mockRejectedValue(new Error('settings table unreachable'));
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await expect(new DiagnosticsServerMiddleware().Initialize({ ApiRoute: (p: string) => p })).resolves.toBeUndefined();
+
+            expect(DiagnosticsSettings.Current().CaptureEnabled).toBe(false);
+            expect(DiagnosticIntakeService.Instance.Enabled).toBe(false);
+            expect(logged.mock.calls.some((c) => c.join(' ').includes('settings table unreachable'))).toBe(true);
+
+            mockInstanceSettings();
+            await DiagnosticsSettings.Load();
+            expect(DiagnosticsSettings.Current().CaptureEnabled).toBe(true);
+        });
+    });
+
+    describe('Explicit session header', () => {
+        const targetUserId = 'CCCCCCCC-3333-4333-8333-000000000003';
+
+        function registerUsersSession(id: string): void {
+            manager.RegisterActiveSession({
+                id,
+                name: id,
+                status: 'Active',
+                scopeType: 'Users',
+                scope: { userIds: [targetUserId] },
+                level: 'Standard',
+                categories: ['Logs'],
+                scrubLiterals: true,
+                startedAtMs: Date.now(),
+                endsAtMs: Date.now() + 60_000,
+                maxBytes: 10_000_000,
+                createdByUserId: ownerUser.ID,
+                bytesWritten: 0,
+            });
+        }
+
+        it('does not attach a user-scoped session before auth, and attaches it after auth only for a target', () => {
+            registerUsersSession('users-session');
+
+            const preCtx: DiagnosticContext = {};
+            expect(manager.MatchPreAuth(preCtx, 'users-session')).toBeUndefined();
+            expect(preCtx.sessionId).toBeUndefined();
+            expect(manager.MatchPostAuth(preCtx, 'someone-else')).toBeUndefined();
+            expect(preCtx.sessionId).toBeUndefined();
+
+            const targetCtx: DiagnosticContext = {};
+            manager.MatchPreAuth(targetCtx, 'users-session');
+            expect(manager.MatchPostAuth(targetCtx, targetUserId)?.id).toBe('users-session');
         });
     });
 });
