@@ -1,12 +1,22 @@
 /**
  * The LTS candidate cut (plans/lts-process.md 5.2 rule 1; runbook operation 2), as code.
  *
- * Driven by publish.yml's `cut-candidate` job. Three subcommands, run in this order with
- * the build + `changeset publish` between `version` and `reenter`:
+ * Driven by publish.yml's `cut-candidate` job. The candidate is built from the newest
+ * published Edge tag of the line (v6.1.0-edge.N), not from the tip of next: what was
+ * tested as Edge is what becomes 6.1.0, and anything merged to next after that tag rides
+ * the next stream. Subcommands, run in this order with the build + `changeset publish`
+ * between `version` and `merge-into-next`:
  *
- *   preflight --line 6.1   refuse to start unless every precondition holds
- *   version   --line 6.1   changeset pre exit -> changeset version -> lockfile refresh,
- *                          then prove every @memberjunction/* package is at 6.1.0
+ *   preflight --line 6.1   (on next) refuse to start unless every precondition holds;
+ *                          resolves the Edge tag and emits it as EDGETAG
+ *   version   --line 6.1 --edge-tag v6.1.0-edge.N
+ *                          (HEAD detached at the Edge tag) changeset pre exit ->
+ *                          changeset version -> lockfile refresh, then prove every
+ *                          @memberjunction/* package is at 6.1.0
+ *   merge-into-next --line 6.1 --edge-tag v6.1.0-edge.N
+ *                          (HEAD at the v6.1.0 tag) check out <remote>/next and merge v6.1.0
+ *                          into it; prove the changesets left are exactly those added to
+ *                          next after the Edge tag
  *   reenter   --line 6.1   changeset pre enter edge + the seed changeset that makes the
  *                          next Edge publish 6.2.0-edge.0 (not 6.1.1-edge.0)
  *   push-next              push HEAD to origin/next, merging in anything that landed on
@@ -166,10 +176,79 @@ export function seedChangeset(nextLine) {
 }
 
 /**
+ * The newest Edge tag of a line: `v6.1.0-edge.N` with the highest N (numerically, so
+ * edge.10 beats edge.9), or null when the line has none.
+ * @param {string[]} tags
+ * @param {string} line e.g. "6.1"
+ */
+export function newestEdgeTag(tags, line) {
+    if (!LINE_RX.test(line ?? '')) throw new Error(`line must look like X.Y (got "${line}")`);
+    const rx = new RegExp(`^v${line.replace('.', '\\.')}\\.0-edge\\.(\\d+)$`);
+    let best = null;
+    let bestN = -1;
+    for (const t of tags) {
+        const m = rx.exec(t);
+        if (m && Number(m[1]) > bestN) {
+            best = t;
+            bestN = Number(m[1]);
+        }
+    }
+    return best;
+}
+
+/**
+ * The changesets next must still carry after the candidate merges in: those on next that
+ * did not exist at the Edge tag. Everything present at the tag was consumed by X.Y.0.
+ * @param {string[]} atEdgeTag pending changesets in the Edge tag's tree
+ * @param {string[]} onNext pending changesets on next before the merge
+ */
+export function keptChangesets(atEdgeTag, onNext) {
+    const consumed = new Set(atEdgeTag);
+    return onNext.filter((f) => !consumed.has(f)).sort();
+}
+
+/**
+ * After merging X.Y.0 into next, the pending changesets must be exactly the kept set:
+ * a consumed one surviving would re-bump the next stream with work the line already
+ * shipped, a kept one missing would drop work from it.
+ * @param {string[]} actual
+ * @param {string[]} expected
+ */
+export function assertChangesetsAfterMerge(actual, expected) {
+    const a = new Set(actual);
+    const e = new Set(expected);
+    const unexpected = [...a].filter((f) => !e.has(f)).sort();
+    const missing = [...e].filter((f) => !a.has(f)).sort();
+    if (unexpected.length === 0 && missing.length === 0) return;
+    throw new Error(
+        `changesets on next after merging the candidate are wrong (unexpected: ${unexpected.join(', ') || 'none'}; missing: ${missing.join(', ') || 'none'})`,
+    );
+}
+
+/**
+ * pre.json right after `changeset pre enter edge` on next: Edge pre-mode starting from
+ * the candidate's version, with no changeset marked as already released, so every kept
+ * changeset plus the seed counts toward the first Edge publish of the next stream.
+ * @param {{mode?: string, tag?: string, initialVersions?: Record<string,string>, changesets?: string[]} | null} pre
+ * @param {string} version e.g. "6.1.0"
+ */
+export function assertReenteredPreJson(pre, version) {
+    assertEdgePreMode(pre);
+    const consumed = pre.changesets ?? [];
+    if (consumed.length > 0) throw new Error(`${PRE_JSON} already lists ${consumed.length} changeset(s) as released: ${consumed.slice(0, 5).join(', ')}`);
+    const core = pre.initialVersions?.['@memberjunction/core'];
+    if (core !== version) throw new Error(`${PRE_JSON} initialVersions has @memberjunction/core at ${core}, expected ${version}`);
+}
+
+/**
  * Group the preflight facts into failures. Pure so the test can drive every branch.
+ * The edge* facts describe the newest Edge tag of the line (edgeTag null: there is none)
+ * and pendingCount is counted in that tag's tree, because that tree is what gets versioned.
  * @param {{
  *   remoteBranchExists: boolean, remoteTagExists: boolean, npmVersionExists: boolean,
- *   pendingCount: number, currentBranch: string
+ *   pendingCount: number, currentBranch: string, edgeTag: string | null,
+ *   edgeTagVersion?: string, edgeTagPre?: object | null,
+ *   npmEdgeVersionExists?: boolean, npmEdgeDistTag?: string
  * }} facts
  * @param {ReturnType<typeof deriveCut>} cut
  */
@@ -179,17 +258,39 @@ export function preflightFailures(facts, cut) {
     if (facts.remoteBranchExists) failures.push(`origin already has ${cut.branch}; this line was cut before`);
     if (facts.remoteTagExists) failures.push(`origin already has tag ${cut.tag}`);
     if (facts.npmVersionExists) failures.push(`npm already has @memberjunction/core@${cut.version}`);
-    if (facts.pendingCount === 0) failures.push(`no pending changesets: changeset version would be a no-op`);
+    if (!facts.edgeTag) {
+        failures.push(`no Edge tag v${cut.line}.0-edge.* exists: the candidate is built from the newest Edge release of the line, publish one first`);
+        return failures;
+    }
+    failures.push(...edgeTagFailures(facts));
+    return failures;
+}
+
+function edgeTagFailures(facts) {
+    const failures = [];
+    const want = facts.edgeTag.slice(1);
+    if (facts.edgeTagVersion !== want) failures.push(`${facts.edgeTag} carries version ${facts.edgeTagVersion} in its tree, expected ${want}`);
+    try {
+        assertEdgePreMode(facts.edgeTagPre);
+    } catch (e) {
+        failures.push(`at ${facts.edgeTag}: ${e.message}`);
+    }
+    if (!facts.npmEdgeVersionExists) failures.push(`npm has no @memberjunction/core@${want}: ${facts.edgeTag} was tagged but never published`);
+    if (facts.npmEdgeDistTag !== want) {
+        failures.push(`npm dist-tag edge is at ${facts.npmEdgeDistTag}, not ${want}: an Edge release is in flight or the tag and npm disagree`);
+    }
+    if (facts.pendingCount === 0) failures.push(`no pending changesets at ${facts.edgeTag}: changeset version would be a no-op`);
     return failures;
 }
 
 /** @param {string[]} argv */
 export function parseCliArgs(argv) {
-    const args = { command: argv[0], line: undefined, remote: 'origin' };
+    const args = { command: argv[0], line: undefined, remote: 'origin', edgeTag: undefined };
     for (let i = 1; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--line') args.line = argv[++i];
         else if (a === '--remote') args.remote = argv[++i];
+        else if (a === '--edge-tag') args.edgeTag = argv[++i];
         else throw new Error(`unknown argument "${a}"`);
     }
     return args;
@@ -220,8 +321,37 @@ function readPreJson() {
     return fs.existsSync(PRE_JSON) ? readJson(PRE_JSON) : null;
 }
 
+const VERSION_SOURCE = 'packages/MJServer/package.json';
+
 function readEdgeVersion() {
-    return readJson(path.join('packages', 'MJServer', 'package.json')).version;
+    return readJson(VERSION_SOURCE).version;
+}
+
+/** @returns {string | null} the file's content at `rev`, null when it is absent there */
+function gitShowOrNull(rev, file) {
+    try {
+        return run('git', ['show', `${rev}:${file}`], { stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (e) {
+        if (e.status === 128) return null; // "path does not exist in <rev>"
+        throw e;
+    }
+}
+
+function pendingChangesetsAt(rev) {
+    const paths = run('git', ['ls-tree', '--name-only', `${rev}`, '.changeset/']).split('\n').filter(Boolean);
+    return pendingChangesets(paths.map((p) => path.basename(p)));
+}
+
+function revParse(rev) {
+    return run('git', ['rev-parse', '--verify', `${rev}^{commit}`]);
+}
+
+/** The --edge-tag a later step was handed must be an Edge tag of this line and exist. */
+function assertEdgeTagArg(args) {
+    if (!args.edgeTag || newestEdgeTag([args.edgeTag], args.line) !== args.edgeTag) {
+        throw new Error(`--edge-tag must be a v${args.line}.0-edge.N tag (got "${args.edgeTag}")`);
+    }
+    return revParse(args.edgeTag);
 }
 
 function listWorkspacePackages() {
@@ -240,6 +370,10 @@ function tryRemoteRefExists(remote, ref) {
         if (e.status === 2) return false; // --exit-code: 2 means "no matching ref"
         throw e;
     }
+}
+
+function npmDistTag(tag) {
+    return run('npm', ['view', '@memberjunction/core', `dist-tags.${tag}`], { stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 function npmVersionExists(version) {
@@ -263,24 +397,53 @@ function gitCommitAll(message) {
 // ---------------------------------------------------------------------------------------
 
 function preflight(args) {
-    const edgeVersion = readEdgeVersion();
-    const cut = assertRequestedLineMatches(args.line, edgeVersion);
+    const cut = assertRequestedLineMatches(args.line, readEdgeVersion());
     assertEdgePreMode(readPreJson());
     assertLedgerReadyForCut(readJson(LEDGER), cut.line);
+    const edgeTag = newestEdgeTag(run('git', ['tag', '--list', `v${cut.line}.0-edge.*`]).split('\n'), cut.line);
     const facts = {
         currentBranch: run('git', ['rev-parse', '--abbrev-ref', 'HEAD']),
         remoteBranchExists: tryRemoteRefExists(args.remote, `refs/heads/${cut.branch}`),
         remoteTagExists: tryRemoteRefExists(args.remote, `refs/tags/${cut.tag}`),
         npmVersionExists: npmVersionExists(cut.version),
-        pendingCount: pendingChangesets(fs.readdirSync('.changeset')).length,
+        edgeTag,
+        ...(edgeTag ? readEdgeTagFacts(edgeTag) : { pendingCount: 0 }),
     };
     const failures = preflightFailures(facts, cut);
     if (failures.length > 0) throw new Error(`preflight failed:\n  - ${failures.join('\n  - ')}`);
-    console.log(`preflight OK: ${edgeVersion} -> ${cut.version} on ${cut.branch} (npm ${cut.npmTag}); ${facts.pendingCount} changesets pending; Edge resumes at ${cut.nextLine}.0-edge.0`);
-    emitOutputs(cut);
+    reportDistanceFromEdgeTag(edgeTag);
+    console.log(`preflight OK: ${edgeTag} -> ${cut.version} on ${cut.branch} (npm ${cut.npmTag}); ${facts.pendingCount} changesets at the tag; Edge resumes at ${cut.nextLine}.0-edge.0`);
+    emitOutputs({ ...cut, edgeTag });
+}
+
+function readEdgeTagFacts(edgeTag) {
+    const versionJson = gitShowOrNull(edgeTag, VERSION_SOURCE);
+    const preJson = gitShowOrNull(edgeTag, PRE_JSON);
+    const want = edgeTag.slice(1);
+    return {
+        edgeTagVersion: versionJson ? JSON.parse(versionJson).version : undefined,
+        edgeTagPre: preJson ? JSON.parse(preJson) : null,
+        npmEdgeVersionExists: npmVersionExists(want),
+        npmEdgeDistTag: npmDistTag('edge'),
+        pendingCount: pendingChangesetsAt(edgeTag).length,
+    };
+}
+
+/** Informational: what on next is NOT going into the candidate. */
+function reportDistanceFromEdgeTag(edgeTag) {
+    const ahead = run('git', ['rev-list', '--count', `${edgeTag}..HEAD`]);
+    console.log(`next is ${ahead} commit(s) ahead of ${edgeTag}; those ride the next Edge stream, not the candidate`);
+    try {
+        run('git', ['merge-base', '--is-ancestor', edgeTag, 'HEAD']);
+    } catch (e) {
+        if (e.status !== 1) throw e;
+        console.log(`warning: ${edgeTag} is not an ancestor of next (its back-merge has not landed); the merge into next will bring the release commit in`);
+    }
 }
 
 function version(args) {
+    const edgeCommit = assertEdgeTagArg(args);
+    if (revParse('HEAD') !== edgeCommit) throw new Error(`HEAD is not at ${args.edgeTag}; the candidate is versioned from the Edge tag's commit`);
     const cut = assertRequestedLineMatches(args.line, readEdgeVersion());
     assertEdgePreMode(readPreJson());
 
@@ -306,6 +469,34 @@ function version(args) {
     emitOutputs(cut);
 }
 
+/**
+ * HEAD is the candidate tag (built off the Edge tag, on no branch). Move to next and merge
+ * the candidate in, so next carries X.Y.0's versions and changelogs and loses the
+ * changesets it consumed, while keeping every changeset merged after the Edge tag. Only
+ * the lockfile may auto-resolve; the packages are already on npm if this stops.
+ */
+function mergeIntoNext(args) {
+    const edgeCommit = assertEdgeTagArg(args);
+    const cut = deriveCut(args.edgeTag.slice(1));
+    const candidateCommit = revParse(cut.tag);
+    if (revParse('HEAD') !== candidateCommit) throw new Error(`HEAD is not at ${cut.tag}; tag the candidate before merging it into next`);
+    try {
+        run('git', ['merge-base', '--is-ancestor', edgeCommit, candidateCommit]);
+    } catch (e) {
+        if (e.status !== 1) throw e;
+        throw new Error(`${cut.tag} is not built on ${args.edgeTag}; refusing to merge it into next`);
+    }
+
+    run('git', ['fetch', args.remote, 'next']);
+    const nextRef = `${args.remote}/next`;
+    const kept = keptChangesets(pendingChangesetsAt(edgeCommit), pendingChangesetsAt(nextRef));
+    run('git', ['checkout', '-B', 'candidate-cut-next', nextRef]);
+    mergeIntoHead(cut.tag, `chore: merge the ${cut.version} candidate into next [skip ci]`);
+
+    assertChangesetsAfterMerge(pendingChangesets(fs.readdirSync('.changeset')), kept);
+    console.log(`merge-into-next OK: ${cut.tag} merged into ${nextRef}; ${kept.length} changeset(s) added after ${args.edgeTag} stay for the ${cut.nextLine} stream`);
+}
+
 function reenter(args) {
     if (!LINE_RX.test(args.line ?? '')) throw new Error(`--line must look like X.Y (got "${args.line}")`);
     const current = readEdgeVersion();
@@ -316,7 +507,7 @@ function reenter(args) {
 
     console.log('changeset pre enter edge');
     run('pnpm', ['exec', 'changeset', 'pre', 'enter', 'edge'], { stdio: 'inherit' });
-    assertEdgePreMode(readPreJson());
+    assertReenteredPreJson(readPreJson(), current);
     fs.writeFileSync(seed.file, seed.content);
     gitCommitAll(`chore: re-enter Edge pre-mode; open the ${major}.${minor + 1} stream`);
     console.log(`reenter OK: ${seed.file} written; next Edge publish is ${major}.${minor + 1}.0-edge.0`);
@@ -332,7 +523,7 @@ function reenter(args) {
 function pushNext(args) {
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
         run('git', ['fetch', args.remote, 'next']);
-        mergeRemoteNextIntoHead(args.remote);
+        mergeIntoHead(`${args.remote}/next`);
         try {
             run('git', ['push', args.remote, 'HEAD:next'], { stdio: 'inherit' });
             console.log(`push-next OK on attempt ${attempt}`);
@@ -344,15 +535,22 @@ function pushNext(args) {
     throw new Error(`could not push to next after ${MAX_PUSH_ATTEMPTS} attempts. The packages are on npm; finish the push by hand.`);
 }
 
-function mergeRemoteNextIntoHead(remote) {
+/**
+ * Merge `ref` into HEAD. Only the lockfile may auto-resolve (kept from HEAD, then
+ * regenerated); any other conflict aborts the merge and throws.
+ * @param {string} ref
+ * @param {string} [message] merge commit message; git's default when omitted
+ */
+function mergeIntoHead(ref, message) {
+    const messageArgs = message ? ['--no-ff', '-m', message] : ['--no-edit'];
     try {
-        run('git', ['merge', '--no-edit', `${remote}/next`]);
+        run('git', ['merge', ...messageArgs, ref]);
     } catch (mergeError) {
         const conflicted = run('git', ['diff', '--name-only', '--diff-filter=U']).split('\n').filter(Boolean);
         const unresolvable = conflicted.filter((p) => p !== LOCKFILE);
         if (unresolvable.length > 0) {
             run('git', ['merge', '--abort']);
-            throw new Error(`merging ${remote}/next conflicts outside ${LOCKFILE}: ${unresolvable.join(', ')}. Aborted; resolve by hand. ${mergeError.message}`);
+            throw new Error(`merging ${ref} conflicts outside ${LOCKFILE}: ${unresolvable.join(', ')}. Aborted; resolve by hand. ${mergeError.message}`);
         }
         if (conflicted.length === 0) throw mergeError;
         run('git', ['checkout', '--ours', '--', LOCKFILE]);
@@ -364,7 +562,7 @@ function mergeRemoteNextIntoHead(remote) {
         run('pnpm', ['install', '--no-frozen-lockfile'], { stdio: 'inherit' });
         if (run('git', ['status', '--porcelain', '--', LOCKFILE]) !== '') {
             run('git', ['add', LOCKFILE]);
-            run('git', ['commit', '-m', `chore: lockfile after merging ${remote}/next [skip ci]`]);
+            run('git', ['commit', '-m', `chore: lockfile after merging ${ref} [skip ci]`]);
         }
     }
 }
@@ -377,12 +575,12 @@ function emitOutputs(cut) {
     fs.appendFileSync(out, lines.join('\n') + '\n');
 }
 
-const COMMANDS = { preflight, version, reenter, 'push-next': pushNext };
+const COMMANDS = { preflight, version, 'merge-into-next': mergeIntoNext, reenter, 'push-next': pushNext };
 
 function main(argv) {
     const args = parseCliArgs(argv);
     const fn = COMMANDS[args.command];
-    if (!fn) throw new Error(`usage: candidate-cut.mjs <${Object.keys(COMMANDS).join('|')}> --line X.Y [--remote origin]`);
+    if (!fn) throw new Error(`usage: candidate-cut.mjs <${Object.keys(COMMANDS).join('|')}> --line X.Y [--edge-tag vX.Y.0-edge.N] [--remote origin]`);
     fn(args);
 }
 

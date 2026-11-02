@@ -16,9 +16,10 @@ name: Build and publish new package versions
 #                 run — `latest` when this line already owns it, else lts-<line>.
 #
 #   Candidate cut — dispatch FROM next with cut_line=X.Y + confirm_branch=lts/X.Y.
-#                 Job: cut-candidate. Exits Edge pre-mode, versions to X.Y.0, builds,
-#                 publishes under lts-X.Y, creates lts/X.Y at the tag, re-enters
-#                 pre-mode so Edge resumes at X.(Y+1).0-edge.0. The logic lives in
+#                 Job: cut-candidate. From the newest vX.Y.0-edge.N tag (not the
+#                 tip of next): exits Edge pre-mode, versions to X.Y.0, builds,
+#                 publishes under lts-X.Y, creates lts/X.Y at the tag, merges it into
+#                 next and re-enters pre-mode so Edge resumes at X.(Y+1).0-edge.0. The logic lives in
 #                 ci/candidate-cut.mjs; the ledger entry for the line is a reviewed
 #                 PR that must merge BEFORE this is dispatched.
 #
@@ -1608,16 +1609,21 @@ jobs:
   #
   # Why a job and not the runbook's hand steps: rehearsed 2026-09-03 on a scratch clone,
   # the hand version cannot run. publish-lts refuses a branch with zero changesets, and
-  # the candidate branch has zero by construction (the version step on next consumed
+  # the candidate branch has zero by construction (the version step at the Edge tag consumed
   # them); the ledger append throws on a line with no entry; and the seed changeset that
   # keeps Edge off the new line's patch tuple is load-bearing (without it the first
   # patch-only merge versions Edge to 6.1.1-edge.0). This job does the whole dance in
   # one run, ordered so that NOTHING IS PUSHED UNTIL THE PACKAGES ARE ON NPM:
   #
-  #   preflight -> pre exit + version + lockfile (local commits) -> build -> publish
-  #   6.1.0 under lts-6.1 -> commit generated files -> tag v6.1.0 -> re-enter pre-mode
-  #   + seed (local) -> push next (merge-and-retry) -> push tag, create lts/6.1 at it
-  #   -> GitHub Release (never latest) -> ledger append -> docs + release notes.
+  #   preflight (on next) -> check out the newest v6.1.0-edge.N tag -> pre exit +
+  #   version + lockfile (local commits) -> build -> publish 6.1.0 under lts-6.1 ->
+  #   commit generated files -> tag v6.1.0 -> merge v6.1.0 into next + re-enter
+  #   pre-mode + seed (local) -> push next (merge-and-retry) -> push tag, create
+  #   lts/6.1 at it -> GitHub Release (never latest) -> ledger append -> docs + notes.
+  #
+  # The candidate is the Edge tag's commit plus the version commits, never the tip of
+  # next: commits merged to next after the tag are not in 6.1.0, and their changesets
+  # stay on next for the 6.2 stream (merge-into-next proves the partition).
   #
   # A failure before the publish step leaves next, npm and GitHub exactly as they were:
   # re-dispatch. A failure after it is "released, not yet recorded", the same posture as
@@ -1628,7 +1634,8 @@ jobs:
   #     Status fields are release-lines-guard + CODEOWNERS territory (process doc 8), so
   #     that entry arrives by reviewed PR; this job appends only the mechanical fields.
   #   - lts/6.1, tag v6.1.0 and @memberjunction/core@6.1.0 do not exist yet.
-  #   - next is in Edge pre-mode with pending changesets.
+  #   - next is in Edge pre-mode; a v6.1.0-edge.N tag exists, its tree is that version
+  #     in Edge pre-mode with pending changesets, and npm's edge dist-tag is exactly it.
   # The lts/** branch ruleset is a repo setting an admin creates once; the job cannot.
   # ---------------------------------------------------------------------------
   cut-candidate:
@@ -1682,6 +1689,39 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
+      - name: Set up git credentials
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
+
+      # The working tree moves to the Edge tag below, whose ci/ may predate this script.
+      # Run next's copy throughout; it imports only Node's stdlib and works on the cwd.
+      - name: Stage next's candidate-cut script
+        run: cp ci/candidate-cut.mjs "$RUNNER_TEMP/candidate-cut.mjs"
+
+      # Refuses unless: HEAD is next in Edge pre-mode, the stream produces the requested
+      # line, the ledger already carries the candidate entry, neither the branch, the tag
+      # nor the npm version exists, and the newest v<line>.0-edge.N tag is that version in
+      # its tree, in Edge pre-mode with pending changesets, and is what npm's edge dist-tag
+      # points at. Logs how many commits next is ahead of the tag (they are NOT in the
+      # candidate). Emits LINE/VERSION/TAG/BRANCH/NPMTAG/NEXTLINE/EDGETAG.
+      - name: Preflight
+        id: cut
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" preflight --line "$CUT"
+
+      # The candidate is the Edge tag's commit. Detached on purpose: nothing below pushes
+      # HEAD as a branch until merge-into-next has moved onto next.
+      - name: Check out ${{ steps.cut.outputs.EDGETAG }}
+        env:
+          EDGE_TAG: ${{ steps.cut.outputs.EDGETAG }}
+        run: |
+          set -euo pipefail
+          git checkout --detach "refs/tags/$EDGE_TAG"
+          echo "::notice::Building the candidate from $EDGE_TAG at $(git rev-parse --short HEAD)"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -1694,34 +1734,8 @@ jobs:
       - name: Validate migration filenames
         run: ./.github/scripts/validate-migration-filenames.sh
 
-      - name: Set up git credentials
-        env:
-          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
-        run: |
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions"
-          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
-
-      # Refuses unless: HEAD is next in Edge pre-mode with pending changesets, the stream
-      # produces the requested line, the ledger already carries the candidate entry, and
-      # neither the branch, the tag nor the npm version exists. Emits LINE/VERSION/TAG/
-      # BRANCH/NPMTAG/NEXTLINE for the steps below.
-      - name: Preflight
-        id: cut
-        run: node ci/candidate-cut.mjs preflight --line "$CUT"
-
-      # Informational: how far the tip is from the last Edge build. The candidate is the
-      # tip by design (runbook operation 2), but a large unpublished batch is worth seeing
-      # in the log before the publish step makes it permanent.
-      - name: Report the distance from the last Edge build
-        run: |
-          set -euo pipefail
-          LAST_EDGE=$(git describe --tags --abbrev=0 --match 'v*-edge.*' HEAD)
-          COUNT=$(git rev-list --count "$LAST_EDGE..HEAD")
-          echo "::notice::$COUNT commits on next since $LAST_EDGE (npm edge is $(npm view @memberjunction/core dist-tags.edge))"
-
       - name: Exit Edge pre-mode and version to ${{ steps.cut.outputs.VERSION }}
-        run: node ci/candidate-cut.mjs version --line "$CUT"
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" version --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
       - name: Build packages
         run: pnpm run build
@@ -1792,8 +1806,14 @@ jobs:
           git tag "$TAG"
           echo "::notice::Tagged $TAG at $(git rev-parse --short HEAD)"
 
+      # HEAD moves from the candidate tag onto origin/next with the tag merged in: next
+      # takes X.Y.0's versions and changelogs and drops the changesets the candidate
+      # consumed, and keeps every changeset merged after the Edge tag. Local only.
+      - name: Merge ${{ steps.cut.outputs.TAG }} into next
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" merge-into-next --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
+
       - name: Re-enter Edge pre-mode and open the ${{ steps.cut.outputs.NEXTLINE }} stream
-        run: node ci/candidate-cut.mjs reenter --line "$CUT"
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" reenter --line "$CUT"
 
       # `next` is protected and only the release App may push to it — see the edge path's
       # remote step for the reasoning. Minted here rather than at job start because an
@@ -1831,7 +1851,7 @@ jobs:
       # the step below deliberately stay on `origin` — those are not covered by next-protect
       # and the App has no reason to hold them.
       - name: Push next
-        run: node ci/candidate-cut.mjs push-next --remote next-push
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" push-next --remote next-push
 
       - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
         env:

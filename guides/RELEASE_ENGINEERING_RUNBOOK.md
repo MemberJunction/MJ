@@ -95,22 +95,26 @@ backported fixes that were already reviewed on `next`.
 ## 2. LTS candidate cut (the pre-exit dance)
 
 Trigger: the cert owner declares the stream ready ("current `6.1.0-edge.N` is our candidate").
-The cut happens at the **tip of `next`**. It is one workflow dispatch, takes about as long as
-an Edge release, and freezes nothing: merges after it simply ride the next stream.
+The cut is built from the **newest published Edge tag of the line** (`v6.1.0-edge.N`), not
+the tip of `next`: the candidate is exactly what shipped as Edge, minus the suffix. It is one
+workflow dispatch, takes about as long as an Edge release, and freezes nothing: anything merged
+to `next` after that tag (including during the run) is not in 6.1.0 and rides the next stream.
 
 Actions -> "Build and publish new package versions" -> Run workflow -> leave the ref at
 `next` -> `cut_line: 6.1` -> `confirm_branch: lts/6.1`. That is invocation 4 in
 `publish.yml`; the job is `cut-candidate`, the logic is `ci/candidate-cut.mjs`.
 
-**Before you press it** (the job checks all three and refuses otherwise):
+**Before you press it** (the job checks all of these and refuses otherwise):
 
 1. `release-lines.json` on `next` carries `lines["6.1"]` as `{ "status": "candidate",
    "candidateDate": "YYYY-MM-DD" }`. That is a reviewed PR (CODEOWNERS: the cert owner);
    status fields never arrive by direct push, so the job only appends the mechanical
    `newest` and `releases` fields afterwards.
-2. The newest Edge build is published. The job cuts the tip regardless and only reports
-   how many commits sit between the last Edge tag and the tip; a large unpublished batch is
-   your call, not its.
+2. The Edge build you mean to certify is the newest one. The job resolves the highest
+   `v6.1.0-edge.N` tag and refuses if there is none, if that tag's tree is not that version
+   in Edge pre-mode, or if npm does not have it with `edge` pointing at it (an Edge release
+   in flight, or a tag npm never got). It logs how many commits `next` is ahead of the tag;
+   those are not in the candidate. If they should be, run an Edge release first.
 3. Nothing named `lts/6.1`, `v6.1.0` or `@memberjunction/core@6.1.0` exists yet.
 
 Also, once per repo and not something the job can do: an admin creates a ruleset for
@@ -119,19 +123,24 @@ on 2026-09-03; a line born without the ruleset stays that way until someone noti
 
 **What the job does**, in an order where nothing is pushed until the packages are on npm:
 
-1. Preflight (above), then `changeset pre exit`, `changeset version` (accumulated
-   changesets resolve; every `@memberjunction/*` package versions to plain **`6.1.0`**),
+1. Preflight (above, on `next`), then check out the Edge tag (detached) and from it
+   `changeset pre exit`, `changeset version` (the changesets present at the tag resolve;
+   every `@memberjunction/*` package versions to plain **`6.1.0`**),
    `pnpm install` and a lockfile commit, and a frozen install as the proof the lockfile is
    in sync. All local commits so far.
 2. Build, then `changeset publish --tag lts-6.1`. Verified against the registry:
    `lts-6.1` points at 6.1.0 and `latest` did not move.
 3. Commit the post-release generated files, tag **`v6.1.0`**.
-4. `changeset pre enter edge` plus the seed changeset (`.changeset/open-6-2-edge-stream.md`,
-   a `minor`), so the next routine release is `6.2.0-edge.0`. Without the seed a patch-only
+4. Check out `origin/next` and merge `v6.1.0` into it: `next` takes 6.1.0's versions and
+   changelogs, loses the changesets 6.1.0 consumed, and keeps every changeset merged after
+   the Edge tag (the job asserts exactly that set survives). Then `changeset pre enter edge`
+   (fresh `pre.json`: initial versions 6.1.0, nothing marked released) plus the seed changeset
+   (`.changeset/open-6-2-edge-stream.md`, a `minor`), so the next routine release is
+   `6.2.0-edge.0` and carries the kept changesets. Without the seed a patch-only
    merge would version Edge to `6.1.1-edge.0`, which the line's own first patch owns; this
    was reproduced on a scratch clone, so the seed is load-bearing, not a courtesy.
-5. Push `next` (merging in anything that landed during the build, bounded retries; only the
-   lockfile may auto-resolve), push the tag, create **`lts/6.1`** at the tag, create the
+5. Push `next` (merging in anything that landed during the build, bounded retries; in both
+   merges only the lockfile may auto-resolve), push the tag, create **`lts/6.1`** at the tag, create the
    GitHub Release with `--latest=false`, append `lines["6.1"].newest` and
    `releases["6.1.0"]` to the ledger, dispatch docs and release notes.
 
@@ -141,13 +150,15 @@ complete. That is "released, not yet recorded", the same posture as every other 
 here; finish the remaining steps by hand from the run log, do not re-run.
 
 **Afterwards.** Open the certification tracking issue; gates run against 6.1.0 **on
-`lts/6.1`**. Cert fixes land on `next` first -> label `backport lts/6.1` -> bot cherry-picks
--> line patch builds (6.1.1, 6.1.2, ...) via operation 3. Certification names whichever
-build passes.
+`lts/6.1`**, whose history is the Edge tag's commit plus the exit and version commits. A fix
+that merged to `next` after the Edge tag and belongs in the line is a backport like any
+other: label `backport lts/6.1` -> bot cherry-picks -> line patch builds (6.1.1, 6.1.2, ...)
+via operation 3. Certification names whichever build passes.
 
-Pinning an *older* Edge build instead of the tip is not something the job supports, on
-purpose: it would leave `next`'s stream tuple stale and need its own exit/version/re-enter
-dance. Cut the tip.
+Pinning an Edge build *older than the newest* is not something the job supports, on purpose:
+the newest Edge tag is what Edge users are running, and cutting behind it would ship a
+candidate that is older than the stream it closes. Run the cut before the next Edge release,
+or certify the newest one.
 
 ---
 
