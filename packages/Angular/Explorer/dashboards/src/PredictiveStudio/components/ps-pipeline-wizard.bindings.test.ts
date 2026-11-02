@@ -91,7 +91,7 @@ describe('PipelineWizardBindings.Plan', () => {
     expect(plan.Unit.UnitRows).toEqual({ kind: 'grain', grainEntity: 'Members', decisionDate: { kind: 'fixed', date: '2026-10-31', advance: 'each-run' }, filter: [] });
     expect(plan.Unit.TaskType).toEqual({ kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 });
     expect(plan.Protocol.Holdout).toEqual({ kind: 'seeded-random', fraction: 0.25 });
-    expect([plan.Unit.Name.endsWith(' — unit'), plan.Unit.Description.startsWith('Created by the Pipeline Wizard on 2026-10-31 ')]).toEqual([true, true]);
+    expect([plan.Unit.Name.endsWith(' — unit'), plan.Unit.Description?.startsWith('Created by the Pipeline Wizard on 2026-10-31 ')]).toEqual([true, true]);
   });
   it('holds a pipeline that declares a time index', () => {
     const indexed = fields({ ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TimeIndexColumn: 'JoinDate' }) });
