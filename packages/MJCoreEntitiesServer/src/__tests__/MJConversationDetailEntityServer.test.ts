@@ -20,8 +20,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogError: (...args: unknown[]) => logErrorMock(...args) };
 });
 
-import { RunView } from '@memberjunction/core';
+import { EntityFieldTSType, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { MJConversationDetailEntityServer } from '../custom/MJConversationDetailEntityServer.server';
+import { MJConversationEntityServer } from '../custom/MJConversationEntityServer.server';
 
 type FieldStub = { Dirty: boolean; OldValue?: unknown } | undefined;
 
@@ -201,5 +202,145 @@ describe('MJConversationDetailEntityServer.Save', () => {
 
         expect(parentSave).toHaveBeenCalledOnce();
         expect(s.BranchID).toBeNull();
+    });
+
+    it('returns false, records why, and does not call parent Save when CheckAndStampAnchoredRestrictedFields refuses the comment', async () => {
+        const parentPrototype = Object.getPrototypeOf(MJConversationDetailEntityServer.prototype) as MJConversationDetailEntityServer;
+        const parentSave = vi.spyOn(parentPrototype, 'Save').mockResolvedValue(true);
+        const results: Array<{ Success: boolean; Type: string; Message: string }> = [];
+        const s = {
+            ...saveStub(null, results),
+            IsSaved: false,
+            CheckAndStampAnchoredRestrictedFields: async () =>
+                'Your comment references restricted field(s) (Salary) that you do not have permission to access.'
+        };
+
+        await expect(
+            MJConversationDetailEntityServer.prototype.Save.call(s as unknown as MJConversationDetailEntityServer)
+        ).resolves.toBe(false);
+
+        expect(parentSave).not.toHaveBeenCalled();
+        expect(results).toEqual([
+            expect.objectContaining({
+                Success: false,
+                Type: 'create',
+                Message: 'Your comment references restricted field(s) (Salary) that you do not have permission to access.'
+            })
+        ]);
+    });
+});
+
+describe('MJConversationEntityServer.Save (anchored RLS + FLS)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('auto-stamps AnchorMetadataObject.restrictedFields when anchored to an FLS-governed field and allows permitted users', async () => {
+        const parentPrototype = Object.getPrototypeOf(MJConversationEntityServer.prototype) as MJConversationEntityServer;
+        const parentSave = vi.spyOn(parentPrototype, 'Save').mockResolvedValue(true);
+        vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockReturnValue(false);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: 'EMP-1' }] })
+        } as unknown as RunView);
+
+        const entityInfo = {
+            ID: 'E0000000-0000-0000-0000-000000000001',
+            Name: 'Employees',
+            DisplayNameOrName: 'Employees',
+            FieldLevelSecurityApplies: true,
+            PrimaryKeys: [{ Name: 'ID', TSType: EntityFieldTSType.String }],
+            FirstPrimaryKey: { Name: 'ID', TSType: EntityFieldTSType.String },
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, HasFieldPermissions: false, TSType: EntityFieldTSType.String },
+                { Name: 'Salary', IsPrimaryKey: false, HasFieldPermissions: true, TSType: EntityFieldTSType.Number }
+            ],
+            GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+            GetDeniedReadFields: vi.fn().mockReturnValue(new Set<string>())
+        };
+
+        const convStub = {
+            IsSaved: false,
+            LinkedEntityID: entityInfo.ID,
+            LinkedRecordID: 'EMP-1',
+            AnchorType: 'Field' as const,
+            AnchorKey: 'salary',
+            AnchorMetadata: null,
+            AnchorMetadataObject: { anchorDisplayName: 'Salary' } as Record<string, unknown>,
+            ContextCurrentUser: { ID: 'user-hr' } as unknown as UserInfo,
+            ProviderToUse: {
+                ProviderType: 'Database',
+                Entities: [entityInfo]
+            },
+            RegisterResultHistoryEntry: vi.fn(),
+            checkAnchoredConversationAccessAndStampMetadata: (
+                MJConversationEntityServer.prototype as unknown as {
+                    checkAnchoredConversationAccessAndStampMetadata: () => Promise<string | null>;
+                }
+            ).checkAnchoredConversationAccessAndStampMetadata
+        };
+
+        const saved = await MJConversationEntityServer.prototype.Save.call(
+            convStub as unknown as MJConversationEntityServer
+        );
+        expect(saved).toBe(true);
+        expect(parentSave).toHaveBeenCalledOnce();
+        expect(convStub.AnchorMetadataObject.restrictedFields).toEqual(['Salary']);
+    });
+
+    it('blocks Save when the caller is denied FLS read access on the anchored field', async () => {
+        const parentPrototype = Object.getPrototypeOf(MJConversationEntityServer.prototype) as MJConversationEntityServer;
+        const parentSave = vi.spyOn(parentPrototype, 'Save').mockResolvedValue(true);
+        vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockReturnValue(false);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: 'EMP-1' }] })
+        } as unknown as RunView);
+
+        const entityInfo = {
+            ID: 'E0000000-0000-0000-0000-000000000001',
+            Name: 'Employees',
+            DisplayNameOrName: 'Employees',
+            FieldLevelSecurityApplies: true,
+            PrimaryKeys: [{ Name: 'ID', TSType: EntityFieldTSType.String }],
+            FirstPrimaryKey: { Name: 'ID', TSType: EntityFieldTSType.String },
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, HasFieldPermissions: false, TSType: EntityFieldTSType.String },
+                { Name: 'Salary', IsPrimaryKey: false, HasFieldPermissions: true, TSType: EntityFieldTSType.Number }
+            ],
+            GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+            GetDeniedReadFields: vi.fn().mockReturnValue(new Set<string>(['salary']))
+        };
+
+        const results: Array<{ Success: boolean; Message: string }> = [];
+        const proto = MJConversationEntityServer.prototype as unknown as {
+            recordSaveDenied: (message: string) => void;
+        };
+        const convStub = {
+            IsSaved: false,
+            LinkedEntityID: entityInfo.ID,
+            LinkedRecordID: 'EMP-1',
+            AnchorType: 'Field' as const,
+            AnchorKey: 'Salary',
+            AnchorMetadata: null,
+            AnchorMetadataObject: null,
+            ContextCurrentUser: { ID: 'user-restricted' } as unknown as UserInfo,
+            ProviderToUse: {
+                ProviderType: 'Database',
+                Entities: [entityInfo]
+            },
+            RegisterResultHistoryEntry: (r: { Success: boolean; Message: string }) => results.push(r),
+            recordSaveDenied: proto.recordSaveDenied,
+            checkAnchoredConversationAccessAndStampMetadata: (
+                MJConversationEntityServer.prototype as unknown as {
+                    checkAnchoredConversationAccessAndStampMetadata: () => Promise<string | null>;
+                }
+            ).checkAnchoredConversationAccessAndStampMetadata
+        };
+
+        const saved = await MJConversationEntityServer.prototype.Save.call(
+            convStub as unknown as MJConversationEntityServer
+        );
+        expect(saved).toBe(false);
+        expect(parentSave).not.toHaveBeenCalled();
+        expect(results[0]?.Message).toContain('restricted field');
     });
 });

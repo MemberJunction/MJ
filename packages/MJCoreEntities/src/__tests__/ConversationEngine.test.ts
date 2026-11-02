@@ -542,14 +542,14 @@ describe('ConversationEngine', () => {
             runViewHook.firstSeen = false;
         });
 
-        it('filters to owned and shared, unarchived, Global/Both conversations in the environment', async () => {
+        it('filters to owned and shared, unarchived, unanchored, Global/Both conversations in the environment', async () => {
             shareConversations('conv-s1');
             runViewResultQueue.push({ Success: true, Results: [] });
             await engine.LoadConversations('env-1', contextUser, true);
 
             const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
             expect(params['ExtraFilter']).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL"
             );
         });
     });
@@ -564,7 +564,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL"
             );
         });
 
@@ -574,7 +574,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL"
             );
         });
 
@@ -583,7 +583,15 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeApplicationScoped: true });
 
-            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0)");
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND AnchorType IS NULL");
+        });
+
+        it('includes anchored conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeAnchored: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')");
         });
 
         it('asks the permission engine for the calling user, not a cached one', async () => {

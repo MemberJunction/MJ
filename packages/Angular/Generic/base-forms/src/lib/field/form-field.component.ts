@@ -19,6 +19,7 @@ import {
   type RecordPreviewUpdatedEvent
 } from '../preview-popover/record-preview-popover.component';
 import { MjRecordPreviewPopoverService } from '../preview-popover/record-preview-popover.service';
+import { FormRecordCommentsCoordinatorService } from '../comments/form-record-comments-coordinator.service';
 import {
   ApplyQuickEditToHostRecord,
   ResolveRecordLinkTarget
@@ -221,6 +222,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private fieldEdits = inject(FormFieldEditCoordinator, { optional: true });
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
   private previewPopoverService = inject(MjRecordPreviewPopoverService, { optional: true });
+  private commentsCoordinator = inject(FormRecordCommentsCoordinatorService, { optional: true });
   private _coordinatorSubs: Subscription[] = [];
   private _remoteHighlightTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastPolymorphicEntityRef: string | null | undefined = undefined;
@@ -359,6 +361,61 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         })
       );
     }
+
+    if (this.commentsCoordinator) {
+      this._coordinatorSubs.push(
+        this.commentsCoordinator.Changed$.subscribe(() => {
+          this.sectionHost?.NotifyFieldChanged(this);
+          this.cdr.markForCheck();
+        })
+      );
+    }
+  }
+
+  /** Number of open (unresolved) anchored comment threads targeting this field. */
+  public get FieldOpenCommentCount(): number {
+    return this.commentsCoordinator?.GetFieldOpenCommentCount(this.FieldName) ?? 0;
+  }
+
+  /** Whether inline field commenting is available on this field. */
+  public get CanCommentOnField(): boolean {
+    return Boolean(
+      this.commentsCoordinator &&
+      this.Record?.IsSaved &&
+      this.IsFieldReadableByUser &&
+      this.FieldName
+    );
+  }
+
+  /** Opens the inline anchored comment popover (or drawer) targeted at this field. */
+  public OnOpenFieldComments(event: MouseEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!this.commentsCoordinator || !this.FieldName) return;
+
+    const btn = event.currentTarget as HTMLElement | null;
+    const rect = btn?.getBoundingClientRect();
+    const hostPanel = this.sectionHost as { SectionKey?: string; SectionName?: string } | null;
+    const formattedVal = this.FormatValue();
+
+    this.commentsCoordinator.OpenPopoverForTarget({
+      AnchorType: 'Field',
+      AnchorKey: this.FieldName,
+      Label: this.DisplayName,
+      QuotedValue: formattedVal && formattedVal.trim().length > 0 ? formattedVal : undefined,
+      SectionKey: hostPanel?.SectionKey || undefined,
+      SectionDisplayName: hostPanel?.SectionName || undefined,
+      AnchorRect: rect
+        ? {
+            top: rect.top,
+            left: rect.left,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          }
+        : undefined
+    });
   }
 
   /** This component's host element — what a section uses to confirm the field is inside it. */
@@ -1025,6 +1082,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!this.IsFieldReadableByUser) return true;
     if (this.FormContext?.hiddenFieldNames?.includes(this.FieldName)) return true;
     if (this.HasTimeTravelDiff) return false;
+    if (this.FieldOpenCommentCount > 0) return false;
     if (this.EditMode && !this.ActiveVersionPreview) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;

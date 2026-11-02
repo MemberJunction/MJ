@@ -38,6 +38,7 @@ import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.co
 import { MjRecordLinkDirective } from './lib/links/record-link.directive';
 import { MjRecordLinkComponent } from './lib/links/record-link.component';
 import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
+import { MjRecordCommentsComponent } from './lib/comments/record-comments.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -84,7 +85,8 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     MjRecordLinksDrawerComponent,
     MjRecordLinkDirective,
     MjRecordLinkComponent,
-    MjRecordPreviewPopoverComponent
+    MjRecordPreviewPopoverComponent,
+    MjRecordCommentsComponent
   ],
   imports: [
     CommonModule,
@@ -131,7 +133,8 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     MjRecordLinksDrawerComponent,
     MjRecordLinkDirective,
     MjRecordLinkComponent,
-    MjRecordPreviewPopoverComponent
+    MjRecordPreviewPopoverComponent,
+    MjRecordCommentsComponent
   ]
 })
 export class BaseFormsModule { }

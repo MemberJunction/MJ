@@ -15,6 +15,7 @@ export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
 export * from './custom/ConversationWriteAccess';
 export * from './custom/ConversationForkAccess';
+export * from './custom/AnchoredConversationSecurity';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/QueryDiagnostics';

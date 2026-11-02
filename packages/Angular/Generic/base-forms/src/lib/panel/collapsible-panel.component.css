@@ -338,3 +338,55 @@ mj-collapsible-panel.mj-panel-has-warnings:not(.mj-chrome-show) > .mj-forms-pane
   padding: 0 1px;
   font-weight: 600;
 }
+
+/* ============================================
+   SECTION-LEVEL ANCHORED COMMENTS
+   ============================================ */
+.mj-forms-panel-comment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.3;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-panel-comment-badge:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-forms-panel-comment-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--mj-radius-sm, 6px);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.mj-forms-panel-header:hover .mj-forms-panel-comment-trigger,
+.mj-forms-panel-comment-trigger:focus-visible {
+  opacity: 1;
+}
+
+.mj-forms-panel-comment-trigger:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-brand-primary);
+}
+
