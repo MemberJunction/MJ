@@ -122,7 +122,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
    * Records the account (base behaviour) and, when the configuration carries a non-empty `rootPath`, uses it as the
    * root in place of `STORAGE_LOCAL_ROOT`.
    */
-  public override async initialize(config?: StorageProviderConfig): Promise<void> { // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  public override async initialize(config?: StorageProviderConfig): Promise<void> {
     await super.initialize(config);
     const configured = config?.rootPath;
     if (typeof configured === 'string' && configured.length > 0) {
@@ -244,6 +244,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return pathToFileURL(await this.pathOf(objectName, 'Object')).href;
   }
 
+  /** Moves (renames) a file under the root, creating the destination's directories. */
   public async MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean> {
     const [from, to] = await Promise.all([this.pathOf(oldObjectName, 'Object'), this.pathOf(newObjectName, 'Object')]);
     await mkdir(dirname(to), { recursive: true });
@@ -251,6 +252,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return true;
   }
 
+  /** Deletes a file under the root; a file that does not exist is already deleted (true). */
   public async DeleteObject(objectName: string): Promise<boolean> {
     await rm(await this.pathOf(objectName, 'Object'), { force: true });
     return true;
@@ -284,6 +286,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return { objects, prefixes };
   }
 
+  /** Creates a directory under the root with any missing parents. */
   public async CreateDirectory(directoryPath: string): Promise<boolean> {
     await mkdir(await this.pathOf(directoryPath, 'Location'), { recursive: true });
     return true;
@@ -347,6 +350,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return true;
   }
 
+  /** Copies a file under the root, creating the destination's directories. */
   public async CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean> {
     const [from, to] = await Promise.all([this.pathOf(sourceObjectName, 'Object'), this.pathOf(destinationObjectName, 'Object')]);
     await mkdir(dirname(to), { recursive: true });
@@ -354,10 +358,12 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return true;
   }
 
+  /** Whether a file exists under the root. */
   public async ObjectExists(objectName: string): Promise<boolean> {
     return existsSync(await this.pathOf(objectName, 'Object'));
   }
 
+  /** Whether a directory exists under the root. */
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     const full = await this.pathOf(directoryPath, 'Location');
     return existsSync(full) && (await stat(full)).isDirectory();
