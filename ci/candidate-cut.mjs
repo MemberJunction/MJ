@@ -13,18 +13,29 @@
  *                          (HEAD detached at the Edge tag) changeset pre exit ->
  *                          changeset version -> lockfile refresh, then prove every
  *                          @memberjunction/* package is at 6.1.0
+ *   pre-publish-check --line 6.1 --edge-tag v6.1.0-edge.N
+ *                          main is still at the Edge tag, and a trial merge of HEAD into
+ *                          <remote>/next has no conflict the resolver cannot handle.
+ *                          Run after `version` and again right before the publish.
  *   merge-into-next --line 6.1 --edge-tag v6.1.0-edge.N
  *                          (HEAD at the v6.1.0 tag) check out <remote>/next and merge v6.1.0
  *                          into it; prove the changesets left are exactly those added to
- *                          next after the Edge tag
+ *                          next after the Edge tag; move every 6.1.0-edge.N version and pin
+ *                          on next to 6.1.0 and regenerate the lockfile
  *   reenter   --line 6.1   changeset pre enter edge + the seed changeset that makes the
  *                          next Edge publish 6.2.0-edge.0 (not 6.1.1-edge.0)
- *   push-next              push HEAD to origin/next, merging in anything that landed on
- *                          next while the job ran (bounded retries, lockfile-only auto-merge)
+ *   push-next --line 6.1   push HEAD to origin/next, merging in anything that landed on
+ *                          next while the job ran (bounded retries; same resolver and
+ *                          version/pin/lockfile sync as merge-into-next)
+ *
+ * Conflict resolution, both merges: package.json and the lockfile resolve to next's side
+ * (the candidate side only ever changed versions and pins there, which the sync redoes);
+ * anything else aborts the merge.
  *
  * Everything that decides is a pure function exported for ci/candidate-cut.test.mjs; the
  * functions that touch git, pnpm or npm are thin and named for what they do. Imports
- * nothing outside Node's stdlib so ci-scripts.yml runs the tests with no install.
+ * nothing outside Node's stdlib (and ./back-merge.mjs, which holds the same rule) so
+ * ci-scripts.yml runs the tests with no install.
  *
  * Rehearsed 2026-09-03 on a scratch clone of origin/next: exit + version gives a clean
  * 6.1.0 across 305 packages; without the seed changeset the first patch-only merge after
@@ -34,6 +45,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { refreshLockfile as refreshLockfileAfterMerge } from './back-merge.mjs';
 
 export const FIXED_GROUP_PREFIX = '@memberjunction/';
 export const PRE_JSON = '.changeset/pre.json';
@@ -236,8 +248,50 @@ export function assertReenteredPreJson(pre, version) {
     assertEdgePreMode(pre);
     const consumed = pre.changesets ?? [];
     if (consumed.length > 0) throw new Error(`${PRE_JSON} already lists ${consumed.length} changeset(s) as released: ${consumed.slice(0, 5).join(', ')}`);
-    const core = pre.initialVersions?.['@memberjunction/core'];
-    if (core !== version) throw new Error(`${PRE_JSON} initialVersions has @memberjunction/core at ${core}, expected ${version}`);
+    // Every fixed-group entry, not just one: changesets numbers the first prerelease of
+    // the group from the highest initial version, so a single package left at
+    // X.Y.0-edge.N would make the new stream start at X.(Y+1).0-edge.(N+1), not edge.0.
+    const initial = Object.entries(pre.initialVersions ?? {}).filter(([name]) => name.startsWith(FIXED_GROUP_PREFIX));
+    if (initial.length === 0) throw new Error(`${PRE_JSON} initialVersions has no ${FIXED_GROUP_PREFIX}* packages`);
+    const wrong = initial.filter(([, v]) => v !== version).map(([n, v]) => `${n}@${v}`);
+    if (wrong.length > 0) {
+        throw new Error(`${PRE_JSON} initialVersions has ${wrong.length} ${FIXED_GROUP_PREFIX}* package(s) not at ${version}: ${wrong.slice(0, 5).join(', ')}`);
+    }
+}
+
+/**
+ * Move this line's Edge tuple to the candidate's in package.json text: `"version"` and
+ * every `@memberjunction/*` value of the form [~^]X.Y.0-edge.N become [~^]X.Y.0. Text in,
+ * text out, so formatting and key order survive. Other lines' tuples, normal versions,
+ * workspace: specifiers and non-MJ packages are left alone.
+ * @param {string} text
+ * @param {string} line e.g. "6.2"
+ */
+export function rewriteEdgePins(text, line) {
+    if (!LINE_RX.test(line ?? '')) throw new Error(`line must look like X.Y (got "${line}")`);
+    const tuple = line.replace('.', '\\.');
+    const rx = new RegExp(`("(?:version|@memberjunction/[^"]+)"\\s*:\\s*")([~^]?)${tuple}\\.0-edge\\.\\d+"`, 'g');
+    return text.replace(rx, `$1$2${line}.0"`);
+}
+
+/**
+ * Conflicted paths from `git merge-tree --write-tree --name-only` output: the tree id,
+ * then one path per line up to the first blank line, then informational messages.
+ * @param {string} stdout
+ */
+export function parseMergeTreeConflicts(stdout) {
+    const lines = stdout.split('\n').slice(1);
+    const end = lines.indexOf('');
+    return [...new Set(end === -1 ? lines : lines.slice(0, end))].filter(Boolean);
+}
+
+/**
+ * The conflicts the merge resolver cannot settle: anything but a package.json or the
+ * root lockfile.
+ * @param {string[]} paths
+ */
+export function unresolvableConflicts(paths) {
+    return paths.filter((p) => path.posix.basename(p) !== 'package.json' && p !== LOCKFILE);
 }
 
 /**
@@ -248,7 +302,8 @@ export function assertReenteredPreJson(pre, version) {
  *   remoteBranchExists: boolean, remoteTagExists: boolean, npmVersionExists: boolean,
  *   pendingCount: number, currentBranch: string, edgeTag: string | null,
  *   edgeTagVersion?: string, edgeTagPre?: object | null,
- *   npmEdgeVersionExists?: boolean, npmEdgeDistTag?: string
+ *   npmEdgeVersionExists?: boolean, npmEdgeDistTag?: string, mainAtEdgeTag?: boolean,
+ *   edgeTagIsAncestorOfNext?: boolean
  * }} facts
  * @param {ReturnType<typeof deriveCut>} cut
  */
@@ -280,6 +335,14 @@ function edgeTagFailures(facts) {
         failures.push(`npm dist-tag edge is at ${facts.npmEdgeDistTag}, not ${want}: an Edge release is in flight or the tag and npm disagree`);
     }
     if (facts.pendingCount === 0) failures.push(`no pending changesets at ${facts.edgeTag}: changeset version would be a no-op`);
+    if (!facts.edgeTagIsAncestorOfNext) {
+        failures.push(
+            `${facts.edgeTag} is not an ancestor of next: its main -> next back-merge has not landed (look for an open back-merge fallback PR). Land it first; cutting over it would publish and then conflict`,
+        );
+    }
+    if (!facts.mainAtEdgeTag) {
+        failures.push(`main is not at ${facts.edgeTag}: a release is on its way to main; let it publish as Edge (or revert it) before cutting`);
+    }
     return failures;
 }
 
@@ -356,7 +419,7 @@ function assertEdgeTagArg(args) {
 
 function listWorkspacePackages() {
     const raw = run('pnpm', ['-r', 'ls', '--depth', '-1', '--json']);
-    return JSON.parse(raw).map((p) => ({ name: p.name, version: p.version }));
+    return JSON.parse(raw).map((p) => ({ name: p.name, version: p.version, path: p.path }));
 }
 
 function remoteRefExists(remote, ref) {
@@ -407,7 +470,7 @@ function preflight(args) {
         remoteTagExists: tryRemoteRefExists(args.remote, `refs/tags/${cut.tag}`),
         npmVersionExists: npmVersionExists(cut.version),
         edgeTag,
-        ...(edgeTag ? readEdgeTagFacts(edgeTag) : { pendingCount: 0 }),
+        ...(edgeTag ? readEdgeTagFacts(edgeTag, args.remote) : { pendingCount: 0 }),
     };
     const failures = preflightFailures(facts, cut);
     if (failures.length > 0) throw new Error(`preflight failed:\n  - ${failures.join('\n  - ')}`);
@@ -416,7 +479,7 @@ function preflight(args) {
     emitOutputs({ ...cut, edgeTag });
 }
 
-function readEdgeTagFacts(edgeTag) {
+function readEdgeTagFacts(edgeTag, remote) {
     const versionJson = gitShowOrNull(edgeTag, VERSION_SOURCE);
     const preJson = gitShowOrNull(edgeTag, PRE_JSON);
     const want = edgeTag.slice(1);
@@ -426,19 +489,30 @@ function readEdgeTagFacts(edgeTag) {
         npmEdgeVersionExists: npmVersionExists(want),
         npmEdgeDistTag: npmDistTag('edge'),
         pendingCount: pendingChangesetsAt(edgeTag).length,
+        mainAtEdgeTag: mainCommit(remote) === revParse(edgeTag),
+        edgeTagIsAncestorOfNext: isAncestor(edgeTag, 'HEAD'),
     };
+}
+
+function isAncestor(ancestor, rev) {
+    try {
+        run('git', ['merge-base', '--is-ancestor', ancestor, rev]);
+        return true;
+    } catch (e) {
+        if (e.status !== 1) throw e;
+        return false;
+    }
+}
+
+function mainCommit(remote) {
+    run('git', ['fetch', remote, 'main']);
+    return revParse(`${remote}/main`);
 }
 
 /** Informational: what on next is NOT going into the candidate. */
 function reportDistanceFromEdgeTag(edgeTag) {
     const ahead = run('git', ['rev-list', '--count', `${edgeTag}..HEAD`]);
     console.log(`next is ${ahead} commit(s) ahead of ${edgeTag}; those ride the next Edge stream, not the candidate`);
-    try {
-        run('git', ['merge-base', '--is-ancestor', edgeTag, 'HEAD']);
-    } catch (e) {
-        if (e.status !== 1) throw e;
-        console.log(`warning: ${edgeTag} is not an ancestor of next (its back-merge has not landed); the merge into next will bring the release commit in`);
-    }
 }
 
 function version(args) {
@@ -458,15 +532,109 @@ function version(args) {
     if (left.length > 0) throw new Error(`${left.length} changesets survived changeset version: ${left.slice(0, 5).join(', ')}`);
     const count = assertFixedGroupAt(listWorkspacePackages(), cut.version);
 
-    console.log(`refreshing ${LOCKFILE} for the version bump`);
+    refreshCandidateLockfile('chore: lockfile for the candidate [skip ci]');
+    console.log(`version OK: ${count} ${FIXED_GROUP_PREFIX}* packages at ${cut.version}`);
+    emitOutputs(cut);
+}
+
+/** Regenerate the lockfile, commit it if it moved, then prove it with a frozen install. */
+function refreshCandidateLockfile(message) {
+    console.log(`refreshing ${LOCKFILE}`);
     run('pnpm', ['install', '--no-frozen-lockfile'], { stdio: 'inherit' });
     if (run('git', ['status', '--porcelain', '--', LOCKFILE]) !== '') {
         run('git', ['add', LOCKFILE]);
-        run('git', ['commit', '-m', 'chore: lockfile for the candidate [skip ci]']);
+        run('git', ['commit', '-m', message]);
     }
     run('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' }); // the only proof the lockfile is in sync
-    console.log(`version OK: ${count} ${FIXED_GROUP_PREFIX}* packages at ${cut.version}`);
-    emitOutputs(cut);
+}
+
+/**
+ * Rewrite the given package.json files with rewriteEdgePins. Writes files, does not
+ * commit. Exported for the git-backed test.
+ * @param {string} line
+ * @param {string[]} files package.json paths (the workspace's, as `changeset version` sees them)
+ * @returns {string[]} the files it changed
+ */
+export function rewriteWorkspacePins(line, files) {
+    const changed = [];
+    for (const f of files) {
+        const before = fs.readFileSync(f, 'utf8');
+        const after = rewriteEdgePins(before, line);
+        if (after === before) continue;
+        fs.writeFileSync(f, after);
+        changed.push(f);
+    }
+    return changed;
+}
+
+/**
+ * The slice of simple-git's client that back-merge.mjs's refreshLockfile uses, over plain
+ * git, so the Edge back-merge and the cut regenerate next's lockfile the same way.
+ */
+const syncGitClient = {
+    status: async () => ({
+        modified: run('git', ['diff', '--name-only', 'HEAD']).split('\n').filter(Boolean),
+        not_added: run('git', ['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean),
+    }),
+    add: async (file) => run('git', ['add', '--', file]),
+    commit: async (message) => run('git', ['commit', '-m', message]),
+};
+
+/**
+ * After a merge onto next: every X.Y.0-edge.N version and pin becomes X.Y.0 (packages
+ * and pins added after the Edge tag included), the lockfile is regenerated the way the
+ * Edge back-merge does it (required: the manifests just moved) and proven with a frozen
+ * install, and the whole fixed group must sit at X.Y.0.
+ */
+async function syncNextToCandidate(line) {
+    const manifests = listWorkspacePackages().map((p) => path.relative(process.cwd(), path.join(p.path, 'package.json')));
+    const changed = rewriteWorkspacePins(line, manifests);
+    if (changed.length > 0) {
+        run('git', ['add', '--', ...changed]);
+        run('git', ['commit', '-m', `chore: move next's ${line}.0-edge versions and pins to ${line}.0 [skip ci]`]);
+    }
+    console.log(`rewrote ${changed.length} package.json file(s) to ${line}.0`);
+    await refreshLockfileAfterMerge(syncGitClient, { required: true });
+    run('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' }); // the only proof the lockfile is in sync
+    return assertFixedGroupAt(listWorkspacePackages(), `${line}.0`);
+}
+
+/**
+ * Merge `theirs` into `ours` without touching the index or the working tree: the merged
+ * tree's id and the paths that would conflict. Exported for the git-backed test.
+ * @returns {{tree: string, conflicts: string[]}}
+ */
+export function trialMerge(ours, theirs) {
+    let stdout;
+    try {
+        stdout = run('git', ['merge-tree', '--write-tree', '--name-only', ours, theirs], { stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+        if (e.status !== 1) throw e; // 1 = conflicts; anything else is git failing
+        stdout = String(e.stdout ?? '');
+    }
+    return { tree: stdout.split('\n')[0].trim(), conflicts: parseMergeTreeConflicts(stdout) };
+}
+
+/**
+ * Refuse, while nothing is published, if the cut could not finish: main moved past the
+ * Edge tag (a release queued behind this run would publish an Edge build of the closed
+ * stream and back-merge it into next), or HEAD cannot merge into next mechanically.
+ */
+function prePublishCheck(args) {
+    const edgeCommit = assertEdgeTagArg(args);
+    if (mainCommit(args.remote) !== edgeCommit) {
+        throw new Error(`${args.remote}/main moved off ${args.edgeTag} during the cut. Nothing is published; let that release go out as Edge, then re-dispatch.`);
+    }
+    run('git', ['fetch', args.remote, 'next']);
+    const nextRef = `${args.remote}/next`;
+    const { tree, conflicts } = trialMerge(nextRef, 'HEAD');
+    const unresolvable = unresolvableConflicts(conflicts);
+    if (unresolvable.length > 0) {
+        throw new Error(`the candidate would not merge into ${nextRef}: conflicts outside package.json and ${LOCKFILE}: ${unresolvable.join(', ')}. Nothing is published.`);
+    }
+    // The same partition merge-into-next asserts, on the trial tree, while it is still free.
+    assertChangesetsAfterMerge(pendingChangesetsAt(tree), keptChangesets(pendingChangesetsAt(edgeCommit), pendingChangesetsAt(nextRef)));
+    console.log(`pre-publish-check OK: main at ${args.edgeTag}; trial merge into next has ${conflicts.length} package.json/lockfile conflict(s), all mechanical`);
 }
 
 /**
@@ -475,26 +643,22 @@ function version(args) {
  * changesets it consumed, while keeping every changeset merged after the Edge tag. Only
  * the lockfile may auto-resolve; the packages are already on npm if this stops.
  */
-function mergeIntoNext(args) {
+async function mergeIntoNext(args) {
     const edgeCommit = assertEdgeTagArg(args);
     const cut = deriveCut(args.edgeTag.slice(1));
     const candidateCommit = revParse(cut.tag);
     if (revParse('HEAD') !== candidateCommit) throw new Error(`HEAD is not at ${cut.tag}; tag the candidate before merging it into next`);
-    try {
-        run('git', ['merge-base', '--is-ancestor', edgeCommit, candidateCommit]);
-    } catch (e) {
-        if (e.status !== 1) throw e;
-        throw new Error(`${cut.tag} is not built on ${args.edgeTag}; refusing to merge it into next`);
-    }
+    if (!isAncestor(edgeCommit, candidateCommit)) throw new Error(`${cut.tag} is not built on ${args.edgeTag}; refusing to merge it into next`);
 
     run('git', ['fetch', args.remote, 'next']);
     const nextRef = `${args.remote}/next`;
     const kept = keptChangesets(pendingChangesetsAt(edgeCommit), pendingChangesetsAt(nextRef));
     run('git', ['checkout', '-B', 'candidate-cut-next', nextRef]);
-    mergeIntoHead(cut.tag, `chore: merge the ${cut.version} candidate into next [skip ci]`);
+    mergeIntoHead(cut.tag, 'ours', `chore: merge the ${cut.version} candidate into next [skip ci]`);
 
     assertChangesetsAfterMerge(pendingChangesets(fs.readdirSync('.changeset')), kept);
-    console.log(`merge-into-next OK: ${cut.tag} merged into ${nextRef}; ${kept.length} changeset(s) added after ${args.edgeTag} stay for the ${cut.nextLine} stream`);
+    const count = await syncNextToCandidate(cut.line);
+    console.log(`merge-into-next OK: ${cut.tag} merged into ${nextRef}; ${count} packages at ${cut.version}; ${kept.length} changeset(s) added after ${args.edgeTag} stay for the ${cut.nextLine} stream`);
 }
 
 function reenter(args) {
@@ -520,10 +684,13 @@ function reenter(args) {
  * packages already on npm, which is the same "released, not yet recorded" posture the Edge
  * back-merge takes. Never force.
  */
-function pushNext(args) {
+async function pushNext(args) {
+    if (!LINE_RX.test(args.line ?? '')) throw new Error(`--line must look like X.Y (got "${args.line}")`);
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
         run('git', ['fetch', args.remote, 'next']);
-        mergeIntoHead(`${args.remote}/next`);
+        const before = revParse('HEAD');
+        mergeIntoHead(`${args.remote}/next`, 'theirs');
+        if (revParse('HEAD') !== before) await syncNextToCandidate(args.line);
         try {
             run('git', ['push', args.remote, 'HEAD:next'], { stdio: 'inherit' });
             console.log(`push-next OK on attempt ${attempt}`);
@@ -536,35 +703,45 @@ function pushNext(args) {
 }
 
 /**
- * Merge `ref` into HEAD. Only the lockfile may auto-resolve (kept from HEAD, then
- * regenerated); any other conflict aborts the merge and throws.
+ * Merge `ref` into HEAD. Conflicts in package.json files and the lockfile resolve to
+ * `nextSide` ('ours' when HEAD is next, 'theirs' when `ref` is), including a deletion on
+ * that side; the caller then re-applies the version/pin sync. Any other conflict aborts
+ * the merge and throws. Exported for the git-backed test.
  * @param {string} ref
+ * @param {'ours' | 'theirs'} nextSide which side of the merge is next
  * @param {string} [message] merge commit message; git's default when omitted
  */
-function mergeIntoHead(ref, message) {
+export function mergeIntoHead(ref, nextSide, message) {
+    if (nextSide !== 'ours' && nextSide !== 'theirs') throw new Error(`nextSide must be ours or theirs (got "${nextSide}")`);
     const messageArgs = message ? ['--no-ff', '-m', message] : ['--no-edit'];
     try {
-        run('git', ['merge', ...messageArgs, ref]);
+        run('git', ['merge', ...messageArgs, ref], { stdio: ['ignore', 'pipe', 'pipe'] });
+        return;
     } catch (mergeError) {
         const conflicted = run('git', ['diff', '--name-only', '--diff-filter=U']).split('\n').filter(Boolean);
-        const unresolvable = conflicted.filter((p) => p !== LOCKFILE);
+        if (conflicted.length === 0) throw mergeError;
+        const unresolvable = unresolvableConflicts(conflicted);
         if (unresolvable.length > 0) {
             run('git', ['merge', '--abort']);
-            throw new Error(`merging ${ref} conflicts outside ${LOCKFILE}: ${unresolvable.join(', ')}. Aborted; resolve by hand. ${mergeError.message}`);
+            throw new Error(`merging ${ref} conflicts outside package.json and ${LOCKFILE}: ${unresolvable.join(', ')}. Aborted; resolve by hand. ${mergeError.message}`);
         }
-        if (conflicted.length === 0) throw mergeError;
-        run('git', ['checkout', '--ours', '--', LOCKFILE]);
-        run('git', ['add', LOCKFILE]);
+        for (const p of conflicted) takeNextSide(p, nextSide);
         run('git', ['commit', '--no-edit']);
-        // The lockfile is derived, so regenerate it from the merged manifests rather than
-        // trust whichever side won. pnpm leaves the file alone when it already satisfies
-        // them, in which case there is nothing to commit.
-        run('pnpm', ['install', '--no-frozen-lockfile'], { stdio: 'inherit' });
-        if (run('git', ['status', '--porcelain', '--', LOCKFILE]) !== '') {
-            run('git', ['add', LOCKFILE]);
-            run('git', ['commit', '-m', `chore: lockfile after merging ${ref} [skip ci]`]);
-        }
+        console.log(`merged ${ref}: ${conflicted.length} package.json/lockfile conflict(s) resolved to next's side`);
     }
+}
+
+function takeNextSide(file, nextSide) {
+    const stage = nextSide === 'ours' ? 2 : 3;
+    try {
+        run('git', ['cat-file', '-e', `:${stage}:${file}`], { stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (e) {
+        if (e.status !== 128 && e.status !== 1) throw e;
+        run('git', ['rm', '-q', '--', file]); // next deleted it
+        return;
+    }
+    run('git', ['checkout', `--${nextSide}`, '--', file]);
+    run('git', ['add', '--', file]);
 }
 
 /** Expose the derived names to later workflow steps via $GITHUB_OUTPUT when present. */
@@ -575,20 +752,18 @@ function emitOutputs(cut) {
     fs.appendFileSync(out, lines.join('\n') + '\n');
 }
 
-const COMMANDS = { preflight, version, 'merge-into-next': mergeIntoNext, reenter, 'push-next': pushNext };
+const COMMANDS = { preflight, version, 'pre-publish-check': prePublishCheck, 'merge-into-next': mergeIntoNext, reenter, 'push-next': pushNext };
 
-function main(argv) {
+async function main(argv) {
     const args = parseCliArgs(argv);
     const fn = COMMANDS[args.command];
     if (!fn) throw new Error(`usage: candidate-cut.mjs <${Object.keys(COMMANDS).join('|')}> --line X.Y [--edge-tag vX.Y.0-edge.N] [--remote origin]`);
-    fn(args);
+    await fn(args);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-    try {
-        main(process.argv.slice(2));
-    } catch (e) {
+    main(process.argv.slice(2)).catch((e) => {
         console.error(`FAIL ${e.message}`);
         process.exit(1);
-    }
+    });
 }

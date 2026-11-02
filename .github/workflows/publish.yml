@@ -1616,10 +1616,12 @@ jobs:
   # one run, ordered so that NOTHING IS PUSHED UNTIL THE PACKAGES ARE ON NPM:
   #
   #   preflight (on next) -> check out the newest v6.1.0-edge.N tag -> pre exit +
-  #   version + lockfile (local commits) -> build -> publish 6.1.0 under lts-6.1 ->
-  #   commit generated files -> tag v6.1.0 -> merge v6.1.0 into next + re-enter
-  #   pre-mode + seed (local) -> push next (merge-and-retry) -> push tag, create
-  #   lts/6.1 at it -> GitHub Release (never latest) -> ledger append -> docs + notes.
+  #   version + lockfile (local commits) -> pre-publish check (main still at the tag,
+  #   trial merge into next) -> build -> re-check -> publish 6.1.0 under lts-6.1 ->
+  #   commit generated files -> tag v6.1.0 -> push tag, create lts/6.1 at it -> GitHub
+  #   Release (never latest) -> merge v6.1.0 into next + version/pin/lockfile sync +
+  #   re-enter pre-mode + seed (local) -> push next (merge-and-retry) -> ledger append
+  #   -> docs + notes.
   #
   # The candidate is the Edge tag's commit plus the version commits, never the tip of
   # next: commits merged to next after the tag are not in 6.1.0, and their changesets
@@ -1636,6 +1638,8 @@ jobs:
   #   - lts/6.1, tag v6.1.0 and @memberjunction/core@6.1.0 do not exist yet.
   #   - next is in Edge pre-mode; a v6.1.0-edge.N tag exists, its tree is that version
   #     in Edge pre-mode with pending changesets, and npm's edge dist-tag is exactly it.
+  #   - main is still at that tag (re-checked before the build and the publish; merge
+  #     nothing into main during a cut) and the tag is an ancestor of next.
   # The lts/** branch ruleset is a repo setting an admin creates once; the job cannot.
   # ---------------------------------------------------------------------------
   cut-candidate:
@@ -1698,9 +1702,10 @@ jobs:
           git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
 
       # The working tree moves to the Edge tag below, whose ci/ may predate this script.
-      # Run next's copy throughout; it imports only Node's stdlib and works on the cwd.
+      # Run next's copy throughout; it imports only Node's stdlib plus ./back-merge.mjs
+      # (staged beside it) and works on the cwd.
       - name: Stage next's candidate-cut script
-        run: cp ci/candidate-cut.mjs "$RUNNER_TEMP/candidate-cut.mjs"
+        run: cp ci/candidate-cut.mjs ci/back-merge.mjs "$RUNNER_TEMP/"
 
       # Refuses unless: HEAD is next in Edge pre-mode, the stream produces the requested
       # line, the ledger already carries the candidate entry, neither the branch, the tag
@@ -1737,11 +1742,20 @@ jobs:
       - name: Exit Edge pre-mode and version to ${{ steps.cut.outputs.VERSION }}
         run: node "$RUNNER_TEMP/candidate-cut.mjs" version --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
+      # Refuses while nothing is published: main moved off the Edge tag, or the candidate
+      # could not merge into next mechanically (conflicts outside package.json/lockfile).
+      - name: Pre-publish check (main at the Edge tag; trial merge into next)
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" pre-publish-check --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
+
       - name: Build packages
         run: pnpm run build
 
       - name: Stage per-package LICENSE files
         run: node .github/scripts/stage-package-licenses.mjs
+
+      # Again, because next and main kept moving during the build.
+      - name: Re-check right before the publish
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" pre-publish-check --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
       # `latest` is read BEFORE the publish so the verification below can prove it did not
       # move. A candidate is never latest; certification promotes (ci/dist-tag-all.mjs).
@@ -1806,9 +1820,39 @@ jobs:
           git tag "$TAG"
           echo "::notice::Tagged $TAG at $(git rev-parse --short HEAD)"
 
+      # Pushed first, before anything touches next: from here on the commit npm was built
+      # from exists on origin even if a later step fails. Tags and lts/** are outside
+      # next-protect, so the PAT remote is enough.
+      - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
+        env:
+          TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+        run: |
+          set -euo pipefail
+          git push origin "refs/tags/$TAG"
+          git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
+          echo "::notice::$BRANCH created at $TAG"
+
+      - name: Create GitHub Release (never latest; certification promotes)
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - skipping creation"
+            exit 0
+          fi
+          gh release create "$TAG" --title "$TAG (LTS candidate)" --generate-notes --latest=false \
+            --target "$BRANCH" --repo "${{ github.repository }}"
+
       # HEAD moves from the candidate tag onto origin/next with the tag merged in: next
       # takes X.Y.0's versions and changelogs and drops the changesets the candidate
-      # consumed, and keeps every changeset merged after the Edge tag. Local only.
+      # consumed, and keeps every changeset merged after the Edge tag. package.json and
+      # lockfile conflicts resolve to next's side; then every X.Y.0-edge.N version and pin
+      # on next (packages added after the tag included) moves to X.Y.0, the lockfile is
+      # regenerated and proven, and the fixed group must be at X.Y.0. Local only.
       - name: Merge ${{ steps.cut.outputs.TAG }} into next
         run: node "$RUNNER_TEMP/candidate-cut.mjs" merge-into-next --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
@@ -1843,7 +1887,7 @@ jobs:
           echo "::notice::next-push remote configured as ${{ steps.next_token.outputs.app-slug }}"
 
       # next kept merging during the build. push-next merges next-push/next in and retries
-      # (bounded); only pnpm-lock.yaml may auto-resolve. Never force.
+      # (bounded), with merge-into-next's resolver and sync. Never force.
       #
       # --remote moves BOTH the fetch and the push onto the App-authenticated remote, which
       # is required: pushNext() merges `<remote>/next` between attempts, so the ref it reads
@@ -1851,31 +1895,7 @@ jobs:
       # the step below deliberately stay on `origin` — those are not covered by next-protect
       # and the App has no reason to hold them.
       - name: Push next
-        run: node "$RUNNER_TEMP/candidate-cut.mjs" push-next --remote next-push
-
-      - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
-        env:
-          TAG: ${{ steps.cut.outputs.TAG }}
-          BRANCH: ${{ steps.cut.outputs.BRANCH }}
-        run: |
-          set -euo pipefail
-          git push origin "refs/tags/$TAG"
-          git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
-          echo "::notice::$BRANCH created at $TAG"
-
-      - name: Create GitHub Release (never latest; certification promotes)
-        env:
-          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
-          TAG: ${{ steps.cut.outputs.TAG }}
-          BRANCH: ${{ steps.cut.outputs.BRANCH }}
-        run: |
-          set -euo pipefail
-          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release $TAG already exists - skipping creation"
-            exit 0
-          fi
-          gh release create "$TAG" --title "$TAG (LTS candidate)" --generate-notes --latest=false \
-            --target "$BRANCH" --repo "${{ github.repository }}"
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" push-next --line "$CUT" --remote next-push
 
       # Mechanical fields only: lines[X.Y].newest and lines[X.Y].releases[X.Y.0]. The
       # candidate entry itself was the reviewed precondition. --match 'v*' keeps

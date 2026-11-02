@@ -1,6 +1,10 @@
 // Tests for ci/candidate-cut.mjs. Run with: node --test ci/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
     deriveCut,
     assertRequestedLineMatches,
@@ -15,6 +19,12 @@ import {
     keptChangesets,
     assertChangesetsAfterMerge,
     assertReenteredPreJson,
+    rewriteEdgePins,
+    parseMergeTreeConflicts,
+    unresolvableConflicts,
+    mergeIntoHead,
+    rewriteWorkspacePins,
+    trialMerge,
     MAX_PUSH_ATTEMPTS,
 } from './candidate-cut.mjs';
 
@@ -108,6 +118,8 @@ const EDGE_OK = {
     edgeTagPre: { mode: 'pre', tag: 'edge' },
     npmEdgeVersionExists: true,
     npmEdgeDistTag: '6.1.0-edge.5',
+    mainAtEdgeTag: true,
+    edgeTagIsAncestorOfNext: true,
 };
 
 test('preflightFailures reports every violated precondition, and none when all hold', () => {
@@ -153,6 +165,65 @@ test('preflightFailures refuses an Edge tag whose tree is not that version in ed
     assert.match(failures[1], /at v6\.1\.0-edge\.5: .*mode "exit"/);
 });
 
+test('preflightFailures refuses when main has moved past the Edge tag', () => {
+    const cut = deriveCut('6.1.0-edge.5');
+    const base = { currentBranch: 'next', remoteBranchExists: false, remoteTagExists: false, npmVersionExists: false, pendingCount: 3 };
+    const failures = preflightFailures({ ...base, ...EDGE_OK, mainAtEdgeTag: false }, cut);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /main is not at v6\.1\.0-edge\.5/);
+});
+
+test('preflightFailures refuses an Edge tag whose back-merge into next has not landed', () => {
+    const cut = deriveCut('6.1.0-edge.5');
+    const base = { currentBranch: 'next', remoteBranchExists: false, remoteTagExists: false, npmVersionExists: false, pendingCount: 3 };
+    const failures = preflightFailures({ ...base, ...EDGE_OK, edgeTagIsAncestorOfNext: false }, cut);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /not an ancestor of next: its main -> next back-merge has not landed/);
+});
+
+test('rewriteEdgePins moves the version and internal pins of this line only, keeping formatting', () => {
+    const before = [
+        '{',
+        '  "name": "@memberjunction/server",',
+        '  "version": "6.2.0-edge.7",',
+        '  "dependencies": {',
+        '    "@memberjunction/core": "6.2.0-edge.7",',
+        '    "@memberjunction/global":"^6.2.0-edge.12",',
+        '    "@memberjunction/old": "6.1.0-edge.3",',
+        '    "@memberjunction/lts": "6.1.6",',
+        '    "@memberjunction/ws": "workspace:*",',
+        '    "zod": "6.2.0-edge.7"',
+        '  }',
+        '}',
+        '',
+    ].join('\n');
+    const after = rewriteEdgePins(before, '6.2');
+    assert.match(after, /"version": "6\.2\.0",/);
+    assert.match(after, /"@memberjunction\/core": "6\.2\.0",/);
+    assert.match(after, /"@memberjunction\/global":"\^6\.2\.0",/);
+    assert.match(after, /"@memberjunction\/old": "6\.1\.0-edge\.3"/); // another line's tuple is not ours to move
+    assert.match(after, /"@memberjunction\/lts": "6\.1\.6"/);
+    assert.match(after, /"@memberjunction\/ws": "workspace:\*"/);
+    assert.match(after, /"zod": "6\.2\.0-edge\.7"/); // not an MJ package
+    assert.equal(rewriteEdgePins(after, '6.2'), after);
+    assert.equal(after.split('\n').length, before.split('\n').length);
+    assert.equal(rewriteEdgePins('"version": "6.20.0-edge.1"', '6.2'), '"version": "6.20.0-edge.1"');
+});
+
+test('parseMergeTreeConflicts reads the conflicted paths from git merge-tree --name-only', () => {
+    assert.deepEqual(parseMergeTreeConflicts('abc123\n'), []);
+    const out = 'abc123\npackages/a/package.json\npackages/a/package.json\npnpm-lock.yaml\n\nAuto-merging packages/a/package.json\nCONFLICT (content): ...\n';
+    assert.deepEqual(parseMergeTreeConflicts(out), ['packages/a/package.json', 'pnpm-lock.yaml']);
+});
+
+test('unresolvableConflicts: only package.json files and the lockfile resolve mechanically', () => {
+    assert.deepEqual(unresolvableConflicts(['package.json', 'packages/a/package.json', 'pnpm-lock.yaml']), []);
+    assert.deepEqual(unresolvableConflicts(['packages/a/CHANGELOG.md', 'packages/a/package.json', 'packages/a/pnpm-lock.yaml']), [
+        'packages/a/CHANGELOG.md',
+        'packages/a/pnpm-lock.yaml',
+    ]);
+});
+
 test('newestEdgeTag picks the highest edge.N of the requested line, numerically', () => {
     const tags = ['v6.1.0-edge.2', 'v6.1.0-edge.10', 'v6.1.0-edge.9', 'v6.1.0', 'v6.2.0-edge.0', 'v6.10.0-edge.99', 'v6.1.0-edge.3-fix', '@memberjunction/core@6.1.0-edge.11'];
     assert.equal(newestEdgeTag(tags, '6.1'), 'v6.1.0-edge.10');
@@ -184,7 +255,140 @@ test('assertReenteredPreJson: fresh edge pre-mode from X.Y.0 with nothing marked
     assert.doesNotThrow(() => assertReenteredPreJson(good, '6.1.0'));
     assert.throws(() => assertReenteredPreJson({ ...good, changesets: ['late-fix'] }, '6.1.0'), /already lists 1 changeset/);
     assert.throws(() => assertReenteredPreJson({ ...good, initialVersions: { '@memberjunction/core': '6.1.0-edge.5' } }, '6.1.0'), /initialVersions.*6\.1\.0-edge\.5/);
+    // One straggler is enough to start the next stream at edge.(N+1): every entry counts.
+    const straggler = { ...good, initialVersions: { '@memberjunction/core': '6.1.0', mj_api: '1.0.0', '@memberjunction/late': '6.1.0-edge.8' } };
+    assert.throws(() => assertReenteredPreJson(straggler, '6.1.0'), /1 @memberjunction\/\* package\(s\) not at 6\.1\.0: @memberjunction\/late@6\.1\.0-edge\.8/);
+    assert.throws(() => assertReenteredPreJson({ ...good, initialVersions: { mj_api: '1.0.0' } }, '6.1.0'), /no @memberjunction\/\* packages/);
     assert.throws(() => assertReenteredPreJson({ ...good, mode: 'exit' }, '6.1.0'), /mode "exit"/);
+});
+
+// ---------------------------------------------------------------------------------------
+// Git-backed: the merge of the candidate into next, on a real (temporary) repository.
+// ---------------------------------------------------------------------------------------
+
+function git(cwd, ...args) {
+    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+}
+
+function writeFiles(dir, files) {
+    for (const [rel, content] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(dir, rel), content);
+    }
+}
+
+function pkg(name, version, deps) {
+    return JSON.stringify({ name, version, dependencies: deps }, null, 2) + '\n';
+}
+
+/**
+ * An Edge tag v6.2.0-edge.3 with exact internal pins; a candidate v6.2.0 built on it the
+ * way `version` does (versions and pins to 6.2.0, consumed changesets and pre.json gone);
+ * and next after the tag with a dependency added next to a pin, a new package, a new
+ * changeset and a code change.
+ */
+function buildFixture() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'candidate-cut-'));
+    git(dir, 'init', '-q', '-b', 'main');
+    git(dir, 'config', 'user.email', 't@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    writeFiles(dir, {
+        'packages/core/package.json': pkg('@memberjunction/core', '6.2.0-edge.3', {}),
+        'packages/MJServer/package.json': pkg('@memberjunction/server', '6.2.0-edge.3', { '@memberjunction/core': '6.2.0-edge.3', zod: '3.0.0' }),
+        '.changeset/pre.json': JSON.stringify({ mode: 'pre', tag: 'edge', initialVersions: {}, changesets: ['consumed'] }),
+        '.changeset/consumed.md': '---\n"@memberjunction/core": minor\n---\n\nconsumed\n',
+        'packages/core/src.txt': 'edge\n',
+    });
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-qm', 'RELEASING');
+    git(dir, 'tag', 'v6.2.0-edge.3');
+
+    git(dir, 'checkout', '-q', '--detach');
+    for (const f of ['packages/core/package.json', 'packages/MJServer/package.json']) {
+        const p = path.join(dir, f);
+        fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replaceAll('6.2.0-edge.3', '6.2.0'));
+    }
+    fs.rmSync(path.join(dir, '.changeset/pre.json'));
+    fs.rmSync(path.join(dir, '.changeset/consumed.md'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-qm', 'version 6.2.0');
+    git(dir, 'tag', 'v6.2.0');
+
+    git(dir, 'checkout', '-q', '-b', 'next', 'v6.2.0-edge.3');
+    writeFiles(dir, {
+        'packages/MJServer/package.json': pkg('@memberjunction/server', '6.2.0-edge.3', {
+            '@memberjunction/core': '6.2.0-edge.3',
+            '@memberjunction/global': '6.2.0-edge.3',
+            zod: '3.1.0',
+        }),
+        'packages/global/package.json': pkg('@memberjunction/global', '6.2.0-edge.3', { '@memberjunction/core': '6.2.0-edge.3' }),
+        '.changeset/after-tag.md': '---\n"@memberjunction/global": patch\n---\n\nafter the tag\n',
+        'packages/core/after-tag.txt': 'not in 6.2.0\n',
+    });
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-qm', 'feat: merged after the edge tag');
+    return dir;
+}
+
+function inDir(dir, fn) {
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+        return fn();
+    } finally {
+        process.chdir(prev);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+test('git: merging the candidate into next resolves pin conflicts to next + 6.2.0 and keeps post-tag work', () => {
+    inDir(buildFixture(), () => {
+        const trial = trialMerge('next', 'v6.2.0');
+        assert.deepEqual(trial.conflicts, ['packages/MJServer/package.json']);
+        // The trial tree already carries the right partition: consumed gone, post-tag kept.
+        assert.deepEqual(git('.', 'ls-tree', '--name-only', trial.tree, '.changeset/'), '.changeset/after-tag.md');
+        mergeIntoHead('v6.2.0', 'ours', 'merge candidate');
+        const manifests = git('.', 'ls-files', '--', '**/package.json').split('\n');
+        const changed = rewriteWorkspacePins('6.2', manifests);
+        assert.deepEqual(changed.sort(), ['packages/MJServer/package.json', 'packages/global/package.json']);
+
+        const server = JSON.parse(fs.readFileSync('packages/MJServer/package.json', 'utf8'));
+        assert.deepEqual(server, {
+            name: '@memberjunction/server',
+            version: '6.2.0',
+            dependencies: { '@memberjunction/core': '6.2.0', '@memberjunction/global': '6.2.0', zod: '3.1.0' },
+        });
+        const global = JSON.parse(fs.readFileSync('packages/global/package.json', 'utf8'));
+        assert.equal(global.version, '6.2.0');
+        assert.equal(global.dependencies['@memberjunction/core'], '6.2.0');
+        assert.deepEqual(fs.readdirSync('.changeset').sort(), ['after-tag.md']);
+        assert.ok(fs.existsSync('packages/core/after-tag.txt'));
+        // The candidate itself never saw the post-tag commit.
+        assert.throws(() => git('.', 'cat-file', '-e', 'v6.2.0:packages/core/after-tag.txt'));
+        assert.throws(() => git('.', 'cat-file', '-e', 'v6.2.0:packages/global/package.json'));
+    });
+});
+
+test('git: a conflict outside package.json and the lockfile aborts the merge and is caught by the trial', () => {
+    inDir(buildFixture(), () => {
+        fs.writeFileSync('.changeset/consumed.md', 'edited on next after release\n');
+        git('.', 'commit', '-qam', 'edit a released changeset');
+        assert.deepEqual(unresolvableConflicts(trialMerge('next', 'v6.2.0').conflicts), ['.changeset/consumed.md']);
+        const head = git('.', 'rev-parse', 'HEAD');
+        assert.throws(() => mergeIntoHead('v6.2.0', 'ours', 'merge candidate'), /conflicts outside package\.json.*\.changeset\/consumed\.md/s);
+        assert.equal(git('.', 'rev-parse', 'HEAD'), head);
+        assert.equal(git('.', 'status', '--porcelain'), '');
+    });
+});
+
+test('git: a package next deleted after the tag stays deleted', () => {
+    inDir(buildFixture(), () => {
+        git('.', 'rm', '-q', 'packages/core/package.json');
+        git('.', 'commit', '-qm', 'drop core');
+        mergeIntoHead('v6.2.0', 'ours', 'merge candidate');
+        assert.ok(!fs.existsSync('packages/core/package.json'));
+    });
 });
 
 test('parseCliArgs reads the subcommand, --line and --remote, and rejects strays', () => {
