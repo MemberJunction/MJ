@@ -15,10 +15,13 @@ export interface RowRead<TRow> {
 export interface PreviousVersionArgs<TRow extends { readonly ID: string }, TSpec> {
   /** The entity's display name in messages (`Prediction Unit`, `Evaluation Protocol`). */
   readonly Label: string;
+  /** The lineage whose version n−1 is read. */
   readonly LineageRootID: string;
   /** The version being saved; its predecessor is read. */
   readonly Version: number;
+  /** Reads one version of the lineage as a plain row. */
   readonly Load: (version: number) => Promise<RowRead<TRow>>;
+  /** Parses a row into its spec. */
   readonly Parse: (row: TRow) => ParseResult<TSpec>;
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseEntity, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, RunView, ValidationResult, type RunViewParams } from '@memberjunction/core';
 
 // Neutralize class-factory registration, as the package's other entity tests do.
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -158,6 +158,56 @@ describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the gua
     expect(orphan.Errors.map((e) => e.Message)).toEqual(['versions must be consecutive: version 1 of lineage P-1 does not exist']);
   });
 });
+
+/** A new pipeline row bound to a unit (and optionally a protocol) over a metadata provider double; no leakage guard. */
+function newPipelineRow(unitID: string, protocolID: string | null): MJMLTrainingPipelineEntityServer {
+  const row = Object.create(MJMLTrainingPipelineEntityServer.prototype) as MJMLTrainingPipelineEntityServer;
+  const provider = { EntityByName: () => undefined, EntityByID: () => undefined, Entities: [] };
+  const members = {
+    IsSaved: false, Name: 'p', PredictionUnitID: unitID, EvaluationProtocolID: protocolID, LeakageGuard: null, SourceBindings: null,
+    TargetEntityID: null, ProviderToUse: provider, ContextCurrentUser: undefined,
+  };
+  for (const [name, value] of Object.entries(members)) {
+    Object.defineProperty(row, name, { value, writable: true, configurable: true });
+  }
+  return row;
+}
+
+/** Serves every RunView from `answer` (by entity name), so a read can fail without a database. */
+function serveRunViews(answer: (entityName: string) => { Success: boolean; Results: unknown[]; ErrorMessage?: string }): void {
+  const runView = async (p: RunViewParams) => answer(p.EntityName || '');
+  // Test-double cast at the seam: the double implements only the RunView member the pipeline server calls.
+  vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
+}
+
+describe('MJMLTrainingPipelineEntityServer.ValidateAsync (a failed read of the bound unit or protocol)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  it('reports a failed Prediction Unit read as a failed read, never as "not found"', async () => {
+    serveRunViews(() => ({ Success: false, Results: [], ErrorMessage: 'timeout' }));
+    const result = await newPipelineRow('U-9', null).ValidateAsync();
+    expect(result.Success).toBe(false);
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', 'Reading Prediction Unit U-9 failed: timeout']]);
+  });
+  it('reports a failed Evaluation Protocol read as a failed read, never as "not found"', async () => {
+    const unit = unitRowFixture();
+    serveRunViews((entity) => (entity === 'MJ: Prediction Units' ? { Success: true, Results: [unit] } : { Success: false, Results: [], ErrorMessage: 'timeout' }));
+    const result = await newPipelineRow('U-9', 'P-9').ValidateAsync();
+    expect(result.Success).toBe(false);
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['EvaluationProtocolID', 'Reading Evaluation Protocol P-9 failed: timeout']]);
+  });
+  it('still reports an absent unit as not found', async () => {
+    serveRunViews(() => ({ Success: true, Results: [] }));
+    const result = await newPipelineRow('U-9', null).ValidateAsync();
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', 'Prediction Unit U-9 was not found']]);
+  });
+});
+
+/** A unit row (any parseable shape): the protocol read fails before the unit is parsed. */
+function unitRowFixture(): { ID: string } {
+  return { ID: 'U-9' };
+}
 
 /** A server entity object with only the members the Save override reads, so no database or metadata is needed. */
 function newRowOf<T extends object>(ctor: { prototype: T }, members: { IsSaved: boolean; Version: number; ID: string; LineageRootID: string }): T {
