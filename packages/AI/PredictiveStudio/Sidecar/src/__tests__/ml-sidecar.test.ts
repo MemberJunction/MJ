@@ -114,7 +114,7 @@ describe('MLSidecar (remote mode)', () => {
   });
 
   it('Predict() POSTs the body to /predict and returns the parsed PredictResponse', async () => {
-    const expected: PredictResponse = { predictions: [{ score: 0.8, class: 'yes' }] };
+    const expected: PredictResponse = { predictions: [{ score: 0.8, class: 'yes', probabilities: [0.2, 0.8] }], classOrder: ['no', 'yes'] };
     queue(200, expected);
     const s = new MLSidecar({ url: URL_BASE });
     const req = buildPredictRequest();

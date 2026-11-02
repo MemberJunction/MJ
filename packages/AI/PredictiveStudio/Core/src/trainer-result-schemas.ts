@@ -23,9 +23,7 @@ import type {
   TrainerRequestConfig,
   TrainerResult,
 } from './trainer-contract';
-
-/** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
-type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
+import type { ListsEveryMember } from './json-value';
 
 /** Every metric key; `satisfies` refuses a value that is not one (the one list every stored-metric schema reads). */
 export const METRIC_KEYS = [
@@ -223,7 +221,7 @@ const MODEL_OBJECTS = {
   ForecastEvaluation: forecastEvaluation, SplitContrast: splitContrast, TrainerCompleted: trainerCompleted, TrainerFailed: trainerFailed,
 } as const;
 
-/** The trainer answer's schemas, as static members on one owner class. */
+/** The zod schemas that validate the trainer's answer. */
 export class TrainerResultSchemas {
   /** The whole answer: a completed run or a failure naming its stage. */
   public static readonly TrainerResult: z.ZodType<TrainerResult> = z.discriminatedUnion('status', [trainerCompleted, trainerFailed]);

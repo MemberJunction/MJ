@@ -113,7 +113,7 @@ describe('trainer answer schemas against the sidecar models', () => {
     const names = Object.keys(TrainerResultSchemas.ModelFields);
     expect(names.length).toBe(41);
     for (const name of names) {
-      expect({ name, fields: [...(python.get(name) ?? [])].sort() }).toEqual({ name, fields: [...TrainerResultSchemas.ModelFields[name]].sort() });
+      expect({ name, fields: [...(python.get(name) || [])].sort() }).toEqual({ name, fields: [...TrainerResultSchemas.ModelFields[name]].sort() });
     }
   });
 

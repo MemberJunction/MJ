@@ -98,18 +98,18 @@ export interface NewEntityCarve {
 
 /** Why a holdout could not be carved; stored on a refused run (wire names shared with the sidecar). */
 export type CarveRefusal =
-  | { readonly kind: 'unparseable-cutoff'; readonly value: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'unparseable-carve-date'; readonly rowId: string; readonly value: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'missing-carve-date'; readonly rowId: string; readonly column: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'no-development-rows'; readonly cutoff: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'no-holdout-rows'; readonly cutoff: string; readonly holdoutEnd: string | null }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly kind: 'seeded-random-side-empty'; readonly side: 'development' | 'locked-holdout';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly fraction: number; readonly rows: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'unparseable-cutoff'; readonly value: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'unparseable-carve-date'; readonly rowId: string; readonly value: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'missing-carve-date'; readonly rowId: string; readonly column: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'no-development-rows'; readonly cutoff: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'no-holdout-rows'; readonly cutoff: string; readonly holdoutEnd: string | null }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | {  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly kind: 'seeded-random-side-empty'; readonly side: 'development' | 'locked-holdout';  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly fraction: number; readonly rows: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
     }
-  | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly kind: 'too-few-periods'; readonly periods: number; readonly origins: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | {  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly kind: 'too-few-periods'; readonly periods: number; readonly origins: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
     };
 
 /** The result of a date carve: the deployment carve and, when the protocol declares one, the new-entity report. */
@@ -141,45 +141,44 @@ export type RollingOriginCarveResult =
 /** The new-entity counts of a stored carve. */
 export interface HoldoutCarveNewEntitySummary {
   /** Groups held out whole. */
-  readonly holdoutEntityKeys: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly holdoutEntityKeys: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** The other groups' rows before the cutoff. */
-  readonly trainingRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly trainingRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** The held-out groups' rows inside the holdout window. */
-  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Rows in neither set. */
-  readonly excludedRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly excludedRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Group keys in both sets; zero when the report is sound. */
-  readonly sharedEntityKeys: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly sharedEntityKeys: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /**
    * SHA-256 (lower-case hex) of the held-out group keys: each key as the carve groups rows (the unit row's group key
    * value, lower-cased by the row reader), sorted with `OrdinalCompare`, joined with `\n` (no trailing newline), UTF-8.
-   * Null on a summary stored before it existed.
    */
-  readonly heldGroupKeysSha256: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  /** SHA-256 of the distinct group keys of the report's training rows, encoded as `heldGroupKeysSha256`; null on an older summary. */
-  readonly trainingGroupKeysSha256: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly heldGroupKeysSha256: string;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** SHA-256 of the distinct group keys of the report's training rows, encoded as `heldGroupKeysSha256`. */
+  readonly trainingGroupKeysSha256: string;  // case-violation-ok-legacy-back-compat: stored carve record field name
 }
 
 /** The carve as stored on the run (`ValidationResults.carve`), read by the gates (holdout class counts, periods) and the UI. */
 export interface HoldoutCarveSummary {
   /** The protocol's holdout kind. */
-  readonly kind: HoldoutSplit['kind'];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly kind: HoldoutSplit['kind'];  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** The date-carved cutoff; null for the other kinds. */
-  readonly cutoff: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly cutoff: string | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** The date-carved holdout end; null when there is none. */
-  readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Rows the development stage may read. */
-  readonly developmentRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly developmentRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Rows in the locked holdout. */
-  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Rows on or after `holdoutEnd`, left out of the snapshot; 0 for the other kinds. */
-  readonly excludedAfterHoldoutEnd: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly excludedAfterHoldoutEnd: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Holdout rows per label for classification units; null otherwise. */
-  readonly holdoutClassCounts: Readonly<Record<string, number>> | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly holdoutClassCounts: Readonly<Record<string, number>> | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** Distinct period starts of the holdout rows at the unit's decision period (one out-of-time slice each). */
-  readonly holdoutPeriods: readonly string[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly holdoutPeriods: readonly string[];  // case-violation-ok-legacy-back-compat: stored carve record field name
   /** The new-entity report's counts and group-key hashes; null when the protocol declares no report. */
-  readonly newEntity: HoldoutCarveNewEntitySummary | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly newEntity: HoldoutCarveNewEntitySummary | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
 }
 
 interface DatedRow { readonly Row: CarveRow; readonly Time: number }
@@ -190,7 +189,7 @@ interface CarveWindow { readonly Cutoff: number; readonly End: number | null }
 type WindowPlace = 'before-cutoff' | 'in-window' | 'after-end';
 
 /**
- * Locked-holdout carves (static members on one owner). Ordering is `OrdinalCompare` from `@memberjunction/global`
+ * Locked-holdout carves. Ordering is `OrdinalCompare` from `@memberjunction/global`
  * (locale-independent), so results never depend on the host's locale.
  */
 export class HoldoutCarve {

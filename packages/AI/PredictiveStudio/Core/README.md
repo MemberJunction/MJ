@@ -2,11 +2,11 @@
 
 > The shared vocabulary of **MemberJunction Predictive Studio** — every type the sidecar, engine, UI, and agent agree on, defined exactly once.
 
-**What** — the **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them): the sidecar request/response shapes, the Prediction Unit and Evaluation Protocol shapes with the gate that judges a run, the declarative pipeline-spec JSON, the visual FeatureStep DAG, and the Model Development Agent's modeling-plan payload — plus the browser-safe, dependency-free runtime logic shared by the server engine, the UI and the agent that every layer must agree on (trust verdicts, at-risk rules, evaluation lineage, the metric-direction predicate, zod validators for the modeling plan). The only runtime dependency is `zod` (for the trust-boundary validators).
+**What** — the **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them): the sidecar request/response shapes, the Prediction Unit and Evaluation Protocol shapes with the gate that judges a run, the declarative pipeline-spec JSON, the visual FeatureStep DAG, and the Model Development Agent's modeling-plan payload — plus the browser-safe, dependency-free runtime logic shared by the server engine, the UI and the agent that every layer must agree on (trust verdicts, at-risk rules, evaluation lineage, the metric-direction predicate, zod validators for the modeling plan). Its runtime dependencies are `zod` (for the trust-boundary validators) and `@memberjunction/global` (UUID comparison, ordinal ordering and canonical JSON).
 
 **Why** — four layers (server engine, Python sidecar client, Studio UI, Model Development Agent) must agree on the same shapes. Defining the contract once, here, is what keeps them in lockstep — change a shape and every consumer fails to compile until it's reconciled.
 
-**How it fits** — it's the bottom of the stack: imported by everything, importing nothing. See [How it fits the whole](#how-it-fits-the-whole) below.
+**How it fits** — it's the bottom of the stack: imported by everything, importing only `zod` and `@memberjunction/global`. See [How it fits the whole](#how-it-fits-the-whole) below.
 
 For the full architecture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§3 covers this package); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
 
@@ -77,7 +77,7 @@ const plan = result.value;        // typed ModelingPlanSpec, proven well-formed
 ## How it fits the whole
 
 ```
-predictive-studio-core  (this package — types + browser-safe, dependency-free runtime logic)
+predictive-studio-core  (this package — types + browser-safe runtime logic; depends on zod and @memberjunction/global)
         │ imported by
         ├── predictive-studio-sidecar   → MLSidecar (trainer/predict over the contract)
         ├── predictive-studio (Engine)  → AsOfFeatureAssembler · FeatureAssemblyExecutor · TrainingEngine ·

@@ -49,7 +49,7 @@ The cardinal correctness rule runs through all four: **one feature-assembly code
 ### Dependency direction
 
 ```
-predictive-studio-core   (types — no runtime deps except zod)
+predictive-studio-core   (types — runtime deps: zod, @memberjunction/global)
         │ imported by
         ├── predictive-studio-sidecar   → MLSidecar + bundled Python service
         └── predictive-studio (Engine)  → the four engines + Actions + Remote Operations

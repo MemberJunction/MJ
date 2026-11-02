@@ -69,7 +69,7 @@ class FakeModelLoader implements IMLModelLoader {
 
 class FakeSidecar implements ISidecarPredictor {
   async predict(req: PredictRequest): Promise<PredictResponse> {
-    return { predictions: req.rows.map(() => ({ score: 0.83, class: 'renew' })) };
+    return { predictions: req.rows.map(() => ({ score: 0.83, class: 'renew', probabilities: null })), classOrder: null };
   }
 }
 

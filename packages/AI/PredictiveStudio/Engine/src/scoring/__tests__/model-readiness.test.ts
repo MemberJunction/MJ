@@ -62,7 +62,7 @@ class MapModelLoader implements IMLModelLoader {
 
 class FakeSidecar implements ISidecarPredictor {
   async predict(req: PredictRequest): Promise<PredictResponse> {
-    return { predictions: (req.rows ?? []).map(() => ({ score: 0.8, class: 'Renewed' })) };
+    return { predictions: (req.rows ?? []).map(() => ({ score: 0.8, class: 'Renewed', probabilities: null })), classOrder: null };
   }
 }
 

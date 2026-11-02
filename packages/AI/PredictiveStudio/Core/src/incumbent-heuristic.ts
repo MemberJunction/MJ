@@ -27,8 +27,7 @@ const NUMBER = /^-?\d+(?:\.\d+)?$/;
 const OPS: readonly IncumbentComparison['Op'][] = ['>=', '>', '<=', '<', '==', '!='];
 
 /**
- * The incumbent-heuristic grammar: parse, list the referenced columns, evaluate. Static members on one owner class so
- * callers write `IncumbentExpressions.ParseIncumbentExpression(text)`.
+ * The incumbent-heuristic grammar: parse, list the referenced columns, evaluate.
  */
 export class IncumbentExpressions {
   /** Parse a scoreExpression; anything outside the grammar is a failure naming the expression. */

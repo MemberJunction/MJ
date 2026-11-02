@@ -5,12 +5,9 @@
  * The `refused` variant carries the refusal (its stage and reason); the `completed` variant carries the unit resolution
  * counts and the record of the training, so a later training of the same snapshot can call the trainer the same way:
  * the trainer's result (`trainer`, artifacts as stored file references, never bytes) and the request settings
- * (`trainerRequest`). (Members an older envelope stored beside them are not part of the schema and are dropped on read.)
- * A completed run also stores the
- * locked-holdout carve its protocol declared (`carve`) and the gate decision with its reason (`gate`, the record
- * `GateRecords.BuildStoredGateRecord` builds). An envelope written before trainer results, the carve or the gate record
- * were stored has no `trainer`/`trainerRequest`/`carve`/`gate` members and reads them as null. A run whose sidecar
- * gate decision differs from the TypeScript transcription is refused at the `gate` stage.
+ * (`trainerRequest`). A completed run also stores the locked-holdout carve its protocol declared (`carve`) and the gate
+ * decision with its reason (`gate`, the record `GateRecords.BuildStoredGateRecord` builds). A run whose sidecar gate
+ * decision differs from the TypeScript transcription is refused at the `gate` stage.
  */
 import { z } from 'zod';
 import type { AssemblyRefusal } from './assembly-contract';
@@ -20,7 +17,7 @@ import type { GateStageRefusal, SliceCoverage, StoredGateRecord } from './run-ev
 import type { CarveRefusal, HoldoutCarveSummary } from './holdout-carve';
 import type { UnitRefusal } from './prediction-unit';
 import { TASK_KINDS } from './task-type';
-import { JsonParse, type ParseResult } from './json-value';
+import { JsonParse, type ListsEveryMember, type ParseResult } from './json-value';
 import type { StoredTrainerResult, TrainerFailureStage, TrainerRequestConfig } from './trainer-contract';
 import { METRIC_KEYS, TrainerResultSchemas } from './trainer-result-schemas';
 import { SELECTION_FAILURE_REASONS, type SelectionFailureReason } from './selection';
@@ -28,53 +25,53 @@ import { SELECTION_FAILURE_REASONS, type SelectionFailureReason } from './select
 export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
 
 export type PipelineRefusal =
-  | { readonly kind: 'unit-required'; readonly pipelineId: string; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'protocol-required'; readonly pipelineId: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'input-not-accepted'; readonly input: 'asOf' | 'labelEventDates' | 'maxRows' | 'primaryKeyField'; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'unit-invalid'; readonly unitId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'too-many-candidates'; readonly pipelineId: string; readonly candidates: number; readonly maxCandidates: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'protocol-created-after-run'; readonly protocolId: string; readonly protocolCreatedAt: string; readonly runCreatedAt: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'protocol-unit-mismatch'; readonly protocolId: string; readonly problems: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'protocol-invalid'; readonly protocolId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'unit-required'; readonly pipelineId: string; readonly why: string }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'protocol-required'; readonly pipelineId: string }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'input-not-accepted'; readonly input: 'asOf' | 'labelEventDates' | 'maxRows' | 'primaryKeyField'; readonly why: string }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'unit-invalid'; readonly unitId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'too-many-candidates'; readonly pipelineId: string; readonly candidates: number; readonly maxCandidates: number }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'protocol-created-after-run'; readonly protocolId: string; readonly protocolCreatedAt: string; readonly runCreatedAt: string }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'protocol-unit-mismatch'; readonly protocolId: string; readonly problems: readonly string[] }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'protocol-invalid'; readonly protocolId: string; readonly errors: readonly string[] }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   /** A pipeline that declares a time index is judged only on a time-respecting holdout (a date carve or rolling origins). */
-  | { readonly kind: 'time-index-needs-time-holdout'; readonly pipelineId: string; readonly protocolId: string; readonly timeIndexColumn: string; readonly holdout: HoldoutSplit['kind'] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'time-index-needs-time-holdout'; readonly pipelineId: string; readonly protocolId: string; readonly timeIndexColumn: string; readonly holdout: HoldoutSplit['kind'] };  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
 
 /** A trainer run that did not complete: the stage it failed at, or a lineage the run cannot record. */
 export type TrainerRefusal =
-  | { readonly kind: 'trainer-failed'; readonly stage: TrainerFailureStage; readonly message: string; readonly computeSeconds: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'lineage-incomplete'; readonly gaps: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'trainer-failed'; readonly stage: TrainerFailureStage; readonly message: string; readonly computeSeconds: number }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly kind: 'lineage-incomplete'; readonly gaps: readonly string[] }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   /** The trainer's report breaks a selection rule (a pruned candidate, a missing interval, the holdout read for another candidate). */
-  | { readonly kind: 'selection-invalid'; readonly reason: SelectionFailureReason; readonly detail: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'selection-invalid'; readonly reason: SelectionFailureReason; readonly detail: string };  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
 
 export type TrainingRefusal =
-  | { readonly stage: 'pipeline'; readonly reason: PipelineRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'unit'; readonly reason: UnitRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'assembly'; readonly reason: AssemblyRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'trainer'; readonly reason: TrainerRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'carve'; readonly reason: CarveRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'pipeline'; readonly reason: PipelineRefusal }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly stage: 'unit'; readonly reason: UnitRefusal }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly stage: 'assembly'; readonly reason: AssemblyRefusal }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly stage: 'trainer'; readonly reason: TrainerRefusal }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | { readonly stage: 'carve'; readonly reason: CarveRefusal }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   | { readonly stage: 'gate'; readonly reason: GateStageRefusal };  // case-violation-ok-legacy-back-compat: stored envelope key
 
 export interface UnitResolutionCounts {
-  readonly rowsRead: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly censoredRowsExcluded: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly labelKnownRowsExcluded: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly emptyLabelRowsExcluded: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly duplicateRowsRemoved: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly resolvedRows: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly dataCutoff: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly rowsRead: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  readonly censoredRowsExcluded: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  readonly labelKnownRowsExcluded: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  readonly emptyLabelRowsExcluded: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  readonly duplicateRowsRemoved: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  readonly resolvedRows: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  readonly dataCutoff: string;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
 }
 
 export type TrainingRunResults =
-  | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'refused'; readonly refusal: TrainingRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly status: 'completed';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly unitResolution: UnitResolutionCounts;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly trainer: StoredTrainerResult | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly trainerRequest: TrainerRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      /** The locked-holdout carve the protocol declared; null for a run without one and for an envelope stored before it existed. */
-      readonly carve: HoldoutCarveSummary | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      /** The gate decision with its reason; null for a run without a trainer result and for an envelope stored before it existed. */
+  | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'refused'; readonly refusal: TrainingRefusal }  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  | {  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      readonly status: 'completed';  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      readonly unitResolution: UnitResolutionCounts;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      readonly trainer: StoredTrainerResult | null;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      readonly trainerRequest: TrainerRequestConfig | null;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      /** The locked-holdout carve the protocol declared; null for a run without one. */
+      readonly carve: HoldoutCarveSummary | null;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+      /** The gate decision with its reason; null for a run without a trainer result. */
       readonly gate: StoredGateRecord | null;  // case-violation-ok-legacy-back-compat: stored envelope key
     };
 
@@ -83,8 +80,6 @@ export type TrainingRunResults =
 // Each schema is annotated with the TypeScript type it parses, so `tsc` refuses a schema whose output does not fit it.
 // A new envelope member, refusal stage or refusal kind needs its schema here and a case in
 // `training-run-results.test.ts`: the union cannot make `tsc` notice a missing variant.
-/** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
-type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
 /** Every holdout kind a stored carve summary may name; `satisfies` refuses a value that is not one. */
 const HOLDOUT_KINDS = ['date-carved', 'rolling-origin', 'seeded-random'] as const satisfies readonly HoldoutSplit['kind'][];
 /** Compile-time completeness: a `HoldoutSplit` kind added without listing it here breaks the build (a stored carve of that kind would otherwise be refused on read). */
@@ -105,8 +100,6 @@ const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('single-valued-target'), value: z.string(), rows: z.number() }),
   z.object({ kind: z.literal('task-type-mismatch'), declared: z.enum(TASK_KINDS), observed: z.string() }),
   z.object({ kind: z.literal('unresolved-reference'), entity: z.string(), field: z.string().nullable() }),
-  z.object({ kind: z.literal('lag-inside-horizon'), lag: z.number(), horizonPeriods: z.number() }),
-  z.object({ kind: z.literal('rolling-window-inside-horizon'), endLag: z.number(), horizonPeriods: z.number() }),
   z.object({ kind: z.literal('missing-decision-date'), entity: z.string(), rows: z.number() }),
   z.object({ kind: z.literal('no-resolved-rows'), censored: z.number(), labelKnown: z.number(), emptyLabel: z.number() }),
 ]);
@@ -143,9 +136,7 @@ const carveRefusalSchema: z.ZodType<CarveRefusal> = z.discriminatedUnion('kind',
   }),
 ]);
 const nonNegativeCount = z.number().int().nonnegative();
-// The input type is left open (`unknown`) because the new-entity hashes may be absent on read (a summary stored before
-// they existed) while the parsed value always has them (absent reads as null).
-const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary, z.ZodTypeDef, unknown> = z.object({
+const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary> = z.object({
   kind: z.enum(HOLDOUT_KINDS),
   cutoff: z.string().nullable(),
   holdoutEnd: z.string().nullable(),
@@ -157,9 +148,8 @@ const holdoutCarveSummarySchema: z.ZodType<HoldoutCarveSummary, z.ZodTypeDef, un
   newEntity: z.object({
     holdoutEntityKeys: nonNegativeCount, trainingRowCount: nonNegativeCount, holdoutRowCount: nonNegativeCount,
     excludedRowCount: nonNegativeCount, sharedEntityKeys: nonNegativeCount,
-    // Absent on a summary stored before the hashes existed: read as null.
-    heldGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/).nullable().default(null),
-    trainingGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/).nullable().default(null),
+    heldGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    trainingGroupKeysSha256: z.string().regex(/^[0-9a-f]{64}$/),
   }).nullable(),
 });
 /** Every gate reason code; `satisfies` refuses a value that is not one. */
@@ -224,22 +214,20 @@ const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
   rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
   emptyLabelRowsExcluded: z.number(), duplicateRowsRemoved: z.number(), resolvedRows: z.number(), dataCutoff: z.string(),
 });
-// The input type is left open (`unknown`) because `trainer`, `trainerRequest`, `carve` and `gate` may be absent on read (an
-// envelope written before they existed) while the parsed value always has them (absent reads as null).
-const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unknown> = z.discriminatedUnion('status', [
+const trainingRunResultsSchema: z.ZodType<TrainingRunResults> = z.discriminatedUnion('status', [
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('refused'), refusal: trainingRefusalSchema }),
   z.object({
     schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA),
     status: z.literal('completed'),
     unitResolution: unitResolutionCountsSchema,
-    trainer: TrainerResultSchemas.StoredTrainerResult.nullable().default(null),
-    trainerRequest: TrainerResultSchemas.TrainerRequestConfig.nullable().default(null),
-    carve: holdoutCarveSummarySchema.nullable().default(null),
-    gate: storedGateRecordSchema.nullable().default(null),
+    trainer: TrainerResultSchemas.StoredTrainerResult.nullable(),
+    trainerRequest: TrainerResultSchemas.TrainerRequestConfig.nullable(),
+    carve: holdoutCarveSummarySchema.nullable(),
+    gate: storedGateRecordSchema.nullable(),
   }),
 ]);
 
-/** Reads the ValidationResults envelope of a unit-based run (static member on one owner). */
+/** Reads the ValidationResults envelope of a unit-based run. */
 export class TrainingRunResultsParser {
   /** Reads the v2 envelope with its zod schema; a legacy (pre-v2) blob or any member of the wrong shape is reported as an error. */
   public static ParseTrainingRunResults(text: string | null): ParseResult<TrainingRunResults> {

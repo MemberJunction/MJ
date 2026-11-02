@@ -9,17 +9,17 @@ import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './
 import { UtcDay, type CellValue } from './utc-day';
 
 export type TaskType =
-  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
   | { readonly kind: 'binary'; readonly classOrder: readonly [string, string]; readonly adverseIndex: 0 | 1 }
-  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
   | { readonly kind: 'multiclass'; readonly classOrder: readonly string[]; readonly adverseIndices: readonly number[] }
-  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
   | { readonly kind: 'continuous' }
-  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
   | { readonly kind: 'count' }
-  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
   | { readonly kind: 'non-negative'; readonly tweediePower: number }
-  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
   | { readonly kind: 'forecast'; readonly valueKind: 'continuous' | 'count' | 'non-negative' };
 
 export type TaskKind = TaskType['kind'];
@@ -33,7 +33,7 @@ export interface ScoreSemanticsResult {
 
 /**
  * The rules derived from a declared TaskType: score semantics, classification test, the legacy ProblemType value,
- * and the TaskType parser (static members on one owner class).
+ * and the TaskType parser.
  */
 export class TaskTypeRules {
   /**

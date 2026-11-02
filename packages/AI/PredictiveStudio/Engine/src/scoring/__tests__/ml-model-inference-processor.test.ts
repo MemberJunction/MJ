@@ -96,7 +96,7 @@ class FakeSidecar implements ISidecarPredictor {
   constructor(private readonly scoreFor: (i: number) => { score: number; class?: string } = (i) => ({ score: 0.5 + i * 0.1, class: i % 2 === 0 ? 'renew' : 'lapse' })) {}
   async predict(req: PredictRequest): Promise<PredictResponse> {
     this.Requests.push(req);
-    return { predictions: (req.rows ?? []).map((_r, i) => this.scoreFor(i)) };
+    return { predictions: (req.rows ?? []).map((_r, i) => ({ ...this.scoreFor(i), probabilities: null })), classOrder: null };
   }
 }
 

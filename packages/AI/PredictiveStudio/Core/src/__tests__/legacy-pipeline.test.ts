@@ -4,6 +4,7 @@ import {
   type LegacyOutcomeInputs, type LegacyPipelineFields,
 } from '../legacy-pipeline';
 import { PredictionUnit } from '../prediction-unit';
+import { HoldoutCarveDateError } from '../holdout-carve';
 import { ProtocolRows } from '../protocol-rows';
 import { EvaluationProtocolRules } from '../evaluation-protocol-rules';
 
@@ -108,11 +109,22 @@ describe('LegacyProtocolInputs', () => {
   });
 });
 
+describe('LegacyProtocolInputs with an unreadable date', () => {
+  it('holds the pipeline, naming the value, instead of ordering it as text', () => {
+    const r = LegacyPipelines.LegacyProtocolInputs(null, null, 'StartDate', ['2024-01-01', 'not a date', '2024-03-01']);
+    expect(r).toEqual({ Kind: 'hold', Reason: 'a row\'s StartDate ("not a date") is not a date (yyyy-mm-dd): no date cutoff can be derived' });
+  });
+});
+
 describe('TrailingShareCutoff', () => {
   it('is the earliest day whose trailing block holds at most the share, and never the first day', () => {
     expect(LegacyPipelines.TrailingShareCutoff(['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04'], 0.25)).toBe('2024-01-04');
     expect(LegacyPipelines.TrailingShareCutoff(['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04'], 0.5)).toBe('2024-01-03');
     expect(LegacyPipelines.TrailingShareCutoff(['2024-01-01', '2024-01-01'], 0.5)).toBeNull();
+  });
+  it('reads each date as its UTC day and refuses a value with no calendar day', () => {
+    expect(LegacyPipelines.TrailingShareCutoff(['2024-01-01T09:00:00.000Z', '2024-01-02T23:59:00.000Z', '2024-01-03', '2024-01-04T00:00:00Z'], 0.25)).toBe('2024-01-04');
+    expect(() => LegacyPipelines.TrailingShareCutoff(['2024-01-01', '2024-02-30'], 0.25)).toThrow(HoldoutCarveDateError);
   });
 });
 

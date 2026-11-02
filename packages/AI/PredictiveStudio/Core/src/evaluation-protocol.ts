@@ -13,24 +13,31 @@ declare const nonNegativeBrand: unique symbol;
 /** A number >= 0, produced only by {@link EvaluationProtocol.ToNonNegative}. */
 export type NonNegative = number & { readonly [nonNegativeBrand]: 'NonNegative' };
 
-export interface Interval { readonly level: number; readonly lower: number; readonly upper: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-export interface MetricWithInterval { readonly metric: MetricKey; readonly value: number; readonly interval: Interval; readonly n: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+/** A confidence interval at `level` around an estimate. */
+export interface Interval { readonly level: number; readonly lower: number; readonly upper: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** One metric's value on `n` rows, with its interval. */
+export interface MetricWithInterval { readonly metric: MetricKey; readonly value: number; readonly interval: Interval; readonly n: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 
+/** The proper scoring rule a protocol ranks candidates by, per target family. */
 export type ProperScore =
-  | { readonly family: 'binary'; readonly metric: 'log-loss' | 'brier' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly family: 'multiclass'; readonly metric: 'multiclass-log-loss' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly family: 'continuous'; readonly metric: 'rmse' | 'mae' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly family: 'count'; readonly metric: 'poisson-deviance' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly family: 'non-negative'; readonly metric: 'tweedie-deviance' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly family: 'forecast'; readonly metric: 'mase' | 'rmse' };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly family: 'binary'; readonly metric: 'log-loss' | 'brier' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'multiclass'; readonly metric: 'multiclass-log-loss' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'continuous'; readonly metric: 'rmse' | 'mae' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'count'; readonly metric: 'poisson-deviance' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'non-negative'; readonly metric: 'tweedie-deviance' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'forecast'; readonly metric: 'mase' | 'rmse' };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** The metrics reported beside the primary score; never used to rank. */
 export type SecondaryMetric = 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+/** Every metric a run may report: the proper scores and the secondary metrics. */
 export type MetricKey = ProperScore['metric'] | SecondaryMetric;
+/** Which way a metric improves. */
 export type MetricDirection = 'lower-is-better' | 'higher-is-better' | 'closer-to-one';
+/** The direction of every metric. */
 export const METRIC_DIRECTION: { readonly [K in MetricKey]: MetricDirection } = {
-  'log-loss': 'lower-is-better', brier: 'lower-is-better', 'multiclass-log-loss': 'lower-is-better', rmse: 'lower-is-better',  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  mae: 'lower-is-better', 'poisson-deviance': 'lower-is-better', 'tweedie-deviance': 'lower-is-better', mase: 'lower-is-better',  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  auc: 'higher-is-better', accuracy: 'higher-is-better', f1: 'higher-is-better', precision: 'higher-is-better',  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  recall: 'higher-is-better', r2: 'higher-is-better', 'calibration-slope': 'closer-to-one',  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  'log-loss': 'lower-is-better', brier: 'lower-is-better', 'multiclass-log-loss': 'lower-is-better', rmse: 'lower-is-better',  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  mae: 'lower-is-better', 'poisson-deviance': 'lower-is-better', 'tweedie-deviance': 'lower-is-better', mase: 'lower-is-better',  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  auc: 'higher-is-better', accuracy: 'higher-is-better', f1: 'higher-is-better', precision: 'higher-is-better',  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  recall: 'higher-is-better', r2: 'higher-is-better', 'calibration-slope': 'closer-to-one',  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 };
 /** The proper scores allowed per family (one source for the shape check and the protocol rules). */
 export const PROPER_SCORES_BY_FAMILY: { readonly [F in ProperScore['family']]: readonly Extract<ProperScore, { family: F }>['metric'][] } = {
@@ -38,62 +45,75 @@ export const PROPER_SCORES_BY_FAMILY: { readonly [F in ProperScore['family']]: r
   count: ['poisson-deviance'], 'non-negative': ['tweedie-deviance'], forecast: ['mase', 'rmse'],
 };
 
+/** A baseline the finalist is compared against: a dummy, a simple model, or the unit's incumbent heuristic. */
 export type BaselineSpec =
-  | { readonly kind: 'dummy'; readonly name: 'base-rate' | 'mean' | 'training-window-mean' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'one-feature'; readonly selection: 'best-single-feature-inner-cv' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'glm'; readonly family: 'logistic' | 'multinomial' | 'gaussian' | 'poisson' | 'tweedie'; readonly penalty: 'l2' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'naive' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'seasonal-naive'; readonly season: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'incumbent-heuristic'; readonly name: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'dummy'; readonly name: 'base-rate' | 'mean' | 'training-window-mean' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'one-feature'; readonly selection: 'best-single-feature-inner-cv' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'glm'; readonly family: 'logistic' | 'multinomial' | 'gaussian' | 'poisson' | 'tweedie'; readonly penalty: 'l2' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'naive' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'seasonal-naive'; readonly season: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'incumbent-heuristic'; readonly name: string };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** Whether a baseline is the no-signal dummy or a simple model. */
 export type BaselineRole = 'dummy' | 'simple';
+/** The locked holdout a protocol declares: a date carve, a rolling-origin backtest, or a seeded row hash. */
 export type HoldoutSplit =
   | {
-      readonly kind: 'date-carved'; readonly dateColumn: string; readonly cutoff: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly kind: 'date-carved'; readonly dateColumn: string; readonly cutoff: string;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
       /** Optional end (exclusive) of the holdout window; rows on or after it are in neither role (it reproduces the reference pipeline's holdout keys). */
-      readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly newEntityReport: { readonly groupKey: string; readonly holdoutFraction: number } | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+      readonly newEntityReport: { readonly groupKey: string; readonly holdoutFraction: number } | null;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
     }
-  | { readonly kind: 'rolling-origin'; readonly origins: number; readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number; readonly window: 'expanding' | 'sliding' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'rolling-origin'; readonly origins: number; readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number; readonly window: 'expanding' | 'sliding' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
   /** Units with one fixed decision date (cross-sectional data): a reproducible row-hash holdout of this fraction of the rows. */
-  | { readonly kind: 'seeded-random'; readonly fraction: number };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'seeded-random'; readonly fraction: number };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 /** A rolling-origin backtest needs at least this many origins (the shape check and the parser read it). */
 export const MIN_ROLLING_ORIGINS = 5;
+/** How candidates are cross-validated inside the development rows. */
 export type InnerValidation =
-  | { readonly kind: 'repeated-stratified-kfold'; readonly folds: number; readonly repeats: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'grouped-kfold'; readonly folds: number; readonly repeats: number; readonly groupKey: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'blocked-time'; readonly folds: number; readonly gapPeriods: number; readonly groupKey: string | null };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'repeated-stratified-kfold'; readonly folds: number; readonly repeats: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'grouped-kfold'; readonly folds: number; readonly repeats: number; readonly groupKey: string }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'blocked-time'; readonly folds: number; readonly gapPeriods: number; readonly groupKey: string | null };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** How classifier probabilities are calibrated, always on a fold disjoint from fitting. */
 export type CalibrationMethod =
-  | { readonly kind: 'platt'; readonly fitOn: 'disjoint-calibration-fold' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'isotonic'; readonly fitOn: 'disjoint-calibration-fold' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'auto'; readonly thresholdRows: number; readonly fitOn: 'disjoint-calibration-fold' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'not-applicable'; readonly reason: 'regression-task' };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-export type ResamplingSpec = { readonly kind: 'none' } | { readonly kind: 'in-fold'; readonly method: 'class-weight' | 'undersample' | 'oversample' };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'platt'; readonly fitOn: 'disjoint-calibration-fold' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'isotonic'; readonly fitOn: 'disjoint-calibration-fold' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'auto'; readonly thresholdRows: number; readonly fitOn: 'disjoint-calibration-fold' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'not-applicable'; readonly reason: 'regression-task' };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** Class rebalancing applied inside each training fold, or none. */
+export type ResamplingSpec = { readonly kind: 'none' } | { readonly kind: 'in-fold'; readonly method: 'class-weight' | 'undersample' | 'oversample' };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** How intervals and paired comparisons are computed on the holdout. */
 export interface IntervalSpec {
-  readonly level: 0.95;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly method: 'bootstrap' | 'cluster-bootstrap' | 'block-bootstrap' | 'delong';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly resamples: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly pairedTest: 'paired-bootstrap' | 'delong' | 'corrected-resampled-t' | 'diebold-mariano';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly level: 0.95;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly method: 'bootstrap' | 'cluster-bootstrap' | 'block-bootstrap' | 'delong';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly resamples: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly pairedTest: 'paired-bootstrap' | 'delong' | 'corrected-resampled-t' | 'diebold-mariano';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 }
+/** The leakage audits every run performs and the single-feature AUC that flags a leak. */
 export interface LeakageAuditSpec {
-  readonly singleFeatureHeldOutAucMax: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly timeShiftedLabelTest: true;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly dropColumnTest: true;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly importanceAggregation: 'per-source-column';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly highCardinalityIdCheck: true;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly singleFeatureHeldOutAucMax: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly timeShiftedLabelTest: true;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly dropColumnTest: true;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly importanceAggregation: 'per-source-column';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly highCardinalityIdCheck: true;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 }
+/** How candidates are searched: a fixed random draw or a guided search. */
 export type SearchStrategy =
-  | { readonly kind: 'random'; readonly candidates: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'guided'; readonly method: 'bayesian' | 'successive-halving'; readonly equalCostComparisonId: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-export interface Budgets { readonly maxComputeSeconds: number; readonly maxTokens: number; readonly maxCandidates: number; readonly hardStop: true }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'random'; readonly candidates: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'guided'; readonly method: 'bayesian' | 'successive-halving'; readonly equalCostComparisonId: string };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** The compute, token and candidate budgets a run may spend; exceeding one stops the run. */
+export interface Budgets { readonly maxComputeSeconds: number; readonly maxTokens: number; readonly maxCandidates: number; readonly hardStop: true }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** When a model may replace the baselines: the comparators, the margin and the decision table. */
 export interface PromotionRule {
-  readonly comparators: readonly BaselineSpec[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly incumbent: 'current-published' | 'none';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly margin: NonNegative;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly lowerBoundLevel: 0.95;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly pairedOn: 'same-holdout-rows';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly decisionTable: 'Q13+Q14+Q15';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly comparators: readonly BaselineSpec[];  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly incumbent: 'current-published' | 'none';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly margin: NonNegative;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly lowerBoundLevel: 0.95;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly pairedOn: 'same-holdout-rows';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly decisionTable: 'Q13+Q14+Q15';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 }
+/** What the gate may ship: the model, a simple baseline, or nothing. */
 export type GateOutcome = 'model' | 'keep-simple-baseline' | 'no-signal';
+/** The gate outcomes every protocol allows; no-signal can never be omitted. */
 export const ALLOWED_OUTCOMES: readonly ['model', 'keep-simple-baseline', 'no-signal'] = ['model', 'keep-simple-baseline', 'no-signal'];
 /**
  * Who may change the guard fields (holdout, promotion, leakage audit, exclusions, budgets) in the next version of a
@@ -102,44 +122,50 @@ export const ALLOWED_OUTCOMES: readonly ['model', 'keep-simple-baseline', 'no-si
  * same guard-field validation.
  */
 export type GuardFieldsEditableBy = 'non-agent' | 'human-only';
+/** Every `GuardFieldsEditableBy` value. */
 export const GUARD_FIELDS_EDITABLE_BY: readonly GuardFieldsEditableBy[] = ['non-agent', 'human-only'];
-export interface ProtocolExclusions { readonly denyFields: readonly string[]; readonly denySources: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-export interface SliceSpec { readonly outOfTime: boolean; readonly subgroups: readonly string[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-export interface PredictionIntervalSpec { readonly method: 'split-conformal' | 'quantile'; readonly nominalCoverage: readonly number[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-export interface ResidualDiagnosticsSpec { readonly acfLags: number; readonly ljungBoxAlpha: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+/** Fields and sources a protocol forbids as features. */
+export interface ProtocolExclusions { readonly denyFields: readonly string[]; readonly denySources: readonly string[] }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** The holdout slices the run reports: out-of-time and per subgroup. */
+export interface SliceSpec { readonly outOfTime: boolean; readonly subgroups: readonly string[] }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** How regression prediction intervals are produced and at which nominal coverages. */
+export interface PredictionIntervalSpec { readonly method: 'split-conformal' | 'quantile'; readonly nominalCoverage: readonly number[] }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** The forecast residual autocorrelation checks: lags and the Ljung-Box significance level. */
+export interface ResidualDiagnosticsSpec { readonly acfLags: number; readonly ljungBoxAlpha: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** A monitored condition that calls for retraining. */
 export type RetrainTrigger =
-  | { readonly kind: 'outcome-degradation'; readonly margin: NonNegative; readonly consecutivePeriods: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'calibration-drift'; readonly slopeOutside: readonly [number, number]; readonly consecutivePeriods: number };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'outcome-degradation'; readonly margin: NonNegative; readonly consecutivePeriods: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly kind: 'calibration-drift'; readonly slopeOutside: readonly [number, number]; readonly consecutivePeriods: number };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 
 /** The typed Evaluation Protocol version a run is graded under (no pipeline or unit reference: the pipeline binds both). */
 export interface EvaluationProtocolSpec {
-  readonly id: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly lineageRootId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly version: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly name: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly holdout: HoldoutSplit;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly innerValidation: InnerValidation;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly seed: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly holdoutAccessBudget: 1;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly primaryScore: ProperScore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly secondaryMetrics: readonly SecondaryMetric[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly baselines: readonly BaselineSpec[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly calibration: CalibrationMethod;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly resampling: ResamplingSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly intervals: IntervalSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly promotion: PromotionRule;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly allowedOutcomes: typeof ALLOWED_OUTCOMES;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly leakageAudit: LeakageAuditSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly exclusions: ProtocolExclusions;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly slices: SliceSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly predictionIntervals: PredictionIntervalSpec | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly residualDiagnostics: ResidualDiagnosticsSpec | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly retrainTriggers: readonly RetrainTrigger[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly search: SearchStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly budgets: Budgets;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly minMinorityClassRows: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly guardFieldsEditableBy: GuardFieldsEditableBy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly authoredBy: Actor;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly id: string;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly lineageRootId: string;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly version: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly name: string;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly holdout: HoldoutSplit;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly innerValidation: InnerValidation;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly seed: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly holdoutAccessBudget: 1;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly primaryScore: ProperScore;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly secondaryMetrics: readonly SecondaryMetric[];  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly baselines: readonly BaselineSpec[];  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly calibration: CalibrationMethod;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly resampling: ResamplingSpec;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly intervals: IntervalSpec;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly promotion: PromotionRule;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly allowedOutcomes: typeof ALLOWED_OUTCOMES;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly leakageAudit: LeakageAuditSpec;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly exclusions: ProtocolExclusions;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly slices: SliceSpec;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly predictionIntervals: PredictionIntervalSpec | null;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly residualDiagnostics: ResidualDiagnosticsSpec | null;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly retrainTriggers: readonly RetrainTrigger[];  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly search: SearchStrategy;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly budgets: Budgets;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly minMinorityClassRows: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly guardFieldsEditableBy: GuardFieldsEditableBy;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  readonly authoredBy: Actor;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 }
 
 /** The one sentence the shape check and the parser give a seeded-random holdout whose fraction is not in (0, 1). */
@@ -175,7 +201,46 @@ export class EvaluationProtocol {
 
   /** Narrows a stored `GuardFieldsEditableBy` column value to its union. */
   public static IsGuardFieldsEditableBy(v: string): v is GuardFieldsEditableBy {
-    return v === 'non-agent' || v === 'human-only';
+    return GUARD_FIELDS_EDITABLE_BY.some((g) => g === v);
+  }
+
+  /**
+   * The proper score of `family` named `metric`, read from {@link PROPER_SCORES_BY_FAMILY} (the one list the shape
+   * check, the parser and the protocol editor share); null when `family` is not a family or has no such score.
+   */
+  public static ToProperScore(family: string | null, metric: string | null): ProperScore | null {
+    switch (family) {
+      case 'binary': {
+        const m = EvaluationProtocol.allowedMetric(PROPER_SCORES_BY_FAMILY.binary, metric);
+        return m === null ? null : { family, metric: m };
+      }
+      case 'multiclass': {
+        const m = EvaluationProtocol.allowedMetric(PROPER_SCORES_BY_FAMILY.multiclass, metric);
+        return m === null ? null : { family, metric: m };
+      }
+      case 'continuous': {
+        const m = EvaluationProtocol.allowedMetric(PROPER_SCORES_BY_FAMILY.continuous, metric);
+        return m === null ? null : { family, metric: m };
+      }
+      case 'count': {
+        const m = EvaluationProtocol.allowedMetric(PROPER_SCORES_BY_FAMILY.count, metric);
+        return m === null ? null : { family, metric: m };
+      }
+      case 'non-negative': {
+        const m = EvaluationProtocol.allowedMetric(PROPER_SCORES_BY_FAMILY['non-negative'], metric);
+        return m === null ? null : { family, metric: m };
+      }
+      case 'forecast': {
+        const m = EvaluationProtocol.allowedMetric(PROPER_SCORES_BY_FAMILY.forecast, metric);
+        return m === null ? null : { family, metric: m };
+      }
+      default: return null;
+    }
+  }
+
+  /** `metric` narrowed to one of `allowed`, or null. */
+  private static allowedMetric<M extends ProperScore['metric']>(allowed: readonly M[], metric: string | null): M | null {
+    return allowed.find((m) => m === metric) || null;
   }
 
   /**
@@ -511,17 +576,7 @@ export class EvaluationProtocol {
 
   private static parsePrimaryScore(v: JsonObject | null): ProperScore | null {
     if (v === null) return null;
-    const family = JsonParse.JsonString(v, 'family');
-    const metric = JsonParse.JsonString(v, 'metric');
-    switch (family) {
-      case 'binary': return metric === 'log-loss' || metric === 'brier' ? { family, metric } : null;
-      case 'multiclass': return metric === 'multiclass-log-loss' ? { family, metric } : null;
-      case 'continuous': return metric === 'rmse' || metric === 'mae' ? { family, metric } : null;
-      case 'count': return metric === 'poisson-deviance' ? { family, metric } : null;
-      case 'non-negative': return metric === 'tweedie-deviance' ? { family, metric } : null;
-      case 'forecast': return metric === 'mase' || metric === 'rmse' ? { family, metric } : null;
-      default: return null; // reported by the shape check
-    }
+    return EvaluationProtocol.ToProperScore(JsonParse.JsonString(v, 'family'), JsonParse.JsonString(v, 'metric'));
   }
 
   private static parseBaseline(v: JsonObject): BaselineSpec | null {

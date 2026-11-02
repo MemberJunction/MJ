@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { TRAINING_RUN_RESULTS_SCHEMA, TrainingRunResultsParser } from '../training-run-results';
 
 const counts = { rowsRead: 10, censoredRowsExcluded: 1, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 9, dataCutoff: '2026-01-01' };
+/** The members every completed envelope carries, null for a run without a trainer result. */
+const noTraining = { trainer: null, trainerRequest: null, carve: null, gate: null };
 
 describe('TrainingRunResultsParser', () => {
   it('reads a completed and a refused envelope', () => {
-    expect(TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts })).Ok).toBe(true);
+    expect(TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, ...noTraining })).Ok).toBe(true);
     const refused = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } } }));
     expect(refused.Ok && refused.Value.status === 'refused' ? refused.Value.refusal.reason.kind : null).toBe('protocol-required');
   });
@@ -29,13 +31,16 @@ describe('TrainingRunResultsParser', () => {
     expect(badHoldout.Ok ? null : badHoldout.Errors.join('\n')).toMatch(/refusal\.reason\.holdout/);
   });
   it('refuses an envelope whose members have the wrong shape, naming the path', () => {
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' } }));
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' }, ...noTraining }));
     expect(r.Ok ? null : r.Errors.join('\n')).toMatch(/unitResolution\.resolvedRows/);
     expect(TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'made-up' } } })).Ok).toBe(false);
   });
-  it('reads an envelope written before trainer results were stored with trainer and trainerRequest as null', () => {
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts }));
-    expect(r.Ok && r.Value.status === 'completed' ? [r.Value.trainer, r.Value.trainerRequest] : 'not read').toEqual([null, null]);
+  it('refuses a completed envelope that omits trainer, trainerRequest, carve or gate', () => {
+    for (const member of ['trainer', 'trainerRequest', 'carve', 'gate'] as const) {
+      const { [member]: _omitted, ...rest } = noTraining;
+      const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, ...rest }));
+      expect(r.Ok ? null : r.Errors.join('\n')).toMatch(new RegExp(`ValidationResults\\.${member}:`));
+    }
   });
   it('reads a trainer refusal and refuses one at an unknown trainer stage', () => {
     const envelope = (stage: string) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'trainer', reason: { kind: 'trainer-failed', stage, message: 'one class in a fold', computeSeconds: 3.25 } } });
@@ -43,18 +48,6 @@ describe('TrainingRunResultsParser', () => {
     expect(ok.Ok && ok.Value.status === 'refused' ? ok.Value.refusal : null).toEqual({ stage: 'trainer', reason: { kind: 'trainer-failed', stage: 'inner-cv', message: 'one class in a fold', computeSeconds: 3.25 } });
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope('warm-up'));
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.stage/);
-  });
-  it('reads a completed envelope written before the carve was stored with carve as null', () => {
-    // The shape a unit run stored before the carve member existed (trainer members, no carve key).
-    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null });
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
-    expect(r.Ok && r.Value.status === 'completed' ? r.Value.carve : 'not read').toBeNull();
-  });
-  it('reads a completed envelope written before the gate record was stored with gate as null', () => {
-    // The shape a unit run stored before the gate member existed (trainer, request and carve members, no gate key).
-    const stored = JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null, carve: null });
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(stored);
-    expect(r.Ok && r.Value.status === 'completed' ? r.Value.gate : 'not read').toBeNull();
   });
   it('reads back a stored carve summary and refuses one with a wrong-typed member', () => {
     const carve = {
@@ -65,7 +58,7 @@ describe('TrainingRunResultsParser', () => {
         heldGroupKeysSha256: 'a'.repeat(64), trainingGroupKeysSha256: 'b'.repeat(64),
       },
     };
-    const envelope = (c: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null, carve: c });
+    const envelope = (c: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, ...noTraining, carve: c });
     const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope(carve));
     expect(ok.Ok && ok.Value.status === 'completed' ? ok.Value.carve : null).toEqual(carve);
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, kind: 'trailing-fraction' }));
@@ -75,15 +68,14 @@ describe('TrainingRunResultsParser', () => {
     const badHash = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...carve, newEntity: { ...carve.newEntity, heldGroupKeysSha256: 'not-a-hash' } }));
     expect(badHash.Ok ? null : badHash.Errors.join('\n')).toMatch(/carve\.newEntity\.heldGroupKeysSha256/);
   });
-  it('reads a new-entity summary stored before its group-key hashes existed with both hashes as null', () => {
-    const older = {
+  it('refuses a new-entity summary without its group-key hashes', () => {
+    const withoutHashes = {
       kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: null, developmentRowCount: 20, holdoutRowCount: 4, excludedAfterHoldoutEnd: 0,
       holdoutClassCounts: null, holdoutPeriods: ['2024-01-01'],
       newEntity: { holdoutEntityKeys: 3, trainingRowCount: 12, holdoutRowCount: 3, excludedRowCount: 5, sharedEntityKeys: 0 },
     };
-    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, trainer: null, trainerRequest: null, carve: older }));
-    const ne = r.Ok && r.Value.status === 'completed' ? r.Value.carve?.newEntity : undefined;
-    expect(ne).toEqual({ ...older.newEntity, heldGroupKeysSha256: null, trainingGroupKeysSha256: null });
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, ...noTraining, carve: withoutHashes }));
+    expect(r.Ok ? null : r.Errors.join('\n')).toMatch(/carve\.newEntity\.heldGroupKeysSha256/);
   });
   it('reads a carve refusal and refuses one of an unknown kind', () => {
     const envelope = (reason: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'carve', reason } });

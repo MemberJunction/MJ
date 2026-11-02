@@ -33,9 +33,10 @@ describe('predictive-studio-core contracts', () => {
   it('PredictResponse aligns predictions positionally', () => {
     const resp: PredictResponse = {
       predictions: [
-        { score: 0.83, class: 'renew' },
-        { score: 0.21, class: 'lapse' },
+        { score: 0.83, class: 'renew', probabilities: [0.17, 0.83] },
+        { score: 0.21, class: 'lapse', probabilities: [0.79, 0.21] },
       ],
+      classOrder: ['lapse', 'renew'],
     };
     expect(resp.predictions[0].score).toBeGreaterThan(resp.predictions[1].score);
   });

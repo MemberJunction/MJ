@@ -45,7 +45,7 @@ export interface LeaderboardRow {
   readonly IsFinalist: boolean;
 }
 
-/** Inner-fold ranking and the selection check (static members on one owner). */
+/** Inner-fold ranking and the selection check. */
 export class InnerScoreSelection {
   /** Best-first by the metric's direction (a loss ascending, a higher-is-better metric descending); ties by candidate name. */
   public static RankByInnerScore(scores: readonly CandidateInnerScore[]): readonly CandidateInnerScore[] {

@@ -258,7 +258,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
       // test-double cast at the seam, as this file's entity factory does (a field-bag fake is not a BaseEntity).
       modelLoader: { loadModel: async () => trained as unknown as MJMLModelEntity },
       artifactLoader: artifacts,
-      sidecar: { predict: async () => ({ predictions: [] }) },
+      sidecar: { predict: async () => ({ predictions: [], classOrder: null }) },
       pipelineUnits: { PredictionUnitIDOf: async (id: string) => (id === pipeline.ID ? UnitYearsWorld.UnitID : null) },
       trainingRows: { TrainingRowIdsOf: async () => new Set<string>() },
       predictionUnits: deps.predictionUnits,

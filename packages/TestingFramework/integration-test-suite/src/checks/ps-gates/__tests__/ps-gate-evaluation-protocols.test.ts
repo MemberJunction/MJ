@@ -55,8 +55,8 @@ describe('EvaluationProtocolGates.MeasureNewEntityFromManifest', () => {
     expect(EvaluationProtocolGates.NewEntityPassed(m, report(), rows.length)).toBe(false);
   });
 
-  it('fails when the report claims 0 shared keys but its stored sets cannot be verified', () => {
-    const unverified = report({ heldGroupKeysSha256: null, trainingGroupKeysSha256: null });
+  it('fails when the report claims 0 shared keys but its stored hashes name no group set', () => {
+    const unverified = report({ heldGroupKeysSha256: '', trainingGroupKeysSha256: '' });
     const m = EvaluationProtocolGates.MeasureNewEntityFromManifest(manifest(), '2024-01-01', 0.4, unverified);
     expect(m.SharedEntityKeys).toBe(-1);
     expect(EvaluationProtocolGates.NewEntityPassed(m, unverified, manifest().length)).toBe(false);

@@ -17,35 +17,35 @@ export type GateBranch = 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy' 
 /** A paired comparison of two scorers' losses on the same holdout rows. */
 export interface PairedComparison {
   /** Mean of (base loss − candidate loss); positive favours the candidate. */
-  readonly value: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly value: number;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
   /** The interval on `value` at the protocol's lower-bound level. */
-  readonly ci: readonly [number, number];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly ci: readonly [number, number];  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
   /** True when ci[0] > the protocol's margin. */
-  readonly beats: boolean;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly beats: boolean;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
 }
 
 /** The gate's decision: what ships (a model, the best simple baseline, or nothing) and the branch that decided it. */
 export type GateDecision =
   | {
-      readonly outcome: 'model';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly shipped: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly shippedRole: 'model';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly note: 'no simple baseline carries demonstrable signal' | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly outcome: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: 'no simple baseline carries demonstrable signal' | null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
     }
   | {
-      readonly outcome: 'keep-simple-baseline';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly branch: 'b:keep-simple-baseline';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly shipped: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly shippedRole: 'simpleBaseline';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly note: null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly outcome: 'keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'b:keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'simpleBaseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
     }
   | {
-      readonly outcome: 'no-signal';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly branch: 'c:no-signal';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly shipped: null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly shippedRole: null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly note: null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly outcome: 'no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'c:no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
     };
 
 /**
@@ -150,7 +150,7 @@ export interface GateReason {
 /**
  * The gate: the transcribed decision table (`BeatsByMargin`, `GateInputsFromIntervals`, `DecideGate`), the stored
  * decision with its guards (`DecideGuardedGate`), member names, stored intervals, the reason in words, and the shared
- * interval text format — static members on one owner, with no free-function aliases.
+ * interval text format.
  */
 export class GateRules {
   private static readonly noSignal: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
@@ -339,11 +339,11 @@ export class GateRules {
 
   /** A stored interval as `x [lo, hi]` with four decimals — the one format every gate and trust text uses. */
   public static FormatInterval(iv: StoredInterval): string {
-    return `${GateRules.F4(iv.value)} [${GateRules.F4(iv.lower)}, ${GateRules.F4(iv.upper)}]`;
+    return `${GateRules.FormatFourDecimals(iv.value)} [${GateRules.FormatFourDecimals(iv.lower)}, ${GateRules.FormatFourDecimals(iv.upper)}]`;
   }
 
   /** A number with four decimals (the gate's display precision). */
-  public static F4(x: number): string {
+  public static FormatFourDecimals(x: number): string {
     return x.toFixed(4);
   }
 
@@ -352,7 +352,7 @@ export class GateRules {
       case 'minority-class-below-minimum':
         return { code: refusal.kind, text: `The test set has only ${refusal.rows} rows of "${refusal.classLabel}"; at least ${refusal.minimum} are needed to tell a model from chance, so nothing ships.` };
       case 'auc-interval-contains-chance':
-        return { code: refusal.kind, text: `The model's AUC interval on the test set, [${GateRules.F4(refusal.lower)}, ${GateRules.F4(refusal.upper)}], contains 0.5 (a coin flip), so it does not ship.` };
+        return { code: refusal.kind, text: `The model's AUC interval on the test set, [${GateRules.FormatFourDecimals(refusal.lower)}, ${GateRules.FormatFourDecimals(refusal.upper)}], contains 0.5 (a coin flip), so it does not ship.` };
       case 'auc-interval-missing':
         return { code: refusal.kind, text: 'The trainer reported no AUC interval for the model, so it cannot be shown to beat a coin flip; nothing ships.' };
     }

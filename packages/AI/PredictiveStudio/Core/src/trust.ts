@@ -15,6 +15,7 @@ import { GateRules, type StoredInterval } from './gate';
 import type { StoredGateRecord } from './run-evaluation';
 import type { TrainerRequestConfig } from './trainer-contract';
 import { TrainingRunResultsParser } from './training-run-results';
+import { JsonParse } from './json-value';
 
 /** What the verdict reads: the model's training run's stored results, and the model's Lineage. */
 export interface TrustInput {
@@ -84,7 +85,7 @@ export interface TrustEvidenceOptions {
   noun?: string;  // case-violation-ok-legacy-back-compat: existing exported option shape
 }
 
-/** The trust verdict and its copy helpers (static members on one owner). */
+/** The trust verdict and its copy helpers. */
 export class TrustVerdicts {
   /** The verdict of a run without a stored gate decision. */
   private static readonly notEvaluated: TrustVerdict = {
@@ -215,14 +216,8 @@ export class TrustVerdicts {
 
   /** The `shippedDriver` a model lineage records for `member`; null when the lineage is absent, unreadable or names another member. */
   private static shippedDriverOf(lineageJson: string | null, member: string): string | null {
-    if (lineageJson === null) return null;
-    let parsed: unknown; // JSON.parse output is untyped until the object checks below narrow it
-    try {
-      parsed = JSON.parse(lineageJson);
-    } catch {
-      return null;
-    }
-    if (typeof parsed !== 'object' || parsed === null || !('shippedMember' in parsed) || !('shippedDriver' in parsed)) return null;
-    return parsed.shippedMember === member && typeof parsed.shippedDriver === 'string' ? parsed.shippedDriver : null;
+    const parsed = JsonParse.ParseJsonText(lineageJson, 'Lineage');
+    if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) return null;
+    return JsonParse.JsonString(parsed.Value, 'shippedMember') === member ? JsonParse.JsonString(parsed.Value, 'shippedDriver') : null;
   }
 }

@@ -26,30 +26,30 @@ export type SnapshotCell = string | number | boolean | null;
 
 /** One feature column as the matrix header carries it: its name, the source column it came from and its full encoding. */
 export interface SnapshotFeatureColumnHeader {
-  readonly name: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly sourceColumn: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly encoding: ColumnEncoding;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly name: string;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly sourceColumn: string;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly encoding: ColumnEncoding;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
 }
 
 /** Line 1 of the matrix file: everything the trainer needs to read the rows that follow. */
 export interface SnapshotMatrixHeader {
-  readonly format: typeof SNAPSHOT_MATRIX_FORMAT;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly format: typeof SNAPSHOT_MATRIX_FORMAT;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
   /** Every column, in row-cell order. */
-  readonly columns: readonly string[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly labelColumn: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly featureColumns: readonly SnapshotFeatureColumnHeader[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly incumbentScoreColumn: typeof INCUMBENT_SCORE_COLUMN | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly referenceScoreColumn: typeof REFERENCE_SCORE_COLUMN | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly columns: readonly string[];  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly labelColumn: string;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly featureColumns: readonly SnapshotFeatureColumnHeader[];  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly incumbentScoreColumn: typeof INCUMBENT_SCORE_COLUMN | null;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly referenceScoreColumn: typeof REFERENCE_SCORE_COLUMN | null;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
   /** Slice field → its `__ps_slice:<field>` column. */
-  readonly sliceColumns: Readonly<Record<string, string>>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly decision: DecisionSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly sliceColumns: Readonly<Record<string, string>>;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly decision: DecisionSpec;  // case-violation-ok-legacy-back-compat: stored snapshot file field name
   /** The sidecar feature schema: the run's `FeaturesUsed` and the model's `FeatureSchema` record it. */
-  readonly featureSchema: readonly FeatureSchemaEntry[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly preprocessing: readonly PreprocessingOp[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly featureSchema: readonly FeatureSchemaEntry[];  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly preprocessing: readonly PreprocessingOp[];  // case-violation-ok-legacy-back-compat: stored snapshot file field name
 }
 
 /** One line of the snapshot provenance file: the per-value provenance of one matrix row. */
 export interface RowProvenance {
-  readonly rowId: SnapshotRowKey['rowId'];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly values: readonly ValueProvenance[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly rowId: SnapshotRowKey['rowId'];  // case-violation-ok-legacy-back-compat: stored snapshot file field name
+  readonly values: readonly ValueProvenance[];  // case-violation-ok-legacy-back-compat: stored snapshot file field name
 }

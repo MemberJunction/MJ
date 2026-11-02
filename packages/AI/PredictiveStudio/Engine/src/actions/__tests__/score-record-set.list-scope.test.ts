@@ -222,7 +222,7 @@ class RecordingSidecar implements ISidecarPredictor {
   public Requests: PredictRequest[] = [];
   async predict(req: PredictRequest): Promise<PredictResponse> {
     this.Requests.push(req);
-    return { predictions: (req.rows ?? []).map((_r, i) => ({ score: 0.25 + i * 0.5, class: i === 0 ? 'lapse' : 'renew' })) };
+    return { predictions: (req.rows ?? []).map((_r, i) => ({ score: 0.25 + i * 0.5, class: i === 0 ? 'lapse' : 'renew', probabilities: null })), classOrder: null };
   }
 }
 

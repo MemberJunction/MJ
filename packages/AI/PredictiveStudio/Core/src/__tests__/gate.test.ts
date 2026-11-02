@@ -219,9 +219,9 @@ describe('GateRules.DescribeGate — the reason in words, one case per code', ()
   });
 });
 
-describe('GateRules.FormatInterval and GateRules.F4', () => {
+describe('GateRules.FormatInterval and GateRules.FormatFourDecimals', () => {
   it('formats a stored interval as "x [lo, hi]" with four decimals', () => {
-    expect(GateRules.F4(0.011)).toBe('0.0110');
+    expect(GateRules.FormatFourDecimals(0.011)).toBe('0.0110');
     expect(GateRules.FormatInterval({ value: 0.0239, lower: 0.011, upper: 0.036 })).toBe('0.0239 [0.0110, 0.0360]');
   });
 });

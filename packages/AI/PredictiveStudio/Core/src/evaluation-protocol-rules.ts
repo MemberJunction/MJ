@@ -92,7 +92,7 @@ export type EvaluationProtocolDraftColumns = Omit<EvaluationProtocolColumns, 'ID
   readonly GuardFieldsEditableBy: GuardFieldsEditableBy;
 };
 
-/** Save-time and bind-time protocol rules and the default protocol (static members on one owner). */
+/** Save-time and bind-time protocol rules and the default protocol. */
 export class EvaluationProtocolRules {
   /** Whether an author may change guard fields under a setting: never an agent tool call; under `human-only`, only a user. */
   public static MayEditGuardFields(author: Actor, setting: GuardFieldsEditableBy): boolean {

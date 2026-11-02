@@ -26,7 +26,7 @@ class CountingSidecar implements ISidecarPredictor {
   public Calls = 0;
   async predict(_req: PredictRequest): Promise<PredictResponse> {
     this.Calls++;
-    return { predictions: [] };
+    return { predictions: [], classOrder: null };
   }
 }
 

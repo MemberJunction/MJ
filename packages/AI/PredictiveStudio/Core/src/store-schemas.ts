@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type { ClassBalanceEntry, ColumnEncoding, DatedSource, SnapshotRowKey, ValueProvenance } from './assembly-contract';
 import type { DecisionSpec } from './prediction-unit';
 import type { FeatureKind, FeatureSchemaEntry, PreprocessingOp } from './sidecar-contract';
-import { JsonParse, type JsonValue, type ParseResult } from './json-value';
+import { JsonParse, type JsonValue, type ListsEveryMember, type ParseResult } from './json-value';
 import {
   INCUMBENT_SCORE_COLUMN,
   REFERENCE_SCORE_COLUMN,
@@ -47,9 +47,6 @@ const FEATURE_KINDS = [
   'decision-derived',
 ] as const satisfies readonly FeatureKind[];
 
-/** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
-type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
-
 /** Compile-time completeness: a `DatedSource` kind added without listing it here breaks the build. */
 const sourceKindsComplete: ListsEveryMember<DatedSource['kind'], (typeof SOURCE_KINDS)[number]> = true;
 /** Compile-time completeness: a `FeatureKind` added without listing it here breaks the build. */
@@ -60,7 +57,7 @@ void featureKindsComplete;
 /** A schema of one stored shape, annotated with the type it checks. */
 export type StoreSchema<T> = z.ZodType<T>;
 
-/** The store schemas, as static members on one owner class so callers write `StoreSchemas.SnapshotRowKey`. */
+/** The zod schemas of the stored Predictive Studio shapes (`StoreSchemas.SnapshotRowKey`, …). */
 export class StoreSchemas {
   /**
    * One stored value checked by its schema: the typed value, or one problem per mismatch (`<path>: <message>`).
@@ -106,7 +103,7 @@ export class StoreSchemas {
   public static readonly DecisionSpec: z.ZodType<DecisionSpec> = z.object({
     action: z.string(),
     actorRole: z.string(),
-    capacityPerPeriod: z.number().nonnegative().nullable(),
+    capacityPerPeriod: z.number().int().positive().nullable(),
     period: z.enum(['day', 'week', 'month', 'quarter', 'year']),
   }).strict();
 

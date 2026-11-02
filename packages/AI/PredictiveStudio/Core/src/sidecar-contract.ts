@@ -75,7 +75,7 @@ export interface PreprocessingOp {
   /** Number of bins to fit when `op` is `bin`. The sidecar fits the edges; absent ⇒ sidecar default. */
   bins?: number;
   /** When `op` is `impute`: also emit a `<col>__missing` column (1 where the value was missing) before filling, so a missing value stays distinct from a true zero. */
-  indicator?: boolean; // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  indicator?: boolean; // case-violation-ok-legacy-back-compat: sidecar wire name
 }
 
 /**
@@ -158,10 +158,9 @@ export interface Prediction {
   /**
    * The full class-probability vector, aligned with {@link PredictResponse.classOrder}. Present for classification and
    * null otherwise (the sidecar sends null rather than leaving the key out); `score` keeps its meaning (P(class 1) for
-   * binary, P(predicted class) for multiclass). The sidecar always sends the key; it stays optional so the test
-   * doubles of the predictor seam, which build responses by hand, need not state it.
+   * binary, P(predicted class) for multiclass).
    */
-  probabilities?: number[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  probabilities: number[] | null;  // case-violation-ok-legacy-back-compat: sidecar wire name
 }
 
 /** One signed per-record feature contribution: `value > 0` pushes the score up, `< 0` down. */
@@ -181,9 +180,9 @@ export interface PredictResponse {
   predictions: Prediction[];
   /**
    * The class order every `probabilities` vector follows (the artifact's declared order for v2 predictors); null for
-   * regression, as the sidecar sends it. Optional for the same reason as {@link Prediction.probabilities}.
+   * regression, as the sidecar sends it.
    */
-  classOrder?: string[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  classOrder: string[] | null;  // case-violation-ok-legacy-back-compat: sidecar wire name
 }
 
 /**

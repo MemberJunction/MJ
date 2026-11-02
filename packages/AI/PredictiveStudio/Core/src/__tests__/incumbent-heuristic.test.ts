@@ -15,6 +15,7 @@ describe('incumbent heuristic expressions', () => {
     if (!r.Ok) throw new Error(r.Errors.join('; '));
     const rowA: Record<string, number> = { a: 0, b: 5, c: 0 };
     const rowB: Record<string, number> = { a: 2, b: 5, c: 3 };
+    // `??`, not `||`: the 0 cells are real values the expression must read, and only a missing column is null.
     expect(IncumbentExpressions.EvaluateIncumbentExpression(r.Value, (c) => rowA[c] ?? null)).toBe(1);
     expect(IncumbentExpressions.EvaluateIncumbentExpression(r.Value, (c) => rowB[c] ?? null)).toBe(0);
     const bare = IncumbentExpressions.ParseIncumbentExpression('LastYearScore');

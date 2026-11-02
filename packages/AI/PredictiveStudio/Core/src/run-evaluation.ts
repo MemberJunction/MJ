@@ -71,7 +71,7 @@ export type GateRecordBuild =
   | { readonly Ok: true; readonly Record: StoredGateRecord }
   | { readonly Ok: false; readonly Refusal: GateStageRefusal };
 
-/** Building and reading the stored gate record (static members on one owner). */
+/** Building and reading the stored gate record. */
 export class GateRecords {
   /** The record a completed run stores; refuses a missing comparison or a sidecar decision that differs from the transcription. */
   public static BuildStoredGateRecord(a: GateRecordArgs): GateRecordBuild {
@@ -104,8 +104,8 @@ export class GateRecords {
   }
 
   /**
-   * The stored gate record of a run, or null for a legacy blob, a refused run, or a run stored before gate records
-   * existed. The envelope is checked member by member by `ParseTrainingRunResults`.
+   * The stored gate record of a run, or null for a blob that is not a v2 envelope, a refused run, or a run without a
+   * trainer result. The envelope is checked member by member by `ParseTrainingRunResults`.
    */
   public static ParseStoredGateRecord(validationResults: string | null): StoredGateRecord | null {
     if (validationResults === null || validationResults.trim().length === 0) return null;

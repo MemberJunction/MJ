@@ -28,7 +28,7 @@ const ERROR_METRIC_KEYS: ReadonlySet<string> = new Set([
   ...LEGACY_LOWER_IS_BETTER,
 ]);
 
-/** Metric direction lookups: static members on one owner. */
+/** Metric direction lookups. */
 export class MetricDirections {
   /**
    * Whether a metric is **lower-is-better** (an error/loss metric). Case-insensitive and whitespace-tolerant.

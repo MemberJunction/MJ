@@ -80,7 +80,7 @@ function stubInferenceDeps(): MLInferenceDeps {
         modelLoader: { loadModel: async () => null },
         artifactLoader: { load: async () => null },
         sidecar: {
-            predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [] }),
+            predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [], classOrder: null }),
         },
     };
 }

@@ -13,13 +13,18 @@ export interface JsonObject {
   readonly [key: string]: JsonValue;
 }
 
+/**
+ * `true` only when `Listed` names every member of `Union`; otherwise `never`, so assigning `true` fails to compile. The
+ * completeness check behind every runtime list of a union's values (`const complete: ListsEveryMember<U, L> = true`).
+ */
+export type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
+
 /** The typed value, or every problem found (each a full sentence naming the column or field). */
 export type ParseResult<T> = { readonly Ok: true; readonly Value: T } | { readonly Ok: false; readonly Errors: readonly string[] };
 
 /**
  * The typed readers every persisted-shape parser shares: the ParseResult factories, the JSON-text parser and the
- * field readers that narrow a JsonObject without casting. Static members on one owner class so callers write
- * JsonParse.JsonString(o, key).
+ * field readers that narrow a JsonObject without casting (e.g. `JsonParse.JsonString(o, key)`).
  */
 export class JsonParse {
   /** A successful parse carrying its typed value. */

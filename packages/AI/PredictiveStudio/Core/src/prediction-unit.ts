@@ -14,77 +14,87 @@ import {
 import { TaskTypeRules, type TaskKind, type TaskType } from './task-type';
 import { UtcDay } from './utc-day';
 
+/** Where a unit row's decision date comes from: a column, a column plus an offset, or one fixed date. */
 export type DecisionDateRule =
-  | { readonly kind: 'column'; readonly column: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'column-offset'; readonly column: string; readonly offsetDays: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'column'; readonly column: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'column-offset'; readonly column: string; readonly offsetDays: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   /** One decision date for every row (cross-sectional data). `advance: 'each-run'` = before each run the engine saves the
    *  next unit version with the run's UTC day as the date; absent = the date never moves. */
-  | { readonly kind: 'fixed'; readonly date: string; readonly advance?: 'each-run' };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'fixed'; readonly date: string; readonly advance?: 'each-run' };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
+/** One condition a unit's rows (or a child table's rows) must meet. */
 export interface RowFilter {
-  readonly field: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly op: 'eq' | 'neq' | 'in' | 'not-null' | 'is-null';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly values: readonly (string | number | boolean)[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly field: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly op: 'eq' | 'neq' | 'in' | 'not-null' | 'is-null';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly values: readonly (string | number | boolean)[];  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 }
 
+/** What one training row is: a row of the grain entity, or a grain row per period of a child table. */
 export type UnitRows =
-  | { readonly kind: 'grain'; readonly grainEntity: string; readonly decisionDate: DecisionDateRule; readonly filter: readonly RowFilter[] }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'grain'; readonly grainEntity: string; readonly decisionDate: DecisionDateRule; readonly filter: readonly RowFilter[] }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | {
-      readonly kind: 'grain-x-periods';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly grainEntity: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly childEntity: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly foreignKey: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly periodDate: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly filter: readonly RowFilter[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly kind: 'grain-x-periods';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly grainEntity: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly childEntity: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly foreignKey: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly periodDate: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly filter: readonly RowFilter[];  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
     };
 
+/** How a row's outcome is read: a column, the next period's value, or an aggregate of child events. */
 export type LabelRule =
-  | { readonly kind: 'column'; readonly column: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'next-period'; readonly periodIndexField: string; readonly offset: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'column'; readonly column: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'next-period'; readonly periodIndexField: string; readonly offset: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | {
-      readonly kind: 'child-event';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly childEntity: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly foreignKey: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly kind: 'child-event';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly childEntity: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly foreignKey: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
       /** Field on the unit row whose value the child's foreign key matches; null = the row's entity key. */
-      readonly ownerKeyField: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly dateField: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly aggregate: 'exists' | 'count' | 'sum';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly valueField: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      readonly filter: readonly RowFilter[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly ownerKeyField: string | null;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly dateField: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly aggregate: 'exists' | 'count' | 'sum';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly valueField: string | null;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+      readonly filter: readonly RowFilter[];  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
     };
 
+/** The moment after which an outcome is not yet known: the corpus end, now, or a fixed date. */
 export type CensoringCutoff =
-  | { readonly kind: 'corpus-end'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'now' }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'fixed'; readonly at: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'corpus-end'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'now' }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'fixed'; readonly at: string };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
+/** How rows whose outcome window has not closed are handled. */
 export interface CensoringRule {
-  readonly rule: 'exclude-unresolved';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly cutoff: CensoringCutoff;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly rule: 'exclude-unresolved';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly cutoff: CensoringCutoff;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 }
 
+/** What assembly does with rows the change history does not cover and with rows from external sources. */
 export interface ChangeHistoryPolicy {
-  readonly onUncoveredRow: 'refuse' | 'exclude-and-count';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly externalSourceRows: 'as-of-detection-time' | 'ineligible';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly onUncoveredRow: 'refuse' | 'exclude-and-count';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly externalSourceRows: 'as-of-detection-time' | 'ineligible';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 }
 
+/** A forecast unit's series: time column, horizon, lags, rolling windows, period and seasonality. */
 export interface TemporalSpec {
-  readonly timeColumn: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly horizonPeriods: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly lags: readonly number[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly rollingWindows: readonly { readonly endLag: number; readonly periods: number; readonly aggregate: 'mean' | 'sum' | 'min' | 'max' }[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly period: 'day' | 'week' | 'month' | 'year';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly seasonality: number | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly timeColumn: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly horizonPeriods: number;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly lags: readonly number[];  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly rollingWindows: readonly { readonly endLag: number; readonly periods: number; readonly aggregate: 'mean' | 'sum' | 'min' | 'max' }[];  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly period: 'day' | 'week' | 'month' | 'year';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly seasonality: number | null;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 }
 
+/** The decision the prediction informs: the action, who takes it and how many per period. */
 export interface DecisionSpec {
-  readonly action: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly actorRole: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly capacityPerPeriod: number | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly period: 'day' | 'week' | 'month' | 'quarter' | 'year';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly action: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly actorRole: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly capacityPerPeriod: number | null;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly period: 'day' | 'week' | 'month' | 'quarter' | 'year';  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 }
 
-export type IncumbentHeuristic = { readonly kind: 'none' } | { readonly kind: 'rule'; readonly name: string; readonly scoreExpression: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+/** The rule the business uses today, compared as a baseline; or none. */
+export type IncumbentHeuristic = { readonly kind: 'none' } | { readonly kind: 'rule'; readonly name: string; readonly scoreExpression: string };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
 /**
  * Who authored a version or started an action — data, never a permission by itself. `human` is a user; `agent`,
@@ -93,10 +103,10 @@ export type IncumbentHeuristic = { readonly kind: 'none' } | { readonly kind: 'r
  * (an automatic publish).
  */
 export type Actor =
-  | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'system'; readonly component: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'system'; readonly component: string };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
 /** The `MJ: Prediction Units` columns the parser reads (the generated entity satisfies this structurally). */
 export interface PredictionUnitColumns {
@@ -119,35 +129,49 @@ export interface PredictionUnitColumns {
   AuthoredBy: string;
 }
 
+/** The typed Prediction Unit version a run trains on. */
 export interface PredictionUnitSpec {
-  readonly id: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly lineageRootId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly version: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly name: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly rows: UnitRows;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly label: { readonly rule: LabelRule; readonly windowDays: number; readonly gapDays: number; readonly outcome: TaskType; readonly labelVersion: number };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly censoring: CensoringRule;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly history: ChangeHistoryPolicy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly groupKey: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly temporal: TemporalSpec | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly decision: DecisionSpec;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly incumbent: IncumbentHeuristic;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  readonly authoredBy: Actor;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly id: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly lineageRootId: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly version: number;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly name: string;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly rows: UnitRows;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly label: { readonly rule: LabelRule; readonly windowDays: number; readonly gapDays: number; readonly outcome: TaskType; readonly labelVersion: number };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly censoring: CensoringRule;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly history: ChangeHistoryPolicy;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly groupKey: string | null;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly temporal: TemporalSpec | null;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly decision: DecisionSpec;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly incumbent: IncumbentHeuristic;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  readonly authoredBy: Actor;  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 }
 
+/** Why the unit's rows could not be resolved for training; stored on a refused run. */
 export type UnitRefusal =
-  | { readonly kind: 'single-valued-target'; readonly value: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'task-type-mismatch'; readonly declared: TaskKind; readonly observed: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'unresolved-reference'; readonly entity: string; readonly field: string | null }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'lag-inside-horizon'; readonly lag: number; readonly horizonPeriods: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'rolling-window-inside-horizon'; readonly endLag: number; readonly horizonPeriods: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'missing-decision-date'; readonly entity: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly kind: 'no-resolved-rows'; readonly censored: number; readonly labelKnown: number; readonly emptyLabel: number };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'single-valued-target'; readonly value: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'task-type-mismatch'; readonly declared: TaskKind; readonly observed: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'unresolved-reference'; readonly entity: string; readonly field: string | null }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'missing-decision-date'; readonly entity: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'no-resolved-rows'; readonly censored: number; readonly labelKnown: number; readonly emptyLabel: number };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
+/** The outcome of validating a unit's target before training. */
 export type UnitValidation =
-  | { readonly status: 'valid'; readonly observedLevels: number; readonly eligibleRows: number; readonly censoredRows: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly status: 'refused'; readonly reason: UnitRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly status: 'valid'; readonly observedLevels: number; readonly eligibleRows: number; readonly censoredRows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly status: 'refused'; readonly reason: UnitRefusal };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
+
+/** The parsed JSON columns of a unit row, before they are assembled into a {@link PredictionUnitSpec}. */
+interface ParsedUnitColumns {
+  readonly rows: UnitRows;
+  readonly rule: LabelRule;
+  readonly task: TaskType;
+  readonly censoring: PredictionUnitSpec['censoring'];
+  readonly history: ChangeHistoryPolicy;
+  readonly temporal: TemporalSpec | null;
+  readonly decision: DecisionSpec;
+  readonly incumbent: IncumbentHeuristic;
+  readonly authoredBy: Actor;
+}
 
 /**
  * The Prediction Unit's parser and derivations: parse a unit row, name its row entity, describe its label rule,
@@ -157,14 +181,7 @@ export class PredictionUnit {
   /** Parse every JSON column of a unit row and check the cross-field rules; all problems are reported. */
   public static ParsePredictionUnitRow(row: PredictionUnitColumns): ParseResult<PredictionUnitSpec> {
     const errors: string[] = [];
-    const json = (text: string | null, column: string): JsonValue | null => {
-      const r = JsonParse.ParseJsonText(text, column);
-      if (r.Ok === false) {
-        errors.push(...r.Errors);
-        return null;
-      }
-      return r.Value;
-    };
+    const json = (text: string | null, column: string): JsonValue | null => PredictionUnit.jsonColumn(text, column, errors);
     const rows = PredictionUnit.parseUnitRows(json(row.UnitRows, 'UnitRows'), errors);
     const rule = PredictionUnit.parseLabelRule(json(row.LabelRule, 'LabelRule'), errors);
     const taskJson = json(row.TaskType, 'TaskType');
@@ -176,30 +193,12 @@ export class PredictionUnit {
     const incumbent = PredictionUnit.parseIncumbent(json(row.IncumbentHeuristic, 'IncumbentHeuristic'), errors);
     const authoredBy = PredictionUnit.parseActor(json(row.AuthoredBy, 'AuthoredBy'), errors);
     PredictionUnit.checkScalarColumns(row, errors);
-    if (rule?.kind === 'next-period' && rows !== null && rows.kind !== 'grain-x-periods') errors.push('LabelRule next-period requires UnitRows kind grain-x-periods');
-    if (task?.kind === 'forecast' && temporal === null) errors.push('A forecast task requires a TemporalSpec');
+    PredictionUnit.checkCrossFields(rows, rule, task, temporal, errors);
 
     if (errors.length > 0 || rows === null || rule === null || task === null || censoring === null || history === null || decision === null || incumbent === null || authoredBy === null) {
       return { Ok: false, Errors: errors.length > 0 ? errors : ['Prediction Unit row is incomplete'] };
     }
-    return {
-      Ok: true,
-      Value: {
-        id: row.ID,
-        lineageRootId: row.LineageRootID,
-        version: row.Version,
-        name: row.Name,
-        rows,
-        label: { rule, windowDays: row.LabelWindowDays, gapDays: row.LabelGapDays, outcome: task, labelVersion: row.LabelVersion },
-        censoring,
-        history,
-        groupKey: row.GroupKey,
-        temporal,
-        decision,
-        incumbent,
-        authoredBy,
-      },
-    };
+    return { Ok: true, Value: PredictionUnit.buildSpec(row, { rows, rule, task, censoring, history, temporal, decision, incumbent, authoredBy }) };
   }
 
   /** The entity whose rows are the unit's rows. */
@@ -496,5 +495,40 @@ export class PredictionUnit {
   private static parseActor(v: JsonValue | null, errors: string[]): Actor | null {
     if (v === null) return null;
     return PredictionUnit.collect(PredictionUnit.ParseActor(v), errors);
+  }
+
+  /** One JSON column of a unit row, or null with its parse problem added to `errors`. */
+  private static jsonColumn(text: string | null, column: string, errors: string[]): JsonValue | null {
+    const r = JsonParse.ParseJsonText(text, column);
+    if (r.Ok === false) {
+      errors.push(...r.Errors);
+      return null;
+    }
+    return r.Value;
+  }
+
+  /** The rules that span two columns: next-period labels need period rows, a forecast needs a Temporal Spec. */
+  private static checkCrossFields(rows: UnitRows | null, rule: LabelRule | null, task: TaskType | null, temporal: TemporalSpec | null, errors: string[]): void {
+    if (rule?.kind === 'next-period' && rows !== null && rows.kind !== 'grain-x-periods') errors.push('LabelRule next-period requires UnitRows kind grain-x-periods');
+    if (task?.kind === 'forecast' && temporal === null) errors.push('A forecast task requires a TemporalSpec');
+  }
+
+  /** The typed unit from a row's scalar columns and its parsed JSON columns. */
+  private static buildSpec(row: PredictionUnitColumns, p: ParsedUnitColumns): PredictionUnitSpec {
+    return {
+      id: row.ID,
+      lineageRootId: row.LineageRootID,
+      version: row.Version,
+      name: row.Name,
+      rows: p.rows,
+      label: { rule: p.rule, windowDays: row.LabelWindowDays, gapDays: row.LabelGapDays, outcome: p.task, labelVersion: row.LabelVersion },
+      censoring: p.censoring,
+      history: p.history,
+      groupKey: row.GroupKey,
+      temporal: p.temporal,
+      decision: p.decision,
+      incumbent: p.incumbent,
+      authoredBy: p.authoredBy,
+    };
   }
 }

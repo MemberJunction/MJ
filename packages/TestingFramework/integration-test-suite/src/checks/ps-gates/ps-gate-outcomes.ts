@@ -83,7 +83,7 @@ export class GateOutcomeMeasures {
     const minorityBelowMinimum = minority < g.guards.minMinorityClassRows;
     const ships = g.decision.outcome !== 'no-signal';
     const coverage = GateOutcomeMeasures.StoredRunCoverage(s);
-    const aucText = auc === null ? 'none' : `[${GateRules.F4(auc.lower)}, ${GateRules.F4(auc.upper)}]`;
+    const aucText = auc === null ? 'none' : `[${GateRules.FormatFourDecimals(auc.lower)}, ${GateRules.FormatFourDecimals(auc.upper)}]`;
     return {
       Stored: true, Model: model, Violation: (ships && minorityBelowMinimum) || (model && aucContainsChance), MinorityBelowMinimum: minorityBelowMinimum,
       BoundsMissing: typeof coverage.metricsWithoutBounds === 'number' ? coverage.metricsWithoutBounds : 1,
@@ -151,7 +151,7 @@ export class GateOutcomeMeasures {
     const agrees = modelBeatsRule
       ? g.decision.shipped !== member
       : g.decision.outcome !== 'model' && g.reason.text.length > 0 && (g.decision.shipped !== member || g.reason.code === 'heuristic-carries-signal');
-    const vs = modelVsRule === undefined ? 'absent' : `${GateRules.F4(modelVsRule.value)} [${GateRules.F4(modelVsRule.ci[0])}, ${GateRules.F4(modelVsRule.ci[1])}]`;
+    const vs = modelVsRule === undefined ? 'absent' : `${GateRules.FormatFourDecimals(modelVsRule.value)} [${GateRules.FormatFourDecimals(modelVsRule.ci[0])}, ${GateRules.FormatFourDecimals(modelVsRule.ci[1])}]`;
     return {
       Passed: scored && agrees,
       Measured: {

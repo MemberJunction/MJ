@@ -15,6 +15,7 @@ import type { TaskType } from './task-type';
 import type { UnitDraft } from './protocol-rows';
 import type { CensoringRule, DecisionDateRule, PredictionUnitSpec } from './prediction-unit';
 import { UtcDay, type CellValue } from './utc-day';
+import { HoldoutCarveDateError } from './holdout-carve';
 
 /** Why a binary pipeline is held; also the report reason. */
 export const ADVERSE_CLASS_HOLD_REASON =
@@ -315,10 +316,11 @@ export class LegacyPipelines {
 
   /**
    * The earliest day d whose trailing block (dates on or after d) holds at most `share` of the rows; null when only the
-   * first day qualifies (no cutoff would leave development rows).
+   * first day qualifies (no cutoff would leave development rows). Each date is read as its UTC day
+   * (`UtcDay.ToUtcDay`); a date without a calendar-day part throws {@link HoldoutCarveDateError}.
    */
   public static TrailingShareCutoff(dates: readonly string[], share: number): string | null {
-    const days = dates.map((d) => d.slice(0, 10)).sort();
+    const days = dates.map((d) => LegacyPipelines.requireIsoDay(d)).sort();
     let best: string | null = null;
     let trailing = 0;
     for (let i = days.length - 1; i >= 1; i--) {
@@ -329,6 +331,13 @@ export class LegacyPipelines {
       best = d;
     }
     return best;
+  }
+
+  /** The `yyyy-mm-dd` UTC day of a date; throws {@link HoldoutCarveDateError} for a value without one. */
+  private static requireIsoDay(text: string): string {
+    const day = UtcDay.ToUtcDay(text);
+    if (day === null) throw new HoldoutCarveDateError(text);
+    return UtcDay.UtcDayIso(day);
   }
 
   /** The legacy holdout share: LockedHoldoutFraction (0 is a value, so only an absent one takes the default), clamped. */
@@ -344,12 +353,17 @@ export class LegacyPipelines {
       const note = `test set = a seeded random ${Math.round(share * 100)}% of rows (one decision date per run); the legacy trailing slice in key order is gone`;
       return { Holdout: { kind: 'seeded-random', fraction: share }, Note: note };
     }
-    const cutoff = LegacyPipelines.TrailingShareCutoff(dates, share);
+    const unreadable = dates.find((d) => UtcDay.ToUtcDay(d) === null);
+    if (unreadable !== undefined) {
+      return { Kind: 'hold', Reason: `a row's ${dateColumn} ("${unreadable}") is not a date (yyyy-mm-dd): no date cutoff can be derived` };
+    }
+    const days = dates.map((d) => LegacyPipelines.requireIsoDay(d));
+    const cutoff = LegacyPipelines.TrailingShareCutoff(days, share);
     if (cutoff === null) {
-      const only = dates[0]?.slice(0, 10) || 'none';
+      const only = days[0] || 'none';
       return { Kind: 'archive', Reason: `every row has the same ${dateColumn} (${only}): no date cutoff leaves development rows` };
     }
-    const rows = dates.filter((d) => d.slice(0, 10) >= cutoff).length;
+    const rows = days.filter((d) => d >= cutoff).length;
     const note = `test set = rows with ${dateColumn} on or after ${cutoff} (${rows} rows); the legacy trailing slice in key order is gone`;
     return { Holdout: { kind: 'date-carved', dateColumn, cutoff, holdoutEnd: null, newEntityReport: null }, Note: note };
   }
@@ -379,7 +393,7 @@ export class LegacyPipelines {
   public static LegacyProtocolInputs(validationJson: string | null, leakageJson: string | null, dateColumn: string | null, dates: readonly string[]): LegacyProtocolOutcome {
     const v = LegacyPipelines.readObject(validationJson);
     const holdout = LegacyPipelines.legacyHoldout(LegacyPipelines.holdoutShare(v), dateColumn, dates);
-    if ('Kind' in holdout) return { Kind: 'archive', Reason: holdout.Reason };
+    if ('Kind' in holdout) return holdout;
     if (holdout.Holdout.kind === 'seeded-random' && LegacyPipelines.declaresTimeIndex(v)) return { Kind: 'hold', Reason: TIME_INDEX_HOLD_REASON };
     const notes: string[] = v === null ? ['ValidationStrategy missing or unreadable: defaults used.', holdout.Note] : [holdout.Note];
     const guard = LegacyPipelines.readObject(leakageJson);

@@ -62,7 +62,7 @@ export class ProtocolEdits {
 
   /** The draft of the version after `base` with the form applied, or the first problem with the form. */
   public static ApplyProtocolEdits(base: EvaluationProtocolSpec, form: ProtocolEditForm): ProtocolEditResult {
-    const primary = ProtocolEdits.properScoreFor(base.primaryScore.family, form.PrimaryMetric);
+    const primary = EvaluationProtocol.ToProperScore(base.primaryScore.family, form.PrimaryMetric);
     if (primary === null) {
       const family = base.primaryScore.family;
       return { Ok: false, Error: `${form.PrimaryMetric} is not a ${family} score; choose one of: ${ProtocolEdits.PrimaryMetricOptions(family).join(', ')}.` };
@@ -120,40 +120,5 @@ export class ProtocolEdits {
 
   private static editedInnerValidation(iv: InnerValidation, form: ProtocolEditForm): InnerValidation {
     return iv.kind === 'blocked-time' ? { ...iv, folds: form.Folds } : { ...iv, folds: form.Folds, repeats: form.Repeats };
-  }
-
-  /** The proper score of `family` named `metric`, read from `PROPER_SCORES_BY_FAMILY`; null when the family has no such score. */
-  private static properScoreFor(family: ProperScore['family'], metric: ProperScore['metric']): ProperScore | null {
-    switch (family) {
-      case 'binary': {
-        const m = ProtocolEdits.allowed(PROPER_SCORES_BY_FAMILY.binary, metric);
-        return m === null ? null : { family, metric: m };
-      }
-      case 'multiclass': {
-        const m = ProtocolEdits.allowed(PROPER_SCORES_BY_FAMILY.multiclass, metric);
-        return m === null ? null : { family, metric: m };
-      }
-      case 'continuous': {
-        const m = ProtocolEdits.allowed(PROPER_SCORES_BY_FAMILY.continuous, metric);
-        return m === null ? null : { family, metric: m };
-      }
-      case 'count': {
-        const m = ProtocolEdits.allowed(PROPER_SCORES_BY_FAMILY.count, metric);
-        return m === null ? null : { family, metric: m };
-      }
-      case 'non-negative': {
-        const m = ProtocolEdits.allowed(PROPER_SCORES_BY_FAMILY['non-negative'], metric);
-        return m === null ? null : { family, metric: m };
-      }
-      case 'forecast': {
-        const m = ProtocolEdits.allowed(PROPER_SCORES_BY_FAMILY.forecast, metric);
-        return m === null ? null : { family, metric: m };
-      }
-    }
-  }
-
-  /** `metric` narrowed to one of `allowed`, or null. */
-  private static allowed<M extends ProperScore['metric']>(allowed: readonly M[], metric: ProperScore['metric']): M | null {
-    return allowed.find((m) => m === metric) || null;
   }
 }
