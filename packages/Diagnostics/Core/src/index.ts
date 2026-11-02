@@ -6,3 +6,4 @@ export * from './crypto.js';
 export * from './findings.js';
 export * from './exporters.js';
 export * from './contributor.js';
+export * from './senderAuth.js';

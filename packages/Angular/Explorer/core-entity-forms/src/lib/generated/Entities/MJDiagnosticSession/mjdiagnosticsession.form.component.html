@@ -7,13 +7,17 @@
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="general"
-        SectionName="General"
-        Icon="fa fa-stethoscope"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
@@ -21,7 +25,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Reason"
@@ -29,7 +33,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Status"
@@ -37,7 +41,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ScopeType"
@@ -45,7 +49,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ScopeJSON"
@@ -53,7 +57,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Level"
@@ -61,7 +65,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CategoriesJSON"
@@ -69,71 +73,65 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ScrubLiterals"
-            Type="textbox"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StartedAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="EndsAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StoppedAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="MaxBytes"
-            Type="textbox"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CreatedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CompanyID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-    </mj-collapsible-panel>
-
-    <mj-collapsible-panel
-        SectionKey="systemMetadata"
-        SectionName="System Metadata"
-        Icon="fa fa-shield-alt"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
@@ -141,7 +139,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
@@ -149,7 +147,65 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- Diagnostic Session Chunks Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDiagnosticSessionChunks"
+        SectionName="Diagnostic Session Chunks"
+        Icon="fa fa-layer-group"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDiagnosticSessionChunks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Diagnostic Session Chunks','DiagnosticSessionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Diagnostic Session Chunks','DiagnosticSessionID')"
+                [AllowLoad]="IsSectionExpanded('mJDiagnosticSessionChunks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDiagnosticSessionChunks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Diagnostic Bundles Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDiagnosticBundles"
+        SectionName="Diagnostic Bundles"
+        Icon="fa fa-box-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDiagnosticBundles')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Diagnostic Bundles','DiagnosticSessionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Diagnostic Bundles','DiagnosticSessionID')"
+                [AllowLoad]="IsSectionExpanded('mJDiagnosticBundles')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDiagnosticBundles', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
+        

@@ -7,13 +7,17 @@
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="general"
-        SectionName="General"
-        Icon="fa fa-box-open"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Name"
@@ -21,7 +25,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Description"
@@ -29,7 +33,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Direction"
@@ -37,15 +41,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="DiagnosticSessionID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Status"
@@ -53,47 +58,48 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ScrubLiterals"
-            Type="textbox"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="WindowStart"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="WindowEnd"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FileID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="SizeBytes"
-            Type="textbox"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="SHA256"
@@ -101,7 +107,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ManifestJSON"
@@ -109,7 +115,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ScrubReportJSON"
@@ -117,7 +123,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FindingsJSON"
@@ -125,7 +131,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FailureReason"
@@ -133,31 +139,33 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CreatedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ApprovedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ApprovedAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Destination"
@@ -165,15 +173,15 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="SentAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ExternalReferenceID"
@@ -181,7 +189,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="SenderInstallID"
@@ -189,7 +197,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="SenderMJVersion"
@@ -197,7 +205,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ContactInfo"
@@ -205,31 +213,24 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ExpiresAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CompanyID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
-    </mj-collapsible-panel>
-
-    <mj-collapsible-panel
-        SectionKey="systemMetadata"
-        SectionName="System Metadata"
-        Icon="fa fa-shield-alt"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
@@ -237,7 +238,7 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
@@ -245,7 +246,11 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
+        

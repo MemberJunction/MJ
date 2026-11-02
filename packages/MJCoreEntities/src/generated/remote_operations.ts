@@ -74,6 +74,131 @@ export interface AuthorizationCheckOutput {
     Results: AuthorizationCheckResultRow[];
 }
 
+export interface DiagnosticsStartSessionInput {
+    Name: string;
+    Reason?: string;
+    ScopeType: 'Users' | 'APIKeys' | 'Operations' | 'BrowserSession' | 'Instance';
+    Scope?: {
+        userIds?: string[];
+        apiKeyIds?: string[];
+        operationNames?: string[];
+        remoteOperationKeys?: string[];
+        browserSessionId?: string;
+    };
+    Level?: 'Standard' | 'Verbose' | 'Debug';
+    Categories?: string[];
+    ScrubLiterals?: boolean;
+    DurationMinutes?: number;
+    MaxBytes?: number;
+}
+
+export interface DiagnosticsStartSessionOutput {
+    SessionID: string;
+    Status: 'Active' | 'Stopped' | 'Expired';
+    StartedAt: string;
+    EndsAt: string;
+    ScrubLiterals: boolean;
+}
+
+export interface DiagnosticsStopSessionInput {
+    SessionID: string;
+}
+
+export interface DiagnosticsStopSessionOutput {
+    SessionID: string;
+    Status: 'Stopped';
+    StoppedAt: string;
+    FlushedChunkCount: number;
+}
+
+export interface DiagnosticsGetMySessionStatusInput {
+    BrowserSessionID?: string;
+}
+
+export interface DiagnosticsGetMySessionStatusOutput {
+    Active: boolean;
+    SessionID?: string;
+    SessionName?: string;
+    EndsAt?: string;
+    Level?: 'Standard' | 'Verbose' | 'Debug';
+    ScrubLiterals?: boolean;
+    SelfServiceRecordingAllowed: boolean;
+}
+
+export interface DiagnosticsUploadClientCaptureInput {
+    SessionID?: string;
+    CreateSelfServiceSession?: boolean;
+    Reason?: string;
+    ScrubLiterals?: boolean;
+    Environment?: Record<string, unknown>;
+    Repro?: Record<string, unknown>;
+    ClientLogs?: Array<Record<string, unknown>>;
+    ClientWaterfall?: Array<Record<string, unknown>>;
+    ClientTelemetry?: Array<Record<string, unknown>>;
+}
+
+export interface DiagnosticsUploadClientCaptureOutput {
+    SessionID: string;
+    ChunksWritten: number;
+    TotalBytesWritten: number;
+}
+
+export interface DiagnosticsBuildBundleInput {
+    SessionID?: string;
+    Name?: string;
+    Description?: string;
+    ScrubLiterals?: boolean;
+    ClientBundleData?: Record<string, unknown>;
+}
+
+export interface DiagnosticsBuildBundleOutput {
+    BundleID: string;
+    Status: 'Ready' | 'Failed';
+    SizeBytes: number;
+    SHA256: string;
+    FindingsCount: number;
+    DownloadToken?: string;
+    DownloadUrl?: string;
+}
+
+export interface DiagnosticsGetBundlePreviewInput {
+    BundleID: string;
+    MintDownloadToken?: boolean;
+}
+
+export interface DiagnosticsGetBundlePreviewOutput {
+    BundleID: string;
+    Name: string;
+    Direction: 'Local' | 'Received';
+    Status: string;
+    SizeBytes: number;
+    SHA256: string | null;
+    ScrubLiterals: boolean;
+    Manifest: Record<string, unknown> | null;
+    ScrubReport: Record<string, unknown> | null;
+    Findings: Array<Record<string, unknown>>;
+    ReadmeText: string;
+    DownloadToken?: string;
+    DownloadUrl?: string;
+}
+
+export interface DiagnosticsSendBundleInput {
+    BundleID: string;
+    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
+    CollectorUrlOverride?: string;
+    ContactInfo?: string;
+    Summary?: string;
+}
+
+export interface DiagnosticsSendBundleOutput {
+    BundleID: string;
+    Status: 'Sent' | 'Failed';
+    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
+    ExternalReferenceID?: string;
+    SentAt?: string;
+    ErrorMessage?: string;
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -1601,6 +1726,123 @@ export class AuthorizationCheckOperation extends BaseRemotableOperation<Authoriz
 }
 
 // ============================================================
+// Diagnostics.BuildBundle — Build Diagnostic Bundle
+// ============================================================
+/**
+ * Build Diagnostic Bundle
+ * Flushes all participating server instances, assembles session chunks into a .mjdiag ZIP archive, runs the two-stage credential/literal scrubber and automated findings engine, verifies the archive with VerifyBundleArchive, and persists the bundle. Implemented by DiagnosticsBuildBundleServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.BuildBundle'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsBuildBundleOperation extends BaseRemotableOperation<DiagnosticsBuildBundleInput, DiagnosticsBuildBundleOutput> {
+    public readonly OperationKey = "Diagnostics.BuildBundle";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_740473b3bcf2a3f2";
+}
+
+// ============================================================
+// Diagnostics.GetBundlePreview — Get Diagnostic Bundle Preview
+// ============================================================
+/**
+ * Get Diagnostic Bundle Preview
+ * Returns a diagnostic bundle's manifest, scrubbing summary, README text, automated findings, and an optional short-lived single-use signed download token. Implemented by DiagnosticsGetBundlePreviewServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.GetBundlePreview'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsGetBundlePreviewOperation extends BaseRemotableOperation<DiagnosticsGetBundlePreviewInput, DiagnosticsGetBundlePreviewOutput> {
+    public readonly OperationKey = "Diagnostics.GetBundlePreview";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:read";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ff86fe838ad9dc0a";
+}
+
+// ============================================================
+// Diagnostics.GetMySessionStatus — Get My Diagnostic Session Status
+// ============================================================
+/**
+ * Get My Diagnostic Session Status
+ * Returns whether the calling user or browser session is currently targeted by an active diagnostic recording session, plus whether self-service recording is enabled. Implemented by DiagnosticsGetMySessionStatusServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.GetMySessionStatus'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsGetMySessionStatusOperation extends BaseRemotableOperation<DiagnosticsGetMySessionStatusInput, DiagnosticsGetMySessionStatusOutput> {
+    public readonly OperationKey = "Diagnostics.GetMySessionStatus";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_eabcee7729276acf";
+}
+
+// ============================================================
+// Diagnostics.SendBundle — Send Diagnostic Bundle
+// ============================================================
+/**
+ * Send Diagnostic Bundle
+ * Encrypts a verified .mjdiag bundle using X25519+HKDF-SHA256+AES-256-GCM with AAD and transmits it to an allowed external destination (MJC, CustomerCollector, or StorageAccount). Implemented by DiagnosticsSendBundleServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.SendBundle'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsSendBundleOperation extends BaseRemotableOperation<DiagnosticsSendBundleInput, DiagnosticsSendBundleOutput> {
+    public readonly OperationKey = "Diagnostics.SendBundle";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "diagnostics:send";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7ae59b550f3f8b82";
+}
+
+// ============================================================
+// Diagnostics.StartSession — Start Diagnostic Session
+// ============================================================
+/**
+ * Start Diagnostic Session
+ * Starts a bounded diagnostic recording session targeting users, API keys, operations, a browser session, or the instance. Implemented by DiagnosticsStartSessionServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.StartSession'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsStartSessionOperation extends BaseRemotableOperation<DiagnosticsStartSessionInput, DiagnosticsStartSessionOutput> {
+    public readonly OperationKey = "Diagnostics.StartSession";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5d73be03f8aaaa28";
+}
+
+// ============================================================
+// Diagnostics.StopSession — Stop Diagnostic Session
+// ============================================================
+/**
+ * Stop Diagnostic Session
+ * Stops an active diagnostic session immediately and broadcasts a multi-instance flush so all server nodes write their pending chunks. Implemented by DiagnosticsStopSessionServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.StopSession'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsStopSessionOperation extends BaseRemotableOperation<DiagnosticsStopSessionInput, DiagnosticsStopSessionOutput> {
+    public readonly OperationKey = "Diagnostics.StopSession";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f24b35079a5b3ede";
+}
+
+// ============================================================
+// Diagnostics.UploadClientCapture — Upload Client Diagnostic Capture
+// ============================================================
+/**
+ * Upload Client Diagnostic Capture
+ * Uploads client-side flight-recorder buffers (logs, GraphQL waterfall, telemetry, startup marks, reproduction notes) into a diagnostic session as re-scrubbed compressed chunks. Implemented by DiagnosticsUploadClientCaptureServerOperation in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.UploadClientCapture'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperation<DiagnosticsUploadClientCaptureInput, DiagnosticsUploadClientCaptureOutput> {
+    public readonly OperationKey = "Diagnostics.UploadClientCapture";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_b7d0b583a51ed636";
+}
+
+// ============================================================
 // PredictiveStudio.ControlExperimentSession — Control Experiment Session
 // ============================================================
 /**
@@ -2329,186 +2571,3 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
 }
 
-
-// ============================================================
-// Diagnostics Remote Operations Types & Typed Bases
-// ============================================================
-
-export interface DiagnosticsStartSessionInput {
-    Name: string;
-    Reason?: string;
-    ScopeType: 'Users' | 'APIKeys' | 'Operations' | 'BrowserSession' | 'Instance';
-    Scope?: {
-        userIds?: string[];
-        apiKeyIds?: string[];
-        operationNames?: string[];
-        remoteOperationKeys?: string[];
-        browserSessionId?: string;
-    };
-    Level?: 'Standard' | 'Verbose' | 'Debug';
-    Categories?: string[];
-    ScrubLiterals?: boolean;
-    DurationMinutes?: number;
-    MaxBytes?: number;
-}
-
-export interface DiagnosticsStartSessionOutput {
-    SessionID: string;
-    Status: 'Active' | 'Stopped' | 'Expired';
-    StartedAt: string;
-    EndsAt: string;
-    ScrubLiterals: boolean;
-}
-
-export interface DiagnosticsStopSessionInput {
-    SessionID: string;
-}
-
-export interface DiagnosticsStopSessionOutput {
-    SessionID: string;
-    Status: 'Stopped';
-    StoppedAt: string;
-    FlushedChunkCount: number;
-}
-
-export interface DiagnosticsGetMySessionStatusInput {
-    BrowserSessionID?: string;
-}
-
-export interface DiagnosticsGetMySessionStatusOutput {
-    Active: boolean;
-    SessionID?: string;
-    SessionName?: string;
-    EndsAt?: string;
-    Level?: 'Standard' | 'Verbose' | 'Debug';
-    ScrubLiterals?: boolean;
-    SelfServiceRecordingAllowed: boolean;
-}
-
-export interface DiagnosticsUploadClientCaptureInput {
-    SessionID?: string;
-    CreateSelfServiceSession?: boolean;
-    Reason?: string;
-    ScrubLiterals?: boolean;
-    Environment?: Record<string, unknown>;
-    Repro?: Record<string, unknown>;
-    ClientLogs?: Array<Record<string, unknown>>;
-    ClientWaterfall?: Array<Record<string, unknown>>;
-    ClientTelemetry?: Array<Record<string, unknown>>;
-}
-
-export interface DiagnosticsUploadClientCaptureOutput {
-    SessionID: string;
-    ChunksWritten: number;
-    TotalBytesWritten: number;
-}
-
-export interface DiagnosticsBuildBundleInput {
-    SessionID?: string;
-    Name?: string;
-    Description?: string;
-    ScrubLiterals?: boolean;
-    ClientBundleData?: Record<string, unknown>;
-}
-
-export interface DiagnosticsBuildBundleOutput {
-    BundleID: string;
-    Status: 'Ready' | 'Failed';
-    SizeBytes: number;
-    SHA256: string;
-    FindingsCount: number;
-    DownloadToken?: string;
-    DownloadUrl?: string;
-}
-
-export interface DiagnosticsGetBundlePreviewInput {
-    BundleID: string;
-    MintDownloadToken?: boolean;
-}
-
-export interface DiagnosticsGetBundlePreviewOutput {
-    BundleID: string;
-    Name: string;
-    Direction: 'Local' | 'Received';
-    Status: string;
-    SizeBytes: number;
-    SHA256: string | null;
-    ScrubLiterals: boolean;
-    Manifest: Record<string, unknown> | null;
-    ScrubReport: Record<string, unknown> | null;
-    Findings: Array<Record<string, unknown>>;
-    ReadmeText: string;
-    DownloadToken?: string;
-    DownloadUrl?: string;
-}
-
-export interface DiagnosticsSendBundleInput {
-    BundleID: string;
-    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
-    CollectorUrlOverride?: string;
-    ContactInfo?: string;
-    Summary?: string;
-}
-
-export interface DiagnosticsSendBundleOutput {
-    BundleID: string;
-    Status: 'Sent' | 'Failed';
-    Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
-    ExternalReferenceID?: string;
-    SentAt?: string;
-    ErrorMessage?: string;
-}
-
-export class DiagnosticsStartSessionOperation extends BaseRemotableOperation<DiagnosticsStartSessionInput, DiagnosticsStartSessionOutput> {
-    public readonly OperationKey = "Diagnostics.StartSession";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiredScope = "diagnostics:manage";
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_start_session_v1";
-}
-
-export class DiagnosticsStopSessionOperation extends BaseRemotableOperation<DiagnosticsStopSessionInput, DiagnosticsStopSessionOutput> {
-    public readonly OperationKey = "Diagnostics.StopSession";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiredScope = "diagnostics:manage";
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_stop_session_v1";
-}
-
-export class DiagnosticsGetMySessionStatusOperation extends BaseRemotableOperation<DiagnosticsGetMySessionStatusInput, DiagnosticsGetMySessionStatusOutput> {
-    public readonly OperationKey = "Diagnostics.GetMySessionStatus";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_my_session_status_v1";
-}
-
-export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperation<DiagnosticsUploadClientCaptureInput, DiagnosticsUploadClientCaptureOutput> {
-    public readonly OperationKey = "Diagnostics.UploadClientCapture";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_upload_client_v1";
-}
-
-export class DiagnosticsBuildBundleOperation extends BaseRemotableOperation<DiagnosticsBuildBundleInput, DiagnosticsBuildBundleOutput> {
-    public readonly OperationKey = "Diagnostics.BuildBundle";
-    public readonly ExecutionMode = 'LongRunning' as const;
-    public readonly RequiredScope = "diagnostics:manage";
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_build_bundle_v1";
-}
-
-export class DiagnosticsGetBundlePreviewOperation extends BaseRemotableOperation<DiagnosticsGetBundlePreviewInput, DiagnosticsGetBundlePreviewOutput> {
-    public readonly OperationKey = "Diagnostics.GetBundlePreview";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiredScope = "diagnostics:read";
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_bundle_preview_v1";
-}
-
-export class DiagnosticsSendBundleOperation extends BaseRemotableOperation<DiagnosticsSendBundleInput, DiagnosticsSendBundleOutput> {
-    public readonly OperationKey = "Diagnostics.SendBundle";
-    public readonly ExecutionMode = 'LongRunning' as const;
-    public readonly RequiredScope = "diagnostics:send";
-    public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_diag_send_bundle_v1";
-}

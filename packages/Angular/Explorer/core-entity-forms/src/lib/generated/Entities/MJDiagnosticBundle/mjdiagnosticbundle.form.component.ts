@@ -3,7 +3,7 @@ import { MJDiagnosticBundleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
-@RegisterClass(BaseFormComponent, 'MJ: Diagnostic Bundles')
+@RegisterClass(BaseFormComponent, 'MJ: Diagnostic Bundles') // Tell MemberJunction about this class
 @Component({
     standalone: false,
     selector: 'gen-mjdiagnosticbundle-form',
@@ -15,8 +15,8 @@ export class MJDiagnosticBundleFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'general', sectionName: 'General', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }
+

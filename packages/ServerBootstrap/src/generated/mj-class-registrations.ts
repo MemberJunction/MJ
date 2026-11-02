@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (465 classes)
+// @memberjunction/core-entities (466 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -453,6 +453,7 @@ import {
     MJDatasetEntity,
     MJDatasetItemEntity,
     MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
@@ -2083,6 +2084,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDatasetEntity,
     MJDatasetItemEntity,
     MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
@@ -2202,11 +2204,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
-    MJPhoneNumberEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -2406,11 +2408,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetDimensionsAction,
     GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
-    GetQuickBooksDimensionsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
@@ -2610,11 +2612,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AutotagBaseEngine,
-    AutotagCloudStorage,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AutotagCloudStorage,
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
@@ -2814,11 +2816,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
-    MJRubricCriterionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRubricCriterionEntityServer,
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
@@ -3018,11 +3020,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
-    SlackWebhookAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
     TavilySearchAction,
@@ -3095,7 +3097,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1255;
+export const CLASS_REGISTRATIONS_COUNT = 1256;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
