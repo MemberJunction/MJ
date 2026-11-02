@@ -11,7 +11,7 @@
  * protocol row, a row that does not parse, or more candidates than the protocol's budget allows are
  * refused before any run row is written, and so is a pipeline that declares a time index
  * (`ValidationStrategy.TimeIndexColumn`) under a protocol whose holdout does not respect time (seeded-random:
- * `time-index-needs-time-holdout`), and so are inputs the unit overrides (`input-not-accepted`); deps without a snapshot
+ * `time-index-needs-time-holdout`), and so is a pipeline whose stored AsOfStrategy the unit overrides (`input-not-accepted`); deps without a snapshot
  * file store or a trainer fail there too. Only then does an advancing fixed decision date move to the run's day (a new
  * unit version). The protocol row must predate the run row, and a protocol
  * that does not fit the unit is refused on the run. The unit row reader then reads every unit row
@@ -235,7 +235,7 @@ export class TrainingEngine {
 
   /**
    * Moves an advancing fixed decision date to the run's UTC day after every pipeline-stage refusal and deps check
-   * (protocol, budget, time index, unit overrides, snapshot file store, trainer) and before the run row (a new unit
+   * (protocol, budget, time index, a stored AsOfStrategy override, snapshot file store, trainer) and before the run row (a new unit
    * version, the pipeline bound to it), so the run reads features as they stand on its own day, its lineage names that
    * version, and a refused pipeline never mints a version. Returns the unit to train under.
    */
@@ -275,8 +275,8 @@ export class TrainingEngine {
    * Train a pipeline that points at a Prediction Unit. The bound Evaluation Protocol version is resolved first: a
    * missing protocol, more candidates than its budget allows, or a pipeline that declares a time index under a holdout
    * that does not respect time (`time-index-needs-time-holdout`) is refused before any run row is written. The unit
-   * decides the rows, their decision dates and their labels: inputs that would override them (`maxRows`,
-   * `labelEventDates`, a point-in-time AsOfStrategy) are refused, and deps without a snapshot file store or a trainer
+   * decides the rows, their decision dates and their labels: a pipeline whose stored AsOfStrategy would override them
+   * is refused (the Train surfaces refuse a row cap and label-event dates by name before training), and deps without a snapshot file store or a trainer
    * fail (a wiring error), both before anything is written. Only then does an advancing fixed decision date move to the
    * run's day (a new unit version), and the run row is written. Censored and label-known rows are excluded and
    * counted, and a protocol that does not fit the unit or a target that cannot train a model is refused before anything
@@ -290,7 +290,7 @@ export class TrainingEngine {
     // A time-indexed pipeline under a holdout that does not respect time is refused before any run row exists.
     const timeIndex = ProtocolSearchGuard.CheckTimeIndexHoldout(protocol, resolved.pipeline.ID, resolved.validation.TimeIndexColumn);
     if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
-    TrainingEngine.refuseUnitOverrides(input, resolved);
+    TrainingEngine.refuseUnitOverrides(resolved);
     const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
     const training: ProtocolTraining = { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) };
     // Every pipeline-stage refusal and deps check above writes nothing; only a pipeline that passes them all advances
@@ -352,10 +352,8 @@ export class TrainingEngine {
     });
   }
 
-  /** The unit decides rows and decision dates, so a capped read, label-event dates and an as-of strategy are refused. */
-  private static refuseUnitOverrides(input: TrainModelInput, resolved: ResolvedPipeline): void {
-    if (input.maxRows !== null && input.maxRows !== undefined) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows', why: 'a Prediction Unit pipeline reads every unit row; a capped read is not a complete read' } });
-    if (input.labelEventDates) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: 'decision dates come from the Prediction Unit' } });
+  /** The unit decides decision dates, so a pipeline whose stored AsOfStrategy asks for point-in-time assembly is refused. */
+  private static refuseUnitOverrides(resolved: ResolvedPipeline): void {
     if (resolved.asOf.Mode !== 'none') throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } });
   }
 

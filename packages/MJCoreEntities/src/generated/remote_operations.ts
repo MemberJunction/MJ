@@ -365,7 +365,7 @@ export interface PredictiveStudioStartExperimentSessionOutput {
     status: string;
 }
 
-/** Optional point-in-time assembly strategy for the train (mirrors the pipeline's stored AsOfStrategy). */
+/** A point-in-time assembly strategy, as `PredictiveStudio.TrainModel` accepted it before Prediction Units (see {@link RetiredTrainModelInputs}). */
 export interface PredictiveStudioTrainAsOf {
     /** How to anchor feature assembly in time: no anchoring, a column on the row, or an offset before the label event. */
     Mode: 'none' | 'column' | 'offset';
@@ -375,38 +375,67 @@ export interface PredictiveStudioTrainAsOf {
     OffsetDays?: number;
 }
 
-/** Input for `PredictiveStudio.TrainModel`. */
+/** Input for `PredictiveStudio.TrainModel`. The pipeline's Prediction Unit and Evaluation Protocol decide everything else. */
 export interface PredictiveStudioTrainModelInput {
     /** Id of the `MJ: ML Training Pipelines` row to train. */
     pipelineId: string;
     /** Optional `MJ: Experiment Session Iterations` id this run belongs to (NULL for a one-off standalone train). */
     experimentSessionIterationId?: string;
-    /** Optional cap on the number of training rows pulled from the target entity. */
-    maxRows?: number;
-    /** Optional primary-key field on the target entity (defaults to `ID`). */
-    primaryKeyField?: string;
-    /** Optional per-record label-event dates (keyed by record primary key), required when `asOf.Mode` is `offset`. */
-    labelEventDates?: Record<string, string>;
-    /** Optional as-of strategy override; when omitted the pipeline's stored `AsOfStrategy` is used. */
-    asOf?: PredictiveStudioTrainAsOf;
     /** Sidecar version string recorded in the model lineage for provenance. */
     sidecarVersion?: string;
 }
 
-/** Output of `PredictiveStudio.TrainModel` — the produced (Draft) model + its honest metrics. */
+/**
+ * Inputs `PredictiveStudio.TrainModel` accepted before Prediction Units. They are refused by name when present, even
+ * when empty or `asOf.Mode` is `none`: the Prediction Unit declares the decision date and the row key, and every
+ * eligible row is read (a capped read is not a complete read). Kept only so a caller (or a test probe) can type a
+ * payload that still sends them.
+ */
+export interface RetiredTrainModelInputs {
+    /** Refused: the Prediction Unit declares each row's decision date. */
+    asOf?: PredictiveStudioTrainAsOf;
+    /** Refused: the Prediction Unit declares each row's decision date. */
+    labelEventDates?: Record<string, string>;
+    /** Refused: every eligible row is read. */
+    maxRows?: number;
+    /** Refused: the Prediction Unit reads its rows keyed by the row entity's own primary key. */
+    primaryKeyField?: string;
+}
+
+/**
+ * Output of `PredictiveStudio.TrainModel`: the run's stored gate decision, its Training Snapshot and Evaluation
+ * Protocol, and the produced model when the decision ships one.
+ */
 export interface PredictiveStudioTrainModelOutput {
-    /** Id of the produced (Draft) `MJ: ML Models` row. */
-    modelId: string;
+    /** Id of the produced (Draft) `MJ: ML Models` row; absent when the gate decision ships no model (no-signal, or the existing rule kept). */
+    modelId?: string;
     /** Id of the `MJ: ML Training Runs` row recording this attempt. */
     trainingRunId: string;
-    /** Monotonic model version under the pipeline (`max(Version)+1`). */
-    version: number;
-    /** JSON of the metrics scored exactly once on the locked holdout the search never saw (the honest performance number). */
+    /** Monotonic model version under the pipeline; absent when no model is produced. */
+    version?: number;
+    /**
+     * JSON of the test-set scores measured once on the locked holdout (`{ "<metric>": value, … }`): the produced
+     * model's stored scores when a model exists (the member the gate ships), otherwise the trainer's finalist scores.
+     */
     holdoutMetrics?: string;
-    /** True when one feature dominates the model's predictions (possible target leakage). A flagged model stays Draft and needs human sign-off before promotion. */
+    /** True when one feature dominates the finalist's predictions (possible target leakage); a flagged model stays Draft and needs human sign-off. */
     leakageFlagged: boolean;
-    /** Lifecycle status of the produced model (always `Draft` immediately after training). */
+    /** Lifecycle status of the produced model (`Draft`), `NoSignal` when the gate stored no-signal, or `KeptExistingRule` when it kept the existing rule. */
     status: string;
+    /** The `MJ: Training Snapshots` row the run trained on. */
+    trainingSnapshotId?: string;
+    /** The `MJ: Evaluation Protocols` row (exact version) the run was evaluated under. */
+    evaluationProtocolId?: string;
+    /** That protocol row's Version. */
+    evaluationProtocolVersion?: number;
+    /** The stored gate outcome. */
+    gateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal';
+    /** The decision-table branch the stored outcome came from (for example `b:keep-simple-baseline` or `c:no-signal`). */
+    gateBranch?: string;
+    /** The stored reason for the outcome, in words generated from the stored comparisons. */
+    gateReason?: string;
+    /** The member the gate ships (the model, a simple baseline or the existing rule); absent under no-signal. */
+    shipped?: string;
 }
 
 /** Input for `Query.RefreshExtraction`. Selectors combine as a union; give at least one. */
@@ -1662,7 +1691,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
 // ============================================================
 /**
  * Train ML Model
- * Train a predictive model from an MJ: ML Training Pipelines definition. Carves a locked holdout (point-in-time/as-of aware), trains via the sidecar, persists an immutable Draft MJ: ML Models row, and flags single-feature dominance (possible target leakage). Returns the new model id, its honest holdout metrics, the leakage flag, and the model version. Delegates to TrainingEngine.trainModel in @memberjunction/predictive-studio-engine.
+ * Trains a predictive model from an ML Training Pipeline under the pipeline's Prediction Unit and Evaluation Protocol: freezes a Training Snapshot, carves the locked holdout by date, selects on inner folds, fits the baselines and stores the three-outcome gate decision with its reason on the training run. Outputs the run's gate outcome and reason, the snapshot and protocol, the model id (none under no-signal), the test-set scores and whether one feature dominates the predictions (possible target leakage).
  * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
  * under 'PredictiveStudio.TrainModel'. This generated base provides the typed contract only (client-safe).
  */

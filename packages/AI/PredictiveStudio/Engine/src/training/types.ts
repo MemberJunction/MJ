@@ -168,13 +168,6 @@ export interface TrainModelInput {
    * omitted for a one-off standalone train outside a session.
    */
   experimentSessionIterationId?: string;
-  /**
-   * Optional per-record label-event dates (keyed by record primary key). Decision dates come from the pipeline's
-   * Prediction Unit, so training refuses them (`input-not-accepted`).
-   */
-  labelEventDates?: Record<string, Date>;
-  /** A cap on training rows; training refuses it (`input-not-accepted`), since a unit run reads every unit row. */
-  maxRows?: number;
   /** Sidecar version string recorded in model lineage (provenance). */
   sidecarVersion?: string;
   /**

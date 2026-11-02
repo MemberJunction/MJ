@@ -3,11 +3,12 @@
     "_comments": [
       "Train ML Model — thin Action boundary over TrainingEngine.trainModel.",
       "Type='Custom' + DriverClass binds to the @RegisterClass(BaseAction,'PredictiveStudioTrainModelAction') class.",
-      "The action validates PipelineID, delegates to the engine (production seams), and maps the result."
+      "The action validates PipelineID, refuses the retired MaxRows input by name, delegates to the engine (production seams), and maps the run's stored gate decision onto the outputs.",
+      "MaxRows is retired: the Prediction Unit decides the rows and every eligible row is read. Its param row is deleted (deleteRecord)."
     ],
     "fields": {
       "Name": "Train ML Model",
-      "Description": "Trains a predictive model from an ML Training Pipeline definition. Carves a locked holdout, trains via the sidecar, persists an immutable Draft ML Model, and flags single-feature dominance (possible target leakage). Outputs the new model id, its honest holdout metrics, and whether it was leakage-flagged.",
+      "Description": "Trains a predictive model from an ML Training Pipeline under the pipeline's Prediction Unit and Evaluation Protocol: freezes a Training Snapshot, carves the locked holdout by date, selects on inner folds, fits the baselines and stores the three-outcome gate decision with its reason on the training run. Outputs the run's gate outcome and reason, the snapshot and protocol, the model id (none under no-signal), the test-set scores and whether one feature dominates the predictions (possible target leakage).",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioTrainModelAction",
       "Status": "Active",
@@ -41,7 +42,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional row cap for the training read. Training reads every row of the target entity; a MaxRows smaller than the rows in scope is refused with READ_CAP_EXCEEDED rather than training on a sample. Omit it unless you want that check."
+            "Description": "Retired. Training reads every eligible row the Prediction Unit resolves; a supplied MaxRows is refused by name."
           },
           "primaryKey": {
             "ID": "1AEC4C95-D252-462D-9DD7-F287F8B5D6F5"
@@ -49,6 +50,10 @@
           "sync": {
             "lastModified": "2026-10-28T00:35:16.257Z",
             "checksum": "60cfd48c8df13cbf40a7a132f06fd767e971c7cbaac12e5af13197b39d7f6fc0"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-10-31T18:14:11.270Z"
           }
         },
         {
@@ -59,7 +64,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Id of the produced (Draft) MJ: ML Models row."
+            "Description": "Id of the produced (Draft) MJ: ML Models row; null when the stored gate decision ships no model (no-signal, or the existing rule kept)."
           },
           "primaryKey": {
             "ID": "E682EE84-2051-4D3F-B892-39CFE781BBA1"
@@ -77,7 +82,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "JSON of the metrics scored once on the locked holdout set the search never saw (the honest performance number)."
+            "Description": "JSON of the test-set scores measured once on the locked holdout: the produced model's stored scores when a model exists, otherwise the trainer's finalist scores."
           },
           "primaryKey": {
             "ID": "55F8564C-CBAF-40FE-A32A-1B3876137CF1"
@@ -104,6 +109,62 @@
             "lastModified": "2026-07-01T17:33:33.725Z",
             "checksum": "b98ee9aa7419dbf70f6ba0595fcfce238586825150e03cf750273d7a6e6b7713"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GateOutcome",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The gate's stored outcome: model, keep-simple-baseline or no-signal."
+          },
+          "primaryKey": {
+            "ID": "A41AB128-1D5C-49B5-BCEA-4E7D38E85111"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GateReason",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The stored reason for the gate outcome, generated from the stored comparisons."
+          },
+          "primaryKey": {
+            "ID": "4C4ACFB0-44C7-4B2A-B5C0-E849A9231D4B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TrainingSnapshotID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The MJ: Training Snapshots row the run trained on."
+          },
+          "primaryKey": {
+            "ID": "8B5E2C10-6A7D-4F93-B1E4-0C9D2A7F5E36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EvaluationProtocolID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The MJ: Evaluation Protocols row (exact version) the run was evaluated under."
+          },
+          "primaryKey": {
+            "ID": "D99B752A-10C9-424D-919B-E421A16BCDFA"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -112,7 +173,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Model trained and persisted (Draft)."
+            "Description": "The training run completed; GateOutcome and GateReason say whether a model was produced (ModelID is null when none was)."
           },
           "primaryKey": {
             "ID": "030CA913-F3CA-4A8B-8B29-F6F16F07807B"
@@ -142,7 +203,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "TRAINING_FAILED",
             "IsSuccess": false,
-            "Description": "The training engine failed (pipeline not found, sidecar error, or a save failure)."
+            "Description": "The training engine failed (pipeline not found, sidecar error, or a save failure), or a retired input (MaxRows) was supplied."
           },
           "primaryKey": {
             "ID": "3D57A26B-CAD2-430C-BF17-54A5798D96BA"
@@ -157,7 +218,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "READ_CAP_EXCEEDED",
             "IsSuccess": false,
-            "Description": "Training refused: the MaxRows parameter is smaller than the rows in scope, so the model would be trained on a fraction of its scope. Omit MaxRows and train again; training reads every row of the target entity. The same code the PredictiveStudio.TrainModel operation returns."
+            "Description": "Training refused: a read would return fewer rows than are in scope, so the model would be trained on a fraction of its scope; training reads every row of the target entity. The same code the PredictiveStudio.TrainModel operation returns."
           },
           "primaryKey": {
             "ID": "CA1C5767-E6E5-4DCA-9E4B-CE775C8D1A0A"

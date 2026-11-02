@@ -8,9 +8,10 @@
  * maps the typed input → `TrainingEngine.trainModel` → the typed output.
  *
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
- * it carries no training logic. The actual orchestration (locked-holdout carve,
- * sidecar `/train`, immutable model persist, leakage flag) lives in the engine, and
- * the production wiring is shared with the Train action via {@link TrainingDelegation.TrainModelViaEngine}.
+ * it carries no training logic. The engine trains the pipeline under its Prediction
+ * Unit and bound Evaluation Protocol and stores the gate decision on the run; the
+ * production wiring is shared with the Train action via {@link TrainingDelegation.TrainModelViaEngine},
+ * and the output is read from the run with {@link TrainModelMapping}, as the action reads it.
  *
  * Marked `LongRunning` (training can take a while): it emits coarse start/finish
  * progress through the server context. The engine does not expose a per-epoch
@@ -29,9 +30,10 @@ import {
 
 import type { TrainModelInput, TrainModelResult } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
-import { TrainingRefusedError } from '../training/training-refusal';
-import { TrainingDelegation, WasTrainingLeakageFlagged } from './delegation';
+import { RunViewEvaluationProtocolStore, type IEvaluationProtocolStore } from '../training/evaluation-protocol-store';
+import { TrainingDelegation } from './delegation';
 import { PredictiveStudioRefusals } from './refusals';
+import { TrainModelMapping } from './train-model.mapping';
 
 /**
  * Server implementation of `PredictiveStudio.TrainModel`. Extends the CodeGen-emitted
@@ -53,7 +55,10 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
     );
   }
 
-  /** @inheritdoc */
+  /**
+   * Refuses a retired input by name, trains, then returns the run's stored decision. A retired input is refused
+   * before any progress is reported, so a refused call never starts a training run.
+   */
   protected async InternalExecute(
     input: PredictiveStudioTrainModelInput,
     provider: IMetadataProvider,
@@ -63,67 +68,24 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
     if (!input?.pipelineId) {
       throw new Error('pipelineId is required');
     }
-    // Mapped before any progress is reported: a refused input never starts a training run.
+    const retired = TrainModelMapping.RetiredInputRefusal('TrainModel', TrainModelMapping.PresentRetiredInputs(input));
+    if (retired !== null) throw retired;
     const engineInput = this.toEngineInput(input);
-
-    context.emitProgress({
-      OperationKey: this.OperationKey,
-      Processed: 0,
-      Status: 'Running',
-      Message: `Training model from pipeline ${input.pipelineId}…`,
-    });
-
+    this.reportProgress(context, 0, `Training model from pipeline ${input.pipelineId}…`);
     const result = await TrainingDelegation.TrainModelViaEngine(engineInput, provider, user, this.engine());
-
-    context.emitProgress({
-      OperationKey: this.OperationKey,
-      Processed: 1,
-      Total: 1,
-      Status: 'Running',
-      Message: result.model === null
-        ? `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`
-        : `Trained model ${result.model.ID} (v${result.model.Version}).`,
-    });
-    return this.toOutput(result);
+    this.reportProgress(context, 1, this.finishedMessage(result));
+    const facts = await TrainModelMapping.GatherRunFacts(result, this.protocolStore(provider, user));
+    return TrainModelMapping.TrainModelOutputFrom(facts);
   }
 
   /**
-   * Map the engine's {@link TrainModelResult} onto the operation's typed output. A run whose gate decision ships no
-   * artifact completes without a model: the model fields are null and the run's stored gate record holds the reason.
-   */
-  protected toOutput(result: TrainModelResult): PredictiveStudioTrainModelOutput {
-    const model = result.model;
-    return {
-      modelId: model === null ? null : model.ID,
-      trainingRunId: result.run.ID,
-      version: model === null ? null : model.Version,
-      holdoutMetrics: model === null ? undefined : model.HoldoutMetrics || undefined,
-      leakageFlagged: WasTrainingLeakageFlagged(result),
-      status: model === null ? null : model.Status,
-    };
-  }
-
-  /**
-   * Map the operation's typed input onto the engine's {@link TrainModelInput}. Decision dates come from the pipeline's
-   * Prediction Unit, so a point-in-time `asOf` input, `labelEventDates` and `primaryKeyField` are refused by name (`input-not-accepted`)
-   * instead of being silently ignored; an `asOf` of `Mode: 'none'` asks for nothing and is accepted.
+   * Map the operation's typed input onto the engine's {@link TrainModelInput}. The retired inputs are refused before
+   * this runs (the type no longer carries them), so only the pipeline, the session iteration and the sidecar version map.
    */
   protected toEngineInput(input: PredictiveStudioTrainModelInput): TrainModelInput {
-    if (input.asOf && input.asOf.Mode !== 'none') {
-      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: "decision dates come from the pipeline's Prediction Unit; the asOf input is no longer accepted (it was silently ignored before)" } });
-    }
-    if (input.labelEventDates) {
-      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: "decision dates come from the pipeline's Prediction Unit; labelEventDates are no longer accepted (they were silently ignored before)" } });
-    }
-    if (input.primaryKeyField) {
-      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'primaryKeyField', why: "the pipeline's Prediction Unit reads its rows keyed by the row entity's own primary key; primaryKeyField is no longer accepted" } });
-    }
     const engineInput: TrainModelInput = { pipelineId: input.pipelineId };
     if (input.experimentSessionIterationId) {
       engineInput.experimentSessionIterationId = input.experimentSessionIterationId;
-    }
-    if (input.maxRows != null) {
-      engineInput.maxRows = input.maxRows;
     }
     if (input.sidecarVersion) {
       engineInput.sidecarVersion = input.sidecarVersion;
@@ -137,6 +99,22 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
    */
   protected engine(): TrainingEngine {
     return new TrainingEngine();
+  }
+
+  /** Where the run's protocol version is read, through the request's provider and user. Overridable for tests. */
+  protected protocolStore(provider: IMetadataProvider, user: UserInfo): IEvaluationProtocolStore {
+    return new RunViewEvaluationProtocolStore(provider, user);
+  }
+
+  /** The finishing progress line: the produced model, or the stored reason no model shipped. */
+  private finishedMessage(result: TrainModelResult): string {
+    return result.model === null
+      ? `Training run ${result.run.ID} completed and shipped no model: ${TrainingEngine.NoModelReason(result)}`
+      : `Trained model ${result.model.ID} (v${result.model.Version}).`;
+  }
+
+  private reportProgress(context: RemoteOpServerContext, processed: 0 | 1, message: string): void {
+    context.emitProgress({ OperationKey: this.OperationKey, Processed: processed, ...(processed === 1 ? { Total: 1 } : {}), Status: 'Running', Message: message });
   }
 }
 

@@ -10,9 +10,11 @@
  * With `--via-operation` the training goes through the `PredictiveStudio.TrainModel` Remote Operation, dispatched
  * in-process (`DispatchRemoteOperationInProcess`, the server path every client call reaches), and the line is the
  * operation's result: `{"operation": {Success, ResultCode, ErrorMessage, Output}}` plus the run's stored gate outcome.
+ * `--retired=<keys>` (with `--via-operation`) also sends the named retired inputs (`asOf`, `labelEventDates`, `maxRows`,
+ * `primaryKeyField`, comma-separated) with sample values, to show the operation refuses each by name before training.
  *
  * Usage (from the repo root, against the database the harness resolves):
- *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-train-pipeline-check.ts <pipelineId> [--via-operation]
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-train-pipeline-check.ts <pipelineId> [--via-operation [--retired=maxRows,asOf]]
  *
  * Exit code: 0 = trained (a model shipped or nothing shipped) or refused (all printed), 2 = no pipeline ID given,
  * 1 = any other error.
@@ -20,7 +22,9 @@
 import { BootstrapAI } from './lib/ai-bootstrap';
 import '@memberjunction/core-entities';
 import { DispatchRemoteOperationInProcess, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJFileStorageProviderEntity, MJMLTrainingRunEntity, PredictiveStudioTrainModelInput, PredictiveStudioTrainModelOutput } from '@memberjunction/core-entities';
+import type {
+  MJFileStorageProviderEntity, MJMLTrainingRunEntity, PredictiveStudioTrainModelInput, PredictiveStudioTrainModelOutput, RetiredTrainModelInputs,
+} from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { GateRecords } from '@memberjunction/predictive-studio-core';
 import { TrainingDelegation, TrainingRefusedError } from '@memberjunction/predictive-studio';
@@ -49,9 +53,29 @@ export async function RestoreStorage(row: MJFileStorageProviderEntity | null): P
   console.log(JSON.stringify({ storage: `switched ${row.Name} back off` }));
 }
 
+/** Sample values for each retired input a `--retired=` flag names (the operation refuses them by presence). */
+const RETIRED_SAMPLES: Required<RetiredTrainModelInputs> = {
+  asOf: { Mode: 'none' }, labelEventDates: { 'sample-row': '2026-01-01' }, maxRows: 1000, primaryKeyField: 'ID',
+};
+
+/** The retired inputs the `--retired=` flag names, with their sample values. */
+function retiredInputsFromArgs(): RetiredTrainModelInputs {
+  const flag = process.argv.find((a) => a.startsWith('--retired='));
+  if (flag === undefined) return {};
+  const out: RetiredTrainModelInputs = {};
+  for (const key of flag.slice('--retired='.length).split(',')) {
+    if (key === 'asOf') out.asOf = RETIRED_SAMPLES.asOf;
+    else if (key === 'labelEventDates') out.labelEventDates = RETIRED_SAMPLES.labelEventDates;
+    else if (key === 'maxRows') out.maxRows = RETIRED_SAMPLES.maxRows;
+    else if (key === 'primaryKeyField') out.primaryKeyField = RETIRED_SAMPLES.primaryKeyField;
+    else throw new Error(`--retired: '${key}' is not a retired TrainModel input`);
+  }
+  return out;
+}
+
 /** Trains through the `PredictiveStudio.TrainModel` operation in-process and prints its result with the run's gate outcome. */
 async function trainViaOperation(pipelineId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
-  const input: PredictiveStudioTrainModelInput = { pipelineId };
+  const input: PredictiveStudioTrainModelInput & RetiredTrainModelInputs = { pipelineId, ...retiredInputsFromArgs() };
   const result = await DispatchRemoteOperationInProcess<PredictiveStudioTrainModelInput, PredictiveStudioTrainModelOutput>('PredictiveStudio.TrainModel', input, { user }, provider);
   const runId = result.Output ? result.Output.trainingRunId : null;
   const runs = runId === null ? null : await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLTrainingRunEntity, 'ValidationResults' | 'Status'>>(

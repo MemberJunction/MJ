@@ -285,11 +285,6 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(JSON.parse(run.ValidationResults!)).toMatchObject({ status: 'refused', refusal: { stage: 'unit', reason: { kind: 'single-valued-target', value: '1' } } });
   });
 
-  it('refuses maxRows for a unit pipeline (a capped read is not a complete read)', async () => {
-    const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
-    await expect(engine.trainModel({ pipelineId: pipeline.ID, maxRows: 5 }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
-  });
-
   it('refuses an as-of strategy for a unit pipeline before calling the trainer (decision dates come from the unit)', async () => {
     const { engine, deps, trainer, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     pipeline.AsOfStrategy = JSON.stringify({ Mode: 'column', Column: 'StartDate' } satisfies AsOfStrategy);
@@ -368,11 +363,6 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(trainer.Requests).toHaveLength(0);
     expect(runs[0].Status).toBe('Failed');
   });
-
-  it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
-    const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
-    await expect(engine.trainModel({ pipelineId: pipeline.ID, labelEventDates: { p0: new Date('2024-01-01T00:00:00Z') } }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
-  });
 });
 
 describe('TrainingEngine — a time-indexed pipeline is judged only on a time-respecting holdout', () => {
@@ -431,7 +421,7 @@ describe('TrainingEngine — an advancing fixed decision date', () => {
     expect([units.Rows.length, harness.runs.length]).toEqual([1, 0]);
   });
 
-  it('saves no new version for a pipeline refused for a unit override (maxRows) or failed for incomplete deps (no trainer)', async () => {
+  it('saves no new version for a pipeline refused for a unit override (a stored as-of strategy) or failed for incomplete deps (no trainer)', async () => {
     const advancing = (): { readonly harness: ReturnType<typeof TrainingHarness.ForUnit>; readonly units: InMemoryUnitVersions } => {
       const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
       const units = new InMemoryUnitVersions();
@@ -446,9 +436,10 @@ describe('TrainingEngine — an advancing fixed decision date', () => {
       harness.deps.now = () => new Date('2026-11-02T09:00:00Z');
       return { harness, units };
     };
-    const capped = advancing();
-    await expect(capped.harness.engine.trainModel({ pipelineId: capped.harness.pipeline.ID, maxRows: 5 }, capped.harness.deps)).rejects.toMatchObject({ Refusal: { reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
-    expect([capped.units.Rows.length, capped.harness.runs.length]).toEqual([1, 0]);
+    const overridden = advancing();
+    overridden.harness.pipeline.AsOfStrategy = JSON.stringify({ Mode: 'column', Column: 'StartDate' } satisfies AsOfStrategy);
+    await expect(overridden.harness.engine.trainModel({ pipelineId: overridden.harness.pipeline.ID }, overridden.harness.deps)).rejects.toMatchObject({ Refusal: { reason: { kind: 'input-not-accepted', input: 'asOf' } } });
+    expect([overridden.units.Rows.length, overridden.harness.runs.length]).toEqual([1, 0]);
     const unwired = advancing();
     delete unwired.harness.deps.trainer;
     await expect(unwired.harness.engine.trainModel({ pipelineId: unwired.harness.pipeline.ID }, unwired.harness.deps)).rejects.toThrow(/no trainer \(trainer\) was supplied/);
