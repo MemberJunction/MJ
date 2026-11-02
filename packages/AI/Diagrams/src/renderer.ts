@@ -502,16 +502,17 @@ function renderLanesSvg(lanes: PositionedLane[], isSequence: boolean): string[] 
     });
 }
 
-function renderEdgesSvg(edges: RoutedEdge[], prefix: string): string[] {
+function renderEdgesSvg(edges: RoutedEdge[], prefix: string, nodeLabels: Record<string, string>): string[] {
     return edges.map((e) => {
         const role = e.role ?? 'default';
         const isMain = Boolean(e.isMain);
         const mk = role === 'error' ? 'error' : isMain && role !== 'return' ? 'accent' : 'line';
         const labelMarkup = e.label && e.lx !== undefined && e.ly !== undefined ? `<text x="${e.lx}" y="${e.ly}" text-anchor="${e.anchor ?? 'middle'}">${esc(e.label)}</text>` : '';
         const orderAttr = e.order !== undefined ? ` data-edge-order="${e.order}"` : '';
+        const aria = `${nodeLabels[e.from] ?? e.from} to ${nodeLabels[e.to] ?? e.to}${e.label ? `, ${e.label}` : ''}`;
         return (
-            `<g class="edge" data-edge-id="${esc(e.id)}" data-edge-from="${esc(e.from)}" data-edge-to="${esc(e.to)}" data-edge-role="${esc(role)}"${isMain ? ' data-main-path="true"' : ''}${orderAttr}>` +
-            `<path d="${e.d}" marker-end="url(#${esc(prefix)}-mk-${mk})"/>${labelMarkup}</g>`
+            `<g class="edge" data-edge-id="${esc(e.id)}" data-edge-from="${esc(e.from)}" data-edge-to="${esc(e.to)}" data-edge-role="${esc(role)}"${isMain ? ' data-main-path="true"' : ''}${orderAttr} tabindex="0" role="button" aria-label="${esc(aria)}">` +
+            `<path d="${esc(e.d)}" marker-end="url(#${esc(prefix)}-mk-${mk})"/>${labelMarkup}</g>`
         );
     });
 }
@@ -608,7 +609,7 @@ export function RenderDiagramSvg(spec: MJDiagramSpec, prefix = 'mjd'): string {
     const out: string[] = [
         ...renderLanesSvg(layout.lanes, spec.kind === 'sequence'),
         ...(layout.lifelines ?? []).map((ll) => `<line class="lifeline" x1="${ll.x}" y1="${ll.y1}" x2="${ll.x}" y2="${ll.y2}"/>`),
-        ...renderEdgesSvg(layout.edges, prefix),
+        ...renderEdgesSvg(layout.edges, prefix, Object.fromEntries(spec.nodes.map((n) => [n.id, n.label]))),
         ...(layout.sequenceDots ?? []).map((d) => `<circle class="seq-dot" cx="${d.x}" cy="${d.y}" r="4"/>`),
         ...renderNodesSvg(spec, layout.pos, mainSet, laneLabels),
     ];

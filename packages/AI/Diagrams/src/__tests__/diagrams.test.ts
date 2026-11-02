@@ -305,6 +305,13 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         expect(res.Valid && res.Spec.mainPath).toEqual(['a', 'b', 'c']);
     });
 
+    it('starts an inferred dataflow main path from an emphasis edge, not the first default edge', () => {
+        const nodes = ['p', 'q', 'a', 'b', 'c'].map((id) => ({ id, stage: 'l', label: id }));
+        const flows = [{ from: 'p', to: 'q' }, { from: 'a', to: 'b', role: 'emphasis' }, { from: 'b', to: 'c' }];
+        const res = ValidateDiagramSpec({ kind: 'dataflow', title: 'T', stages: lane, nodes, flows });
+        expect(res.Valid && res.Spec.mainPath).toEqual(['a', 'b', 'c']);
+    });
+
     it("lets the spec's kind decide, treats an empty requested kind as missing, and refuses a conflicting one", () => {
         const spec = loadFixture('renewal.workflow.json') as Record<string, unknown>;
         expect(ValidateDiagramSpec({ ...spec, kind: '' }, 'workflow').Valid).toBe(true);
@@ -365,6 +372,22 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         root.activeElement!.dispatchEvent(new doc.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         expect(root.querySelector('.mjd-panel')?.getAttribute('data-empty')).toBe('true');
         expect(root.activeElement).toBe(viewer.Svg.querySelector(`[data-node-id="${target}"]`));
+    });
+
+    it('selects a connection from the keyboard, and returns focus to it on Escape', () => {
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, RenderDiagramSvg(validSpec('renewal.workflow.json')), sanitize)!;
+        const root = shadow(host);
+        const edge = viewer.Svg.querySelector<SVGGElement>('[data-edge-id="e1"]')!;
+        expect(edge.getAttribute('aria-label')).toBe('Log CE credits to Submit renewal, credits logged');
+        edge.focus();
+        edge.dispatchEvent(new doc.defaultView!.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        expect(edge.classList.contains('sel')).toBe(true);
+        expect(root.querySelector('.mjd-panel')?.getAttribute('data-empty')).not.toBe('true');
+        edge.dispatchEvent(new doc.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(root.querySelector('.mjd-panel')?.getAttribute('data-empty')).toBe('true');
+        expect(root.activeElement).toBe(edge);
     });
 
     it('shows a non-diagram SVG on a white canvas in both themes', () => {

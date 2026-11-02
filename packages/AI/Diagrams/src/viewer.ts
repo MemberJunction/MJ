@@ -164,9 +164,10 @@ svg.mjd .node, svg.mjd .card, svg.mjd .edge {
   cursor: pointer;
   transition: opacity .16s ease;
 }
-svg.mjd .node:focus { outline: none; }
+svg.mjd .node:focus, svg.mjd .edge:focus { outline: none; }
 svg.mjd .node:focus-visible > rect:not(.step-pill),
 svg.mjd .node:focus-visible > polygon,
+svg.mjd .edge:focus-visible > path:not(.mjd-hit),
 svg.mjd .card:focus-visible > rect:first-of-type {
   stroke: var(--accent);
   stroke-width: 3px;
@@ -589,13 +590,7 @@ class DiagramViewer implements DiagramViewerInstance {
             }, { signal });
         };
         this.index.nodes.forEach((el, id) => onActivate(el, () => (this.selected === id ? this.Clear() : this.Select(id))));
-        this.index.edges.forEach((edge) =>
-            edge.el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (this.selectedEdge === edge.id) this.Clear();
-                else this.SelectEdge(edge.id);
-            }, { signal })
-        );
+        this.index.edges.forEach((edge) => onActivate(edge.el, () => (this.selectedEdge === edge.id ? this.Clear() : this.SelectEdge(edge.id))));
         this.index.cards.forEach((card) => onActivate(card, () => this.selectCard(card)));
         this.stage.addEventListener('click', (e) => {
             const t = e.target as Element;
@@ -623,7 +618,7 @@ class DiagramViewer implements DiagramViewerInstance {
     /** Clears, then puts focus back on what the panel was about, so keyboard users keep their place. */
     private close(): void {
         const edge = this.selectedEdge ? this.index.edgeById.get(this.selectedEdge) : undefined;
-        const origin = this.index.nodes.get(this.selected ?? edge?.from ?? '') ?? this.index.cards.find((c) => c.dataset.cardId === this.activeCard);
+        const origin = this.index.nodes.get(this.selected ?? '') ?? edge?.el ?? this.index.cards.find((c) => c.dataset.cardId === this.activeCard);
         this.Clear();
         origin?.focus();
     }
