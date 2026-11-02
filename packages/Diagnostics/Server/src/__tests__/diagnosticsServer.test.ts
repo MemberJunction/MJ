@@ -5,7 +5,14 @@ import {
     WithoutDiagnosticCapture,
     RunDetachedDiagnosticContext,
     DiagnosticContext,
+    IMetadataProvider,
+    UserInfo,
 } from '@memberjunction/core';
+import {
+    DiagnosticsUploadClientCaptureServerOperation,
+    DiagnosticsBuildBundleServerOperation,
+    DiagnosticsSendBundleServerOperation,
+} from '../remoteOperations.js';
 import {
     BuildMjdiagArchive,
     EncryptDiagnosticBundle,
@@ -471,6 +478,65 @@ describe('@memberjunction/diagnostics-server', () => {
             });
             expect(azureResult.verdict).toBe('Infected');
             expect(azureResult.threatName).toBe('Trojan.Generic');
+        });
+
+        it('routes DiagnosticsSendBundleServerOperation through local DiagnosticIntakeService when no external collector URL is configured', async () => {
+            const intake = DiagnosticIntakeService.Instance;
+            intake.ResetForTests();
+
+            const mockOwnerUser = {
+                ID: 'user-owner-1',
+                IsActive: true,
+                Type: 'Owner',
+                UserRoles: [{ Role: 'Developer' }],
+            } as unknown as UserInfo;
+            const mockProvider = {} as unknown as IMetadataProvider;
+
+            const uploadOp = new DiagnosticsUploadClientCaptureServerOperation();
+            const uploadRes = await uploadOp.ExecuteServer(
+                {
+                    CreateSelfServiceSession: true,
+                    Reason: 'UserReportedProblem',
+                    ScrubLiterals: true,
+                    ClientLogs: [
+                        {
+                            timestamp: new Date().toISOString(),
+                            severity: 'error',
+                            source: 'client',
+                            message: 'Unhandled UI error in Explorer',
+                        },
+                    ],
+                },
+                { provider: mockProvider, user: mockOwnerUser }
+            );
+            expect(uploadRes.Success).toBe(true);
+            expect(uploadRes.Output?.SessionID).toBeTruthy();
+
+            const buildOp = new DiagnosticsBuildBundleServerOperation();
+            const buildRes = await buildOp.ExecuteServer(
+                {
+                    SessionID: uploadRes.Output!.SessionID,
+                    Name: 'Explorer Support Bundle',
+                    ScrubLiterals: true,
+                },
+                { provider: mockProvider, user: mockOwnerUser }
+            );
+            expect(buildRes.Success).toBe(true);
+            expect(buildRes.Output?.Status).toBe('Ready');
+
+            const sendOp = new DiagnosticsSendBundleServerOperation();
+            const sendRes = await sendOp.ExecuteServer(
+                {
+                    BundleID: buildRes.Output!.BundleID,
+                    Destination: 'MJC',
+                    Summary: 'Smoke test from Explorer dialog',
+                },
+                { provider: mockProvider, user: mockOwnerUser }
+            );
+            expect(sendRes.Success).toBe(true);
+            expect(sendRes.Output?.Status).toBe('Sent');
+            expect(sendRes.Output?.ExternalReferenceID).toMatch(/^diagref_/);
+            expect(intake.GetReceivedBundle(sendRes.Output!.ExternalReferenceID!)?.status).toBe('Ready');
         });
     });
 });

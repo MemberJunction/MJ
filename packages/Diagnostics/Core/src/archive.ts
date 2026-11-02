@@ -57,15 +57,15 @@ export async function ComputeSha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
-    if (typeof CompressionStream === 'undefined') {
+    if (typeof CompressionStream === 'undefined' || input.byteLength === 0) {
         return input;
     }
     const cs = new CompressionStream('deflate-raw');
     const writer = cs.writable.getWriter();
     const copy = new Uint8Array(input.byteLength);
     copy.set(input);
-    await writer.write(copy);
-    await writer.close();
+    const writePromise = writer.write(copy).then(() => writer.close());
+
     const chunks: Uint8Array[] = [];
     const reader = cs.readable.getReader();
     let total = 0;
@@ -75,6 +75,7 @@ async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
         chunks.push(value);
         total += value.byteLength;
     }
+    await writePromise;
     const out = new Uint8Array(total);
     let offset = 0;
     for (const chunk of chunks) {

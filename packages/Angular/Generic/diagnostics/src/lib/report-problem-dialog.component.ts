@@ -61,11 +61,17 @@ import {
 
                         @if (LastResult) {
                             <div class="mj-diag-summary-box">
-                                <strong>Bundle Ready:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
+                                <strong>Bundle Downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
                                 ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings)
                                 <button type="button" class="mj-diag-link-btn" (click)="OnDownloadSnapshot()">
-                                    Download .mjdiag
+                                    Download Again
                                 </button>
+                            </div>
+                        }
+
+                        @if (BuildError) {
+                            <div class="mj-diag-summary-box">
+                                <strong>Download Error:</strong> <span>{{ BuildError }}</span>
                             </div>
                         }
 
@@ -85,8 +91,12 @@ import {
                         <button type="button" class="mj-diag-secondary-btn" (click)="OnStartRecording()">
                             Start Live Recording
                         </button>
-                        <button type="button" class="mj-diag-secondary-btn" (click)="OnBuildSnapshot()">
-                            Build .mjdiag Snapshot
+                        <button
+                            type="button"
+                            class="mj-diag-secondary-btn"
+                            [disabled]="IsBuilding"
+                            (click)="OnBuildSnapshot()">
+                            {{ IsBuilding ? 'Building...' : 'Download .mjdiag Snapshot' }}
                         </button>
                         <button
                             type="button"
@@ -216,6 +226,8 @@ export class MJDiagnosticReportProblemDialogComponent {
     public ScrubberProfile: DiagnosticScrubberProfile = 'Standard';
     public LastResult: ClientBundleBuildResult | null = null;
     public LastSubmission: SubmitBundleToSupportResult | null = null;
+    public BuildError: string | null = null;
+    public IsBuilding = false;
     public IsSubmitting = false;
 
     public OnTicketInput(event: Event): void {
@@ -237,15 +249,25 @@ export class MJDiagnosticReportProblemDialogComponent {
     }
 
     public async OnBuildSnapshot(): Promise<void> {
-        const result = await this.diagnosticsService.BuildClientBundle({
-            scrubberProfile: this.ScrubberProfile,
-            ticketNumber: this.TicketNumber.trim() || undefined,
-            note: this.Note.trim() || undefined,
-            includeHar: true,
-        });
-        this.LastResult = result;
+        this.IsBuilding = true;
+        this.BuildError = null;
         this.cdr.markForCheck();
-        this.BundleBuilt.emit(result);
+        try {
+            const result = await this.diagnosticsService.BuildClientBundle({
+                scrubberProfile: this.ScrubberProfile,
+                ticketNumber: this.TicketNumber.trim() || undefined,
+                note: this.Note.trim() || undefined,
+                includeHar: true,
+            });
+            this.LastResult = result;
+            this.diagnosticsService.DownloadClientBundle(result);
+            this.BundleBuilt.emit(result);
+        } catch (err) {
+            this.BuildError = err instanceof Error ? err.message : String(err);
+        } finally {
+            this.IsBuilding = false;
+            this.cdr.markForCheck();
+        }
     }
 
     public OnDownloadSnapshot(): void {

@@ -389,10 +389,22 @@ export class MJDiagnosticsService {
         const blob = new Blob([copy.buffer], { type: 'application/zip' });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
+        anchor.style.display = 'none';
         anchor.href = url;
         anchor.download = `${result.bundleId}.mjdiag`;
+        if (document.body) {
+            document.body.appendChild(anchor);
+        }
         anchor.click();
-        URL.revokeObjectURL(url);
+        if (anchor.parentNode) {
+            anchor.parentNode.removeChild(anchor);
+        }
+        const timer = setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 1_000);
+        if (typeof (timer as unknown as { unref?: () => void }).unref === 'function') {
+            (timer as unknown as { unref: () => void }).unref();
+        }
     }
 
     /**

@@ -26,6 +26,7 @@ import {
   IntakeCompleteRequest,
   MAX_INTAKE_BUNDLE_BYTES
 } from './intakeService.js';
+import { GetInMemoryDiagnosticBundle } from './remoteOperations.js';
 
 export function ParseTraceparentHeader(headerValue?: string): { traceId: string; spanId: string } {
   if (headerValue && typeof headerValue === 'string') {
@@ -193,6 +194,13 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
           'Content-Disposition',
           `attachment; filename="${bundleId.replace(/[^a-zA-Z0-9_-]/g, '')}.mjdiag"`
         );
+
+        const localBundle = GetInMemoryDiagnosticBundle(bundleId);
+        if (localBundle?.archiveBytes) {
+          res.setHeader('Content-Type', 'application/zip');
+          res.status(200).send(Buffer.from(localBundle.archiveBytes));
+          return;
+        }
 
         const received = DiagnosticIntakeService.Instance.GetReceivedBundle(bundleId);
         if (received?.decryptedZipBytes) {

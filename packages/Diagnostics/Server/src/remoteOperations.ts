@@ -34,6 +34,7 @@ import {
   ActiveDiagnosticSession
 } from './sessionManager.js';
 import { DiagnosticIntakeService } from './intakeService.js';
+import { EncryptDiagnosticBundle } from '@memberjunction/diagnostics';
 
 function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
   if (!user) return true;
@@ -410,28 +411,77 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     if (!local) {
       throw new Error(`Bundle '${input.BundleID}' not found.`);
     }
-    if (!input.CollectorUrlOverride) {
-      throw new Error('CollectorUrlOverride is required when no default collector URL is configured.');
+
+    const collectorUrl = input.CollectorUrlOverride || process.env.MJ_DIAGNOSTICS_COLLECTOR_URL;
+    let referenceId: string;
+
+    if (collectorUrl) {
+      const result = await DiagnosticSessionManager.Instance.SendBundleToCollector({
+        archiveBytes: local.archiveBytes,
+        bundleId: local.bundleId,
+        scrubLiterals: local.scrubLiterals,
+        collectorBaseUrl: collectorUrl,
+        ingestApiKey: process.env.MJ_DIAGNOSTICS_INGEST_API_KEY,
+        contactInfo: input.ContactInfo,
+        summary: input.Summary
+      });
+      referenceId = result.referenceId;
+    } else {
+      // No external collector URL configured: route through local DiagnosticIntakeService
+      // using the full X25519-HKDF-SHA256-AES256GCM encryption + 4-layer verification & malware scan pipeline
+      const intake = DiagnosticIntakeService.Instance;
+      if (!intake.Enabled) {
+        intake.Configure({ enabled: true });
+      }
+      const pk = await intake.GetPublicKeyDescriptor();
+      const plaintextSha256 = crypto.createHash('sha256').update(local.archiveBytes).digest('hex');
+      const encryptedBytes = await EncryptDiagnosticBundle(local.archiveBytes, {
+        recipientKeyId: pk.keyId,
+        recipientPublicKeyBase64: pk.publicKey,
+        recipientKeySignatureBase64: pk.signature,
+        senderEnvironmentId: DiagnosticSessionManager.Instance.InstallID,
+        manifestSha256: plaintextSha256
+      });
+      const encryptedSha256 = crypto.createHash('sha256').update(encryptedBytes).digest('hex');
+
+      const initiated = intake.InitiateBundleIntake({
+        installId: DiagnosticSessionManager.Instance.InstallID,
+        bundleId: local.bundleId,
+        formatVersion: 1,
+        mjVersion: '6.2.0',
+        scrubLiterals: local.scrubLiterals,
+        sizeBytes: encryptedBytes.byteLength,
+        plaintextSha256,
+        encryptedSha256,
+        keyId: pk.keyId,
+        summary: input.Summary,
+        contact: input.ContactInfo
+      });
+
+      const uploaded = await intake.UploadEncryptedPayload(initiated.referenceId, encryptedBytes);
+      if (!uploaded.accepted) {
+        throw new Error(uploaded.reason ?? 'Local intake rejected encrypted payload');
+      }
+
+      const completed = await intake.CompleteBundleIntake(initiated.referenceId, {
+        encryptedSha256,
+        plaintextSha256
+      });
+      if (completed.status !== 'received') {
+        throw new Error(completed.reason ?? 'Local intake rejected bundle during verification');
+      }
+      referenceId = completed.referenceId;
     }
 
-    const result = await DiagnosticSessionManager.Instance.SendBundleToCollector({
-      archiveBytes: local.archiveBytes,
-      bundleId: local.bundleId,
-      scrubLiterals: local.scrubLiterals,
-      collectorBaseUrl: input.CollectorUrlOverride,
-      contactInfo: input.ContactInfo,
-      summary: input.Summary
-    });
-
     local.status = 'Sent';
-    local.externalReferenceId = result.referenceId;
+    local.externalReferenceId = referenceId;
     local.sentAt = new Date().toISOString();
 
     return {
       BundleID: local.bundleId,
       Status: 'Sent',
       Destination: input.Destination,
-      ExternalReferenceID: result.referenceId,
+      ExternalReferenceID: referenceId,
       SentAt: local.sentAt
     };
   }
