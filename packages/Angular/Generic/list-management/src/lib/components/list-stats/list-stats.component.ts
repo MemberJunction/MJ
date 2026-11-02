@@ -223,6 +223,7 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
           ExtraFilter: `ListID='${escapedId}'${cbPredicate}`,
           OrderBy: '__mj_UpdatedAt DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           Fields: ['__mj_UpdatedAt'],
           ResultType: 'simple',
         }),

@@ -1,5 +1,135 @@
 # @memberjunction/schema-engine
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- c8bbfce: The GitHub App JWT the RSU commit step mints expires 9 minutes out instead of exactly GitHub's 10-minute maximum, so a server clock slightly ahead of GitHub's is no longer refused.
+- effedda: The Runtime Schema Update commit-and-PR step can authenticate with a GitHub App. When no `GITHUB_TOKEN`/`GH_TOKEN` is set it mints an installation token from `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` (or `_PATH`), scoped to the one repository named by `RSU_GITHUB_REPO`, so a deployment that provides the App instead of a token no longer ends the step with "GitHub token not found" and leaves its migration and generated code uncommitted.
+- 14c7719: The runtime schema update is observable across its own restart: the progress emitter can resume a run (manifest preserved, sequence continues), RSU run artifacts carry the connection id so they are readable over the API, and the post-restart half emits `CreateEntityMaps` and `StartSync` steps before closing the run.
+
+  A run is also survivable and stoppable. Listing runs now applies its filters and limit to the run manifests before hydrating anything, and a finished run's counts, warnings, event count and final event come from the `result.json` the emitter already wrote — so `IntegrationListRuns` with `limit:1` reads one journal instead of every journal four times. Retention prunes by run start time and sacrifices finished runs before result-less ones, so a stranded run's evidence is no longer the first thing deleted. `MJ_INTEGRATION_RUN_ARTIFACT_ROOT` moves the artifact tree out of the directory a deploy swaps. And the RSU compile runs with bounded turbo concurrency in its own process group, is killed (group-wide) when it exceeds its timeout instead of running on unattended, reports elapsed time while it runs, and fails the pipeline before the commit and restart steps rather than restarting the API onto an uncompiled tree.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/sql-dialect@6.2.0-edge.7
+  - @memberjunction/queue@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 6770aad: CodeGen keeps EntityField metadata in step with the views and procedures it regenerates, and fails the run when a step fails instead of reporting success.
+  - Custom and layered base views are refreshed live, inner view first, before fields are synced; orphaned EntityField rows are pruned across every entity once per run, and the Sequence renumber no longer collides on them (#4050, #4336, #4737, #5976, #6028).
+  - Self-referencing keys that still have `Root*` fields or a `GetRootID` function keep their hierarchy after the 6.1 opt-in change (#5976).
+  - IS-A child entities keep the foreign-key metadata of inherited fields (#4569).
+  - Stale create/update/delete procedures are found by comparing them with what CodeGen generates (#3343); expression column defaults no longer produce procedures that fail to compile (#4000).
+  - `spDeleteEntityWithCoreDependencies` handles every reference to an entity from a checked-in policy and runs in one transaction (#3546).
+  - The runtime schema update path resolves `additionalSchemaInfo` from the config file's folder and fails when CodeGen creates no entity for a table (#5858).
+  - Batch, script and step failures are collected and the run exits non-zero listing all of them.
+
+### Patch Changes
+
+- 48c974e: A runtime schema update survives the process being killed, and says so if it doesn't. Child builds get a heap ceiling sized to free memory instead of inheriting the parent's, so a large build can no longer take down the server. Pending work is recorded before the build starts, so a restart resumes it. At startup, MJServer closes out any run a dead process left open (`SweepInterruptedRuns`) and marks it failed with a `process-killed` result, so the wizard and the active-operations panel stop waiting on it.
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/sql-dialect@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/queue@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/queue@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

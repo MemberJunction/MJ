@@ -459,6 +459,9 @@ export class MatchEngine {
             Fields: pkFields.map(f => f.Name),
             MaxRows: 1,
             ResultType: 'simple',
+            // Per-record lookup that only reads Results — a hit fills the 1-row page, which would
+            // otherwise trigger the provider's fallback COUNT as a second round trip per record.
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;
@@ -717,6 +720,9 @@ export class MatchEngine {
             // committed state — a cached null (from a lookup made before this record's map existed)
             // would make a re-sync of a changed record wrongly CREATE → duplicate-key on the dest.
             BypassCache: true,
+            // Per-record lookup that only reads Results — a hit fills the 1-row page, which would
+            // otherwise trigger the provider's fallback COUNT as a second round trip per record.
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;

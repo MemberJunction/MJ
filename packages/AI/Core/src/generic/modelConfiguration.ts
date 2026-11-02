@@ -41,6 +41,7 @@ import { IsPlainObject } from '@memberjunction/global';
 
 import { JSONObject, JSONValue } from './baseRealtime';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
+import type { EmbeddingInputType } from './embed.types';
 
 /**
  * MJ-normalized turn-detection mode vocabulary — provider-neutral by design so a shared model
@@ -66,9 +67,18 @@ export type RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' 
 export interface RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored by profiles without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored by drivers without a
+     * mapping. OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an
+     * end-of-turn silence ladder (off when any layer sets `SilenceDurationMs`). Gemini: end-of-speech sensitivity.
+     * ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored by profiles without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored by profiles without a mapping. A profile whose provider has
+     * coarser controls maps it as an approximate value: Gemini Live has two start-of-speech buckets, so below 0.5 is START_SENSITIVITY_HIGH
+     * and 0.5 or more is START_SENSITIVITY_LOW.
+     */
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;
@@ -421,6 +431,21 @@ export interface PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * The per-modality bag common to every AI configuration column. Sections are optional and
  * per-modality so one row can configure everything the thing it describes does.
  */
@@ -437,6 +462,8 @@ export interface AIConfigurationSections {
     Decision?: DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -581,6 +608,22 @@ export function IsZeroDataRetention(config: AIModelConfiguration | null | undefi
  */
 export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
     return config?.LLM?.PrefixPromptCache === true;
+}
+
+/**
+ * Prepends the model's configured embedding prefix for `inputType` (omitted means `'document'`).
+ * Returns the text unchanged when the effective configuration declares no prefix for that role.
+ * Read the configuration through {@link ResolveEffectiveModelConfiguration} (or
+ * `AIEngineBase.GetEffectiveModelConfiguration`) so the most specific layer's prefix wins.
+ */
+export function ApplyEmbeddingInputPrefix(
+    text: string,
+    inputType: EmbeddingInputType | undefined,
+    config: AIModelConfiguration | null | undefined
+): string {
+    const section = config?.Embedding;
+    const prefix = inputType === 'query' ? section?.QueryPrefix : section?.DocumentPrefix;
+    return prefix ? prefix + text : text;
 }
 
 /**

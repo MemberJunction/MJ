@@ -50,19 +50,39 @@ const SENSITIVE_FIELD_PATTERNS: ReadonlyArray<string> = [
     // and `OAuthToken` are still caught by `auth`.
     'password', 'passwd', 'pwd', 'secret', 'apikey', 'accesskey', 'privatekey',
     'accesstoken', 'refreshtoken', 'apitoken', 'bearertoken', 'sessiontoken',
-    'salt', 'hash', 'credential', 'auth', 'connectionstring',
+    'salt', 'hash', 'credential', 'auth', 'connectionstring', 'passcode', 'biometric',
     // Government and tax identifiers. `tin` is deliberately absent: `taxid` already covers
     // the concept, while `t-i-n` is a substring of ordinary English (Ra-tin-g, Marke-tin-g,
     // Set-tin-gs, Mee-tin-g) and matched 43 MJ columns, none of them a tax identifier.
-    // A whole-word `tin` is in SENSITIVE_FIELD_WHOLE_WORD_PATTERNS below.
+    // A whole-word `tin` is in SENSITIVE_FIELD_WHOLE_WORD_PATTERNS below. `pin` and `otp`
+    // are whole-word for the same reason; `passcode` and `biometric` are long enough to be
+    // safe as substrings.
     'socialsec', 'nationalinsurance', 'taxid', 'passport', 'driverlicense', 'driverslicense',
     // Financial
     'bank', 'routing', 'iban', 'swift', 'accountnumber', 'cardnumber', 'cardnum', 'cvv',
     'cvc', 'creditcard', 'salary', 'compensation', 'income',
     // Protected characteristics and other special-category data
     'ethnic', 'religion', 'political', 'sexualorientation', 'disability',
-    'healthcondition', 'diagnosis', 'medicalrecord', 'dateofbirth', 'birthdate',
+    'healthcondition', 'diagnosis', 'medicalrecord',
 ];
+
+/**
+ * Date of birth: refused like the patterns above, except in a document built for duplicate
+ * detection. Telling two records for the same person apart from two people who share a name
+ * is what a birth date is for, and without it duplicate detection on people loses most of its
+ * precision. Every other purpose (search, classification) still refuses it.
+ *
+ * `dateofbirth` and `birthdate` match anywhere in the name; `dob` must begin a word, for the
+ * reason given at {@link SENSITIVE_FIELD_WORD_PATTERNS}.
+ */
+const BIRTH_DATE_FIELD_PATTERNS: ReadonlyArray<string> = ['dateofbirth', 'birthdate'];
+const BIRTH_DATE_FIELD_WORD_PATTERNS: ReadonlyArray<string> = ['dob'];
+
+/**
+ * What the vectors are for. A `'duplicate-detection'` document may embed a date of birth (see
+ * {@link BIRTH_DATE_FIELD_PATTERNS}); every other refusal applies to every purpose.
+ */
+export type VectorFieldPurpose = 'duplicate-detection' | 'other';
 
 /**
  * Patterns that must BEGIN A WORD in the field name rather than appear anywhere in it.
@@ -76,13 +96,14 @@ const SENSITIVE_FIELD_PATTERNS: ReadonlyArray<string> = [
  *
  * Anchoring loses no true positives, because all three are whole words wherever they are
  * meant: `ssn`, `employee_ssn`, `EmployeeSSN`, `SSNumber`, `dob`, `DOB`, `race`,
- * `EmployeeRace`. (`date_of_birth` and `DateOfBirth` are covered by `dateofbirth` above.)
+ * `EmployeeRace`. (`dob` itself lives in {@link BIRTH_DATE_FIELD_WORD_PATTERNS}, because duplicate
+ * detection may use it.)
  *
  * `idtoken` is here for the same reason: as a substring it sits inside `Pa-idToken-s` and
  * `Val-idToken-Count`, which are counts, while `IdToken`, `IDToken` and `id_token` all begin
  * a word.
  */
-const SENSITIVE_FIELD_WORD_PATTERNS: ReadonlyArray<string> = ['ssn', 'dob', 'race', 'idtoken'];
+const SENSITIVE_FIELD_WORD_PATTERNS: ReadonlyArray<string> = ['ssn', 'race', 'idtoken'];
 
 /**
  * Patterns that must be a WHOLE WORD: begin a word and end at the end of the name or where
@@ -91,8 +112,12 @@ const SENSITIVE_FIELD_WORD_PATTERNS: ReadonlyArray<string> = ['ssn', 'dob', 'rac
  * `tin` (tax identification number) is too short even for a word start: `Tint`, `TinyInt`
  * and `Tinker` all begin with it. As a word of its own it means one thing: `TIN`,
  * `VendorTIN`, `vendor_tin`, `TINNumber`.
+ *
+ * `pin` (a personal identification number) and `otp` (a one-time password) are whole words
+ * for the same reason: `Shipping`, `Mapping`, `Pinned` and `Hotpot` contain them. `UserPin`,
+ * `PIN` and `OTPCode` are refused; `Pinned` and `PinnedAt` are not.
  */
-const SENSITIVE_FIELD_WHOLE_WORD_PATTERNS: ReadonlyArray<string> = ['tin'];
+const SENSITIVE_FIELD_WHOLE_WORD_PATTERNS: ReadonlyArray<string> = ['tin', 'pin', 'otp'];
 
 /** Characters dropped by normalisation. The two spellings must stay in step. */
 const SEPARATORS_GLOBAL = /[\s_\-.]/g;
@@ -178,7 +203,7 @@ function matchesWholeWord(normalized: string, wordStarts: ReadonlySet<number>, p
  * `authorname`, which contains `auth` — so it is refused. That is the trade accepted above:
  * a visible false refusal the user can work around beats a silent disclosure they cannot.
  */
-export function IsSensitiveFieldName(name: string | null | undefined): boolean {
+export function IsSensitiveFieldName(name: string | null | undefined, purpose: VectorFieldPurpose = 'other'): boolean {
     if (!name) {
         return false;
     }
@@ -187,13 +212,20 @@ export function IsSensitiveFieldName(name: string | null | undefined): boolean {
         return true;
     }
     const wordStarts = wordStartOffsets(name);
-    return SENSITIVE_FIELD_WORD_PATTERNS.some((pattern) => matchesAtWordStart(normalized, wordStarts, pattern))
-        || SENSITIVE_FIELD_WHOLE_WORD_PATTERNS.some((pattern) => matchesWholeWord(normalized, wordStarts, pattern));
+    if (SENSITIVE_FIELD_WORD_PATTERNS.some((pattern) => matchesAtWordStart(normalized, wordStarts, pattern))
+        || SENSITIVE_FIELD_WHOLE_WORD_PATTERNS.some((pattern) => matchesWholeWord(normalized, wordStarts, pattern))) {
+        return true;
+    }
+    if (purpose === 'duplicate-detection') {
+        return false;
+    }
+    return BIRTH_DATE_FIELD_PATTERNS.some((pattern) => normalized.includes(pattern))
+        || BIRTH_DATE_FIELD_WORD_PATTERNS.some((pattern) => matchesAtWordStart(normalized, wordStarts, pattern));
 }
 
-/** Drops every sensitive field from a list, preserving order. */
-export function WithoutSensitiveFields<T extends { Name: string }>(fields: ReadonlyArray<T>): T[] {
-    return fields.filter((f) => !IsSensitiveFieldName(f.Name));
+/** Drops every field that must not be embedded for this purpose, preserving order. */
+export function WithoutSensitiveFields<T extends { Name: string }>(fields: ReadonlyArray<T>, purpose: VectorFieldPurpose = 'other'): T[] {
+    return fields.filter((f) => !IsSensitiveFieldName(f.Name, purpose));
 }
 
 /**
@@ -203,10 +235,10 @@ export function WithoutSensitiveFields<T extends { Name: string }>(fields: Reado
  * user can type a field the picker never offered. Returns the offending names so the
  * refusal can say which ones, rather than only that something was wrong.
  */
-export function SensitiveFieldsInTemplate(templateText: string | null | undefined): string[] {
+export function SensitiveFieldsInTemplate(templateText: string | null | undefined, purpose: VectorFieldPurpose = 'other'): string[] {
     const found = new Set<string>();
     for (const token of TemplatePlaceholderNames(templateText)) {
-        if (IsSensitiveFieldName(token)) {
+        if (IsSensitiveFieldName(token, purpose)) {
             found.add(token);
         }
     }

@@ -1,4 +1,5 @@
 export * from './TemplateEngine';
+export * from './TemplateRenderUser';
 export * from './NunjucksSandbox';
 export * from './NunjucksCompileGuard';
 export * from './TemplateSandboxError';

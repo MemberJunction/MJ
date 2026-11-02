@@ -5,7 +5,15 @@ vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql,
 }));
 
-import { DatabasePlatform, DeleteSQLResult, ExecuteSQLOptions, QueryExecutionSpec, RunQueryParams, RunQueryResult, SaveSQLResult } from '@memberjunction/core';
+import { DatabasePlatform, DeleteSQLResult, ExecuteSQLOptions, QueryExecutionSpec, RunQueryParams, RunQueryResult, SaveSQLResult, UserInfo } from '@memberjunction/core';
+import { SystemUserID } from '../systemUser';
+
+/**
+ * These tests cover how ad-hoc SQL is rendered, paged and run, over tables that are not entity
+ * views, so they run as the system user; what a caller may read is covered in
+ * queryRun.fieldSecurity.test.ts.
+ */
+const systemUser = new UserInfo(undefined, { ID: SystemUserID, Name: 'System', Email: 'system@example.com', IsActive: true, UserRoles: [] });
 
 /** A provider that records the SQL it is asked to run and answers from a queue. */
 class AdhocTestProvider extends GenericDatabaseProviderTestBase {
@@ -42,11 +50,11 @@ class AdhocTestProvider extends GenericDatabaseProviderTestBase {
     }
 
     public RunAdhoc(params: RunQueryParams): Promise<RunQueryResult> {
-        return this.InternalRunQuery(params);
+        return this.InternalRunQuery(params, systemUser);
     }
 
     public RunSpec(spec: QueryExecutionSpec): Promise<RunQueryResult> {
-        return this.InternalExecuteQueryFromSpec(spec);
+        return this.InternalExecuteQueryFromSpec(spec, systemUser);
     }
 }
 

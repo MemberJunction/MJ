@@ -133,6 +133,8 @@ export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirect
 export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
 export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
+export { DescribePersistCounts } from './SchemaPersistCounts.js';
+export type { PersistCountsLike } from './SchemaPersistCounts.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
 export type { HasExternalID, BatchIdentityResult } from './BatchIdentity.js';
 export { PlanPromotions, planPromotions, PlanColumnReclamations, planColumnReclamations, InferColumnTypeFromSamples, inferColumnTypeFromSamples, InferColumnTypeFromStats, inferColumnTypeFromStats, BuildOverflowStats, buildOverflowStats, SanitizeColumnName, sanitizeColumnName } from './CustomColumnPromotion.js';
@@ -154,8 +156,11 @@ export type { DiscoveryWatchEntry, DiscoveryWatchPatch, DiscoveryWatchdogOptions
 export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
+export type { ConnectorSettingDescriptor } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
 export { DecideSchemaLimitViolations, decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+// MJ-RUN-37 — the persist layer's watermark-invalidation signal, consumed by the schema evolution.
+export { ObjectsWithWatermarkFieldChange, WATERMARK_INVALIDATING_ATTRIBUTES } from './IntegrationSchemaSync.js';
 export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
 
 // ── Auth helpers (shared OAuth2/token primitives for connectors) ──
@@ -165,3 +170,25 @@ export { OAuth1aSigner, percentEncodeRFC3986 } from './auth-helpers/index.js';
 export type { OAuth1aSignRequest, OAuth1aSignatureMethod } from './auth-helpers/index.js';
 export { buildBasicAuthHeaderValue, buildBasicAuthHeader } from './auth-helpers/index.js';
 export type { BasicAuthRequest } from './auth-helpers/index.js';
+export {
+    CurrentCatalogCI,
+    RunInCatalogScope,
+    RunInWarmedCatalogScope,
+    WithCatalogScope,
+    RunOutsideCatalogScope,
+    InstallCatalogScopeResolver,
+    LoadCatalogScope,
+    RefreshCatalogScope,
+    WarmCatalogObject,
+    UnpinCatalogObjects,
+    EvictCatalogScope,
+    CatalogFieldCacheStats,
+    FIELD_ROW_BUDGET,
+} from './CatalogScope.js';
+export type { CatalogScopeState } from './CatalogScope.js';
+export { CatalogRow, CompanyIntegrationCatalogStore } from './CompanyIntegrationCatalogStore.js';
+export { BuildCatalogWriter, GlobalCatalogSourceOverride, ResolveCatalogSource } from './CatalogSource.js';
+export type { CatalogSource } from './CatalogSource.js';
+export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
+export type { CatalogWriter } from './CatalogWriter.js';
+export * from './ResourcePressure.js';

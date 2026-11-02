@@ -247,6 +247,7 @@ Key rules:
 - Empty values are represented as `_` for readability
 - The aggregate hash uses a djb2 hash function when aggregate expressions are present (otherwise `_`)
 - Connection prefix is appended only when provided — enables multi-connection cache isolation
+- When `RunViewParams.AlternateBaseView` is active (or resolved from a saved User View's `DisplayState.alternateBaseView`), an isolated narrowing segment `|abv:<lowercased-name>` is appended to the fingerprint so cached results for an [Alternate Base View](ALTERNATE_BASE_VIEWS_GUIDE.md) never collide with `BaseView` or another alternate view (and views with `CachePolicy = 'Bypass'` skip caching entirely)
 - Pipe-delimited for easy parsing and debugging
 
 ### Aggregate Hashing

@@ -60,6 +60,19 @@ export class BaseEntitySaveQueue {
     }
 
     /**
+     * Fire-and-forget INSERT that runs only after `ready` resolves. Use this when the row has a foreign
+     * key to a row that **another** queue is still writing: pass that queue's {@link Settled} for the
+     * parent. The INSERT is queued at once (so {@link Flush} waits for it) and the caller never waits;
+     * only the save itself is held back. ({@link InsertAfter} is the same wait when both rows share this
+     * queue.)
+     */
+    public InsertWhen(entity: BaseEntity, ready: Promise<void>): void {
+        const label = this.labelFor('Insert', entity);
+        const options = this.buildSaveOptions(false);
+        void this.queue.Enqueue(entity, () => this.runSave(entity, label, options), { isOk: (ok) => ok === true, label, ready });
+    }
+
+    /**
      * Fire-and-forget UPDATE chained after the entity's INSERT. `applyMutation` (if given) runs INSIDE
      * the post-INSERT task — after `finalizeSave`'s reload — so its values always survive; the save is
      * force-persisted with `IgnoreDirtyState`. Pass no mutation only when the fields are already set
@@ -83,6 +96,16 @@ export class BaseEntitySaveQueue {
             options.SaveReturnMode = this.saveReturnMode;
         }
         return options;
+    }
+
+    /**
+     * Resolves once every save queued so far for `entity` has settled (at once when none is pending);
+     * never rejects — a failed save is already logged here. For a caller that holds the entity's ID and
+     * must write a dependent row (a foreign key to it) from a *different* queue: `InsertAfter` only
+     * orders writes within this queue.
+     */
+    public Settled(entity: BaseEntity): Promise<void> {
+        return this.queue.Settled(entity);
     }
 
     /** Awaits all pending saves and returns failure diagnostics. Call at the run/goal finalize boundary. */

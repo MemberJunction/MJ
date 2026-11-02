@@ -53,8 +53,14 @@ describe('VOLATILE_PLACEHOLDER_NAMES', () => {
         }
     });
 
+    it('includes the execution-context placeholders that grow with the conversation every step', () => {
+        for (const v of ['_HAS_CONVERSATION_CONTEXT', '_CONVERSATION_LENGTH']) {
+            expect(VOLATILE_PLACEHOLDER_NAMES).toContain(v);
+        }
+    });
+
     it('does not include per-run-stable placeholders', () => {
-        for (const v of ['_USER_NAME', '_ENVIRONMENT', '_PROMPT_NAME', '_CURRENT_TIMEZONE']) {
+        for (const v of ['_USER_NAME', '_ENVIRONMENT', '_PROMPT_NAME', '_CURRENT_TIMEZONE', '_AGENT_NAME', '_CONFIGURATION_ID']) {
             expect(VOLATILE_PLACEHOLDER_NAMES).not.toContain(v);
         }
     });

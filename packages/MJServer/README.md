@@ -110,6 +110,16 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
 | `MJ_REALTIME_ENABLED` | Enable WebRTC SDP broker router (`/realtime/sdp-exchange`) | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
+| `MJ_SESSION_JANITOR_ENABLED` | Run the AI Agent Session janitor's periodic tick — see [Idle databases](#idle-databases-serverless-sql-auto-pause) | `true` |
+| `MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS` | How often the session janitor ticks (ms, greater than 0) | `60000` |
+| `MJ_BRIDGE_RECONCILER_ENABLED` | Repeat the realtime bridge orphan reconcile (the startup pass always runs) | `true` |
+| `MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS` | How often it repeats (ms, greater than 0) | `600000` |
+| `MJ_HANDOFF_OFFER_EXPIRY_ENABLED` | Run the 15-second expiry sweep over human-handoff offers | `true` |
+| `MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS` | How often it runs (ms, greater than 0) | `15000` |
+| `MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED` | Repeat the orphaned conversation detail reconcile (the startup pass always runs) | `true` |
+| `MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS` | How often it repeats (ms, greater than 0) | `300000` |
+| `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS` | How often the agent-run watchdog sweeps for orphaned runs, once this process has run an agent (ms); `0` = startup sweep only | `300000` |
+| `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` | `MJ: AI Models` name every process embeds locally with — see [Changing the local embedding model](#changing-the-local-embedding-model) | highest-PowerRank active local model |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
 ### Configuration File (`mj.config.cjs`)
@@ -170,6 +180,34 @@ module.exports = {
     maxConcurrentJobs: 5,
   },
 
+  // Background sweeps — see "Idle databases" below and the Serverless Database Auto-Pause guide
+  agentSessions: {
+    janitor: {
+      enabled: true,              // env: MJ_SESSION_JANITOR_ENABLED
+      sweepIntervalMs: 60000,     // env: MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS
+      closeThresholdMinutes: 15,  // a session idle longer than this is closed
+    },
+    bridgeReconciler: {
+      enabled: true,              // env: MJ_BRIDGE_RECONCILER_ENABLED
+      sweepIntervalMs: 600000,    // env: MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS
+    },
+    handoffOfferExpiry: {
+      enabled: true,              // env: MJ_HANDOFF_OFFER_EXPIRY_ENABLED
+      sweepIntervalMs: 15000,     // env: MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS
+    },
+  },
+  conversationDetailReconciler: {
+    enabled: true,                // env: MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED
+    sweepIntervalMs: 300000,      // env: MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS
+  },
+
+  // Agent-run watchdog — heartbeat only while a run is in flight; the sweep runs once any agent has run
+  agentRunWatchdog: {
+    sweepIntervalMs: 300000,      // env: MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS; 0 = startup sweep only
+    heartbeatIntervalMs: 30000,   // liveness stamp for this process's in-flight runs
+    staleThresholdMinutes: 5,     // a Running run with no heartbeat for this long is force-failed
+  },
+
   sqlLogging: {
     enabled: true,
     allowedLogDirectory: './logs/sql',
@@ -201,6 +239,31 @@ module.exports = {
   },
 };
 ```
+
+### Changing the local embedding model
+
+The `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` environment variable picks the model that embeds agent notes
+and examples, tags, queries and components, e.g. `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL='EmbeddingGemma 2 (Local)'`.
+It is an environment variable, not an `mj.config.cjs` key, because every process that embeds (MJAPI,
+the `mj` CLI, MCP/A2A servers, workers) must agree on it; set it in `.env` or the deployment
+environment and restart. Unset, the highest-PowerRank active local model is used. A name that matches
+no active local model turns local embedding off, with an error in the log.
+
+When it changes, vectors stored by the old model are left out of the in-memory indexes until they are
+re-embedded, and a record re-embeds on its next save. Run the **Re-embed Local Vectors** action to
+move them all at once, then restart the MJ server processes so their in-memory indexes reload:
+
+```bash
+mj ai actions run -n "Re-embed Local Vectors" --param "DryRun=true"   # count what is stale
+mj ai actions run -n "Re-embed Local Vectors"                         # re-embed it
+mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"    # re-embed everything, e.g. after
+                                                                      # an upgrade changed a model's vectors
+```
+
+Each run is recorded in `MJ: Process Runs`, with a detail row for every record it touched.
+
+Entity search vectors (`MJ: Entity Record Documents`) belong to their Entity Document's Vector Index;
+re-point the Entity Document and run entity vector sync for those.
 
 ### Prompt run template data (`aiPromptRuns`)
 
@@ -754,6 +817,12 @@ scheduledJobs: {
 
 The service starts automatically during server initialization and shuts down gracefully on SIGTERM/SIGINT.
 
+## Idle databases (serverless SQL auto-pause)
+
+MJAPI runs several background loops that query the database on a timer, and keeps `connectionPool.min` connections open, even when nobody is using it. That stops a serverless database (Azure SQL serverless, Aurora Serverless, Neon) from pausing. Every loop has a switch; turned off together, an idle MJAPI sends no periodic queries.
+
+**→ [Serverless Database Auto-Pause Guide](../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md)** has the copy-paste settings, every loop with its default, its switch and what turning it off costs, the orphaned-agent-run trade-off, and how to check from the database side that MJAPI is quiet.
+
 ## AI Integration
 
 ### AI Prompt Execution
@@ -968,7 +1037,33 @@ databaseSettings: {
 
 ### Authentication Token Caching
 
-Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
+Validated JWT tokens are cached using an LRU cache (`AuthCache`), storing both the `UserPayload` and the decoded `jwt.JwtPayload` claims to avoid repeated cryptographic verification and base64 decoding for the same token within its lifetime.
+
+### Scalability & Cache Broadcast Architecture
+
+MJServer implements a 4-pillar horizontal and vertical scalability architecture. For full details, refer to the **[Server Scaling and Broadcast Architecture Guide](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)**.
+
+#### 1. Pluggable Cache Invalidation Broadcast Providers (`CacheInvalidationBroadcastManager`)
+Every entity save/delete is assigned a monotonically increasing sequence number (`X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP headers + `Sequence` field on `CacheInvalidationNotification`) and stored in a bounded ring buffer for deterministic client delta catch-up (`GetCacheInvalidationsSince(sinceSequence)`).
+
+Permission and RLS filtering is coalesced by **Role Fingerprint Bucket** ($O(\text{Roles})$ instead of $O(\text{Subscribers})$), and can be offloaded to managed cloud WebSocket planes registered via `@RegisterClass(BaseCacheInvalidationBroadcastProvider, ...)`:
+- **`SequencedRoleBucket`** (default): In-process + Redis Pub/Sub role-bucket memoization.
+- **`AzureWebPubSub`**: Offloads fan-out to Azure Web PubSub groups (`mj.role.<roleFingerprint>`).
+- **`AWSIoTCore`**: Offloads fan-out to AWS IoT Core MQTT topics (`mj/cache/role/<roleFingerprint>`).
+- **`GCPPubSub`**: Publishes role-bucketed messages to Google Cloud Pub/Sub topics with `roleFingerprint` attributes.
+
+#### 2. $O(1)$ Session-Scoped `PushStatusUpdates` Routing
+`PushStatusUpdates(sessionId)` routes status messages directly to per-session topics (`PUSH_STATUS_UPDATES:session:<sessionId>`) via `CreateSessionRoutingPubSub` and memoizes parsed JSON payloads via a `WeakMap` (`ParseStatusUpdateMessage`), eliminating $O(N \times M)$ cross-session filter scans and JSON re-parsing.
+
+#### 3. Zero-Copy Per-Request Context & Root-Only Middleware
+- **Root-Only `VariablesLoggingMiddleware`**: Applied exclusively to root `Query`, `Mutation`, and `Subscription` fields (`ApplyRootVariablesLoggingMiddleware`) rather than `globalMiddlewares`, avoiding per-field promise allocations on large result sets.
+- **Prototype-Delegated Metadata Shell**: Per-request providers reuse the global metadata graph via `Object.create(shared)` (`ProviderBase.CreateSharedMetadataShell`) and defer RxJS transaction subject allocation until `BeginTransaction()` is invoked.
+
+#### 4. Horizontal Scaling via `MJ_SERVER_ROLE`
+Split interactive GraphQL/REST traffic from background jobs across multi-replica deployments using `serverRole` (`MJ_SERVER_ROLE`):
+- **`all`** (default): Runs HTTP/GraphQL/WebSocket servers and all background workers (`ScheduledJobsService`, `KnowledgeHubIndexingBootstrap`, `ApplicationTrackRecordSyncBootstrap`).
+- **`api`**: Serves interactive HTTP/GraphQL/WebSocket traffic only; skips background cron and indexing workers.
+- **`worker`**: Runs background workers and a lightweight `/health` probe; skips interactive GraphQL/REST/MCP/A2A route mounting.
 
 ## Server Extensions
 

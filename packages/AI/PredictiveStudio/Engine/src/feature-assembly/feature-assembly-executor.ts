@@ -48,6 +48,7 @@ import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
 
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
+import { ReadCapExceededError } from './read-cap-error';
 import { type DatedRow, ResolveAsOfDate, DaysSinceLastActivityAsOf, ActivityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
@@ -141,10 +142,10 @@ export interface FeatureAssemblyParams {
   primaryKeyField?: string;
   /** Telemetry tag (train / materialize / on-demand). Logic is identical regardless. */
   context?: AssemblyContext;
-  /** Request user — REQUIRED on the server for isolation/audit. */
-  contextUser?: UserInfo;
-  /** Optional provider for multi-provider correctness. */
-  provider?: IMetadataProvider;
+  /** Request user — threaded through every read for isolation/audit. */
+  contextUser: UserInfo;
+  /** The provider every read runs on; required because the reads have no global fallback. */
+  provider: IMetadataProvider;
   /**
    * Optional data-access override — the seam that makes the executor unit-testable
    * without a DB. When omitted, a {@link RunViewDataAccess} is used.
@@ -249,6 +250,11 @@ export class FeatureAssemblyExecutor {
     });
     if (!res.Success) {
       throw new Error(`Failed to fetch target records: ${res.ErrorMessage ?? 'unknown error'}`);
+    }
+    const cap = params.recordSet.MaxRows;
+    const matched = res.TotalRowCount;
+    if (ReadCapExceededError.IsTruncated(cap, res.Rows.length, matched)) {
+      throw ReadCapExceededError.ForTraining(params.recordSet.EntityName, cap, res.Rows.length, matched);
     }
     return res.Rows;
   }

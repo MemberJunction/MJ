@@ -119,6 +119,7 @@ function makeEntity(opts: MockEntityOptions): EntityInfo {
         FirstPrimaryKey: keys[0],
         PrimaryKeys: keys,
         GetUserPermisions: () => ({ CanRead: opts.CanRead ?? true }),
+        GetDeniedReadFields: () => new Set<string>(),
         GetEffectiveRowFilterWhereClause: () => opts.RlsClause ?? '',
     } as unknown as EntityInfo;
 }

@@ -8,11 +8,14 @@
  * builder commits to metadata is type-safe and never hallucinated — the same guarantee Database
  * Designer and Agent Manager give for schema/agent metadata.
  *
- * Pure + framework-free (no entity/provider deps) → fully unit-testable with zero setup.
+ * Pure + framework-free (no entity/provider deps) → fully unit-testable with zero setup. It also refuses, before the
+ * builder writes any row, the plan settings training would refuse (an as-of mode training ignores, an unknown
+ * majority-baseline rule) — so a refused plan never leaves an orphan Draft pipeline behind.
  */
 
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
+  EvaluationLineage,
   type ModelingPlanSpec,
   type SourceBinding,
   type FeatureStepGraph,
@@ -23,6 +26,8 @@ import {
   type ProblemType,
   type FeatureStepWarning,
 } from '@memberjunction/predictive-studio-core';
+
+import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
 export interface PipelineConfig {
@@ -143,15 +148,35 @@ function buildLeakageGuard(spec: ModelingPlanSpec): LeakageGuard {
   return { DenyFields: denyFields, SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
 }
 
-/** Validation strategy straight from the plan (LockedHoldoutFraction is always carried). */
+/**
+ * Validation strategy straight from the plan (LockedHoldoutFraction is always carried, as are the evaluation
+ * settings `TimeIndexColumn` and `MajorityBaselineRule`). An unknown `MajorityBaselineRule` is refused here with
+ * `InvalidMajorityBaselineRuleError`, the same refusal training raises.
+ */
 function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
   const v = spec.ValidationStrategy;
-  return {
+  const validation: ValidationStrategy = {
     Strategy: v?.Strategy ?? 'holdout',
     TestSize: v?.TestSize,
     K: v?.K,
     LockedHoldoutFraction: v?.LockedHoldoutFraction ?? 0.2,
   };
+  if (v?.TimeIndexColumn) {
+    validation.TimeIndexColumn = v.TimeIndexColumn;
+  }
+  if (v?.MajorityBaselineRule) {
+    validation.MajorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(v.MajorityBaselineRule);
+  }
+  return validation;
+}
+
+/** The plan's as-of strategy; a mode training would ignore is refused before any pipeline row exists. */
+function buildAsOf(spec: ModelingPlanSpec): AsOfStrategy {
+  const asOf = spec.TargetDefinition.AsOfStrategy;
+  if (AsOfSettingHasNoEffectError.WouldBeIgnored(asOf)) {
+    throw new AsOfSettingHasNoEffectError('modeling-plan', asOf.Mode, null);
+  }
+  return asOf || { Mode: 'none' };
 }
 
 /** Derive a concise pipeline name from the plan's goal or custom name (trim + cap length). */
@@ -166,7 +191,8 @@ function deriveName(goal: string, customName?: string): string {
 /**
  * Deterministically translate an approved {@link ModelingPlanSpec} into the concrete pipeline
  * configuration the builder will persist. Throws on a spec that can't yield a trainable pipeline
- * (no target entity, no target variable, or no proposed algorithm) — the builder surfaces these as a
+ * (no target entity, no target variable, or no proposed algorithm) or that training would refuse
+ * ({@link AsOfSettingHasNoEffectError}, `InvalidMajorityBaselineRuleError`) — the builder surfaces these as a
  * clean failure rather than creating a broken pipeline.
  *
  * @param spec the approved modeling plan the agent accumulated.
@@ -196,6 +222,8 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
       ? `${baseName} (${experiment.AlgorithmName})`
       : baseName;
 
+  const asOf = buildAsOf(spec);
+  const validation = buildValidation(spec);
   const { steps: featureSteps, warnings } = buildFeatureSteps(spec, experiment.FeatureSet ?? []);
 
   return {
@@ -208,9 +236,9 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
     sourceBindings: buildSourceBindings(spec),
     featureSteps,
     warnings,
-    asOf: target.AsOfStrategy ?? { Mode: 'none' },
+    asOf,
     leakageGuard: buildLeakageGuard(spec),
-    validation: buildValidation(spec),
+    validation,
   };
 }
 

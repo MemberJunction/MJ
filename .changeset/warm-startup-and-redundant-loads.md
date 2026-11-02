@@ -1,7 +1,7 @@
 ---
 "@memberjunction/core": patch
 "@memberjunction/core-entities": patch
-"@memberjunction/aiengine-base": patch
+"@memberjunction/ai-engine-base": patch
 "@memberjunction/graphql-dataprovider": patch
 ---
 

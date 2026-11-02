@@ -6,6 +6,7 @@ import {
     FormatValue,
     GaugePct,
     ParseDrivers,
+    PredictionDrivers,
     ParsePayloadDrivers,
     ParseHistoryItem,
     FilterHistoryByModel,
@@ -143,6 +144,23 @@ describe('model-prediction.logic', () => {
         it('drops zero-importance features', () => {
             const drivers = ParseDrivers(JSON.stringify({ a: 0, b: 0.5 }));
             expect(drivers.map(d => d.name)).toEqual(['b']);
+        });
+    });
+
+    describe('PredictionDrivers.DriversForModel', () => {
+        const json = JSON.stringify({ tenure_years: 0.8, nondues_lines_y: 1.7 });
+        it('returns drivers for coefficient models only', () => {
+            expect(PredictionDrivers.DriversForModel(JSON.stringify({ evaluation: { ImportanceKind: 'coefficient' } }), json).length).toBeGreaterThan(0);
+            expect(PredictionDrivers.DriversForModel(JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } }), json)).toEqual([]);
+        });
+
+        it('reports hidden drivers only when a non-coefficient model has importances', () => {
+            const tree = JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } });
+            const linear = JSON.stringify({ evaluation: { ImportanceKind: 'coefficient' } });
+            expect(PredictionDrivers.DriversHidden(tree, json)).toBe(true);
+            expect(PredictionDrivers.DriversHidden(null, json)).toBe(true);
+            expect(PredictionDrivers.DriversHidden(linear, json)).toBe(false);
+            expect(PredictionDrivers.DriversHidden(tree, null)).toBe(false);
         });
     });
 

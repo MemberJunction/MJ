@@ -1,5 +1,6 @@
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls } from "@memberjunction/ai";
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls,
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type OpenAICompatibleToolCallReadout } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
@@ -271,7 +272,7 @@ export class OpenAILLM extends BaseLLM {
         // cancellation/timeout aborts the underlying HTTP request instead of leaking the socket.
         let result: OpenAI.Chat.Completions.ChatCompletion;
         try {
-            result = await this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
+            result = await this.createChatCompletion(openAIParams, params);
         } catch (error) {
             if (this.IsCancellationError(error, params.cancellationToken)) {
                 return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
@@ -335,7 +336,8 @@ export class OpenAILLM extends BaseLLM {
                         }
                     }
                     
-                    const toolCalls = this.extractToolCalls(c.message?.tool_calls);
+                    const read = this.extractToolCalls(c.message?.tool_calls);
+                    const toolCalls = read.Calls;
 
                     return {
                         message: {
@@ -346,7 +348,8 @@ export class OpenAILLM extends BaseLLM {
                         },
                         // OpenAI already reports 'tool_calls' here; normalize defensively so the
                         // value is consistent even if a compatible endpoint reports something else.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : c.finish_reason,
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : read.Malformed ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL : c.finish_reason,
+                        ...(read.Malformed ? { finishMessage: read.Malformed } : {}),
                         index: c.index,
                         logprobs: c.logprobs // Include logprobs if present
                     }
@@ -395,8 +398,91 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
+     * The models (per endpoint) that refused function tools while reasoning was on. Learned from the
+     * provider's own rejection, so a later request to the same model goes out right the first time.
+     * Process-wide because the prompt runner creates a new driver instance for every call.
+     */
+    private static readonly toolsWithoutReasoningModels = new Set<string>();
+
+    /**
+     * Sends a non-streaming Chat Completions request, turning reasoning off when the model accepts
+     * function tools only without it.
+     *
+     * Some reasoning models (GPT-6 Luna, for one) reject `tools` on Chat Completions unless
+     * `reasoning_effort` is `'none'`. Leaving the field out is not enough, because the model reasons
+     * by default. The provider's 400 says so in words, which is the signal used here: no model name
+     * is listed in code, and a model that later accepts both is never touched. On that rejection the
+     * request is resent once with `reasoning_effort: 'none'`, and the model is remembered so its later
+     * requests skip the failed round trip. The tools are kept, which is the point: without this the
+     * prompt runner retries on the envelope path and the model loses its tool declarations.
+     *
+     * The Responses API accepts tools and reasoning together for these models; moving tool calls to
+     * it would keep their reasoning, and is a larger change than this driver makes.
+     */
+    protected async createChatCompletion(
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+        params: ChatParams
+    ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+        const modelKey = this.toolsWithoutReasoningKey(request.model);
+        const first = request.tools?.length && OpenAILLM.toolsWithoutReasoningModels.has(modelKey)
+            ? this.withReasoningOffForTools(request)
+            : request;
+        try {
+            return await this.OpenAI.chat.completions.create(first, this.buildRequestOptions(params));
+        } catch (error) {
+            if (!this.isToolsWithReasoningRejection(error, first)) {
+                throw error;
+            }
+            OpenAILLM.toolsWithoutReasoningModels.add(modelKey);
+            return await this.OpenAI.chat.completions.create(this.withReasoningOffForTools(first), this.buildRequestOptions(params));
+        }
+    }
+
+    /** The memo key for a model: the same model name can mean different models on different endpoints. */
+    private toolsWithoutReasoningKey(model: string): string {
+        return `${this.OpenAI.baseURL ?? ''}|${model}`;
+    }
+
+    /** A copy of a request with `reasoning_effort: 'none'`, warning when that drops an effort the caller asked for. */
+    private withReasoningOffForTools(
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+    ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+        if (request.reasoning_effort && request.reasoning_effort !== 'none') {
+            console.warn(
+                `OpenAI provider: ${request.model} accepts function tools on Chat Completions only with reasoning off; ` +
+                `sending reasoning_effort 'none' instead of the requested '${request.reasoning_effort}'.`
+            );
+        }
+        return { ...request, reasoning_effort: 'none' };
+    }
+
+    /**
+     * Whether an error is the provider refusing function tools because reasoning is on — a 400 that
+     * names both — for a request that declared tools and did not already turn reasoning off.
+     */
+    private isToolsWithReasoningRejection(
+        error: unknown,
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+    ): boolean {
+        if (!request.tools?.length || request.reasoning_effort === 'none' || !(error instanceof Error)) {
+            return false;
+        }
+        const status = (error as Error & { status?: number }).status;
+        return status === 400 && /function tools/i.test(error.message) && /reasoning_effort/i.test(error.message);
+    }
+
+    /**
      * Create a streaming request for OpenAI
      */
+    /**
+     * Whether a streaming request asks for the trailing usage chunk (`stream_options.include_usage`).
+     * OpenAI and the compatible hosts this driver fronts accept the field; a subclass for a host that
+     * rejects request fields it does not know returns false.
+     */
+    protected get IncludeStreamingUsage(): boolean {
+        return true;
+    }
+
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
@@ -428,6 +514,10 @@ export class OpenAILLM extends BaseLLM {
             temperature: params.temperature,
             max_completion_tokens: params.maxOutputTokens,
             stream: true,
+            // The final chunk then carries `usage` (with prompt_tokens_details.cached_tokens, which
+            // processStreamingChunk already reads). Without it a streamed call records zero prompt
+            // tokens, zero cache reads and no cost.
+            ...(this.IncludeStreamingUsage ? { stream_options: { include_usage: true } } : {}),
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
@@ -811,6 +901,9 @@ export class OpenAILLM extends BaseLLM {
                     } as ChatCompletionUserMessageParam;
                 
                 case 'assistant':
+                    // `m.reasoning` is not replayed: Chat Completions has no field for reasoning
+                    // items, so a reasoning model's thinking does not carry across tool turns here.
+                    // That needs the Responses API, which this driver does not use yet.
                     return {
                         role: 'assistant' as const,
                         // OpenAI wants null, not '', when the turn is carried entirely by tool calls.
@@ -880,15 +973,15 @@ export class OpenAILLM extends BaseLLM {
      * Normalizes OpenAI's `tool_calls` — whose arguments arrive as a JSON STRING — into
      * {@link ChatToolCall}s with parsed arguments.
      *
-     * A model can emit malformed JSON for a call's arguments. That is a tool-specific failure the
-     * caller must be able to see, so the call is still surfaced (with empty arguments) and logged
-     * rather than dropped — dropping it would look to the agent loop like the model said nothing.
+     * A model can emit malformed JSON for a call's arguments. That is reported as a malformed tool
+     * call, with what the model sent — never run with empty arguments, and never dropped, which
+     * would look to the agent loop like the model said nothing.
      *
      * @param toolCalls The raw tool calls from the response, if any
-     * @returns The normalized calls, or undefined when the model called nothing
+     * @returns The normalized calls, or the malformed call's description
      */
-    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): ChatToolCall[] | undefined {
-        return extractOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
+    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): OpenAICompatibleToolCallReadout {
+        return ReadOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
     }
 
 

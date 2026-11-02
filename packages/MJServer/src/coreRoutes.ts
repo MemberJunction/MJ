@@ -19,18 +19,20 @@ import { CreateOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { CreateSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { CreateMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { CreateRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
-import { CreateMagicLinkHandler, CreateMagicLinkJwksRouter, RegisterMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
+import { CreateMagicLinkHandler, CreateMagicLinkJwksRouter, MagicLinkService, RegisterMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { CreateWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
 import { CreateRealtimeVerifyRouter, REALTIME_VERIFY_MOUNT_PATH, RealtimeSessionVerificationService } from './realtimeSessions/index.js';
 import { CreateAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
+import { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled, RegisterLocalDevAuthProvider } from './auth/localDevAuth.js';
 import type { StartupLogger } from './logging/StartupLogger.js';
 
 type RouteLog = Pick<StartupLogger, 'LogIf'>;
 
-/** Routers the public mounts create that must be mounted again after the auth middleware. */
+/** Routers (and host services) the public mounts create for post-auth mounting and extension sharing. */
 export interface CoreAuthenticatedRouters {
     OAuth?: Router;
     MagicLink?: Router;
+    MagicLinkService?: MagicLinkService;
     Widget?: Router;
 }
 
@@ -61,10 +63,26 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
         log.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${ApiRoute(REALTIME_SDP_EXCHANGE_PATH)}`);
     }
 
-    routers.MagicLink = mountMagicLinkPublic(app, publicUrl, log);
+    const magicLink = mountMagicLinkPublic(app, publicUrl, log);
+    routers.MagicLink = magicLink?.authenticatedRouter;
+    routers.MagicLinkService = magicLink?.service;
     routers.Widget = mountWidgetPublic(app, publicUrl, log);
+    mountLocalDevAuthPublic(app, publicUrl, log);
     mountRealtimeVerify(app, log);
     return routers;
+}
+
+function mountLocalDevAuthPublic(app: Application, publicUrl: string, log: RouteLog): void {
+    AssertLocalDevAuthAllowed();
+    if (!IsLocalDevAuthEnabled()) {
+        return;
+    }
+    RegisterLocalDevAuthProvider(publicUrl);
+    if (!configInfo.magicLink?.enabled && !configInfo.widget?.enabled) {
+        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
+        log.LogIf('verbose', `[LocalDevAuth] Published RS256 signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+    }
+    log.LogIf('verbose', `[LocalDevAuth] Local dev auth routes enabled at ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/dev-login (localhost only)`);
 }
 
 function mountOAuthCallback(app: Application, publicUrl: string, log: RouteLog): Router | undefined {
@@ -84,16 +102,20 @@ function mountOAuthCallback(app: Application, publicUrl: string, log: RouteLog):
     return authenticatedRouter;
 }
 
-/** Public magic-link router (JWKS + redeem). The invite-creation router is returned for after auth. */
-function mountMagicLinkPublic(app: Application, publicUrl: string, log: RouteLog): Router | undefined {
+/** Public magic-link router (JWKS + redeem). The invite-creation router + service are returned for post-auth / extensions. */
+function mountMagicLinkPublic(
+    app: Application,
+    publicUrl: string,
+    log: RouteLog,
+): { authenticatedRouter: Router; service: MagicLinkService } | undefined {
     if (!configInfo.magicLink?.enabled) {
         return undefined;
     }
-    const { publicRouter, authenticatedRouter } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
+    const { publicRouter, authenticatedRouter, service } = CreateMagicLinkHandler(publicUrl, configInfo.magicLink);
     RegisterMagicLinkAuthProvider(publicUrl, configInfo.magicLink);
     app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), publicRouter);
     log.LogIf('verbose', `[MagicLink] Public routes registered at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/redeem and ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
-    return authenticatedRouter;
+    return { authenticatedRouter, service };
 }
 
 /**

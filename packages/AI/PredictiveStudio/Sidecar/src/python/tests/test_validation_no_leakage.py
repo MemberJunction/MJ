@@ -17,6 +17,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from app import main, preprocessing
 
@@ -58,24 +59,16 @@ def test_validation_preprocessing_fit_on_train_fold_only():
     captured: dict = {}
     build = _build_dummy_estimator_factory(captured)
 
-    # Build a minimal TrainRequest-like object with the fields _anti_skew_val_metrics reads.
-    class _Req:
-        problem_type = "classification"
-
-    main._anti_skew_val_metrics(
-        _Req(),
-        dev_rows,
-        columns,
-        feature_cols,
-        ops_spec,
+    ctx = main.FoldContext(
+        dev_rows=dev_rows,
+        columns=columns,
+        feature_cols=feature_cols,
+        ops_spec=ops_spec,
         target_idx=1,
-        tr_idx=tr_idx,
-        te_idx=te_idx,
         y_dev=y_dev,
-        is_classification=True,
-        encoder=None,
         build=build,
     )
+    main._anti_skew_val_metrics(ctx, tr_idx, te_idx, True)
 
     # Train fold is all-zero x → mean 0, std degenerate → treated as 1.0. So the
     # validation row x==100 standardizes to (100 - 0) / 1 == 100. If preprocessing
@@ -130,3 +123,35 @@ def test_run_training_metrics_use_no_leakage_path():
     assert isinstance(result["metrics"], dict)
     # The shipped estimator was re-fit on all dev data and is usable.
     assert result["estimator"] is not None
+
+
+def test_sidecar_carved_holdout_does_not_move_fitted_preprocessing():
+    """I-1: on the `validation.holdout_size` path the holdout is carved BEFORE preprocessing is fit, so an extreme
+    value in a holdout row must not reach the frozen standardize mean (the transform that later scores it)."""
+    from tests.test_train_predict import client
+
+    n = 40
+    holdout_size = 0.25
+    seed = 42
+    labels = [i % 2 for i in range(n)]
+    xs = [float(i % 5) for i in range(n)]
+    # Reproduce the sidecar's carve (same labels, size, seed) to know which row lands in the holdout.
+    dev_idx, hold_idx = main._split_holdout_indices(np.array(labels), holdout_size, seed, True)
+    xs[int(hold_idx[0])] = 1e6
+    req = {
+        "algorithm": "logistic_regression",
+        "problem_type": "classification",
+        "validation": {"strategy": "train_test_split", "test_size": 0.25, "holdout_size": holdout_size, "random_state": seed},
+        "feature_schema": [{"Name": "x", "Kind": "numeric"}],
+        "preprocessing": [{"op": "standardize", "cols": ["x"]}],
+        "target": "label",
+        "data": {"columns": ["x", "label"], "rows": [[xs[i], labels[i]] for i in range(n)]},
+    }
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    fitted_mean = body["fitted_preprocessing"]["ops"][0]["stats"]["x"]["mean"]
+    assert fitted_mean == pytest.approx(float(np.mean([xs[i] for i in dev_idx])))
+    assert fitted_mean < 5.0
+    assert body["training_row_count"] == len(dev_idx)
+    assert body["holdout_metrics"]["n"] == float(len(hold_idx))

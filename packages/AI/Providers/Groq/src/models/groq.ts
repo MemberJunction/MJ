@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls,
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL,
     type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq from 'groq-sdk';
@@ -291,8 +291,9 @@ export class GroqLLM extends BaseLLM {
             // Extract thinking content if present using base class helper
             const extracted = this.extractThinkingFromContent(rawMessage);
 
-            const toolCalls = extractOpenAICompatibleToolCalls(
+            const read = ReadOpenAICompatibleToolCalls(
                 choice.message?.tool_calls as RawOpenAICompatibleToolCall[] | undefined, 'Groq provider');
+            const toolCalls = read.Calls;
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
@@ -302,7 +303,8 @@ export class GroqLLM extends BaseLLM {
                 },
                 // Normalize the one value the tool surface defines; the rest passes through
                 // untouched (MJ#4335 tracks normalizing the others).
-                finish_reason: toolCalls ? 'tool_calls' : choice.finish_reason,
+                finish_reason: toolCalls ? 'tool_calls' : read.Malformed ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL : choice.finish_reason,
+                ...(read.Malformed ? { finishMessage: read.Malformed } : {}),
                 index: choice.index
             };
             return res;

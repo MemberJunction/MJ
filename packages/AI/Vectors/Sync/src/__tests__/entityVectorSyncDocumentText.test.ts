@@ -68,7 +68,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 /** Renders "Name: <org_name>" from the record, standing in for Nunjucks. */
-const renderTemplateMock = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>) => ({
+const renderTemplateMock = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>, ..._rest: unknown[]) => ({
   Success: true,
   Output: `Name: ${String(data['org_name'] ?? '').toLowerCase().trim()}`,
   Message: '',
@@ -79,7 +79,7 @@ vi.mock('@memberjunction/templates', () => ({
       Config: vi.fn(),
       Templates: [],
       SetupNunjucks: vi.fn(),
-      RenderTemplate: (...args: [unknown, unknown, Record<string, unknown>, boolean, boolean]) => renderTemplateMock(...args),
+      RenderTemplate: (...args: [unknown, unknown, Record<string, unknown>, boolean, boolean, unknown?]) => renderTemplateMock(...args),
     },
   },
 }));
@@ -154,5 +154,21 @@ describe('renderAndEmbedBatch → EmbeddingData.TemplateContent (DocumentText)',
     const embedded = runEmbeddingMock.mock.calls[0][0].Texts;
     expect(result.map(r => r.TemplateContent)).toEqual(embedded);
     expect(result.map(r => r.__mj_recordID)).toEqual(['R1', 'R2']);
+  });
+});
+
+describe('renderAndEmbedBatch renders as the syncing user', () => {
+  it('passes the syncer\'s user to every render, never relying on whoever configured the shared engine', async () => {
+    renderTemplateMock.mockClear();
+    const syncer = new TestableSyncer();
+    const user = { ID: 'sync-user' };
+    (syncer as unknown as { CurrentUser: unknown }).CurrentUser = user;
+
+    await syncer.testRenderAndEmbedBatch(batch);
+
+    expect(renderTemplateMock).toHaveBeenCalledTimes(2);
+    for (const call of renderTemplateMock.mock.calls) {
+      expect((call as unknown[])[5]).toEqual({ ContextUser: user });
+    }
   });
 });

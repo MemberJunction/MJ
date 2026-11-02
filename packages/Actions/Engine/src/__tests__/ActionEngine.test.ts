@@ -210,6 +210,9 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
         // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
         // LoggingMode — is covered in ActionEngine.logging.test.ts.
         RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
+        // The real field-security projection the engine applies before redaction; its behaviour is
+        // covered in actions-base/ActionParamFieldSecurity.test.ts and ActionEngine.logging.test.ts.
+        ProjectActionParamValuesForUser: actual.ProjectActionParamValuesForUser,
         ActionAudienceReaders: actual.ActionAudienceReaders,
         ActionAudienceAddsReader: actual.ActionAudienceAddsReader,
         AUDIENCE_UNSUPPORTED_RESULT_CODE: actual.AUDIENCE_UNSUPPORTED_RESULT_CODE,
@@ -921,6 +924,33 @@ describe('ActionEngineServer', () => {
             await vi.waitFor(() => expect(mockEntity.Save).toHaveBeenCalled());
         });
 
+        it("REGRESSION: stamps UserID with the run's user, not the engine's", async () => {
+            let stampedUserID = '';
+            const mockEntity = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(v: string) { stampedUserID = v; },
+                set Params(_v: string) {},
+            };
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
+            const engineUser = engine.ContextUser;
+            engine.ContextUser = { ID: 'alice-id', Name: 'Alice' } as never;
+            try {
+                const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [], ContextUser: { ID: 'bob-id', Name: 'Bob' } };
+                await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, false);
+                expect(stampedUserID).toBe('bob-id');
+
+                await (engine as unknown as Record<string, Function>)['StartActionLog']({ Action: { ID: 'a1', Name: 'Test' }, Params: [] } as never, false);
+                expect(stampedUserID).toBe('alice-id');
+            } finally {
+                engine.ContextUser = engineUser;
+            }
+        });
+
         it('should not save when saveRecord is false', async () => {
             const mockEntity = {
                 NewRecord: vi.fn(),
@@ -986,6 +1016,25 @@ describe('ActionEngineServer', () => {
 
             // Save is queued fire-and-forget — assert it runs on the microtask queue.
             await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+        });
+
+        it('logs the action\'s own result code when it matches none of the metadata result codes', async () => {
+            let loggedCode: string | undefined;
+            const logEntity = {
+                Save: vi.fn().mockResolvedValue(true),
+                set EndedAt(_v: Date) {},
+                set Params(_v: string) {},
+                set ResultCode(v: string | undefined) { loggedCode = v; },
+                set Message(_v: string | undefined) {},
+            };
+
+            const params = { Params: [] };
+            const result = { Result: undefined, ResultCode: 'CUSTOM_CODE', Message: 'Done' };
+
+            await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
+
+            await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+            expect(loggedCode).toBe('CUSTOM_CODE');
         });
 
         it('should log error when save fails', async () => {
@@ -1089,6 +1138,120 @@ describe('ActionEngineServer', () => {
             // The failed INSERT is surfaced (not swallowed) as a failure in the queue's flush diagnostics.
             const flush = await (engine as unknown as { _logQueue: { Flush(): Promise<{ failures: number }> } })._logQueue.Flush();
             expect(flush.failures).toBeGreaterThan(0);
+        });
+    });
+
+    describe('LogEntryPersisted (#6014)', () => {
+        /** A log entity whose every Save waits on `gate`, so a test controls when the row "lands". */
+        function gatedLog(gate: Promise<void>, saves: string[]) {
+            return {
+                ID: 'log-1',
+                NewRecord: vi.fn(),
+                LatestResult: { CompleteMessage: '' },
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(_v: string) {},
+                set Params(_v: string) {},
+                set ResultParams(_v: string) {},
+                set ResultCode(_v: string | undefined) {},
+                set Message(_v: string | undefined) {},
+                set EndedAt(_v: Date) {},
+                set RetentionPeriod(_v: unknown) {},
+                async Save() {
+                    await gate;
+                    saves.push('saved');
+                    return true;
+                },
+            };
+        }
+        const params = (skip: boolean) => ({
+            Action: { ID: 'action-1', Name: 'Test', DriverClass: 'TestAction' },
+            ContextUser: { ID: 'user-1', Name: 'Test' },
+            Filters: [],
+            Params: [],
+            SkipActionLog: skip,
+        });
+        const isSettled = async (p: Promise<void>) => {
+            let done = false;
+            void p.then(() => { done = true; });
+            await new Promise((r) => setTimeout(r, 5));
+            return done;
+        };
+
+        it('resolves only after the log entity\'s Save resolved, on the normal path', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => { release = r; });
+            const saves: string[] = [];
+            const entity = gatedLog(gate, saves);
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.LogEntry).toBe(entity);
+            expect(result.LogEntryPersisted).toBeInstanceOf(Promise);
+            expect(await isSettled(result.LogEntryPersisted!)).toBe(false);
+            expect(saves).toEqual([]);
+
+            release();
+            await result.LogEntryPersisted;
+            // Both the 'started' INSERT and the 'ended' UPDATE have landed.
+            expect(saves).toEqual(['saved', 'saved']);
+        });
+
+        it('is set on the validation-failure path (StartAndEndActionLog)', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => { release = r; });
+            const saves: string[] = [];
+            const entity = gatedLog(gate, saves);
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(false as never);
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.Success).toBe(false);
+            expect(result.LogEntry).toBe(entity);
+            expect(result.LogEntryPersisted).toBeInstanceOf(Promise);
+            expect(await isSettled(result.LogEntryPersisted!)).toBe(false);
+
+            release();
+            await result.LogEntryPersisted;
+            // The single force-persisted UPDATE is the write that creates the row.
+            expect(saves).toEqual(['saved']);
+        });
+
+        it('is absent when SkipActionLog is true', async () => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(true) as never);
+
+            expect(result.Success).toBe(true);
+            expect(result.LogEntry).toBeUndefined();
+            expect(result.LogEntryPersisted).toBeUndefined();
+        });
+
+        it('is absent when FailuresOnly drops the LogEntry of a successful run', async () => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'ResolveLoggingMode' as never).mockReturnValue('FailuresOnly' as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.Success).toBe(true);
+            expect(result.LogEntry).toBeUndefined();
+            expect(result.LogEntryPersisted).toBeUndefined();
         });
     });
 

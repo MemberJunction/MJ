@@ -556,6 +556,24 @@ describe('ApplyRecordChangeFieldSecurityProjection (RunView wiring)', () => {
         );
         expect('ChangesDescription' in rows[0]).toBe(false);
     });
+
+    it('projects a ViewID-only result, whose entity cannot be resolved without I/O, by each row\'s EntityID', () => {
+        const rows = runViewProvider().applyRecordChangeProjection([employeeChangeRow()], { ViewID: 'view-1' } as RunViewParams, intern);
+        expect(JSON.parse(rows[0]['ChangesJSON'] as string)).not.toHaveProperty('Salary');
+        expect('ChangesDescription' in rows[0]).toBe(false);
+    });
+
+    it('fails closed on a ViewName-only result whose rows carry no EntityID', () => {
+        const { EntityID: _omitted, ...row } = employeeChangeRow();
+        const rows = runViewProvider().applyRecordChangeProjection([row], { ViewName: 'Audit trail' } as RunViewParams, intern);
+        expect('ChangesJSON' in rows[0]).toBe(false);
+        expect('FullRecordJSON' in rows[0]).toBe(false);
+    });
+
+    it('leaves a ViewID-only result that carries no payload column alone', () => {
+        const rows = [{ ID: 'e-1', Name: 'Ada' }];
+        expect(runViewProvider().applyRecordChangeProjection(rows, { ViewID: 'view-2' } as RunViewParams, intern)).toBe(rows);
+    });
 });
 
 describe('ProjectRecordChangePayloadJSON', () => {

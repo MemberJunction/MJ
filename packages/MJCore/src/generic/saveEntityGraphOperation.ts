@@ -47,6 +47,7 @@ import { BaseRemotableOperation } from './baseRemotableOperation';
 import type { RemoteOpServerContext } from './baseRemotableOperation';
 import { BaseEntity } from './baseEntity';
 import { CompositeKey, KeyValuePair } from './compositeKey';
+import { AssertClientInputWritableForUser } from './entityValueFieldSecurity';
 import type { EntityCompanionPayload } from './entityCompanion';
 import type { IMetadataProvider } from './interfaces';
 import { LogError } from './logging';
@@ -216,6 +217,8 @@ export class SaveEntityGraphOperation extends BaseRemotableOperation<SaveEntityG
             root.NewRecord();
         }
 
+        // Client input: a caller with any field denial may send only fields they can read.
+        AssertClientInputWritableForUser(root.EntityInfo, input.Fields, user);
         root.SetMany(input.Fields, true);
         await root.DeserializeCompanions(input.Companions ?? []);
         return root;

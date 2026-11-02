@@ -1,13 +1,14 @@
 export { BaseModelRunner } from './BaseModelRunner';
 // Named by BaseModelRunner's protected extension points, so a subclass outside this package can
 // declare its overrides (the same reason FailoverConfiguration is exported).
-export type { ModelVendorCandidate, FailoverAttempt, PromptRunUsageFields } from './BaseModelRunner';
+export type { ModelVendorCandidate, ModelSelectionPreviewItem, FailoverAttempt, PromptRunUsageFields } from './BaseModelRunner';
 export * from './AIPromptRunner';
 export * from './AIPromptTimeoutError';
 // The native tool-calling gate. Exported because the agent loop needs to reason
 // about the same decision before it decides whether to build tools at all, and because the mode
 // helpers are how a caller reads back which path a run took.
 export * from './nativeToolCallingGate';
+export * from './replayedReasoningPrefix';
 export * from './AIModelRunner';
 export * from './embedding/AIEmbeddingRunner';
 export * from './embedding/embedding-runner.types';

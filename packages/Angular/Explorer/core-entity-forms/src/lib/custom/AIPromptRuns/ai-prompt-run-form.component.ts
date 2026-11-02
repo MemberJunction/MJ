@@ -30,6 +30,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     /** Custom-layout AI Prompt Run form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     // Related entities
     public Prompt: MJAIPromptEntityExtended | null = null;
 

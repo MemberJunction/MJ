@@ -1,5 +1,76 @@
 # @memberjunction/ai-xai
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 8b90b41: One `NormalizeTurnDetectionSettings` in `@memberjunction/ai` now validates turn-detection blocks for the cascade and every driver, so `Coverage` survives every config layer. Each realtime driver declares `SupportedTurnSettings` in its `DriverFacts` (mirrored on session `Capabilities`): the normalized fields it maps, each `exact` or `approximate`. Gemini (and Vertex Gemini Enterprise) map `SilenceDurationMs`, `Eagerness` (low/high → end-of-speech sensitivity; auto leaves Google's default) and `Threshold` onto `automaticActivityDetection`; `Threshold` is approximate (below 0.5 → high start sensitivity, 0.5 and above → low), and in meeting mode (`disabled: true`) none of them is sent, because Gemini Live refuses those fields next to `disabled` (close 1007). xAI maps `Eagerness` onto end-of-turn silence (1200/700/400 ms) unless any layer sets `SilenceDurationMs`; a request that sets any turn field without a `Mode` is now sent as `serverVad` with those values instead of xAI's default block, and xAI now waits for `session.created` before sending its start config (sent earlier, it was dropped on the still-connecting socket). On OpenAI and Eleven Realtime, `Eagerness` applies only with `Mode: 'semanticVad'`. ElevenLabs Agents still maps only `Eagerness`, and `ELEVENLABS_SUPPORTED_TURN_SETTINGS` is unchanged. The `AIConfiguration` JSON type's turn-detection field docs state these rules.
+
+### Patch Changes
+
+- f34cbef: A raw `audio` override in the realtime Config bag now merges into the built audio block (transcription, turn detection and the meeting-mode floor are kept) on the mint, `session.update` and `Reconfigure` paths, instead of replacing it. Merge happens within a turn-detection type; a different type replaces the built block. An explicit `null` in the bag is sent as `null` (for example `turn_detection: null` turns VAD off, in meeting mode too, since without VAD nothing auto-responds), and a meeting-mode profile that builds no turn detection gets none invented. A bag `turn_detection` leaf on the default OpenAI config (no turn detection built) now gets OpenAI's default `type: 'server_vad'`; without a type OpenAI rejected the session. `Reconfigure` always sends `turn_detection`: `null` when the bag turned VAD off, otherwise with `create_response` set from its `DisableAutoResponse`.
+- 6b0de38: Every realtime driver now declares static `DriverFacts` (such as `ProviderMaxSessionSeconds`), readable before a session exists. A minted `ClientRealtimeSessionConfig` carries `MaxSessionSeconds`, the effective session cap: the smaller of the driver's provider cap and the host's cap, positive integers only. `PrepareClientSession` passes it through unchanged. The MJAPI relay uses the same cap rule (one shared implementation), so a fractional or invalid cap counts as unset. ElevenLabs Agents sends its native max duration only when the host set a cap, and reports `MaxSessionSeconds` only then (without a host cap the agent keeps its own setting, 600 s on a new agent, which the driver does not know); Eleven Realtime reports the same clamped value it puts on the wire. Gemini client-direct sessions now reach their 30-minute cap: Gemini ends a Live connection after about 10 minutes and counts the browser's resume as a new session, so the minted token now opens one connection per 10 minutes of the session cap plus 3 for resumes, until the cap plus 60 s (at most 6 connections and 30 minutes); it was single-use with a 10-minute window, so the first resume was refused and the call ended at about 10 minutes. A shorter host cap gives a shorter-lived token, so the browser's credential never outlasts the session's deadline.
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [4283a82]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [0b406e8]
+- Updated dependencies [f34cbef]
+- Updated dependencies [c018cb9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-openai@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [709de1a]
+- Updated dependencies [914e6ff]
+- Updated dependencies [1141164]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-openai@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 04fec10: Grok Build 0.1 no longer fails when a prompt or agent sets an effort level. Metadata only, no code change.
+
+  xAI rejects `reasoning_effort` for this model with a 400 (`Model grok-build-0.1 does not support parameter reasoningEffort.`), but its x.ai rows were flagged `SupportsEffortLevel`, so `AIPromptRunner` sent the effort level and every such run failed. Both x.ai rows (model developer and inference provider) are now `SupportsEffortLevel: false`; the runner drops the effort level for the model and logs that it is ignored, and the call succeeds. Verified live against xAI: Grok 4.5, 4.6 and 4.7 accept `reasoning_effort` and keep the flag. The OpenRouter row is unchanged: OpenRouter's handling of the parameter for this model was not verified.
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

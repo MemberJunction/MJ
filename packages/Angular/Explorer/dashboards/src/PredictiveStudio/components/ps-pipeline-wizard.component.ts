@@ -147,35 +147,10 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                   <h4>Point-in-Time Cutoff (Temporal Leakage Guard)</h4>
                 </div>
                 <div class="ps-card-body">
-                  <div class="ps-grid-2">
-                    <div class="ps-field">
-                      <label>Cutoff Mode</label>
-                      <select class="mj-input" [(ngModel)]="asOfMode">
-                        <option value="none">None (Static Cross-Sectional Data)</option>
-                        <option value="column">Date Column on Entity</option>
-                        <option value="offset">Relative Days Offset before Event</option>
-                      </select>
-                    </div>
-
-                    @if (asOfMode === 'column') {
-                      <div class="ps-field">
-                        <label>Decision Date Field</label>
-                        <select class="mj-input" [(ngModel)]="asOfColumn">
-                          <option [value]="''">-- Select Date Field --</option>
-                          @for (f of dateFields; track f.Name) {
-                            <option [value]="f.Name">{{ f.Name }}</option>
-                          }
-                        </select>
-                      </div>
-                    }
-
-                    @if (asOfMode === 'offset') {
-                      <div class="ps-field">
-                        <label>Offset Days before Outcome</label>
-                        <input class="mj-input" type="number" min="1" [(ngModel)]="asOfOffsetDays" />
-                      </div>
-                    }
-                  </div>
+                  <p class="ps-muted">
+                    Not available yet. Training reads every feature as it stands today, so a cutoff date would have no
+                    effect, and a pipeline that sets one is refused at training. This pipeline is built without a cutoff.
+                  </p>
                 </div>
               </div>
             </div>
@@ -570,36 +545,6 @@ export class PSPipelineWizardComponent implements OnInit {
   public set evaluationMetric(value) {
     this.EvaluationMetric = value;
   }
-  public AsOfMode: 'none' | 'column' | 'offset' = 'none';
-
-  /** @deprecated Use {@link AsOfMode}. */
-  public get asOfMode(): 'none' | 'column' | 'offset' {
-    return this.AsOfMode;
-  }
-  /** @deprecated Use {@link AsOfMode}. */
-  public set asOfMode(value: 'none' | 'column' | 'offset') {
-    this.AsOfMode = value;
-  }
-  public AsOfColumn = '';
-
-  /** @deprecated Use {@link AsOfColumn}. */
-  public get asOfColumn() {
-    return this.AsOfColumn;
-  }
-  /** @deprecated Use {@link AsOfColumn}. */
-  public set asOfColumn(value) {
-    this.AsOfColumn = value;
-  }
-  public AsOfOffsetDays = 30;
-
-  /** @deprecated Use {@link AsOfOffsetDays}. */
-  public get asOfOffsetDays() {
-    return this.AsOfOffsetDays;
-  }
-  /** @deprecated Use {@link AsOfOffsetDays}. */
-  public set asOfOffsetDays(value) {
-    this.AsOfOffsetDays = value;
-  }
 
   // Step 2: Features
   public FieldItems: FieldSelectionItem[] = [];
@@ -769,15 +714,6 @@ export class PSPipelineWizardComponent implements OnInit {
   /** @deprecated Use {@link AvailableFields}. */
   public get availableFields(): EntityFieldInfo[] {
     return this.AvailableFields;
-  }
-
-  public get DateFields(): EntityFieldInfo[] {
-    return this.AvailableFields.filter((f) => f.Type?.toLowerCase().includes('date') || f.Type?.toLowerCase().includes('time'));
-  }
-
-  /** @deprecated Use {@link DateFields}. */
-  public get dateFields(): EntityFieldInfo[] {
-    return this.DateFields;
   }
 
   public get AvailableMetrics(): string[] {
@@ -1117,11 +1053,7 @@ export class PSPipelineWizardComponent implements OnInit {
       p.FeatureSteps = JSON.stringify({ Steps: steps });
 
       // As-Of Strategy
-      const asOf: AsOfStrategy = {
-        Mode: this.AsOfMode,
-        ...(this.AsOfMode === 'column' ? { Column: this.AsOfColumn } : {}),
-        ...(this.AsOfMode === 'offset' ? { OffsetDays: this.AsOfOffsetDays } : {}),
-      };
+      const asOf: AsOfStrategy = { Mode: 'none' };
       p.AsOfStrategy = JSON.stringify(asOf);
 
       // Leakage Guard

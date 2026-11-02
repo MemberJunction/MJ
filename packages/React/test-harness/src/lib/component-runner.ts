@@ -244,12 +244,16 @@ export function ResolveDataCapMaxRows(
  * paging, making it the denominator for "capped at N of M". Providers that omit it, or
  * leave it equal to `RowCount`, yield `capped: false` rather than a guess.
  *
+ * A result with `Success: false` is a failed call, not an empty one: its `ErrorMessage` is
+ * recorded as `error`. Providers return a client-database timeout this way rather than
+ * throwing, and recording it as a 0-row success reads as "no data" downstream.
+ *
  * Pure (no I/O) so it can be unit-tested without launching a browser.
  */
 export function BuildDataAccessRecord(
   kind: DataAccessRecord['kind'],
   resolved: { target: string; identity: DataAccessIdentity },
-  result: { Results?: any[]; TotalRowCount?: number } | undefined,
+  result: { Success?: boolean; ErrorMessage?: string; Results?: any[]; TotalRowCount?: number } | undefined,
   maxRows: { applied: number; requested?: number },
   durationMs: number
 ): DataAccessRecord {
@@ -265,7 +269,66 @@ export function BuildDataAccessRecord(
     appliedMaxRows: maxRows.applied,
     requestedMaxRows: maxRows.requested,
     durationMs,
+    ...(result?.Success === false && { error: result.ErrorMessage || 'the call failed with no error message' }),
   };
+}
+
+/** Start time of each data call that has not returned yet. */
+const pendingDataCalls = new WeakMap<DataAccessRecord, number>();
+/** Records that are final: returned, or reported as still running when the test ended. */
+const settledDataCalls = new WeakSet<DataAccessRecord>();
+
+/**
+ * Adds a record for a data call as it starts, so a call still running when the test ends is
+ * reported instead of missing. {@link SettleDataAccessRecord} fills it in when the call returns;
+ * {@link FinalizePendingDataAccess} marks it if it has not by the time the result is built.
+ */
+export function StartDataAccessRecord(
+  dataAccess: DataAccessRecord[],
+  kind: DataAccessRecord['kind'],
+  resolved: { target: string; identity: DataAccessIdentity },
+  maxRows: { applied: number; requested?: number },
+  now: number = Date.now()
+): DataAccessRecord {
+  const record: DataAccessRecord = {
+    kind,
+    target: resolved.target,
+    identity: resolved.identity,
+    rowsReturned: 0,
+    capped: false,
+    appliedMaxRows: maxRows.applied,
+    requestedMaxRows: maxRows.requested,
+    durationMs: 0,
+  };
+  pendingDataCalls.set(record, now);
+  dataAccess.push(record);
+  return record;
+}
+
+/**
+ * Completes a started record with the call's outcome. A record already reported as still running
+ * is left as it was: the result the caller received said so, and must not change afterwards.
+ */
+export function SettleDataAccessRecord(placeholder: DataAccessRecord, outcome: DataAccessRecord): void {
+  if (settledDataCalls.has(placeholder)) return;
+  pendingDataCalls.delete(placeholder);
+  settledDataCalls.add(placeholder);
+  Object.assign(placeholder, outcome);
+}
+
+/**
+ * Marks every call still running when the test finishes as failed, with how long it had run.
+ * Without this, a slow query reads as "the component made no data calls".
+ */
+export function FinalizePendingDataAccess(dataAccess: DataAccessRecord[], now: number = Date.now()): void {
+  for (const record of dataAccess) {
+    const startedAt = pendingDataCalls.get(record);
+    if (startedAt === undefined) continue;
+    pendingDataCalls.delete(record);
+    settledDataCalls.add(record);
+    record.durationMs = now - startedAt;
+    record.error = `still running after ${(record.durationMs / 1000).toFixed(1)}s when the test finished`;
+  }
 }
 
 /** Debug-log suffix naming the cap, e.g. ` (capped at 1000 of 205802)`. Empty when uncapped. */
@@ -278,7 +341,12 @@ export function DescribeDataCap(record: DataAccessRecord): string {
  * `/MJ/AI/Agents/Foo`. Tolerates missing or doubled slashes on either side.
  */
 function joinCategoryPath(categoryPath: string, name: string): string {
-  const trimmed = categoryPath.replace(/^\/+|\/+$/g, '');
+  // Trimmed by scanning rather than /^\/+|\/+$/g, which backtracks quadratically on long runs of '/'
+  let start = 0;
+  let end = categoryPath.length;
+  while (start < end && categoryPath[start] === '/') start++;
+  while (end > start && categoryPath[end - 1] === '/') end--;
+  const trimmed = categoryPath.slice(start, end);
   return trimmed.length === 0 ? `/${name}` : `/${trimmed}/${name}`;
 }
 
@@ -485,6 +553,64 @@ export interface ComponentExecutionOptions extends LinterOptions {
   dataCaps?: DataCapOptions;
 }
 
+/**
+ * One error recorded inside the page for {@link ComponentRunner} to collect after the run.
+ * `type` selects the rule the error is reported under.
+ */
+interface BrowserRuntimeErrorEntry {
+  message: string;
+  stack?: string;
+  type: string;
+  phase?: string;
+  source?: Violation['source'];
+}
+
+/** One distinct runtime error collected from the page, with how often it occurred. */
+interface CollectedRuntimeError {
+  /** The message as reported, with "(occurred N times)" appended when N > 1. */
+  message: string;
+  /** The message without the occurrence suffix, which identifies the error across collections. */
+  baseMessage: string;
+  stack?: string;
+  componentStack?: string;
+  source?: string;
+  type?: string;
+  rule?: string;
+  occurrences: number;
+}
+
+/** A runtime error as reported in {@link ComponentExecutionResult.errors}. */
+type RuntimeErrorViolation = {
+  message: string;
+  severity: Violation['severity'];
+  rule: string;
+  line: number;
+  column: number;
+  source?: Violation['source'];
+  stack?: string;
+  componentStack?: string;
+};
+
+/** The harness's own globals on the page's `window`. */
+interface HarnessPageGlobals {
+  __testHarnessRuntimeErrors?: BrowserRuntimeErrorEntry[];
+  __testHarnessTestFailed?: boolean;
+}
+
+/** One failed entry in the component manager's load result. */
+interface ComponentLoadFailure {
+  componentName: string;
+  error: string;
+  phase?: string;
+}
+
+/**
+ * Rule for a call to a component utility the harness was not given (for example
+ * `utilities.ai` when the caller passes no AI tools). The call cannot be tested here,
+ * which is a limit of the harness, not a defect in the component.
+ */
+export const SANDBOX_UTILITY_UNAVAILABLE_RULE = 'sandbox-utility-unavailable';
+
 export interface ComponentExecutionResult {
   success: boolean;
   html: string;
@@ -578,6 +704,98 @@ export class ComponentRunner {
   }
 
   /**
+   * Occurrences of one JSX element-type error at which it stops being treated as noise and
+   * fails the run.
+   *
+   * These errors can be spurious: a child component that resolves a moment late produces one
+   * or two before settling, which is why they were once dropped entirely. But dropping them
+   * has no limit. A component rendering an object where a component belongs throws one per
+   * render, and runs have reached thousands in a single component while reporting success.
+   * A handful is a race; a few dozen is a defect.
+   */
+  private static readonly JSX_ERROR_FAILURE_THRESHOLD = 25;
+
+  /** Whether `e` is an "invalid JSX element type" or "undefined component" error. */
+  private static isJSXElementError(e: Pick<CollectedRuntimeError, 'type' | 'rule'>): boolean {
+    return e.type === 'invalid-element-type' || e.type === 'undefined-component' ||
+      e.rule === 'invalid-jsx-element' || e.rule === 'undefined-jsx-component';
+  }
+
+  /** A JSX element-type error rare enough to be treated as a transient resolution miss. */
+  private static isSuppressibleJSXError(e: CollectedRuntimeError): boolean {
+    return ComponentRunner.isJSXElementError(e) && e.occurrences < ComponentRunner.JSX_ERROR_FAILURE_THRESHOLD;
+  }
+
+  /**
+   * Folds an error from the second (post-async) collection into the first. Collection is
+   * cumulative, so a JSX error seen again carries a higher count and a different message: it
+   * replaces its earlier entry instead of being added beside it, and it counts toward the
+   * run's errors once it reaches the threshold.
+   */
+  private static mergeAsyncRuntimeError(err: CollectedRuntimeError, errors: string[], collected: CollectedRuntimeError[]): void {
+    if (!ComponentRunner.isJSXElementError(err)) {
+      if (!errors.includes(err.message)) {
+        errors.push(err.message);
+        collected.push(err);
+      }
+      return;
+    }
+    const index = collected.findIndex(e => e.type === err.type && e.baseMessage === err.baseMessage);
+    if (index >= 0) {
+      const previousMessage = errors.indexOf(collected[index].message);
+      if (previousMessage >= 0) errors.splice(previousMessage, 1);
+      collected[index] = err;
+    } else {
+      collected.push(err);
+    }
+    if (!ComponentRunner.isSuppressibleJSXError(err)) errors.push(err.message);
+  }
+
+  /**
+   * The reported violation for a collected runtime error. Most are critical. A JSX
+   * element-type error is low below the threshold, so it stays visible without failing the
+   * run, and high at or above it, which fails `codeExecutionSuccess`.
+   */
+  private static buildRuntimeErrorViolation(e: CollectedRuntimeError, debug: boolean): RuntimeErrorViolation {
+    const isJSXError = ComponentRunner.isJSXElementError(e);
+    const isFailingJSXError = isJSXError && !ComponentRunner.isSuppressibleJSXError(e);
+    const severity: Violation['severity'] = !isJSXError ? 'critical' : isFailingJSXError ? 'high' : 'low';
+    if (isJSXError && debug) {
+      console.log(`📝 JSX element error (${e.occurrences}x, severity=${severity}):`, e.message);
+    }
+    return {
+      message: isFailingJSXError
+        ? `${e.message} — repeated ${e.occurrences} times, which indicates a genuinely invalid element type rather than a transient resolution miss`
+        : e.message,
+      severity,
+      rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
+      line: 0,
+      column: 0,
+      source: e.source as Violation['source'],
+      stack: e.stack,
+      componentStack: e.componentStack,
+    };
+  }
+
+  /**
+   * One warning per utility the component called that this harness was not given. They are
+   * warnings rather than errors so they never fail the run or reach a fixer as a defect:
+   * the call was not tested, and the component may well be correct.
+   */
+  private static buildUnavailableUtilityWarnings(unavailableUtilities: Set<string>): Violation[] {
+    return [...unavailableUtilities].map(name => ({
+      message:
+        `${name} is not available in the test harness, so this call was not tested. ` +
+        `This is a limit of the harness, not a defect in the component.`,
+      severity: 'medium' as const,
+      rule: SANDBOX_UTILITY_UNAVAILABLE_RULE,
+      line: 0,
+      column: 0,
+      source: 'test-harness' as const
+    }));
+  }
+
+  /**
    * Reclassify violations that are actually browser crashes.
    * Browser crashes should be marked as low severity with rule='browser-crash'
    * since they're infrastructure issues, not code errors.
@@ -650,6 +868,7 @@ export class ComponentRunner {
     const warnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
     const dataErrors: string[] = []; // Track data access errors from RunView/RunQuery
+    const unavailableUtilities = new Set<string>(); // Utilities the component called that this harness was not given
     const dataAccess: DataAccessRecord[] = []; // Track every data call: target, rows, cap state
     let renderCount = 0;
     
@@ -734,7 +953,7 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page, options, dataErrors, dataAccess, debug)
+      await this.exposeMJUtilities(page, options, dataErrors, unavailableUtilities, dataAccess, debug)
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
@@ -775,12 +994,23 @@ export class ComponentRunner {
         
         // Declare renderCheckInterval at the top scope for cleanup
         let renderCheckInterval: any;
-        
+        const harnessWindow = window as Window & HarnessPageGlobals;
+
+        // A failure the harness can name is thrown with that name, so the catch below can
+        // report it under its own rule instead of the catch-all 'execution-error'.
+        // HarnessSetupError: the page itself is not ready, so the component never ran.
+        // ComponentLoadError: the component compiled but did not yield a usable root.
+        const namedError = (name: 'HarnessSetupError' | 'ComponentLoadError', message: string): Error => {
+          const error = new Error(message);
+          error.name = name;
+          return error;
+        };
+
         try {
           // Access the real runtime classes
           const MJRuntime = (window as any).MJReactRuntime;
           if (!MJRuntime) {
-            throw new Error('React runtime not loaded');
+            throw namedError('HarnessSetupError', 'React runtime not loaded');
           }
 
           const {
@@ -821,7 +1051,7 @@ export class ComponentRunner {
           if (!(window as any).React) {
             console.error('🔴 CRITICAL: React is NULL when creating runtimeContext!');
             console.error('Window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('react')));
-            throw new Error('React is not available in window context');
+            throw namedError('HarnessSetupError', 'React is not available in window context');
           }
           
           if (debug) {
@@ -879,7 +1109,7 @@ export class ComponentRunner {
           // Don't call createRuntimeUtilities() as it tries to create new Metadata() which fails
           const utilities = (window as any).__mjUtilities;
           if (!utilities) {
-            throw new Error('Utilities not found - exposeMJUtilities may have failed');
+            throw namedError('HarnessSetupError', 'Utilities not found - exposeMJUtilities may have failed');
           }
           
           // The test harness renders components in isolation without the MJExplorer
@@ -1032,7 +1262,25 @@ export class ComponentRunner {
           }
 
           if (!registrationResult.success) {
-            throw new Error('Component registration failed: ' + JSON.stringify(registrationResult.errors));
+            // One entry per failed component, naming it and the phase that failed, so
+            // unrelated failures are reported (and grouped by consumers) separately.
+            const failures: ComponentLoadFailure[] = registrationResult.errors;
+            harnessWindow.__testHarnessRuntimeErrors = harnessWindow.__testHarnessRuntimeErrors || [];
+            for (const failure of failures) {
+              const who = failure.componentName ? `Component "${failure.componentName}"` : 'A component';
+              harnessWindow.__testHarnessRuntimeErrors.push({
+                message: `${who} failed during ${failure.phase || 'registration'}: ${failure.error || 'no error message was reported'}`,
+                type: 'registration-error',
+                phase: failure.phase,
+                source: 'runtime-wrapper'
+              });
+            }
+            harnessWindow.__testHarnessTestFailed = true;
+            return {
+              success: false,
+              error: `Component registration failed for ${failures.length} component(s)`,
+              componentCount: 0
+            };
           }
 
           if (debug) {
@@ -1043,7 +1291,7 @@ export class ComponentRunner {
 
           // NEW: With ComponentManager, we already have the components from loadResult
           if (!loadResult) {
-            throw new Error('Component loading failed - no result returned');
+            throw namedError('ComponentLoadError', 'Component loading failed - no result returned');
           }
           
           const RootComponentObject = loadResult.rootComponent;
@@ -1051,13 +1299,13 @@ export class ComponentRunner {
             // Enhanced error message with debugging info
             console.error('Failed to load component:', spec.name);
             console.error('Load errors:', loadResult.errors);
-            throw new Error('Root component not loaded: ' + spec.name);
+            throw namedError('ComponentLoadError', `Root component "${spec.name}" was not loaded`);
           }
           
           // Extract the React component from the ComponentObject
           const RootComponent = RootComponentObject.component;
           if (!RootComponent || typeof RootComponent !== 'function') {
-            throw new Error('Component object does not contain a valid React component');
+            throw namedError('ComponentLoadError', `Component "${spec.name}" does not contain a valid React component`);
           }
 
           // Get all loaded components from the result
@@ -1111,6 +1359,13 @@ export class ComponentRunner {
 
             // Wrap React.createElement to detect invalid element types
             const originalCreateElement = (window as any).React?.createElement;
+            // React.memo, forwardRef, lazy and context providers/consumers are objects tagged
+            // with one of these symbols, and are valid element types. Library components are
+            // often built this way, so treating every object as invalid flagged working code.
+            const reactComponentObjectTags = new Set(
+              ['react.memo', 'react.forward_ref', 'react.lazy', 'react.provider', 'react.context', 'react.consumer']
+                .map(tag => Symbol.for(tag))
+            );
             if (originalCreateElement) {
               (window as any).React.createElement = function(type: any, props: any, ...children: any[]) {
                 (window as any).__testHarnessRenderCount++;
@@ -1120,7 +1375,8 @@ export class ComponentRunner {
                   const typeOf = typeof type;
                   
                   // Check for the common "object instead of component" error
-                  if (typeOf === 'object' && !(window as any).React.isValidElement(type)) {
+                  if (typeOf === 'object' && !(window as any).React.isValidElement(type) &&
+                      !reactComponentObjectTags.has(type.$$typeof)) {
                     // Try to get a meaningful name for the object
                     let objectInfo = 'unknown object';
                     try {
@@ -1399,14 +1655,16 @@ export class ComponentRunner {
           console.error('🔴 BROWSER: Error type:', typeof error);
           console.error('🔴 BROWSER: Error stringified:', JSON.stringify(error, null, 2));
           
-          (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
-          (window as any).__testHarnessRuntimeErrors.push({
+          const isSetupError = error?.name === 'HarnessSetupError';
+          const isLoadError = error?.name === 'ComponentLoadError';
+          harnessWindow.__testHarnessRuntimeErrors = harnessWindow.__testHarnessRuntimeErrors || [];
+          harnessWindow.__testHarnessRuntimeErrors.push({
             message: error.message || String(error),
             stack: error.stack,
-            type: 'execution-error',
-            source: 'runtime-wrapper'
+            type: isSetupError ? 'harness-setup-error' : isLoadError ? 'component-load-error' : 'execution-error',
+            source: isSetupError ? 'test-harness' : 'runtime-wrapper'
           });
-          (window as any).__testHarnessTestFailed = true;
+          harnessWindow.__testHarnessTestFailed = true;
           
           return {
             success: false,
@@ -1496,14 +1754,9 @@ export class ComponentRunner {
 
       // Collect all errors with source information
       const runtimeErrorsWithSource = await this.collectRuntimeErrors(page);
-      // Filter out JSX element type errors when adding to errors array
+      // Low-volume JSX element-type errors stay out of the error count (see JSX_ERROR_FAILURE_THRESHOLD)
       errors.push(...runtimeErrorsWithSource
-        .filter(e => {
-          // Skip JSX element type errors from error count
-          const isJSXError = e.type === 'invalid-element-type' || 
-                            e.type === 'undefined-component';
-          return !isJSXError;
-        })
+        .filter(e => !ComponentRunner.isSuppressibleJSXError(e))
         .map(e => e.message)); // Extract messages for backward compat
 
       // Collect warnings (separate from errors)
@@ -1515,18 +1768,7 @@ export class ComponentRunner {
       await page.waitForTimeout(asyncWaitTime);
       
       const asyncErrors = await this.collectRuntimeErrors(page);
-      // Only add new errors (excluding JSX element type errors)
-      asyncErrors.forEach(err => {
-        const isJSXError = err.type === 'invalid-element-type' || 
-                          err.type === 'undefined-component';
-        if (!isJSXError && !errors.includes(err.message)) {
-          errors.push(err.message);
-          runtimeErrorsWithSource.push(err); // Keep the structured version too
-        } else if (isJSXError && !runtimeErrorsWithSource.some(e => e.message === err.message)) {
-          // Still track JSX errors for logging but don't add to errors array
-          runtimeErrorsWithSource.push(err);
-        }
-      });
+      asyncErrors.forEach(err => ComponentRunner.mergeAsyncRuntimeError(err, errors, runtimeErrorsWithSource));
       
       // Also check for new warnings
       const asyncWarnings = await this.collectWarnings(page);
@@ -1651,39 +1893,10 @@ export class ComponentRunner {
       // Combine runtime errors with data errors
       const allErrors = [...errors, ...dataErrors];
       
-      // Map runtime errors with source info and specific rules
-      // Filter out JSX element type errors - they're too noisy and often false positives
-      const errorViolations = runtimeErrorsWithSource
-        .filter(e => {
-          // Skip JSX element type errors - still logged but not reported as violations
-          const isJSXError = e.rule === 'invalid-jsx-element' || 
-                            e.rule === 'undefined-jsx-component' ||
-                            e.type === 'invalid-element-type' ||
-                            e.type === 'undefined-component';
-          if (isJSXError && debug) {
-            console.log('📝 JSX element error detected but not reported as violation:', e.message);
-          }
-          return !isJSXError;
-        })
-        .map(e => ({
-          message: e.message,
-          severity: 'critical' as const,
-          rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
-          line: 0,
-          column: 0,
-          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined),
-          stack: (e as any).stack as string | undefined,
-          componentStack: (e as any).componentStack as string | undefined,
-        })) as Array<{
-          message: string;
-          severity: 'critical';
-          rule: string;
-          line: number;
-          column: number;
-          source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
-          stack?: string;
-          componentStack?: string;
-        }>;
+      // Map runtime errors with source info and specific rules. JSX element-type errors are
+      // graded by volume rather than dropped (see JSX_ERROR_FAILURE_THRESHOLD).
+      const errorViolations: RuntimeErrorViolation[] = runtimeErrorsWithSource
+        .map(e => ComponentRunner.buildRuntimeErrorViolation(e, debug));
       
       // Add timeout error if detected
       if (hasTimeout) {
@@ -1756,6 +1969,8 @@ export class ComponentRunner {
       );
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
 
+      FinalizePendingDataAccess(dataAccess);
+
       // Surface capped data calls as their own warnings, so a downstream evaluator does not
       // read a deliberately truncated render as a defect.
       const capWarnings: Violation[] = dataAccess
@@ -1785,6 +2000,7 @@ export class ComponentRunner {
             column: 0
           })),
           ...capWarnings,
+          ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
         ],
         console: consoleLogs,
         screenshot,
@@ -1856,18 +2072,22 @@ export class ComponentRunner {
         (e.severity === 'critical' || e.severity === 'high') && e.rule !== 'browser-crash'
       );
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
+      FinalizePendingDataAccess(dataAccess);
 
       const result: ComponentExecutionResult = {
         success: false,
         html: '',
         errors: errorViolations,
-        warnings: warnings.map(w => ({
-          message: w,
-          severity: 'low' as const,
-          rule: 'warning',
-          line: 0,
-          column: 0
-        })),
+        warnings: [
+          ...warnings.map(w => ({
+            message: w,
+            severity: 'low' as const,
+            rule: 'warning',
+            line: 0,
+            column: 0
+          })),
+          ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
+        ],
         console: consoleLogs,
         executionTime: Date.now() - startTime,
         renderCount,
@@ -2389,7 +2609,7 @@ export class ComponentRunner {
   /**
    * Collect runtime errors from the page
    */
-  private async collectRuntimeErrors(page: any): Promise<Array<{message: string; source?: string; type?: string; rule?: string}>> {
+  private async collectRuntimeErrors(page: any): Promise<CollectedRuntimeError[]> {
     const errorData = await page.evaluate(() => {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
@@ -2447,6 +2667,12 @@ export class ComponentRunner {
         case 'execution-error':
           rule = 'execution-error';
           break;
+        case 'harness-setup-error':
+          rule = 'harness-setup-error';
+          break;
+        case 'component-load-error':
+          rule = 'component-load-error';
+          break;
         case 'runtime':
           rule = 'runtime-error';
           break;
@@ -2497,14 +2723,7 @@ export class ComponentRunner {
     });
 
     // Convert map to array with occurrence counts
-    const errors: Array<{
-      message: string;
-      stack?: string;
-      componentStack?: string;
-      source?: string;
-      type?: string;
-      rule?: string;
-    }> = [];
+    const errors: CollectedRuntimeError[] = [];
     errorMap.forEach(({error, count}) => {
       // Append count if > 1
       const message = count > 1
@@ -2513,7 +2732,10 @@ export class ComponentRunner {
 
       errors.push({
         ...error,
-        message
+        message,
+        baseMessage: error.message,
+        // Carried as a field, not only in the message, so severity can threshold on volume
+        occurrences: count
       });
     });
 
@@ -2747,7 +2969,7 @@ export class ComponentRunner {
           // Generate embeddings for all texts
           const embeddings: number[][] = [];
           for (const text of texts) {
-            const result = await aiEngine.EmbedText(model, text);
+            const result = await aiEngine.EmbedText(model, text, undefined, { inputType: params.inputType });
             if (result && result.vector) {
               embeddings.push(result.vector);
             } else {
@@ -2782,6 +3004,7 @@ export class ComponentRunner {
     page: any,
     options: ComponentExecutionOptions,
     dataErrors: string[],
+    unavailableUtilities: Set<string>,
     dataAccess: DataAccessRecord[],
     debug: boolean = false
   ): Promise<void> {
@@ -2887,15 +3110,18 @@ export class ComponentRunner {
       const viewTarget = ResolveViewTarget(params);
       const maxRows = ResolveDataCapMaxRows(params.MaxRows, viewCeiling);
       const startedAt = Date.now();
+      const placeholder = StartDataAccessRecord(dataAccess, 'RunView', viewTarget, maxRows, startedAt);
       try {
         const result = await util.rv.RunView({ ...params, MaxRows: maxRows.applied }, options.contextUser);
 
         const record = BuildDataAccessRecord('RunView', viewTarget, result, maxRows, Date.now() - startedAt);
-        dataAccess.push(record);
+        SettleDataAccessRecord(placeholder, record);
 
-        // Debug logging for successful calls
+        // Debug logging for completed calls
         if (debug) {
-          console.log(`💾 RunView SUCCESS: View="${viewTarget.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
+          console.log(record.error
+            ? `❌ RunView FAILED: View="${viewTarget.target}" — ${record.error}`
+            : `💾 RunView SUCCESS: View="${viewTarget.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
           if (params.ExtraFilter) {
             console.log(`   Filter: ${params.ExtraFilter}`);
           }
@@ -2905,7 +3131,7 @@ export class ComponentRunner {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
-        dataAccess.push({
+        SettleDataAccessRecord(placeholder, {
           kind: 'RunView', target: viewTarget.target, identity: viewTarget.identity, rowsReturned: 0, capped: false,
           appliedMaxRows: maxRows.applied, requestedMaxRows: maxRows.requested,
           durationMs: Date.now() - startedAt, error: errorMessage,
@@ -2930,6 +3156,9 @@ export class ComponentRunner {
     await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
       const perCallMaxRows = params.map(p => ResolveDataCapMaxRows(p.MaxRows, viewCeiling));
       const startedAt = Date.now();
+      const placeholders = params.map((p, i) =>
+        StartDataAccessRecord(dataAccess, 'RunViews', ResolveViewTarget(p), perCallMaxRows[i], startedAt)
+      );
       try {
         const results = await util.rv.RunViews(
           params.map((p, i) => ({ ...p, MaxRows: perCallMaxRows[i].applied })),
@@ -2942,13 +3171,15 @@ export class ComponentRunner {
         const records = params.map((p, i) => BuildDataAccessRecord(
           'RunViews', ResolveViewTarget(p), results[i], perCallMaxRows[i], elapsed
         ));
-        records.forEach(r => dataAccess.push(r));
+        records.forEach((r, i) => SettleDataAccessRecord(placeholders[i], r));
 
-        // Debug logging for successful calls
+        // Debug logging for completed calls
         if (debug) {
-          console.log(`💾 RunViews SUCCESS: ${params.length} queries executed`);
+          console.log(`💾 RunViews completed: ${params.length} queries executed`);
           records.forEach((r, i) => {
-            console.log(`   [${i+1}] Entity="${r.target}" Rows=${r.rowsReturned}${DescribeDataCap(r)}`);
+            console.log(r.error
+              ? `   [${i+1}] Entity="${r.target}" FAILED — ${r.error}`
+              : `   [${i+1}] Entity="${r.target}" Rows=${r.rowsReturned}${DescribeDataCap(r)}`);
           });
         }
 
@@ -2958,7 +3189,7 @@ export class ComponentRunner {
         const entities = params.map(p => DescribeViewTarget(p)).join(', ');
 
         // RunViews fails as a batch, so every view in it failed.
-        params.forEach((p, i) => dataAccess.push({
+        params.forEach((p, i) => SettleDataAccessRecord(placeholders[i], {
           kind: 'RunViews', ...ResolveViewTarget(p), rowsReturned: 0, capped: false,
           appliedMaxRows: perCallMaxRows[i].applied, requestedMaxRows: perCallMaxRows[i].requested,
           durationMs: Date.now() - startedAt, error: errorMessage,
@@ -2984,15 +3215,18 @@ export class ComponentRunner {
       const queryIdentifier = ResolveQueryTarget(params);
       const maxRows = ResolveDataCapMaxRows(params.MaxRows, queryCeiling);
       const startedAt = Date.now();
+      const placeholder = StartDataAccessRecord(dataAccess, 'RunQuery', queryIdentifier, maxRows, startedAt);
       try {
         const result = await util.rq.RunQuery({ ...params, MaxRows: maxRows.applied }, options.contextUser);
 
         const record = BuildDataAccessRecord('RunQuery', queryIdentifier, result, maxRows, Date.now() - startedAt);
-        dataAccess.push(record);
+        SettleDataAccessRecord(placeholder, record);
 
-        // Debug logging for successful calls
+        // Debug logging for completed calls
         if (debug) {
-          console.log(`💾 RunQuery SUCCESS: Query="${queryIdentifier.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
+          console.log(record.error
+            ? `❌ RunQuery FAILED: Query="${queryIdentifier.target}" — ${record.error}`
+            : `💾 RunQuery SUCCESS: Query="${queryIdentifier.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
           if (params.Parameters && Object.keys(params.Parameters).length > 0) {
             console.log(`   Parameters:`, params.Parameters);
           }
@@ -3002,7 +3236,7 @@ export class ComponentRunner {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
-        dataAccess.push({
+        SettleDataAccessRecord(placeholder, {
           kind: 'RunQuery', target: queryIdentifier.target, identity: queryIdentifier.identity, rowsReturned: 0, capped: false,
           appliedMaxRows: maxRows.applied, requestedMaxRows: maxRows.requested,
           durationMs: Date.now() - startedAt, error: errorMessage,
@@ -3026,10 +3260,11 @@ export class ComponentRunner {
 
     // Expose AI tools
     await page.exposeFunction('__mjExecutePrompt', async (params: SimpleExecutePromptParams) => {
+      if (typeof util.ai?.ExecutePrompt !== 'function') {
+        unavailableUtilities.add('utilities.ai.ExecutePrompt');
+        return { success: false, result: 'AI tools are not available in the test harness', modelName: '' };
+      }
       try {
-        if (!util.ai) {
-          throw new Error('AI tools not available');
-        }
         // Add contextUser to params if not provided
         const paramsWithUser = { ...params, contextUser: options.contextUser };
         const result = await util.ai.ExecutePrompt(paramsWithUser);
@@ -3057,10 +3292,11 @@ export class ComponentRunner {
     });
 
     await page.exposeFunction('__mjEmbedText', async (params: SimpleEmbedTextParams) => {
+      if (typeof util.ai?.EmbedText !== 'function') {
+        unavailableUtilities.add('utilities.ai.EmbedText');
+        throw new Error('AI tools are not available in the test harness');
+      }
       try {
-        if (!util.ai) {
-          throw new Error('AI tools not available');
-        }
         // Add contextUser to params if not provided
         const paramsWithUser = { ...params, contextUser: options.contextUser };
         const result = await util.ai.EmbedText(paramsWithUser);

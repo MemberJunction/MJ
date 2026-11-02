@@ -23,6 +23,13 @@ These indexes exist on this table in the database. Developers index the columns 
 - {{ tbl.schema }}.{{ tbl.name }}{% if tbl.pk %} (PK: {{ tbl.pk }}){% endif %}
 {% endfor %}
 
+{% if seedExcerpt %}
+## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+{{ seedExcerpt }}
+
+{% endif %}
 ## Your Task:
 Evaluate each UNLOCKED PK candidate. A valid primary key must:
 1. Uniquely identify every row in the table

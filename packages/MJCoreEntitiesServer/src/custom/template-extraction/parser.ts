@@ -141,12 +141,15 @@ class ASTWalker {
 
         for (const acc of this.params.values()) {
             const type = resolveType(acc.types);
+            const isSystemVariable = acc.name.startsWith('_');
             result.push({
                 name: acc.name,
                 type,
-                isRequired: acc.usedUnconditionally,
+                // The runtime injects system variables only on some calls (#5156),
+                // so a caller is never required to supply one.
+                isRequired: !isSystemVariable && acc.usedUnconditionally,
                 DefaultValue: acc.defaultValue,
-                IsSystemVariable: acc.name.startsWith('_'),
+                IsSystemVariable: isSystemVariable,
                 AppliedFilters: [...acc.filters],
                 properties: buildPropertyTree(acc.properties),
                 Usages: acc.usages,

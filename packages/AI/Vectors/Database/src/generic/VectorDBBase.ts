@@ -82,10 +82,19 @@ export abstract class VectorDBBase {
     abstract CreateRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
     abstract GetRecord(param: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
     abstract GetRecords(params: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
-    abstract UpdateRecord(record: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
-    abstract UpdateRecords(records: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
-    abstract DeleteRecord(record: VectorRecord, indexName?: string): BaseResponse  | Promise<BaseResponse>;
-    abstract DeleteRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
+    abstract UpdateRecord(record: UpdateOptions, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
+    /**
+     * Update stored records (values and/or metadata). A provider without batch support fails on an
+     * array; treat that as "not supported", not success.
+     */
+    abstract UpdateRecords(records: UpdateOptions | UpdateOptions[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
+    /** Delete one record, routed like {@link CreateRecords}: per-record directives, then `providerConfig`. */
+    abstract DeleteRecord(record: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
+    /**
+     * Delete records, routed like {@link CreateRecords}. An unrouted delete in a namespace-scoped
+     * store reports success and removes nothing.
+     */
+    abstract DeleteRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
 
     /**
      * Delete ALL records from an index. Use with caution.

@@ -1,7 +1,8 @@
 // Tests for ci/dist-tag-all.mjs — run with: node --test ci/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCliArgs, buildPlan, parseDistTagLs, withRetry, runPool } from './dist-tag-all.mjs';
+import { existsSync } from 'node:fs';
+import { parseCliArgs, buildPlan, parseDistTagLs, withRetry, runPool, verifyOne } from './dist-tag-all.mjs';
 
 test('parseCliArgs: happy path with defaults', () => {
   const args = parseCliArgs(['--version', '5.50.1', '--tag', 'latest']);
@@ -81,4 +82,50 @@ test('runPool: processes every item with bounded concurrency', async () => {
 
 test('runPool: handles empty input', async () => {
   assert.deepEqual(await runPool([], async () => 1, 8), []);
+});
+
+const lsOutput = (tagValue) => ({ stdout: tagValue ? `latest: ${tagValue}\n` : '' });
+
+test('verifyOne: polls with a fresh, removed npm cache dir per attempt until the tag lands', async () => {
+  const caches = [];
+  let calls = 0;
+  const exec = async (_cmd, args) => {
+    const cache = args[args.indexOf('--cache') + 1];
+    assert.ok(existsSync(cache), 'cache dir exists during the call');
+    caches.push(cache);
+    return lsOutput(++calls < 3 ? '1.0.0' : '2.0.0');
+  };
+  const sleeps = [];
+  const result = await verifyOne({ name: '@x/a' }, 'latest', '2.0.0', undefined, { exec, sleep: async (ms) => sleeps.push(ms) });
+  assert.deepEqual(result, { name: '@x/a', ok: true });
+  assert.equal(calls, 3);
+  assert.equal(new Set(caches).size, 3, 'each attempt uses its own cache dir');
+  for (const c of caches) assert.equal(existsSync(c), false, 'cache dir removed afterwards');
+  assert.equal(sleeps.length, 2);
+});
+
+test('verifyOne: reports the last mismatch after exhausting ~10 polls over ~30s', async () => {
+  let calls = 0;
+  let slept = 0;
+  const exec = async () => {
+    calls++;
+    return lsOutput('1.0.0');
+  };
+  const result = await verifyOne({ name: '@x/a' }, 'latest', '2.0.0', undefined, { exec, sleep: async (ms) => (slept += ms) });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /expected latest → 2\.0\.0, found 1\.0\.0/);
+  assert.equal(calls, 10);
+  assert.ok(slept >= 25000 && slept <= 35000, `total backoff ${slept}ms`);
+});
+
+test('verifyOne: passes --registry and surfaces exec errors', async () => {
+  let seen;
+  const exec = async (_cmd, args) => {
+    seen = args;
+    throw Object.assign(new Error('boom'), { stderr: 'npm ERR! network\n' });
+  };
+  const result = await verifyOne({ name: '@x/a' }, 'latest', '2.0.0', 'http://r', { exec, sleep: async () => {}, attempts: 2 });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'npm ERR! network');
+  assert.ok(seen.includes('--registry') && seen.includes('http://r'));
 });

@@ -44,8 +44,10 @@ commands as plain `mj dev workspace ...`.
    ```
 
    It detects members (anything with `mj-app.json`, `@mj-biz-apps/*` packages, or the MJ monorepo
-   itself), writes four files at the parent (`pnpm-workspace.yaml`, `package.json`, `.npmrc`,
-   `turbo.json`) plus a `.mj-dev-workspace.json` sentinel, then runs the install.
+   itself), writes three files at the parent (`pnpm-workspace.yaml`, `package.json`, `.npmrc`)
+   plus a `.mj-dev-workspace.json` sentinel, then runs the install. There is no parent
+   `turbo.json`: each member keeps its own, and a regenerate moves one an earlier version wrote
+   to `turbo.json.bak`.
 
    When it offers to **remove members' own standalone installs, say yes** — the MJ clone's
    `node_modules` from step 2 must be replaced by the workspace install, or MJ's code resolves
@@ -55,7 +57,7 @@ commands as plain `mj dev workspace ...`.
 4. **Build everything from the parent** and check health:
 
    ```bash
-   pnpm run build          # turbo across all members
+   pnpm run build          # every member package, in dependency order, one at a time
    node MJ/packages/MJCLI/bin/run.js dev workspace status
    ```
 
@@ -104,6 +106,14 @@ is why this fails at page load with a completely green build.
 parent. A package declared by a repo that is not a workspace member is ignored (it can never be
 linked — that is what excluding it means), and the check skips entirely until `pnpm install` has
 run at the parent, since linkage is the install's output rather than the generator's.
+
+Doctor also reads build output. Linking a member package links its source folder, so a package that
+was never built, or was edited after its last build, installs cleanly and fails only when Explorer
+loads it (a missing export, or "No form is registered for …"). For every member package with a
+`build` script and a `src/` folder, doctor FAILS when its entry file (`main`, else `module`, else
+the `exports` root; `dist/` when none is declared) does not exist, and WARNS when a `src/` file is
+newer than everything in the output folder. Test files do not count. Rebuild with
+`pnpm --filter <package> run build` at the parent.
 
 ## Recovery
 

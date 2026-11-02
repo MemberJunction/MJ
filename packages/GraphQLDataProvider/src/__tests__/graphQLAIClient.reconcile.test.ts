@@ -26,8 +26,11 @@ interface RunRow {
     ErrorMessage: string | null;
 }
 
-/** Stub provider whose PubSub stream is the supplied Subject and whose RunView returns `run`. */
-function makeProvider(stream: Subject<string>, run: RunRow | undefined, runView = vi.fn()) {
+/**
+ * Stub provider whose PubSub stream is the supplied Subject and whose RunView returns `run`. The
+ * conversation-detail ack names the reply row `replyId`, as the server's does.
+ */
+function makeProvider(stream: Subject<string>, run: RunRow | undefined, runView = vi.fn(), replyId = 'cd-1') {
     runView.mockResolvedValue({ Success: true, Results: run ? [run] : [] });
     return {
         sessionId: 'sess-1',
@@ -35,7 +38,10 @@ function makeProvider(stream: Subject<string>, run: RunRow | undefined, runView 
         ExecuteGQL: vi.fn().mockImplementation((_m: string, _v: Record<string, unknown>) =>
             Promise.resolve({
                 RunAIAgent: { success: true },
-                RunAIAgentFromConversationDetail: { success: true },
+                RunAIAgentFromConversationDetail: {
+                    success: true,
+                    result: JSON.stringify({ accepted: true, fireAndForget: true, conversationDetailId: replyId, createdAt: '2026-10-12T10:00:00.000Z' }),
+                },
             })),
         RunView: runView,
     } as unknown as GraphQLDataProvider;
@@ -65,10 +71,10 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
             Result: null,
             ErrorMessage: null,
         };
-        const client = new GraphQLAIClient(makeProvider(stream, run, runView));
+        const client = new GraphQLAIClient(makeProvider(stream, run, runView, 'cd-123'));
 
         const p = client.RunAIAgentFromConversationDetail({
-            conversationDetailId: 'cd-123',
+            userMessageId: 'user-msg-1',
             agentId: 'agent-1',
         } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
 
@@ -83,6 +89,25 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
         // Selector is the stable, operation-specific ConversationDetailID — not a scraped run id.
         const filter = runView.mock.calls[0][0].ExtraFilter as string;
         expect(filter).toBe("ConversationDetailID='cd-123'");
+    });
+
+    it('does not query the run record while the conversation-detail ack is still pending', async () => {
+        // The idle window starts before the mutation, so a slow server (a long history load) stalls before the ack
+        // names the reply row. With no row yet there is nothing to reconcile by; an empty ID is not a filter.
+        const stream = new Subject<string>();
+        const runView = vi.fn();
+        const provider = makeProvider(stream, undefined, runView);
+        (provider as unknown as { ExecuteGQL: ReturnType<typeof vi.fn> }).ExecuteGQL.mockReturnValue(new Promise(() => {}));
+        const client = new GraphQLAIClient(provider);
+
+        void client.RunAIAgentFromConversationDetail({
+            userMessageId: 'user-msg-1',
+            agentId: 'agent-1',
+        } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
+
+        await flush();
+        await vi.advanceTimersByTimeAsync(IDLE_MS);
+        expect(runView).not.toHaveBeenCalled();
     });
 
     it('plain RunAIAgent path reconciles by the run id captured from the stream', async () => {
@@ -114,7 +139,7 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
         const client = new GraphQLAIClient(makeProvider(stream, undefined, runView));
 
         const p = client.RunAIAgentFromConversationDetail({
-            conversationDetailId: 'cd-1',
+            userMessageId: 'user-msg-1',
             agentId: 'agent-1',
         } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
         let settled = false;
@@ -134,10 +159,10 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
     it('treats Paused / AwaitingFeedback as a successful recovery', async () => {
         const stream = new Subject<string>();
         const run: RunRow = { ID: 'run-3', Status: 'AwaitingFeedback', FinalPayload: JSON.stringify({ q: 'x' }), Result: null, ErrorMessage: null };
-        const client = new GraphQLAIClient(makeProvider(stream, run));
+        const client = new GraphQLAIClient(makeProvider(stream, run, vi.fn(), 'cd-2'));
 
         const p = client.RunAIAgentFromConversationDetail({
-            conversationDetailId: 'cd-2',
+            userMessageId: 'user-msg-1',
             agentId: 'agent-1',
         } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
 
@@ -152,10 +177,10 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
     it('falls back to Result on an older row that has no FinalPayload', async () => {
         const stream = new Subject<string>();
         const run: RunRow = { ID: 'run-4', Status: 'Completed', FinalPayload: null, Result: JSON.stringify({ legacy: true }), ErrorMessage: null };
-        const client = new GraphQLAIClient(makeProvider(stream, run));
+        const client = new GraphQLAIClient(makeProvider(stream, run, vi.fn(), 'cd-4'));
 
         const p = client.RunAIAgentFromConversationDetail({
-            conversationDetailId: 'cd-4',
+            userMessageId: 'user-msg-1',
             agentId: 'agent-1',
         } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
 
@@ -176,10 +201,10 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
             Result: JSON.stringify({ source: 'Result' }),
             ErrorMessage: null,
         };
-        const client = new GraphQLAIClient(makeProvider(stream, run));
+        const client = new GraphQLAIClient(makeProvider(stream, run, vi.fn(), 'cd-5'));
 
         const p = client.RunAIAgentFromConversationDetail({
-            conversationDetailId: 'cd-5',
+            userMessageId: 'user-msg-1',
             agentId: 'agent-1',
         } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
 
@@ -200,10 +225,10 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
             Result: null,
             ErrorMessage: 'Cancelled by user',
         };
-        const client = new GraphQLAIClient(makeProvider(stream, run));
+        const client = new GraphQLAIClient(makeProvider(stream, run, vi.fn(), 'cd-6'));
 
         const p = client.RunAIAgentFromConversationDetail({
-            conversationDetailId: 'cd-6',
+            userMessageId: 'user-msg-1',
             agentId: 'agent-1',
         } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
 

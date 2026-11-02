@@ -86,11 +86,26 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         detail.AIAgentRunID = result.AIAgentRunID ?? null;
         // Fire-and-forget — the detail write must not block the per-record loop, and a failed write must
         // not abort the run (the queue logs failures; CompleteRun flushes + reports the count).
-        this.detailQueue.Insert(detail);
+        // ActionExecutionLogID has a foreign key to a log row the Action engine may still be writing, so
+        // that save waits for it inside the queue: the FK cannot lose the race, the loop does not wait,
+        // and CompleteRun's flush still covers it. Each detail is its own key, so one wait holds no other
+        // detail back.
+        if (result.ActionExecutionLogPersisted) {
+            this.detailQueue.InsertWhen(detail, result.ActionExecutionLogPersisted);
+        } else {
+            this.detailQueue.Insert(detail);
+        }
     }
 
     public async Checkpoint(handle: RunHandle, cursor: ProcessCursor, counts: RunCounts, _contextUser: UserInfo, _provider?: IMetadataProvider): Promise<boolean> {
         const run = (handle as GenericRunHandle).run;
+        // Re-read BEFORE saving to pick up an externally-requested pause/cancel. Save() writes every field of
+        // this long-lived entity, so saving first would write its stale CancellationRequested=false over the
+        // request and the re-read would never see it. A request that lands between this Load and the Save
+        // below is still overwritten; entity saves have no conditional update to close that one round trip.
+        if (!(await run.Load(run.ID))) {
+            LogError(`GenericProcessRunTracker: checkpoint could not re-read run '${run.ID}' for a pause/cancel request: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
         run.ProcessedItems = counts.Processed;
         run.SuccessCount = counts.Success;
         run.ErrorCount = counts.Error;
@@ -106,8 +121,6 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
             LogError(`GenericProcessRunTracker: checkpoint save failed for run '${run.ID}': ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             return true; // a transient checkpoint failure should not halt processing
         }
-        // Re-read to pick up an externally-requested pause/cancel.
-        await run.Load(run.ID);
         if (run.CancellationRequested) {
             run.Status = 'Paused';
             run.EndTime = new Date();

@@ -15,9 +15,9 @@
  *
  * @module @memberjunction/ai-agents
  */
-import { endianness } from 'os';
 import { Decoder } from '@evan/opus';
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import {
@@ -333,7 +333,7 @@ export function ParseCanonicalRecordingWav(bytes: Uint8Array): Int16Array | null
         return null;
     }
     const dataOffset = buffer.byteOffset + RECORDING_WAV_HEADER_BYTES;
-    if (endianness() === 'LE' && dataOffset % BYTES_PER_SAMPLE === 0) {
+    if (IS_LITTLE_ENDIAN && dataOffset % BYTES_PER_SAMPLE === 0) {
         // A view, not a copy: the previous recording can be as large as the new one.
         return new Int16Array(buffer.buffer, dataOffset, dataSize / BYTES_PER_SAMPLE);
     }
@@ -400,7 +400,7 @@ function allocatePcm16Wav(sampleCount: number, sampleRate: number): { Pcm: Int16
     const wav = Buffer.alloc(RECORDING_WAV_HEADER_BYTES + dataSize);
     WriteRecordingWavHeader(wav, sampleRate, dataSize);
     const dataOffset = wav.byteOffset + RECORDING_WAV_HEADER_BYTES;
-    if (endianness() === 'LE' && dataOffset % BYTES_PER_SAMPLE === 0) {
+    if (IS_LITTLE_ENDIAN && dataOffset % BYTES_PER_SAMPLE === 0) {
         return { Pcm: new Int16Array(wav.buffer, dataOffset, sampleCount), Finish: () => wav };
     }
     const pcm = new Int16Array(sampleCount);
@@ -467,8 +467,13 @@ class LibopusPacketDecoder implements IOpusPacketDecoder {
     public Decode(packet: Uint8Array): Int16Array {
         // The binding returns a view of a buffer it reuses on the next call, so copy the samples out now.
         const bytes = this.decoder.decode(packet);
+        const sampleCount = bytes.byteLength / BYTES_PER_SAMPLE;
+        const samples = new Int16Array(sampleCount);
+        if (IS_LITTLE_ENDIAN && bytes.byteOffset % BYTES_PER_SAMPLE === 0) {
+            samples.set(new Int16Array(bytes.buffer, bytes.byteOffset, sampleCount));
+            return samples;
+        }
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-        const samples = new Int16Array(bytes.byteLength / BYTES_PER_SAMPLE);
         for (let i = 0; i < samples.length; i++) {
             samples[i] = view.getInt16(i * BYTES_PER_SAMPLE, true);
         }

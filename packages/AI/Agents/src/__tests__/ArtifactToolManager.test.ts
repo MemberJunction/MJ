@@ -79,6 +79,15 @@ describe('ArtifactToolManager', () => {
             expect(manifest).toContain('**C**');
         });
 
+        it('names the artifact_tool tool, and not artifactToolCalls or artifactDirective, in native form', () => {
+            manager.Initialize([makeArtifact('First', 'JSON', '{}')]);
+            const native = manager.ToManifestString({ nativeTools: true });
+            expect(native).toContain('`artifact_tool`');
+            expect(native).not.toContain('artifactToolCalls');
+            expect(native).not.toContain('artifactDirective');
+            expect(manager.ToManifestString()).toContain('artifactToolCalls');
+        });
+
         it('clears all state', () => {
             manager.Initialize([makeArtifact('X', 'JSON', '{}')]);
             manager.Clear();

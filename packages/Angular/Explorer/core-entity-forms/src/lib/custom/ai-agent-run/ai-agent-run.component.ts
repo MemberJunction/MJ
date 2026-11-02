@@ -274,6 +274,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     } finally {
       this.RunTreeLoading = false;
       this.scheduleWorkflowPoll();
+      this.cdr.markForCheck();
     }
   }
 
@@ -345,6 +346,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
       // Parse all JSON fields on form load for instant access later
       this.parseAllFields();
+      this.cdr.markForCheck();
 
       // If the run is in progress, subscribe to BaseEntity events so we
       // pick up new steps / status changes the moment AgentRunner saves
@@ -525,14 +527,14 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       const cachedAgent = AIEngineBase.Instance?.Agents?.find(a => UUIDsEqual(a.ID, this.record.AgentID));
       if (cachedAgent) {
         this.Agent = cachedAgent;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
         return;
       }
       const md = this.ProviderToUse;
       const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
         this.Agent = agent;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       }
     } catch (error) {
       console.error('Error loading agent:', error);
@@ -555,6 +557,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         isLoading: false,
         error: 'Failed to load cost data'
       };
+      this.cdr.markForCheck();
     }
   }
   

@@ -51,9 +51,9 @@ export interface IMLModelLoader {
    *
    * @param modelId model primary-key value
    * @param contextUser request user — required server-side for isolation/audit
-   * @param provider optional provider for multi-provider correctness
+   * @param provider the provider the read goes through (required: no fallback to the global provider)
    */
-  loadModel(modelId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLModelEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  loadModel(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<MJMLModelEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

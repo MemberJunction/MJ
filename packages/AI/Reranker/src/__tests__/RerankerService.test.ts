@@ -490,6 +490,41 @@ describe('RerankerService', () => {
                 RerankerService.Instance.RerankExamples([reset], 'query', makeConfig({ fallbackOnError: true }), mockUser)
             ).rejects.toThrow('Decision model is down');
         });
+
+        it('uses options.provider when provided and saves steps with datestamps_only return mode (MJ-AI-7)', async () => {
+            mockRunRerank.mockResolvedValue({
+                Success: true,
+                ExecutionTimeMS: 1,
+                Response: {
+                    success: true,
+                    durationMs: 1,
+                    results: [{ id: 'e2', relevanceScore: 0.9, document: { id: 'e2', text: 'invoice' }, rank: 0 }]
+                }
+            });
+            const saveMock = vi.fn().mockResolvedValue(true);
+            const customStepEntity = {
+                ID: 'step-custom-provider',
+                Save: saveMock,
+                LatestResult: null
+            } as unknown as MJAIAgentRunStepEntityExtended;
+            const getEntityObjectMock = vi.fn().mockResolvedValue(customStepEntity);
+
+            await RerankerService.Instance.RerankExamples(
+                [invoice],
+                'query',
+                makeConfig(),
+                mockUser,
+                {
+                    agentRunID: 'run-provider-test',
+                    provider: { GetEntityObject: getEntityObjectMock } as unknown as Parameters<typeof RerankerService.Instance.RerankExamples>[4] extends { provider?: infer P } ? P : never
+                }
+            );
+
+            expect(getEntityObjectMock).toHaveBeenCalledWith('MJ: AI Agent Run Steps', mockUser);
+            expect(saveMock).toHaveBeenCalledTimes(2);
+            expect(saveMock).toHaveBeenNthCalledWith(1, { SaveReturnMode: 'datestamps_only' });
+            expect(saveMock).toHaveBeenNthCalledWith(2, { SaveReturnMode: 'datestamps_only' });
+        });
     });
 });
 

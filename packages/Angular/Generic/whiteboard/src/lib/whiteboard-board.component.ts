@@ -12,7 +12,7 @@ import {
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
   WhiteboardHighlightItem, WhiteboardHtmlItem, WhiteboardImageItem, WhiteboardInkItem,
   WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPageInfo,
-  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
+  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTagClass, WhiteboardTextItem
 } from './whiteboard-state';
 import { WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
@@ -22,11 +22,30 @@ import {
 } from './whiteboard-widget-bridge';
 import { WhiteboardWidgetSrcdocPipe } from './whiteboard-srcdoc.pipe';
 import {
+  WhiteboardWidgetBroker, WhiteboardWidgetBrokerHost, WhiteboardWidgetCommandOutcome, WhiteboardWidgetCommandRequest
+} from './whiteboard-widget-broker';
+import {
+  EvaluateWidgetChannelMessage, WhiteboardWidgetActionInfo, WhiteboardWidgetChannelMessage, WhiteboardWidgetErrorCode
+} from './whiteboard-widget-protocol';
+import { WHITEBOARD_TOOL_NAMES, WhiteboardWidgetActionsChangedEventArgs } from './whiteboard-tools';
+import {
   BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu,
   WhiteboardContextMenuAction, WhiteboardContextMenuActionID
 } from './whiteboard-context-menu';
 import { WhiteboardTool, WhiteboardToolRoster } from './whiteboard-tool-roster';
 import { RealtimeWhiteboardPagesComponent, WhiteboardPageChipContextMenuEvent } from './whiteboard-pages.component';
+
+/** True when a DOM mutation added or removed a widget iframe (directly or inside a subtree). */
+function mutationTouchesWidgetFrame(record: MutationRecord): boolean {
+  const nodes = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)];
+  return nodes.some((n) => n instanceof Element
+    && (n.matches('iframe.html-card__frame') || n.querySelector('iframe.html-card__frame') !== null));
+}
+
+/** A broker-shaped failure outcome (board-side validation before a command reaches the broker). */
+function widgetFailure(code: WhiteboardWidgetErrorCode, error: string): WhiteboardWidgetCommandOutcome {
+  return { Ok: false, Code: code, Error: error };
+}
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
 export interface WhiteboardAgentPresence {
@@ -282,6 +301,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   @Output() ContentApplying = new EventEmitter<WhiteboardContentApplyingEventArgs>();
   /** AFTER event: an editor commit applied to the state engine. */
   @Output() ContentApplied = new EventEmitter<WhiteboardContentAppliedEventArgs>();
+  /**
+   * AFTER event: a widget reported the actions it offers (on ready, and whenever it
+   * registers or removes one). Consumers tell their agent what a widget can do.
+   */
+  @Output() WidgetActionsChanged = new EventEmitter<WhiteboardWidgetActionsChangedEventArgs>();
 
   @ViewChild('canvas') private canvasRef?: ElementRef<HTMLDivElement>;
   /** The page strip — the context menu's "Rename page" routes to its inline editor. */
@@ -346,6 +370,29 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   /** Whether the single window 'message' listener (the widget input bridge) is attached. */
   private widgetMessageListenerAttached = false;
 
+  // ── Two-way widget protocol ─────────────────────────────────────────────────
+  /** Refcounted "keep this widget's frame mounted" pins (item ID → count), see {@link PinMount}. */
+  private readonly pinnedMounts = new Map<string, number>();
+  /** The widget frames rendered at the last view check (item ID → its contentWindow). */
+  private readonly mountedFrames = new Map<string, Window>();
+  private contentChangedSub?: Subscription;
+  private destroyed = false;
+  /** What the broker needs from this board: mount / reveal, restore source, and change hooks. */
+  private readonly brokerHost: WhiteboardWidgetBrokerHost = {
+    RequestMount: (itemId, reveal) => {
+      this.PinMount(itemId);
+      if (reveal) {
+        this.RevealItem(itemId);
+      }
+    },
+    ReleaseMount: (itemId) => this.UnpinMount(itemId),
+    GetRestoreState: (itemId) => this.State.GetWidgetState(itemId),
+    ActionsChanged: (itemId, actions) => this.emitActionsChanged(itemId, actions),
+    StateChanged: (itemId, stateJson) => this.State.SetWidgetState(itemId, stateJson)
+  };
+  /** Request/reply bookkeeping for commands sent into this board's widgets. */
+  private readonly widgetBroker = new WhiteboardWidgetBroker(this.brokerHost);
+
   ngOnInit(): void {
     this.changedSub = this.State.Changed$.subscribe((change) => {
       if (change.Op === 'add' && change.Author === 'agent') {
@@ -373,6 +420,13 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       this.recomputeRenderBuckets();
       this.syncWidgetMessageListener();
       this.cdr.markForCheck();
+    });
+    // A new Html on a widget reloads its document in place (same window object): tell
+    // the broker before the new document's ready arrives, so in-flight commands fail fast.
+    this.contentChangedSub = this.State.ContentChanged$.subscribe((e) => {
+      if (e.Item.Kind === 'html' && e.Patch.Html !== undefined) {
+        this.widgetBroker.OnContentReloading(e.Item.ID);
+      }
     });
     this.recomputeRenderBuckets();
     this.syncWidgetMessageListener();
@@ -414,6 +468,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this._inkItems = ink;
     this._connectorItems = connectors;
     this._highlightItems = highlights;
+    this._minimapItemsCache = null;
+    this._contentBoundsCacheComputed = false;
   }
 
   ngOnDestroy(): void {
@@ -421,7 +477,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       clearTimeout(this.steppingTimer);
       this.steppingTimer = null;
     }
+    this.destroyed = true;
     this.changedSub?.unsubscribe();
+    this.contentChangedSub?.unsubscribe();
+    this.widgetBroker.Dispose();
     for (const t of this.popInTimers) {
       clearTimeout(t);
     }
@@ -429,6 +488,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       window.removeEventListener('message', this.onWindowMessage);
       this.widgetMessageListenerAttached = false;
     }
+    if (this.canvasResizeObserver) {
+      this.canvasResizeObserver.disconnect();
+      this.canvasResizeObserver = null;
+    }
+    this.widgetFrameObserver?.disconnect();
+    this.widgetFrameObserver = null;
   }
 
   ngAfterViewChecked(): void {
@@ -438,6 +503,27 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       editor?.focus();
     }
     this.observeCanvasSize();
+    this.observeWidgetFrames();
+    this.syncMountedWidgetFrames();
+  }
+
+  /**
+   * Watches the canvas for widget frames entering or leaving the DOM. `ngAfterViewChecked`
+   * alone is not enough: a local `detectChanges()` (pan, zoom, pin refresh) re-renders this
+   * board's template without running its own view-checked hook, so a frame could unmount
+   * unseen and the broker would keep sending to a dead window. Attached once.
+   */
+  private observeWidgetFrames(): void {
+    const el = this.canvasRef?.nativeElement;
+    if (!el || this.widgetFrameObserver || typeof MutationObserver === 'undefined') {
+      return;
+    }
+    this.widgetFrameObserver = new MutationObserver((records) => {
+      if (records.some((r) => mutationTouchesWidgetFrame(r))) {
+        this.syncMountedWidgetFrames();
+      }
+    });
+    this.widgetFrameObserver.observe(el, { childList: true, subtree: true });
   }
 
   // ── Hidden-host layout recovery ─────────────────────────────────────────────
@@ -452,6 +538,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   /** Observer driving {@link onCanvasResize}; created once the canvas element exists. */
   private canvasResizeObserver: ResizeObserver | null = null;
+  /** Observer keeping the broker's mount view current, see {@link observeWidgetFrames}. */
+  private widgetFrameObserver: MutationObserver | null = null;
   /** True once the canvas has had a real (non-zero) layout. */
   private hadRealLayout = false;
   /** True once the user pans/zooms — the auto-fit must never fight a chosen viewport. */
@@ -662,6 +750,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public StickyRotation(item: WhiteboardStickyItem): string {
     return `rotate(${item.Rotation ?? 0}deg)`;
+  }
+
+  /** The `wb-tag-<slug>` wrapper class for a tagged item, '' otherwise (see {@link WhiteboardTagClass}). */
+  public TagClass(item: WhiteboardItem): string {
+    return WhiteboardTagClass(item.Tag);
   }
 
   public StickyTintClass(item: WhiteboardStickyItem): string {
@@ -1262,9 +1355,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    * {@link WidgetSubmitted} event pair.
    */
   private onWindowMessage = (event: MessageEvent): void => {
-    const widget = this.resolveWidgetFromSource(event.source);
+    const frame = this.resolveWidgetFrame(event.source);
+    const widget = frame ? { ItemID: frame.ItemID, Title: frame.Title } : null;
     const outcome = EvaluateWidgetSubmitMessage(event.data, widget);
     if (outcome.Kind === 'submit') {
+      this.gateAgentAuthor(outcome.Event);
       const submitting: WhiteboardWidgetSubmittingEventArgs = { Event: outcome.Event, Cancel: false };
       this.WidgetSubmitting.emit(submitting);
       if (!submitting.Cancel) {
@@ -1280,23 +1375,30 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       console.warn('Whiteboard widget submit dropped: message source is not a tracked widget frame.');
     }
     else {
-      // 'not-submit' — may be the injected recorder's AMBIENT interaction batch instead.
-      this.handleInteractionMessage(event.data, widget);
+      // 'not-submit' — may be the injected recorder's AMBIENT interaction batch, or a
+      // two-way protocol message (ready / actions / state / reply).
+      if (!this.handleInteractionMessage(event.data, widget)) {
+        this.handleWidgetChannelMessage(event.data, frame);
+      }
     }
   };
 
   /**
    * Second leg of the message listener: evaluate a non-submit message against the ambient
    * interaction contract and surface accepted batches through {@link WidgetInteraction}.
-   * `'not-interaction'` is unrelated postMessage traffic — ignored silently, like the
-   * submit path's `'not-submit'`.
+   * Returns `false` only for `'not-interaction'` (no interaction marker), so the caller can
+   * try the two-way protocol next; anything else was handled (emitted or dropped) here.
    */
-  private handleInteractionMessage(messageData: unknown, widget: { ItemID: string; Title?: string } | null): void {
+  private handleInteractionMessage(messageData: unknown, widget: { ItemID: string; Title?: string } | null): boolean {
     const outcome = EvaluateWidgetInteractionMessage(messageData, widget);
     if (outcome.Kind === 'interaction') {
+      this.gateAgentAuthor(outcome.Event);
       this.WidgetInteraction.emit(outcome.Event);
       this.cdr.markForCheck();
-      return;
+      return true;
+    }
+    if (outcome.Reason === 'not-interaction') {
+      return false;
     }
     if (outcome.Reason === 'oversize') {
       console.warn(`Whiteboard widget interaction dropped: batch exceeds ${WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS} chars.`);
@@ -1307,34 +1409,225 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     else if (outcome.Reason === 'bad-shape') {
       console.warn('Whiteboard widget interaction dropped: events batch is malformed.');
     }
+    return true;
   }
 
   /** Resolve a message `event.source` to the tracked widget iframe (window → item) it belongs to. */
   private resolveWidgetFromSource(source: MessageEventSource | null): { ItemID: string; Title?: string } | null {
+    const frame = this.resolveWidgetFrame(source);
+    return frame ? { ItemID: frame.ItemID, Title: frame.Title } : null;
+  }
+
+  /** Like {@link resolveWidgetFromSource}, also returning the frame's window (the reply/command address). */
+  private resolveWidgetFrame(source: MessageEventSource | null): { ItemID: string; Title?: string; Window: Window } | null {
     if (!source) {
       return null;
     }
-    const frames = this.canvasRef?.nativeElement.querySelectorAll<HTMLIFrameElement>('iframe.html-card__frame[data-item-id]');
-    if (!frames) {
-      return null;
-    }
-    for (const frame of Array.from(frames)) {
-      if (frame.contentWindow === source) {
+    for (const frame of this.renderedWidgetFrames()) {
+      if (frame.contentWindow && frame.contentWindow === source) {
         const id = frame.dataset['itemId'];
         const item = id ? this.State.GetItem(id) : undefined;
         if (item && item.Kind === 'html') {
-          return { ItemID: item.ID, Title: item.Title };
+          return { ItemID: item.ID, Title: item.Title, Window: frame.contentWindow };
         }
       }
     }
     return null;
   }
 
+  /** The widget iframes currently in the DOM. */
+  private renderedWidgetFrames(): HTMLIFrameElement[] {
+    const frames = this.canvasRef?.nativeElement.querySelectorAll<HTMLIFrameElement>('iframe.html-card__frame[data-item-id]');
+    return frames ? Array.from(frames) : [];
+  }
+
+  // ────────────────────────────────────────────── two-way widget protocol (commands → widgets)
+
+  /**
+   * Run one command (inspect / operate / call) against a widget on the ACTIVE page through
+   * the board's {@link WhiteboardWidgetBroker}. Always resolves: the widget's raw result, or
+   * a failure with a {@link WhiteboardWidgetErrorCode} the caller can hand to its agent
+   * (`widget_not_found` names {@link WHITEBOARD_TOOL_NAMES.SwitchPage} when the item lives
+   * on another page; `not_html` for a non-widget item).
+   */
+  public SendWidgetCommand(request: WhiteboardWidgetCommandRequest): Promise<WhiteboardWidgetCommandOutcome> {
+    const item = this.State.GetItem(request.ItemID);
+    if (!item) {
+      return Promise.resolve(widgetFailure('widget_not_found', this.widgetNotFoundMessage(request.ItemID)));
+    }
+    if (item.Kind !== 'html') {
+      return Promise.resolve(widgetFailure('not_html', `Item ${item.ID} is a ${item.Kind}, not an HTML widget.`));
+    }
+    // Reconcile mounts first so the broker never acts on a frame that already left the DOM.
+    this.syncMountedWidgetFrames();
+    return this.widgetBroker.Send(request);
+  }
+
+  /** The actions a widget currently offers (empty until its helper reports ready). */
+  public GetWidgetActions(itemId: string): WhiteboardWidgetActionInfo[] {
+    return this.widgetBroker.GetActions(itemId);
+  }
+
+  /**
+   * Keep a widget's frame mounted even when it is off-screen, WITHOUT moving the viewport
+   * (an agent reading a widget must never yank the user's view). Refcounted: every call is
+   * matched by one {@link UnpinMount}.
+   */
+  public PinMount(itemId: string): void {
+    this.pinnedMounts.set(itemId, (this.pinnedMounts.get(itemId) ?? 0) + 1);
+    this.refreshView();
+  }
+
+  /** Release one {@link PinMount}; the frame unmounts again if it is off-screen. */
+  public UnpinMount(itemId: string): void {
+    const count = this.pinnedMounts.get(itemId) ?? 0;
+    if (count <= 1) {
+      this.pinnedMounts.delete(itemId);
+    }
+    else {
+      this.pinnedMounts.set(itemId, count - 1);
+    }
+    this.refreshView();
+  }
+
+  /** Whether a widget's frame is pinned mounted by {@link PinMount}. */
+  public IsMountPinned(itemId: string): boolean {
+    return this.pinnedMounts.has(itemId);
+  }
+
+  /** Template gate for a widget's live frame: near the viewport, or pinned by a command. */
+  public ShouldMountWidget(item: WhiteboardItem): boolean {
+    return this.IsNearViewport(item) || this.pinnedMounts.has(item.ID);
+  }
+
+  /**
+   * Pan so the item is centered (zoom unchanged) — only when it is NOT already near the
+   * viewport and the user is not mid-gesture, so an agent operating a visible widget never
+   * moves the board. Used for operate / call, so the user sees what the agent does.
+   */
+  public RevealItem(itemId: string): void {
+    const item = this.State.GetItem(itemId);
+    const el = this.canvasRef?.nativeElement;
+    if (!item || !el || el.clientWidth === 0 || el.clientHeight === 0 || this.Interaction || this.IsNearViewport(item)) {
+      return;
+    }
+    const b = this.State.ItemBounds(item);
+    this.PanX = el.clientWidth / 2 - (b.X + b.W / 2) * this.Zoom;
+    this.PanY = el.clientHeight / 2 - (b.Y + b.H / 2) * this.Zoom;
+    this.viewportTouched = true; // a chosen viewport — the first-layout auto-fit must not fight it
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Route one validated two-way protocol message to the broker. `frame` is the resolved
+   * sender; its window is the only address replies are matched against.
+   */
+  private handleWidgetChannelMessage(messageData: unknown, frame: { ItemID: string; Window: Window } | null): void {
+    const outcome = EvaluateWidgetChannelMessage(messageData, frame);
+    if (outcome.Kind === 'dropped') {
+      if (outcome.Reason !== 'not-widget-channel') {
+        console.warn(`Whiteboard widget message dropped (${outcome.Reason}).`);
+      }
+      return;
+    }
+    if (frame) {
+      this.dispatchWidgetChannelMessage(outcome.Message, frame.Window);
+    }
+  }
+
+  private dispatchWidgetChannelMessage(message: WhiteboardWidgetChannelMessage, source: Window): void {
+    switch (message.Kind) {
+      case 'ready':
+        this.widgetBroker.OnReady(message.ItemID, source, message.DocumentToken, message.Actions, message.HasState);
+        break;
+      case 'actions':
+        this.widgetBroker.OnActions(message.ItemID, source, message.Actions);
+        break;
+      case 'state':
+        this.widgetBroker.OnState(message.ItemID, source, message.StateJson, message.DocumentToken);
+        break;
+      case 'reply':
+        this.widgetBroker.OnReply(message.ItemID, source, message.Reply);
+        break;
+    }
+  }
+
+  /**
+   * Host-side gate on a frame's `agent` tag: honoured only while the broker's agent window
+   * for that widget is open (an agent command running, or just ended). Anything else is
+   * the user's own input, whatever the frame claims.
+   */
+  private gateAgentAuthor(event: WhiteboardWidgetSubmitEvent | WhiteboardWidgetInteractionEvent): void {
+    if (event.Author === 'agent' && !this.widgetBroker.IsAgentWindowOpen(event.ItemID)) {
+      event.Author = 'user';
+    }
+  }
+
+  /**
+   * Diff the rendered widget frames (item ID + contentWindow identity) against the last
+   * check and tell the broker about mounts and unmounts. Runs after every view check; cheap
+   * (one query over the iframes) and skipped while the board has no widgets.
+   */
+  private syncMountedWidgetFrames(): void {
+    if (!this.widgetMessageListenerAttached && this.mountedFrames.size === 0) {
+      return;
+    }
+    const seen = new Map<string, Window>();
+    for (const frame of this.renderedWidgetFrames()) {
+      const id = frame.dataset['itemId'];
+      if (id && frame.contentWindow) {
+        seen.set(id, frame.contentWindow);
+      }
+    }
+    for (const [id, win] of Array.from(this.mountedFrames)) {
+      if (seen.get(id) !== win) {
+        this.mountedFrames.delete(id);
+        this.widgetBroker.OnUnmounted(id);
+      }
+    }
+    for (const [id, win] of seen) {
+      if (!this.mountedFrames.has(id)) {
+        this.mountedFrames.set(id, win);
+        this.widgetBroker.OnMounted(id, win);
+      }
+    }
+  }
+
+  private emitActionsChanged(itemId: string, actions: WhiteboardWidgetActionInfo[]): void {
+    const item = this.State.GetItem(itemId);
+    const title = item && item.Kind === 'html' ? item.Title ?? '' : '';
+    this.WidgetActionsChanged.emit(new WhiteboardWidgetActionsChangedEventArgs(itemId, title, actions));
+  }
+
+  /** Re-render after a pin change so a pinned frame mounts (or an unpinned one leaves) promptly. */
+  private refreshView(): void {
+    this.cdr.markForCheck();
+    void Promise.resolve().then(() => {
+      if (!this.destroyed) {
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  /** The `widget_not_found` message: names the page the item is on, or lists the widgets here. */
+  private widgetNotFoundMessage(itemId: string): string {
+    const page = this.State.FindItemPage(itemId);
+    if (page) {
+      return `Widget "${itemId}" is on page "${page.Name}", not the active page "${this.State.ActivePageName}". ` +
+        `Switch first with ${WHITEBOARD_TOOL_NAMES.SwitchPage}.`;
+    }
+    const widgets = this.State.Items.filter((i) => i.Kind === 'html').map((i) => i.ID).join(', ') || '(none)';
+    return `No widget with id "${itemId}" on the active page "${this.State.ActivePageName}". Widgets here: ${widgets}.`;
+  }
+
   /**
    * Cheap "on-screen-ish" check that gates iframe instantiation for HTML widgets: only
    * widgets within (or near) the current viewport get a live sandboxed frame; the rest
    * render a static placeholder until panned/zoomed into view. Re-entering view re-creates
-   * the frame (any internal widget state resets — acceptable for board decorations).
+   * the frame from a freshly built document; on its ready the broker hands back the saved
+   * widget state ({@link WhiteboardState.GetWidgetState}), so widgets that use
+   * `setState`/`onRestore`, or automatic form state, come back where they were. Agent
+   * commands keep an off-screen frame mounted via {@link ShouldMountWidget} / {@link PinMount}.
    */
   public IsNearViewport(item: WhiteboardItem): boolean {
     const el = this.canvasRef?.nativeElement;
@@ -1659,19 +1952,30 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.ContextMenu = null;
   }
 
+  private _minimapItemsCache: { X: number; Y: number; W: number; H: number; Agent: boolean }[] | null = null;
+  private _contentBoundsCache: WhiteboardBounds | null = null;
+  private _contentBoundsCacheComputed = false;
+
   // minimap render model
   public get MinimapViewBox(): string {
     const world = this.minimapWorld();
     return `${world.X} ${world.Y} ${world.W} ${world.H}`;
   }
 
+  /**
+   * Precomputed minimap item bounds, invalidated when `State.Changed$` fires (via `recomputeRenderBuckets`)
+   * so 60fps pointer-move pan/zoom passes do not recompute `State.Items` or `ItemBounds` across all shapes.
+   */
   public get MinimapItems(): { X: number; Y: number; W: number; H: number; Agent: boolean }[] {
-    return this.State.Items
-      .filter((i) => i.Kind !== 'highlight')
-      .map((i) => {
-        const b = this.State.ItemBounds(i);
-        return { X: b.X, Y: b.Y, W: Math.max(b.W, 8), H: Math.max(b.H, 8), Agent: i.Author === 'agent' };
-      });
+    if (this._minimapItemsCache === null) {
+      this._minimapItemsCache = this.State.Items
+        .filter((i) => i.Kind !== 'highlight')
+        .map((i) => {
+          const b = this.State.ItemBounds(i);
+          return { X: b.X, Y: b.Y, W: Math.max(b.W, 8), H: Math.max(b.H, 8), Agent: i.Author === 'agent' };
+        });
+    }
+    return this._minimapItemsCache;
   }
 
   public get MinimapViewport(): WhiteboardBounds {
@@ -1681,8 +1985,16 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return { X: -this.PanX / this.Zoom, Y: -this.PanY / this.Zoom, W: w / this.Zoom, H: h / this.Zoom };
   }
 
+  private getCachedContentBounds(): WhiteboardBounds | null {
+    if (!this._contentBoundsCacheComputed) {
+      this._contentBoundsCache = this.State.ContentBounds();
+      this._contentBoundsCacheComputed = true;
+    }
+    return this._contentBoundsCache;
+  }
+
   private minimapWorld(): WhiteboardBounds {
-    const content = this.State.ContentBounds();
+    const content = this.getCachedContentBounds();
     const vp = this.MinimapViewport;
     const minX = Math.min(content?.X ?? vp.X, vp.X) - 40;
     const minY = Math.min(content?.Y ?? vp.Y, vp.Y) - 40;

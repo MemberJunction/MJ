@@ -85,10 +85,13 @@ import type { RecordRef, RecordProcessorContext } from '@memberjunction/record-s
 
 const INTEGRATION_ENABLED = process.env.PS_INTEGRATION === '1';
 
-/** Resolve the bundled Sidecar venv python; null when it doesn't exist. */
+/** The sidecar interpreter: PREDICTIVE_STUDIO_PYTHON when set, else the bundled Sidecar venv; null when neither exists. */
 function resolveVenvPython(): string | null {
+  const fromEnv = process.env.PREDICTIVE_STUDIO_PYTHON?.trim();
+  if (fromEnv !== undefined && fromEnv.length > 0) {
+    return existsSync(fromEnv) ? fromEnv : null;
+  }
   const here = path.dirname(fileURLToPath(import.meta.url));
-  // …/Engine/src/__tests__/integration → up to PredictiveStudio, then Sidecar/.venv
   const venv = path.resolve(here, '..', '..', '..', '..', 'Sidecar', '.venv', 'bin', 'python');
   return existsSync(venv) ? venv : null;
 }
@@ -104,8 +107,8 @@ if (INTEGRATION_ENABLED && VENV_PYTHON === null) {
   // eslint-disable-next-line no-console
   console.warn(
     '[PS integration] PS_INTEGRATION=1 but the sidecar venv was not found at ' +
-      'packages/AI/PredictiveStudio/Sidecar/.venv. Run `npm run setup:python` in the Sidecar ' +
-      'package first. Skipping the live train+score integration suite.',
+      'packages/AI/PredictiveStudio/Sidecar/.venv (or PREDICTIVE_STUDIO_PYTHON). Run `npm run setup:python` in the Sidecar ' +
+      'package or set PREDICTIVE_STUDIO_PYTHON first. Skipping the live train+score integration suite.',
   );
 }
 
@@ -202,6 +205,15 @@ function clamp(v: number, lo: number, hi: number): number {
 // region: in-memory FeatureAssembly data source ------------------------------
 
 /**
+ * The provider slice training uses: `EntityByName` for the target's primary key, which orders the training read.
+ * Every row read goes through the in-memory data access, so nothing else on the provider is called.
+ */
+const TRAINING_PROVIDER = {
+  EntityByName: () => ({ PrimaryKeys: [{ Name: 'ID' }] }),
+} as unknown as IMetadataProvider;
+const TRAINING_USER = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
+
+/**
  * In-memory {@link IFeatureDataAccess} — feeds the REAL FeatureAssemblyExecutor
  * synthetic rows instead of a database/RunView. This is the legitimate seam the
  * executor exposes for exactly this purpose.
@@ -212,10 +224,10 @@ class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
     const rows = this.rowsByEntity[params.EntityName];
     if (!rows) {
-      return { Success: false, Rows: [], ErrorMessage: `No fixture for ${params.EntityName}` };
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `No fixture for ${params.EntityName}` };
     }
     const capped = params.MaxRows && params.MaxRows > 0 ? rows.slice(0, params.MaxRows) : rows;
-    return { Success: true, Rows: capped };
+    return { Success: true, Rows: capped, TotalRowCount: rows.length };
   }
 
   async fetchEmbedding(): Promise<number[] | null> {
@@ -454,7 +466,11 @@ function readMetric(model: RecordingEntity, field: 'Metrics' | 'HoldoutMetrics',
 // region: the suite ----------------------------------------------------------
 
 describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score (real sidecar)', () => {
-  const DATASET = buildDataset(420);
+  // 3,000 rows: the locked holdout is a seeded, stratified 20% sample (LockedHoldoutSplitter), and on
+  // this generator the xgboost holdout AUC's 1st percentile across random 600-row holdouts is 0.77,
+  // so the 0.7 floor below holds for any seed. At 420 rows the 84-row holdout AUC fell below 0.7 on
+  // 40% of carves and the floor only held by the luck of one particular carve.
+  const DATASET = buildDataset(3000);
   // Hold back the last 20 rows as a "fresh" scoring set the model never trained on.
   const SCORING_HOLDOUT = DATASET.slice(-20);
 
@@ -490,6 +506,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       recordLoader: new FakeRecordLoader(pipeline),
       sidecar: makeProductionTrainer(sidecar),
       artifactStore,
+      contextUser: TRAINING_USER,
+      provider: TRAINING_PROVIDER,
     };
 
     // REAL FeatureAssemblyExecutor reads the synthetic rows through the in-memory seam.
@@ -527,6 +545,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     expect(runRec.Fields.Status).toBe('Completed');
 
     // --- Score clearly-positive and clearly-negative rows through the REAL processor ---
+    model.Status = 'Validated';
     const modelLoader = new InMemoryModelLoader(model);
     const artifactLoader = new InMemoryArtifactLoader(artifactStore.Saved);
     const scoreDeps: MLInferenceDeps = {
@@ -611,6 +630,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       recordLoader: new FakeRecordLoader(pipeline),
       sidecar: makeProductionTrainer(sidecar),
       artifactStore,
+      contextUser: TRAINING_USER,
+      provider: TRAINING_PROVIDER,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
@@ -621,6 +642,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     expect(holdoutAuc!).toBeGreaterThanOrEqual(0.7);
 
     // Score the strong probes — logistic must also separate them.
+    model.Status = 'Validated';
     const scoreDeps: MLInferenceDeps = {
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
@@ -656,6 +678,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       recordLoader: new FakeRecordLoader(pipeline),
       sidecar: makeProductionTrainer(sidecar),
       artifactStore,
+      contextUser: TRAINING_USER,
+      provider: TRAINING_PROVIDER,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
@@ -670,6 +694,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     expect(holdoutR2!).toBeGreaterThanOrEqual(0.4);
 
     // Score a high-engagement vs low-engagement row → higher satisfaction for the former.
+    model.Status = 'Validated';
     const scoreDeps: MLInferenceDeps = {
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),

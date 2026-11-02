@@ -124,6 +124,9 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
     /** Sessions read best full-width, like the agent-run form. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     // UI state
     public ActiveTab: 'runs' | 'channels' | 'transcript' | 'details' = 'runs';
     public Loading = false;

@@ -1203,3 +1203,103 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
     });
   });
 });
+
+/**
+ * A restricted user's entity object never holds the fields they cannot read. Their Record
+ * Changes must still carry the whole record — the audit trail stores full payloads and projects
+ * them per reader — so the provider reads the stored row first and widens the snapshot from it.
+ */
+describe('SQLServerDataProvider Record Change snapshot of a narrowed object', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  /**
+   * A saved Widget held by a user who may not read Quantity: its hydration source omitted the
+   * field, as a restricted user's always does. Only such a user's save reads the stored row; an
+   * object that merely lacks a column its user may read is snapshotted as it is.
+   */
+  function makeNarrowedWidget(): TestEntity {
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true });
+    vi.spyOn(entityInfo, 'FieldLevelSecurityApplies', 'get').mockReturnValue(true);
+    vi.spyOn(entityInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['quantity']));
+    const entity = new TestEntity(entityInfo);
+    entity.ContextCurrentUser = TEST_USER;
+    const row = savedWidgetRow();
+    delete row.Quantity;
+    entity.Hydrate(row);
+    expect(entity.GetFieldByName('Quantity')?.NotLoaded).toBe(true);
+    return entity;
+  }
+
+  function fullRecordJSONInput(query: RecordedQuery): Record<string, unknown> {
+    const input = query.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{"ID"'));
+    expect(input, 'expected a FullRecordJSON input').toBeDefined();
+    return JSON.parse(String(input?.value)) as Record<string, unknown>;
+  }
+
+  it('UPDATE: FullRecordJSON carries the stored value the object never held; ChangesJSON only the change', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNarrowedWidget();
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77, Description: 'Second run' }] }); // the save
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Quantity] FROM [dbo].[vwWidgets] WHERE [ID]='w-0001'`);
+    const save = mssqlState.Queries[1];
+    const full = fullRecordJSONInput(save);
+    expect(full.Quantity).toBe(77);
+    expect(full.Description).toBe('Second run');
+    const changes = save.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{"Description"'));
+    expect(changes, 'expected a ChangesJSON input naming only Description').toBeDefined();
+    expect(Object.keys(JSON.parse(String(changes?.value)))).toEqual(['Description']);
+  });
+
+  it('UPDATE by a user denied nothing, of an object loaded without a column: one statement, no stored-row read', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = new TestEntity(makeWidgetEntityInfo({ trackRecordChanges: true }));
+    entity.ContextCurrentUser = TEST_USER;
+    const row = savedWidgetRow();
+    delete row.Quantity;
+    entity.Hydrate(row);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Description: 'Second run' }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(fullRecordJSONInput(mssqlState.Queries[0])).not.toHaveProperty('Quantity');
+  });
+
+  it('UPDATE of a full-width object: one statement, no stored-row read', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Description: 'Second run' }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(fullRecordJSONInput(mssqlState.Queries[0]).Quantity).toBe(3);
+  });
+
+  it('DELETE: the delete snapshot (what a restore brings back) carries the stored value', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNarrowedWidget();
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] }); // the delete
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(fullRecordJSONInput(mssqlState.Queries[1]).Quantity).toBe(77);
+  });
+});

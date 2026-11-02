@@ -31,7 +31,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 // GetSaveSQL is async because it may need to encrypt field values
                                 const bCreate = item.OperationType === 'Create';
                                 const spName = sqlProvider.GetCreateUpdateSPName(item.BaseEntity, bCreate);
-                                const newInstruction = await sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
+                                const newInstruction = await sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser, transaction);
                                 item.Instruction = newInstruction; // update the instruction with the new values
                             }
                             

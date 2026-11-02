@@ -696,7 +696,8 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 const records = cfg.PropertyName ? engineObj[cfg.PropertyName] : undefined;
                 if (!Array.isArray(records)) continue;
 
-                const unfiltered = !cfg.Filter || cfg.Filter.trim().length === 0;
+                const unfiltered = (!cfg.Filter || cfg.Filter.trim().length === 0)
+                    && (!cfg.AlternateBaseView || cfg.AlternateBaseView.trim().length === 0);
                 if (options?.unfilteredOnly && !unfiltered) continue;
 
                 matches.push({

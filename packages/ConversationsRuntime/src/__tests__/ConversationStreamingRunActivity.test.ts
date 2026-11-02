@@ -176,3 +176,43 @@ describe('ConversationStreaming message activity', () => {
         expect(streaming.LastHeardForMessage(DETAIL_ID)).toBeUndefined();
     });
 });
+
+describe('ConversationStreaming routes by the reply row every message carries', () => {
+    beforeEach(() => {
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it("routes a progress frame whose run names no detail to the reply row the server stamped on it", async () => {
+        const streaming = buildStreaming();
+        const callback = vi.fn(async () => undefined);
+        streaming.RegisterMessageCallback(DETAIL_ID, callback);
+
+        await deliver(streaming, {
+            resolver: 'RunAIAgentResolver',
+            type: 'ExecutionProgress',
+            status: 'ok',
+            data: {
+                agentRunId: RUN_ID,
+                type: 'progress',
+                conversationDetailId: DETAIL_ID,
+                agentRun: { ID: RUN_ID },
+                progress: { message: 'Reading the file', percentage: 10 },
+            },
+        });
+
+        expect(callback).toHaveBeenCalledOnce();
+        expect(callback.mock.calls[0][0]).toMatchObject({ conversationDetailId: DETAIL_ID, message: 'Reading the file' });
+    });
+
+    it("still routes by the run's own detail when it names one, as before", async () => {
+        const streaming = buildStreaming();
+        const callback = vi.fn(async () => undefined);
+        streaming.RegisterMessageCallback(DETAIL_ID, callback);
+
+        await deliver(streaming, progressFrame(RUN_ID));
+
+        expect(callback).toHaveBeenCalledOnce();
+    });
+});

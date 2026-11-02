@@ -11,23 +11,60 @@
  *
  * Conversation-originated responses are handled by the chat resolver's
  * `syncFeedbackRequestFromConversation()` and never reach this code path.
+ *
+ * Ownership: a request is private to the user it is for. The UI role may create and update
+ * requests (granted in `metadata/entity-permissions`), so `Validate()` keeps the rows per-user:
+ * a non-Owner-type user may create a request only for themselves and may update only a request
+ * that was already theirs (the PRE-save `RequestForUserID`). Owner-type users, the scheduler's
+ * system user among them, are exempt, which is what cross-user paths such as Send Inter-Agent
+ * Request run under.
  */
 
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
+import { AgentWakeTriggerService } from './AgentWakeTriggerService';
 
 /** Statuses that indicate a human has responded */
 const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
 
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
 export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.validateOwnership(result);
+        result.Success = result.Success && result.Errors.length === 0;
+        return result;
+    }
+
+    /**
+     * A non-Owner-type user may only save a request that is for them: on create, the one they
+     * are creating; on update, the one it was for before this save (so reassigning
+     * RequestForUserID cannot bypass the gate).
+     */
+    private validateOwnership(result: ValidationResult): void {
+        const user = this.ContextCurrentUser;
+        if (!user || user.Type?.trim().toLowerCase() === 'owner') {
+            return;
+        }
+        const preSaveOwner = (this.GetFieldByName('RequestForUserID')?.OldValue as string | null | undefined) ?? this.RequestForUserID;
+        if (preSaveOwner && !UUIDsEqual(preSaveOwner, user.ID)) {
+            result.Errors.push(new ValidationErrorInfo(
+                'RequestForUserID',
+                'An agent request is private to the user it is for — you can only create or modify your own requests.',
+                this.RequestForUserID,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // Capture pre-save state to detect status transitions
         const statusField = this.GetFieldByName('Status');
+        const wasNewRecord = !this.IsSaved;
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
 
@@ -58,6 +95,32 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             this.resumeAgent().catch(error => {
                 LogError(`Failed to resume agent for request ${this.ID}: ${(error as Error).message}`, undefined, error);
             });
+        } else if (
+            this.OriginatingAgentRunID == null &&
+            this.ResumingAgentRunID == null &&
+            this.OriginatingTaskID == null &&
+            this.AgentID != null
+        ) {
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            if (wasRequested && isNowResponded) {
+                // Action-created approval or inter-agent request was resolved — schedule immediate AgentWake
+                AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                    this,
+                    this.ContextCurrentUser,
+                    md
+                ).catch(error => {
+                    LogError(`Failed to schedule resolution wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
+                });
+            } else if (wasNewRecord && this.Status === 'Requested') {
+                // Newly created peer-to-peer InterAgent request — schedule immediate AgentWake for target user's CoS
+                AgentWakeTriggerService.Instance.TriggerWakeOnIncomingInterAgentRequest(
+                    this,
+                    this.ContextCurrentUser,
+                    md
+                ).catch(error => {
+                    LogError(`Failed to schedule incoming inter-agent wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
+                });
+            }
         }
 
         return true;
@@ -118,12 +181,15 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
 
         // Run the agent with lastRunId to continue the conversation
         const runner = new AgentRunner();
+        const allowHandoff = !(contextUser?.IsMagicLinkAnonymous || Boolean(contextUser?.WidgetGuestContext));
+        const initialMessages = [...conversationMessages];
         const params: ExecuteAgentParams = {
             agent: agentEntity,
-            conversationMessages,
+            conversationMessages: [...initialMessages],
             contextUser,
             lastRunId: this.OriginatingAgentRunID!,
             autoPopulateLastRunPayload: true,
+            ...(allowHandoff ? { handoffChain: [] } : {}),
             ...(isPlanResume ? { planMode: true } : {}),
             ...(branchId ? { ConversationBranchID: branchId } : {})
         };
@@ -144,6 +210,16 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             } else {
                 LogError(`Failed to save ResumingAgentRunID for request ${this.ID}`);
             }
+        }
+
+        if (allowHandoff && result.agentResult.handoff && result.conversationId && result.agentResponseDetailId) {
+            await runner.FollowHandoffs({
+                params: { ...params, conversationMessages: initialMessages },
+                sourceResult: result.agentResult,
+                conversationId: result.conversationId,
+                sourceConversationDetailId: result.agentResponseDetailId,
+                createArtifacts: true
+            });
         }
     }
 

@@ -17,7 +17,7 @@ import { CreateBridgeRoomTranscriptSink, type BridgeTranscriptLineInput } from '
 /** A minimal fake BaseEntity that records assigned fields as own properties + a settable id. */
 function makeFakeEntity(id: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return { ID: id, NewRecord: vi.fn(), Save: vi.fn(async () => true), LatestResult: { CompleteMessage: '' } } as any;
+    return { ID: id, NewRecord: vi.fn(), MarkServerAuthoredReply: vi.fn(), Save: vi.fn(async () => true), LatestResult: { CompleteMessage: '' } } as any;
 }
 
 /** Provider that returns the same Conversation entity but a FRESH detail per GetEntityObject (no cross-test bleed). */

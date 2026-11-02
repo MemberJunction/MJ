@@ -10,9 +10,11 @@ import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
+import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { CanonicalPrimaryKeyValue } from "./util";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, EscapeSQLString } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -27,6 +29,30 @@ export type FieldChange = {
     oldValue: unknown;
     newValue: unknown;
 };
+
+/**
+ * Options controlling how {@link Metadata.GetRecordDependencies} discovers dependent records.
+ */
+export interface GetRecordDependenciesOptions {
+    /**
+     * Which category of foreign-key links to inspect:
+     * - `'both'` (default): Both hard database foreign keys (`EntityField.RelatedEntityID`) and
+     *   polymorphic / soft foreign keys (`EntityField.EntityIDFieldName`).
+     * - `'hard'`: Only direct foreign-key relationships (`RelatedEntityID` is set and `EntityIDFieldName` is empty).
+     * - `'soft'`: Only polymorphic foreign-key relationships (`EntityIDFieldName` is set).
+     */
+    LinkType?: 'both' | 'hard' | 'soft';
+    /**
+     * Whether to include high-volume system audit/telemetry entities (`MJ: Record Changes`,
+     * `MJ: Audit Logs`, `MJ: User Record Logs`, `MJ: User RecordAccess`).
+     * Defaults to `true` for delete/merge safety checks; UI record-link viewers pass `false`.
+     */
+    IncludeSystemEntities?: boolean;
+    /**
+     * Optional allow-list of entity names to restrict the dependency scan to.
+     */
+    EntityNames?: string[];
+}
 
 /**
  * Result of save SQL generation. Subclasses populate this from their dialect-specific
@@ -496,20 +522,56 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     protected abstract BuildChildDiscoverySQL(childEntities: EntityInfo[], recordPKValue: string): string;
 
     /**
+     * Builds a batched UNION ALL query probing all `childEntities`' `BaseView`s for a set
+     * of parent primary-key values (`WHERE pk IN (...)`), returning `(EntityName, RecordPK, Priority)`.
+     * Dialect providers override this to use platform-native string-literal and CAST syntax.
+     */
+    protected BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const escapedKeys = recordPKValues
+            .map(v => `'${EscapeSQLString(String(v))}'`)
+            .join(', ');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+                const sourceRef = this.QuoteSchemaAndView(schema, child.BaseView);
+                const pkRef = this.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A children share the parent's single key
+                const escapedName = `'${EscapeSQLString(child.Name)}'`;
+                return `SELECT ${escapedName} AS ${this.QuoteIdentifier('EntityName')}, CAST(${pkRef} AS VARCHAR(255)) AS ${this.QuoteIdentifier('RecordPK')}, ${idx + 1} AS ${this.QuoteIdentifier('Priority')} FROM ${sourceRef} WHERE ${pkRef} IN (${escapedKeys})`;
+            });
+        return unionParts.length > 0 ? unionParts.join(' UNION ALL ') : '';
+    }
+
+    /**
      * Builds SQL for hard-link (foreign key) dependency queries.
      * Returns a UNION ALL query across all dependent entities.
-     * @param entityDependencies The entity-level dependency metadata
+     * @param entityDependencies The entity-level dependency metadata (or entity name to resolve dependencies for)
      * @param compositeKey The primary key of the record being checked
+     * @param options Optional filtering options for dependency discovery
+     * @param contextUser Optional user context for permission filtering
      */
-    protected abstract BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string;
+    protected abstract BuildHardLinkDependencySQL(
+        entityDependencies: EntityDependency[] | string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo
+    ): string;
 
     /**
      * Builds SQL for soft-link dependency queries (entities using EntityIDFieldName pattern).
      * Returns a UNION ALL query across all soft-linked entities.
      * @param entityName The entity name being checked for dependencies
      * @param compositeKey The primary key of the record
+     * @param options Optional filtering options for dependency discovery
+     * @param contextUser Optional user context for permission filtering
      */
-    protected abstract BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string;
+    protected abstract BuildSoftLinkDependencySQL(
+        entityName: string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo
+    ): string;
 
     /**
      * Generates the SQL (and optional parameters) for a Save (Create or Update) operation.
@@ -853,6 +915,122 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         return [];
     }
 
+    private static readonly DEFAULT_ISA_DISCOVERY_BATCH_CHUNK_SIZE = 500;
+
+    /**
+     * Maximum number of parent primary keys included in a single `BuildChildDiscoveryBatchSQL`
+     * `WHERE PK IN (...)` statement inside {@link FindISAChildEntitiesBatch}.
+     */
+    protected get ISADiscoveryBatchChunkSize(): number {
+        return DatabaseProviderBase.DEFAULT_ISA_DISCOVERY_BATCH_CHUNK_SIZE;
+    }
+
+    /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked at {@link ISADiscoveryBatchChunkSize} keys per statement to
+     * stay well within SQL limits).
+     */
+    public async FindISAChildEntitiesBatch(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>> {
+        const resultMap = new Map<string, string[]>();
+        const childEntities = entityInfo.ChildEntities;
+        if (childEntities.length === 0 || recordPKValues.length === 0) {
+            return resultMap;
+        }
+
+        // IS-A children share the parent's single key, so the parent's key type decides how values
+        // are canonicalized (UUIDs case-insensitively, anything else by exact text).
+        const pkIsUuid = Boolean(entityInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
+        const uniquePKs = this.deduplicateCanonicalPKs(recordPKValues, pkIsUuid);
+        if (uniquePKs.length === 0) {
+            return resultMap;
+        }
+
+        const priorityByChildName = new Map<string, number>();
+        for (let i = 0; i < childEntities.length; i++) {
+            priorityByChildName.set(childEntities[i].Name.toLowerCase(), i + 1);
+        }
+
+        const chunkSize = this.ISADiscoveryBatchChunkSize;
+        const collected = new Map<string, Array<{ name: string; priority: number }>>();
+        for (let start = 0; start < uniquePKs.length; start += chunkSize) {
+            const chunk = uniquePKs.slice(start, start + chunkSize);
+            await this.collectISAChildBatchChunk(
+                childEntities,
+                chunk,
+                pkIsUuid,
+                priorityByChildName,
+                collected,
+                contextUser
+            );
+        }
+
+        for (const [pkKey, entries] of collected) {
+            entries.sort((a, b) => a.priority - b.priority);
+            const names: string[] = [];
+            for (const entry of entries) {
+                if (!names.includes(entry.name)) {
+                    names.push(entry.name);
+                }
+            }
+            resultMap.set(pkKey, names);
+        }
+        return resultMap;
+    }
+
+    private deduplicateCanonicalPKs(recordPKValues: ReadonlyArray<string>, pkIsUuid: boolean): string[] {
+        const uniquePKs: string[] = [];
+        const seen = new Set<string>();
+        for (const rawPk of recordPKValues) {
+            if (!rawPk) continue;
+            const norm = CanonicalPrimaryKeyValue(String(rawPk), pkIsUuid);
+            if (!seen.has(norm)) {
+                seen.add(norm);
+                uniquePKs.push(String(rawPk).trim());
+            }
+        }
+        return uniquePKs;
+    }
+
+    private async collectISAChildBatchChunk(
+        childEntities: EntityInfo[],
+        chunk: string[],
+        pkIsUuid: boolean,
+        priorityByChildName: ReadonlyMap<string, number>,
+        collected: Map<string, Array<{ name: string; priority: number }>>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        const batchSQL = this.BuildChildDiscoveryBatchSQL(childEntities, chunk);
+        if (!batchSQL) return;
+
+        const rows = await this.ExecuteSQL<{ EntityName?: string; ChildEntityName?: string; RecordPK?: string; Priority?: number }>(
+            batchSQL,
+            undefined,
+            undefined,
+            contextUser
+        );
+        if (!rows || rows.length === 0) return;
+
+        for (const row of rows) {
+            const entityName = row.EntityName ?? row.ChildEntityName;
+            if (!entityName || row.RecordPK == null) continue;
+            const pkKey = CanonicalPrimaryKeyValue(String(row.RecordPK), pkIsUuid);
+            const priority =
+                typeof row.Priority === 'number'
+                    ? row.Priority
+                    : (priorityByChildName.get(entityName.toLowerCase()) ?? Number.MAX_SAFE_INTEGER);
+            let bucket = collected.get(pkKey);
+            if (!bucket) {
+                bucket = [];
+                collected.set(pkKey, bucket);
+            }
+            bucket.push({ name: entityName, priority });
+        }
+    }
+
     /**
      * Checks whether a given entity matches the target name, or is an ancestor
      * of the target (i.e., the target is somewhere in its descendant sub-tree).
@@ -988,16 +1166,149 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**************************************************************************/
 
     /**
+     * High-volume system audit/telemetry entities excluded when `options.IncludeSystemEntities === false`.
+     */
+    private static readonly _systemDependencyEntityNames: ReadonlySet<string> = new Set([
+        'mj: record changes',
+        'mj: audit logs',
+        'mj: user record logs',
+        'mj: user recordaccess',
+        'mj: entity record documents',
+    ]);
+
+    /**
+     * Normalizes `(contextUserOrOptions, options)` so callers can invoke `GetRecordDependencies`
+     * with either `(entityName, key, options)` or `(entityName, key, contextUser, options)`.
+     */
+    protected resolveRecordDependencyArgs(
+        contextUserOrOptions?: UserInfo | GetRecordDependenciesOptions,
+        options?: GetRecordDependenciesOptions
+    ): { contextUser?: UserInfo; options?: GetRecordDependenciesOptions } {
+        if (options !== undefined) {
+            return { contextUser: contextUserOrOptions as UserInfo | undefined, options };
+        }
+        if (!contextUserOrOptions) {
+            return { contextUser: undefined, options: undefined };
+        }
+        if (
+            contextUserOrOptions instanceof UserInfo ||
+            'UserRoles' in contextUserOrOptions ||
+            'Email' in contextUserOrOptions
+        ) {
+            return { contextUser: contextUserOrOptions as UserInfo, options: undefined };
+        }
+        return { contextUser: undefined, options: contextUserOrOptions as GetRecordDependenciesOptions };
+    }
+
+    /**
+     * Determines whether `relatedEntity` should be included in a record dependency scan
+     * based on `options` (`IncludeSystemEntities`, `EntityNames`) and `contextUser` read permissions.
+     */
+    protected shouldIncludeDependencyEntity(
+        relatedEntity: EntityInfo,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo
+    ): boolean {
+        if (!this.shouldIncludeDependencyEntityName(relatedEntity.Name, options)) {
+            return false;
+        }
+        if (contextUser && typeof relatedEntity.CheckPermissions === 'function') {
+            if (!relatedEntity.CheckPermissions(contextUser, EntityPermissionType.Read, false)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Checks name-based dependency filters (`IncludeSystemEntities` and `EntityNames`)
+     * when only the entity name is available.
+     */
+    protected shouldIncludeDependencyEntityName(
+        relatedEntityName: string,
+        options?: GetRecordDependenciesOptions
+    ): boolean {
+        const normalizedName = relatedEntityName.trim().toLowerCase();
+        if (options?.IncludeSystemEntities === false) {
+            if (DatabaseProviderBase._systemDependencyEntityNames.has(normalizedName)) {
+                return false;
+            }
+        }
+        if (options?.EntityNames && options.EntityNames.length > 0) {
+            const allowed = options.EntityNames.some(n => n.trim().toLowerCase() === normalizedName);
+            if (!allowed) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Resolves an `EntityDependency[] | string` argument to an `EntityDependency[]` array.
+     * Supports passing either a pre-resolved `EntityDependency[]` list or an `entityName` string.
+     */
+    protected resolveEntityDependencies(entityDependenciesOrName: EntityDependency[] | string): EntityDependency[] {
+        if (Array.isArray(entityDependenciesOrName)) {
+            return entityDependenciesOrName;
+        }
+        const eName = entityDependenciesOrName.trim().toLowerCase();
+        const result: EntityDependency[] = [];
+        for (const re of this.Entities) {
+            const relatedFields = re.Fields.filter(
+                f => f.RelatedEntity?.trim().toLowerCase() === eName && (!f.EntityIDFieldName || f.EntityIDFieldName.trim().length === 0)
+            );
+            for (const f of relatedFields) {
+                result.push({
+                    EntityName: entityDependenciesOrName,
+                    RelatedEntityName: re.Name,
+                    FieldName: f.Name,
+                });
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Selects `relatedEntity.BaseTable` when `BaseTable` is defined, the entity is not virtual,
+     * and all referenced columns (`PrimaryKeys` plus `referencedFieldNames`) are physical (`!f.IsVirtual`).
+     * Falls back to `relatedEntity.BaseView` when any referenced column is virtual or `BaseTable` is absent.
+     */
+    protected resolveDependencySourceObject(relatedEntity: EntityInfo, referencedFieldNames: string[]): string {
+        if (!relatedEntity.BaseTable || relatedEntity.BaseTable.trim().length === 0 || relatedEntity.VirtualEntity) {
+            return relatedEntity.BaseView;
+        }
+        if (relatedEntity.PrimaryKeys?.some(pk => pk.IsVirtual === true)) {
+            return relatedEntity.BaseView;
+        }
+        for (const fieldName of referencedFieldNames) {
+            const field = relatedEntity.Fields?.find(
+                f => f.Name?.trim().toLowerCase() === fieldName?.trim().toLowerCase()
+            );
+            if (field?.IsVirtual === true) {
+                return relatedEntity.BaseView;
+            }
+        }
+        return relatedEntity.BaseTable;
+    }
+
+    /**
      * Returns a list of record-level dependencies — records in other entities linked to
      * the specified entity/record via foreign keys (hard links) or EntityIDFieldName
      * soft links. Uses abstract SQL builders for dialect-specific query generation.
      *
      * @param entityName The entity name to check
      * @param compositeKey The primary key(s) of the record
-     * @param contextUser Optional context user
+     * @param contextUser Optional context user (or options when called with 3 args)
+     * @param options Optional filtering options (`LinkType`, `IncludeSystemEntities`, `EntityNames`)
      */
-    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(
+        entityName: string,
+        compositeKey: CompositeKey,
+        contextUser?: UserInfo | GetRecordDependenciesOptions,
+        options?: GetRecordDependenciesOptions
+    ): Promise<RecordDependency[]> {
         try {
+            const { contextUser: resolvedUser, options: resolvedOptions } = this.resolveRecordDependencyArgs(contextUser, options);
             const recordDependencies: RecordDependency[] = [];
 
             // Validate up front. Reporting "no dependencies" for an entity we cannot resolve would be
@@ -1007,21 +1318,44 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 throw new Error(`Entity ${entityName} not found in metadata`);
             }
 
-            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+            const linkType = resolvedOptions?.LinkType ?? 'both';
 
-            // Deliberately NO early return when there are no hard (foreign key) dependents. An entity
-            // whose only dependents are polymorphic EntityID/RecordID links is precisely the case the
-            // soft-link query exists to serve, and returning here skipped building it entirely.
-            const hardSQL = entityDependencies.length > 0 ? this.BuildHardLinkDependencySQL(entityDependencies, compositeKey) : '';
-            const softSQL = this.BuildSoftLinkDependencySQL(entityName, compositeKey);
+            let hardSQL = '';
+            if (linkType === 'both' || linkType === 'hard') {
+                const rawEntityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+                const entityDependencies = rawEntityDependencies.filter((dep) => {
+                    const relEntity = this.EntityByName(dep.RelatedEntityName);
+                    if (relEntity) {
+                        return this.shouldIncludeDependencyEntity(relEntity, resolvedOptions, resolvedUser);
+                    }
+                    return this.shouldIncludeDependencyEntityName(dep.RelatedEntityName, resolvedOptions);
+                });
+                // Deliberately NO early return when there are no hard (foreign key) dependents. An entity
+                // whose only dependents are polymorphic EntityID/RecordID links is precisely the case the
+                // soft-link query exists to serve, and returning here skipped building it entirely.
+                hardSQL = entityDependencies.length > 0
+                    ? this.BuildHardLinkDependencySQL(entityDependencies, compositeKey, resolvedOptions, resolvedUser)
+                    : '';
+            }
+
+            const softSQL =
+                linkType === 'both' || linkType === 'soft'
+                    ? this.BuildSoftLinkDependencySQL(entityName, compositeKey, resolvedOptions, resolvedUser)
+                    : '';
             const sSQL = [hardSQL, softSQL].filter(s => s.length > 0).join(' UNION ALL ');
 
             if (!sSQL) return recordDependencies;
 
-            const result = await this.ExecuteSQL<Record<string, unknown>>(sSQL, undefined, undefined, contextUser);
+            const result = await this.ExecuteSQL<Record<string, unknown>>(sSQL, undefined, undefined, resolvedUser);
             if (!result || result.length === 0) return recordDependencies;
 
-            return this.parseRecordDependencyResults(result);
+            return this.parseRecordDependencyResults(result).filter((dep) => {
+                const relEntity = this.EntityByName(dep.RelatedEntityName);
+                if (relEntity) {
+                    return this.shouldIncludeDependencyEntity(relEntity, resolvedOptions, resolvedUser);
+                }
+                return this.shouldIncludeDependencyEntityName(dep.RelatedEntityName, resolvedOptions);
+            });
         } catch (e) {
             LogError(e);
             throw e;
@@ -1071,10 +1405,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             });
             depCompositeKey.LoadFromEntityInfoAndRecord(relatedEntityInfo, pkeys);
 
+            const fieldName = r.FieldName as string;
+            const fieldInfo = relatedEntityInfo.Fields?.find(
+                (f) => f.Name?.trim().toLowerCase() === fieldName?.trim().toLowerCase()
+            );
+            const fieldDisplayName = fieldInfo
+                ? (fieldInfo.DisplayNameOrName || fieldInfo.DisplayName || fieldInfo.Name)
+                : undefined;
+
             recordDependencies.push({
                 EntityName: r.EntityName as string,
                 RelatedEntityName: r.RelatedEntityName as string,
-                FieldName: r.FieldName as string,
+                FieldName: fieldName,
+                FieldDisplayName: fieldDisplayName,
                 PrimaryKey: depCompositeKey,
                 // Both dialects emit this literal on every row of the union: 1/true for the polymorphic
                 // branch, 0/false for the foreign key branch.
@@ -1110,6 +1453,39 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * SQL Server overrides this to fire before-save entity actions and AI actions.
      */
     protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
+        /* no-op by default */
+    }
+
+    /**
+     * Returns true when `Save()` must enlist {@link OnDurableAfterSaveExecute} transactionally
+     * (wrapping direct saves in an {@link EntityTransactionScope}, and awaiting durable action
+     * submission inside `TransactionGroup` save callbacks before group completion).
+     *
+     * Default: `false` (zero extra transaction overhead on ordinary entity saves).
+     */
+    protected async ShouldEnlistSaveInTransaction(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _isNewRecord: boolean,
+    ): Promise<boolean> {
+        return false;
+    }
+
+    /**
+     * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
+     * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
+     * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
+     * {@link ShouldEnlistSaveInTransaction} returned `true`.
+     * Used by `GenericDatabaseProvider` to enlist durable after-save entity actions atomically in the
+     * same SQL transaction as the entity write.
+     */
+    protected async OnDurableAfterSaveExecute(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _context: SaveContext,
+    ): Promise<void> {
         /* no-op by default */
     }
 
@@ -1594,7 +1970,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * because there is nobody to check against.
      */
     protected CanUserReadRecordName(entity: EntityInfo, contextUser?: UserInfo): boolean {
-        if (!entity.EnableFieldLevelSecurity) {
+        if (!entity.FieldLevelSecurityApplies) {
             return true;
         }
         if (!contextUser) {
@@ -1853,6 +2229,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     });
                     extraData.entityName = entity.EntityInfo.Name;
 
+                    type TransactionRowValue = string | number | boolean | Date | Uint8Array | object | null | undefined;
                     entity.TransactionGroup.AddTransaction(
                         new TransactionItem(
                             entity,
@@ -1860,19 +2237,43 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.literalSQL ?? sqlDetails.fullSQL,
                             sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                             extraData,
-                            (transactionResult: Record<string, unknown>, success: boolean) => {
+                            async (transactionResult: Record<string, TransactionRowValue>, success: boolean) => {
                                 resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
+                                    if (bNewRecord) {
+                                        let hydratedPk = false;
+                                        for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                            const fieldObj = entity.Fields.find((f) => f.Name === pkField.Name);
+                                            if (
+                                                fieldObj &&
+                                                (fieldObj.Value === null || fieldObj.Value === undefined) &&
+                                                transactionResult[pkField.Name] != null
+                                            ) {
+                                                fieldObj.Value = transactionResult[pkField.Name];
+                                                hydratedPk = true;
+                                            }
+                                        }
+                                        if (hydratedPk) {
+                                            entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                        }
+                                    }
+                                    if (await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord)) {
+                                        await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                                    }
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    const mergedResult: Record<string, unknown> = preSaveValues
-                                        ? { ...preSaveValues, ...transactionResult }
+                                    const mergedResult: Record<string, TransactionRowValue> = preSaveValues
+                                        ? { ...(preSaveValues as Record<string, TransactionRowValue>), ...transactionResult }
                                         : transactionResult;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
                                 } else {
                                     entityResult.Success = false;
-                                    entityResult.Message = 'Transaction Failed';
+                                    if (!entityResult.Message) {
+                                        entityResult.Message = transactionResult instanceof Error
+                                            ? transactionResult.message
+                                            : 'Transaction Failed';
+                                    }
                                 }
                             },
                         ),
@@ -1880,60 +2281,92 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     return true;
                 } else {
                     // ---- Direct execution path ----
+                    const enlistInTx = !bReplay && await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord);
+                    const saveTxScope = enlistInTx ? await this.BeginEntityTransaction() : null;
+                    let saveTxCommitted = false;
                     suspendRefresh();
 
-                    let result: Record<string, unknown>[];
-                    if (bReplay) {
-                        result = [entity.GetAll()];
-                    } else {
-                        const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
-                        const rawResult = await this.ExecuteSQL<Record<string, unknown>>(
-                            sqlDetails.fullSQL,
-                            sqlDetails.parameters ?? undefined,
-                            execOptions,
-                            user,
-                        );
-                        result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
-                    }
-
-                    resumeRefresh();
-                    entityResult.EndedAt = new Date();
-
-                    if (result && result.length > 0) {
-                        this.OnAfterSaveExecute(entity, user, options, saveContext);
-                        entityResult.Success = true;
-
-                        // In 'datestamps_only' mode, the SP/query returned only the PK and
-                        // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
-                        // onto the pre-save snapshot so caller-set fields remain intact without
-                        // falsely marking concurrent in-flight mutations as clean.
-                        let mergedRow: Record<string, unknown>;
-                        if (preSaveValues) {
-                            mergedRow = { ...preSaveValues, ...result[0] };
-                            Object.defineProperty(mergedRow, '__mj_preMerged', {
-                                value: true,
-                                enumerable: false,
-                                configurable: true,
-                            });
+                    type SaveRowList = Awaited<ReturnType<typeof this.PostProcessRows>>;
+                    let result: SaveRowList;
+                    try {
+                        if (bReplay) {
+                            result = [entity.GetAll()];
                         } else {
-                            mergedRow = result[0];
+                            const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
+                            const rawResult = await this.ExecuteSQL<SaveRowList[number]>(
+                                sqlDetails.fullSQL,
+                                sqlDetails.parameters ?? undefined,
+                                execOptions,
+                                user,
+                            );
+                            result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
                         }
 
-                        // OnSaveCompleted may return patch fields (e.g., updated lat/lng
-                        // from geocoding) that need to be merged onto the SP result before
-                        // the entity loads the data via finalizeSave().
-                        const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
-                        if (patches) {
-                            Object.assign(mergedRow, patches);
-                        }
+                        resumeRefresh();
+                        entityResult.EndedAt = new Date();
 
-                        return mergedRow;
-                    } else {
-                        if (bNewRecord)
-                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
-                        else
-                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                        if (result && result.length > 0) {
+                            if (bNewRecord) {
+                                let hydratedPk = false;
+                                for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                    const fieldObj = entity.Fields.find(f => f.Name === pkField.Name);
+                                    if (fieldObj && (fieldObj.Value === null || fieldObj.Value === undefined) && result[0][pkField.Name] != null) {
+                                        fieldObj.Value = result[0][pkField.Name];
+                                        hydratedPk = true;
+                                    }
+                                }
+                                if (hydratedPk) {
+                                    entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                }
+                            }
+                            if (enlistInTx) {
+                                await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                            }
+                            if (saveTxScope) {
+                                await saveTxScope.Commit();
+                                saveTxCommitted = true;
+                            }
+                        } else {
+                            if (bNewRecord)
+                                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                            else
+                                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                        }
+                    } catch (innerErr) {
+                        if (saveTxScope && !saveTxCommitted) {
+                            await saveTxScope.Rollback();
+                        }
+                        throw innerErr;
                     }
+
+                    this.OnAfterSaveExecute(entity, user, options, saveContext);
+                    entityResult.Success = true;
+
+                    // In 'datestamps_only' mode, the SP/query returned only the PK and
+                    // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
+                    // onto the pre-save snapshot so caller-set fields remain intact without
+                    // falsely marking concurrent in-flight mutations as clean.
+                    let mergedRow: SaveRowList[number];
+                    if (preSaveValues) {
+                        mergedRow = { ...preSaveValues, ...result[0] };
+                        Object.defineProperty(mergedRow, '__mj_preMerged', {
+                            value: true,
+                            enumerable: false,
+                            configurable: true,
+                        });
+                    } else {
+                        mergedRow = result[0];
+                    }
+
+                    // OnSaveCompleted may return patch fields (e.g., updated lat/lng
+                    // from geocoding) that need to be merged onto the SP result before
+                    // the entity loads the data via finalizeSave().
+                    const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                    if (patches) {
+                        Object.assign(mergedRow, patches);
+                    }
+
+                    return mergedRow;
                 }
             } else {
                 return entity.GetAll(); // nothing to save
@@ -2559,6 +2992,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         duplicateRun.Set('ProcessingStatus', 'In Progress');
         duplicateRun.Set('ApprovalStatus', 'Pending');
         duplicateRun.Set('SourceListID', listEntity.Get('ID'));
+        // Without a document, the server-side Duplicate Run entity defaults to the entity's
+        // duplicate-detection document.
+        if (params.EntityDocumentID) {
+            duplicateRun.Set('EntityDocumentID', params.EntityDocumentID);
+        }
 
         const saveResult = await duplicateRun.Save();
         if (!saveResult) {
@@ -2598,6 +3036,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (child)
                     throw new Error(`Record ${key.ToString()} of ${request.EntityName} has a ${child.ChildEntityName} subtype row; merging records another entity extends is not supported yet`);
             }
+        }
+
+        // The field map is client input applied to the surviving record: a caller with any field
+        // denial may name only fields they can read, and a denied name and an unknown name get the
+        // same refusal. Checked before the merge log and the transaction, so a refusal leaves no trace.
+        if (request.FieldMap?.length) {
+            const values = Object.fromEntries(request.FieldMap.map(f => [f.FieldName, f.Value]));
+            AssertClientInputWritableForUser(e, values, contextUser);
         }
 
         const result: RecordMergeResult = {

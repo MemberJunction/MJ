@@ -19,8 +19,10 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
+import { SavePinState } from '../../utils/pin-state';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
-import { MarkdownService } from '@memberjunction/ng-markdown';
+import { MarkdownService, type ImageClickedEventArgs } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -35,6 +37,11 @@ import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import {
+  AgentAccentVar,
+  type MessageHandoffInfo,
+  type MessageHandedOffFromInfo,
+} from './agent-handoff-card.component';
 
 /** How a saved edit of a message is applied: as a new fork, in place with a rerun of its turn, or in place only. */
 export type MessageEditMode = 'Fork' | 'Resend' | 'Save';
@@ -204,6 +211,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /** Emits true when this row's inline editor opens and false when it closes. */
   @Output() public EditingChanged = new EventEmitter<boolean>();
+
+  /** Outgoing agent handoff card metadata attached to this source AI message. */
+  @Input() public Handoff: MessageHandoffInfo | null = null;
+
+  /** Incoming agent handoff provenance attached to this target AI message. */
+  @Input() public HandedOffFrom: MessageHandedOffFromInfo | null = null;
+
+  /** CSS custom property reference for the target agent's accent color on a handed-off target message. */
+  public get TargetAccentVar(): string {
+    if (!this.HandedOffFrom) {
+      return 'var(--mj-brand-primary)';
+    }
+    return AgentAccentVar(this.message?.AgentID ?? this.HandedOffFrom.TargetAgent.ID);
+  }
+
+  /** CSS custom property reference for the source agent's accent color on a handed-off target message. */
+  public get HandedOffFromAccentVar(): string {
+    if (!this.HandedOffFrom) {
+      return 'var(--mj-brand-primary)';
+    }
+    return AgentAccentVar(this.HandedOffFrom.SourceAgent.ID);
+  }
+
+  /**
+   * True when this message is a handed-off target AI message that has not yet produced
+   * its first streamed token (still in its initial placeholder state).
+   */
+  public get IsHandedOffTargetJoining(): boolean {
+    if (!this.HandedOffFrom || !this.IsInProgressAIMessage) {
+      return false;
+    }
+    const raw = (this.message?.Message ?? '').trim();
+    return raw.length === 0 || raw === '⏳ Starting...';
+  }
+
+  /** True when this source message handed off to a target agent (and did not fail). */
+  public get IsSourceTransferred(): boolean {
+    return Boolean(this.Handoff) && this.Handoff?.Status !== 'Failed';
+  }
 
   /**
    * How a saved edit is applied: 'Fork' while the person may fork; with forking off, 'Resend' on the
@@ -893,6 +939,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   /** The raw Message the cached display text was computed from. */
   private _cachedRawText: string = '';
+  private _cachedHadHandoff: boolean = false;
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1332,8 +1379,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return formattedTime;
   }
 
+  /**
+   * Time since the message was created: its server creation time once it has one, else when it was first shown. An
+   * agent's reply first renders as a local placeholder, before the server acknowledges the run; it takes the reply
+   * row's creation time when the acknowledgement arrives, so the timer counts from when the server's row began.
+   */
   public get ElapsedTimeSinceLoad(): number {
-    return Date.now() - this._loadTime;
+    const createdAt = this.message?.__mj_CreatedAt;
+    // Never negative: the server's clock can run ahead of this browser's.
+    return Math.max(0, Date.now() - (createdAt ? new Date(createdAt).getTime() : this._loadTime));
   }
 
   /** @deprecated Use {@link ElapsedTimeSinceLoad}. */
@@ -1501,18 +1555,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
    */
   private computeDisplayMessage(): string {
-    const raw = this.message.Message || '';
+    const raw = this.displaySourceText();
+    const hadHandoff = Boolean(this.Handoff);
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
     // compare is a pointer check and nothing below runs until the text changes.
-    if (raw === this._cachedRawText && this._cachedDisplayMessage) {
+    if (raw === this._cachedRawText && hadHandoff === this._cachedHadHandoff && this._cachedDisplayMessage) {
       return this._cachedDisplayMessage;
     }
 
     let text = raw;
 
-    // For Sage, only show the delegation line (starts with emoji)
-    if (this.IsConversationManager && text) {
+    // For legacy Sage delegation (when no Handoff card is rendered), only show the delegation line (starts with emoji)
+    if (this.IsConversationManager && text && !this.Handoff) {
       const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {
         text = delegationMatch[0];
@@ -1523,9 +1578,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const transformed = this.transformMentionsToHTML(text);
 
     this._cachedRawText = raw;
+    this._cachedHadHandoff = hadHandoff;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
+  }
+
+  /**
+   * The text the bubble renders from: the stored message, with a failed agent reply formatted as the chat has always
+   * shown one (see {@link FormatAgentFailureForDisplay}). Display only: the entity's text is never changed.
+   */
+  private displaySourceText(): string {
+    const raw = this.message.Message || '';
+    if (this.IsAIMessage && this.message.Status === 'Error') {
+      return FormatAgentFailureForDisplay(raw, this.AiAgentInfo?.name ?? 'Agent');
+    }
+    return raw;
   }
 
   /**
@@ -1642,7 +1710,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
       return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
@@ -2294,6 +2362,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } else if (this.ForkRail === 'Own') {
       classes.push('fork-rail-own');
     }
+    if (this.Handoff) {
+      classes.push('handoff-source');
+      if (this.Handoff.Status !== 'Failed') {
+        classes.push('msg--handed', 'handoff-source-transferred');
+      }
+    }
+    if (this.HandedOffFrom) {
+      classes.push('target-block', 'handoff-target');
+    }
     return classes.join(' ');
   }
 
@@ -2435,7 +2512,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.message.IsPinned = !previousValue;
     this.cdRef.detectChanges();
 
-    const saved = await this.message.Save();
+    const saved = await SavePinState(this.ProviderToUse, this.message.ID, !previousValue);
     if (!saved) {
       // Revert on failure
       this.message.IsPinned = previousValue;
@@ -2626,6 +2703,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** @deprecated Use {@link OnAttachmentClick}. */
   public onAttachmentClick(attachment: MessageAttachment): void {
     return this.OnAttachmentClick(attachment);
+  }
+
+  /**
+   * An image in the message text was clicked: open it in the chat's image viewer, the way an
+   * attachment thumbnail opens there.
+   */
+  public OnMarkdownImageClicked(image: ImageClickedEventArgs): void {
+    this.AttachmentClicked.emit({
+      id: image.Src,
+      type: 'Image',
+      mimeType: '',
+      fileName: image.Alt || null,
+      sizeBytes: 0,
+      contentUrl: image.Src,
+    });
   }
 
   /**

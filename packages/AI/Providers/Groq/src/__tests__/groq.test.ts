@@ -153,6 +153,8 @@ vi.mock('@memberjunction/ai', () => {
         buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
         buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
+        ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
+        CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
         // Narrows a `tool` role to the classic trio; the driver relies on it, so use the real one.
         toClassicChatMessageRole: actualToClassicChatMessageRole,
         BaseLLM,

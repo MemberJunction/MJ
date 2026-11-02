@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 import { DatabaseConnection, Introspector, DataSampler } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { PrepareIndexesForRun } from '../utils/index-hints.js';
 import { TopologicalSorter } from '../database/TopologicalSorter.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
@@ -26,6 +27,7 @@ import { DatabaseDocumentation, AnalysisRun, DataSamplingPhase, TableDefinition 
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
+import { KeyVerifier } from '../discovery/JoinProbe.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
 import { PluginManager } from '../plugins/PluginManager.js';
 import type { AutoDocPluginHook } from '../plugins/types.js';
@@ -211,6 +213,7 @@ export class AnalysisOrchestrator {
             Config: this.config.analysis.relationshipDiscovery,
             AiConfig: this.config.ai,
             schemas: state.schemas,
+            SeedContext: state.seedContext ?? this.config.seedContext,
             OnProgress: this.onProgress,
             OnCheckpoint: async (phase) => {
               state.phases.keyDetection = phase;
@@ -277,6 +280,17 @@ export class AnalysisOrchestrator {
 
       const iterationTracker = new IterationTracker();
       const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress, db.getDriver());
+
+      // ONE verifier for the whole run, shared by the LLM-FK path and the organic-key
+      // path. Deliberately shared rather than one each: the probe cap is the cost bound,
+      // and two verifiers would mean two full allowances against a live customer
+      // database. A single instance also means a candidate probed by one path is not
+      // re-probed by the other.
+      const keyVerifier = new KeyVerifier(
+        db ? db.getDriver() : null,
+        this.config.analysis.keyVerification ?? {}
+      );
+      analysisEngine.SetKeyVerifier(keyVerifier);
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
@@ -419,6 +433,8 @@ export class AnalysisOrchestrator {
             this.config.analysis.organicKeyDetection,
             this.config.ai,
             this.config.database.provider,
+            keyVerifier,
+            { AutoCreateRelatedViewOnForm: this.config.analysis.organicKeyDetection.autoCreateRelatedViewOnForm },
           );
           const okResult = await detector.detect(state, {
             OnProgress: (msg) => this.onProgress(msg),
@@ -430,6 +446,11 @@ export class AnalysisOrchestrator {
             clustersFound: okResult.Summary.clustersFound,
             clustersEmitted: okResult.Summary.clustersEmitted,
             outputKeys: okResult.Summary.outputKeys,
+            clustersDroppedUnverified: okResult.Summary.clustersDroppedUnverified,
+            membersDroppedUnverified: okResult.Summary.membersDroppedUnverified,
+            conceptsSkippedUnanchored: okResult.Summary.conceptsSkippedUnanchored,
+            probesUsed: okResult.Summary.probesUsed,
+            probesAllowed: okResult.Summary.probesAllowed,
           });
         } catch (err) {
           // Non-fatal — organic-key detection is optional enrichment. Log and continue.
@@ -533,10 +554,7 @@ export class AnalysisOrchestrator {
     driver: BaseAutoDocDriver,
     stateManager: StateManager
   ): Promise<void> {
-    if (this.config.analysis.useExistingIndexes === false) {
-      return;
-    }
-    const schemas = state.schemas.filter((s) => s.tables.some((t) => t.indexes === undefined));
+    const schemas = PrepareIndexesForRun(state.schemas, this.config.analysis.useExistingIndexes);
     if (schemas.length === 0) {
       return;
     }

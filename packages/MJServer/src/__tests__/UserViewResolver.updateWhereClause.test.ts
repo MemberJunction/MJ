@@ -35,6 +35,7 @@ vi.mock('../resolvers/UserResolver.js', () => ({ UserResolver: class {} }));
 
 import { UserViewResolver } from '../resolvers/UserViewResolver.js';
 import type { AppContext, ProviderInfo, UserPayload } from '../types.js';
+import { EmployeeEntity, FullWidthEmployeeRow, Intern, SECRET_SALARY } from './fieldSecurityFixtures.js';
 
 const VIEW_ID = '0F8FAD5B-D9CB-469F-A165-70867728950E';
 const USER = { ID: 'user-1', Email: 'dev@example.com' } as unknown as UserInfo;
@@ -110,5 +111,19 @@ describe('UserViewResolver.UpdateWhereClause', () => {
         const { view } = makeView({ loadOk: true, saveOk: false });
         const ctx = makeContext([{ provider: makeProvider(view), type: 'Read-Write' }]);
         await expect(new UserViewResolver().UpdateWhereClause(VIEW_ID, ctx)).rejects.toThrow(/Failed to update where clause/);
+    });
+
+    it('REGRESSION: returns the saved view projected for the caller, never a denied value', async () => {
+        const { view } = makeView({ loadOk: true });
+        const fullWidth = view as FakeView & { EntityInfo?: unknown };
+        fullWidth.EntityInfo = EmployeeEntity();
+        fullWidth.GetAll = vi.fn(() => FullWidthEmployeeRow());
+        const ctx = makeContext([{ provider: makeProvider(view), type: 'Read-Write' }]);
+        (ctx.userPayload as { userRecord: unknown }).userRecord = Intern();
+
+        const result = await new UserViewResolver().UpdateWhereClause(VIEW_ID, ctx);
+
+        expect(JSON.stringify(result)).not.toContain(String(SECRET_SALARY));
+        expect(result).toMatchObject({ ID: 'emp-1', Name: 'Ada' });
     });
 });

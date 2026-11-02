@@ -29,6 +29,21 @@ export interface ThemeDefinition {
     Description?: string;
     /** Optional preview swatch colors for a future theme picker UI */
     PreviewColors?: string[];
+    /**
+     * The theme {@link ThemeService.Initialize} applies when the user has no saved preference
+     * (or the saved one is no longer registered). At most one registered theme should set it;
+     * the first registered wins. Without one the default stays `'system'`. A single-brand host
+     * registers its brand as the default instead of calling `SetTheme` on every login, which
+     * fought `Initialize()`'s own resolution and wrote a preference the user never chose.
+     *
+     * Not the same axis as Theme Studio's org default (`MJ: Themes`.IsDefault): that one picks
+     * the org BRAND OVERLAY, registered via {@link ThemeService.RegisterBrandTheme} into the
+     * brand registry and layered under whatever base theme is active. This flag picks the BASE
+     * (picker) theme and never looks at the brand registry, so the two compose: a picker-only
+     * built-in default keeps the org overlay; a `CssUrl` default replaces it while selected, as
+     * any explicitly selected custom theme does.
+     */
+    IsDefault?: boolean;
 }
 
 /**
@@ -55,10 +70,23 @@ const PRELOAD_BASE_THEME_KEY = 'mj-theme';
  * localStorage key holding the active org **brand overlay** id, mirrored so the
  * inline pre-paint script can restore `data-theme-overlay` on first paint (the org
  * brand persists across the user's light/dark choice AND across logout). The overlay
- * CSS itself is a session-scoped Blob re-emitted at login bootstrap, so this key only
- * restores the attribute — brand colors repaint once bootstrap re-injects the CSS.
+ * CSS itself is a session-scoped Blob re-emitted at login bootstrap; the CSS text is
+ * persisted beside it under {@link PRELOAD_OVERLAY_CSS_KEY} so
+ * {@link ThemeService.RestorePersistedBrandOverlay} can put it back before first paint.
  */
-const PRELOAD_OVERLAY_KEY = 'mj-theme-overlay';
+export const PRELOAD_OVERLAY_KEY = 'mj-theme-overlay';
+
+/**
+ * localStorage key: the active org brand overlay's emitted CSS, as JSON `{ id, css }`.
+ * The overlay stylesheet is a Blob URL that does not survive a reload, so without this
+ * the loading screen and the sign-in page painted MJ's default tokens until bootstrap
+ * re-emitted the overlay at the end of workspace init. Only honored when `id` matches
+ * {@link PRELOAD_OVERLAY_KEY}; bootstrap's real `<link>` replaces the preloaded `<style>`.
+ */
+export const PRELOAD_OVERLAY_CSS_KEY = 'mj-theme-overlay-css';
+
+/** Attribute on the `<style>` that carries a restored overlay until bootstrap loads the real one. */
+export const PRELOAD_STYLE_ATTR = 'data-mj-brand-overlay-preload';
 
 /** User-settings key: JSON array of the user's starred (favorited) brand theme ids. */
 const STARRED_THEMES_KEY = 'Explorer.StarredThemes';
@@ -134,6 +162,13 @@ export class ThemeService {
      * themeRegistry so brand overlays do NOT appear in the user's light/dark theme
      * picker — the org brand is applied independently of the user's mode (decision #1).
      */
+    /**
+     * Theme ids in the order they were FIRST registered with {@link ThemeDefinition.IsDefault}.
+     * Kept apart from the registry because a Map keeps an id's original slot on replace: the
+     * seeded 'light'/'dark' entries would otherwise outrank any custom theme flagged earlier.
+     */
+    private defaultCandidates: string[] = [];
+
     private brandRegistry = new Map<string, ThemeDefinition>();
 
     /** Cache of loaded <link> elements by theme ID to avoid re-downloading */
@@ -141,6 +176,18 @@ export class ThemeService {
 
     /** Session-scoped Blob object URLs for brand overlays, keyed by theme ID (for revocation on re-register). */
     private brandBlobUrls = new Map<string, string>();
+
+    /** The emitted overlay CSS per brand theme id — what gets persisted for first paint. */
+    private brandCss = new Map<string, string>();
+
+    /**
+     * An overlay id restored from localStorage by {@link RestorePersistedBrandOverlay} that
+     * bootstrap has not yet confirmed ({@link ApplyBrandOverlay}) or cleared
+     * ({@link ClearBrandOverlay}). Tracked here rather than inferred from the presence of the
+     * preload `<style>`, so a third party touching that element cannot change the service's
+     * answer, and "bootstrap has not run yet" is a state of its own.
+     */
+    private pendingOverlayId: string | null = null;
 
     /**
      * Observable for user's theme preference (theme ID or 'system')
@@ -202,6 +249,12 @@ export class ThemeService {
      */
     public RegisterTheme(theme: ThemeDefinition): void {
         this.themeRegistry.set(theme.Id, theme);
+        const at = this.defaultCandidates.indexOf(theme.Id);
+        if (theme.IsDefault && at === -1) {
+            this.defaultCandidates.push(theme.Id);
+        } else if (!theme.IsDefault && at !== -1) {
+            this.defaultCandidates.splice(at, 1);
+        }
     }
 
     /**
@@ -262,6 +315,7 @@ export class ThemeService {
 
         const url = URL.createObjectURL(new Blob([css], { type: 'text/css' }));
         this.brandBlobUrls.set(params.id, url);
+        this.brandCss.set(params.id, css);
 
         // Register into the brand registry only — NOT themeRegistry — so the org brand
         // does not surface as a user-selectable option in the theme picker.
@@ -324,26 +378,122 @@ export class ThemeService {
         }
         this._brandOverlayId = id;
         await this.loadThemeCss(def);
+        // The real stylesheet carries the brand now; a restored preload (this id or a stale one) goes.
+        this.removePreloadStyles();
+        this.pendingOverlayId = null;
         document.documentElement.setAttribute('data-theme-overlay', id);
         if (options?.persist === false) {
             return;
         }
         try {
             window.localStorage.setItem(PRELOAD_OVERLAY_KEY, id);
+            // The CSS is a few KB; skip the synchronous write when the stored entry already matches
+            // (a re-apply of the same brand), so repeated applies cost nothing.
+            const entry = JSON.stringify({ id, css: this.brandCss.get(id) ?? '' });
+            if (window.localStorage.getItem(PRELOAD_OVERLAY_CSS_KEY) !== entry) {
+                window.localStorage.setItem(PRELOAD_OVERLAY_CSS_KEY, entry);
+            }
         } catch (e) {
             // non-fatal: a brief brand flash on next reload at worst
         }
     }
 
     /**
+     * Put the persisted org brand overlay back BEFORE first paint, from localStorage alone —
+     * no registry, no database. Call it from the earliest code that runs in the app (the
+     * explorer-app constructor), so the sign-in page and the shell's loading screen paint
+     * branded on a cold load instead of waiting for bootstrap to re-emit the overlay.
+     *
+     * Injects the persisted CSS as a `<style>` (bootstrap's real `<link>` replaces it), sets
+     * `data-theme-overlay`, and records the id so {@link Initialize} does not strip the
+     * attribute before bootstrap registers the brand. A CSS entry whose id no longer matches
+     * the persisted overlay id is stale and is dropped. Returns whether anything was restored.
+     */
+    public RestorePersistedBrandOverlay(): boolean {
+        let id: string | null = null;
+        let entry: { id?: unknown; css?: unknown } | null = null;
+        try {
+            id = window.localStorage.getItem(PRELOAD_OVERLAY_KEY);
+            const raw = window.localStorage.getItem(PRELOAD_OVERLAY_CSS_KEY);
+            entry = raw ? (JSON.parse(raw) as { id?: unknown; css?: unknown }) : null;
+        } catch (e) {
+            return false;
+        }
+        if (!id || !entry) {
+            return false;
+        }
+        if (entry.id !== id || typeof entry.css !== 'string') {
+            try {
+                window.localStorage.removeItem(PRELOAD_OVERLAY_CSS_KEY);
+            } catch (e) {
+                // non-fatal
+            }
+            return false;
+        }
+        const existing = this.findPreloadStyle(id);
+        if (existing) {
+            // A host's inline snippet already injected it. Re-append so it follows every
+            // stylesheet that arrived after it (the app's own, above all): the overlay's
+            // selectors tie the compiled :root tokens on specificity, so order decides.
+            document.head.appendChild(existing);
+        } else {
+            const style = document.createElement('style');
+            style.setAttribute(PRELOAD_STYLE_ATTR, id);
+            style.textContent = entry.css;
+            document.head.appendChild(style);
+        }
+        document.documentElement.setAttribute('data-theme-overlay', id);
+        this._brandOverlayId = id;
+        this.pendingOverlayId = id;
+        return true;
+    }
+
+    /**
+     * The restored preload `<style>` for this overlay id, if one is in the document (ours or the
+     * host's inline snippet). An attribute walk rather than an interpolated selector: the id
+     * comes from localStorage, and a quote or bracket in it would make `querySelector` throw —
+     * from the explorer-app constructor.
+     */
+    private findPreloadStyle(id: string): HTMLStyleElement | null {
+        const styles = document.head.querySelectorAll<HTMLStyleElement>(`style[${PRELOAD_STYLE_ATTR}]`);
+        for (const el of Array.from(styles)) {
+            if (el.getAttribute(PRELOAD_STYLE_ATTR) === id) {
+                return el;
+            }
+        }
+        return null;
+    }
+
+    /** Drop every restored preload `<style>` (a real stylesheet has taken over, or the brand was cleared). */
+    private removePreloadStyles(): void {
+        document.head.querySelectorAll(`style[${PRELOAD_STYLE_ATTR}]`).forEach((el) => el.remove());
+    }
+
+    /**
      * Remove the active org brand overlay (revert to the base MJ tokens).
+     *
+     * Scoped to the brand: only the brand's own `<link>` is disabled and the `data-theme-overlay`
+     * attribute is dropped only when it still names that brand. Bootstrap calls this on every login
+     * where the org has no active brand, right after `Initialize()` applied the user's theme, so a
+     * blanket clear would switch off a user's custom theme on any install that never used Theme Studio.
      */
     public ClearBrandOverlay(): void {
+        const brandId = this._brandOverlayId;
         this._brandOverlayId = null;
-        document.documentElement.removeAttribute('data-theme-overlay');
-        this.disableAllCustomCss();
+        this.pendingOverlayId = null;
+        if (brandId !== null) {
+            if (document.documentElement.getAttribute('data-theme-overlay') === brandId) {
+                document.documentElement.removeAttribute('data-theme-overlay');
+            }
+            const brandLink = this.loadedCssLinks.get(brandId);
+            if (brandLink) {
+                brandLink.disabled = true;
+            }
+        }
+        this.removePreloadStyles();
         try {
             window.localStorage.removeItem(PRELOAD_OVERLAY_KEY);
+            window.localStorage.removeItem(PRELOAD_OVERLAY_CSS_KEY);
         } catch (e) {
             // non-fatal
         }
@@ -366,13 +516,30 @@ export class ThemeService {
 
         this._starred$.next(this.loadStarredIds());
 
+        // A saved preference wins; without one the host's default theme (IsDefault), else 'system'.
         const savedPreference = await this.loadSetting();
-        this._preference$.next(savedPreference);
+        const preference = savedPreference ?? this.DefaultPreference;
+        this._preference$.next(preference);
 
-        const resolvedThemeId = this.resolveTheme(savedPreference);
+        const resolvedThemeId = this.resolveTheme(preference);
         await this.applyTheme(resolvedThemeId);
 
         this._initialized = true;
+    }
+
+    /**
+     * What {@link Initialize} applies when nothing is saved: the first theme REGISTERED with
+     * {@link ThemeDefinition.IsDefault} (registration order, not registry slot order — re-registering
+     * a built-in slot with the flag does not jump the queue), else `'system'`. Public so a picker
+     * can mark the default.
+     */
+    public get DefaultPreference(): string {
+        for (const id of this.defaultCandidates) {
+            if (this.themeRegistry.get(id)?.IsDefault) {
+                return id;
+            }
+        }
+        return 'system';
     }
 
     /**
@@ -402,7 +569,9 @@ export class ThemeService {
         this.systemMediaQuery = null;
         this.boundSystemThemeHandler = null;
 
-        this._preference$.next('system');
+        // "Nothing chosen" is the host's default, not literally 'system': a reader of Preference in
+        // the logged-out window (a sign-in page toggle) should see the same answer Initialize() will.
+        this._preference$.next(this.DefaultPreference);
         this._appliedTheme$.next('light');
         this._initialized = false;
 
@@ -456,6 +625,11 @@ export class ThemeService {
                 if (brandDef?.CssUrl) {
                     await this.loadThemeCss(brandDef);
                     document.documentElement.setAttribute('data-theme-overlay', this._brandOverlayId);
+                } else if (this.pendingOverlayId === this._brandOverlayId) {
+                    // Restored from localStorage and not yet confirmed or cleared by bootstrap: keep
+                    // the attribute so the preloaded CSS stays matched until the real overlay lands.
+                    document.documentElement.setAttribute('data-theme-overlay', this._brandOverlayId);
+                    this.disableAllCustomCss();
                 } else {
                     document.documentElement.removeAttribute('data-theme-overlay');
                     this.disableAllCustomCss();
@@ -704,17 +878,17 @@ export class ThemeService {
     // ========================================
 
     /**
-     * Load theme preference from User Settings.
-     * Accepts any registered theme ID or 'system'.
-     * Falls back to 'system' if saved value is not recognized.
+     * The user's saved preference ('system' or a registered theme ID), or `null` when there is
+     * none to honor — nothing saved, a saved theme that is no longer registered, or a failed
+     * read. The caller decides what `null` means (see {@link DefaultPreference}).
      */
-    private async loadSetting(): Promise<string> {
+    private async loadSetting(): Promise<string | null> {
         try {
             const engine = UserInfoEngine.Instance;
             const settingValue = engine.GetSetting(THEME_SETTING_KEY);
 
             if (!settingValue) {
-                return 'system';
+                return null;
             }
 
             // Accept 'system' or any registered theme ID
@@ -722,11 +896,11 @@ export class ThemeService {
                 return settingValue;
             }
 
-            // Saved theme no longer registered — fall back
-            return 'system';
+            // Saved theme no longer registered — nothing to honor
+            return null;
         } catch (error) {
             console.warn('Failed to load theme setting:', error);
-            return 'system';
+            return null;
         }
     }
 

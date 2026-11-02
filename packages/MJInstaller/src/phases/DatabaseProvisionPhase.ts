@@ -615,8 +615,17 @@ export class DatabaseProvisionPhase {
     const { Config: config, Emitter: emitter } = context;
     const labels = PLATFORM_LABELS[server.Platform];
 
-    if (config.DatabaseAdminUser && config.DatabaseAdminPassword !== undefined) {
-      const configured = { User: config.DatabaseAdminUser, Password: config.DatabaseAdminPassword };
+    const adminUser = config.DatabaseAdminUser
+      ?? (server.Platform === 'sqlserver' && config.CodeGenUser && this.isBuiltInSysadmin(config.CodeGenUser)
+        ? config.CodeGenUser
+        : undefined);
+    const adminPassword = config.DatabaseAdminPassword
+      ?? (adminUser && config.CodeGenUser && adminUser === config.CodeGenUser
+        ? config.CodeGenPassword
+        : undefined);
+
+    if (adminUser && adminPassword !== undefined) {
+      const configured = { User: adminUser, Password: adminPassword };
       const result = await this.tryLogin(server, labels.MaintenanceDatabase, configured.User, configured.Password);
       if (result.Ok) return configured;
       throw new InstallerError(

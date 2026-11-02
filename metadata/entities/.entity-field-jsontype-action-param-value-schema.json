@@ -22,6 +22,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Action Params&Name=ValueSchema"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:17:42.878Z",
+            "checksum": "9f132485e0b911a42a67672e0e067ce7613b86b636472bdc262658dfcbe3b176"
           }
         }
       ]

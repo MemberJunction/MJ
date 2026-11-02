@@ -151,17 +151,18 @@ describe('encodeHistoryForArm', () => {
     it('passes tool-form history through for a native-results arm', () => {
         expect(EncodeHistoryForArm(history, true)).toEqual(history);
     });
-    it('renders the corpus prose form otherwise: the call turn is dropped, each result becomes an [Action Result] user message', () => {
+    it('renders the text form otherwise: the call as text on its turn, each result as an [Action Result] user message', () => {
         const out = EncodeHistoryForArm(history, false);
-        expect(out.map((m) => m.role)).toEqual(['user', 'user']);
-        expect(out[1].content).toBe('[Action Result] run_ad_hoc_query succeeded. | n |\n| 12 |');
+        expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+        expect(out[1]).toEqual({ role: 'assistant', content: '[Called run_ad_hoc_query({"Query":"SELECT COUNT(*) …"})]' });
+        expect(out[2].content).toBe('[Action Result] run_ad_hoc_query succeeded. | n |\n| 12 |');
     });
-    it('keeps an assistant turn that carried narration, minus its calls', () => {
+    it('keeps an assistant turn\'s narration ahead of its calls', () => {
         const out = EncodeHistoryForArm([{ ...(history[1] as object), content: 'Let me count.' }, history[2]] as never[], false);
-        expect(out[0]).toEqual({ role: 'assistant', content: 'Let me count.' });
+        expect(out[0]).toEqual({ role: 'assistant', content: 'Let me count.\n[Called run_ad_hoc_query({"Query":"SELECT COUNT(*) …"})]' });
     });
     it('marks a failed result', () => {
         const failed = [history[1], { role: 'tool', content: [{ type: 'tool_result', toolCallId: 'call_0', toolName: 'run_ad_hoc_query', content: 'Invalid column', isError: true }] }] as never[];
-        expect(EncodeHistoryForArm(failed, false)[0].content).toBe('[Action Result] run_ad_hoc_query failed. Invalid column');
+        expect(EncodeHistoryForArm(failed, false)[1].content).toBe('[Action Result] run_ad_hoc_query failed. Invalid column');
     });
 });

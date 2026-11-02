@@ -40,6 +40,7 @@ vi.mock('@memberjunction/aiengine', async (importOriginal) => {
 
 import { AIPromptRunner } from '../AIPromptRunner';
 import { GetToolCallingMode, GetToolCallingDecision } from '../nativeToolCallingGate';
+import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 
 const VENDOR_ID = 'A1111111-1111-1111-1111-111111111111';
 const VENDOR_ROW_ID = 'B2222222-2222-2222-2222-222222222222';
@@ -342,6 +343,46 @@ describe('isToolSpecificFailure — what earns the one envelope retry', () => {
         expect(priv(runner).isToolSpecificFailure(failedResult(message))).toBe(false);
     });
 
+    it.each([
+        ['prose that mentions tools', 'The assistant could not finish: the tools it needed were busy, try again later'],
+        ['prose that mentions a tool call', 'Internal error while streaming the tool call response'],
+    ])('does NOT retry on text that only mentions tools: %s', (_name, message) => {
+        expect(priv(runner).isToolSpecificFailure(failedResult(message))).toBe(false);
+    });
+
+    it('does NOT retry on a rate limit even when its message names a tool field', () => {
+        const limited = failedResult('Rate limit reached for requests with tool_use blocks');
+        limited.errorInfo = { errorType: 'RateLimit', severity: 'Retriable', canFailover: true, context: {}, error: new Error('429') };
+        expect(priv(runner).isToolSpecificFailure(limited)).toBe(false);
+    });
+
+    it('retries a classified request error that names a tool field', () => {
+        const rejected = failedResult('tools.0.input_schema: invalid JSON Schema');
+        rejected.errorInfo = { errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false, context: {}, error: new Error('400') };
+        expect(priv(runner).isToolSpecificFailure(rejected)).toBe(true);
+    });
+
+    it.each([
+        ['a balance-named tool, classified as no credit', 'NoCredit', 'tools.2.input_schema: Get_Account_Balance has an invalid property'],
+        ['a timeout-named property, classified as network', 'NetworkError', "tools.0.input_schema.properties.TimeoutMS: 'integer' is not valid here"]
+    ])('retries a 400 schema rejection whatever the classifier called it: %s', (_name, errorType, message) => {
+        const rejected = failedResult(message);
+        rejected.errorInfo = { httpStatusCode: 400, errorType: errorType as 'NoCredit' | 'NetworkError', severity: 'Retriable', canFailover: true, context: {}, error: new Error('400') };
+        expect(priv(runner).isToolSpecificFailure(rejected)).toBe(true);
+    });
+
+    it('retries an unclassified-status server error that names a tool field', () => {
+        const rejected = failedResult('tool calling is not supported for this model');
+        rejected.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true, context: {}, error: new Error('x') };
+        expect(priv(runner).isToolSpecificFailure(rejected)).toBe(true);
+    });
+
+    it('does NOT retry an authentication failure, even one naming a tool field', () => {
+        const denied = failedResult('Your key is not allowed to use tool_choice');
+        denied.errorInfo = { httpStatusCode: 403, errorType: 'Authentication', severity: 'Fatal', canFailover: true, context: {}, error: new Error('403') };
+        expect(priv(runner).isToolSpecificFailure(denied)).toBe(false);
+    });
+
     it('never treats a cancellation as a tool failure', () => {
         const cancelled = failedResult('Request was aborted');
         cancelled.errorInfo = {
@@ -366,7 +407,12 @@ describe('isToolSpecificFailureText — the thrown-rejection path', () => {
     it.each([
         ['OpenAI tools+reasoning rejection', 'Function tools with reasoning_effort are not supported for gpt-5.6-luna in /v1/chat/completions.'],
         ['Cerebras format conflict', '"tools" is incompatible with "response_format"'],
-        ['bare tools rejection', 'Unrecognized request argument supplied: tools']
+        ['bare tools rejection', 'Unrecognized request argument supplied: tools'],
+        ['tool calling unsupported (Groq, Together, llama.cpp servers)', 'tool calling is not supported for this model'],
+        ['Anthropic tools-list rejection', 'tools: Input should be a valid list'],
+        ['llama.cpp without --jinja', '400 tools param requires --jinja flag'],
+        ['llama.cpp unsupported param', '400 Unsupported param: tools'],
+        ['model without tools', 'tools is not supported with this model']
     ])('recognizes %s', (_name, message) => {
         expect(priv(runner).isToolSpecificFailureText(message)).toBe(true);
     });
@@ -395,7 +441,10 @@ describe('retryWithToolsStripped — the retry sees an envelope-shaped history',
             model: unknown,
             vendorId: string | null,
             prompt: unknown,
-            reason: string
+            reason: string,
+            params: AIPromptParams,
+            renderedPrompt: string,
+            firstRenderedPrompt: string
         ): Promise<ChatResult>;
     };
     it('re-encodes tool turns as text, strips the declarations, and records the NativeFallback mode', async () => {
@@ -414,15 +463,18 @@ describe('retryWithToolsStripped — the retry sees an envelope-shaped history',
         chatParams.toolChoice = 'auto';
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const result = await (runner as unknown as RetryInternals).retryWithToolsStripped(
-            llm, chatParams, { TimedOut: () => false, Dispose: () => undefined }, model(), VENDOR_ID, prompt(true), 'provider said no'
+            llm, chatParams, { TimedOut: () => false, Dispose: () => undefined }, model(), VENDOR_ID, prompt(true), 'provider said no',
+            { data: {} } as AIPromptParams, 'The whole task is in here.', 'The whole task is in here.'
         );
         warn.mockRestore();
         expect(result).toBe(ok);
         expect(GetToolCallingMode(result)).toBe('NativeFallback');
         expect(seen?.tools).toBeUndefined();
         expect(seen?.toolChoice).toBeUndefined();
-        expect(seen?.messages.map((m) => m.role)).toEqual(['system', 'user']);
-        expect(seen?.messages[1].content).toBe('[Action Result] get_entity_details succeeded. # Members');
+        // The call survives as text, so the retry still sees what was asked for.
+        expect(seen?.messages.map((m) => m.role)).toEqual(['system', 'assistant', 'user']);
+        expect(seen?.messages[1].content).toBe('[Called get_entity_details({"entityName":"Members"})]');
+        expect(seen?.messages[2].content).toBe('[Action Result] get_entity_details succeeded. # Members');
         expect(seen?.messages.some((m) => m.toolCalls || m.role === 'tool')).toBe(false);
     });
 });

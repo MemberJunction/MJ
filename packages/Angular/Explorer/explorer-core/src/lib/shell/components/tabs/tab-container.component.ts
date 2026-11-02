@@ -30,7 +30,7 @@ import {
   TabService
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon,
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon, ResolveRecordTabDisplayTitle,
   GetDeletedRecordFromEvent, RecordTabShowsRecord, RemoveDeletedRecordFromOrigin, OriginToTabConfiguration, OriginHasReturnTarget,
   NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
 import type { DeletedRecordRef, RecordSourceContext } from '@memberjunction/ng-shared';
@@ -353,7 +353,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (activeTab && this.isRecordTab(activeTab)) {
       const app = this.appManager.GetAppById(activeTab.applicationId);
-      this.RecordBarTitle = activeTab.title;
+      this.RecordBarTitle = this.resolveTabTitle(activeTab);
       this.RecordBarIcon = ResolveRecordTypeIcon(activeTab.configuration, this.ProviderToUse);
       this.RecordBarColor = app?.GetColor() || DEFAULT_APP_COLOR;
     }
@@ -381,12 +381,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       : null;
     return {
       TabId: tab.id,
-      Title: tab.title,
+      Title: this.resolveTabTitle(tab),
       Icon: ResolveRecordTypeIcon(tab.configuration, this.ProviderToUse),
       Color: app?.GetColor() || DEFAULT_APP_COLOR,
       OriginLabel: originLabel,
       IsActive: tab.id === activeTabId
     };
+  }
+
+  private resolveTabTitle(tab: WorkspaceTab): string {
+    return ResolveRecordTabDisplayTitle(tab, this.ProviderToUse) || tab.title;
   }
 
   /** True while the RECORDS region is the visible surface (active tab is a record) */
@@ -494,7 +498,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         const app = this.appManager.GetAppById(tab.applicationId);
         this.recordsLayoutManager.UpdateTabStyle(tab.id, {
           isPinned: tab.isPinned,
-          title: tab.title,
+          title: this.resolveTabTitle(tab),
           appColor: app?.GetColor() || DEFAULT_APP_COLOR,
           typeIcon: this.resolveTabTypeIcon(tab)
         });
@@ -801,7 +805,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       tabId: tab.id,
       appId: tab.applicationId,
       appColor: app?.GetColor() || DEFAULT_APP_COLOR,
-      title: tab.title,
+      title: this.resolveTabTitle(tab),
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
       isLoaded: false,
@@ -1501,7 +1505,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
     // Entity name discriminates between "new record" tabs of different entities (all
     // have empty ResourceRecordID otherwise). For non-Records resources this is undefined.
-    const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
+    const cacheDiscriminator = this.resolveCacheDiscriminator(resourceData.Configuration);
 
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
     const cached = this.cacheManager.getCachedComponent(
@@ -2007,13 +2011,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // IMPORTANT: Check both resourceRecordId AND configuration.recordId
     // because for nav items, the recordId is stored in configuration, not resourceRecordId
     const effectiveRecordId = tab.resourceRecordId || (tab.configuration?.recordId as string) || '';
+    const effectiveAbv = (tab.configuration?.['AlternateBaseView'] as string) || (tab.configuration?.['alternateBaseView'] as string) || '';
     const parts = [
       tab.applicationId,
       tab.configuration?.resourceType || '',
       tab.configuration?.driverClass || '',
       tab.configuration?.Entity || '',  // Include Entity name for Records resource type
       effectiveRecordId,
-      tab.configuration?.route || ''
+      tab.configuration?.route || '',
+      effectiveAbv
     ];
     return parts.join('|');
   }
@@ -2029,7 +2035,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       tabId: tab.id,
       appId: tab.applicationId,
       appColor,
-      title: tab.title,
+      title: this.resolveTabTitle(tab),
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
       isLoaded: false,
@@ -2146,7 +2152,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
       // Discriminate distinct "new record" tabs of different entities (all have empty
       // ResourceRecordID otherwise — would silently collide in the cache).
-      const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
+      const cacheDiscriminator = this.resolveCacheDiscriminator(resourceData.Configuration);
 
       // Check if we have a cached component for this resource
       const cached = this.cacheManager.getCachedComponent(
@@ -2741,6 +2747,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // reload from being handed back the component it just detached.
           const existingEntity = existingResourceData?.Configuration?.Entity as string | undefined;
           const newEntity = tab.configuration['Entity'] as string | undefined;
+          const existingAbv = ((existingResourceData?.Configuration?.['AlternateBaseView'] ?? existingResourceData?.Configuration?.['alternateBaseView']) as string | undefined) || '';
+          const newAbv = ((tab.configuration['AlternateBaseView'] ?? tab.configuration['alternateBaseView']) as string | undefined) || '';
 
           // The record id comparison accepts the URL-segment form ResourceRecordSaved writes into
           // the component's Data ('ID|<uuid>' for a tab that keeps '<uuid>'). An exact comparison
@@ -2750,6 +2758,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
                              !TabContainerComponent.IsSameRecordId(existingRecordId, newRecordId) ||
                              existingEntity !== newEntity ||
+                             existingAbv !== newAbv ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
@@ -2782,7 +2791,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         const app = this.appManager.GetAppById(tab.applicationId);
         const styleUpdate: Partial<TabComponentState> = {
           isPinned: tab.isPinned,
-          title: tab.title,
+          title: this.resolveTabTitle(tab),
           appColor: app?.GetColor() || DEFAULT_APP_COLOR
         };
         if (IsRecordsTabConfiguration(tab.configuration)) {
@@ -3310,5 +3319,26 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     // Unblock the shell's first-load gate so the loading overlay clears.
     this.emitFirstLoadCompleteOnce();
+  }
+
+  private resolveCacheDiscriminator(configuration?: Record<string, unknown> | null): string | undefined {
+    if (typeof ComponentCacheManager.GetCacheDiscriminator === 'function') {
+      return ComponentCacheManager.GetCacheDiscriminator(configuration);
+    }
+    if (!configuration) {
+      return undefined;
+    }
+    const entity = typeof configuration['Entity'] === 'string' && configuration['Entity'].trim().length > 0
+      ? configuration['Entity'].trim()
+      : '';
+    const rawAbv = configuration['AlternateBaseView'];
+    const abv = typeof rawAbv === 'string' && rawAbv.trim().length > 0 ? rawAbv.trim() : '';
+    if (!entity && !abv) {
+      return undefined;
+    }
+    if (entity && abv) {
+      return `${entity}|abv:${abv}`;
+    }
+    return entity || `abv:${abv}`;
   }
 }

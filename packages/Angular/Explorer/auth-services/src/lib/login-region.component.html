@@ -18,10 +18,10 @@
         @if (b.ID === SelectedID) {
           <span class="lr__tools" (click)="$event.stopPropagation()">
             <span class="lr__tool-name">{{ Label(b) }}</span>
-            <button type="button" title="Move up" aria-label="Move up" (click)="Emit('up', b.ID, $event)"><i class="fa-solid fa-arrow-up"></i></button>
-            <button type="button" title="Move down" aria-label="Move down" (click)="Emit('down', b.ID, $event)"><i class="fa-solid fa-arrow-down"></i></button>
-            <button type="button" title="Duplicate" aria-label="Duplicate" (click)="Emit('duplicate', b.ID, $event)"><i class="fa-regular fa-clone"></i></button>
-            <button type="button" title="Delete" aria-label="Delete" (click)="Emit('delete', b.ID, $event)"><i class="fa-regular fa-trash-can"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Move up" AriaLabel="Move up" (click)="Emit('up', b.ID, $event)"><i class="fa-solid fa-arrow-up"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Move down" AriaLabel="Move down" (click)="Emit('down', b.ID, $event)"><i class="fa-solid fa-arrow-down"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Duplicate" AriaLabel="Duplicate" (click)="Emit('duplicate', b.ID, $event)"><i class="fa-regular fa-clone"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Delete" AriaLabel="Delete" (click)="Emit('delete', b.ID, $event)"><i class="fa-regular fa-trash-can"></i></button>
           </span>
         }
         <div class="lr__placeholder" [class]="WidthClass(b)" *cdkDragPlaceholder></div>

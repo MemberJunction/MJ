@@ -23,6 +23,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: true },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: true },
             { sectionKey: 'externalIntegration', sectionName: 'External Integration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
@@ -110,6 +111,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRubricEvaluationsContextEntityID', sectionName: 'Rubric Evaluations (Context Entity ID)', isExpanded: false },
             { sectionKey: 'mJScopedNotificationConfigs', sectionName: 'Scoped Notification Configs', isExpanded: false },
             { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
+            { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
+            { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }
