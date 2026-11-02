@@ -125,6 +125,7 @@ Users and administrators can launch diagnostic capture or download a `.mjdiag` b
        - Neither → the send fails with a message that names both settings. A fresh server with default settings takes this path.
 - **Server-Initiated "Watch Sessions" + Automatic Browser Flush (`X-MJ-Diagnostic-Trigger`)**:
   - An administrator or automated rule can arm a server-side Watch Session (`Diagnostics.StartSession`) scoped by `Users` (`UserID`, `BrowserSessionID`, `APIKeyID` isolated by `CompanyID`) or `Operations` (GraphQL operation name, error-only, or `minDurationMs` latency threshold).
+  - `Diagnostics.UploadClientCapture` accepts uploads to a `BrowserSession`-scoped session from any caller who presents that browser session ID, so treat the browser session ID as a capability and do not share or log it.
   - When `DiagnosticsServerMiddleware` matches an incoming browser request to an active Watch Session, it sets `X-MJ-Diagnostic-Trigger: <sessionId>` on the HTTP response.
   - `MJDiagnosticsService.HandleServerTriggerHeader(sessionId)` in the browser detects this header and automatically flushes the client flight-recorder snapshot via `Diagnostics.UploadClientCapture` (deduplicated per session ID) without requiring any user interaction.
 

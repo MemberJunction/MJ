@@ -163,7 +163,7 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
     };
   }
 
-  /** Parses the optional JSON configuration and lists every field that is not a non-negative number. */
+  /** Parses the optional JSON configuration and lists every numeric field that is not valid. */
   private readConfiguration(rawConfig: string | null): { Config: DiagnosticRetentionJobConfiguration; Errors: ConfigurationError[] } {
     if (!rawConfig) {
       return { Config: {}, Errors: [] };
@@ -176,12 +176,26 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
     }
     const errors: ConfigurationError[] = [];
     for (const field of NUMERIC_CONFIG_FIELDS) {
-      const value = parsed[field];
-      if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
-        errors.push({ Field: field, Message: `${field} must be a non-negative number`, Value: value });
+      const error = this.configFieldError(field, parsed[field]);
+      if (error) {
+        errors.push(error);
       }
     }
     return { Config: parsed as DiagnosticRetentionJobConfiguration, Errors: errors };
+  }
+
+  /** Returns the error for a field that is set but not a non-negative number (an integer for `MaxDeletesPerRun`). */
+  private configFieldError(field: (typeof NUMERIC_CONFIG_FIELDS)[number], value: unknown): ConfigurationError | null {
+    if (value === undefined) {
+      return null;
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      return { Field: field, Message: `${field} must be a non-negative number`, Value: value };
+    }
+    if (field === 'MaxDeletesPerRun' && !Number.isInteger(value)) {
+      return { Field: field, Message: `${field} must be a non-negative integer`, Value: value };
+    }
+    return null;
   }
 
   /** ISO timestamp of the moment `days` days before `now`. */

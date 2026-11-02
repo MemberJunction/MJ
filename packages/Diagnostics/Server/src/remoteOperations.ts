@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import {
   BaseRemotableOperation,
   IMetadataProvider,
+  LogError,
   Metadata,
   RemoteOpServerContext,
   UserInfo
@@ -150,6 +151,11 @@ async function isSelfServiceAllowed(user: UserInfo | undefined, provider?: IMeta
 async function authorizeSessionAccess(user: UserInfo, sessionId: string | undefined, provider?: IMetadataProvider): Promise<boolean> {
   if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', provider)) return true;
   const session = sessionId ? await FindSession(sessionId, user, provider) : undefined;
+  return authorizeOwnSession(user, session, provider);
+}
+
+/** True when self-service recording is on and the user started this self-only session. */
+async function authorizeOwnSession(user: UserInfo, session: ActiveDiagnosticSession | undefined, provider?: IMetadataProvider): Promise<boolean> {
   if (!session || !isOwnSelfServiceSession(session, user)) return false;
   return isSelfServiceAllowed(user, provider);
 }
@@ -342,10 +348,17 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
     return started.Output.SessionID;
   }
 
-  /** Stops a session started for one upload, so it never matches later requests. Build and preview still read it. */
+  /**
+   * Stops a session started for one upload, so it never matches later requests. Build and preview still read it.
+   * A failed row update is logged; the upload result is kept.
+   */
   private async endCallerSession(sessionId: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
     DiagnosticSessionManager.Instance.StopActiveSessionInMemory(sessionId);
-    await EndSessionRow(sessionId, user, provider);
+    try {
+      await EndSessionRow(sessionId, user, provider);
+    } catch (err) {
+      LogError(`Could not stop diagnostic session '${sessionId}' after the client upload: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   protected override async InternalExecute(
@@ -400,12 +413,17 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
 
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.BuildBundle')
 export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundleOperation {
+  /** The session `Authorize` loaded; `InternalExecute` of the same call reuses it. */
+  private session: ActiveDiagnosticSession | undefined;
+
   protected override async Authorize(
     input: DiagnosticsBuildBundleInput,
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return authorizeSessionAccess(user, input.SessionID, context?.provider);
+    this.session = input.SessionID ? await FindSession(input.SessionID, user, context?.provider) : undefined;
+    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) return true;
+    return authorizeOwnSession(user, this.session, context?.provider);
   }
 
   protected override async InternalExecute(
@@ -416,7 +434,7 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
     const route = GetDiagnosticsApiRoute();
     const settings = await DiagnosticsSettings.Load(user, provider);
     const scrubLiterals = settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false);
-    const session = input.SessionID ? await FindSession(input.SessionID, user, provider) : undefined;
+    const session = this.session;
     const row = await CreateLocalBundleRow(
       {
         Name: input.Name ?? `Bundle-${new Date().toISOString()}`,
@@ -588,7 +606,7 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     }
 
     const sentAt = new Date();
-    await MarkBundleSent(row, referenceId, sentAt);
+    await this.recordSent(row, referenceId, sentAt);
     local.status = 'Sent';
     local.externalReferenceId = referenceId;
     local.sentAt = sentAt.toISOString();
@@ -600,6 +618,18 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
       ExternalReferenceID: referenceId,
       SentAt: local.sentAt
     };
+  }
+
+  /** Marks the row `Sent`. The bundle was already delivered, so a failed save is logged with the reference ID and not thrown. */
+  private async recordSent(row: MJDiagnosticBundleEntity, referenceId: string, sentAt: Date): Promise<void> {
+    try {
+      await MarkBundleSent(row, referenceId, sentAt);
+    } catch (err) {
+      LogError(
+        `Diagnostic bundle '${row.ID}' was sent (reference ID '${referenceId}') but its row could not be marked Sent: ` +
+          (err instanceof Error ? err.message : String(err))
+      );
+    }
   }
 
   /** Sends the bundle to the enrolled collector at `Diagnostics.External.CollectorUrl` and returns its reference ID. */

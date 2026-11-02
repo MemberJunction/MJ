@@ -159,6 +159,8 @@ export class MJDiagnosticsService {
     private submitSessionId: string | null = null;
     private recordingProvider: IMetadataProvider | null = null;
     private pendingStop: Promise<void> | null = null;
+    /** True from the start of `StartLiveRecording` until it ends, so a second call is refused. */
+    private isStartingRecording = false;
 
     /** Provider for remote operations. Defaults to the global provider when not set. */
     public Provider: IMetadataProvider | null = null;
@@ -226,7 +228,7 @@ export class MJDiagnosticsService {
             });
 
             this.unsubscribeTelemetry = TelemetryManager.Instance.OnEvent((event) => {
-                this.RecordTelemetryEvent(event);
+                this.recordTelemetryEvent(event);
             });
 
             this.unregisterResponseHeaders = RegisterResponseHeaderObserver((headers) => {
@@ -279,9 +281,19 @@ export class MJDiagnosticsService {
      * under a local `rec-…` ID that is never sent to the server. Returns the recording's session ID.
      */
     public async StartLiveRecording(scrubberProfile: DiagnosticScrubberProfile = DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE): Promise<string> {
-        if (this.recordingStateSubject.value.isRecording) {
+        if (this.recordingStateSubject.value.isRecording || this.isStartingRecording) {
             throw new Error('A recording is already running. Stop it before you start a new one.');
         }
+        this.isStartingRecording = true;
+        try {
+            return await this.startLiveRecording(scrubberProfile);
+        } finally {
+            this.isStartingRecording = false;
+        }
+    }
+
+    /** Starts the server session (when allowed) and the recording; see {@link StartLiveRecording}. */
+    private async startLiveRecording(scrubberProfile: DiagnosticScrubberProfile): Promise<string> {
         const provider = this.ProviderToUse;
         await this.pendingStop;
         this.ensureNetworkObserver();
@@ -659,7 +671,7 @@ export class MJDiagnosticsService {
         this.flushedTriggerSessions.clear();
     }
 
-    private RecordTelemetryEvent(event: TelemetryEvent): void {
+    private recordTelemetryEvent(event: TelemetryEvent): void {
         const origin = TelemetryManager.Instance.TimeOrigin;
         this.RecordTelemetryEntry({
             id: event.id,

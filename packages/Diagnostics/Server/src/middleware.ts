@@ -23,7 +23,7 @@ import { GetInMemoryDiagnosticBundle } from './remoteOperations.js';
 import { DiagnosticsSettings } from './settings.js';
 import { ConfigureIntakeFromSettings } from './intakeStartup.js';
 import { SetDiagnosticsApiRoute } from './apiRoute.js';
-import { RestoreActiveSessions } from './sessionStore.js';
+import { RestoreActiveSessions, WatchSessionExpiry } from './sessionStore.js';
 import { SetClientCaptureTriggerHeader } from './clientCapture.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -105,9 +105,9 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
   private serverContext: ServerMiddlewareContext | undefined;
 
   /**
-   * Starts the session manager, loads the `Diagnostics.*` settings, configures intake from them and
-   * loads the active sessions. MJServer calls this after metadata and the user cache are loaded.
-   * When the settings fail to load, the error is logged and capture and intake stay off.
+   * Starts the session manager, loads the `Diagnostics.*` settings, configures intake from them,
+   * saves sessions that expire in memory as `Expired` and loads the active sessions. MJServer calls
+   * this after metadata and the user cache are loaded. When the settings fail to load, the error is logged and capture and intake stay off.
    */
   public override async Initialize(context?: ServerMiddlewareContext): Promise<void> {
     this.serverContext = context;
@@ -119,6 +119,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
       return;
     }
     await ConfigureIntakeFromSettings(settings, systemUser);
+    WatchSessionExpiry(systemUser);
     await this.restoreSessions(systemUser);
   }
 

@@ -1,14 +1,15 @@
 import { GetDiagnosticContext } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import type { BaseServerMiddleware } from '@memberjunction/server/middleware/BaseServerMiddleware';
 import type { ActiveDiagnosticSession } from './sessionManager.js';
 
 /** Response header that asks the browser to upload its capture buffers to the named session. */
 export const DIAGNOSTIC_TRIGGER_HEADER = 'X-MJ-Diagnostic-Trigger';
 
+type ServerResponse = Parameters<ReturnType<NonNullable<BaseServerMiddleware['GetPreAuthMiddleware']>>[number]>[1];
+
 /** A response that can carry a header. */
-export interface HeaderWritableResponse {
-  setHeader(name: string, value: string): unknown;
-}
+export type HeaderWritableResponse = Pick<ServerResponse, 'setHeader'>;
 
 /** True when a session targets people (users or a browser session), so their browser should capture too. */
 export function SessionWantsClientCapture(session: ActiveDiagnosticSession | undefined): session is ActiveDiagnosticSession {

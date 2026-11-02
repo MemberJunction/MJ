@@ -1,4 +1,5 @@
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IsValidUUID } from '@memberjunction/global';
 import { MJDiagnosticSessionEntity, MJDiagnosticSessionEntity_IDiagnosticSessionScope as IDiagnosticSessionScope } from '@memberjunction/core-entities';
 import { ActiveDiagnosticSession, DiagnosticSessionManager } from './sessionManager.js';
 
@@ -79,12 +80,15 @@ async function loadSessionRow(
   contextUser: UserInfo | undefined,
   provider?: IMetadataProvider
 ): Promise<MJDiagnosticSessionEntity | undefined> {
+  if (!IsValidUUID(sessionId)) {
+    return undefined;
+  }
   const md = provider ?? Metadata.Provider;
   const row = await md.GetEntityObject<MJDiagnosticSessionEntity>(SESSION_ENTITY, contextUser);
   return (await row.Load(sessionId)) ? row : undefined;
 }
 
-/** Loads a session from its row, whatever its status. Returns `undefined` when there is no row. */
+/** Loads a session from its row, whatever its status. Returns `undefined` when the ID is not a UUID or there is no row. */
 export async function LoadSessionRecord(
   sessionId: string,
   contextUser: UserInfo | undefined,
@@ -130,6 +134,27 @@ export async function EndSessionRow(
     throw saveError('update the diagnostic session', row);
   }
   return row.Status;
+}
+
+/**
+ * Makes the session manager save a session's row as `Expired` when the session passes its end time
+ * while this process holds it. A failed save is logged.
+ */
+export function WatchSessionExpiry(contextUser: UserInfo | undefined, provider?: IMetadataProvider): void {
+  DiagnosticSessionManager.Instance.SetSessionExpiredHandler((session) => {
+    void expireSessionRow(session.id, contextUser, provider);
+  });
+}
+
+async function expireSessionRow(sessionId: string, contextUser: UserInfo | undefined, provider?: IMetadataProvider): Promise<void> {
+  try {
+    const row = await loadSessionRow(sessionId, contextUser, provider);
+    if (row?.Status === 'Active') {
+      await expireRow(row);
+    }
+  } catch (err) {
+    LogError(`Could not mark diagnostic session '${sessionId}' Expired: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /** Saves a row whose end time has passed as `Expired`; logs a failed save. */

@@ -17,7 +17,6 @@ import type { RequestHandler, ErrorRequestHandler, Application } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import type { RunViewParams, UserInfo, BaseEntity, RunViewResult } from '@memberjunction/core';
-import type { ApiRouteOptions } from '../apiRoot.js';
 
 /**
  * What the server hands each middleware at startup.
@@ -27,8 +26,10 @@ export interface ServerMiddlewareContext {
      * Builds the path of a route under MJAPI's base path (`MJAPI_BASE_PATH`).
      * `subpath` must start with `/`. Use it for every route a middleware registers or compares against.
      * With `{ absolute: true }` it returns the public URL of the route (`MJAPI_PUBLIC_URL` + subpath).
+     * The options type is written out here, not imported from `apiRoot.ts`: packages that read this
+     * file's types from source must not compile `config.ts`.
      */
-    ApiRoute: (subpath: string, options?: ApiRouteOptions) => string;
+    ApiRoute: (subpath: string, options?: { absolute?: boolean }) => string;
 }
 
 export abstract class BaseServerMiddleware {

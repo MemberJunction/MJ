@@ -1,5 +1,6 @@
 import * as crypto from 'node:crypto';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { MJCredentialEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { DiagnosticKeyPair, GenerateDiagnosticKeyPair, SignEnrolProof } from '@memberjunction/diagnostics';
@@ -42,6 +43,7 @@ export interface EnrolSenderResult {
  * Enrols this installation with the collector at `Diagnostics.External.CollectorUrl`: generates an
  * Ed25519 sender key, proves possession to `POST /enroll` with the registration code, then stores
  * the private key in `MJ: Credentials` and records the key ID and the collector's keys.
+ * The previous sender key credential, if any, is marked inactive.
  */
 export async function EnrolSender(options: EnrolSenderOptions): Promise<EnrolSenderResult> {
   const registrationCode = options.RegistrationCode?.trim();
@@ -53,8 +55,12 @@ export async function EnrolSender(options: EnrolSenderOptions): Promise<EnrolSen
   const installId = await settings.EnsureInstallID(options.ContextUser);
   const keyPair = await GenerateDiagnosticKeyPair('Ed25519', BuildSenderKeyID(installId, options.Now ?? new Date()));
   const response = await postEnrolment(audience, installId, registrationCode, keyPair);
+  const previousCredentialId = settings.ExternalSenderCredentialID;
   const credentialId = await storeSenderKey(keyPair, options.ContextUser);
   await saveEnrolment(settings, credentialId, keyPair.keyId, response, options.ContextUser);
+  if (previousCredentialId && !UUIDsEqual(previousCredentialId, credentialId)) {
+    await deactivateCredential(previousCredentialId, options.ContextUser, options.Provider);
+  }
   return { InstallID: installId, KeyID: keyPair.keyId, EnrolledAt: new Date().toISOString() };
 }
 
@@ -179,4 +185,21 @@ async function saveEnrolment(
     response.collectorSigningPublicKeyBase64,
     contextUser
   );
+}
+
+/** Marks a replaced sender key credential inactive. A failure is logged; the new enrolment stays in place. */
+async function deactivateCredential(credentialId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
+  const md = provider ?? Metadata.Provider;
+  const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+  if (!(await credential.Load(credentialId))) {
+    LogError(`Could not load the previous diagnostics sender key credential '${credentialId}' to mark it inactive.`);
+    return;
+  }
+  credential.IsActive = false;
+  if (!(await credential.Save())) {
+    LogError(
+      `Could not mark the previous diagnostics sender key credential '${credentialId}' inactive: ` +
+        (credential.LatestResult?.CompleteMessage ?? 'unknown error')
+    );
+  }
 }

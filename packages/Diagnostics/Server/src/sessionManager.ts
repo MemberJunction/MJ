@@ -195,6 +195,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   private _consoleTapInstalled = false;
   private _pollTimer: ReturnType<typeof setInterval> | null = null;
   private _installId: string = crypto.randomUUID();
+  private _onSessionExpired: ((session: ActiveDiagnosticSession) => void) | null = null;
 
   public constructor() {
     super();
@@ -316,15 +317,28 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     this._activeSessions.set(session.id, session);
   }
 
+  /** Sets the function called when a held `Active` session passes its end time and is dropped. */
+  public SetSessionExpiredHandler(handler: ((session: ActiveDiagnosticSession) => void) | null): void {
+    this._onSessionExpired = handler;
+  }
+
   public GetActiveSession(sessionId: string): ActiveDiagnosticSession | undefined {
     const s = this._activeSessions.get(sessionId);
     if (!s) return undefined;
     if (s.status !== 'Active' || Date.now() >= s.endsAtMs) {
-      s.status = 'Expired';
-      this._activeSessions.delete(s.id);
+      this.dropEndedSession(s);
       return undefined;
     }
     return s;
+  }
+
+  /** Drops a session that is no longer active; an `Active` one is marked `Expired` and passed to the expiry handler. */
+  private dropEndedSession(session: ActiveDiagnosticSession): void {
+    this._activeSessions.delete(session.id);
+    if (session.status === 'Active') {
+      session.status = 'Expired';
+      this._onSessionExpired?.(session);
+    }
   }
 
   /**
@@ -342,7 +356,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       if (s.status === 'Active' && now < s.endsAtMs) {
         out.push(s);
       } else {
-        this._activeSessions.delete(s.id);
+        this.dropEndedSession(s);
       }
     }
     return out;

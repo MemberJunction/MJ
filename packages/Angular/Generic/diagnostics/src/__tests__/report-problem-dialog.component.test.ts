@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChangeDetectorRef, Injector, runInInjectionContext } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { MJDiagnosticsService } from '../lib/diagnostics.service';
 import { MJDiagnosticReportProblemDialogComponent } from '../lib/report-problem-dialog.component';
 import { MJDiagnosticRecordingBannerComponent } from '../lib/recording-banner.component';
@@ -11,12 +12,6 @@ function createInjector(service: MJDiagnosticsService): Injector {
             { provide: ChangeDetectorRef, useValue: { markForCheck: () => undefined } },
         ],
     });
-}
-
-async function flushAsync(): Promise<void> {
-    for (let i = 0; i < 10; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-    }
 }
 
 describe('MJDiagnosticReportProblemDialogComponent', () => {
@@ -46,10 +41,12 @@ describe('MJDiagnosticReportProblemDialogComponent', () => {
         dialog.ngOnInit();
         banner.ngOnInit();
         service.StartRecording('rec-42', 'Standard');
+        const built = firstValueFrom(dialog.BundleBuilt);
 
         banner.OnStopClicked();
-        await flushAsync();
+        await built;
 
+        expect(dialog.ErrorMessage).toBeNull();
         expect(service.CurrentRecordingState.isRecording).toBe(false);
         expect(buildSpy).toHaveBeenCalledTimes(1);
         expect(dialog.IsVisible).toBe(true);

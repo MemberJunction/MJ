@@ -84,14 +84,25 @@ function assertSecureCollectorUrl(url: string): void {
 
 /**
  * Calls `fetch` without following redirects. A 3xx answer or a network failure throws a message
- * that names the step.
+ * that names the step; only a redirect failure adds that redirects are not followed.
  */
 export async function FetchWithoutRedirect(url: string, init: RequestInit, step: string): Promise<Response> {
   try {
     return await fetch(url, { ...init, redirect: 'error' });
   } catch (err) {
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : err instanceof Error ? err.message : String(err);
-    throw new Error(`Collector ${step} failed: ${cause}. Redirects from the collector are not followed.`);
+    const redirectNote = /redirect/i.test(cause) ? ' Redirects from the collector are not followed.' : '';
+    throw new Error(`Collector ${step} failed: ${cause}.${redirectNote}`);
+  }
+}
+
+/** Reads a collector answer as JSON. Throws a clear message when the body is not JSON. */
+async function readCollectorJson<T>(resp: Response, step: string): Promise<T> {
+  const text = await resp.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`The collector response to ${step} is not JSON.`);
   }
 }
 
@@ -139,7 +150,7 @@ export async function SendBundleToCollector(params: SendBundleToCollectorParams)
   const completeUrl = `${ctx.Audience}/bundles/${encodeURIComponent(initiated.referenceId)}/complete`;
   const completeBody = JSON.stringify({ encryptedSha256, plaintextSha256 });
   const completed = await expectOk(await signedFetch(ctx, 'POST', completeUrl, completeBody, 'application/json'), 'POST /complete');
-  const json = (await completed.json()) as { referenceId?: string; status: string };
+  const json = await readCollectorJson<{ referenceId?: string; status: string }>(completed, 'POST /complete');
   if (!json.referenceId) {
     throw new Error('The collector did not return a reference ID on complete.');
   }
@@ -159,7 +170,7 @@ function warnOnRecipientKeyRotation(recipient: CollectorPublicKeyResponse, enrol
 
 async function fetchRecipientKey(ctx: CollectorRequestContext): Promise<CollectorPublicKeyResponse> {
   const resp = await expectOk(await signedFetch(ctx, 'GET', `${ctx.Audience}/public-key`, '', undefined), 'GET /public-key');
-  const json = (await resp.json()) as CollectorPublicKeyResponse;
+  const json = await readCollectorJson<CollectorPublicKeyResponse>(resp, 'GET /public-key');
   if (!json.keyId || !json.publicKey) {
     throw new Error('The collector public key response has no keyId or publicKey.');
   }
@@ -191,7 +202,7 @@ async function initiateIntake(
     contact: params.ContactInfo
   });
   const resp = await expectOk(await signedFetch(ctx, 'POST', `${ctx.Audience}/bundles`, body, 'application/json'), 'POST /bundles');
-  const json = (await resp.json()) as CollectorInitiateResponse;
+  const json = await readCollectorJson<CollectorInitiateResponse>(resp, 'POST /bundles');
   if (!json.referenceId) {
     throw new Error('The collector did not return a reference ID.');
   }

@@ -88,7 +88,7 @@ export const DiagnosticsChecks: NamedCheck[] = [
         Name: 'DIAG2: Assemble .mjdiag bundle archive, verify structure, and enforce single-use HMAC download token',
         Fn: async (ctx: IntegrationCheckContext) => {
             const manager = DiagnosticSessionManager.Instance;
-            const sessionId = `it-assemble-${Date.now()}`;
+            const sessionId = crypto.randomUUID();
             const userId = ctx.User.ID;
 
             manager.RegisterActiveSession({
@@ -115,7 +115,7 @@ export const DiagnosticsChecks: NamedCheck[] = [
                 parameterTypes: [],
             });
 
-            const assembled = await manager.AssembleBundleDataFromChunks(sessionId, true);
+            const assembled = await manager.AssembleBundleDataFromChunks(sessionId, true, undefined, ctx.User, ctx.Provider);
             const verification = await VerifyBundleArchive(assembled.archiveBytes);
             Assert(verification.valid, `Bundle archive must verify cleanly: ${verification.reason}`);
             const data = ParseBundleDataFromArchive(verification);
@@ -140,7 +140,7 @@ export const DiagnosticsChecks: NamedCheck[] = [
         Name: 'DIAG3: End-to-end encrypted MJDB v1 upload and Quarantine-then-Promote intake',
         Fn: async (ctx: IntegrationCheckContext) => {
             const manager = DiagnosticSessionManager.Instance;
-            const sessionId = `it-intake-session-${Date.now()}`;
+            const sessionId = crypto.randomUUID();
             manager.RegisterActiveSession({
                 id: sessionId,
                 name: 'IT Intake Session',
@@ -156,7 +156,7 @@ export const DiagnosticsChecks: NamedCheck[] = [
                 createdByUserId: ctx.User.ID,
                 bytesWritten: 0,
             });
-            const assembled = await manager.AssembleBundleDataFromChunks(sessionId, true);
+            const assembled = await manager.AssembleBundleDataFromChunks(sessionId, true, undefined, ctx.User, ctx.Provider);
             const verification = await VerifyBundleArchive(assembled.archiveBytes);
             const bundleId = verification.manifest?.bundleId ?? `it-intake-${Date.now()}`;
 

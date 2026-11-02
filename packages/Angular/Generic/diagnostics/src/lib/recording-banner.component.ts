@@ -26,7 +26,7 @@ import { MJDiagnosticsService, ActiveRecordingState } from './diagnostics.servic
                     }
                 </span>
                 <span class="mj-diag-stop-action">
-                    <button type="button" mjButton variant="danger" size="sm" (click)="OnStopClicked()">
+                    <button type="button" mjButton Variant="danger" Size="sm" (click)="OnStopClicked()">
                         Stop &amp; Package
                     </button>
                 </span>

@@ -46,6 +46,7 @@ import {
 import { DiagnosticsServerMiddleware } from '../middleware.js';
 import { MJ_VERSION } from '../version.js';
 import { DiagnosticsSettings } from '../settings.js';
+import { WatchSessionExpiry } from '../sessionStore.js';
 import { CollectorIntakeAudience } from '../collectorClient.js';
 
 type ExpressAppParam = Parameters<DiagnosticsServerMiddleware['ConfigureExpressApp']>[0];
@@ -1000,6 +1001,28 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(preview.ErrorMessage).toMatch(/Not authorized/);
         });
 
+        it('refuses a session ID that is not a UUID as not authorized, without a database error', async () => {
+            mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
+            const sqlServerLike = {
+                ...fake.Provider,
+                GetEntityObject: async (entityName: string) => {
+                    const row = (await fake.Provider.GetEntityObject(entityName)) as unknown as FakeRow;
+                    row.Load = async () => {
+                        throw new Error('Conversion failed when converting from a character string to uniqueidentifier.');
+                    };
+                    return row;
+                },
+            } as unknown as IMetadataProvider;
+
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
+                { SessionID: 'not-a-uuid' },
+                { provider: sqlServerLike, user: selfUser }
+            );
+
+            expect(built.Success).toBe(false);
+            expect(built.ErrorMessage).toMatch(/Not authorized/);
+        });
+
         it('lets the owner build from a stopped session after a restart', async () => {
             mockInstanceSettings({ 'Diagnostics.SelfServiceRecording': 'true' });
             const ctx = { provider: fake.Provider, user: selfUser };
@@ -1099,6 +1122,35 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(chunkLines).toHaveLength(1);
         });
 
+        it('marks the row Expired when a session held in memory passes its end time', async () => {
+            WatchSessionExpiry(ownerUser, fake.Provider);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            try {
+                const sessionId = await startSession();
+                vi.setSystemTime(Date.now() + 2 * 60 * 60_000);
+
+                expect(manager.GetActiveSession(sessionId)).toBeUndefined();
+
+                await vi.waitFor(() => expect(fake.Stored(sessionEntity, sessionId)?.Status).toBe('Expired'));
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('keeps a session-less upload successful when its session row cannot be stopped', async () => {
+            fake.FailSave = (name, fields) => name === sessionEntity && fields.Status === 'Stopped';
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const uploaded = await new DiagnosticsUploadClientCaptureServerOperation().ExecuteServer(
+                { ClientLogs: [{ timestamp: '2026-11-02T12:00:00.000Z', severity: 'error', source: 'client', message: 'UI failed' }] },
+                { provider: fake.Provider, user: ownerUser }
+            );
+
+            expect(uploaded.Success).toBe(true);
+            expect(fake.SaveHistory('MJ: Diagnostic Session Chunks').length).toBeGreaterThan(0);
+            expect(logged.mock.calls.some((c) => c.join(' ').includes('MJ: Diagnostic Sessions save rejected'))).toBe(true);
+        });
+
         it('loads Active sessions at startup and expires the ones whose end time has passed', async () => {
             const live = createFakeDiagnosticsProvider();
             const rowFor = async (id: string, endsAt: Date): Promise<FakeRow> => {
@@ -1186,6 +1238,24 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(fake.Stored(bundleEntity, bundleId)?.SentAt).toBeInstanceOf(Date);
         });
 
+        it('SendBundle returns the reference ID and logs it when the Sent status cannot be saved', async () => {
+            DiagnosticIntakeService.Instance.ResetForTests();
+            DiagnosticIntakeService.Instance.Configure({ enabled: true });
+            const { bundleId } = await buildBundle();
+            fake.FailSave = (name, fields) => name === bundleEntity && fields.Status === 'Sent';
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const sent = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
+                { BundleID: bundleId, Destination: 'MJC' },
+                { provider: fake.Provider, user: ownerUser }
+            );
+
+            expect(sent.Success).toBe(true);
+            const referenceId = sent.Output?.ExternalReferenceID;
+            expect(referenceId).toBeTruthy();
+            expect(logged.mock.calls.some((c) => c.join(' ').includes(String(referenceId)))).toBe(true);
+        });
+
         it('SendBundle marks the row Failed with the reason when the send fails', async () => {
             mockInstanceSettings({ 'Diagnostics.External.Enabled': 'true', 'Diagnostics.External.CollectorUrl': 'https://collector.example' });
             vi.stubGlobal('fetch', vi.fn(async () => {
@@ -1215,7 +1285,7 @@ describe('@memberjunction/diagnostics-server', () => {
 
             download({ params: { bundleId: 'BUNDLE-FROM-BEFORE-RESTART' }, query: { token }, headers: {} }, res);
 
-            expect(res.StatusCode).not.toBe(404);
+            expect(res.StatusCode).toBe(410);
             expect(res.Body?.error).toMatch(/no longer available on this instance; rebuild the bundle/);
         });
     });

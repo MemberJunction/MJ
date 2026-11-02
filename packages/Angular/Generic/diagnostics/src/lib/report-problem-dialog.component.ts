@@ -77,7 +77,7 @@ function errorText(err: unknown): string {
                         <strong>Bundle Downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
                         ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings,
                         scrubbing: {{ LastResult.manifest.scrubberProfile }})
-                        <button type="button" mjButton variant="flat" size="sm" (click)="OnDownloadSnapshot()">
+                        <button type="button" mjButton Variant="flat" Size="sm" (click)="OnDownloadSnapshot()">
                             Download Again
                         </button>
                     </div>
@@ -99,8 +99,8 @@ function errorText(err: unknown): string {
                 <button
                     type="button"
                     mjButton
-                    variant="primary"
-                    size="md"
+                    Variant="primary"
+                    Size="md"
                     [disabled]="IsSubmitting"
                     (click)="OnSubmitToSupport()">
                     {{ IsSubmitting ? 'Submitting...' : 'Submit to Support' }}
@@ -108,16 +108,16 @@ function errorText(err: unknown): string {
                 <button
                     type="button"
                     mjButton
-                    variant="secondary"
-                    size="md"
+                    Variant="secondary"
+                    Size="md"
                     [disabled]="IsBuilding"
                     (click)="OnBuildSnapshot()">
                     {{ IsBuilding ? 'Building...' : 'Download .mjdiag Snapshot' }}
                 </button>
-                <button type="button" mjButton variant="secondary" size="md" (click)="OnStartRecording()">
+                <button type="button" mjButton Variant="secondary" Size="md" (click)="OnStartRecording()">
                     Start Live Recording
                 </button>
-                <button type="button" mjButton variant="outline" size="md" (click)="OnClose()">
+                <button type="button" mjButton Variant="outline" Size="md" (click)="OnClose()">
                     Cancel
                 </button>
             </mj-dialog-actions>
@@ -158,6 +158,7 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
     private readonly diagnosticsService = inject(MJDiagnosticsService);
     private readonly cdr = inject(ChangeDetectorRef);
     private packageSub: Subscription | null = null;
+    private queuedPackage: ActiveRecordingState | null = null;
 
     public TicketNumber = '';
     public Note = '';
@@ -240,8 +241,15 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
         }
     }
 
-    /** Shows the dialog and builds a snapshot for a recording that was just stopped. */
+    /**
+     * Shows the dialog and builds a snapshot for a recording that was just stopped.
+     * While a build runs, the latest request waits and runs when that build ends.
+     */
     private async packageRecording(state: ActiveRecordingState): Promise<void> {
+        if (this.IsBuilding) {
+            this.queuedPackage = state;
+            return;
+        }
         this.IsVisible = true;
         this.ScrubberProfile = state.scrubberProfile;
         this.cdr.markForCheck();
@@ -269,6 +277,16 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
         } finally {
             this.IsBuilding = false;
             this.cdr.markForCheck();
+        }
+        await this.packageQueuedRecording();
+    }
+
+    /** Packages the recording that waited for the previous build, if there is one. */
+    private async packageQueuedRecording(): Promise<void> {
+        const queued = this.queuedPackage;
+        this.queuedPackage = null;
+        if (queued) {
+            await this.packageRecording(queued);
         }
     }
 
