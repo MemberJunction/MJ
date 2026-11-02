@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import * as zlib from 'node:zlib';
 import { monitorEventLoopDelay, IntervalHistogram } from 'node:perf_hooks';
-import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal, SanitizeForLog, TrimTrailingSlashes } from '@memberjunction/global';
 import {
   DiagnosticContext,
   IDiagnosticContextProvider,
@@ -13,6 +13,7 @@ import {
   IsInMJLogToConsole,
   LogEntry,
   LogError,
+  IMetadataProvider,
   Metadata,
   RunView,
   UserInfo,
@@ -36,7 +37,7 @@ import {
   DiagnosticServerHealthSnapshot,
   DiagnosticNetworkEntry,
   DiagnosticTelemetryEntry,
-  ScrubBundleData,
+  ScrubBundleDataWithCount,
   ScrubString,
   AnalyzeDiagnosticBundleData,
   BuildMjdiagArchive,
@@ -44,6 +45,11 @@ import {
   EncryptDiagnosticBundle,
   DiagnosticContributorRegistry
 } from '@memberjunction/diagnostics';
+
+/** Returns console arguments with each string on one line and length-capped. */
+function sanitizeConsoleArgs(args: unknown[]): unknown[] {
+  return args.map((arg) => (typeof arg === 'string' ? SanitizeForLog(arg) : arg));
+}
 
 export interface ActiveDiagnosticSession {
   id: string;
@@ -262,21 +268,21 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       if (!IsInMJLogToConsole()) {
         this.recordDirectConsoleCall('info', args);
       }
-      origLog(...args);
+      origLog(...sanitizeConsoleArgs(args));
     };
 
     console.warn = (...args: unknown[]): void => {
       if (!IsInMJLogToConsole()) {
         this.recordDirectConsoleCall('warn', args);
       }
-      origWarn(...args);
+      origWarn(...sanitizeConsoleArgs(args));
     };
 
     console.error = (...args: unknown[]): void => {
       if (!IsInMJLogToConsole()) {
         this.recordDirectConsoleCall('error', args);
       }
-      origError(...args);
+      origError(...sanitizeConsoleArgs(args));
     };
   }
 
@@ -619,16 +625,20 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return drained;
   }
 
-  public async FlushSessionChunksToDatabase(sessionId: string, contextUser?: UserInfo): Promise<number> {
+  public async FlushSessionChunksToDatabase(
+    sessionId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<number> {
     return WithoutDiagnosticCapture(async () => {
       const drained = this.DrainPendingBuffersForSession(sessionId);
       if (drained.length === 0) {
         return 0;
       }
-      let md: Metadata;
+      let md: IMetadataProvider;
       try {
-        md = new Metadata();
-        if (!md.Entities?.some((e) => e.Name === 'MJ: Diagnostic Session Chunks')) {
+        md = provider ?? Metadata.Provider;
+        if (!md.EntityByName('MJ: Diagnostic Session Chunks')) {
           return 0;
         }
       } catch {
@@ -720,7 +730,8 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     sessionId: string | undefined,
     scrubLiterals: boolean,
     clientSeed?: Partial<DiagnosticBundleData>,
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
   ): Promise<{
     bundleData: DiagnosticBundleData;
     archiveBytes: Uint8Array;
@@ -759,13 +770,13 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
 
         // Also query persisted chunks if database provider is available and entity exists
         try {
-          const md = new Metadata();
-          if (md.Entities?.some((e) => e.Name === 'MJ: Diagnostic Session Chunks')) {
-            const rv = new RunView();
+          const md = provider ?? Metadata.Provider;
+          if (md.EntityByName('MJ: Diagnostic Session Chunks')) {
+            const rv = RunView.FromMetadataProvider(md);
             const res = await rv.RunView<MJDiagnosticSessionChunkEntity>(
               {
                 EntityName: 'MJ: Diagnostic Session Chunks',
-                ExtraFilter: `DiagnosticSessionID = '${sessionId.replace(/'/g, "''")}'`,
+                ExtraFilter: `DiagnosticSessionID = '${EscapeSQLString(sessionId)}'`,
                 OrderBy: 'Sequence ASC',
                 ResultType: 'simple'
               },
@@ -825,11 +836,12 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         contrib
       };
 
-      const scrubbedData = ScrubBundleData(rawData, { scrubberProfile });
+      const scrubbed = ScrubBundleDataWithCount(rawData, { scrubberProfile });
+      const scrubbedData = scrubbed.Data;
       scrubbedData.findings = AnalyzeDiagnosticBundleData(scrubbedData);
 
       const scrubReport = {
-        credentialsScrubbedCount: scrubbedData.clientLogs.length + scrubbedData.serverLogs.length,
+        credentialsScrubbedCount: scrubbed.CredentialsScrubbedCount,
         sqlLiteralsNormalizedCount: scrubLiterals ? scrubbedData.serverSql.length : 0,
         customPatternsAppliedCount: 0
       };
@@ -959,7 +971,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     contactInfo?: string;
     summary?: string;
   }): Promise<{ referenceId: string; status: string }> {
-    const baseUrl = params.collectorBaseUrl.replace(/\/+$/, '');
+    const baseUrl = TrimTrailingSlashes(params.collectorBaseUrl);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };

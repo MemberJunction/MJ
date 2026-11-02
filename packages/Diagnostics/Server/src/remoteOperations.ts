@@ -3,6 +3,7 @@ import {
   BaseRemotableOperation,
   IMetadataProvider,
   Metadata,
+  RemoteOpServerContext,
   UserInfo
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -45,7 +46,8 @@ function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
 
 export async function AuthorizeDiagnosticsUser(
   user: UserInfo | undefined,
-  authorizationName: 'Diagnostics: Run Sessions' | 'Diagnostics: Send Externally'
+  authorizationName: 'Diagnostics: Run Sessions' | 'Diagnostics: Send Externally',
+  provider?: IMetadataProvider
 ): Promise<boolean> {
   if (!user || !user.IsActive) {
     return false;
@@ -57,7 +59,7 @@ export async function AuthorizeDiagnosticsUser(
     return true;
   }
   try {
-    const md = new Metadata();
+    const md = provider ?? Metadata.Provider;
     const authInfo = md.Authorizations?.find((a) => a.Name === authorizationName);
     if (authInfo && authInfo.UserCanExecute(user)) {
       return true;
@@ -98,9 +100,10 @@ export function GetInMemoryDiagnosticBundle(bundleId: string): InMemoryBundleSto
 export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSessionOperation {
   protected override async Authorize(
     _input: DiagnosticsStartSessionInput,
-    user: UserInfo
+    user: UserInfo,
+    context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions');
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
   }
 
   protected override async InternalExecute(
@@ -147,20 +150,22 @@ export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSess
 export class DiagnosticsStopSessionServerOperation extends DiagnosticsStopSessionOperation {
   protected override async Authorize(
     _input: DiagnosticsStopSessionInput,
-    user: UserInfo
+    user: UserInfo,
+    context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions');
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
   }
 
   protected override async InternalExecute(
     input: DiagnosticsStopSessionInput,
-    _provider: IMetadataProvider,
+    provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsStopSessionOutput> {
     DiagnosticSessionManager.Instance.StopActiveSessionInMemory(input.SessionID);
     const flushed = await DiagnosticSessionManager.Instance.FlushSessionChunksToDatabase(
       input.SessionID,
-      user
+      user,
+      provider
     );
     return {
       SessionID: input.SessionID,
@@ -222,12 +227,13 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
 export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUploadClientCaptureOperation {
   protected override async Authorize(
     input: DiagnosticsUploadClientCaptureInput,
-    user: UserInfo
+    user: UserInfo,
+    context?: RemoteOpServerContext
   ): Promise<boolean> {
     if (!user || !user.IsActive || isScopeLimitedPrincipal(user)) {
       return false;
     }
-    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions')) {
+    if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) {
       return true;
     }
     if (input.SessionID) {
@@ -241,7 +247,7 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
 
   protected override async InternalExecute(
     input: DiagnosticsUploadClientCaptureInput,
-    _provider: IMetadataProvider,
+    provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsUploadClientCaptureOutput> {
     const sessionId = input.SessionID ?? crypto.randomUUID();
@@ -271,7 +277,7 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
       mgr.AppendToChunkBuffer(sessionId, 'Client', 'Telemetry', tel);
     }
 
-    void mgr.FlushSessionChunksToDatabase(sessionId, user).catch(() => {});
+    void mgr.FlushSessionChunksToDatabase(sessionId, user, provider).catch(() => {});
 
     return {
       SessionID: sessionId,
@@ -285,14 +291,15 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
 export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundleOperation {
   protected override async Authorize(
     _input: DiagnosticsBuildBundleInput,
-    user: UserInfo
+    user: UserInfo,
+    context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions');
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
   }
 
   protected override async InternalExecute(
     input: DiagnosticsBuildBundleInput,
-    _provider: IMetadataProvider,
+    provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsBuildBundleOutput> {
     const bundleId = crypto.randomUUID();
@@ -302,7 +309,8 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
       input.SessionID,
       scrubLiterals,
       undefined,
-      user
+      user,
+      provider
     );
 
     inMemoryBundles.set(bundleId, {
@@ -337,9 +345,10 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
 export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBundlePreviewOperation {
   protected override async Authorize(
     _input: DiagnosticsGetBundlePreviewInput,
-    user: UserInfo
+    user: UserInfo,
+    context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions');
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider);
   }
 
   protected override async InternalExecute(
@@ -397,9 +406,10 @@ export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBu
 export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleOperation {
   protected override async Authorize(
     _input: DiagnosticsSendBundleInput,
-    user: UserInfo
+    user: UserInfo,
+    context?: RemoteOpServerContext
   ): Promise<boolean> {
-    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Send Externally');
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Send Externally', context?.provider);
   }
 
   protected override async InternalExecute(

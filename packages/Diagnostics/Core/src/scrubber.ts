@@ -64,8 +64,9 @@ const SENSITIVE_HEADER_NAMES: ReadonlySet<string> = new Set([
 const SENSITIVE_KEY_PATTERN =
     /^(password|passwd|pwd|secret|client_?secret|api_?key|access_?token|refresh_?token|id_?token|private_?key|connection_?string|conn_?str|authorization|cookie|set_?cookie|session_?token|auth_?token|bearer_?token|encryption_?key|signing_?key|master_?key|account_?key|sas_?token)$/i;
 
-const PEM_PRIVATE_KEY_REGEX =
-    /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
+const PEM_BEGIN_REGEX = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g;
+
+const PEM_END_REGEX = /-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
 
 const JWT_REGEX = /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 
@@ -87,6 +88,71 @@ const SQL_SINGLE_QUOTED_LITERAL_REGEX = /N?'(?:''|[^'])*'/g;
 
 const SQL_NUMERIC_COMPARISON_REGEX =
     /(\b(?:WHERE|AND|OR|ON|HAVING|SET|VALUES|LIMIT|OFFSET|TOP)\b[^;]*?(=|<>|!=|<=|>=|<|>|\bIN\s*\(|\bBETWEEN\s+)\s*)-?\b\d+(?:\.\d+)?\b/gi;
+
+/** Running total of credential redactions made during one scrub call. */
+interface RedactionTally {
+    count: number;
+}
+
+/** A Stage 1 credential pattern and the text that replaces each match. */
+interface CredentialRule {
+    regex: RegExp;
+    replace: (match: string, prefix: string) => string;
+}
+
+const CREDENTIAL_RULES: readonly CredentialRule[] = [
+    { regex: JWT_REGEX, replace: () => '[REDACTED_JWT]' },
+    { regex: BEARER_REGEX, replace: (_m, prefix) => `${prefix}[REDACTED_TOKEN]` },
+    { regex: KNOWN_API_KEY_REGEX, replace: () => '[REDACTED_API_KEY]' },
+    { regex: CONN_STRING_SECRET_REGEX, replace: (_m, name) => `${name}=[REDACTED_SECRET]` },
+    { regex: URL_QUERY_SECRET_REGEX, replace: (_m, prefix) => `${prefix}[REDACTED_QUERY_PARAM]` },
+];
+
+/**
+ * Returns the index just past the first PEM END marker at or after `from`, or -1 if there is none.
+ */
+function findPemEnd(input: string, from: number): number {
+    PEM_END_REGEX.lastIndex = from;
+    const end = PEM_END_REGEX.exec(input);
+    return end ? end.index + end[0].length : -1;
+}
+
+/**
+ * Replaces each PEM private-key block with `[REDACTED_PEM_KEY]`.
+ * Scans BEGIN and END markers by index, so it runs in linear time on any input.
+ */
+function redactPemPrivateKeys(input: string, tally: RedactionTally): string {
+    let out = '';
+    let cursor = 0;
+    PEM_BEGIN_REGEX.lastIndex = 0;
+    let begin = PEM_BEGIN_REGEX.exec(input);
+    while (begin) {
+        const blockEnd = findPemEnd(input, begin.index + begin[0].length);
+        if (blockEnd < 0) {
+            break; // no END after this BEGIN, so no later BEGIN has one either
+        }
+        out += input.slice(cursor, begin.index) + '[REDACTED_PEM_KEY]';
+        tally.count++;
+        cursor = blockEnd;
+        PEM_BEGIN_REGEX.lastIndex = blockEnd;
+        begin = PEM_BEGIN_REGEX.exec(input);
+    }
+    return cursor === 0 ? input : out + input.slice(cursor);
+}
+
+/**
+ * Applies the Stage 1 always-on credential rules and adds each redaction to `tally`.
+ */
+function redactCredentials(input: string, tally: RedactionTally): string {
+    let result = redactPemPrivateKeys(input, tally);
+    for (const rule of CREDENTIAL_RULES) {
+        result = result.replace(rule.regex, (match: string, prefix: string) => {
+            tally.count++;
+            return rule.replace(match, prefix);
+        });
+    }
+    return result;
+}
 
 /**
  * Checks whether an object key name represents a credential or secret that must always be redacted.
@@ -127,6 +193,12 @@ export function TruncateStackFramePath(stack: string): string {
 
 export const TruncateStackTracePaths = TruncateStackFramePath;
 
+/** Scrubbed text plus the number of credential redactions made. */
+export interface ScrubStringResult {
+    Text: string;
+    RedactionCount: number;
+}
+
 /**
  * Scrubs a string using Stage 1 (always-on credential scrubbing) and optional Stage 2
  * (when `scrubberProfile === 'Standard'`) plus any `customPatterns`.
@@ -135,6 +207,26 @@ export function ScrubString(
     input: string,
     optionsOrProfile?: ScrubOptions | DiagnosticScrubberProfile
 ): string {
+    return scrubStringTallied(input, optionsOrProfile, { count: 0 });
+}
+
+/**
+ * Same as {@link ScrubString}, and also returns how many Stage 1 credential redactions it made.
+ */
+export function ScrubStringWithCount(
+    input: string,
+    optionsOrProfile?: ScrubOptions | DiagnosticScrubberProfile
+): ScrubStringResult {
+    const tally: RedactionTally = { count: 0 };
+    const text = scrubStringTallied(input, optionsOrProfile, tally);
+    return { Text: text, RedactionCount: tally.count };
+}
+
+function scrubStringTallied(
+    input: string,
+    optionsOrProfile: ScrubOptions | DiagnosticScrubberProfile | undefined,
+    tally: RedactionTally
+): string {
     if (!input || typeof input !== 'string') {
         return input;
     }
@@ -142,13 +234,7 @@ export function ScrubString(
     const { profile, customRegexes } = resolveScrubOptions(optionsOrProfile);
 
     // Stage 1: Always-on credential & secret scrubbing
-    let result = input
-        .replace(PEM_PRIVATE_KEY_REGEX, '[REDACTED_PEM_KEY]')
-        .replace(JWT_REGEX, '[REDACTED_JWT]')
-        .replace(BEARER_REGEX, '$1[REDACTED_TOKEN]')
-        .replace(KNOWN_API_KEY_REGEX, '[REDACTED_API_KEY]')
-        .replace(CONN_STRING_SECRET_REGEX, '$1=[REDACTED_SECRET]')
-        .replace(URL_QUERY_SECRET_REGEX, '$1[REDACTED_QUERY_PARAM]');
+    let result = redactCredentials(input, tally);
 
     // Stage 2: Stack frame path normalization in Standard mode
     if (profile === 'Standard' && (result.includes('packages/') || result.includes('packages\\') || result.includes('node_modules'))) {
@@ -190,20 +276,21 @@ export function ScrubValue<T>(
     optionsOrProfile?: ScrubOptions | DiagnosticScrubberProfile
 ): T {
     const seen = new WeakSet<object>();
-    return scrubValueInternal(value, optionsOrProfile, seen, 0) as T;
+    return scrubValueInternal(value, optionsOrProfile, seen, 0, { count: 0 }) as T;
 }
 
 function scrubValueInternal(
     value: unknown,
     optionsOrProfile: ScrubOptions | DiagnosticScrubberProfile | undefined,
     seen: WeakSet<object>,
-    depth: number
+    depth: number,
+    tally: RedactionTally
 ): unknown {
     if (value === null || value === undefined) {
         return value;
     }
     if (typeof value === 'string') {
-        return ScrubString(value, optionsOrProfile);
+        return scrubStringTallied(value, optionsOrProfile, tally);
     }
     if (typeof value === 'number' || typeof value === 'boolean') {
         return value;
@@ -220,7 +307,7 @@ function scrubValueInternal(
     seen.add(value);
 
     if (Array.isArray(value)) {
-        return value.map((item) => scrubValueInternal(item, optionsOrProfile, seen, depth + 1));
+        return value.map((item) => scrubValueInternal(item, optionsOrProfile, seen, depth + 1, tally));
     }
 
     const record = value as Record<string, unknown>;
@@ -228,11 +315,18 @@ function scrubValueInternal(
     for (const [key, propVal] of Object.entries(record)) {
         if (IsSensitiveKeyName(key)) {
             scrubbedRecord[key] = '[REDACTED_KEY]';
+            tally.count++;
         } else {
-            scrubbedRecord[key] = scrubValueInternal(propVal, optionsOrProfile, seen, depth + 1);
+            scrubbedRecord[key] = scrubValueInternal(propVal, optionsOrProfile, seen, depth + 1, tally);
         }
     }
     return scrubbedRecord;
+}
+
+/** Scrubbed bundle plus the number of credential redactions made across it. */
+export interface ScrubBundleDataResult {
+    Data: DiagnosticBundleData;
+    CredentialsScrubbedCount: number;
 }
 
 /**
@@ -242,8 +336,20 @@ export function ScrubBundleData(
     data: DiagnosticBundleData,
     optionsOrProfile?: ScrubOptions | DiagnosticScrubberProfile
 ): DiagnosticBundleData {
+    return ScrubBundleDataWithCount(data, optionsOrProfile).Data;
+}
+
+/**
+ * Same as {@link ScrubBundleData}, and also returns how many credential redactions it made
+ * (Stage 1 pattern matches plus sensitive-key redactions).
+ */
+export function ScrubBundleDataWithCount(
+    data: DiagnosticBundleData,
+    optionsOrProfile?: ScrubOptions | DiagnosticScrubberProfile
+): ScrubBundleDataResult {
     const { profile } = resolveScrubOptions(optionsOrProfile);
-    const cloned = ScrubValue(structuredClone(data), optionsOrProfile);
+    const tally: RedactionTally = { count: 0 };
+    const cloned = scrubValueInternal(structuredClone(data), optionsOrProfile, new WeakSet<object>(), 0, tally) as DiagnosticBundleData;
 
     if (profile === 'Standard') {
         cloned.serverSql = cloned.serverSql.map((sqlEntry) => ({
@@ -252,5 +358,5 @@ export function ScrubBundleData(
         }));
     }
 
-    return cloned;
+    return { Data: cloned, CredentialsScrubbedCount: tally.count };
 }

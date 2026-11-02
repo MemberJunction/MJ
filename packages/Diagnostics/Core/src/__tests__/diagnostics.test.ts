@@ -8,6 +8,8 @@ import {
   NormalizeSqlLiterals,
   TruncateStackFramePath,
   ScrubBundleData,
+  ScrubStringWithCount,
+  ScrubBundleDataWithCount,
   BuildMjdiagArchive,
   BuildCustomZipArchive,
   VerifyBundleArchive,
@@ -296,6 +298,43 @@ describe('Two-Stage Credential & Literal Scrubber', () => {
     expect(out.userName).toBe('[REDACTED_CUSTOM]');
     expect(out.clientSecret).toBe('[REDACTED_KEY]');
     expect(out.nested.refreshToken).toBe('[REDACTED_KEY]');
+  });
+});
+
+describe('Scrubber redaction counts', () => {
+  const threeSecretsOneLine =
+    'key sk-proj-1234567890abcdefghijklmnop then AKIAIOSFODNN7EXAMPLE then Password=hunter2';
+
+  it('ScrubStringWithCount counts each redaction, not each line', () => {
+    const result = ScrubStringWithCount(threeSecretsOneLine, 'FullRaw');
+    expect(result.RedactionCount).toBe(3);
+    expect(result.Text).toBe(ScrubString(threeSecretsOneLine, 'FullRaw'));
+  });
+
+  it('ScrubBundleDataWithCount counts the redactions across the whole bundle', () => {
+    const data = createSampleBundleData();
+    data.clientLogs = [{ timestamp: '2026-11-02T12:00:00.000Z', severity: 'info', source: 'client', message: threeSecretsOneLine }];
+    data.serverLogs = [{ timestamp: '2026-11-02T12:00:00.000Z', severity: 'info', source: 'server', message: 'no secrets here' }];
+    data.serverSql = [];
+    data.serverTraces = [];
+    data.clientWaterfall = [];
+    data.clientTelemetry = [];
+    data.contrib = undefined;
+    data.repro = { breadcrumbs: [] };
+    const result = ScrubBundleDataWithCount(data, 'FullRaw');
+    expect(result.CredentialsScrubbedCount).toBe(3);
+    expect(result.Data.clientLogs[0].message).not.toContain('hunter2');
+  });
+});
+
+describe('Scrubber PEM private-key redaction', () => {
+  it('finishes in linear time on many BEGIN headers with no END marker', () => {
+    const header = '-----BEGIN PRIVATE KEY-----';
+    const hostile = header.repeat(Math.ceil(1_200_000 / header.length));
+    const started = Date.now();
+    const out = ScrubString(hostile, 'FullRaw');
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(out).toBe(hostile);
   });
 });
 

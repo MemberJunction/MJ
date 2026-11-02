@@ -4,8 +4,8 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo } from '@memberjunction/core';
-import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
@@ -589,8 +589,6 @@ const setupComplete$ = new ReplaySubject(1);
     // Generated resolvers call this static method with bracket-quoted SQL.
     // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
     const origExecuteSQLWithPool = SQLServerDataProvider.ExecuteSQLWithPool;
-    const { GenericDatabaseProvider: GenericDBProv, SummarizeSqlParameters: SummarizeParams } = await import('@memberjunction/generic-database-provider');
-    const { GetDiagnosticContext: GetDiagCtx, IsDiagnosticCaptureSuppressed: IsDiagSuppressed } = await import('@memberjunction/core');
     SQLServerDataProvider.ExecuteSQLWithPool = async function(
       pool: sql.ConnectionPool, query: string, parameters?: unknown[], contextUser?: import('@memberjunction/core').UserInfo
     ): Promise<unknown[]> {
@@ -602,31 +600,31 @@ const setupComplete$ = new ReplaySubject(1);
         const startTime = performance.now();
         try {
           const result = await thePgPool.query(pgQuery);
-          if (!IsDiagSuppressed() && GenericDBProv.HasSqlObservers()) {
-            GenericDBProv.NotifySqlObservers({
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
               ts: Date.now(),
               sql: pgQuery,
-              parameterSummaries: SummarizeParams(parameters),
+              parameterSummaries: SummarizeSqlParameters(parameters),
               durationMs: performance.now() - startTime,
               rowCount: result.rows?.length ?? 0,
               isMutation: false,
               description: 'ExecuteSQLWithPool(PG)',
-              diagnosticContext: GetDiagCtx(),
+              diagnosticContext: GetDiagnosticContext(),
             });
           }
           return result.rows;
         } catch (err) {
-          if (!IsDiagSuppressed() && GenericDBProv.HasSqlObservers()) {
-            GenericDBProv.NotifySqlObservers({
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
               ts: Date.now(),
               sql: pgQuery,
-              parameterSummaries: SummarizeParams(parameters),
+              parameterSummaries: SummarizeSqlParameters(parameters),
               durationMs: performance.now() - startTime,
               rowCount: 0,
               isMutation: false,
               errorMessage: err instanceof Error ? err.message : String(err),
               description: 'ExecuteSQLWithPool(PG)',
-              diagnosticContext: GetDiagCtx(),
+              diagnosticContext: GetDiagnosticContext(),
             });
           }
           throw err;

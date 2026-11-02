@@ -9,8 +9,7 @@ describe('DiagnosticsChecks (DIAG1–DIAG4)', () => {
 
     for (const check of DiagnosticsChecks) {
         it(`${check.Id} — ${check.Name}`, async () => {
-            await check.Fn(mockCtx);
-            expect(true).toBe(true);
+            await expect(check.Fn(mockCtx)).resolves.toBeUndefined();
         });
     }
 });

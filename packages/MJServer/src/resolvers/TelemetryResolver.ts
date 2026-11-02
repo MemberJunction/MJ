@@ -4,10 +4,10 @@ import {
     TelemetryManager,
     TelemetryCategory,
     TelemetryInsightSeverity,
-    Metadata,
     AuthorizationEvaluator,
 } from '@memberjunction/core';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { GetReadOnlyProvider } from '../util.js';
 
 // ============================================================================
 // GraphQL Types for TelemetryEvent
@@ -333,7 +333,7 @@ export class TelemetryResolver {
         if (user.Type?.trim().toLowerCase() === 'owner') {
             return;
         }
-        const authorizations = Metadata.Provider?.Authorizations ?? [];
+        const authorizations = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true })?.Authorizations ?? [];
         const diagAuth = authorizations.find(
             (a) => a.Name?.trim().toLowerCase() === 'diagnostics: run sessions'
         );

@@ -1,5 +1,5 @@
 import * as crypto from 'node:crypto';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     GetDiagnosticContext,
     WithoutDiagnosticCapture,
@@ -253,6 +253,86 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(assembled.bundleData.clientLogs.length).toBe(1);
             expect(assembled.bundleData.serverSql[0].sql).toContain('Secret = ?');
             expect(assembled.bundleData.findings.some((f) => f.category === 'slow_sql')).toBe(true);
+        });
+    });
+
+    describe('Bundle redaction summary', () => {
+        it('reports the number of credential redactions in the manifest, not the number of log lines', async () => {
+            manager.RegisterActiveSession({
+                id: 'session-redaction-count',
+                name: 'Redaction Count Test',
+                status: 'Active',
+                scopeType: 'Users',
+                scope: { userIds: ['user-1'] },
+                level: 'Standard',
+                categories: ['Logs'],
+                scrubLiterals: false,
+                startedAtMs: Date.now(),
+                endsAtMs: Date.now() + 60_000,
+                maxBytes: 10_000_000,
+                createdByUserId: 'user-1',
+                bytesWritten: 0,
+            });
+            manager.AppendToChunkBuffer('session-redaction-count', 'Server', 'Logs', {
+                timestamp: '2026-11-02T12:00:00.000Z',
+                severity: 'error',
+                source: 'server',
+                message: 'key sk-proj-1234567890abcdefghijklmnop then AKIAIOSFODNN7EXAMPLE then Password=hunter2',
+            });
+
+            const assembled = await manager.AssembleBundleDataFromChunks('session-redaction-count', false, {
+                clientLogs: [
+                    { timestamp: '2026-11-02T12:00:01.000Z', severity: 'info', source: 'client', message: 'no secrets here' },
+                ],
+            });
+
+            const summary = assembled.manifest['redactionSummary'] as { credentialsScrubbedCount: number };
+            expect(summary.credentialsScrubbedCount).toBe(3);
+            expect(assembled.scrubReport.credentialsScrubbedCount).toBe(3);
+        });
+    });
+
+    describe('Console tap', () => {
+        it('re-emits string arguments without CR or LF', () => {
+            const originalLog = console.log;
+            const sink = vi.fn();
+            console.log = sink;
+            try {
+                manager.InstallConsoleTap();
+                console.log('request for bob\r\n[ERROR] forged entry', 42);
+            } finally {
+                console.log = originalLog;
+            }
+            expect(sink).toHaveBeenCalledTimes(1);
+            const [first, second] = sink.mock.calls[0];
+            expect(first).toBe('request for bob[ERROR] forged entry');
+            expect(second).toBe(42);
+        });
+    });
+
+    describe('SendBundleToCollector URL handling', () => {
+        afterEach(() => {
+            vi.unstubAllGlobals();
+        });
+
+        it('trims the collector URL in linear time when it holds many non-trailing slashes', async () => {
+            const fetchStub = vi.fn(async () => {
+                throw new Error('network disabled in test');
+            });
+            vi.stubGlobal('fetch', fetchStub);
+            const collectorBaseUrl = 'http://collector.example' + '/'.repeat(100_000) + 'x';
+
+            const started = Date.now();
+            await expect(
+                manager.SendBundleToCollector({
+                    archiveBytes: new Uint8Array([1, 2, 3]),
+                    bundleId: 'bundle-slash-test',
+                    scrubLiterals: true,
+                    collectorBaseUrl,
+                })
+            ).rejects.toThrow('network disabled in test');
+            expect(Date.now() - started).toBeLessThan(2000);
+            expect(fetchStub).toHaveBeenCalledWith(`${collectorBaseUrl}/public-key`, expect.anything());
         });
     });
 
