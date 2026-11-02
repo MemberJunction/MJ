@@ -43,4 +43,15 @@ describe('store schemas', () => {
     const inHeader = StoreSchemas.Validate(StoreSchemas.SnapshotMatrixHeader, asJson({ ...header, preprocessing: [{ op: 'impute', extra: 1 }] }));
     expect(inHeader.Ok).toBe(false);
   });
+  it('refuses a decision capacity that is not a positive integer and accepts a positive integer or null', () => {
+    const withCapacity = (capacityPerPeriod: number | null) => asJson({ ...header, decision: { ...header.decision, capacityPerPeriod } });
+    for (const bad of [0, -3, 2.5]) {
+      const r = StoreSchemas.Validate(StoreSchemas.SnapshotMatrixHeader, withCapacity(bad));
+      expect(r.Ok ? null : r.Errors.some((e) => e.startsWith('decision.capacityPerPeriod:'))).toBe(true);
+    }
+    for (const good of [1, 150, null]) {
+      const r = StoreSchemas.Validate(StoreSchemas.SnapshotMatrixHeader, withCapacity(good));
+      expect(r.Ok && r.Value.decision.capacityPerPeriod).toBe(good);
+    }
+  });
 });
