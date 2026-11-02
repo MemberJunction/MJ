@@ -780,12 +780,12 @@ const PS_PIPELINES_STARTER_PROMPT =
         <ps-pipeline-wizard
           [engine]="engine"
           [provider]="provider"
-          [currentUser]="CurrentUser"
-          [cloneFrom]="WizardClonePipeline"
-          [initialAlgorithmId]="initialWizardAlgorithmId"
-          (saved)="OnWizardSaved($event)"
-          (trainRequested)="OnWizardTrainRequested($event)"
-          (closed)="CloseWizard()">
+          [CurrentUser]="CurrentUser"
+          [CloneFrom]="WizardClonePipeline"
+          [InitialAlgorithmId]="initialWizardAlgorithmId"
+          (Saved)="OnWizardSaved($event)"
+          (TrainRequested)="OnWizardTrainRequested($event)"
+          (Closed)="CloseWizard()">
         </ps-pipeline-wizard>
       }
     </div>
