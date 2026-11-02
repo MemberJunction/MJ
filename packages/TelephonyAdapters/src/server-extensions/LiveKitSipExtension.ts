@@ -79,7 +79,8 @@ export class LiveKitSipExtension extends BaseServerExtension {
         LiveKitAgentRoomCoordinator.Instance.SetRoomTeardownHook(async (roomName, contextUser, provider) => {
             void RoomAudioPlayer.Instance.StopAllInRoom(roomName);
             await service.HangUpRoom(roomName);
-            this.seenSipRooms.delete(roomName);
+            const wasSeen = this.seenSipRooms.delete(roomName);
+            if (!wasSeen) return;
             const ctx =
                 contextUser && provider
                     ? { Ok: true as const, User: contextUser, Provider: provider }
@@ -115,28 +116,25 @@ export class LiveKitSipExtension extends BaseServerExtension {
             if (this.isPollingRooms || !this.service) return;
             this.isPollingRooms = true;
             try {
-                const roomClient = (sip as unknown as { roomClient: () => { listRooms: () => Promise<Array<{ name: string }>> } }).roomClient();
-                const rooms = await roomClient.listRooms();
+                const roomNames = await sip.ListRooms(prefix);
                 const currentCallRooms = new Set<string>();
-                for (const r of rooms) {
-                    if (!r.name || !r.name.startsWith(prefix)) continue;
-
-                    const participants = await sip.ListParticipants(r.name);
+                for (const roomName of roomNames) {
+                    const participants = await sip.ListParticipants(roomName);
                     const sipParticipant = participants.find((p) => p.IsSip);
                     if (!sipParticipant) {
                         if (participants.some((p) => p.Identity.startsWith('hold-'))) {
-                            void RoomAudioPlayer.Instance.StopAllInRoom(r.name);
+                            void RoomAudioPlayer.Instance.StopAllInRoom(roomName);
                             for (const p of participants.filter((pt) => pt.Identity.startsWith('hold-'))) {
-                                void sip.RemoveParticipant(r.name, p.Identity).catch(() => undefined);
+                                void sip.RemoveParticipant(roomName, p.Identity).catch(() => undefined);
                             }
                         }
                         continue;
                     }
 
-                    currentCallRooms.add(r.name);
-                    if (this.seenSipRooms.has(r.name)) continue;
+                    currentCallRooms.add(roomName);
+                    if (this.seenSipRooms.has(roomName)) continue;
 
-                    this.seenSipRooms.add(r.name);
+                    this.seenSipRooms.add(roomName);
                     const ctx = ResolveInboundContext(config.inboundRunAsUserEmail);
                     if (!ctx.Ok) continue;
 
@@ -144,7 +142,7 @@ export class LiveKitSipExtension extends BaseServerExtension {
                     await service.HandleWebhookEvent(
                         {
                             Event: 'participant_joined',
-                            RoomName: r.name,
+                            RoomName: roomName,
                             ParticipantIdentity: sipParticipant.Identity,
                             IsSipParticipant: true,
                             CallerNumber: attrs['sip.phoneNumber'] ?? attrs['sipPhoneNumber'],
@@ -158,7 +156,7 @@ export class LiveKitSipExtension extends BaseServerExtension {
 
                 for (const prevRoom of [...this.seenSipRooms]) {
                     if (!currentCallRooms.has(prevRoom)) {
-                        this.seenSipRooms.delete(prevRoom);
+                        if (!this.seenSipRooms.delete(prevRoom)) continue;
                         void RoomAudioPlayer.Instance.StopAllInRoom(prevRoom);
                         const ctx = ResolveInboundContext(config.inboundRunAsUserEmail);
                         if (ctx.Ok) {
