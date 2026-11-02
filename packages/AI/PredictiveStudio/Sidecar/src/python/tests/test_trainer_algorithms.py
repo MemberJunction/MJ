@@ -113,3 +113,12 @@ def test_health_lists_the_catalog_drivers_only() -> None:
     assert algorithms.supported_algorithms() == [
         "lightgbm", "logistic_regression", "mlp", "random_forest", "ridge", "xgboost",
     ]
+
+
+@pytest.mark.parametrize("driver,family", [("logistic_regression", "binary"), ("ridge", "continuous"),
+                                           ("random_forest", "binary"), ("mlp", "binary")])
+def test_an_unknown_hyperparameter_is_refused_by_name(driver: str, family: algorithms.TabularFamily) -> None:
+    """A hyperparameter the estimator does not take is a refusal naming the key (a ValueError, as the fit path
+    catches), never the constructor's TypeError."""
+    with pytest.raises(algorithms.UnknownHyperparameterError, match="'not_a_parameter'"):
+        algorithms.tabular_estimator(driver, family, {"not_a_parameter": 0.1}, 0, 1, None)

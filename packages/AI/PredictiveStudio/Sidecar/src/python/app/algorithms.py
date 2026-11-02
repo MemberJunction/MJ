@@ -82,6 +82,11 @@ class ObjectiveOverrideError(ValueError):
     device (including the libraries' aliases for each)."""
 
 
+class UnknownHyperparameterError(ValueError):
+    """Raised when a candidate's hyperparameters name a keyword the driver's estimator does not take (a typo, or a
+    parameter of another algorithm)."""
+
+
 class InvalidTweediePowerError(ValueError):
     """Raised when a non-negative target's declared ``tweedie_power`` is missing or outside the open interval (1, 2)
     of the compound Poisson-gamma distribution."""
@@ -145,6 +150,7 @@ def tabular_estimator(driver: str, family: TabularFamily, hp: Dict[str, Hyperpar
     Raises:
         AlgorithmNotSupportedError: For an unknown driver, or a driver that cannot fit ``family``.
         ObjectiveOverrideError: When ``hp`` names a keyword the factory fixes.
+        UnknownHyperparameterError: When ``hp`` names a keyword the driver's estimator does not take.
         InvalidTweediePowerError: When a non-negative target's ``tweedie_power`` is missing or outside (1, 2).
     """
     builder = _TABULAR_BUILDERS.get(driver)
@@ -156,7 +162,12 @@ def tabular_estimator(driver: str, family: TabularFamily, hp: Dict[str, Hyperpar
             f"candidate hyperparameter '{collisions[0]}' is refused: the objective, seed and thread count are set "
             f"from the task type ({family}) and the protocol"
         )
-    return builder(family, dict(hp), seed, threads, tweedie_power)
+    try:
+        return builder(family, dict(hp), seed, threads, tweedie_power)
+    except TypeError as exc:
+        # The scikit-learn constructors take only their declared keywords and raise TypeError naming an unknown one.
+        # The builders construct and never fit, so a TypeError here is a keyword the constructor refused.
+        raise UnknownHyperparameterError(f"driver '{driver}' does not take the candidate's hyperparameters: {exc}") from exc
 
 
 def _declared_tweedie_power(driver: str, tweedie_power: float | None) -> float:

@@ -239,6 +239,13 @@ def test_failure_returns_stage_and_no_metrics(server: FileServer) -> None:
     assert set(_obj(resp.json())) == {"status", "trainingRunId", "stage", "message", "computeSeconds"}
 
 
+def test_an_unknown_hyperparameter_fails_the_inner_cv_stage_naming_the_candidate(server: FileServer) -> None:
+    """A typo in a candidate's hyperparameters is a deterministic trainer failure (never a 500 the engine would retry
+    as a transport error), naming the candidate and the key."""
+    r = _failed(_request(server, binary_frame(300), drivers=[("typo", "logistic_regression", {"alpha": 0.1})]))
+    assert r.stage == "inner-cv" and "candidate 'typo'" in r.message and "'alpha'" in r.message, r.message
+
+
 def test_too_many_candidates_is_budget_exceeded(server: FileServer) -> None:
     req = _request(server, binary_frame(300))
     _obj(_obj(req["protocol"])["budgets"])["maxCandidates"] = 2
