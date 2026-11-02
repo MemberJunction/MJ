@@ -1359,6 +1359,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     if (this.MoreMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-more`);
   }
 
+  /** The phone sheet closed itself (scrim, grab handle, Escape inside it): drop the matching menu state. */
+  public OnMenuSheetVisibleChange(menu: 'more' | 'view', visible: boolean): void {
+    if (visible) return;
+    if (menu === 'more') this.MoreMenuOpen = false;
+    else this.ViewMenuOpen = false;
+    this.syncDocumentListeners();
+    this.cdr.markForCheck();
+  }
+
   public ToggleViewMenu(): void {
     this.ViewMenuOpen = !this.ViewMenuOpen;
     this.MoreMenuOpen = false;

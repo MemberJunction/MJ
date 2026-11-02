@@ -129,8 +129,23 @@
             <i class="fa-solid fa-ellipsis"></i>
             <span class="mj-forms-btn-text">More</span>
           </button>
-          @if (MoreMenuOpen) {
+          @if (MoreMenuOpen && !IsAutoHideViewport) {
             <div class="mj-forms-menu mj-forms-menu--left" [id]="MenuIdPrefix + '-more'" role="group" aria-label="More actions">
+              <ng-container [ngTemplateOutlet]="moreMenuContent"></ng-container>
+            </div>
+          }
+          @if (IsAutoHideViewport) {
+            <!-- Phone: the same rows, as a bottom sheet. A dropdown hanging off a 32px button
+                 is the wrong container when the thumb is the pointer. -->
+            <mj-bottom-sheet [Visible]="MoreMenuOpen"
+                             (VisibleChange)="OnMenuSheetVisibleChange('more', $event)"
+                             Title="More actions">
+              <div class="mj-forms-menu mj-forms-menu--sheet" [id]="MenuIdPrefix + '-more'" role="group" aria-label="More actions">
+                <ng-container [ngTemplateOutlet]="moreMenuContent"></ng-container>
+              </div>
+            </mj-bottom-sheet>
+          }
+          <ng-template #moreMenuContent>
               @for (item of MoreMenuItems; track item.Key) {
                 <div class="mj-forms-menu-row" [class.disabled]="item.Disabled">
                   <button class="mj-forms-menu-item" type="button"
@@ -166,8 +181,7 @@
                   <span class="mj-forms-menu-label">{{ del.MenuLabel }}</span>
                 </button>
               }
-            </div>
-          }
+          </ng-template>
         </div>
       }
     </div>
@@ -234,8 +248,21 @@
             <span class="mj-forms-variant-tag">{{ CurrentVariantLabel }}</span>
           }
         </button>
-        @if (ViewMenuOpen) {
+        @if (ViewMenuOpen && !IsAutoHideViewport) {
           <div class="mj-forms-menu mj-forms-menu--right" [id]="MenuIdPrefix + '-view'" role="group" aria-label="Sections and layout">
+            <ng-container [ngTemplateOutlet]="viewMenuContent"></ng-container>
+          </div>
+        }
+        @if (IsAutoHideViewport) {
+          <mj-bottom-sheet [Visible]="ViewMenuOpen"
+                           (VisibleChange)="OnMenuSheetVisibleChange('view', $event)"
+                           Title="Sections and layout">
+            <div class="mj-forms-menu mj-forms-menu--sheet" [id]="MenuIdPrefix + '-view'" role="group" aria-label="Sections and layout">
+              <ng-container [ngTemplateOutlet]="viewMenuContent"></ng-container>
+            </div>
+          </mj-bottom-sheet>
+        }
+        <ng-template #viewMenuContent>
             @if (Config.ShowSectionControls) {
               @if (Config.ShowSectionFilter) {
                 <div class="mj-forms-menu-search">
@@ -351,8 +378,7 @@
               <span class="mj-forms-menu-label">Hide toolbar now</span>
             </button>
             }
-          </div>
-        }
+        </ng-template>
       </div>
     }
 

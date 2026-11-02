@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
@@ -31,8 +32,12 @@ const RECORD = {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+@Component({ standalone: true, selector: 'mj-bottom-sheet', template: '@if (Visible) { <ng-content></ng-content> }' })
+class BottomSheetStub { @Input() Visible = false; @Input() Title = ''; @Output() VisibleChange = new EventEmitter<boolean>(); @Output() Closed = new EventEmitter<void>(); }
+
 const renderRaw = (inputs: Record<string, unknown> = {}) =>
   renderComponentFixture(MjFormToolbarComponent, {
+    imports: [BottomSheetStub],
     declarations: [MjFormToolbarComponent],
     inputs: {
       Record: RECORD,
@@ -845,6 +850,45 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(query(f, '[data-toolbar-pin="global"]')).toBeNull();
       expect(query(f, '[data-toolbar-pin="entity"]')).toBeNull();
       expect(query(f, '[data-toolbar-collapse="menu"]')).toBeNull();
+    });
+
+    it('opens More and View as bottom sheets at phone width, not dropdowns', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      f.componentInstance.ExpandToolbarForSession();
+      f.detectChanges();
+      openMore(f);
+      expect(query(f, 'mj-bottom-sheet .mj-forms-menu--sheet')).not.toBeNull();
+      expect(query(f, '.mj-forms-menu--left')).toBeNull();
+      expect(btn(f, 'button[title="Delete this Record"]')).not.toBeNull();
+      openView(f);
+      expect(queryAll(f, 'mj-bottom-sheet .mj-forms-menu--sheet').length).toBe(1);
+      expect(query(f, '.mj-forms-menu--right')).toBeNull();
+      expect(query(f, '[data-toolbar-pin="global"]')).not.toBeNull();
+    });
+
+    it('closing the sheet from its scrim clears the menu state', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      f.componentInstance.ExpandToolbarForSession();
+      f.detectChanges();
+      openMore(f);
+      expect(f.componentInstance.MoreMenuOpen).toBe(true);
+      f.componentInstance.OnMenuSheetVisibleChange('more', false);
+      f.detectChanges();
+      expect(f.componentInstance.MoreMenuOpen).toBe(false);
+      expect(query(f, 'mj-bottom-sheet .mj-forms-menu--sheet')).toBeNull();
+    });
+
+    it('keeps More and View as dropdowns at desktop width', () => {
+      useViewport(false);
+      const f = render();
+      openMore(f);
+      expect(query(f, '.mj-forms-menu--left')).not.toBeNull();
+      expect(query(f, 'mj-bottom-sheet .mj-forms-menu--sheet')).toBeNull();
+      openView(f);
+      expect(query(f, '.mj-forms-menu--right')).not.toBeNull();
+      expect(query(f, 'mj-bottom-sheet .mj-forms-menu--sheet')).toBeNull();
     });
 
     it('shows the pin and hide controls in the View menu at phone width', () => {

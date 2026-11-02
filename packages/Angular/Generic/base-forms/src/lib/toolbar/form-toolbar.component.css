@@ -1053,21 +1053,28 @@
     display: none;
   }
 
-  .mj-forms-menu-host {
+  /* Phone: More and View are bottom sheets. The sheet owns position, surface and
+     scrolling; the menu keeps only its row layout. */
+  .mj-forms-menu--sheet {
     position: static;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 0 var(--mj-space-2) var(--mj-space-3);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
-  .mj-forms-menu {
-    min-width: min(260px, calc(100vw - 24px));
-    max-width: calc(100vw - 24px);
+  .mj-forms-menu--sheet .mj-forms-menu-item,
+  .mj-forms-menu--sheet .mj-form-variant-picker-row {
+    min-height: 44px;
   }
 
-  .mj-forms-menu--left {
-    left: 12px;
-  }
-
-  .mj-forms-menu--right {
-    right: 12px;
+  .mj-forms-menu--sheet .mj-section-search {
+    max-width: none;
+    width: 100%;
   }
 }
 
