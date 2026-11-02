@@ -1364,6 +1364,25 @@ describe('MjRecordFormContainerComponent (DOM) — mobile rail', () => {
     expect(f.nativeElement.querySelector('.mj-forms-section-sheet-heading')?.textContent?.trim()).toBe('More');
   });
 
+  it('closing the sheet from its scrim clears the search instead of leaving a standing filter', () => {
+    const filters: string[] = [];
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    const form = { searchFilter: '', onFilterChange: (v: string) => { filters.push(v); form.searchFilter = v; } };
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    picker(f)!.click();
+    f.detectChanges();
+    const search = f.nativeElement.querySelector('.mj-forms-section-sheet-search') as HTMLInputElement;
+    search.value = 'pay';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(filters).toEqual(['pay']);
+
+    f.componentInstance.OnSectionSheetVisibleChange(false);
+    f.detectChanges();
+    expect(f.componentInstance.SectionSheetOpen).toBe(false);
+    expect(filters).toEqual(['pay', '']);
+  });
+
   it('renders no "More" heading when the form has no More folder', () => {
     const f = renderMobile({ mobile: true, activeGroup: 'details', spec: NO_MORE_SPEC });
     picker(f)!.click();

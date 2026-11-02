@@ -1006,6 +1006,94 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(btn(f, 'button[title="Discard Changes"]')).not.toBeNull();
     });
 
+    const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    it('hiding the toolbar while the global pin is on writes an entity override and leaves GlobalPinned alone', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_VISIBILITY_SETTING_KEY ? JSON.stringify({ Version: 1, GlobalPinned: true }) : undefined
+      );
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = renderRaw({ EditMode: false });
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      btn(f, '.mj-forms-toolbar-collapse-btn')!.click();
+      f.detectChanges();
+      expect(save).toHaveBeenCalledWith(
+        TOOLBAR_VISIBILITY_SETTING_KEY,
+        JSON.stringify({ Version: 1, GlobalPinned: true, EntityPinned: { 'MJ: Entities': false } })
+      );
+      expect(f.componentInstance.IsGlobalToolbarPinned).toBe(true);
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+      expect(query(f, '.mj-forms-toolbar-collapsed-pill')).not.toBeNull();
+    });
+
+    it('hiding the toolbar pinned only for this entity removes the entity entry and keeps the global pin off', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_VISIBILITY_SETTING_KEY
+          ? JSON.stringify({ Version: 1, GlobalPinned: false, EntityPinned: { 'MJ: Entities': true, 'MJ: Users': true } })
+          : undefined
+      );
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = renderRaw({ EditMode: false });
+      expect(f.componentInstance.IsToolbarExpanded).toBe(true);
+      f.componentInstance.CollapseToolbarForSession();
+      f.detectChanges();
+      expect(save).toHaveBeenCalledWith(
+        TOOLBAR_VISIBILITY_SETTING_KEY,
+        JSON.stringify({ Version: 1, GlobalPinned: false, EntityPinned: { 'MJ: Users': true } })
+      );
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+    });
+
+    it('hiding the toolbar pinned for this entity on top of the global pin overrides the entity to false', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_VISIBILITY_SETTING_KEY
+          ? JSON.stringify({ Version: 1, GlobalPinned: true, EntityPinned: { 'MJ: Entities': true } })
+          : undefined
+      );
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = renderRaw({ EditMode: false });
+      f.componentInstance.CollapseToolbarForSession();
+      f.detectChanges();
+      expect(save).toHaveBeenCalledWith(
+        TOOLBAR_VISIBILITY_SETTING_KEY,
+        JSON.stringify({ Version: 1, GlobalPinned: true, EntityPinned: { 'MJ: Entities': false } })
+      );
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+    });
+
+    it('hiding an unpinned, session-expanded toolbar writes nothing', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = renderRaw({ EditMode: false });
+      f.componentInstance.ExpandToolbarForSession();
+      f.detectChanges();
+      f.componentInstance.CollapseToolbarForSession();
+      f.detectChanges();
+      expect(save).not.toHaveBeenCalled();
+      expect(f.componentInstance.IsToolbarExpanded).toBe(false);
+    });
+
+    it('moves focus to the hide chevron on expand and back to the "…" button on collapse', async () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = renderRaw({ EditMode: false });
+      document.body.appendChild(f.nativeElement);
+      try {
+        const expand = btn(f, '.mj-forms-collapsed-btn--expand')!;
+        expand.focus();
+        expand.click();
+        f.detectChanges();
+        await tick();
+        expect(document.activeElement).toBe(query(f, '.mj-forms-toolbar-collapse-btn'));
+
+        btn(f, '.mj-forms-toolbar-collapse-btn')!.click();
+        f.detectChanges();
+        await tick();
+        expect(document.activeElement).toBe(query(f, '.mj-forms-collapsed-btn--expand'));
+      } finally {
+        f.nativeElement.remove();
+      }
+    });
+
     it('ToggleGlobalToolbarPin() writes GlobalPinned: true to UserInfoEngine under mj.form.toolbar.visibility', () => {
       vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);

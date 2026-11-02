@@ -1069,8 +1069,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.cdr.detectChanges();
   }
 
+  /**
+   * The sheet opened or closed from its own controls (scrim, Escape). Closing clears the sheet's
+   * search the same way picking a row does: it was a way to find a row, not a standing filter.
+   */
   public OnSectionSheetVisibleChange(visible: boolean): void {
     this.SectionSheetOpen = visible;
+    if (!visible && this.EffectiveSearchFilter.trim()) this.OnFilterChange('');
     this.cdr.markForCheck();
   }
 

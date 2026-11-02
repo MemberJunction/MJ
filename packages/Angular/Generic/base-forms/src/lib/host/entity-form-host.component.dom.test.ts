@@ -645,6 +645,13 @@ describe('MjEntityFormHostComponent — phone width mounts the user\'s mode and 
     expect(f.componentInstance.Form?.FormModeSwitch).toBeNull();
   });
 
+  it('ShowFormModeSwitch=false leaves the form without a FormModeSwitch at phone width, even over a custom form', async () => {
+    useViewport(true);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), inputs: { ShowFormModeSwitch: false } });
+    expect(f.componentInstance.HasStandardFormAlternative).toBe(true);
+    expect(f.componentInstance.Form?.FormModeSwitch).toBeNull();
+  });
+
   it('keeps the sentence and button, and the custom view, at desktop width', async () => {
     useViewport(false);
     const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });

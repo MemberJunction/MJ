@@ -1,7 +1,8 @@
 /**
- * The one breakpoint the form chrome treats as "a phone": the section rail becomes a
- * horizontal strip, the toolbar auto-hides, the More folder opens as a sheet, and the
- * standard-form switch compacts. Keep every form-side `matchMedia` on this constant.
+ * The one breakpoint the form chrome treats as "a phone": the section rail becomes a single
+ * section picker that opens a searchable bottom sheet, the toolbar auto-hides behind the
+ * [Edit | …] pill, and the standard-form switch moves into the View sheet. Keep every
+ * form-side `matchMedia` on this constant.
  */
 export const PHONE_VIEWPORT_MEDIA_QUERY = '(max-width: 768px)';
 

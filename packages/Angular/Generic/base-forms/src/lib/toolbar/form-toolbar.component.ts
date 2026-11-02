@@ -1209,43 +1209,63 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return false;
   }
 
-  /** Expands the full toolbar in Read Mode for the current viewing session. */
+  /**
+   * Expands the full toolbar in Read Mode for the current viewing session. Focus moves to the
+   * "Hide toolbar" chevron once the swap has rendered.
+   */
   public ExpandToolbarForSession(): void {
     this.ToolbarSessionExpanded = true;
     this.cdr.markForCheck();
+    this.focusAfterRender('.mj-forms-toolbar-collapse-btn');
   }
 
   /**
    * Collapses the full toolbar back to the compact Read-Mode trigger pill.
-   * If the toolbar was pinned open, unpins it for the current context so it collapses immediately.
+   * If the toolbar was pinned open, unpins it for this entity only so it collapses immediately:
+   * an entity pin is cleared (or overridden to `false` when the global pin would still show it),
+   * and a global pin gets an entity override of `false`. The global pin itself is never touched
+   * here; only "Unpin toolbar on all forms" changes it. Focus moves to the "…" expand button
+   * once the swap has rendered, so a keyboard user is not dropped on `<body>`.
    */
   public CollapseToolbarForSession(): void {
     this.ToolbarSessionExpanded = false;
     this.CloseMenus();
     if (this.IsToolbarPinnedOpen) {
-      const current = this.ToolbarVisibilitySetting;
-      const entityName = this.CurrentEntityName;
-      if (entityName && current.EntityPinned?.[entityName] === true) {
-        const nextEntityPinned = { ...current.EntityPinned };
-        if (current.GlobalPinned) {
-          nextEntityPinned[entityName] = false;
-        } else {
-          delete nextEntityPinned[entityName];
-        }
-        this.writeVisibilitySetting({
-          Version: 1,
-          GlobalPinned: current.GlobalPinned,
-          EntityPinned: nextEntityPinned,
-        });
-      } else {
-        this.writeVisibilitySetting({
-          Version: 1,
-          GlobalPinned: false,
-          EntityPinned: current.EntityPinned,
-        });
-      }
+      this.unpinToolbarForEntity();
     }
     this.cdr.markForCheck();
+    this.focusAfterRender('.mj-forms-collapsed-btn--expand');
+  }
+
+  /** Writes the per-entity override that makes `IsToolbarPinnedOpen` false for the current entity. */
+  private unpinToolbarForEntity(): void {
+    const entityName = this.CurrentEntityName;
+    if (!entityName) return;
+    const current = this.ToolbarVisibilitySetting;
+    const nextEntityPinned = { ...(current.EntityPinned ?? {}) };
+    if (current.GlobalPinned) {
+      nextEntityPinned[entityName] = false;
+    } else {
+      delete nextEntityPinned[entityName];
+    }
+    this.writeVisibilitySetting({
+      Version: 1,
+      GlobalPinned: current.GlobalPinned,
+      EntityPinned: nextEntityPinned,
+    });
+  }
+
+  /**
+   * Focuses the first element matching `selector` inside this component after the next render.
+   * The expand/collapse controls replace each other in an `@if` swap, so the activated button is
+   * gone by the time the view updates; this hands focus to its counterpart. A no-op when nothing
+   * matches (the toolbar stayed expanded because of a search filter, say).
+   */
+  private focusAfterRender(selector: string): void {
+    setTimeout(() => {
+      const root: HTMLElement = this.host.nativeElement;
+      root.querySelector<HTMLElement>(selector)?.focus();
+    }, 0);
   }
 
   /** Toggles pinning the toolbar open globally across all forms. */

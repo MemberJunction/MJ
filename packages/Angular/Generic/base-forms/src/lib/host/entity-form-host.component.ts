@@ -638,7 +638,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this._record = null; // force a fresh load against the new variant
       this.reload();
     };
-    instance.FormModeSwitch = this.HasStandardFormAlternative
+    // ShowFormModeSwitch is the host's opt-out for the strip; the phone View sheet honours it too.
+    instance.FormModeSwitch = this.ShowFormModeSwitch && this.HasStandardFormAlternative
       ? { Mode: this._formMode, Switch: (m) => this.SwitchFormMode(m) }
       : null;
   }
