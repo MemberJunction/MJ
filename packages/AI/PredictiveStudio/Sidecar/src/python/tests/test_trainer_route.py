@@ -341,6 +341,21 @@ def test_a_calibration_map_that_cannot_be_fitted_fails_the_holdout_stage(server:
     assert r.stage == "holdout" and "calibration map" in r.message
 
 
+def test_a_rare_class_never_leaves_a_calibration_half_without_it(server: FileServer) -> None:
+    """A multiclass task whose third class has two out-of-fold rows: the calibration cross-fit's halves are split by
+    class, so each half fits its per-class map on both rows' classes and the run completes whatever the seed."""
+    req = TrainerRequest.model_validate(_multiclass_request(server, _three_classes(binary_frame(200)), "mc-rare"))
+    rng = np.random.default_rng(4)
+    y = np.array([0] * 30 + [1] * 28 + [2] * 2, dtype=np.float64)
+    oof = rng.dirichlet(np.ones(3), size=len(y))
+    enc = TR.EncodedLabel(y, "multiclass", ["a", "b", "c"], None)
+    groups = [f"e{i}" for i in range(len(y))]
+    for seed in range(20):
+        proto = req.protocol.model_copy(update={"seed": seed})
+        _calibrator, decision = EV.decide_calibration(req.model_copy(update={"protocol": proto}), enc, oof, y, groups)
+        assert decision is not None and decision.method == "platt"
+
+
 # ------------------------------------------------------------------------------------------------ the incumbent ---
 
 def test_an_incumbent_of_another_class_order_fails_the_holdout_stage(server: FileServer) -> None:

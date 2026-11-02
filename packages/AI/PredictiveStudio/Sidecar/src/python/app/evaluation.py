@@ -112,7 +112,9 @@ def _declared_kind(req: TrainerRequest) -> Literal["platt", "isotonic", "auto"]:
 
 
 def _halves(y: FArr, groups: Sequence[str], seed: int) -> List[Fold]:
-    """The 2-fold split of the calibration cross-fit: whole grouping units when units repeat, else random rows.
+    """The 2-fold split of the calibration cross-fit: whole grouping units when units repeat, else rows split by class
+    (only classification tasks are calibrated), so a class with two or more rows reaches both halves and each half can
+    fit its per-class map whatever the seed.
 
     Raises:
         TrainerFailure: Stage `holdout`, when the rows cannot be split in two (one grouping unit, or one row).
@@ -120,7 +122,7 @@ def _halves(y: FArr, groups: Sequence[str], seed: int) -> List[Fold]:
     try:
         if len(set(groups)) < len(groups):
             return grouped(list(groups), 2, 1, seed)
-        return repeated_stratified(y, 2, 1, seed, stratify=False)
+        return repeated_stratified(y, 2, 1, seed, stratify=True)
     except ValueError as exc:
         raise TrainerFailure("holdout", f"the calibration cross-fit cannot split the out-of-fold rows: {exc}") from exc
 
