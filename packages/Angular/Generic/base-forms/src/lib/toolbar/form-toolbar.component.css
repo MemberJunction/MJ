@@ -52,6 +52,7 @@
    MAIN TOOLBAR
    ============================================ */
 .mj-forms-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1029,8 +1030,13 @@
   .mj-forms-toolbar {
     padding: 8px 12px;
     gap: 6px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .mj-forms-toolbar .mj-forms-btn {
+    padding: 6px 10px;
+    font-size: 12.5px;
   }
 
   .mj-forms-edit-banner {
@@ -1047,9 +1053,21 @@
     display: none;
   }
 
+  .mj-forms-menu-host {
+    position: static;
+  }
+
   .mj-forms-menu {
     min-width: min(260px, calc(100vw - 24px));
     max-width: calc(100vw - 24px);
+  }
+
+  .mj-forms-menu--left {
+    left: 12px;
+  }
+
+  .mj-forms-menu--right {
+    right: 12px;
   }
 }
 
