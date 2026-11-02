@@ -177,7 +177,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                         [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="false"
                         [showAgentPicker]="false" [showAgentModePicker]="false"
                         [defaultAgentId]="ModelDevAgentId" [pendingMessage]="PendingPrompt"
-                        [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="ChatAppContext"
+                        [applicationScope]="'Application'" [applicationId]="ApplicationID" [appContext]="ChatAppContext"
                         (conversationCreated)="OnChatConversationCreated($event)"
                         (pendingMessageConsumed)="OnChatPendingMessageConsumed()">
                       </mj-conversation-chat-area>
@@ -850,10 +850,14 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
 
   public get ChatEnvironmentId(): string {
-    return (this.Data?.Configuration?.['environmentId'] as string | undefined) || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+    const id = this.Data?.Configuration?.['environmentId'];
+    return typeof id === 'string' && id ? id : MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
-  public get applicationId(): string | null { return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? null; }
+  public get ApplicationID(): string | null {
+    const id = this.Data?.Configuration?.['applicationId'];
+    return typeof id === 'string' && id ? id : null;
+  }
   public get ModelDevAgentId(): string | null { return this._modelDevAgentId; }
 
   public get ChatAppContext(): Record<string, unknown> {
