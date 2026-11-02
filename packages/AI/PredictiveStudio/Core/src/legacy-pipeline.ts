@@ -320,7 +320,12 @@ export class LegacyPipelines {
    * (`UtcDay.ToUtcDay`); a date without a calendar-day part throws {@link HoldoutCarveDateError}.
    */
   public static TrailingShareCutoff(dates: readonly string[], share: number): string | null {
-    const days = dates.map((d) => LegacyPipelines.requireIsoDay(d)).sort();
+    return LegacyPipelines.cutoffOfDays(dates.map((d) => LegacyPipelines.requireIsoDay(d)), share);
+  }
+
+  /** {@link TrailingShareCutoff} over dates already read as `yyyy-mm-dd` UTC days. */
+  private static cutoffOfDays(isoDays: readonly string[], share: number): string | null {
+    const days = [...isoDays].sort();
     let best: string | null = null;
     let trailing = 0;
     for (let i = days.length - 1; i >= 1; i--) {
@@ -353,12 +358,13 @@ export class LegacyPipelines {
       const note = `test set = a seeded random ${Math.round(share * 100)}% of rows (one decision date per run); the legacy trailing slice in key order is gone`;
       return { Holdout: { kind: 'seeded-random', fraction: share }, Note: note };
     }
-    const unreadable = dates.find((d) => UtcDay.ToUtcDay(d) === null);
-    if (unreadable !== undefined) {
-      return { Kind: 'hold', Reason: `a row's ${dateColumn} ("${unreadable}") is not a date (yyyy-mm-dd): no date cutoff can be derived` };
+    const days: string[] = [];
+    for (const d of dates) {
+      const day = UtcDay.ToUtcDay(d);
+      if (day === null) return { Kind: 'hold', Reason: `a row's ${dateColumn} ("${d}") is not a date (yyyy-mm-dd): no date cutoff can be derived` };
+      days.push(UtcDay.UtcDayIso(day));
     }
-    const days = dates.map((d) => LegacyPipelines.requireIsoDay(d));
-    const cutoff = LegacyPipelines.TrailingShareCutoff(days, share);
+    const cutoff = LegacyPipelines.cutoffOfDays(days, share);
     if (cutoff === null) {
       const only = days[0] || 'none';
       return { Kind: 'archive', Reason: `every row has the same ${dateColumn} (${only}): no date cutoff leaves development rows` };

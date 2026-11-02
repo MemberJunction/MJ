@@ -7,7 +7,7 @@
  * Per-member "why": a row carries the signed per-record drivers the scoring payload stored (linear models produce them);
  * a model that stores none gets no per-member attribution rather than a fabricated one.
  *
- * Pure, dependency-free, browser-safe → unit-tested with no Angular.
+ * Pure and browser-safe (no server or database dependencies) → unit-tested with no Angular.
  */
 
 import { IsValidUUID, NormalizeUUID, OrdinalCompare } from '@memberjunction/global';
