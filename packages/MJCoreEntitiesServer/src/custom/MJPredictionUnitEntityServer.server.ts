@@ -1,7 +1,26 @@
-import { BaseEntity, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { PredictionUnit, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
+import { PredictionUnit, type ParseResult, type PredictionUnitColumns, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
+
+/** One row read as a plain object: the row (null when absent), or why the read failed. */
+export interface RowRead<TRow> {
+  /** The row's columns; null when it is absent or the read failed. */
+  readonly Row: TRow | null;
+  /** Why the read failed; null when it succeeded. */
+  readonly Error: string | null;
+}
+
+/** What {@link VersionedRowGuard.PreviousVersion} reads: the lineage, the version being saved, and how to load and parse a version. */
+export interface PreviousVersionArgs<TRow extends { readonly ID: string }, TSpec> {
+  /** The entity's display name in messages (`Prediction Unit`, `Evaluation Protocol`). */
+  readonly Label: string;
+  readonly LineageRootID: string;
+  /** The version being saved; its predecessor is read. */
+  readonly Version: number;
+  readonly Load: (version: number) => Promise<RowRead<TRow>>;
+  readonly Parse: (row: TRow) => ParseResult<TSpec>;
+}
 
 /**
  * The immutable-version guard shared by the unit, protocol and snapshot subclasses: one implementation of
@@ -30,6 +49,52 @@ export class VersionedRowGuard {
     return !!p && 'EntityByName' in p && typeof p.EntityByName === 'function' && 'Entities' in p;
   }
 
+  /** Records a failure on `field` and marks the result failed. */
+  public static Fail(result: ValidationResult, field: string, message: string): void {
+    result.Success = false;
+    result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
+  }
+
+  /**
+   * The first row of `entityName` matching `filter`, as a plain row (nothing is mutated). A failed read is returned as
+   * its error, so it is never reported as an absent row.
+   */
+  public static async ReadOneRow<TRow>(provider: IMetadataProvider, entityName: string, filter: string, user: UserInfo | undefined): Promise<RowRead<TRow>> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<TRow>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple' }, user);
+    return r.Success ? { Row: r.Results[0] || null, Error: null } : { Row: null, Error: r.ErrorMessage || 'unknown error' };
+  }
+
+  /** Version `version` of a lineage, read with {@link ReadOneRow}. */
+  public static async LoadVersion<TRow>(provider: IMetadataProvider, entityName: string, lineageRootID: string, version: number, user: UserInfo | undefined): Promise<RowRead<TRow>> {
+    return VersionedRowGuard.ReadOneRow<TRow>(provider, entityName, `LineageRootID='${EscapeSQLString(lineageRootID)}' AND Version=${version}`, user);
+  }
+
+  /**
+   * Version `n - 1` of a lineage with its parsed form: null for version 1; undefined when it could not be read, is
+   * absent (versions are consecutive) or does not parse, each recorded on `result` against `Version`.
+   */
+  public static async PreviousVersion<TRow extends { readonly ID: string }, TSpec>(
+    result: ValidationResult, a: PreviousVersionArgs<TRow, TSpec>,
+  ): Promise<{ readonly Row: TRow; readonly Spec: TSpec } | null | undefined> {
+    if (a.Version <= 1) return null;
+    const previousVersion = a.Version - 1;
+    const read = await a.Load(previousVersion);
+    if (read.Error !== null) {
+      VersionedRowGuard.Fail(result, 'Version', `Reading version ${previousVersion} of lineage ${a.LineageRootID} failed: ${read.Error}`);
+      return undefined;
+    }
+    if (!read.Row) {
+      VersionedRowGuard.Fail(result, 'Version', `versions must be consecutive: version ${previousVersion} of lineage ${a.LineageRootID} does not exist`);
+      return undefined;
+    }
+    const parsed = a.Parse(read.Row);
+    if (parsed.Ok === false) {
+      VersionedRowGuard.Fail(result, 'Version', `${a.Label} version ${previousVersion} (${read.Row.ID}) does not parse: ${parsed.Errors.join('; ')}`);
+      return undefined;
+    }
+    return { Row: read.Row, Spec: parsed.Value };
+  }
+
   /**
    * Adds the update refusal (on `updateField`) or, for a new row, the row's own problems (on `rowField`) to `result`.
    * `rowProblems` runs only when the write is not an update of a saved version.
@@ -40,10 +105,7 @@ export class VersionedRowGuard {
     const problems: readonly { field: string; message: string }[] = update
       ? [{ field: updateField, message: update }]
       : rowProblems().map((message) => ({ field: rowField, message }));
-    for (const p of problems) {
-      result.Success = false;
-      result.Errors.push(new ValidationErrorInfo(p.field, p.message, null, ValidationErrorType.Failure));
-    }
+    for (const p of problems) VersionedRowGuard.Fail(result, p.field, p.message);
     return result;
   }
 }
@@ -94,11 +156,11 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
     }
     const parsed = PredictionUnit.ParsePredictionUnitRow(this);
     if (parsed.Ok === false) {
-      this.fail(result, 'UnitRows', `Prediction Unit does not parse: ${parsed.Errors.join('; ')}`);
+      VersionedRowGuard.Fail(result, 'UnitRows', `Prediction Unit does not parse: ${parsed.Errors.join('; ')}`);
       return result;
     }
     this.checkReferencedFields(result, provider, parsed.Value);
-    if (this.Version > 1) await this.checkLabelVersion(result, provider, parsed.Value);
+    await this.checkLabelVersion(result, provider, parsed.Value);
     return result;
   }
 
@@ -107,52 +169,25 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
     for (const ref of PredictionUnit.UnitReferencedFields(spec)) {
       const entity = provider.EntityByName(ref.entity);
       const resolved = !!entity && (ref.field === null || !!entity.FieldByName(ref.field));
-      if (!resolved) this.fail(result, 'UnitRows', `unresolved-reference: ${ref.field === null ? ref.entity : `${ref.entity}.${ref.field}`}`);
+      if (!resolved) VersionedRowGuard.Fail(result, 'UnitRows', `unresolved-reference: ${ref.field === null ? ref.entity : `${ref.entity}.${ref.field}`}`);
     }
   }
 
   /**
    * Version `n` follows version `n - 1` of the same lineage, and its LabelVersion is the previous one plus one exactly
-   * when the outcome definition (rule, window, gap, task) changed.
+   * when the outcome definition (rule, window, gap, task) changed. Nothing to check for version 1.
    */
   private async checkLabelVersion(result: ValidationResult, provider: IMetadataProvider, spec: PredictionUnitSpec): Promise<void> {
-    const previousVersion = this.Version - 1;
-    const read = await this.loadVersion(provider, previousVersion);
-    if (read.Error !== null) {
-      this.fail(result, 'Version', `Reading version ${previousVersion} of lineage ${this.LineageRootID} failed: ${read.Error}`);
-      return;
-    }
-    const previous = read.Row;
-    if (!previous) {
-      this.fail(result, 'Version', `versions must be consecutive: version ${previousVersion} of lineage ${this.LineageRootID} does not exist`);
-      return;
-    }
-    const previousSpec = PredictionUnit.ParsePredictionUnitRow(previous);
-    if (previousSpec.Ok === false) {
-      this.fail(result, 'Version', `Prediction Unit version ${previousVersion} (${previous.ID}) does not parse: ${previousSpec.Errors.join('; ')}`);
-      return;
-    }
-    const changed = PredictionUnit.LabelDefinitionChanged(previousSpec.Value, spec);
-    const expected = MJPredictionUnitEntityServer.ExpectedLabelVersion(previous.LabelVersion, changed);
+    const previous = await VersionedRowGuard.PreviousVersion<PredictionUnitColumns, PredictionUnitSpec>(result, {
+      Label: 'Prediction Unit', LineageRootID: this.LineageRootID, Version: this.Version,
+      Load: (version) => VersionedRowGuard.LoadVersion<PredictionUnitColumns>(provider, 'MJ: Prediction Units', this.LineageRootID, version, this.ContextCurrentUser),
+      Parse: (row) => PredictionUnit.ParsePredictionUnitRow(row),
+    });
+    if (!previous) return;
+    const changed = PredictionUnit.LabelDefinitionChanged(previous.Spec, spec);
+    const expected = MJPredictionUnitEntityServer.ExpectedLabelVersion(previous.Row.LabelVersion, changed);
     if (this.LabelVersion !== expected) {
-      this.fail(result, 'LabelVersion', `LabelVersion must be ${expected}: the outcome definition ${changed ? 'changed' : 'did not change'} from version ${previousVersion}`);
+      VersionedRowGuard.Fail(result, 'LabelVersion', `LabelVersion must be ${expected}: the outcome definition ${changed ? 'changed' : 'did not change'} from version ${this.Version - 1}`);
     }
-  }
-
-  /**
-   * One version of this row's lineage as a plain row (nothing is mutated): the row or null when it is absent, and the
-   * read error when the read itself failed (so a failed read is never reported as a missing version).
-   */
-  private async loadVersion(provider: IMetadataProvider, version: number): Promise<{ Row: MJPredictionUnitEntity | null; Error: string | null }> {
-    const r = await RunView.FromMetadataProvider(provider).RunView<MJPredictionUnitEntity>(
-      { EntityName: 'MJ: Prediction Units', ExtraFilter: `LineageRootID='${EscapeSQLString(this.LineageRootID)}' AND Version=${version}`, ResultType: 'simple' },
-      this.ContextCurrentUser,
-    );
-    return r.Success ? { Row: r.Results[0] || null, Error: null } : { Row: null, Error: r.ErrorMessage || 'unknown error' };
-  }
-
-  private fail(result: ValidationResult, field: string, message: string): void {
-    result.Success = false;
-    result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
   }
 }

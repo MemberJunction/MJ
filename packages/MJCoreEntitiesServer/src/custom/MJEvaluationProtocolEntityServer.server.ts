@@ -1,16 +1,8 @@
-import { BaseEntity, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
-import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { BaseEntity, LogStatus, type EntitySaveOptions, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 import { MJEvaluationProtocolEntity } from '@memberjunction/core-entities';
 import { EvaluationProtocol, EvaluationProtocolRules, type EvaluationProtocolColumns, type EvaluationProtocolSpec, type ProtocolRefusal } from '@memberjunction/predictive-studio-core';
-import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
-
-/** One version of a protocol lineage as read for validation: the row (null when absent), or the read error. */
-export interface ProtocolVersionRead {
-  /** The version's columns; null when it is absent or the read failed. */
-  readonly Row: EvaluationProtocolColumns | null;
-  /** Why the read failed; null when it succeeded. */
-  readonly Error: string | null;
-}
+import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.server';
 
 /**
  * `MJ: Evaluation Protocols`: immutable versions plus the protocol's own shape checks. On insert, the protocol rules
@@ -50,13 +42,17 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
     }
     const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(this);
     if (parsed.Ok === false) {
-      this.fail(result, 'Version', `Evaluation Protocol does not parse: ${parsed.Errors.join('; ')}`);
+      VersionedRowGuard.Fail(result, 'Version', `Evaluation Protocol does not parse: ${parsed.Errors.join('; ')}`);
       return result;
     }
-    const previous = await this.previousVersion(result, provider);
+    const previous = await VersionedRowGuard.PreviousVersion<EvaluationProtocolColumns, EvaluationProtocolSpec>(result, {
+      Label: 'Evaluation Protocol', LineageRootID: this.LineageRootID, Version: this.Version,
+      Load: (version) => this.LoadVersion(provider, version),
+      Parse: (row) => EvaluationProtocol.ParseEvaluationProtocolRow(row),
+    });
     if (previous === undefined) return result;
-    for (const r of EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: parsed.Value, Previous: previous, AuthoredBy: parsed.Value.authoredBy })) {
-      this.fail(result, MJEvaluationProtocolEntityServer.refusalField(r), EvaluationProtocolRules.DescribeProtocolRefusal(r));
+    for (const r of EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: parsed.Value, Previous: previous === null ? null : previous.Spec, AuthoredBy: parsed.Value.authoredBy })) {
+      VersionedRowGuard.Fail(result, MJEvaluationProtocolEntityServer.refusalField(r), EvaluationProtocolRules.DescribeProtocolRefusal(r));
     }
     return result;
   }
@@ -90,44 +86,8 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
     }
   }
 
-  /**
-   * Version `n - 1` of this lineage, parsed: null for version 1, undefined when it could not be read, is absent (versions
-   * are consecutive) or does not parse (each recorded on `result`).
-   */
-  private async previousVersion(result: ValidationResult, provider: IMetadataProvider): Promise<EvaluationProtocolSpec | null | undefined> {
-    if (this.Version <= 1) return null;
-    const previousVersion = this.Version - 1;
-    const read = await this.LoadVersion(provider, previousVersion);
-    if (read.Error !== null) {
-      this.fail(result, 'Version', `Reading version ${previousVersion} of lineage ${this.LineageRootID} failed: ${read.Error}`);
-      return undefined;
-    }
-    if (!read.Row) {
-      this.fail(result, 'Version', `versions must be consecutive: version ${previousVersion} of lineage ${this.LineageRootID} does not exist`);
-      return undefined;
-    }
-    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(read.Row);
-    if (parsed.Ok === false) {
-      this.fail(result, 'Version', `Evaluation Protocol version ${previousVersion} (${read.Row.ID}) does not parse: ${parsed.Errors.join('; ')}`);
-      return undefined;
-    }
-    return parsed.Value;
-  }
-
-  /**
-   * One version of this row's lineage as a plain row (nothing is mutated): the row or null when it is absent, and the
-   * read error when the read itself failed (so a failed read is never reported as a missing version).
-   */
-  protected async LoadVersion(provider: IMetadataProvider, version: number): Promise<ProtocolVersionRead> {
-    const r = await RunView.FromMetadataProvider(provider).RunView<EvaluationProtocolColumns>(
-      { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `LineageRootID='${EscapeSQLString(this.LineageRootID)}' AND Version=${version}`, ResultType: 'simple' },
-      this.ContextCurrentUser,
-    );
-    return r.Success ? { Row: r.Results[0] || null, Error: null } : { Row: null, Error: r.ErrorMessage || 'unknown error' };
-  }
-
-  private fail(result: ValidationResult, field: string, message: string): void {
-    result.Success = false;
-    result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
+  /** One version of this row's lineage as a plain row (nothing is mutated), or the read error. */
+  protected async LoadVersion(provider: IMetadataProvider, version: number): Promise<RowRead<EvaluationProtocolColumns>> {
+    return VersionedRowGuard.LoadVersion<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', this.LineageRootID, version, this.ContextCurrentUser);
   }
 }

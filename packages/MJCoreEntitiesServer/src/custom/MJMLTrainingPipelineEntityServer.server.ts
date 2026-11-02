@@ -1,8 +1,7 @@
-import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
+import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.server';
 import {
     EvaluationProtocol,
     EvaluationProtocolRules,
@@ -15,6 +14,7 @@ import {
     type LeakageGuardIssue,
     type LeakageGuardValidationContext,
     type EvaluationProtocolColumns,
+    type PredictionUnitColumns,
     type PredictionUnitSpec,
     type SourceBinding,
 } from '@memberjunction/predictive-studio-core';
@@ -74,7 +74,7 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
     private needsUnitProtocolCheck(): boolean {
         if (!this.IsSaved) return true;
         return ['PredictionUnitID', 'EvaluationProtocolID', 'TargetEntityID', 'ProblemType', 'TargetVariable']
-            .some((name) => this.GetFieldByName(name)?.Dirty ?? false);
+            .some((name) => this.GetFieldByName(name)?.Dirty === true);
     }
 
     /**
@@ -235,18 +235,14 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
             LogStatus(`MJMLTrainingPipelineEntityServer: the provider is not a metadata provider, so the Prediction Unit and Evaluation Protocol checks were skipped for pipeline "${this.Name}"`);
             return;
         }
-        const { unitRow, protocol } = await this.loadUnitAndProtocol(provider, unitID, this.EvaluationProtocolID);
-        if (!unitRow) {
-            this.fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} was not found`);
-            return;
-        }
-        if (this.EvaluationProtocolID && !protocol) {
-            this.fail(result, 'EvaluationProtocolID', `Evaluation Protocol ${this.EvaluationProtocolID} was not found`);
-            return;
-        }
+        const { Unit: unitRead, Protocol: protocolRead } = await this.loadUnitAndProtocol(provider, unitID, this.EvaluationProtocolID);
+        const unitRow = this.readRowOrFail(result, 'PredictionUnitID', `Prediction Unit ${unitID}`, unitRead);
+        if (!unitRow) return;
+        const protocol = protocolRead === null ? null : this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${this.EvaluationProtocolID}`, protocolRead);
+        if (protocolRead !== null && !protocol) return;
         const spec = PredictionUnit.ParsePredictionUnitRow(unitRow);
         if (spec.Ok === false) {
-            this.fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} does not parse: ${spec.Errors.join('; ')}`);
+            VersionedRowGuard.Fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} does not parse: ${spec.Errors.join('; ')}`);
             return;
         }
         const rowEntityName = PredictionUnit.UnitRowEntityName(spec.Value.rows);
@@ -256,45 +252,41 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
             DescribedLabel: PredictionUnit.DescribeLabelRule(spec.Value),
         };
         for (const problem of MJMLTrainingPipelineEntityServer.GetPipelineUnitProblems(this, facts)) {
-            this.fail(result, 'PredictionUnitID', problem);
+            VersionedRowGuard.Fail(result, 'PredictionUnitID', problem);
         }
         if (!protocol) return;
         for (const problem of MJMLTrainingPipelineEntityServer.GetProtocolUnitProblems(protocol, spec.Value)) {
-            this.fail(result, 'EvaluationProtocolID', problem);
+            VersionedRowGuard.Fail(result, 'EvaluationProtocolID', problem);
         }
     }
 
     /**
      * Reads the bound unit row and the bound protocol row (every column of each, for the parsers), in parallel, as
-     * plain rows (nothing is mutated). A failed read is reported as "not found" by the caller.
+     * plain rows (nothing is mutated). A failed read carries its error, so it is never reported as "not found".
      */
     private async loadUnitAndProtocol(
         provider: IEntityDataProvider & IMetadataProvider,
         unitID: string,
         protocolID: string | null,
-    ): Promise<{ unitRow: MJPredictionUnitEntity | null; protocol: EvaluationProtocolColumns | null }> {
-        const rv = RunView.FromMetadataProvider(provider);
-        const [units, protocols] = await Promise.all([
-            rv.RunView<MJPredictionUnitEntity>(
-                { EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitID)}'`, ResultType: 'simple' },
-                this.ContextCurrentUser,
-            ),
+    ): Promise<{ Unit: RowRead<PredictionUnitColumns>; Protocol: RowRead<EvaluationProtocolColumns> | null }> {
+        const user = this.ContextCurrentUser;
+        const [unit, protocol] = await Promise.all([
+            VersionedRowGuard.ReadOneRow<PredictionUnitColumns>(provider, 'MJ: Prediction Units', `ID='${EscapeSQLString(unitID)}'`, user),
             protocolID
-                ? rv.RunView<EvaluationProtocolColumns>(
-                    { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(protocolID)}'`, ResultType: 'simple' },
-                    this.ContextCurrentUser,
-                )
+                ? VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(protocolID)}'`, user)
                 : null,
         ]);
-        return {
-            unitRow: units.Success ? units.Results[0] || null : null,
-            protocol: protocols !== null && protocols.Success ? protocols.Results[0] || null : null,
-        };
+        return { Unit: unit, Protocol: protocol };
     }
 
-    private fail(result: ValidationResult, field: string, message: string): void {
-        result.Success = false;
-        result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
+    /** The row a read returned; null with "Reading … failed" or "… was not found" recorded on `field`. */
+    private readRowOrFail<TRow>(result: ValidationResult, field: string, what: string, read: RowRead<TRow>): TRow | null {
+        if (read.Error !== null) {
+            VersionedRowGuard.Fail(result, field, `Reading ${what} failed: ${read.Error}`);
+            return null;
+        }
+        if (!read.Row) VersionedRowGuard.Fail(result, field, `${what} was not found`);
+        return read.Row;
     }
 
     /** Fold guard issues into the entity's ValidationResult. */

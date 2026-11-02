@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
 
+/** The snapshot columns the row check reads: the read-complete flag and the five content hashes. */
 export type SnapshotHashFields = Pick<MJTrainingSnapshotEntity, 'ReadComplete' | 'ContentHash' | 'MatrixSha256' | 'RowManifestSha256' | 'ProvenanceSha256' | 'FeatureSchemaHash'>;
 
 /** `MJ: Training Snapshots`: written once by the snapshot builder, never updated. */

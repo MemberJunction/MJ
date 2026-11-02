@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, ValidationResult } from '@memberjunction/core';
 
 // Neutralize class-factory registration, as the package's other entity tests do.
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -7,8 +7,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
   return { ...actual, RegisterClass: () => (target: object) => target };
 });
 
-import { MJPredictionUnitEntityServer, VersionedRowGuard } from '../custom/MJPredictionUnitEntityServer.server';
-import { MJEvaluationProtocolEntityServer, type ProtocolVersionRead } from '../custom/MJEvaluationProtocolEntityServer.server';
+import { MJPredictionUnitEntityServer, VersionedRowGuard, type RowRead } from '../custom/MJPredictionUnitEntityServer.server';
+import { MJEvaluationProtocolEntityServer } from '../custom/MJEvaluationProtocolEntityServer.server';
 import { EvaluationProtocol, EvaluationProtocolRules, type Actor, type EvaluationProtocolColumns, type HoldoutSplit, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { MJTrainingSnapshotEntityServer } from '../custom/MJTrainingSnapshotEntityServer.server';
 import { MJMLTrainingPipelineEntityServer } from '../custom/MJMLTrainingPipelineEntityServer.server';
@@ -35,6 +35,38 @@ describe('GetVersionedRowUpdateProblem', () => {
     expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, ['LabelRule', 'LabelWindowDays'])).toBe(
       'MJ: Prediction Units rows are immutable versions; LabelRule, LabelWindowDays cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID).',
     );
+  });
+});
+
+describe('VersionedRowGuard.PreviousVersion', () => {
+  type Row = { readonly ID: string; readonly Value: string };
+  const args = (read: RowRead<Row>, version = 2) => ({
+    Label: 'Thing', LineageRootID: 'L-1', Version: version,
+    Load: async () => read,
+    Parse: (row: Row) => (row.Value === 'ok' ? { Ok: true as const, Value: row.Value.length } : { Ok: false as const, Errors: ['bad value'] }),
+  });
+  const fresh = (): ValidationResult => {
+    const r = new ValidationResult();
+    r.Success = true;
+    return r;
+  };
+  it('is null for version 1 and the row with its parsed form otherwise', async () => {
+    expect(await VersionedRowGuard.PreviousVersion(fresh(), args({ Row: null, Error: null }, 1))).toBeNull();
+    expect(await VersionedRowGuard.PreviousVersion(fresh(), args({ Row: { ID: 'R-1', Value: 'ok' }, Error: null }))).toEqual({ Row: { ID: 'R-1', Value: 'ok' }, Spec: 2 });
+  });
+  it('records a failed read as a failed read, never as a missing version', async () => {
+    const result = fresh();
+    expect(await VersionedRowGuard.PreviousVersion(result, args({ Row: null, Error: 'timeout' }))).toBeUndefined();
+    expect(result.Success).toBe(false);
+    expect(result.Errors.map((e) => e.Message)).toEqual(['Reading version 1 of lineage L-1 failed: timeout']);
+  });
+  it('records a missing and an unparseable previous version', async () => {
+    const missing = fresh();
+    expect(await VersionedRowGuard.PreviousVersion(missing, args({ Row: null, Error: null }))).toBeUndefined();
+    expect(missing.Errors.map((e) => e.Message)).toEqual(['versions must be consecutive: version 1 of lineage L-1 does not exist']);
+    const unparseable = fresh();
+    expect(await VersionedRowGuard.PreviousVersion(unparseable, args({ Row: { ID: 'R-1', Value: 'no' }, Error: null }))).toBeUndefined();
+    expect(unparseable.Errors.map((e) => e.Message)).toEqual(['Thing version 1 (R-1) does not parse: bad value']);
   });
 });
 
@@ -76,7 +108,7 @@ describe('GetPipelineUnitProblems and GetProtocolUnitProblems', () => {
 /** An Evaluation Protocol server row whose previous version is served from memory (no database). */
 class InMemoryLineageProtocol extends MJEvaluationProtocolEntityServer {
   public Previous: EvaluationProtocolColumns | null = null;
-  protected override async LoadVersion(): Promise<ProtocolVersionRead> {
+  protected override async LoadVersion(): Promise<RowRead<EvaluationProtocolColumns>> {
     return { Row: this.Previous, Error: null };
   }
 }
@@ -157,16 +189,16 @@ describe.each(versionedRowClasses)('%s Save adopts the lineage root', (_name, ct
     expect(await row.Save()).toBe(true);
     expect(rootAtBaseSave).toBe('ID-1');
     const blank = newRowOf(ctor, { IsSaved: false, Version: 1, ID: 'ID-2', LineageRootID: '' });
-    await blank.Save();
+    expect(await blank.Save()).toBe(true);
     expect(blank.LineageRootID).toBe('ID-2');
   });
   it('leaves a later version and a saved row alone', async () => {
     vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
     const later = newRowOf(ctor, { IsSaved: false, Version: 2, ID: 'ID-3', LineageRootID: 'ROOT' });
-    await later.Save();
+    expect(await later.Save()).toBe(true);
     expect(later.LineageRootID).toBe('ROOT');
     const saved = newRowOf(ctor, { IsSaved: true, Version: 1, ID: 'ID-4', LineageRootID: 'ROOT' });
-    await saved.Save();
+    expect(await saved.Save()).toBe(true);
     expect(saved.LineageRootID).toBe('ROOT');
   });
 });
