@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEntity, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { EntityChangeContext } from './EntityChangeContext';
-import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionCategoryEntity, MJActionEntity, MJActionEntity_IActionConfiguration, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 import type { ActionRunAudience } from "./ActionAudience";
 
@@ -81,13 +81,14 @@ export interface AIDirective {
 }
 
 /**
- * Trust classification for an action's output when returned to an AI agent.
+ * Trust classification for an action's output when returned to an AI agent, derived from
+ * the generated `MJActionEntity_IActionConfiguration['outputTrustLevel']` type in `@memberjunction/core-entities`.
  * - `'Trusted'`: Internal structured data or platform-validated output (default).
  * - `'SemiTrusted'`: Output that may contain user-authored or partner content and should be wrapped in a data envelope.
  * - `'Untrusted'`: External content (web pages, search results, emails, webhooks, MCP tools) that must be wrapped in
  *   `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the agent run as tainted.
  */
-export type ActionOutputTrustLevel = 'Trusted' | 'SemiTrusted' | 'Untrusted';
+export type ActionOutputTrustLevel = NonNullable<MJActionEntity_IActionConfiguration['outputTrustLevel']>;
 
 /**
  * Structured recovery guidance returned by an action when it fails, enabling an AI agent
