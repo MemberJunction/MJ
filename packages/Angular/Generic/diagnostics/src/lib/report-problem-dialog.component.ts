@@ -72,11 +72,18 @@ function errorText(err: unknown): string {
                     <mj-alert Variant="error" Role="alert" [Message]="ErrorMessage"></mj-alert>
                 }
 
+                @if (IsClientOnlyRecording) {
+                    <mj-alert
+                        Variant="info"
+                        Message="This recording is client-only: the server did not start a session for you (that needs the Diagnostics: Run Sessions authorization or self-service recording). Server traces, SQL and logs will not be in the bundle."></mj-alert>
+                }
+
                 @if (LastResult) {
                     <div class="mj-diag-summary-box">
-                        <strong>Bundle Downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
+                        <strong>Client snapshot downloaded:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
                         ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings,
-                        scrubbing: {{ LastResult.manifest.scrubberProfile }})
+                        scrubbing: {{ LastResult.manifest.scrubberProfile }}). It holds browser data only;
+                        server traces, SQL and logs come with Submit to Support.
                         <button type="button" mjButton Variant="flat" Size="sm" (click)="OnDownloadSnapshot()">
                             Download Again
                         </button>
@@ -112,7 +119,7 @@ function errorText(err: unknown): string {
                     Size="md"
                     [disabled]="IsBuilding"
                     (click)="OnBuildSnapshot()">
-                    {{ IsBuilding ? 'Building...' : 'Download .mjdiag Snapshot' }}
+                    {{ IsBuilding ? 'Building...' : 'Download Client Snapshot (.mjdiag)' }}
                 </button>
                 @if (IsRecording) {
                     <button type="button" mjButton Variant="danger" Size="md" [disabled]="IsBuilding" (click)="OnStopRecording()">
@@ -177,6 +184,8 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
     public IsSubmitting = false;
     /** True while a live recording runs; the dialog then offers Stop & Package instead of Start. */
     public IsRecording = false;
+    /** True while the running recording has no server session, so the bundle holds browser data only. */
+    public IsClientOnlyRecording = false;
 
     public ngOnInit(): void {
         this.packageSub = this.diagnosticsService.PackageRequests$.subscribe((state) => {
@@ -184,6 +193,7 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
         });
         this.recordingSub = this.diagnosticsService.RecordingState$.subscribe((state) => {
             this.IsRecording = state.isRecording;
+            this.IsClientOnlyRecording = state.isRecording && !state.serverSessionId;
             this.cdr.markForCheck();
         });
     }

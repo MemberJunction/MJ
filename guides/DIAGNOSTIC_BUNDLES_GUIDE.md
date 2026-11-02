@@ -107,13 +107,16 @@ Users and administrators can launch diagnostic capture or download a `.mjdiag` b
    - Inside `AboutDialogComponent`'s collapsible **Diagnostics** accordion section, click **"Diagnostic Bundle..."** right next to **"Copy diagnostics"** to open `<mj-diagnostic-report-problem-dialog>`.
 2. **User Avatar Menu (Top-Right Header)**:
    - Open the user profile menu and click **"Diagnostic Bundle"** (in the `system` section right above `About MemberJunction`).
-   - When the user starts a live recording session and closes the dialog to reproduce an issue, `<mj-diagnostic-recording-banner>` stays pinned in the shell with a **Stop & Package** button. It stops the recording, builds the snapshot for that session, and reopens the dialog with the result.
+   - When the user starts a live recording session and closes the dialog to reproduce an issue, `<mj-diagnostic-recording-banner>` stays pinned in the shell with a **Stop & Package** button. It stops the recording, builds the snapshot for that session, and reopens the dialog with the result. The banner renders inside the shell container (anything placed after it is clipped by the shell's `overflow: hidden`). When the server did not start a session for the user, the banner shows a **client-only** tag and the dialog explains why; the resulting bundle then holds browser data only.
 3. **Stuck-Loading Screen (Pre-Reset Capture)**:
    - `ShellComponent.ngOnInit()` initializes `MJDiagnosticsService` immediately at boot. If startup stalls and the *"Taking longer than expected"* reset panel appears, a **"Download Diagnostic Bundle"** button is shown right next to **"Reset"** so the user can download the startup `.mjdiag` flight-recorder snapshot *before* `ResetApplication()` clears IndexedDB and caches.
 
 ### Capture Modes & Submission Flows
 
-- **Snapshot**: Packages the current client and server ring buffers immediately without starting a persistent session.
+- **Snapshot** (**Download Client Snapshot** in the dialog, or **Stop & Package** on the banner): packages the browser's ring buffers (`client/logs.ndjson`, `client/waterfall.ndjson`, `client/telemetry.ndjson`) immediately, without a session. A client snapshot never contains `server/traces.ndjson`, `server/sql.ndjson` or `server/logs.ndjson`; those files are empty placeholders required by the archive layout. Server data comes only from a server-built bundle (**Submit to Support**, or `Diagnostics.BuildBundle` for a session).
+  - `client/telemetry.ndjson` fills while a live recording runs: the service turns `TelemetryManager` on for the recording and restores the prior setting on stop. Outside a recording the file is empty unless the application enables telemetry itself.
+  - `requestBytes` / `responseBytes` in `client/waterfall.ndjson` are approximate JSON text lengths (query plus variables; response data). They are measured only while a diagnostic observer is registered or telemetry is on, and are 0 otherwise.
+  - A live recording without `Diagnostics: Run Sessions` (or self-service recording, `Diagnostics.SelfServiceRecording`) is **client-only**: it runs under a local `rec-…` ID that is never sent to the server, so no server session exists and no server data is captured for it.
 - **Record**: Starts a live session (`MJ: Diagnostic Sessions`). The browser attaches `X-MJ-Diagnostic-Session: <sessionId>` on GraphQL requests (`GraphQLDataProvider.Instance.SetActiveDiagnosticSessionId(sessionId)`) and flushes client buffers to the `MJ_Diagnostics` IndexedDB database every 1 second (preserved across `ResetApplication()`).
 - **One-Click "Submit to Support" (`MJDiagnosticsService.SubmitBundleToSupport()`)**:
   - Directly from `<mj-diagnostic-report-problem-dialog>`, clicking **"Submit to Support"** executes:

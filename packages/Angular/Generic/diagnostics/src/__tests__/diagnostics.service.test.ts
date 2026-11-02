@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     DiagnosticsUploadClientCaptureOperation,
     DiagnosticsBuildBundleOperation,
@@ -8,6 +8,7 @@ import {
     DiagnosticsGetMySessionStatusOperation,
 } from '@memberjunction/core-entities';
 import { VerifyBundleArchive, ParseBundleDataFromArchive } from '@memberjunction/diagnostics';
+import { TelemetryManager } from '@memberjunction/core';
 import {
     GraphQLDataProvider,
     NetworkDiagnosticObserver,
@@ -348,6 +349,42 @@ describe('MJDiagnosticsService', () => {
 
             await expect(service.SubmitBundleToSupport()).rejects.toThrow('stop here');
             expect(uploadSpy.mock.calls[0][0].SessionID).toBeUndefined();
+        });
+    });
+    describe('recording scope and telemetry', () => {
+        afterEach(() => {
+            TelemetryManager.Instance.SetEnabled(false);
+        });
+
+        it('exposes the server session ID on the recording state and clears it on stop', () => {
+            service.StartRecording('sess-100', 'Standard');
+            expect(service.CurrentRecordingState.serverSessionId).toBe('sess-100');
+            service.StopRecording();
+            expect(service.CurrentRecordingState.serverSessionId).toBeNull();
+        });
+
+        it('marks a recording without a server session as client-only', async () => {
+            const provider = fakeProvider(false);
+            vi.spyOn(DiagnosticsGetMySessionStatusOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { Active: false, SelfServiceRecordingAllowed: false },
+            });
+            service.Provider = provider;
+
+            const sessionId = await service.StartLiveRecording('FullRaw');
+
+            expect(sessionId).toMatch(/^rec-/);
+            expect(service.CurrentRecordingState.sessionId).toBe(sessionId);
+            expect(service.CurrentRecordingState.serverSessionId).toBeNull();
+            service.StopRecording();
+        });
+
+        it('turns telemetry on for the recording and back off when it was off before', () => {
+            TelemetryManager.Instance.SetEnabled(false);
+            service.StartRecording('sess-1', 'Standard');
+            expect(TelemetryManager.Instance.IsEnabled).toBe(true);
+            service.StopRecording();
+            expect(TelemetryManager.Instance.IsEnabled).toBe(false);
         });
     });
 });

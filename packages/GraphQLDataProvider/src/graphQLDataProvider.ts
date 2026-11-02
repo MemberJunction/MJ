@@ -44,7 +44,9 @@ export interface NetworkDiagnosticObservation {
     spanId: string;
     traceparent: string;
     durationMs: number;
+    /** Approximate size: query text plus the JSON text of the variables. */
     requestBytes: number;
+    /** Approximate size: the JSON text of the response data, or of the error response. */
     responseBytes: number;
     succeeded: boolean;
     errorCode?: string;
@@ -3677,6 +3679,30 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         };
     }
 
+    /**
+     * True when a network diagnostic observer is registered or telemetry is on. Payload sizes are
+     * only measured then, so the JSON serialization never costs anything on an idle client.
+     */
+    private shouldMeasurePayloadSizes(): boolean {
+        if (_networkDiagnosticObservers.size > 0) {
+            return true;
+        }
+        const tm = typeof TelemetryManager !== 'undefined' ? TelemetryManager?.Instance : undefined;
+        return Boolean(tm?.IsEnabled);
+    }
+
+    /** Length of the JSON text of `value`; 0 when it is missing or cannot be serialized. */
+    private static approximateJsonSize(value: unknown): number {
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return JSON.stringify(value)?.length ?? 0;
+        } catch {
+            return 0;
+        }
+    }
+
     private emitNetworkTelemetry(obs: NetworkDiagnosticObservation): void {
         try {
             const suppressed = typeof IsDiagnosticCaptureSuppressed === 'function' && IsDiagnosticCaptureSuppressed();
@@ -3919,7 +3945,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         };
         const startTime = performance.now();
         const variableKeys = variables && typeof variables === 'object' ? Object.keys(variables as Record<string, unknown>) : [];
-        const approxReqBytes = typeof query === 'string' ? query.length : 0;
+        const measureSizes = this.shouldMeasurePayloadSizes();
+        const approxReqBytes = (typeof query === 'string' ? query.length : 0)
+            + (measureSizes ? GraphQLDataProvider.approximateJsonSize(variables) : 0);
 
         try {
             const data = await this._client.request(query, variables, requestHeaders);
@@ -3932,7 +3960,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 traceparent,
                 durationMs,
                 requestBytes: approxReqBytes,
-                responseBytes: 0,
+                responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(data) : 0,
                 succeeded: true,
                 retryCount,
                 variableKeys,
@@ -3990,7 +4018,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             traceparent,
                             durationMs,
                             requestBytes: approxReqBytes,
-                            responseBytes: 0,
+                            responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e.response) : 0,
                             succeeded: false,
                             errorCode: code,
                             errorMessage: safeToThrow.message,
@@ -4011,7 +4039,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         traceparent,
                         durationMs,
                         requestBytes: approxReqBytes,
-                        responseBytes: 0,
+                        responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e.response) : 0,
                         succeeded: false,
                         errorCode: code,
                         errorMessage: safeToThrow.message,
@@ -4031,7 +4059,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     traceparent,
                     durationMs,
                     requestBytes: approxReqBytes,
-                    responseBytes: 0,
+                    responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e?.response) : 0,
                     succeeded: false,
                     errorCode: safeToThrow.Code,
                     errorMessage: safeToThrow.message,

@@ -24,6 +24,9 @@ import { MJDiagnosticsService, ActiveRecordingState } from './diagnostics.servic
                     @if (RecordingState.sessionId) {
                         <code>({{ RecordingState.sessionId }})</code>
                     }
+                    @if (!RecordingState.serverSessionId) {
+                        <span class="mj-diag-scope" title="No server session: the bundle will hold browser data only">client-only</span>
+                    }
                 </span>
                 <span class="mj-diag-stop-action">
                     <button type="button" mjButton Variant="danger" Size="sm" (click)="OnStopClicked()">
@@ -50,6 +53,15 @@ import { MJDiagnosticsService, ActiveRecordingState } from './diagnostics.servic
             height: 8px;
             border-radius: var(--mj-radius-full);
             background: var(--mj-status-error);
+        }
+        .mj-diag-scope {
+            margin-left: var(--mj-space-2);
+            padding: 0 var(--mj-space-1-5);
+            border-radius: var(--mj-radius-sm);
+            border: 1px solid var(--mj-status-error-border);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
         }
         .mj-diag-stop-action {
             margin-left: auto;

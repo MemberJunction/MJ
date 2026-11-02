@@ -63,6 +63,8 @@ const IDB_STORE_NAME = 'session_buffer';
 export interface ActiveRecordingState {
     isRecording: boolean;
     sessionId: string | null;
+    /** The server session that captures this recording; `null` for a client-only recording. */
+    serverSessionId: string | null;
     mode: DiagnosticMode;
     startedAtIso: string | null;
     scrubberProfile: DiagnosticScrubberProfile;
@@ -137,6 +139,7 @@ export class MJDiagnosticsService {
     private readonly recordingStateSubject = new BehaviorSubject<ActiveRecordingState>({
         isRecording: false,
         sessionId: null,
+        serverSessionId: null,
         mode: 'flight-recorder',
         startedAtIso: null,
         scrubberProfile: DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE,
@@ -148,6 +151,8 @@ export class MJDiagnosticsService {
     private initialized = false;
     private unregisterLoggerSink: (() => void) | null = null;
     private unsubscribeTelemetry: (() => void) | null = null;
+    /** True while a recording keeps telemetry on that was off before it started. */
+    private telemetryEnabledByRecording = false;
     private idbFlushTimer: ReturnType<typeof setTimeout> | null = null;
     private sessionIdHook: ((sessionId: string | null) => void) | null = null;
     private readonly flushedTriggerSessions = new Set<string>();
@@ -319,9 +324,11 @@ export class MJDiagnosticsService {
     /** Sets the recording state; `serverSessionId` goes in the session header and is the Submit target. */
     private beginRecording(sessionId: string, scrubberProfile: DiagnosticScrubberProfile, serverSessionId: string | null): void {
         this.submitSessionId = serverSessionId;
+        this.enableTelemetryForRecording();
         const nextState: ActiveRecordingState = {
             isRecording: true,
             sessionId,
+            serverSessionId,
             mode: 'active-recording',
             startedAtIso: new Date().toISOString(),
             scrubberProfile,
@@ -331,6 +338,23 @@ export class MJDiagnosticsService {
             this.sessionIdHook(serverSessionId);
         }
         this.scheduleIdbFlush();
+    }
+
+    /** Turns telemetry on for the recording when it is off, so `client/telemetry.ndjson` has data. */
+    private enableTelemetryForRecording(): void {
+        const tm = TelemetryManager.Instance;
+        if (!tm.IsEnabled) {
+            tm.SetEnabled(true);
+            this.telemetryEnabledByRecording = true;
+        }
+    }
+
+    /** Turns telemetry back off when only the recording had turned it on. */
+    private restoreTelemetryAfterRecording(): void {
+        if (this.telemetryEnabledByRecording) {
+            TelemetryManager.Instance.SetEnabled(false);
+            this.telemetryEnabledByRecording = false;
+        }
     }
 
     /** Starts a server session for this user and browser session when allowed; otherwise returns `null`. */
@@ -405,11 +429,13 @@ export class MJDiagnosticsService {
         const nextState: ActiveRecordingState = {
             isRecording: false,
             sessionId: null,
+            serverSessionId: null,
             mode: 'flight-recorder',
             startedAtIso: null,
             scrubberProfile: DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE,
         };
         this.recordingStateSubject.next(nextState);
+        this.restoreTelemetryAfterRecording();
         if (this.sessionIdHook) {
             this.sessionIdHook(null);
         }
