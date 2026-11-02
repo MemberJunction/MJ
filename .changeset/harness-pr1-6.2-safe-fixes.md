@@ -1,11 +1,11 @@
 ---
-"@memberjunction/core-entities": patch
-"@memberjunction/actions-base": patch
-"@memberjunction/actions": patch
-"@memberjunction/core-actions": patch
-"@memberjunction/ai-core-plus": patch
-"@memberjunction/ai-agents": patch
-"@memberjunction/messaging-adapters": patch
+"@memberjunction/core-entities": minor
+"@memberjunction/actions-base": minor
+"@memberjunction/actions": minor
+"@memberjunction/core-actions": minor
+"@memberjunction/ai-core-plus": minor
+"@memberjunction/ai-agents": minor
+"@memberjunction/messaging-adapters": minor
 ---
 
 PR 1 (6.2-safe fixes) for the Always-On Agent Harness & Core Primitives plan:
