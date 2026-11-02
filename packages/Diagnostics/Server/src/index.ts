@@ -1,9 +1,14 @@
 export * from './sessionManager.js';
 export * from './malwareScanner.js';
 export * from './intakeService.js';
+export * from './intakeAuth.js';
+export * from './senderRegistry.js';
+export * from './intakeEnrolment.js';
 export * from './middleware.js';
 export * from './remoteOperations.js';
 export * from './retentionJobDriver.js';
 export * from './settings.js';
+export * from './collectorClient.js';
+export * from './senderEnrolment.js';
 export * from './version.js';
 export { MJStorageIntakeBridge } from './intakeStorageBridge.js';

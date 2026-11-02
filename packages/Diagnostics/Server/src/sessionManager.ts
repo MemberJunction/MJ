@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import * as zlib from 'node:zlib';
 import { monitorEventLoopDelay, IntervalHistogram } from 'node:perf_hooks';
-import { BaseSingleton, EscapeSQLString, MJGlobal, TrimTrailingSlashes } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal } from '@memberjunction/global';
 import {
   DiagnosticContext,
   IDiagnosticContextProvider,
@@ -23,7 +23,7 @@ import {
   MJDiagnosticSessionEntity,
   MJDiagnosticSessionChunkEntity,
   MJDiagnosticBundleEntity,
-  IDiagnosticSessionScope
+  MJDiagnosticSessionEntity_IDiagnosticSessionScope as IDiagnosticSessionScope
 } from '@memberjunction/core-entities';
 import {
   DatabasePoolStats,
@@ -43,10 +43,12 @@ import {
   AnalyzeDiagnosticBundleData,
   BuildMjdiagArchive,
   VerifyBundleArchive,
-  EncryptDiagnosticBundle,
   DiagnosticContributorRegistry
 } from '@memberjunction/diagnostics';
 import { MJ_VERSION } from './version.js';
+import { CollectorSendResult, SendBundleToCollector, SendBundleToCollectorParams } from './collectorClient.js';
+import { DiagnosticsSettings } from './settings.js';
+import { SessionTargetsCaller } from './clientCapture.js';
 
 export interface ActiveDiagnosticSession {
   id: string;
@@ -206,8 +208,9 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return this._hostInstanceLabel;
   }
 
+  /** The `Diagnostics.InstallID` setting, or a per-process ID until one is saved. */
   public get InstallID(): string {
-    return this._installId;
+    return DiagnosticsSettings.Current().InstallID || this._installId;
   }
 
   public ResetForTests(): void {
@@ -414,7 +417,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         this.attachSessionToContext(context, s);
         return s;
       }
-      if (s.scopeType === 'Users' && userId && s.scope.userIds?.includes(userId)) {
+      if (s.scopeType === 'Users' && userId && SessionTargetsCaller(s, userId, context.BrowserSessionID)) {
         this.attachSessionToContext(context, s);
         return s;
       }
@@ -980,114 +983,8 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return { valid: true, userId: claims.userId };
   }
 
-  public async SendBundleToCollector(params: {
-    archiveBytes: Uint8Array;
-    bundleId: string;
-    scrubLiterals: boolean;
-    collectorBaseUrl: string;
-    ingestApiKey?: string;
-    recipientKeyId?: string;
-    recipientPublicKeyBase64?: string;
-    pinnedAuthorityPublicKeyBase64?: string;
-    contactInfo?: string;
-    summary?: string;
-  }): Promise<{ referenceId: string; status: string }> {
-    const baseUrl = TrimTrailingSlashes(params.collectorBaseUrl);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    if (params.ingestApiKey) {
-      headers['X-API-Key'] = params.ingestApiKey;
-    }
-
-    // Step 0: Resolve recipient public key if not supplied
-    let keyId = params.recipientKeyId;
-    let publicKeyBase64 = params.recipientPublicKeyBase64;
-    let keySignatureBase64: string | undefined;
-
-    if (!keyId || !publicKeyBase64) {
-      const pkResp = await fetch(`${baseUrl}/public-key`, { headers });
-      if (!pkResp.ok) {
-        throw new Error(`Failed to fetch collector public key: HTTP ${pkResp.status}`);
-      }
-      const pkJson = (await pkResp.json()) as {
-        keyId: string;
-        publicKey: string;
-        signature?: string;
-      };
-      keyId = pkJson.keyId;
-      publicKeyBase64 = pkJson.publicKey;
-      keySignatureBase64 = pkJson.signature;
-    }
-
-    const plaintextSha256 = crypto.createHash('sha256').update(params.archiveBytes).digest('hex');
-
-    // Encrypt with X25519 + HKDF-SHA256 + AES-256-GCM + AAD
-    const encryptedBytes = await EncryptDiagnosticBundle(params.archiveBytes, {
-      recipientKeyId: keyId,
-      recipientPublicKeyBase64: publicKeyBase64,
-      recipientKeySignatureBase64: keySignatureBase64,
-      pinnedAuthorityPublicKeyBase64: params.pinnedAuthorityPublicKeyBase64,
-      senderEnvironmentId: this._installId,
-      manifestSha256: plaintextSha256
-    });
-
-    const encryptedSha256 = crypto.createHash('sha256').update(encryptedBytes).digest('hex');
-
-    // Step 1: POST /bundles
-    const initResp = await fetch(`${baseUrl}/bundles`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        installId: this._installId,
-        bundleId: params.bundleId,
-        formatVersion: 1,
-        mjVersion: MJ_VERSION,
-        scrubLiterals: params.scrubLiterals,
-        sizeBytes: encryptedBytes.byteLength,
-        plaintextSha256,
-        encryptedSha256,
-        keyId,
-        summary: params.summary,
-        contact: params.contactInfo
-      })
-    });
-    if (!initResp.ok) {
-      throw new Error(`Intake POST /bundles failed: HTTP ${initResp.status}`);
-    }
-    const initData = (await initResp.json()) as {
-      referenceId: string;
-      uploadUrl: string;
-    };
-
-    // Step 2: PUT payload
-    const putUrl = initData.uploadUrl.startsWith('http')
-      ? initData.uploadUrl
-      : `${baseUrl}/bundles/${initData.referenceId}/payload`;
-    const putResp = await fetch(putUrl, {
-      method: 'PUT',
-      headers: {
-        ...(params.ingestApiKey ? { 'X-API-Key': params.ingestApiKey } : {}),
-        'Content-Type': 'application/octet-stream'
-      },
-      body: Buffer.from(encryptedBytes)
-    });
-    if (!putResp.ok) {
-      throw new Error(`Intake PUT payload failed: HTTP ${putResp.status}`);
-    }
-
-    // Step 3: POST /bundles/:referenceId/complete
-    const completeResp = await fetch(`${baseUrl}/bundles/${initData.referenceId}/complete`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        encryptedSha256,
-        plaintextSha256
-      })
-    });
-    if (!completeResp.ok) {
-      throw new Error(`Intake POST /complete failed: HTTP ${completeResp.status}`);
-    }
-    return (await completeResp.json()) as { referenceId: string; status: string };
+  /** Sends an archive to an enrolled collector. See `collectorClient.ts`. */
+  public async SendBundleToCollector(params: SendBundleToCollectorParams): Promise<CollectorSendResult> {
+    return SendBundleToCollector(params);
   }
 }

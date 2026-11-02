@@ -3,9 +3,40 @@ import {
     DiagnosticsUploadClientCaptureOperation,
     DiagnosticsBuildBundleOperation,
     DiagnosticsSendBundleOperation,
+    DiagnosticsStartSessionOperation,
+    DiagnosticsStopSessionOperation,
+    DiagnosticsGetMySessionStatusOperation,
 } from '@memberjunction/core-entities';
 import { VerifyBundleArchive, ParseBundleDataFromArchive } from '@memberjunction/diagnostics';
+import {
+    GraphQLDataProvider,
+    NetworkDiagnosticObserver,
+    RegisterNetworkDiagnosticObserver,
+    RegisterResponseHeaderObserver,
+    ResponseHeaderObserver,
+} from '@memberjunction/graphql-dataprovider';
 import { MJDiagnosticsService } from '../lib/diagnostics.service';
+
+vi.mock('@memberjunction/graphql-dataprovider', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/graphql-dataprovider')>()),
+    RegisterNetworkDiagnosticObserver: vi.fn(() => () => undefined),
+    RegisterResponseHeaderObserver: vi.fn(() => () => undefined),
+}));
+
+const recordingUser = { ID: 'USER-1', Type: 'User', UserRoles: [] };
+
+/** A GraphQL provider stand-in whose user does or does not hold `Diagnostics: Run Sessions`. */
+function fakeProvider(canRunSessions: boolean): GraphQLDataProvider & { SetDynamicHeader: ReturnType<typeof vi.fn>; RemoveDynamicHeader: ReturnType<typeof vi.fn> } {
+    const provider = Object.create(GraphQLDataProvider.prototype);
+    Object.defineProperties(provider, {
+        CurrentUser: { value: recordingUser },
+        Authorizations: { value: [{ Name: 'Diagnostics: Run Sessions', UserCanExecute: () => canRunSessions }] },
+        sessionId: { value: 'tab-1' },
+        SetDynamicHeader: { value: vi.fn() },
+        RemoveDynamicHeader: { value: vi.fn() },
+    });
+    return provider;
+}
 
 describe('MJDiagnosticsService', () => {
     let service: MJDiagnosticsService;
@@ -171,5 +202,152 @@ describe('MJDiagnosticsService', () => {
         const secondTrigger = await service.HandleServerTriggerHeader('watch-sess-42');
         expect(secondTrigger).toBe(false);
         expect(uploadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    describe('live recording', () => {
+        it('starts a server session for a user with Diagnostics: Run Sessions, sends its header and fills the waterfall', async () => {
+            const provider = fakeProvider(true);
+            const startSpy = vi.spyOn(DiagnosticsStartSessionOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-1', Status: 'Active', StartedAt: '', EndsAt: '', ScrubLiterals: false },
+            });
+            const stopSpy = vi.spyOn(DiagnosticsStopSessionOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-1', Status: 'Stopped', StoppedAt: '', FlushedChunkCount: 0 },
+            });
+            service.Provider = provider;
+
+            const sessionId = await service.StartLiveRecording('FullRaw');
+
+            expect(sessionId).toBe('srv-1');
+            expect(startSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ ScopeType: 'Users', Scope: { userIds: ['USER-1'], browserSessionId: 'tab-1' } }),
+                expect.objectContaining({ provider }),
+            );
+            expect(provider.SetDynamicHeader).toHaveBeenCalledWith('x-mj-diagnostic-session', 'srv-1');
+            const observer = vi.mocked(RegisterNetworkDiagnosticObserver).mock.calls.at(-1)?.[0] as NetworkDiagnosticObserver;
+            observer({
+                operationName: 'GetUsers', operationKind: 'query', traceId: 't', spanId: 's', traceparent: 'tp',
+                durationMs: 12, requestBytes: 10, responseBytes: 20, succeeded: true, retryCount: 0, variableKeys: [], timestamp: 1,
+            });
+            const built = await service.BuildClientBundle();
+            expect(ParseBundleDataFromArchive(await VerifyBundleArchive(built.zipBytes)).clientWaterfall).toHaveLength(1);
+
+            service.StopRecording();
+            await vi.waitFor(() => expect(stopSpy).toHaveBeenCalledWith({ SessionID: 'srv-1' }, expect.objectContaining({ provider })));
+            expect(provider.RemoveDynamicHeader).toHaveBeenCalledWith('x-mj-diagnostic-session');
+        });
+
+        it('records client-only without the authorization and never sends the local ID to the server', async () => {
+            const provider = fakeProvider(false);
+            vi.spyOn(DiagnosticsGetMySessionStatusOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { Active: false, SelfServiceRecordingAllowed: false },
+            });
+            const startSpy = vi.spyOn(DiagnosticsStartSessionOperation.prototype, 'Execute');
+            const uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-created', ChunksWritten: 0, TotalBytesWritten: 0 },
+            });
+            vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({ Success: false, ErrorMessage: 'stop here' });
+            service.Provider = provider;
+
+            const sessionId = await service.StartLiveRecording('FullRaw');
+            expect(sessionId).toMatch(/^rec-/);
+            expect(startSpy).not.toHaveBeenCalled();
+            expect(provider.SetDynamicHeader).not.toHaveBeenCalled();
+
+            await expect(service.SubmitBundleToSupport()).rejects.toThrow('stop here');
+            expect(uploadSpy.mock.calls[0][0].SessionID).toBeUndefined();
+        });
+
+        it('uploads the client capture once when GraphQL responses carry X-MJ-Diagnostic-Trigger', async () => {
+            const uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'watch-7', ChunksWritten: 1, TotalBytesWritten: 10 },
+            });
+            service.Initialize();
+            const observer = vi.mocked(RegisterResponseHeaderObserver).mock.calls.at(-1)?.[0] as ResponseHeaderObserver;
+            const headers = new Headers({ 'X-MJ-Diagnostic-Trigger': 'watch-7' });
+            observer(headers);
+            observer(headers);
+            service.Dispose();
+
+            await vi.waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
+            expect(uploadSpy.mock.calls[0][0].SessionID).toBe('watch-7');
+        });
+
+        it('does not start a recording when a response names the session a session-less Submit just created', async () => {
+            const uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-oneshot', ChunksWritten: 1, TotalBytesWritten: 10 },
+            });
+            vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({ Success: false, ErrorMessage: 'stop here' });
+            service.Initialize();
+            const observer = vi.mocked(RegisterResponseHeaderObserver).mock.calls.at(-1)?.[0] as ResponseHeaderObserver;
+
+            await expect(service.SubmitBundleToSupport()).rejects.toThrow('stop here');
+            observer(new Headers({ 'X-MJ-Diagnostic-Trigger': 'srv-oneshot' }));
+            service.Dispose();
+
+            expect(service.CurrentRecordingState.isRecording).toBe(false);
+            expect(uploadSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it('explains a refused session-less upload as self-service recording being off', async () => {
+            vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+                Success: false,
+                ResultCode: 'FORBIDDEN',
+                ErrorMessage: "Not authorized to run operation 'Diagnostics.UploadClientCapture'",
+            });
+            await expect(service.SubmitBundleToSupport()).rejects.toThrow(
+                'Self-service recording is turned off on this server. Ask an administrator to start a diagnostic session, or download the snapshot instead.',
+            );
+        });
+
+        it('refuses to start a live recording while one is running', async () => {
+            const provider = fakeProvider(true);
+            const startSpy = vi.spyOn(DiagnosticsStartSessionOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-2', Status: 'Active', StartedAt: '', EndsAt: '', ScrubLiterals: false },
+            });
+            service.Provider = provider;
+            await service.StartLiveRecording('FullRaw');
+
+            await expect(service.StartLiveRecording('FullRaw')).rejects.toThrow(/already running/);
+            expect(startSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it('Dispose stops the server session it started and clears the session header', async () => {
+            const provider = fakeProvider(true);
+            vi.spyOn(DiagnosticsStartSessionOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-3', Status: 'Active', StartedAt: '', EndsAt: '', ScrubLiterals: false },
+            });
+            const stopSpy = vi.spyOn(DiagnosticsStopSessionOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-3', Status: 'Stopped', StoppedAt: '', FlushedChunkCount: 0 },
+            });
+            service.Provider = provider;
+            await service.StartLiveRecording('FullRaw');
+
+            service.Dispose();
+
+            await vi.waitFor(() => expect(stopSpy).toHaveBeenCalledWith({ SessionID: 'srv-3' }, expect.objectContaining({ provider })));
+            expect(provider.RemoveDynamicHeader).toHaveBeenCalledWith('x-mj-diagnostic-session');
+        });
+
+        it('a Submit long after a stopped recording does not upload into the stopped session', async () => {
+            const uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'srv-new', ChunksWritten: 0, TotalBytesWritten: 0 },
+            });
+            vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({ Success: false, ErrorMessage: 'stop here' });
+            service.StartRecording('srv-old', 'FullRaw');
+            service.StopRecording();
+
+            await expect(service.SubmitBundleToSupport()).rejects.toThrow('stop here');
+            expect(uploadSpy.mock.calls[0][0].SessionID).toBeUndefined();
+        });
     });
 });

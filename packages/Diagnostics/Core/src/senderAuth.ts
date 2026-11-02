@@ -212,6 +212,7 @@ function parseHeaderParams(text: string): Map<string, string> | null {
         params.set(match[1], match[2]);
         index = pattern.lastIndex;
         if (match[3] === '' && index < text.length) return null;
+        if (match[3] === ',' && index >= text.length) return null;
     }
     return params;
 }

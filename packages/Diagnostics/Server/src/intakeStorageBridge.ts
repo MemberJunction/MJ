@@ -11,10 +11,12 @@ import { IDiagnosticStorageBridge } from './intakeService.js';
 export class MJStorageIntakeBridge implements IDiagnosticStorageBridge {
   private readonly quarantineDriver: FileStorageBase;
   private readonly verifiedDriver: FileStorageBase;
+  public readonly VerifiedStorageProviderID: string;
 
-  private constructor(quarantineDriver: FileStorageBase, verifiedDriver: FileStorageBase) {
+  private constructor(quarantineDriver: FileStorageBase, verifiedDriver: FileStorageBase, verifiedProviderId: string) {
     this.quarantineDriver = quarantineDriver;
     this.verifiedDriver = verifiedDriver;
+    this.VerifiedStorageProviderID = verifiedProviderId;
   }
 
   /** Loads both storage providers and returns a bridge over their drivers. Throws when a provider cannot be loaded. */
@@ -28,7 +30,7 @@ export class MJStorageIntakeBridge implements IDiagnosticStorageBridge {
     const quarantineDriver = quarantineProviderId
       ? await LoadStorageDriver(quarantineProviderId, contextUser, provider)
       : verifiedDriver;
-    return new MJStorageIntakeBridge(quarantineDriver, verifiedDriver);
+    return new MJStorageIntakeBridge(quarantineDriver, verifiedDriver, verifiedProviderId);
   }
 
   public async WriteQuarantineObject(referenceId: string, bytes: Uint8Array): Promise<string> {
@@ -41,11 +43,13 @@ export class MJStorageIntakeBridge implements IDiagnosticStorageBridge {
   public async PromoteToVerifiedStorage(
     referenceId: string,
     _quarantinePath: string,
-    verifiedZipBytes: Uint8Array
+    verifiedBytes: Uint8Array,
+    encrypted = false
   ): Promise<string> {
     const day = new Date().toISOString().slice(0, 10);
-    const objectName = `verified/${day}/${referenceId}.mjdiag`;
-    const ok = await this.verifiedDriver.PutObject(objectName, Buffer.from(verifiedZipBytes), 'application/zip');
+    const objectName = `verified/${day}/${referenceId}${encrypted ? '.mjdiag.enc' : '.mjdiag'}`;
+    const contentType = encrypted ? 'application/octet-stream' : 'application/zip';
+    const ok = await this.verifiedDriver.PutObject(objectName, Buffer.from(verifiedBytes), contentType);
     if (!ok) throw new Error(`Failed to write verified object '${objectName}'.`);
     return objectName;
   }

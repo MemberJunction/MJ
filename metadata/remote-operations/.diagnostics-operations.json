@@ -159,5 +159,51 @@
     "primaryKey": {
       "ID": "8F71C490-5B21-4E3A-9C14-207000000007"
     }
+  },
+  {
+    "fields": {
+      "Name": "Issue Diagnostic Sender Registration Code",
+      "OperationKey": "Diagnostics.IssueSenderRegistrationCode",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Issues a one-time registration code for a MJ: Diagnostic Sender Registrations row on this collector: 32 random bytes as base64url, valid for 24 hours. Only the SHA-256 hash is stored; the plain code is returned once. Requires the Diagnostics: Manage Intake authorization. Implemented by DiagnosticsIssueSenderRegistrationCodeServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsIssueSenderRegistrationCodeInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsIssueSenderRegistrationCodeOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E7D8A509-CD90-4B7D-ACDB-8252B2C39070"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Enrol Diagnostic Sender",
+      "OperationKey": "Diagnostics.EnrolSender",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Enrols this installation as a sender with the collector at Diagnostics.External.CollectorUrl using a one-time registration code: generates an Ed25519 key pair, stores the private key in MJ: Credentials, proves possession of the key to the collector and pins the collector's public keys. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsEnrolSenderInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsEnrolSenderOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "CFCA928A-30D0-407C-B2D9-2F7794FE0254"
+    }
   }
 ]

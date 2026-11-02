@@ -1,5 +1,7 @@
-/** Builds a path under MJAPI's base path. */
-export type DiagnosticsApiRouteBuilder = (subpath: string) => string;
+import type { ServerMiddlewareContext } from '@memberjunction/server/middleware/BaseServerMiddleware';
+
+/** Builds a path under MJAPI's base path, or the public absolute URL with `{ absolute: true }`. */
+export type DiagnosticsApiRouteBuilder = ServerMiddlewareContext['ApiRoute'];
 
 let routeBuilder: DiagnosticsApiRouteBuilder | undefined;
 

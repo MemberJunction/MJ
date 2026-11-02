@@ -1,5 +1,5 @@
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJDiagnosticSessionEntity, IDiagnosticSessionScope } from '@memberjunction/core-entities';
+import { MJDiagnosticSessionEntity, MJDiagnosticSessionEntity_IDiagnosticSessionScope as IDiagnosticSessionScope } from '@memberjunction/core-entities';
 import { ActiveDiagnosticSession, DiagnosticSessionManager } from './sessionManager.js';
 
 const SESSION_ENTITY = 'MJ: Diagnostic Sessions';

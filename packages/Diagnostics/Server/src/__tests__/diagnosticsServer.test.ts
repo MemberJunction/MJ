@@ -46,6 +46,7 @@ import {
 import { DiagnosticsServerMiddleware } from '../middleware.js';
 import { MJ_VERSION } from '../version.js';
 import { DiagnosticsSettings } from '../settings.js';
+import { CollectorIntakeAudience } from '../collectorClient.js';
 
 type ExpressAppParam = Parameters<DiagnosticsServerMiddleware['ConfigureExpressApp']>[0];
 
@@ -537,24 +538,12 @@ describe('@memberjunction/diagnostics-server', () => {
             vi.unstubAllGlobals();
         });
 
-        it('trims the collector URL in linear time when it holds many non-trailing slashes', async () => {
-            const fetchStub = vi.fn(async () => {
-                throw new Error('network disabled in test');
-            });
-            vi.stubGlobal('fetch', fetchStub);
-            const collectorBaseUrl = 'http://collector.example' + '/'.repeat(100_000) + 'x';
+        it('trims the collector URL in linear time when it holds many non-trailing slashes', () => {
+            const collectorBaseUrl = 'https://collector.example' + '/'.repeat(100_000) + 'x';
 
             const started = Date.now();
-            await expect(
-                manager.SendBundleToCollector({
-                    archiveBytes: new Uint8Array([1, 2, 3]),
-                    bundleId: 'bundle-slash-test',
-                    scrubLiterals: true,
-                    collectorBaseUrl,
-                })
-            ).rejects.toThrow('network disabled in test');
+            expect(CollectorIntakeAudience(collectorBaseUrl)).toBe(`${collectorBaseUrl}/diagnostics/intake/v1`);
             expect(Date.now() - started).toBeLessThan(2000);
-            expect(fetchStub).toHaveBeenCalledWith(`${collectorBaseUrl}/public-key`, expect.anything());
         });
     });
 
@@ -785,6 +774,7 @@ describe('@memberjunction/diagnostics-server', () => {
         it('routes DiagnosticsSendBundleServerOperation through local DiagnosticIntakeService when no external collector URL is configured', async () => {
             const intake = DiagnosticIntakeService.Instance;
             intake.ResetForTests();
+            intake.Configure({ enabled: true });
 
             const mockOwnerUser = {
                 ID: 'user-owner-1',
@@ -918,7 +908,7 @@ describe('@memberjunction/diagnostics-server', () => {
             vi.spyOn(CredentialEngine.Instance, 'Config').mockResolvedValue(undefined);
             const resolved: ResolvedCredential = {
                 credential: null,
-                values: { keyId: key.keyId, publicKey: key.publicKeyBase64, privateKey: key.privateKeyBase64 },
+                values: { keyId: key.keyId, publicKey: key.publicKeyBase64, privateKey: key.privateKeyBase64, ...(await GenerateDiagnosticKeyPair('Ed25519').then((s) => ({ signingPublicKey: s.publicKeyBase64, signingPrivateKey: s.privateKeyBase64 }))) },
                 source: 'database',
                 expirationStatus: 'valid',
             };
@@ -1179,6 +1169,7 @@ describe('@memberjunction/diagnostics-server', () => {
 
         it('SendBundle moves the row through Sending to Sent with the reference ID', async () => {
             DiagnosticIntakeService.Instance.ResetForTests();
+            DiagnosticIntakeService.Instance.Configure({ enabled: true });
             const { bundleId } = await buildBundle();
             const sent = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
                 { BundleID: bundleId, Destination: 'MJC' },
@@ -1196,19 +1187,19 @@ describe('@memberjunction/diagnostics-server', () => {
         });
 
         it('SendBundle marks the row Failed with the reason when the send fails', async () => {
-            mockInstanceSettings({ 'Diagnostics.External.Enabled': 'true' });
+            mockInstanceSettings({ 'Diagnostics.External.Enabled': 'true', 'Diagnostics.External.CollectorUrl': 'https://collector.example' });
             vi.stubGlobal('fetch', vi.fn(async () => {
                 throw new Error('collector unreachable');
             }));
             try {
                 const { bundleId } = await buildBundle();
                 const sent = await new DiagnosticsSendBundleServerOperation().ExecuteServer(
-                    { BundleID: bundleId, Destination: 'CustomerCollector', CollectorUrlOverride: 'https://collector.example' },
+                    { BundleID: bundleId, Destination: 'CustomerCollector' },
                     { provider: fake.Provider, user: ownerUser }
                 );
                 expect(sent.Success).toBe(false);
                 expect(fake.Stored(bundleEntity, bundleId)?.Status).toBe('Failed');
-                expect(String(fake.Stored(bundleEntity, bundleId)?.FailureReason)).toContain('collector unreachable');
+                expect(String(fake.Stored(bundleEntity, bundleId)?.FailureReason)).toContain('not enrolled');
             } finally {
                 vi.unstubAllGlobals();
             }

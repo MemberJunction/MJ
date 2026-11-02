@@ -140,6 +140,7 @@ describe('ParseSenderAuthorizationHeader', () => {
         ['non-numeric ts', good.replace('1700000000', '17x0')],
         ['non-uuid nonce', good.replace('7c0d1c52-6f1e-4b8e-9a63-0e0d5b8f6a11', 'abc')],
         ['trailing junk', `${good} junk`],
+        ['trailing comma', `${good},`],
     ])('returns null for %s', (_label, value) => {
         expect(ParseSenderAuthorizationHeader(value)).toBeNull();
     });

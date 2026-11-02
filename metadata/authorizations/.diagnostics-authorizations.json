@@ -22,5 +22,17 @@
     "primaryKey": {
       "ID": "8F71C490-5B21-4E3A-9C14-202000000002"
     }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics: Manage Intake",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to manage this collector's diagnostic intake: issue one-time sender registration codes, and enrol this installation as a sender with a collector."
+    },
+    "primaryKey": {
+      "ID": "78A94BB3-96AF-4F22-A8E1-5FDC84981D65"
+    }
   }
 ]

@@ -58,19 +58,5 @@
     "primaryKey": {
       "ID": "8F71C490-5B21-4E3A-9C14-204000000004"
     }
-  },
-  {
-    "fields": {
-      "Name": "ingest",
-      "FullPath": "diagnostics:ingest",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=diagnostics",
-      "Category": "Diagnostics",
-      "Description": "Authenticate a sender MJAPI instance to upload encrypted .mjdiag.enc bundles to a receiver MJAPI's /diagnostics/intake/v1 endpoint.",
-      "ResourceType": "DiagnosticBundle",
-      "IsActive": true
-    },
-    "primaryKey": {
-      "ID": "8F71C490-5B21-4E3A-9C14-204000000005"
-    }
   }
 ]

@@ -29,8 +29,15 @@ import {
   DiagnosticsSendBundleOperation,
   DiagnosticsSendBundleInput,
   DiagnosticsSendBundleOutput,
+  DiagnosticsEnrolSenderOperation,
+  DiagnosticsEnrolSenderInput,
+  DiagnosticsEnrolSenderOutput,
+  DiagnosticsIssueSenderRegistrationCodeOperation,
+  DiagnosticsIssueSenderRegistrationCodeInput,
+  DiagnosticsIssueSenderRegistrationCodeOutput,
   MJDiagnosticBundleEntity
 } from '@memberjunction/core-entities';
+import { IssueSenderRegistrationCode } from './intakeEnrolment.js';
 import {
   DiagnosticSessionManager,
   ActiveDiagnosticSession
@@ -49,6 +56,8 @@ import {
   MarkBundleSent
 } from './bundleStore.js';
 import { BundleDownloadUrl, GetDiagnosticsApiRoute } from './apiRoute.js';
+import { EnrolSender, LoadEnrolledSender } from './senderEnrolment.js';
+import { CurrentBrowserSessionId, SessionTargetsCaller } from './clientCapture.js';
 
 function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
   if (!user) return true;
@@ -59,7 +68,7 @@ function isScopeLimitedPrincipal(user: UserInfo | undefined | null): boolean {
 
 export async function AuthorizeDiagnosticsUser(
   user: UserInfo | undefined,
-  authorizationName: 'Diagnostics: Run Sessions' | 'Diagnostics: Send Externally',
+  authorizationName: 'Diagnostics: Run Sessions' | 'Diagnostics: Send Externally' | 'Diagnostics: Manage Intake',
   provider?: IMetadataProvider
 ): Promise<boolean> {
   if (!user || !user.IsActive) {
@@ -112,12 +121,12 @@ export function GetInMemoryDiagnosticBundle(bundleId: string): InMemoryBundleSto
 
 type SessionScopeInput = DiagnosticsStartSessionInput['Scope'];
 
-/** True when a `Users` scope names no one but the given user. */
+/** True when a `Users` scope names no one but the given user. A browser session in the scope only narrows it. */
 function isSelfOnlyScope(scopeType: DiagnosticsStartSessionInput['ScopeType'], scope: SessionScopeInput, user: UserInfo): boolean {
   if (scopeType !== 'Users') return false;
   if (!scope) return true;
   const otherScopes = [scope.apiKeyIds, scope.operationNames, scope.remoteOperationKeys].some((list) => (list?.length ?? 0) > 0);
-  if (otherScopes || scope.browserSessionId) return false;
+  if (otherScopes) return false;
   const userIds = scope.userIds ?? [];
   return userIds.length === 0 || userIds.every((id) => UUIDsEqual(id, user.ID));
 }
@@ -304,21 +313,52 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
     if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) {
       return true;
     }
-    if (input.SessionID) {
-      const s = DiagnosticSessionManager.Instance.GetActiveSession(input.SessionID);
-      if (s && s.scopeType === 'Users' && s.scope.userIds?.includes(user.ID)) {
-        return true;
-      }
+    if (!input.SessionID) {
+      return isSelfServiceAllowed(user, context?.provider);
     }
-    return false;
+    const s = DiagnosticSessionManager.Instance.GetActiveSession(input.SessionID);
+    if (s && SessionTargetsCaller(s, user.ID, CurrentBrowserSessionId())) {
+      return true;
+    }
+    return authorizeSessionAccess(user, input.SessionID, context?.provider);
+  }
+
+  /** Starts a session for the caller alone (this user and browser session) and returns its ID. */
+  private async startCallerSession(input: DiagnosticsUploadClientCaptureInput, context: RemoteOpServerContext): Promise<string> {
+    const browserSessionId = CurrentBrowserSessionId();
+    const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+      {
+        Name: `Client capture ${new Date().toISOString()}`,
+        Reason: input.Reason,
+        ScopeType: 'Users',
+        Scope: browserSessionId ? { userIds: [context.user.ID], browserSessionId } : { userIds: [context.user.ID] },
+        ScrubLiterals: input.ScrubLiterals
+      },
+      context
+    );
+    if (!started.Success || !started.Output) {
+      throw new Error(started.ErrorMessage ?? 'Could not start a diagnostic session for the client capture.');
+    }
+    return started.Output.SessionID;
+  }
+
+  /** Stops a session started for one upload, so it never matches later requests. Build and preview still read it. */
+  private async endCallerSession(sessionId: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    DiagnosticSessionManager.Instance.StopActiveSessionInMemory(sessionId);
+    await EndSessionRow(sessionId, user, provider);
   }
 
   protected override async InternalExecute(
     input: DiagnosticsUploadClientCaptureInput,
     provider: IMetadataProvider,
-    user: UserInfo
+    user: UserInfo,
+    context: RemoteOpServerContext
   ): Promise<DiagnosticsUploadClientCaptureOutput> {
-    const sessionId = input.SessionID ?? crypto.randomUUID();
+    const settings = await DiagnosticsSettings.Load(user, provider);
+    if (!settings.CaptureEnabled) {
+      throw new Error(`Diagnostic capture is disabled on this instance (${DIAGNOSTICS_SETTING_KEYS.CaptureEnabled} is false).`);
+    }
+    const sessionId = input.SessionID ?? (await this.startCallerSession(input, context));
     const mgr = DiagnosticSessionManager.Instance;
 
     for (const log of input.ClientLogs ?? []) {
@@ -345,9 +385,9 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
       mgr.AppendToChunkBuffer(sessionId, 'Client', 'Telemetry', tel);
     }
 
-    // Without a session row the chunks stay in memory for BuildBundle; saving them would break the session foreign key.
-    if (input.SessionID) {
-      void mgr.FlushSessionChunksToDatabase(sessionId, user, provider).catch(() => {});
+    await mgr.FlushSessionChunksToDatabase(sessionId, user, provider);
+    if (!input.SessionID) {
+      await this.endCallerSession(sessionId, user, provider);
     }
 
     return {
@@ -530,7 +570,7 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     }
 
     const settings = await DiagnosticsSettings.Load(user, provider);
-    const collectorUrl = input.CollectorUrlOverride || settings.ExternalCollectorUrl;
+    const collectorUrl = settings.ExternalCollectorUrl;
     if (collectorUrl) {
       assertExternalSendAllowed(settings, input.Destination);
     }
@@ -540,8 +580,8 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     let referenceId: string;
     try {
       referenceId = collectorUrl
-        ? await this.sendToCollector(local, input, collectorUrl)
-        : await this.sendToLocalIntake(local, input);
+        ? await this.sendToCollector(local, input, settings, user)
+        : await this.sendToLocalIntake(local, input, settings);
     } catch (err) {
       await MarkBundleFailed(row, err instanceof Error ? err.message : String(err));
       throw err;
@@ -562,32 +602,50 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     };
   }
 
-  /** Sends the bundle to an external collector and returns its reference ID. */
+  /** Sends the bundle to the enrolled collector at `Diagnostics.External.CollectorUrl` and returns its reference ID. */
   private async sendToCollector(
     local: InMemoryBundleStoreItem,
     input: DiagnosticsSendBundleInput,
-    collectorUrl: string
+    settings: DiagnosticsSettings,
+    user: UserInfo
   ): Promise<string> {
+    const sender = await LoadEnrolledSender(settings, user);
     const result = await DiagnosticSessionManager.Instance.SendBundleToCollector({
-      archiveBytes: local.archiveBytes,
-      bundleId: local.bundleId,
-      scrubLiterals: local.scrubLiterals,
-      collectorBaseUrl: collectorUrl,
-      ingestApiKey: process.env.MJ_DIAGNOSTICS_INGEST_API_KEY,
-      contactInfo: input.ContactInfo,
-      summary: input.Summary
+      ArchiveBytes: local.archiveBytes,
+      BundleID: local.bundleId,
+      ScrubLiterals: local.scrubLiterals,
+      CollectorUrl: settings.ExternalCollectorUrl,
+      Sender: sender,
+      PinnedSigningPublicKeyBase64: settings.ExternalCollectorSigningPublicKeyBase64,
+      EnrolledRecipientPublicKeyBase64: settings.ExternalCollectorPublicKeyBase64,
+      ContactInfo: input.ContactInfo,
+      Summary: input.Summary
     });
-    return result.referenceId;
+    return result.ReferenceID;
   }
 
   /**
    * Sends the bundle through this instance's `DiagnosticIntakeService` (full encryption,
    * verification and malware scan) when no external collector URL is set. Returns the reference ID.
+   * Throws when local intake is disabled or not usable.
    */
-  private async sendToLocalIntake(local: InMemoryBundleStoreItem, input: DiagnosticsSendBundleInput): Promise<string> {
+  private async sendToLocalIntake(
+    local: InMemoryBundleStoreItem,
+    input: DiagnosticsSendBundleInput,
+    settings: DiagnosticsSettings
+  ): Promise<string> {
     const intake = DiagnosticIntakeService.Instance;
+    if (!intake.Enabled && settings.IntakeEnabled) {
+      throw new Error(
+        `Local intake is enabled (${DIAGNOSTICS_SETTING_KEYS.IntakeEnabled}) but not usable: its key ` +
+          `(${DIAGNOSTICS_SETTING_KEYS.IntakeKeyPairCredentialID}) did not load at startup. Check the server log.`
+      );
+    }
     if (!intake.Enabled) {
-      intake.Configure({ enabled: true });
+      throw new Error(
+        `No collector is configured (${DIAGNOSTICS_SETTING_KEYS.ExternalCollectorUrl} is empty) and local intake is disabled ` +
+          `(${DIAGNOSTICS_SETTING_KEYS.IntakeEnabled}). Set a collector and enrol, or enable local intake.`
+      );
     }
     const pk = await intake.GetPublicKeyDescriptor();
     const plaintextSha256 = crypto.createHash('sha256').update(local.archiveBytes).digest('hex');
@@ -623,5 +681,50 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
       throw new Error(completed.reason ?? 'Local intake rejected bundle during verification');
     }
     return completed.referenceId;
+  }
+}
+
+/** Enrols this installation with the collector at `Diagnostics.External.CollectorUrl`. See `EnrolSender`. */
+@RegisterClass(BaseRemotableOperation, 'Diagnostics.EnrolSender')
+export class DiagnosticsEnrolSenderServerOperation extends DiagnosticsEnrolSenderOperation {
+  protected override async Authorize(
+    _input: DiagnosticsEnrolSenderInput,
+    user: UserInfo,
+    context?: RemoteOpServerContext
+  ): Promise<boolean> {
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Manage Intake', context?.provider);
+  }
+
+  protected override async InternalExecute(
+    input: DiagnosticsEnrolSenderInput,
+    provider: IMetadataProvider,
+    user: UserInfo
+  ): Promise<DiagnosticsEnrolSenderOutput> {
+    const result = await EnrolSender({ RegistrationCode: input.RegistrationCode, ContextUser: user, Provider: provider });
+    return { InstallID: result.InstallID, EnrolledAt: result.EnrolledAt };
+  }
+}
+
+@RegisterClass(BaseRemotableOperation, 'Diagnostics.IssueSenderRegistrationCode')
+export class DiagnosticsIssueSenderRegistrationCodeServerOperation extends DiagnosticsIssueSenderRegistrationCodeOperation {
+  protected override async Authorize(
+    _input: DiagnosticsIssueSenderRegistrationCodeInput,
+    user: UserInfo,
+    context?: RemoteOpServerContext
+  ): Promise<boolean> {
+    return AuthorizeDiagnosticsUser(user, 'Diagnostics: Manage Intake', context?.provider);
+  }
+
+  /** Issues a one-time code for the registration. The plain code is returned once and never stored. */
+  protected override async InternalExecute(
+    input: DiagnosticsIssueSenderRegistrationCodeInput,
+    provider: IMetadataProvider,
+    user: UserInfo
+  ): Promise<DiagnosticsIssueSenderRegistrationCodeOutput> {
+    if (!input.RegistrationID) {
+      throw new Error('RegistrationID is required.');
+    }
+    const issued = await IssueSenderRegistrationCode(input.RegistrationID, { ContextUser: user, Provider: provider });
+    return { Code: issued.Code, ExpiresAt: issued.ExpiresAt.toISOString() };
   }
 }

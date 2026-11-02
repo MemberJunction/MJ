@@ -1,11 +1,17 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import {
+    IMetadataProvider,
+    LogError,
+    Metadata,
     RegisterLogSink,
     TelemetryManager,
     TelemetryEvent,
 } from '@memberjunction/core';
 import {
+    DiagnosticsStartSessionOperation,
+    DiagnosticsStopSessionOperation,
+    DiagnosticsGetMySessionStatusOperation,
     DiagnosticsUploadClientCaptureOperation,
     DiagnosticsBuildBundleOperation,
     DiagnosticsSendBundleOperation,
@@ -28,6 +34,20 @@ import {
     VerifyBundleArchive,
     AnalyzeDiagnosticBundleData,
 } from '@memberjunction/diagnostics';
+import {
+    GraphQLResponseHeaders,
+    RegisterNetworkDiagnosticObserver,
+    RegisterResponseHeaderObserver,
+} from '@memberjunction/graphql-dataprovider';
+import {
+    BrowserSessionIdOf,
+    DIAGNOSTIC_TRIGGER_HEADER,
+    SelfSessionScope,
+    SetDiagnosticSessionHeader,
+    ToNetworkEntry,
+    UploadFailureMessage,
+    UserCanRunDiagnosticSessions,
+} from './live-recording';
 
 export const MJ_DIAGNOSTICS_IDB_NAME = 'MJ_Diagnostics';
 
@@ -70,7 +90,6 @@ export interface ClientBundleBuildResult {
 export interface SubmitBundleToSupportOptions {
     scrubberProfile?: DiagnosticScrubberProfile;
     destination?: DiagnosticsSendBundleInput['Destination'];
-    collectorUrlOverride?: string;
     contactInfo?: string;
     note?: string;
     ticketNumber?: string;
@@ -132,6 +151,21 @@ export class MJDiagnosticsService {
     private idbFlushTimer: ReturnType<typeof setTimeout> | null = null;
     private sessionIdHook: ((sessionId: string | null) => void) | null = null;
     private readonly flushedTriggerSessions = new Set<string>();
+    private unregisterNetworkObserver: (() => void) | null = null;
+    private unregisterResponseHeaders: (() => void) | null = null;
+    /** Server session this service started for the current live recording; stopped with the recording. */
+    private ownedServerSessionId: string | null = null;
+    /** Server session the next Submit uploads to; `null` for a client-only recording. */
+    private submitSessionId: string | null = null;
+    private recordingProvider: IMetadataProvider | null = null;
+    private pendingStop: Promise<void> | null = null;
+
+    /** Provider for remote operations. Defaults to the global provider when not set. */
+    public Provider: IMetadataProvider | null = null;
+
+    public get ProviderToUse(): IMetadataProvider {
+        return this.Provider ?? Metadata.Provider;
+    }
 
     public get RecordingState$(): Observable<ActiveRecordingState> {
         return this.recordingStateSubject.asObservable();
@@ -194,6 +228,10 @@ export class MJDiagnosticsService {
             this.unsubscribeTelemetry = TelemetryManager.Instance.OnEvent((event) => {
                 this.RecordTelemetryEvent(event);
             });
+
+            this.unregisterResponseHeaders = RegisterResponseHeaderObserver((headers) => {
+                this.onResponseHeaders(headers);
+            });
         });
     }
 
@@ -213,6 +251,13 @@ export class MJDiagnosticsService {
             clearTimeout(this.idbFlushTimer);
             this.idbFlushTimer = null;
         }
+        this.unregisterResponseHeaders?.();
+        this.unregisterResponseHeaders = null;
+        this.unregisterNetworkObserver?.();
+        this.unregisterNetworkObserver = null;
+        if (this.ownedServerSessionId) {
+            this.StopRecording();
+        }
         this.initialized = false;
     }
 
@@ -222,12 +267,46 @@ export class MJDiagnosticsService {
 
     public CloseReportProblemDialog(): void {
         this.reportDialogOpenSubject.next(false);
+        if (!this.recordingStateSubject.value.isRecording) {
+            this.submitSessionId = null;
+        }
     }
 
     /**
-     * Starts a client/server recording session and binds the session ID header hook.
+     * Starts a live recording. When the user holds `Diagnostics: Run Sessions` or self-service
+     * recording is on, a server session for this user and browser session is started, every request
+     * carries its ID and the network waterfall is recorded. Otherwise the recording is client-only
+     * under a local `rec-…` ID that is never sent to the server. Returns the recording's session ID.
+     */
+    public async StartLiveRecording(scrubberProfile: DiagnosticScrubberProfile = DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE): Promise<string> {
+        if (this.recordingStateSubject.value.isRecording) {
+            throw new Error('A recording is already running. Stop it before you start a new one.');
+        }
+        const provider = this.ProviderToUse;
+        await this.pendingStop;
+        this.ensureNetworkObserver();
+        const serverSessionId = await this.startServerSession(provider);
+        if (serverSessionId) {
+            this.ensureSessionHeaderHook(provider);
+            this.flushedTriggerSessions.add(serverSessionId);
+        }
+        const sessionId = serverSessionId ?? `rec-${Date.now()}`;
+        this.beginRecording(sessionId, scrubberProfile, serverSessionId);
+        this.ownedServerSessionId = serverSessionId;
+        this.recordingProvider = provider;
+        return sessionId;
+    }
+
+    /**
+     * Starts recording under an existing server session ID and binds the session ID header hook.
      */
     public StartRecording(sessionId: string, scrubberProfile: DiagnosticScrubberProfile = DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE): void {
+        this.beginRecording(sessionId, scrubberProfile, sessionId);
+    }
+
+    /** Sets the recording state; `serverSessionId` goes in the session header and is the Submit target. */
+    private beginRecording(sessionId: string, scrubberProfile: DiagnosticScrubberProfile, serverSessionId: string | null): void {
+        this.submitSessionId = serverSessionId;
         const nextState: ActiveRecordingState = {
             isRecording: true,
             sessionId,
@@ -237,13 +316,78 @@ export class MJDiagnosticsService {
         };
         this.recordingStateSubject.next(nextState);
         if (this.sessionIdHook) {
-            this.sessionIdHook(sessionId);
+            this.sessionIdHook(serverSessionId);
         }
         this.scheduleIdbFlush();
     }
 
+    /** Starts a server session for this user and browser session when allowed; otherwise returns `null`. */
+    private async startServerSession(provider: IMetadataProvider): Promise<string | null> {
+        if (!UserCanRunDiagnosticSessions(provider) && !(await this.selfServiceAllowed(provider))) {
+            return null;
+        }
+        const result = await new DiagnosticsStartSessionOperation().Execute(
+            {
+                Name: `Live recording ${new Date().toISOString()}`,
+                Reason: 'UserLiveRecording',
+                ScopeType: 'Users',
+                Scope: SelfSessionScope(provider),
+            },
+            { provider },
+        );
+        if (!result.Success || !result.Output) {
+            throw new Error(result.ErrorMessage ?? 'Failed to start a diagnostic session on the server');
+        }
+        return result.Output.SessionID;
+    }
+
+    private async selfServiceAllowed(provider: IMetadataProvider): Promise<boolean> {
+        const status = await new DiagnosticsGetMySessionStatusOperation().Execute(
+            { BrowserSessionID: BrowserSessionIdOf(provider) },
+            { provider },
+        );
+        return Boolean(status.Success && status.Output?.SelfServiceRecordingAllowed);
+    }
+
+    private async stopServerSession(sessionId: string, provider: IMetadataProvider): Promise<void> {
+        const result = await new DiagnosticsStopSessionOperation().Execute({ SessionID: sessionId }, { provider });
+        if (!result.Success) {
+            LogError(`Could not stop diagnostic session '${sessionId}': ${result.ErrorMessage ?? 'unknown error'}`);
+        }
+    }
+
     /**
-     * Stops the active recording session and unbinds the session ID header hook.
+     * Registers a header hook that sets `x-mj-diagnostic-session` on the provider, when no hook is registered.
+     * The service has one hook slot, so the hook stays bound to the first provider it was registered for.
+     */
+    private ensureSessionHeaderHook(provider: IMetadataProvider): void {
+        if (!this.sessionIdHook) {
+            this.RegisterSessionHeaderHook((id) => SetDiagnosticSessionHeader(provider, id));
+        }
+    }
+
+    /** Records every GraphQL network operation in the waterfall buffer. */
+    private ensureNetworkObserver(): void {
+        if (!this.unregisterNetworkObserver) {
+            this.unregisterNetworkObserver = RegisterNetworkDiagnosticObserver((observation) => {
+                this.RecordNetworkEntry(ToNetworkEntry(observation));
+            });
+        }
+    }
+
+    /** Uploads the client capture when a response carries `X-MJ-Diagnostic-Trigger`. */
+    private onResponseHeaders(headers: GraphQLResponseHeaders): void {
+        const sessionId = headers.get(DIAGNOSTIC_TRIGGER_HEADER);
+        if (sessionId) {
+            this.HandleServerTriggerHeader(sessionId).catch((err) => {
+                LogError(`Diagnostic trigger upload failed: ${err instanceof Error ? err.message : String(err)}`);
+            });
+        }
+    }
+
+    /**
+     * Stops the active recording, unbinds the session ID header hook and stops the server
+     * session this service started for it.
      */
     public StopRecording(): void {
         const nextState: ActiveRecordingState = {
@@ -257,6 +401,12 @@ export class MJDiagnosticsService {
         if (this.sessionIdHook) {
             this.sessionIdHook(null);
         }
+        const owned = this.ownedServerSessionId;
+        if (owned) {
+            this.ownedServerSessionId = null;
+            this.pendingStop = this.stopServerSession(owned, this.recordingProvider ?? this.ProviderToUse);
+        }
+        this.submitSessionId = null;
     }
 
     /**
@@ -265,7 +415,9 @@ export class MJDiagnosticsService {
      */
     public StopAndPackageRecording(): void {
         const stopped = this.recordingStateSubject.value;
+        const packagedSessionId = this.submitSessionId;
         this.StopRecording();
+        this.submitSessionId = packagedSessionId;
         this.OpenReportProblemDialog();
         this.packageRequestSubject.next(stopped);
     }
@@ -318,7 +470,7 @@ export class MJDiagnosticsService {
             ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
-        });
+        }, { provider: this.ProviderToUse });
         return result.Success;
     }
 
@@ -333,7 +485,9 @@ export class MJDiagnosticsService {
     ): Promise<SubmitBundleToSupportResult> {
         const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
         const scrubLiterals = scrubberProfile === 'Standard';
-        const activeSessionId = this.recordingStateSubject.value.sessionId ?? undefined;
+        const provider = this.ProviderToUse;
+        await this.pendingStop;
+        const activeSessionId = this.submitSessionId ?? undefined;
 
         const uploadOp = new DiagnosticsUploadClientCaptureOperation();
         const uploadRes = await uploadOp.Execute({
@@ -353,20 +507,24 @@ export class MJDiagnosticsService {
             ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
-        });
+        }, { provider });
 
         if (!uploadRes.Success || !uploadRes.Output) {
-            throw new Error(uploadRes.ErrorMessage ?? 'Failed to upload client diagnostic capture');
+            throw new Error(UploadFailureMessage(uploadRes, activeSessionId));
         }
 
         const resolvedSessionId = uploadRes.Output.SessionID;
+        this.flushedTriggerSessions.add(resolvedSessionId);
+        if (!this.recordingStateSubject.value.isRecording) {
+            this.submitSessionId = null;
+        }
         const buildOp = new DiagnosticsBuildBundleOperation();
         const buildRes = await buildOp.Execute({
             SessionID: resolvedSessionId,
             Name: options.ticketNumber ? `Support Bundle (${options.ticketNumber})` : 'Support Diagnostic Bundle',
             Description: options.note,
             ScrubLiterals: scrubLiterals,
-        });
+        }, { provider });
 
         if (!buildRes.Success || !buildRes.Output || buildRes.Output.Status !== 'Ready') {
             throw new Error(buildRes.ErrorMessage ?? 'Failed to assemble diagnostic bundle on server');
@@ -377,10 +535,9 @@ export class MJDiagnosticsService {
         const sendRes = await sendOp.Execute({
             BundleID: buildRes.Output.BundleID,
             Destination: destination,
-            CollectorUrlOverride: options.collectorUrlOverride,
             ContactInfo: options.contactInfo,
             Summary: options.note ?? options.ticketNumber,
-        });
+        }, { provider });
 
         if (!sendRes.Success || !sendRes.Output) {
             return {

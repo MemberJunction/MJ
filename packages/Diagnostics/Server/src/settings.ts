@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
 
@@ -17,8 +18,16 @@ export const DIAGNOSTICS_SETTING_KEYS = {
   IntakeDecryptOnIngest: 'Diagnostics.Intake.DecryptOnIngest',
   IntakeRetentionDays: 'Diagnostics.Intake.RetentionDays',
   IntakeOnBundleReceivedActionID: 'Diagnostics.Intake.OnBundleReceivedActionID',
-  IntakeKeyPairCredentialID: 'Diagnostics.Intake.KeyPairCredentialID'
+  IntakeKeyPairCredentialID: 'Diagnostics.Intake.KeyPairCredentialID',
+  ExternalSenderCredentialID: 'Diagnostics.External.SenderCredentialID',
+  ExternalSenderKeyID: 'Diagnostics.External.SenderKeyID',
+  ExternalCollectorPublicKeyBase64: 'Diagnostics.External.CollectorPublicKeyBase64',
+  ExternalCollectorSigningPublicKeyBase64: 'Diagnostics.External.CollectorSigningPublicKeyBase64',
+  InstallID: 'Diagnostics.InstallID'
 } as const;
+
+/** A `Diagnostics.*` feature key. */
+export type DiagnosticsSettingKey = (typeof DIAGNOSTICS_SETTING_KEYS)[keyof typeof DIAGNOSTICS_SETTING_KEYS];
 
 const keys = DIAGNOSTICS_SETTING_KEYS;
 
@@ -118,6 +127,51 @@ export class DiagnosticsSettings {
 
   public get IntakeKeyPairCredentialID(): string {
     return this.getString(keys.IntakeKeyPairCredentialID);
+  }
+
+  /** ID of the `MJ: Credentials` row that holds this installation's Ed25519 sender key. */
+  public get ExternalSenderCredentialID(): string {
+    return this.getString(keys.ExternalSenderCredentialID);
+  }
+
+  /** Key ID the collector knows the sender key by. */
+  public get ExternalSenderKeyID(): string {
+    return this.getString(keys.ExternalSenderKeyID);
+  }
+
+  /** Collector X25519 public key (SPKI base64) recorded at enrolment. */
+  public get ExternalCollectorPublicKeyBase64(): string {
+    return this.getString(keys.ExternalCollectorPublicKeyBase64);
+  }
+
+  /** Collector Ed25519 signing public key (SPKI base64) pinned at enrolment. */
+  public get ExternalCollectorSigningPublicKeyBase64(): string {
+    return this.getString(keys.ExternalCollectorSigningPublicKeyBase64);
+  }
+
+  /** Stable ID of this installation. Empty until `EnsureInstallID` saves one. */
+  public get InstallID(): string {
+    return this.getString(keys.InstallID);
+  }
+
+  /** Saves a setting value through `InstanceConfigEngine`. Throws when the save fails. */
+  public async Save(key: DiagnosticsSettingKey, value: string, contextUser?: UserInfo): Promise<void> {
+    const saved = await this.engine.Set(key, value, contextUser);
+    if (!saved) {
+      throw new Error(`Could not save the instance configuration '${key}'. Check that the row exists.`);
+    }
+  }
+
+  /** Returns the stored install ID, generating and saving a UUID when it is empty. */
+  public async EnsureInstallID(contextUser?: UserInfo): Promise<string> {
+    const existing = this.InstallID;
+    if (existing) {
+      return existing;
+    }
+    const generated = crypto.randomUUID();
+    await this.Save(keys.InstallID, generated, contextUser);
+    // Another caller may have saved an ID at the same time; the stored value wins.
+    return this.InstallID || generated;
   }
 
   private getString(key: string): string {

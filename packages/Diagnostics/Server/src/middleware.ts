@@ -17,17 +17,14 @@ import {
   DiagnosticSessionManager,
   RunWithServerDiagnosticContext
 } from './sessionManager.js';
-import {
-  DiagnosticIntakeService,
-  IntakeCreateBundleRequest,
-  IntakeCompleteRequest,
-  MAX_INTAKE_BUNDLE_BYTES
-} from './intakeService.js';
+import { DiagnosticIntakeService } from './intakeService.js';
+import { RegisterIntakeRoutes } from './intakeRoutes.js';
 import { GetInMemoryDiagnosticBundle } from './remoteOperations.js';
 import { DiagnosticsSettings } from './settings.js';
 import { ConfigureIntakeFromSettings } from './intakeStartup.js';
 import { SetDiagnosticsApiRoute } from './apiRoute.js';
 import { RestoreActiveSessions } from './sessionStore.js';
+import { SetClientCaptureTriggerHeader } from './clientCapture.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 export function ParseTraceparentHeader(headerValue?: string): { traceId: string; spanId: string } {
@@ -197,7 +194,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
   }
 
   public override GetPostAuthMiddleware(): MiddlewareList {
-    const postAuthHandler: MiddlewareHandler = (req: ExpressReq, _res: ExpressRes, next: ExpressNext) => {
+    const postAuthHandler: MiddlewareHandler = (req: ExpressReq, res: ExpressRes, next: ExpressNext) => {
       const ctx = GetDiagnosticContext();
       if (ctx && DiagnosticsSettings.Current().CaptureEnabled) {
         const reqWithUser = req as ExpressReq & {
@@ -210,7 +207,8 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
         const userId = reqWithUser.userPayload?.userRecord?.ID;
         const apiKeyId = reqWithUser.userPayload?.apiKeyId;
         const companyId = reqWithUser.userPayload?.companyId;
-        DiagnosticSessionManager.Instance.MatchPostAuth(ctx, userId, apiKeyId, companyId);
+        const matched = DiagnosticSessionManager.Instance.MatchPostAuth(ctx, userId, apiKeyId, companyId);
+        SetClientCaptureTriggerHeader(res, matched);
       }
       next();
     };
@@ -267,117 +265,6 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     );
 
     // 2. Standard MJAPI Intake routes (/diagnostics/intake/v1)
-    app.get(
-      this.route('/diagnostics/intake/v1/public-key'),
-      async (_req: ExpressReq, res: ExpressRes) => {
-        if (!DiagnosticIntakeService.Instance.Enabled) {
-          res.status(404).json({ error: 'Diagnostic intake is disabled on this instance.' });
-          return;
-        }
-        const descriptor = await DiagnosticIntakeService.Instance.GetPublicKeyDescriptor();
-        res.status(200).json(descriptor);
-      }
-    );
-
-    app.post(
-      this.route('/diagnostics/intake/v1/bundles'),
-      (req: ExpressReq, res: ExpressRes) => {
-        const intake = DiagnosticIntakeService.Instance;
-        if (!intake.Enabled) {
-          res.status(404).json({ error: 'Diagnostic intake is disabled on this instance.' });
-          return;
-        }
-        const apiKey = req.headers['x-api-key'];
-        const tokenStr = Array.isArray(apiKey) ? apiKey[0] : apiKey;
-        if (!intake.ValidateIngestAuth(tokenStr)) {
-          res.status(401).json({ error: 'Missing or invalid ingest API key (requires diagnostics:ingest scope).' });
-          return;
-        }
-        const body = req.body as IntakeCreateBundleRequest;
-        const callerKey = `${req.ip ?? 'unknown'}:${body?.installId ?? 'unknown'}`;
-        if (!intake.CheckRateLimit(callerKey)) {
-          res.status(429).json({ error: 'Diagnostic intake rate limit exceeded.' });
-          return;
-        }
-        try {
-          const created = intake.InitiateBundleIntake(body);
-          res.status(201).json(created);
-        } catch (err) {
-          res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-        }
-      }
-    );
-
-    app.put(
-      this.route('/diagnostics/intake/v1/bundles/:referenceId/payload'),
-      (req: ExpressReq, res: ExpressRes) => {
-        const intake = DiagnosticIntakeService.Instance;
-        if (!intake.Enabled) {
-          res.status(404).json({ error: 'Diagnostic intake is disabled on this instance.' });
-          return;
-        }
-        const apiKey = req.headers['x-api-key'];
-        const tokenStr = Array.isArray(apiKey) ? apiKey[0] : apiKey;
-        if (!intake.ValidateIngestAuth(tokenStr)) {
-          res.status(401).json({ error: 'Unauthorized' });
-          return;
-        }
-
-        const rawReferenceId = req.params['referenceId'];
-        const referenceId = Array.isArray(rawReferenceId) ? rawReferenceId[0] ?? '' : rawReferenceId ?? '';
-        const chunks: Buffer[] = [];
-        let totalBytes = 0;
-        let aborted = false;
-
-        req.on('data', (chunk: Buffer) => {
-          totalBytes += chunk.byteLength;
-          if (totalBytes > MAX_INTAKE_BUNDLE_BYTES) {
-            aborted = true;
-            res.status(413).json({ error: 'Payload exceeds 25 MiB limit.' });
-            req.destroy();
-            return;
-          }
-          chunks.push(chunk);
-        });
-
-        req.on('end', () => {
-          if (aborted) return;
-          const payload = new Uint8Array(Buffer.concat(chunks));
-          void intake.UploadEncryptedPayload(referenceId, payload).then((result) => {
-            if (!result.accepted) {
-              res.status(400).json(result);
-            } else {
-              res.status(200).json({ accepted: true, referenceId });
-            }
-          });
-        });
-      }
-    );
-
-    app.post(
-      this.route('/diagnostics/intake/v1/bundles/:referenceId/complete'),
-      async (req: ExpressReq, res: ExpressRes) => {
-        const intake = DiagnosticIntakeService.Instance;
-        if (!intake.Enabled) {
-          res.status(404).json({ error: 'Diagnostic intake is disabled on this instance.' });
-          return;
-        }
-        const apiKey = req.headers['x-api-key'];
-        const tokenStr = Array.isArray(apiKey) ? apiKey[0] : apiKey;
-        if (!intake.ValidateIngestAuth(tokenStr)) {
-          res.status(401).json({ error: 'Unauthorized' });
-          return;
-        }
-        const rawReferenceId = req.params['referenceId'];
-        const referenceId = Array.isArray(rawReferenceId) ? rawReferenceId[0] ?? '' : rawReferenceId ?? '';
-        const body = req.body as IntakeCompleteRequest;
-        const result = await intake.CompleteBundleIntake(referenceId, body);
-        if (result.status === 'rejected') {
-          res.status(422).json(result);
-        } else {
-          res.status(200).json(result);
-        }
-      }
-    );
+    RegisterIntakeRoutes(app, (subpath) => this.route(subpath));
   }
 }

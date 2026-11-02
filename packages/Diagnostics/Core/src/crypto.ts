@@ -143,6 +143,18 @@ export async function VerifyRecipientPublicKeySignature(
     }
 }
 
+/**
+ * Builds the string the envelope sender signature covers:
+ * `mjdiag-sender-v1:${recipientKeyId}:${ephemeralPublicKeyBase64}:${manifestSha256}`.
+ */
+export function BuildEnvelopeSenderSignatureString(
+    recipientKeyId: string,
+    ephemeralPublicKeyBase64: string,
+    manifestSha256?: string
+): string {
+    return `mjdiag-sender-v1:${recipientKeyId}:${ephemeralPublicKeyBase64}:${manifestSha256 ?? ''}`;
+}
+
 export interface EncryptDiagnosticBundleOptions {
     recipientKeyId: string;
     recipientPublicKeyBase64: string;
@@ -228,7 +240,7 @@ export async function EncryptDiagnosticBundle(
             ['sign']
         );
         const sigInput = new TextEncoder().encode(
-            `mjdiag-sender-v1:${options.recipientKeyId}:${ephemeralPublicKeyBase64}:${options.manifestSha256 ?? ''}`
+            BuildEnvelopeSenderSignatureString(options.recipientKeyId, ephemeralPublicKeyBase64, options.manifestSha256)
         );
         const sigBytes = new Uint8Array(await subtle.sign({ name: 'Ed25519' }, senderKey, toArrayBuffer(sigInput)));
         senderSignatureBase64 = BytesToBase64(sigBytes);
@@ -426,7 +438,7 @@ export async function DecryptDiagnosticBundle(
                 ['verify']
             );
             const sigInput = new TextEncoder().encode(
-                `mjdiag-sender-v1:${header.recipientKeyId}:${header.ephemeralPublicKeyBase64}:${header.manifestSha256 ?? ''}`
+                BuildEnvelopeSenderSignatureString(header.recipientKeyId, header.ephemeralPublicKeyBase64, header.manifestSha256)
             );
             senderVerified = await subtle.verify(
                 { name: 'Ed25519' },

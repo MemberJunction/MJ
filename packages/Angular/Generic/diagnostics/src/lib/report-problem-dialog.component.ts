@@ -228,11 +228,16 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
         }
     }
 
-    public OnStartRecording(): void {
-        const sessionId = `rec-${Date.now()}`;
-        this.diagnosticsService.StartRecording(sessionId, this.ScrubberProfile);
-        this.RecordingStarted.emit(sessionId);
-        this.OnClose();
+    public async OnStartRecording(): Promise<void> {
+        this.ErrorMessage = null;
+        try {
+            const sessionId = await this.diagnosticsService.StartLiveRecording(this.ScrubberProfile);
+            this.RecordingStarted.emit(sessionId);
+            this.OnClose();
+        } catch (err) {
+            this.ErrorMessage = `Start recording failed: ${errorText(err)}`;
+            this.cdr.markForCheck();
+        }
     }
 
     /** Shows the dialog and builds a snapshot for a recording that was just stopped. */

@@ -69,6 +69,55 @@ export function RegisterNetworkDiagnosticObserver(observer: NetworkDiagnosticObs
     };
 }
 
+/** The headers of a GraphQL HTTP response. */
+export interface GraphQLResponseHeaders {
+    get(name: string): string | null;
+}
+
+export type ResponseHeaderObserver = (headers: GraphQLResponseHeaders) => void;
+
+const _responseHeaderObservers = new Set<ResponseHeaderObserver>();
+
+/**
+ * Registers a callback called with the headers of each GraphQL HTTP response. Returns an
+ * unsubscribe function. An observer that throws does not affect the request or other observers.
+ */
+export function RegisterResponseHeaderObserver(observer: ResponseHeaderObserver): () => void {
+    _responseHeaderObservers.add(observer);
+    return () => {
+        _responseHeaderObservers.delete(observer);
+    };
+}
+
+type MaybeHeaders = { get?: (name: string) => string | null };
+
+/**
+ * Returns the response's headers when it has a `headers.get` function. A failed request
+ * (graphql-request `ClientError`) carries its response on `error.response`.
+ */
+function responseHeadersOf(response: unknown): GraphQLResponseHeaders | null {
+    if (!response || typeof response !== 'object') {
+        return null;
+    }
+    const source = response instanceof Error ? (response as { response?: { headers?: MaybeHeaders } }).response : response;
+    const headers = (source as { headers?: MaybeHeaders } | undefined)?.headers;
+    return headers && typeof headers.get === 'function' ? (headers as GraphQLResponseHeaders) : null;
+}
+
+function notifyResponseHeaderObservers(response: unknown): void {
+    const headers = _responseHeaderObservers.size > 0 ? responseHeadersOf(response) : null;
+    if (!headers) {
+        return;
+    }
+    for (const observer of _responseHeaderObservers) {
+        try {
+            observer(headers);
+        } catch {
+            // an observer failure never breaks the request
+        }
+    }
+}
+
 function generateHexId(byteCount: number): string {
     const g = globalThis as { crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array } };
     if (g.crypto && typeof g.crypto.getRandomValues === 'function') {
@@ -4171,6 +4220,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             headers,
             responseMiddleware: (response) => {
                 this.inspectResponseCacheHeaders(response);
+                notifyResponseHeaderObservers(response);
             },
         });
 

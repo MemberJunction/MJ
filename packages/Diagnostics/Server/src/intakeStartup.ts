@@ -5,13 +5,25 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { DiagnosticKeyPair } from '@memberjunction/diagnostics';
 import { DiagnosticIntakeService, IDiagnosticStorageBridge, OnBundleReceivedHook } from './intakeService.js';
 import { MJStorageIntakeBridge } from './intakeStorageBridge.js';
+import { KeyPairMatches } from './intakeKeys.js';
 import { DIAGNOSTICS_SETTING_KEYS, DiagnosticsSettings } from './settings.js';
 
-/** Values the `Diagnostics.Intake.KeyPairCredentialID` credential holds. */
+/**
+ * Values the `Diagnostics.Intake.KeyPairCredentialID` credential holds: the X25519 recipient key
+ * pair and the Ed25519 signing key pair that signs the recipient public key.
+ */
 interface IntakeKeyCredentialValues extends Record<string, string> {
   keyId: string;
   publicKey: string;
   privateKey: string;
+  signingPublicKey: string;
+  signingPrivateKey: string;
+}
+
+/** The recipient and signing key pairs the intake loads from its credential. */
+interface IntakeKeys {
+  Recipient: DiagnosticKeyPair;
+  Signing: DiagnosticKeyPair;
 }
 
 /**
@@ -29,8 +41,8 @@ export async function ConfigureIntakeFromSettings(
     intake.Configure({ enabled: false });
     return;
   }
-  const keyPair = await loadIntakeKeyPair(settings.IntakeKeyPairCredentialID, contextUser);
-  if (!keyPair) {
+  const keys = await loadIntakeKeys(settings.IntakeKeyPairCredentialID, contextUser);
+  if (!keys) {
     intake.Configure({ enabled: false });
     return;
   }
@@ -42,18 +54,21 @@ export async function ConfigureIntakeFromSettings(
     intake.Configure({ enabled: false });
     return;
   }
-  intake.RegisterKeyPair(keyPair, undefined, true);
+  intake.RegisterKeyPair(keys.Recipient, undefined, true);
+  intake.RegisterSigningKeyPair(keys.Signing);
   intake.Configure({
     enabled: true,
     decryptOnIngest: settings.IntakeDecryptOnIngest,
     retentionDays: settings.IntakeRetentionDays,
     storageBridge,
-    onBundleReceivedHook: createOnBundleReceivedHook(settings.IntakeOnBundleReceivedActionID, contextUser)
+    onBundleReceivedHook: createOnBundleReceivedHook(settings.IntakeOnBundleReceivedActionID, contextUser),
+    contextUser,
+    provider
   });
-  LogStatus(`Diagnostics intake enabled with receiver key '${keyPair.keyId}'.`);
+  LogStatus(`Diagnostics intake enabled with receiver key '${keys.Recipient.keyId}'.`);
 }
 
-async function loadIntakeKeyPair(credentialId: string, contextUser?: UserInfo): Promise<DiagnosticKeyPair | null> {
+async function loadIntakeKeys(credentialId: string, contextUser?: UserInfo): Promise<IntakeKeys | null> {
   if (!credentialId) {
     LogWarning(
       `${DIAGNOSTICS_SETTING_KEYS.IntakeEnabled} is true but ${DIAGNOSTICS_SETTING_KEYS.IntakeKeyPairCredentialID} is empty; diagnostic intake stays disabled.`,
@@ -68,7 +83,7 @@ async function loadIntakeKeyPair(credentialId: string, contextUser?: UserInfo): 
       contextUser,
       subsystem: 'Diagnostics Intake'
     });
-    return toKeyPair(resolved.values);
+    return toIntakeKeys(resolved.values);
   } catch (err) {
     LogError(
       `Diagnostic intake stays disabled: the receiver key credential '${credentialId}' could not be loaded: ${err instanceof Error ? err.message : String(err)}`
@@ -77,15 +92,26 @@ async function loadIntakeKeyPair(credentialId: string, contextUser?: UserInfo): 
   }
 }
 
-function toKeyPair(values: IntakeKeyCredentialValues): DiagnosticKeyPair {
+/**
+ * Builds the key pairs from the credential values. Throws when a value is missing or when a
+ * public key is not the one derived from its private key.
+ */
+function toIntakeKeys(values: IntakeKeyCredentialValues): IntakeKeys {
   if (!values.keyId || !values.publicKey || !values.privateKey) {
     throw new Error('the credential must hold keyId, publicKey and privateKey');
   }
+  if (!values.signingPublicKey || !values.signingPrivateKey) {
+    throw new Error('the credential must hold signingPublicKey and signingPrivateKey (the Ed25519 key that signs the public key)');
+  }
+  if (!KeyPairMatches(values.publicKey, values.privateKey)) {
+    throw new Error('publicKey is not the public key of privateKey');
+  }
+  if (!KeyPairMatches(values.signingPublicKey, values.signingPrivateKey)) {
+    throw new Error('signingPublicKey is not the public key of signingPrivateKey');
+  }
   return {
-    algorithm: 'X25519',
-    keyId: values.keyId,
-    publicKeyBase64: values.publicKey,
-    privateKeyBase64: values.privateKey
+    Recipient: { algorithm: 'X25519', keyId: values.keyId, publicKeyBase64: values.publicKey, privateKeyBase64: values.privateKey },
+    Signing: { algorithm: 'Ed25519', keyId: `${values.keyId}-signing`, publicKeyBase64: values.signingPublicKey, privateKeyBase64: values.signingPrivateKey }
   };
 }
 

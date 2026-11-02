@@ -119,7 +119,10 @@ Users and administrators can launch diagnostic capture or download a `.mjdiag` b
   - Directly from `<mj-diagnostic-report-problem-dialog>`, clicking **"Submit to Support"** executes:
     1. `Diagnostics.UploadClientCapture` — uploads the scrubbed client flight-recorder seed to the server.
     2. `Diagnostics.BuildBundle` — merges client and server chunks, runs the 9 automated diagnostic rules, and verifies the `.mjdiag` archive.
-    3. `Diagnostics.SendBundle` — encrypts the `.mjdiag` archive with `MJDB` v1 hybrid encryption (`X25519` + `AES-256-GCM` with header AAD) and uploads it to the configured collector endpoint, displaying the returned `diagref_...` Support Reference ID in the dialog.
+    3. `Diagnostics.SendBundle` — encrypts the `.mjdiag` archive with `MJDB` v1 hybrid encryption (`X25519` + `AES-256-GCM` with header AAD) and sends it, displaying the returned `diagref_...` Support Reference ID in the dialog. The server picks one path (see [Sending to a Collector](#sending-to-a-collector-enrolment-and-signed-requests)):
+       - `Diagnostics.External.CollectorUrl` is set → send to that collector. The installation must be enrolled; otherwise the send fails with "This installation is not enrolled with the collector".
+       - No collector URL and local intake enabled (`Diagnostics.Intake.Enabled` and its key loaded) → hand the bundle to this server's own `DiagnosticIntakeService` in process.
+       - Neither → the send fails with a message that names both settings. A fresh server with default settings takes this path.
 - **Server-Initiated "Watch Sessions" + Automatic Browser Flush (`X-MJ-Diagnostic-Trigger`)**:
   - An administrator or automated rule can arm a server-side Watch Session (`Diagnostics.StartSession`) scoped by `Users` (`UserID`, `BrowserSessionID`, `APIKeyID` isolated by `CompanyID`) or `Operations` (GraphQL operation name, error-only, or `minDurationMs` latency threshold).
   - When `DiagnosticsServerMiddleware` matches an incoming browser request to an active Watch Session, it sets `X-MJ-Diagnostic-Trigger: <sessionId>` on the HTTP response.
@@ -148,7 +151,32 @@ The server reads these settings through `DiagnosticsSettings` (`@memberjunction/
 | `Diagnostics.RetentionDays` | `14` | Days before the retention job purges local sessions and bundles. |
 | `Diagnostics.External.Enabled` | `false` | Allows `Diagnostics.SendBundle` to send to an external collector. Sending to the in-process intake is not external. |
 | `Diagnostics.External.Destinations` | `[]` | JSON array of allowed destinations (`MJC`, `CustomerCollector`, `StorageAccount`). An empty list allows all. |
-| `Diagnostics.External.CollectorUrl` | `''` | Intake base URL of the external collector. |
+| `Diagnostics.External.CollectorUrl` | `''` | Public API URL of the collector MJAPI (its `MJAPI_PUBLIC_URL`, for example `https://support.example.com/api`). The only collector URL `SendBundle` uses; the request cannot override it. |
+| `Diagnostics.External.SenderCredentialID` | `''` | `MJ: Credentials` row that holds this installation's Ed25519 sender key. Written by `Diagnostics.EnrolSender`. |
+| `Diagnostics.External.SenderKeyID` | `''` | Key ID the collector knows the sender key by. Written by `Diagnostics.EnrolSender`. |
+| `Diagnostics.External.CollectorPublicKeyBase64` | `''` | Collector X25519 public key (SPKI base64) recorded at enrolment. A different key that the pinned signing key signed is accepted and logged once as a key rotation. |
+| `Diagnostics.External.CollectorSigningPublicKeyBase64` | `''` | Collector Ed25519 signing key (SPKI base64) pinned at enrolment. The collector's X25519 key must carry a signature from this key. |
+| `Diagnostics.InstallID` | `''` | Stable ID of this installation. Generated (UUID) and saved at enrolment; `DiagnosticSessionManager.InstallID` reads it. A server that never enrols uses a per-process ID, which is enough for in-process local intake. |
+
+### Sending to a Collector: Enrolment and Signed Requests
+
+**Collector audience.** The sender and the collector compute the same intake URL, which is also the signed `aud`:
+`TrimTrailingSlashes(Diagnostics.External.CollectorUrl) + '/diagnostics/intake/v1'` (not added twice when the URL already ends with it). On the collector this is `ApiRoute('/diagnostics/intake/v1', { absolute: true })` with trailing slashes removed, so `Diagnostics.External.CollectorUrl` must equal the collector's public API URL.
+
+**Collector URL rules.** `Diagnostics.External.CollectorUrl` must use `https:` (plain `http:` is accepted only for `localhost`, `127.0.0.1` and `[::1]`). Redirects from the collector are never followed: a 3xx answer fails the step.
+
+**Enrolment (once per installation, and again to rotate the key).** Enrolment is trust-on-first-use: the collector keys returned by `/enroll` are pinned without other proof, so the first contact must be over TLS to the right host.
+1. The collector administrator issues a registration code (`Diagnostics.IssueSenderRegistrationCode`, see §4).
+2. On the sending server, set `Diagnostics.External.CollectorUrl`, then run the remote operation `Diagnostics.EnrolSender` with `{ RegistrationCode }` (authorization `Diagnostics: Manage Intake`). There is no `mj diag enroll` CLI command: `@memberjunction/cli` does not depend on `@memberjunction/diagnostics-server`, so the remote operation is the enrolment path. Code can call `EnrolSender()` from `@memberjunction/diagnostics-server`.
+3. `EnrolSender` reads or creates `Diagnostics.InstallID`, generates an Ed25519 key pair with the key ID `<first 8 chars of the install ID>-<yyyymm>-<4 hex>`, and posts `{ installId, registrationCode, keyId, publicKeyBase64, proof }` to `<aud>/enroll`. `proof` is the Ed25519 signature over `mjdiag-enrol-v1:<installId>:<keyId>:<registrationCode>:<aud>`.
+4. When the collector accepts, the server stores the private key in `MJ: Credentials` (credential type `Diagnostics Sender Key`, values `{ keyId, publicKey, privateKey }`) and saves `Diagnostics.External.SenderCredentialID`, `SenderKeyID`, `CollectorPublicKeyBase64` and `CollectorSigningPublicKeyBase64`.
+
+**Every send.**
+- Each request to the collector (`GET /public-key`, `POST /bundles`, `PUT` payload, `POST /complete`) carries `Authorization: MJDiag-Ed25519 keyId="…",installId="…",aud="…",ts="…",nonce="…",sig="…"`. `sig` is the Ed25519 signature over `mjdiag-http-v1:<METHOD>:<path>:<aud>:<installId>:<ts>:<nonce>:<bodySha256>`, where `path` is the full URL path of the request (no query string, base path included), `ts` is unix seconds, `nonce` a fresh UUID and `bodySha256` the hex SHA-256 of the exact bytes sent (of the empty string for `GET`).
+- The collector's X25519 key must carry a valid signature from the pinned `CollectorSigningPublicKeyBase64`; otherwise nothing is encrypted or uploaded.
+- The envelope is signed with the same sender key (`senderKeyId` = the stored key ID), so the collector can bind the envelope to the HTTP identity.
+- The `uploadUrl` the collector returns must be on the collector URL's origin (a relative URL resolves against the intake URL); otherwise the send stops before the upload.
+- No API key (`MJ_API_KEY` or any other) is read or sent on this path.
 
 ---
 
@@ -158,15 +186,15 @@ Any MemberJunction server (`MJAPI`) can act as a secure diagnostic bundle receiv
 
 ### Step 1: Generate Collector Keys & Store in `MJ: Credentials`
 
-Generate an X25519 encryption keypair (and optional Ed25519 signing keypair) using the CLI:
+Generate an X25519 encryption keypair and an Ed25519 signing keypair using the CLI:
 
 ```bash
 npx mj diag keygen --key-id mjc-intake-2026-01 --signing
 ```
 
-1. Store the X25519 key in `MJ: Credentials` (encrypted at rest via `@memberjunction/encryption`). The credential values are JSON with three fields: `keyId`, `publicKey` (SPKI base64) and `privateKey` (PKCS#8 base64).
-2. Record the `MJ: Credentials` row ID in the `Diagnostics.Intake.KeyPairCredentialID` instance configuration setting. At startup the server loads this key and enables intake only when `Diagnostics.Intake.Enabled` is `true` and the key loads; otherwise intake stays disabled and the server logs a warning. Startup never generates a key pair.
-3. Publish the **X25519 Public Key (SPKI base64)** and `keyId` so submitting instances can encrypt bundles to your collector via `EncryptBundleForCollector`.
+1. Store both key pairs in one `MJ: Credentials` row of type `Diagnostics Intake Key` (encrypted at rest via `@memberjunction/encryption`). The values are JSON with five fields: `keyId`, `publicKey` (X25519 SPKI base64), `privateKey` (X25519 PKCS#8 base64), `signingPublicKey` (Ed25519 SPKI base64) and `signingPrivateKey` (Ed25519 PKCS#8 base64).
+2. Record the `MJ: Credentials` row ID in the `Diagnostics.Intake.KeyPairCredentialID` instance configuration setting. At startup the server loads the credential and enables intake only when `Diagnostics.Intake.Enabled` is `true`, all five values are present, and each public key is the one derived from its private key. Otherwise intake stays disabled and the server logs one error. Startup never generates a key pair.
+3. `GET /diagnostics/intake/v1/public-key` returns the X25519 public key with its Ed25519 signature (`SignRecipientPublicKey`). It never serves an unsigned key: without a signing key it answers 503. Senders pin `signingPublicKey` at enrolment (below) and refuse any public key it did not sign.
 
 ### Step 2: Set Up `MJStorage` Locations (Quarantine-then-Promote)
 
@@ -185,6 +213,8 @@ To ensure unverified or infected bytes never mingle with trusted support artifac
      verified/<YYYY-MM-DD>/<referenceId>.mjdiag
      ```
    - The quarantine object is immediately deleted upon promotion or rejection.
+   - With `Diagnostics.Intake.DecryptOnIngest = false` the still-encrypted envelope is promoted instead, to `verified/<YYYY-MM-DD>/<referenceId>.mjdiag.enc`.
+3. **Received bundle rows**: each upload saves a `MJ: Diagnostic Bundles` row with `Direction = 'Received'`, `Status = 'Receiving'`, `SenderInstallID` (the authenticated install), `SenderMJVersion`, `ContactInfo`, `ExternalReferenceID` (the reference ID) and `ExpiresAt` (from `Diagnostics.Intake.RetentionDays`). On complete the row becomes `Ready` (with `SizeBytes`, `SHA256` of the stored bytes, an `MJ: Files` row in `FileID` when the verified storage provider is set, and `ManifestJSON`/`FindingsJSON` when decrypted) or `Failed` with the reason. The retention job purges these rows and their files.
 
 ### Step 3: Configure Malware Scanning (`IDiagnosticMalwareScanner`)
 
@@ -209,15 +239,50 @@ Even when no external antivirus daemon is configured, the intake pipeline **alwa
    - Rejects non-ZIP files, path-traversal entries (`../` or leading `/`), unexpected file extensions, compression-ratio zip bombs (`> 100:1`), and oversized archives (`> 100 MB` uncompressed).
    - Verifies that every entry in the archive is on the `.mjdiag` allow-list (`manifest.json`, `environment.json`, `findings.json`, `traces/*.json`, `logs/*.jsonl`, `sql/*.jsonl`, `network/*.json`, `custom/*.json`), parses as valid JSON/JSONL, and matches the SHA-256 digest recorded in `manifest.json`.
 
-### Step 4: Intake Configuration Reference (`MJ: Instance Configurations`)
+### Step 4: Register Senders (enrolment, signed requests, revocation)
+
+Only registered installations can submit. A sender is a `MJ: Diagnostic Sender Registrations` row (`InstallID`, `Name`, `Status` `Pending` | `Active` | `Revoked`, `KeyID`, `PublicKeyBase64`, `MaxBundlesPerDay`, `LastSeenAt`). Code can also register a key in memory with `DiagnosticIntakeService.Instance.RegisterSenderPublicKey(installId, keyId, publicKeyBase64)` (no row; for a self-hosted hub or tests). Nothing else grants access; no API key (`MJ_API_KEY` or any other) is read.
+
+**Enrolment.**
+1. Create a registration row with the sender's `InstallID` and a `Name` (status `Pending`).
+2. Run `Diagnostics.IssueSenderRegistrationCode` with `{ RegistrationID }` (authorization `Diagnostics: Manage Intake`). It returns `{ Code, ExpiresAt }`: 32 random bytes as base64url, valid for 24 hours. Only the SHA-256 hash is stored; give the plain code to the sender's administrator once.
+3. The sender runs `Diagnostics.EnrolSender` (§3), which posts `{ installId, registrationCode, keyId, publicKeyBase64, proof }` to `POST /diagnostics/intake/v1/enroll`. That route needs no signature. Failed enrolments count against the IP failure limit (below).
+4. The collector loads the row by `InstallID`, requires an unexpired code hash, compares the code hash in constant time, and verifies `proof` (Ed25519 over `mjdiag-enrol-v1:<installId>:<keyId>:<registrationCode>:<aud>`) with `publicKeyBase64`. It then saves `KeyID`, `PublicKeyBase64`, `Status = 'Active'`, `EnrolledAt`, and clears the code. The response is `{ installId, keyId, collectorPublicKeyBase64, collectorSigningPublicKeyBase64 }`. Any failure answers 400 or 401 with a generic message; the reason is in the server log.
+
+**Signed requests.** `POST /bundles`, `PUT /bundles/:referenceId/payload` and `POST /bundles/:referenceId/complete` require `Authorization: MJDiag-Ed25519 keyId="…",installId="…",aud="…",ts="…",nonce="…",sig="…"`. The collector:
+- finds the `Active` registration for `installId` and requires `keyId` to equal its `KeyID`;
+- rejects `|now − ts| > 300 s`;
+- requires `aud` to equal its audience, `TrimTrailingSlashes(ApiRoute('/diagnostics/intake/v1', { absolute: true }))`. So `MJAPI_PUBLIC_URL` must be the URL senders put in `Diagnostics.External.CollectorUrl`;
+- verifies `sig` over `mjdiag-http-v1:<METHOD>:<path>:<aud>:<installId>:<ts>:<nonce>:<bodySha256>`. `path` is the full request path as the sender called it, `MJAPI_BASE_PATH` included and the query string removed (`req.originalUrl` up to `?`). `bodySha256` is the hex SHA-256 of the raw body;
+- refuses a repeated `(installId, nonce)`.
+
+Any failure answers 401 with a generic message, and the reason is logged. The header and registration are checked before the body is read, and a payload body is never read past its declared `sizeBytes` (413). Rate limits:
+
+| Limit | Applies to | Default |
+|-------|-----------|---------|
+| IP failure limit | Failed attempts before the signature check (missing or malformed header, unknown or non-Active install, key ID mismatch) and failed enrolments, counted per client IP. When an IP is over the limit, its unsigned requests (including `GET /public-key` and `POST /enroll`) and its further failures get 429. A request with a valid signature is never IP-limited. | 60 per minute (`Configure` option `maxFailedAttemptsPerMinute`) |
+| Sender limit | Verified requests on the bundle routes, counted per install ID. | 30 per minute (`Configure` option `maxRequestsPerMinute`) |
+| Daily quota | See below. | `MaxBundlesPerDay` |
+
+The counters are per process, and each holds at most 10,000 keys (the oldest are dropped first). A collector behind a reverse proxy or load balancer must set Express `trust proxy` (for example in a middleware's `ConfigureExpressApp`) so that `req.ip` is the client address. Otherwise all clients share the proxy's IP and one failure budget.
+
+`POST /bundles` and the payload upload refuse (429) a sender that already has `MaxBundlesPerDay` `Received` bundle rows from the last 24 hours (0 means no limit).
+
+**Binding.** The intake record keeps the authenticated `(installId, keyId)`. A body `installId` that differs answers 400, and payload or complete from another sender answers 403. On complete the envelope must carry a valid sender signature by the same key (`senderKeyId` equal to the authenticated `keyId`), or the bundle is rejected. A successful complete updates the registration's `LastSeenAt`. The `uploadUrl` returned by `POST /bundles` is the public absolute URL (`ApiRoute(…, { absolute: true })`).
+
+**Revocation and rotation.** Set `Status = 'Revoked'` (and `RevokedAt`): every request from that install then answers 401. To rotate a key, issue a new registration code; the sender enrols again with a new key, and the row's `KeyID` and `PublicKeyBase64` are replaced. Issuing a code re-enables a revoked sender: an enrolment with that code sets the row back to `Active`.
+
+**Replay store.** The nonce cache is in memory, per process. It keeps each nonce for 600 s (the ±300 s skew window), removes expired entries, and refuses new nonces when it is full. A collector that runs more than one MJAPI instance needs a shared store (for example Redis `SET NX EX`), or a nonce replayed to another instance is accepted.
+
+### Step 5: Intake Configuration Reference (`MJ: Instance Configurations`)
 
 | Configuration Key | Default | Description |
 | --- | --- | --- |
 | `Diagnostics.Intake.Enabled` | `false` | Enables `/diagnostics/intake/v1/*` routes on this MJAPI instance. Intake also needs a receiver key (below). |
-| `Diagnostics.Intake.KeyPairCredentialID` | `''` | `MJ: Credentials` ID holding this receiver's X25519 key (`keyId`, `publicKey`, `privateKey`). Intake stays disabled while it is empty. |
+| `Diagnostics.Intake.KeyPairCredentialID` | `''` | `MJ: Credentials` ID (type `Diagnostics Intake Key`) holding `keyId`, `publicKey`, `privateKey`, `signingPublicKey` and `signingPrivateKey`. Intake stays disabled while it is empty, incomplete, or a public key does not match its private key. |
 | `Diagnostics.Intake.StorageProviderID` | `''` | `MJ: File Storage Providers` ID for promoted, verified `.mjdiag` bundles. |
 | `Diagnostics.Intake.QuarantineStorageProviderID` | `''` | Optional `MJ: File Storage Providers` ID for staging unverified encrypted uploads. |
-| `Diagnostics.Intake.DecryptOnIngest` | `true` | Passed to intake. Intake always decrypts and verifies in this version; `false` has no effect yet. |
+| `Diagnostics.Intake.DecryptOnIngest` | `true` | `true`: intake decrypts, verifies the archive, runs the malware scan, and saves the manifest and findings. `false`: intake checks the envelope header, the sender signature and the declared hash, then stores the envelope still encrypted. No malware scan runs, and `ManifestJSON`/`FindingsJSON` stay empty; decrypt offline with the private key. |
 | `Diagnostics.Intake.RetentionDays` | `30` | Days to keep received bundles. |
 | `Diagnostics.Intake.OnBundleReceivedActionID` | `''` | Optional `MJ: Actions` ID run after a bundle passes verification. It runs as the system user with the inputs `ReferenceID`, `BundleID`, `SenderInstallID`, `SenderMJVersion`, `Summary`, `Contact`, `FindingsCount` and `VerifiedStoragePath`. |
 

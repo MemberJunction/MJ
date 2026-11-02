@@ -18,5 +18,15 @@
     "primaryKey": {
       "ID": "8F71C490-5B21-4E3A-9C14-203000000002"
     }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Diagnostics: Manage Intake",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "B0749BFE-6E8A-4040-8015-01FA1507E066"
+    }
   }
 ]

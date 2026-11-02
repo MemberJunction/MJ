@@ -30,7 +30,7 @@ export interface DiagnosticsStopSessionInput {
 
 export interface DiagnosticsStopSessionOutput {
     SessionID: string;
-    Status: 'Stopped';
+    Status: 'Stopped' | 'Expired';
     StoppedAt: string;
     FlushedChunkCount: number;
 }
@@ -109,7 +109,6 @@ export interface DiagnosticsGetBundlePreviewOutput {
 export interface DiagnosticsSendBundleInput {
     BundleID: string;
     Destination: 'MJC' | 'CustomerCollector' | 'StorageAccount';
-    CollectorUrlOverride?: string;
     ContactInfo?: string;
     Summary?: string;
 }
@@ -121,4 +120,27 @@ export interface DiagnosticsSendBundleOutput {
     ExternalReferenceID?: string;
     SentAt?: string;
     ErrorMessage?: string;
+}
+
+export interface DiagnosticsIssueSenderRegistrationCodeInput {
+    /** ID of the MJ: Diagnostic Sender Registrations row. */
+    RegistrationID: string;
+}
+
+export interface DiagnosticsIssueSenderRegistrationCodeOutput {
+    /** The one-time code. It is shown once; only its SHA-256 hash is stored. */
+    Code: string;
+    /** ISO 8601 time after which the code is refused. */
+    ExpiresAt: string;
+}
+
+export interface DiagnosticsEnrolSenderInput {
+    /** The one-time code the collector issued for this installation. */
+    RegistrationCode: string;
+}
+
+export interface DiagnosticsEnrolSenderOutput {
+    InstallID: string;
+    /** ISO 8601 time of the enrolment. */
+    EnrolledAt: string;
 }

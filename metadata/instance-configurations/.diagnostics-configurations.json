@@ -76,7 +76,7 @@
       "ValueType": "string",
       "Category": "Diagnostics",
       "DisplayName": "Customer Collector Intake Base URL",
-      "Description": "Base URL of a CustomerCollector MJAPI intake endpoint when sending bundles to a self-hosted enterprise hub.",
+      "Description": "Public API URL of the collector (its MJAPI_PUBLIC_URL, for example https://support.example.com/api). The sender appends /diagnostics/intake/v1 to it to reach the intake and to build the signed audience. Empty means no external collector.",
       "DefaultValue": ""
     },
     "primaryKey": {
@@ -202,11 +202,81 @@
       "ValueType": "string",
       "Category": "Diagnostics",
       "DisplayName": "Intake Receiver Key Credential ID",
-      "Description": "MJ: Credentials ID holding this receiver's X25519 key as JSON values keyId, publicKey (SPKI base64) and privateKey (PKCS#8 base64). Intake stays disabled while this is empty.",
+      "Description": "MJ: Credentials ID (type Diagnostics Intake Key) holding this collector's keys as JSON values: keyId, publicKey (X25519 SPKI base64) and privateKey (PKCS#8 base64), plus signingPublicKey and signingPrivateKey (the Ed25519 key that signs the public key). Each public key must match its private key. Intake stays disabled while this is empty or invalid.",
       "DefaultValue": ""
     },
     "primaryKey": {
       "ID": "A28A085F-7988-45D6-8E3A-74F307293ED9"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.SenderCredentialID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Sender Key Credential ID",
+      "Description": "MJ: Credentials ID (type Diagnostics Sender Key) holding the Ed25519 key this installation signs collector requests with. Set by Diagnostics.EnrolSender; empty means this installation is not enrolled.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "98876DA9-9923-42DD-861B-55367B1E4947"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.SenderKeyID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Sender Key ID",
+      "Description": "Key ID of this installation's enrolled Ed25519 sender key, sent as keyId in every signed collector request. Set by Diagnostics.EnrolSender.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "D5EFF460-0E62-4E21-B88A-889FD3531AF6"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.CollectorPublicKeyBase64",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Pinned Collector Public Key",
+      "Description": "The collector's X25519 public key (SPKI base64) returned at enrolment. Set by Diagnostics.EnrolSender.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "ECDC9B5B-9B62-4EED-A7DB-B271F0D8C0B6"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.CollectorSigningPublicKeyBase64",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Pinned Collector Signing Key",
+      "Description": "The collector's Ed25519 signing public key (SPKI base64) returned at enrolment. Every send checks the collector's public key signature against it and refuses on a mismatch. Set by Diagnostics.EnrolSender.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "ADF504AD-CF53-4206-895E-3DD884627DA9"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.InstallID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Installation ID",
+      "Description": "Stable ID of this installation, used as installId when it sends diagnostic bundles to a collector. Generated once when empty.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "5377B6BF-9029-4650-8BB1-CA7A8AC1ABDC"
     }
   }
 ]

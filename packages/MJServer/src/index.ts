@@ -1013,7 +1013,7 @@ const setupComplete$ = new ReplaySubject(1);
   }
 
   // Initialize all middleware
-  const middlewareContext: ServerMiddlewareContext = { ApiRoute: (subpath: string) => ApiRoute(subpath) };
+  const middlewareContext: ServerMiddlewareContext = { ApiRoute: (subpath, options) => ApiRoute(subpath, options) };
   for (const mw of middlewares) {
       await mw.Initialize(middlewareContext);
       startupLog.LogIf('verbose', `  [Middleware] ${mw.Label}`);
@@ -1638,7 +1638,7 @@ const setupComplete$ = new ReplaySubject(1);
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>({
-      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID', 'X-MJ-Trace-ID'],
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID', 'X-MJ-Trace-ID', 'X-MJ-Diagnostic-Trigger'],
     }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
