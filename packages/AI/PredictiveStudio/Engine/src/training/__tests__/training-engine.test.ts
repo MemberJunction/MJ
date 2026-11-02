@@ -231,6 +231,39 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(results.refusal.reason.kind).toBe('non-numeric-in-numeric-column');
   });
 
+  describe('the bound Evaluation Protocol\'s exclusions', () => {
+    const steps: FeatureStepGraph = { Steps: [
+      { Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'Region', 'StartDate'] },
+      { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] },
+    ] };
+    /** Protocol exclusions deny `Region` (names compared case-insensitively) and the People source; the pipeline's own deny list denies `StartDate`. */
+    const excludedHarness = (): ReturnType<typeof protocolHarness> => {
+      const protocolRow = ProtocolRowFixture.Row({ MinMinorityClassRows: 1, Exclusions: JSON.stringify({ denyFields: ['region'], denySources: ['People'] }) });
+      const harness = protocolHarness(cannedFor, protocolRow, undefined, steps);
+      harness.pipeline.LeakageGuard = JSON.stringify({ DenyFields: ['StartDate'], SingleFeatureDominanceThreshold: 0.6 });
+      return harness;
+    };
+
+    it('keeps protocol-excluded fields and sources out of the snapshot a training run freezes, with the pipeline\'s deny list as well', async () => {
+      const { engine, deps, pipeline, files, snapshots } = excludedHarness();
+      await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+      const content = await storedContent(files, snapshots[0]);
+      const rows = snapshotRows(content);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(row.EventsAttended).toBeTypeOf('number');
+        expect(Object.keys(row).some((k) => k === 'Region' || k === 'Status' || k.startsWith('StartDate'))).toBe(false);
+      }
+    });
+
+    it('resolves the same exclusions when it assembles on its own (pipeline ID and deps only)', async () => {
+      const { engine, deps, pipeline } = excludedHarness();
+      const assembly = await engine.AssembleForTraining(pipeline.ID, deps);
+      expect(assembly.Assembled.Status).toBe('assembled');
+      expect(assembly.Features.map((f) => f.name)).toEqual(['EventsAttended']);
+    });
+  });
+
   it('assembles the same matrix on its own (pipeline ID and deps only) as the training run sends', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
     const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns, steps);

@@ -81,6 +81,7 @@ import {
   type TaskKind,
   type TaskType,
   type TrainerRequest,
+  type ProtocolExclusions,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
@@ -104,7 +105,7 @@ import { SnapshotHash } from '../snapshot/snapshot-hash';
 import { LockedHoldoutSplitter, type LockedHoldoutSplit } from './locked-holdout';
 import { TrainerRequestBuilder } from './trainer-request';
 import { TrainerRunRecorder, TrainerLineageRefusedError } from './trainer-result';
-import { RunViewEvaluationProtocolStore, type LoadedProtocol } from './evaluation-protocol-store';
+import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore, type LoadedProtocol } from './evaluation-protocol-store';
 import { ProtocolSearchGuard } from '../protocol/search-guard';
 import { ComputePricing } from './compute-cost';
 import type { ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage } from './types';
@@ -142,6 +143,12 @@ export interface UnitAssemblyInputs {
    * as-of assembly reads anything.
    */
   readonly SliceFields?: readonly string[];
+  /**
+   * The bound protocol's exclusions (a guard field): the fields and sources that never enter the matrix, together with
+   * the pipeline's own `LeakageGuard` deny lists. Null when the pipeline is bound to no protocol (such a pipeline
+   * never trains; only its standalone assembly runs).
+   */
+  readonly ProtocolExclusions: ProtocolExclusions | null;
 }
 
 /**
@@ -306,6 +313,7 @@ export class TrainingEngine {
 
       const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, {
         Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata, SliceFields: protocol.Protocol.slices.subgroups,
+        ProtocolExclusions: protocol.Protocol.exclusions,
       });
       if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
       const { Snapshot: snapshot, Carve: carve } = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, protocol, deps);
@@ -736,11 +744,12 @@ export class TrainingEngine {
 
   /**
    * Assemble a unit pipeline's training matrix as of each unit row's decision date: the pipeline's steps resolve into
-   * typed columns (the pipeline's LeakageGuard deny lists excluded) and the as-of assembler reads them. This is the one
+   * typed columns (the bound protocol's exclusions and the pipeline's LeakageGuard deny lists excluded,
+   * {@link EffectiveExclusions}) and the as-of assembler reads them. This is the one
    * assembly function training uses; the scoring path calls the same assembler with the columns and levels training
    * stored. With `prepared` (a training run) the pipeline, unit and rows already read are reused; without it (a check
-   * that only needs the matrix) the pipeline, unit and rows are read here, and a pipeline without a unit is refused
-   * (`unit-required`).
+   * that only needs the matrix) the pipeline, its bound protocol's exclusions, the unit and its rows are read here, and
+   * a pipeline without a unit is refused (`unit-required`).
    *
    * @param pipelineId the `MJ: ML Training Pipelines` row
    * @param deps the training deps (provider, user and the unit seams; `history` defaults to complete Record Changes reads)
@@ -749,7 +758,7 @@ export class TrainingEngine {
   public async AssembleForTraining(pipelineId: string, deps: TrainingDeps, prepared?: UnitAssemblyInputs): Promise<UnitTrainingAssembly> {
     const inputs = prepared || (await this.prepareUnitAssembly(pipelineId, deps));
     const { Resolved: resolved, Unit: unit, UnitRead: unitRead } = inputs;
-    const exclusions = { denyFields: resolved.leakageGuard.DenyFields || [], denySources: resolved.leakageGuard.DenySources || [] };
+    const exclusions = TrainingEngine.EffectiveExclusions(resolved.leakageGuard, inputs.ProtocolExclusions);
     const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions);
     if (resolution.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: resolution };
     // The names the assembly will write (date parts included), so this check accepts exactly what the builder does.
@@ -777,6 +786,21 @@ export class TrainingEngine {
   }
 
   /**
+   * The fields and sources kept out of a unit pipeline's matrix: the union of the bound protocol's `exclusions` (a guard
+   * field, set only in protocol configuration) and the pipeline's `LeakageGuard` deny lists. A union, so neither list
+   * can bring back a column the other keeps out.
+   *
+   * @param leakageGuard the pipeline's leakage guard
+   * @param protocolExclusions the bound protocol's exclusions, or null when the pipeline has no protocol
+   */
+  public static EffectiveExclusions(leakageGuard: LeakageGuard, protocolExclusions: ProtocolExclusions | null): ProtocolExclusions {
+    return {
+      denyFields: [...(leakageGuard.DenyFields || []), ...(protocolExclusions ? protocolExclusions.denyFields : [])],
+      denySources: [...(leakageGuard.DenySources || []), ...(protocolExclusions ? protocolExclusions.denySources : [])],
+    };
+  }
+
+  /**
    * The series history a unit with a Temporal Spec reads its lags and rolling windows from: the unit rows' labels by
    * entity and period. Null for a unit without one.
    */
@@ -799,10 +823,26 @@ export class TrainingEngine {
     if (!unitId) {
       throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why: 'only a pipeline that points at a Prediction Unit is assembled as of decision dates' } });
     }
+    const protocolExclusions = await this.boundProtocolExclusions(resolved.pipeline, deps);
     const unit = await this.loadUnitSpec(unitId, deps);
     const seams = this.unitSeams(deps);
     const unitRead = await this.readUnitRows(unit, seams, deps);
-    return { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata };
+    return { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata, ProtocolExclusions: protocolExclusions };
+  }
+
+  /**
+   * The exclusions of the protocol version the pipeline is bound to, read as a training run reads it; null when the
+   * pipeline names no protocol.
+   *
+   * @throws TrainingRefusedError (`protocol-required`) when the bound row does not exist, (`protocol-invalid`) when it does not parse
+   */
+  private async boundProtocolExclusions(pipeline: MJMLTrainingPipelineEntity, deps: TrainingDeps): Promise<ProtocolExclusions | null> {
+    const protocolId = pipeline.EvaluationProtocolID;
+    if (!protocolId) return null;
+    const store = deps.protocols || new RunViewEvaluationProtocolStore(this.requireProvider(deps), deps.contextUser);
+    const spec = await EvaluationProtocolSpecs.LoadSpec(store, protocolId);
+    if (spec === null) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: pipeline.ID } });
+    return spec.exclusions;
   }
 
   /** The unit path reads through the request's provider (never a global RunView) unless the deps supply the seams. */
