@@ -4,10 +4,10 @@ Each candidate's inner score is the mean of its per-fold primary scores over eve
 resampled-t interval (Nadeau and Bengio 2003: variance (1/J + n_valid/n_train) * S^2 over the J fold scores),
 because fold scores share training rows and the naive t interval is too narrow.
 
-The finalist is chosen by the reference pipeline's rule (`truthsuite.refpipe.run._select`): the lowest pooled
-out-of-fold primary score, then the earliest candidate in request order whose mean per-row loss excess over that best
-is within one standard error of the paired row differences. Nothing is pruned: every candidate is scored on every
-fold, so no candidate is dropped while its interval still overlaps the leader's.
+The finalist is chosen by the one-standard-error rule: the lowest pooled out-of-fold primary score, then the earliest
+candidate in request order whose mean per-row loss excess over that best is within one standard error of the paired row
+differences. Nothing is pruned: every candidate is scored on every fold, so no candidate is dropped while its interval
+still overlaps the leader's.
 """
 
 from __future__ import annotations

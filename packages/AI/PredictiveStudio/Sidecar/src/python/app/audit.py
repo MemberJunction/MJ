@@ -1,14 +1,12 @@
 """Leakage audit on DEVELOPMENT rows, run before any candidate is fitted, and the implausible-gain rule against a
 planted reference score.
 
-Port of the truth suite's reference pipeline audit (`packages/AI/PredictiveStudio/TruthSuite/python/truthsuite/
-refpipe/audit.py`), with the protocol's single-feature ceiling in place of the reference's fixed 0.9:
+The single-feature ceiling is the protocol's (`leakageAudit`), not a fixed constant:
 
   high-cardinality-id   a categorical or identifier feature column whose distinct-value ratio over its non-missing
-                        development values exceeds 0.5. The reference applies this to every non-numeric column; here
-                        the declared encoding decides, so a boolean or date-part column (numeric by declaration) is
-                        never treated as an identifier. An identifier column is excluded by its encoding either way;
-                        the flag reports it.
+                        development values exceeds 0.5. The declared encoding decides which columns are checked, so
+                        a boolean or date-part column (numeric by declaration) is never treated as an identifier. An
+                        identifier column is excluded by its encoding either way; the flag reports it.
   single-feature-auc    a feature column whose out-of-fold single-feature score against the label shifted by
   time-shifted-label    k in {-1, 0, +1} rows within its entity is best at k >= 0 and above the ceiling: a same-period
                         proxy of the outcome (k = 0) or a future-period outcome (k = +1). A column whose best shift is
@@ -17,9 +15,8 @@ refpipe/audit.py`), with the protocol's single-feature ceiling in place of the r
 Scores: binary AUC, multiclass macro one-vs-rest AUC, continuous R^2. The single-feature model is a shrunken bin mean
 (20 quantile bins for a numeric column with more than 20 distinct values, else one bin per value), fitted on each
 audit fold's training rows. Audit folds are 5 whole-entity folds when entities repeat, else 5 random folds, from the
-same fold builders (and so the same draws) as the reference. With time, rows are ordered by entity, decision-period
-ordinal and snapshot position, where the reference orders by entity, decision date and row ID; the two agree when an
-entity has at most one row per period.
+trainer's fold builders (`folds`). With time, rows are ordered by entity, decision-period ordinal and snapshot
+position.
 
 Every feature column of a source column is audited, and the source is flagged when any of them is, so an encoding or
 a derivation (several feature columns from one source) cannot split a leak into parts that each pass. Flagged source
@@ -27,13 +24,10 @@ columns are removed from every candidate and baseline before selection.
 
 A shift whose audit folds cannot be built (fewer than 20 shifted rows, fewer than 5 entities to group, or no fold
 with rows on both sides) scores NaN and never wins; a column with no scored shift is not flagged by the single-feature
-rule. The audit raises nothing. Two differences from the reference follow from this: the reference scores a shift
-with fewer than 5 entities on the folds that are not empty, where here that shift is unscored; and the reference takes
-the metric, and so the ceiling, from the LAST shift (+1), so when +1 is unscored it compares against no ceiling and
-flags nothing, where here the column is judged on the shifts that score (a same-period copy is flagged even when the
-next period cannot be scored). Per-shift scores agree either way.
+rule. The audit raises nothing. A column is judged on the shifts that score, so a same-period copy is flagged even
+when the next period cannot be scored.
 
-A tie between shifts resolves in the reference's order: same period, then next period, then previous period. A label
+A tie between shifts resolves in a fixed order: same period, then next period, then previous period. A label
 that never changes within an entity gives a copy of it the same score on every shift, and that copy is a same-period
 proxy, not a lag.
 """
@@ -65,9 +59,8 @@ MIN_SHIFTED_ROWS = 20
 NUMERIC_BINS = 20
 # A candidate beating the reference score with a one-sided paired DeLong p below this is treated as a leak.
 REFERENCE_P = 0.001
-# Tie-break order of equal shift scores: the reference sorts its shift keys as text ("+0" < "+1" < "-1") and keeps the
-# first maximum, so an exact tie goes to the same period, then the next, then the previous. Breaking ties towards -1
-# would keep a copy of a per-entity-stable label as a "past outcome".
+# Tie-break order of equal shift scores: an exact tie goes to the same period, then the next, then the previous.
+# Breaking ties towards -1 would keep a copy of a per-entity-stable label as a "past outcome".
 _SHIFT_TIE_ORDER: Dict[int, int] = {0: 0, 1: 1, -1: 2}
 # Fewest rows of each class the paired comparison needs to estimate a variance.
 _MIN_ROWS_PER_CLASS = 2
@@ -93,7 +86,7 @@ class ColumnAudit:
 @dataclass(frozen=True)
 class AuditResult:
     """The flags, the source columns to exclude, the source columns kept as past-period outcomes, and the per-column
-    evidence (not on the wire; for comparison with the reference pipeline)."""
+    evidence (not on the wire; the parity tests compare it)."""
 
     flags: List[LeakageFlag]
     excluded_sources: List[str]
@@ -250,12 +243,12 @@ def run_audit(frame: pd.DataFrame, columns: Sequence[encoding.ColumnSpec], y: np
     row per entry of `y`, `entity` and `period_ordinal`.
 
     Every feature column of each source column is audited (identifier columns only by the distinct-ratio check); a
-    source is excluded when any of its columns is flagged. Label shifts are taken ROW by row within an entity, as the
-    reference pipeline does: with time, rows are ordered by entity, then period, then their position, and shift k pairs
-    a row with the label k rows later in its entity, which is the label k periods later only when an entity has one row
-    per period. Without time the rows keep their given order. Without time, or when no entity has more than one row,
-    only shift 0 is scored; folds group whole entities only when some entity has more than one row.
-    `y` is the encoded label: class index (binary, multiclass) or value."""
+    source is excluded when any of its columns is flagged. Label shifts are taken ROW by row within an entity: with
+    time, rows are ordered by entity, then period, then their position, and shift k pairs a row with the label k rows
+    later in its entity, which is the label k periods later only when an entity has one row per period. Without time the
+    rows keep their given order. Without time, or when no entity has more than one row, only shift 0 is scored; folds
+    group whole entities only when some entity has more than one row. `y` is the encoded label: class index (binary,
+    multiclass) or value."""
     entities_repeat = len(set(entity)) < len(entity)
     shifts: Tuple[int, ...] = (-1, 0, 1) if has_time and entities_repeat else (0,)
     order = (np.lexsort((np.arange(len(entity)), period_ordinal, np.asarray([str(e) for e in entity])))

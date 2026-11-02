@@ -6,7 +6,7 @@
   delong_paired      the paired DeLong (1988) test of two scores' AUCs on one set of rows
   hanley_mcneil_se   the textbook AUC standard error, the yardstick an interval's width is checked against
 
-Resampling is the truth suite's reference pipeline's: numpy default_rng(seed), integers(0, n, n) for rows,
+Resampling is fixed so a seed reproduces an interval exactly: numpy default_rng(seed), integers(0, n, n) for rows,
 integers(0, G, G) for whole groups, the 2.5/97.5 percentiles for a 95% interval.
 """
 

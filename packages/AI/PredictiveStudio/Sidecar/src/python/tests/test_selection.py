@@ -14,6 +14,7 @@ from app.array_types import IntArr
 from app.encoding import CategoricalEncoding, ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import BinaryTask, CandidateSpec, CountTask, EvaluationProtocol, TrainerRequest
+from tests.tools.measures import shared_groups
 from tests.tools.trainer_fixture import (
     NUMERIC,
     DriverSpec,
@@ -24,7 +25,7 @@ from tests.tools.trainer_fixture import (
     request,
     snapshot_files,
 )
-from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
+from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, holdout_2024, server  # noqa: F401 - `server` is a pytest fixture
 
 NOW = dt.datetime(2026, 10, 12, tzinfo=dt.timezone.utc)
 # Two cheap candidates, simplest first (the one-standard-error rule's complexity order).
@@ -32,12 +33,8 @@ GLM_AND_FOREST: list[DriverSpec] = [("glm_candidate", "logistic_regression", {})
                                     ("forest", "random_forest", {"n_estimators": 50, "min_samples_leaf": 5})]
 
 
-def _holdout_2024(df: pd.DataFrame) -> list[str]:
-    return [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
-
-
 def _req(server: FileServer, df: pd.DataFrame, **proto_over: JsonObject) -> TrainerRequest:
-    m, n = snapshot_files(df, FEATS, _holdout_2024(df), label_map={0: "no", 1: "yes"})
+    m, n = snapshot_files(df, FEATS, holdout_2024(df), label_map={0: "no", 1: "yes"})
     return TrainerRequest.model_validate(request(server, m, n, TASK, protocol("binary", **proto_over), candidates("binary")))
 
 
@@ -108,18 +105,18 @@ def _entities(snap: SN.Snapshot, dev: IntArr) -> list[str]:
 def test_an_ungrouped_blocked_time_protocol_does_not_group_rows(server: FileServer) -> None:
     """`groupKey: null`: every row is its own group, so one entity's rows may sit on both sides of a fold."""
     snap, dev, folds = _folds_for(server, {"kind": "blocked-time", "folds": 3, "gapPeriods": 0, "groupKey": None})
-    assert sum(F.shared_groups(f, _entities(snap, dev)) for f in folds) > 0
+    assert sum(shared_groups(f, _entities(snap, dev)) for f in folds) > 0
 
 
 def test_a_grouped_blocked_time_protocol_keeps_each_unit_on_one_side(server: FileServer) -> None:
     snap, dev, folds = _folds_for(server, {"kind": "blocked-time", "folds": 3, "gapPeriods": 0, "groupKey": "EntityKey"})
-    assert all(F.shared_groups(f, _entities(snap, dev)) == 0 for f in folds)
+    assert all(shared_groups(f, _entities(snap, dev)) == 0 for f in folds)
 
 
 def test_grouped_kfold_keeps_each_unit_on_one_side(server: FileServer) -> None:
     snap, dev, folds = _folds_for(server, {"kind": "grouped-kfold", "folds": 5, "repeats": 2, "groupKey": "EntityKey"})
     assert len(folds) == 10
-    assert all(F.shared_groups(f, _entities(snap, dev)) == 0 for f in folds)
+    assert all(shared_groups(f, _entities(snap, dev)) == 0 for f in folds)
 
 
 def test_repeated_kfold_on_a_continuous_target_is_unstratified(server: FileServer) -> None:
@@ -159,7 +156,7 @@ def test_locked_holdout_rows_never_reach_selection(server: FileServer) -> None:
     full = binary_frame()
     development = full[~full["T"].str.startswith("2024")]
     interaction = _interaction_rows()
-    with_benign_holdout = _glm_forest_outcome(server, full, _holdout_2024(full), "benign")
+    with_benign_holdout = _glm_forest_outcome(server, full, holdout_2024(full), "benign")
     with_interaction_holdout = _glm_forest_outcome(server, pd.concat([development, interaction], ignore_index=True),
                                                    list(interaction["ID"]), "interaction")
     interaction_leaked = _glm_forest_outcome(server, pd.concat([development, interaction], ignore_index=True), [],
@@ -212,7 +209,7 @@ def test_count_and_non_negative_targets_are_scored_by_their_deviance(
         server: FileServer, task: JsonObject, expected_metric: str, expected_row_loss: scores.RowLoss) -> None:
     kind = str(task["kind"])
     df = _amount_frame(kind)
-    m, n = snapshot_files(df, {"x1": NUMERIC, "x2": NUMERIC}, _holdout_2024(df))
+    m, n = snapshot_files(df, {"x1": NUMERIC, "x2": NUMERIC}, holdout_2024(df))
     drivers: list[DriverSpec] = [("forest", "random_forest", {"n_estimators": 30, "min_samples_leaf": 5}),
                                  ("lgbm", "lightgbm", {"n_estimators": 40})]
     req = TrainerRequest.model_validate(request(server, m, n, task, protocol(kind), candidates(kind, drivers)))

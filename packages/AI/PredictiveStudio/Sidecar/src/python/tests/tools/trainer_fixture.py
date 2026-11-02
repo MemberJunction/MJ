@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 import urllib.request
-from collections.abc import Mapping, Sequence
+from collections.abc import Hashable, Mapping, Sequence
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Union
@@ -29,7 +29,8 @@ import numpy as np
 import pandas as pd
 from pydantic import TypeAdapter
 
-from app.baselines import BASELINE_ONLY_DRIVERS, GLM_DRIVER
+from app.algorithms import BASELINE_ONLY_DRIVERS
+from app.baselines import GLM_DRIVER
 from app.schemas import Cell
 from app.snapshot_format import (
     INCUMBENT_SCORE_COLUMN,
@@ -177,35 +178,15 @@ def snapshot_files(df: pd.DataFrame, features: Mapping[str, JsonObject], holdout
     true probability); snapshots the product writes leave it null. The provenance file is not written: the trainer
     never reads it."""
     hold = {str(i) for i in holdout_ids}
-    extras: list[tuple[str, str]] = []
-    if incumbent_col:
-        extras.append((INCUMBENT_SCORE_COLUMN, incumbent_col))
-    if reference_col:
-        extras.append((REFERENCE_SCORE_COLUMN, reference_col))
-    for field, src in (slice_cols or {}).items():
-        extras.append((f"{SLICE_COLUMN_PREFIX}{field}", src))
-    cols = list(features) + [LABEL_COLUMN] + [e for e, _ in extras]
+    extras = _extra_columns(incumbent_col, reference_col, slice_cols)
     rows: list[list[Cell]] = []
     manifest: list[JsonObject] = []
     for rec in df.to_dict("records"):
-        raw_label: object = rec[label]
-        label_cell = _cell(raw_label)
-        if label_map is not None:
-            if not isinstance(label_cell, int) or isinstance(label_cell, bool):
-                raise ValueError(f"label_map maps integer labels; row {rec[id_col]} has {raw_label!r}")
-            label_cell = label_map[label_cell]
-        rows.append([_cell(rec[f]) for f in features] + [label_cell]
-                    + [_slice_cell(rec[s]) if e.startswith(SLICE_COLUMN_PREFIX) else _cell(rec[s]) for e, s in extras])
-        row_id = str(rec[id_col])
-        manifest.append({
-            "rowId": row_id, "entityKey": str(rec[entity_col]),
-            "decisionDate": (_day(rec[time_col]) if time_col else None) or "2000-01-01",
-            "groupKey": str(rec[entity_col]),
-            "period": _day(rec[period_col]) if period_col else None,
-            "role": "locked-holdout" if row_id in hold else "development",
-        })
+        rows.append(_matrix_row(rec, features, label, label_map, id_col, extras))
+        manifest.append(_manifest_entry(rec, hold, id_col, entity_col, time_col, period_col))
+    cols: list[JsonValue] = [*features, LABEL_COLUMN, *(e for e, _ in extras)]
     header: JsonObject = {
-        "format": MATRIX_FORMAT, "columns": list(cols), "labelColumn": LABEL_COLUMN,
+        "format": MATRIX_FORMAT, "columns": cols, "labelColumn": LABEL_COLUMN,
         "featureColumns": [{"name": f, "sourceColumn": (source_of or {}).get(f, f), "encoding": e}
                            for f, e in features.items()],
         "incumbentScoreColumn": INCUMBENT_SCORE_COLUMN if incumbent_col else None,
@@ -217,6 +198,45 @@ def snapshot_files(df: pd.DataFrame, features: Mapping[str, JsonObject], holdout
     matrix = "".join(_canonical_line(line) for line in [header, *rows])
     manifest_text = "".join(_canonical_line(m) for m in manifest)
     return matrix.encode("utf-8"), manifest_text.encode("utf-8")
+
+
+def _extra_columns(incumbent_col: str | None, reference_col: str | None,
+                   slice_cols: Mapping[str, str] | None) -> list[tuple[str, str]]:
+    """(matrix column, frame column) of every column after the label: incumbent score, reference score, slices."""
+    extras: list[tuple[str, str]] = []
+    if incumbent_col:
+        extras.append((INCUMBENT_SCORE_COLUMN, incumbent_col))
+    if reference_col:
+        extras.append((REFERENCE_SCORE_COLUMN, reference_col))
+    for field, src in (slice_cols or {}).items():
+        extras.append((f"{SLICE_COLUMN_PREFIX}{field}", src))
+    return extras
+
+
+def _matrix_row(rec: Mapping[Hashable, object], features: Mapping[str, JsonObject], label: str,
+                label_map: Mapping[int, str] | None, id_col: str, extras: Sequence[tuple[str, str]]) -> list[Cell]:
+    """One matrix row: the feature cells, the label (mapped through `label_map` when given), then the extra columns."""
+    raw_label: object = rec[label]
+    label_cell = _cell(raw_label)
+    if label_map is not None:
+        if not isinstance(label_cell, int) or isinstance(label_cell, bool):
+            raise ValueError(f"label_map maps integer labels; row {rec[id_col]} has {raw_label!r}")
+        label_cell = label_map[label_cell]
+    return ([_cell(rec[f]) for f in features] + [label_cell]
+            + [_slice_cell(rec[s]) if e.startswith(SLICE_COLUMN_PREFIX) else _cell(rec[s]) for e, s in extras])
+
+
+def _manifest_entry(rec: Mapping[Hashable, object], hold: set[str], id_col: str, entity_col: str,
+                    time_col: str | None, period_col: str | None) -> JsonObject:
+    """One manifest line: the row's key, entity, decision date, group, period and role."""
+    row_id = str(rec[id_col])
+    return {
+        "rowId": row_id, "entityKey": str(rec[entity_col]),
+        "decisionDate": (_day(rec[time_col]) if time_col else None) or "2000-01-01",
+        "groupKey": str(rec[entity_col]),
+        "period": _day(rec[period_col]) if period_col else None,
+        "role": "locked-holdout" if row_id in hold else "development",
+    }
 
 
 def feature_schema_hash(matrix: bytes) -> str:

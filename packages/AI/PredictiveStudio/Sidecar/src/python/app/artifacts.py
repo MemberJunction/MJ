@@ -1,6 +1,7 @@
-"""Model artifact envelope (serialize/deserialize) + warm LRU model cache.
+"""Model artifact envelopes (deserialize through a restricted unpickler) + warm LRU model cache.
 
-Envelope shape (base64-encoded as ``artifact_b64`` on the wire)::
+A model trained before Prediction Units carries the legacy (v1) envelope (base64-encoded as ``artifact_b64`` on the
+wire); ``/predict`` still loads it so those models keep scoring::
 
     {
       "format": "joblib" | "xgboost-json" | "lightgbm-text",
@@ -10,9 +11,8 @@ Envelope shape (base64-encoded as ``artifact_b64`` on the wire)::
       "feature_schema": [ {"Name": ..., "Kind": ...}, ... ]
     }
 
-All estimators are serialized via ``joblib`` (sklearn, xgboost's sklearn
-wrapper, and lightgbm's sklearn wrapper all pickle cleanly). The ``format``
-field is kept for forward-compat with native booster dumps.
+Every v1 estimator was serialized via ``joblib`` (sklearn, xgboost's sklearn
+wrapper, and lightgbm's sklearn wrapper all pickle cleanly); only ``joblib`` loads.
 
 Trainer predictors use their own envelope (``ps-predictor/v2``, see ``artifacts_v2``) and are loaded with
 ``load_v2_envelope``; a forecast's series model or baseline shares that envelope and is loaded with
@@ -32,9 +32,8 @@ import io
 import pickle
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Optional, Tuple
 
-import joblib
 import numpy as np
 import numpy.typing as npt
 from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
@@ -43,9 +42,6 @@ from pydantic import ValidationError
 
 from .artifacts_v2 import SHIPPABLE_TYPES, PredictorEnvelope, ShippablePredictor
 from .trainer import TrainedPredictor
-
-ENVELOPE_VERSION = 1
-
 
 # ---------------------------------------------------------------------------
 # Restricted unpickling
@@ -75,9 +71,9 @@ ENVELOPE_VERSION = 1
 #    500 with a traceback.
 #
 # If a new estimator family fails to load with "not an allowed global", add the narrowest
-# exact pairs it needs and extend the round-trip test: a trainer-predictor pair goes in
-# ``PREDICTOR_V2_GLOBALS`` (tests/test_artifacts_v2.py checks it both ways), a legacy
-# ``/train`` pair in the legacy set inside ``_ALLOWED_GLOBALS``. Do not add a module prefix.
+# exact pairs it needs to ``PREDICTOR_V2_GLOBALS`` and extend the round-trip test
+# (tests/test_artifacts_v2.py checks it both ways). The legacy (v1) set inside
+# ``_ALLOWED_GLOBALS`` is closed: no new v1 model is trained. Do not add a module prefix.
 
 #: The exact pairs a trainer predictor (``ps-predictor/v2``) pickles beyond the legacy list below: its in-fold
 #: pipeline, the GLM baselines' estimators and losses, its calibration map and the predictor classes themselves.
@@ -237,13 +233,6 @@ class RestrictedModelUnpickler(NumpyUnpickler):  # type: ignore[misc]  # joblib 
 # Serialize / deserialize
 # ---------------------------------------------------------------------------
 
-def _model_to_bytes(estimator: Any) -> bytes:
-    """Serialize an estimator to raw bytes via joblib (in-memory, no temp file)."""
-    buf = io.BytesIO()
-    joblib.dump(estimator, buf)
-    return buf.getvalue()
-
-
 def _bytes_to_model(raw: bytes) -> Any:
     """Deserialize raw joblib bytes back into an estimator through the restricted loader.
 
@@ -260,37 +249,11 @@ def _bytes_to_model(raw: bytes) -> Any:
         raise ArtifactRefusedError(f"Artifact could not be decoded: {type(exc).__name__}: {exc}") from exc
 
 
-def serialize_envelope(
-    estimator: Any,
-    fitted_preprocessing: Dict[str, Any],
-    feature_schema: List[Dict[str, Any]],
-) -> Tuple[str, str]:
-    """Serialize an estimator + metadata into a base64 envelope.
-
-    Returns ``(artifact_b64, model_id)`` where ``model_id`` is a stable content
-    hash usable as a warm-cache key.
-    """
-    payload = _model_to_bytes(estimator)
-    envelope = {
-        "format": "joblib",
-        "version": ENVELOPE_VERSION,
-        "payload_b64": base64.b64encode(payload).decode("ascii"),
-        "fitted_preprocessing": fitted_preprocessing,
-        "feature_schema": feature_schema,
-    }
-    import json
-
-    envelope_json = json.dumps(envelope, separators=(",", ":"), sort_keys=True)
-    artifact_b64 = base64.b64encode(envelope_json.encode("utf-8")).decode("ascii")
-    model_id = hashlib.sha256(artifact_b64.encode("ascii")).hexdigest()
-    return artifact_b64, model_id
-
-
 def deserialize_envelope(artifact_b64: str) -> Tuple[Any, Dict[str, Any]]:
     """Decode a base64 envelope back into ``(estimator, envelope_dict)``.
 
     Raises ArtifactRefusedError (a ValueError) for anything that is not a well-formed
-    envelope produced by :func:`serialize_envelope`.
+    legacy (v1) joblib envelope.
     """
     import json
 
@@ -311,8 +274,8 @@ def deserialize_envelope(artifact_b64: str) -> Tuple[Any, Dict[str, Any]]:
 def artifact_hash(artifact_b64: str) -> str:
     """Content hash (sha256 hex) of a base64 artifact — the warm-cache key.
 
-    Identical to the ``model_id`` returned by :func:`serialize_envelope`, so a
-    freshly trained model and a re-submitted artifact resolve to the same slot.
+    Identical to the ``model_id`` a legacy (v1) model was stored with, so a call
+    naming that ``model_id`` and a re-submitted artifact resolve to the same slot.
     """
     return hashlib.sha256(artifact_b64.encode("ascii")).hexdigest()
 
@@ -407,7 +370,7 @@ def load_v2_shippable(envelope_bytes: bytes) -> Tuple[ShippablePredictor, Predic
     """
     try:
         envelope = PredictorEnvelope.model_validate_json(envelope_bytes)
-        payload = base64.b64decode(envelope.payload_b64.encode("ascii"), validate=True)
+        payload = base64.b64decode(envelope.payloadB64.encode("ascii"), validate=True)
     except ValidationError as exc:
         if any(e["type"] == "json_invalid" or e["loc"] in ((), ("format",)) for e in exc.errors()):
             raise NotAV2EnvelopeError(f"Not a ps-predictor/v2 envelope: {exc}") from exc

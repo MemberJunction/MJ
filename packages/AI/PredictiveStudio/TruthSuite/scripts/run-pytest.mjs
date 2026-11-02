@@ -2,7 +2,7 @@
 /**
  * run-pytest.mjs — run TruthSuite's Python tests using its bundled .venv.
  * `--mypy` type-checks the Python package and its tests, and the sidecar's trainer-contract, column-encoding,
- * snapshot-loading, inner-fold, estimator-factory, scoring, interval, calibration, baseline and artifact modules, the holdout stage, the run, the leakage audit, permutation importance, the time-series evaluation, the forecast backtest, the gate parity test and test fixtures (`mypy --strict`, python/mypy.ini), instead.
+ * missing-value, snapshot-loading, inner-fold, estimator-factory, scoring, interval, calibration, baseline and artifact modules, the holdout stage, the run, the leakage audit, permutation importance, the time-series evaluation, the forecast backtest, the gate parity test and test fixtures (`mypy --strict`, python/mypy.ini), instead.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -30,12 +30,13 @@ if (process.platform === 'darwin') {
   env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH ? `${libomp}:${env.DYLD_LIBRARY_PATH}` : libomp;
 }
 
-// The sidecar's trainer contract, its column encoding, its snapshot loading, its inner-validation folds, its estimator
+// The sidecar's trainer contract, its column encoding, its missing-value rule, its snapshot loading, its inner-validation folds, its estimator
 // factories, its proper scores and secondary metrics, holdout intervals, the publishing gate, calibration, candidate selection, the baselines, the restricted artifact loader and the predictor artifacts, the selection stage, its CodeVersion, the holdout stage and the run, the leakage audit, permutation importance, the time-series evaluation, the forecast backtest, the gate parity test, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
 const SIDECAR_TYPED_MODULES = [
   'app/trainer_schemas.py',
   'app/failures.py',
   'app/snapshot_format.py',
+  'app/missing_values.py',
   'app/encoding.py',
   'app/snapshot.py',
   'app/folds.py',

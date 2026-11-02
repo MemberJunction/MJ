@@ -14,9 +14,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app import folds as FO, snapshot as SN, trainer as TR
+from app import snapshot as SN, trainer as TR
 from app.trainer_schemas import ContinuousTask, EvaluationProtocol, TrainerCompleted, TrainerFailed
 from tests.gates.conftest import completed, post
+from tests.tools.measures import shared_groups
 from tests.tools.trainer_fixture import (NUMERIC, FileServer, JsonObject, JsonValue, as_int, as_object, candidates,
                                          feature_schema_hash, protocol, refpipe_carve, request, scenario,
                                          scenario_manifest, snapshot_files)
@@ -218,7 +219,7 @@ def test_T2p_S_T_4_blocked_grouped_folds(server: FileServer) -> None:
         folds = TR.build_folds(proto, snap, dev, enc, all_ordinals)
         assert len(folds) == 5
         for f in folds:
-            assert FO.shared_groups(f, entities) == 0
+            assert shared_groups(f, entities) == 0
             assert int(ordinals[f.train].max()) <= int(ordinals[f.valid].min()) - gap
     r = _t2p(server, "t2p-st4")
     value, lower, upper = _shipped_rmse(r)

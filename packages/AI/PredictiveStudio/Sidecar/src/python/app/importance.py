@@ -4,9 +4,8 @@ Every feature column derived from one source column is permuted together with ON
 a derivation cannot split (dilute) a source column's importance. The measure is the increase of the primary loss on
 the rows given (the locked holdout in the trainer), averaged over repeats: model-agnostic, so every family reports it
 the same way (no impurity or split counts). The interval is a paired bootstrap of that increase on the same resampled
-rows (`intervals.paired_bootstrap`). Port of the truth suite's reference pipeline
-(`packages/AI/PredictiveStudio/TruthSuite/python/truthsuite/refpipe/scoring.py`, `permutation_importance_by_column`):
-the same permutation draws, the same bootstrap draws (seeded `seed + 1` for every source), the same ordering.
+rows (`intervals.paired_bootstrap`). The draws are fixed so a seed reproduces the result: one row-permutation stream
+over the sources in sorted order, and every source's bootstrap seeded `seed + 1`.
 """
 
 from __future__ import annotations
@@ -74,10 +73,3 @@ def permutation_importance(predict: PredictFn, X: pd.DataFrame, y: FArr, fn: Sco
         out.append(ColumnImportance(src, b.value, b.lower, b.upper))
     out.sort(key=lambda c: (-c.drop, c.source_column))
     return out
-
-
-def noise_share(importances: Sequence[ColumnImportance], noise_sources: Sequence[str]) -> float:
-    """Share of the positive importance carried by the named sources (0 when no source has positive importance)."""
-    pos = {c.source_column: max(0.0, c.drop) for c in importances}
-    total = sum(pos.values())
-    return 0.0 if total == 0 else sum(pos.get(s, 0.0) for s in noise_sources) / total

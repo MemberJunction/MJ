@@ -37,7 +37,7 @@ from tests.tools.trainer_fixture import (
     request,
     snapshot_files,
 )
-from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
+from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, holdout_2024, server  # noqa: F401 - `server` is a pytest fixture
 
 client = TestClient(app)
 LABELS = {0: "no", 1: "yes"}
@@ -61,21 +61,17 @@ def _list(value: JsonValue) -> list[JsonValue]:
     return value
 
 
-def _holdout_2024(df: pd.DataFrame) -> list[str]:
-    return [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
-
-
 def _request(server: FileServer, df: pd.DataFrame, feats: dict[str, JsonObject] = FEATS, tag: str = "snap",
              drivers: list[DriverSpec] | None = None, task: JsonObject = TASK,
              **proto_over: JsonValue) -> JsonObject:
-    m, n = snapshot_files(df, feats, _holdout_2024(df), label_map=LABELS, slice_cols={"City": "city"},
+    m, n = snapshot_files(df, feats, holdout_2024(df), label_map=LABELS, slice_cols={"City": "city"},
                           decision=DECISION)
     proto = protocol("binary", slices={"outOfTime": True, "subgroups": ["City"]}, **proto_over)
     return request(server, m, n, task, proto, candidates("binary", drivers), tag=tag)
 
 
 def _multiclass_request(server: FileServer, df: pd.DataFrame, tag: str) -> JsonObject:
-    m, n = snapshot_files(df, FEATS, _holdout_2024(df), label_map=MULTICLASS_LABELS)
+    m, n = snapshot_files(df, FEATS, holdout_2024(df), label_map=MULTICLASS_LABELS)
     return request(server, m, n, MULTICLASS_TASK, protocol("multiclass"), candidates("multiclass", LOGISTIC_ONLY),
                    tag=tag)
 
@@ -174,7 +170,7 @@ def test_predict_returns_the_class_vector_of_a_v2_artifact(server: FileServer) -
 
 
 def test_predict_refuses_a_v2_artifact_whose_payload_is_not_allowed() -> None:
-    envelope = {"format": "ps-predictor/v2", "version": 2, "payload_b64": base64.b64encode(b"not a pickle").decode(),
+    envelope = {"format": "ps-predictor/v2", "version": 2, "payloadB64": base64.b64encode(b"not a pickle").decode(),
                 "featureColumns": [], "taskKind": "binary", "classOrder": ["no", "yes"],
                 "featureSchemaHash": "0" * 64, "driverBaseline": None, "transformedColumns": None}
     b64 = base64.b64encode(json.dumps(envelope).encode("utf-8")).decode("ascii")

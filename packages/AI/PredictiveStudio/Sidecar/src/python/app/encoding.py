@@ -34,8 +34,8 @@ value encodes as all zeros like any other undeclared value.
 TargetEncoder (its own inner 5-fold cross-fit on each fit's training rows). Only `onehot` is reachable from a product
 snapshot today: the engine's assembler emits one-hot categoricals only.
 
-The trainer path's encoder is deliberately separate from the legacy `preprocessing` module's fit-once JSON ops; it
-shares that module's notion of a missing value (None, NaN, blank text), not its code.
+The trainer path's encoder is deliberately separate from the legacy `preprocessing` module's frozen JSON ops; the two
+share one definition of a missing value (`missing_values.is_missing`).
 """
 
 from __future__ import annotations
@@ -53,6 +53,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler, TargetEncoder
+
+from .missing_values import is_missing
 
 MISSING_TOKEN = "__missing__"
 MISSING_INDICATOR_SUFFIX = "__missing"
@@ -165,22 +167,13 @@ class HashBucketEncoder(BaseEstimator, TransformerMixin):  # type: ignore[misc]
         return np.asarray([f"{c}#b{b}" for c in names for b in range(self.n_buckets)], dtype=np.str_)
 
 
-def _is_missing(value: object) -> bool:
-    """True for null-equivalents: None, pandas NA, NaN floats (numpy ones too) and blank or whitespace text."""
-    if value is None or value is pd.NA:
-        return True
-    if isinstance(value, (float, np.floating)) and math.isnan(float(value)):
-        return True
-    return isinstance(value, str) and value.strip() == ""
-
-
 def _numeric_value(column: str, value: object) -> float:
     """The float of a present numeric value, NaN for a missing one.
 
     Raises:
         NonNumericValueError: When the value is present but not a finite number.
     """
-    if _is_missing(value):
+    if is_missing(value):
         return math.nan
     if isinstance(value, (bool, int, float, np.number, np.bool_)):
         if not math.isfinite(float(value)):
@@ -347,5 +340,5 @@ def normalize(columns: Sequence[ColumnSpec], X: pd.DataFrame) -> pd.DataFrame:
         if isinstance(c.encoding, NumericEncoding):
             out[c.name] = np.asarray([_numeric_value(c.name, v) for v in values], dtype=np.float64)
         else:
-            out[c.name] = [None if _is_missing(v) else str(v) for v in values]
+            out[c.name] = [None if is_missing(v) else str(v) for v in values]
     return pd.DataFrame(out, index=X.index)

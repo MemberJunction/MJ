@@ -3,11 +3,10 @@
 The protocol's rolling-origin holdout places `origins` non-overlapping `horizonPeriods`-period test windows at the end
 of the series; origin k trains only on the periods up to `gapPeriods` before its first test period (expanding from the
 first period, or a sliding `minTrainPeriods` window). The row manifest's locked-holdout rows must be exactly those test
-periods. This is the reference pipeline's design (`truthsuite.refpipe.run.run_series`), and it differs from the
-tabular holdout in two ways that are intended: a later origin trains on earlier origins' test periods (each origin
-forecasts only periods after its own window, so no origin reads a target it is scored on), and the returned artifacts
-are fitted on the whole series, the way the series will be forecast after publishing. `holdoutAccess.count` is 1:
-the outer origins are scored once, for one finalist.
+periods. This differs from the tabular holdout in two ways that are intended: a later origin trains on earlier origins'
+test periods (each origin forecasts only periods after its own window, so no origin reads a target it is scored on), and
+the returned artifacts are fitted on the whole series, the way the series will be forecast after publishing.
+`holdoutAccess.count` is 1: the outer origins are scored once, for one finalist.
 
 Selection reads only the periods before the first test period: up to three inner origins of `horizonPeriods` periods
 end there, each trained on every period before it (minus the gap). A candidate whose residuals on that whole
@@ -69,7 +68,7 @@ from .trainer_schemas import (
 
 # The Ljung-Box veto's significance level when the protocol declares no residual diagnostics.
 DEFAULT_LJUNG_BOX_ALPHA: Final = 0.05
-# The veto's lags: min(VETO_MAX_LAGS, residuals // VETO_RESIDUALS_PER_LAG), at least 1 (the reference pipeline's rule).
+# The veto's lags: min(VETO_MAX_LAGS, residuals // VETO_RESIDUALS_PER_LAG), at least 1.
 VETO_MAX_LAGS: Final = 24
 VETO_RESIDUALS_PER_LAG: Final = 5
 # At most this many inner origins end at the first test period.
@@ -251,8 +250,8 @@ def _backtest(fit: _Fitter, origins: Sequence[T.Origin], spec: CandidateSpec) ->
 def _rows(metric: scores.PrimaryMetric, scored: Sequence[T.OriginScores],
           forecasts: Sequence[FArr]) -> Tuple[FArr, FArr]:
     """(y, prediction) whose primary-score loss is the loss of `forecasts` (one array per origin): absolute errors
-    scaled by each origin's scale against 0 for MASE (the reference pipeline's device; the same arithmetic as
-    `OriginScores.scaled_errors`), else the actual values and the forecasts."""
+    scaled by each origin's scale against 0 for MASE (the same arithmetic as `OriginScores.scaled_errors`), else the
+    actual values and the forecasts."""
     if metric == "mase":
         e = np.concatenate([np.abs(o.actual - f) / o.scale for o, f in zip(scored, forecasts)])
         return np.zeros(len(e), dtype=np.float64), np.asarray(e, dtype=np.float64)

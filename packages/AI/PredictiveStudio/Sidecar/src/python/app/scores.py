@@ -8,10 +8,6 @@ aggregates of a row loss (sqrt of mean squared error; mean of scaled absolute er
 
 Predictions: binary -> P(classOrder[1]) as a 1-D array; multiclass -> (n, K) probabilities in classOrder;
 continuous/count/non-negative -> the conditional mean.
-
-The legacy `/train` route's `metrics` module reports sklearn summary metrics (AUC, F1, RMSE, ...) as one dictionary
-per model and has no per-row losses; the trainer ranks on proper scores row by row, so this module is a separate,
-typed mechanism by design and shares no code with it.
 """
 
 from __future__ import annotations

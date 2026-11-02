@@ -17,14 +17,9 @@ test, residual autocorrelation, and the series models.
   SeriesModel        AR(1) + constant, trend + season OLS, trend + season + AR(1); terms on the series' own previous
                      value are forecast recursively, so no target inside a test window is read
 
-The statistics are ports of the truth suite's reference pipeline (`truthsuite.refpipe.scoring`: mase_scale, acf,
-ljung_box, hac_se, panel_acf, diebold_mariano; `truthsuite.refpipe.baselines`: naive_last, seasonal_naive,
-series_mean), with input checks added: a function that cannot compute on its input raises ValueError naming it. The
-series models follow `truthsuite.refpipe.models.SeriesModel` with two differences, both because statsmodels is not a
-sidecar dependency. AR(1) + constant is fitted by conditional least squares with a Gaussian sigma^2 * sum phi^(2j)
-interval, not by statsmodels' exact ARIMA likelihood and its forecast interval, so its forecasts, intervals and
-MASE differ from the reference pipeline's (on the 240-month monthly truth series with 12 origins: MASE 0.6229
-against 0.6242). The reference pipeline's additive Holt-Winters candidate is not offered.
+A function that cannot compute on its input raises ValueError naming it. statsmodels is not a sidecar dependency, so
+AR(1) + constant is fitted by conditional least squares with a Gaussian sigma^2 * sum phi^(2j) interval, not by an
+exact ARIMA likelihood, and no Holt-Winters candidate is offered.
 """
 
 from __future__ import annotations
@@ -72,7 +67,7 @@ class Origin:
 def rolling_origins(n_periods: int, origins: int, horizon: int, gap: int, min_train: int,
                     window: WindowKind) -> List[Origin]:
     """`origins` non-overlapping `horizon`-period test windows ending at the last period (first test period =
-    n - origins * horizon, as the reference pipeline places them). Origin k's training window ends `gap` periods
+    n - origins * horizon). Origin k's training window ends `gap` periods
     before its first test period; every origin must keep at least `min_train` training periods."""
     if origins < 5:
         raise ValueError(f"rolling-origin needs at least 5 origins, got {origins}")
@@ -123,9 +118,7 @@ def naive_last(y_train: FArr, steps: IntArr) -> FArr:
 def seasonal_naive(y_train: FArr, steps: IntArr, season: int) -> FArr:
     """The window's last full season, read at each step's position in the season: step s past the window takes the
     value s - season * ceil(s / season) periods from the window's end, so a gap between the window and the forecast
-    periods keeps the season aligned. (The reference pipeline's `truthsuite.refpipe.baselines.seasonal_naive` takes a
-    horizon and assumes the first forecast period follows the window; its series pipeline never leaves a gap, and at
-    gap 0 both give the same values.)"""
+    periods keeps the season aligned."""
     s = _checked_steps(steps, "seasonal-naive")
     tr = _window(y_train)
     if len(tr) < season:
@@ -292,7 +285,7 @@ def panel_acf(resid: FArr, entity: Sequence[str], order: IntArr, nlags: int) -> 
 def box_pierce(rhos: Sequence[float], pairs: Sequence[int]) -> Tuple[float, float]:
     """Pooled Box-Pierce Q over lags 1..len(rhos): the sum of each lag's pair count times its squared
     autocorrelation (the pairs behind each rho of panel_acf, so lags with fewer within-entity pairs weigh less), and
-    its chi-square p-value on len(rhos) degrees of freedom (`truthsuite.refpipe.run._residual_panel`)."""
+    its chi-square p-value on len(rhos) degrees of freedom."""
     if len(rhos) != len(pairs):
         raise ValueError(f"box_pierce got {len(rhos)} autocorrelations for {len(pairs)} pair count(s)")
     if not rhos:
@@ -329,7 +322,7 @@ class DMResult:
 
 def diebold_mariano(loss_a: FArr, loss_b: FArr, h: int) -> DMResult:
     """DM test of equal accuracy on d = loss_a - loss_b: HAC variance with h-1 lags, the Harvey-Leybourne-Newbold
-    small-sample correction, a t(n-1) reference. The statistic and p-value are NaN, as in the reference pipeline,
+    small-sample correction, a t(n-1) reference. The statistic and p-value are NaN
     when the HAC variance of the differential is not positive: identical losses, or a differential so negatively
     autocorrelated that gamma_0 + 2 * sum(gamma_k) <= 0."""
     a = np.asarray(loss_a, dtype=np.float64)

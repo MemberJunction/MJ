@@ -181,7 +181,7 @@ describe('MLSidecar.RunTrainer', () => {
     const out = await s.RunTrainer(req);
     expect(requestLog[0].method).toBe('POST');
     expect(requestLog[0].path).toBe('/trainer');
-    expect(JSON.parse(requestLog[0].body ?? '{}')).toEqual(req);
+    expect(JSON.parse(requestLog[0].body || '{}')).toEqual(req);
     expect(out).toEqual(failed);
   });
 

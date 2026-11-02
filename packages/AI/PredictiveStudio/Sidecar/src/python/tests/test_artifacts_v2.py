@@ -32,6 +32,7 @@ from app import temporal as T
 from app.algorithms import TabularFamily
 from app.array_types import FArr
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol
+from tests.tools import legacy_envelope as legacy
 from tests.tools.trainer_fixture import protocol
 
 RNG = np.random.default_rng(0)
@@ -219,7 +220,7 @@ def _envelope_with_payload(payload: bytes) -> bytes:
     """A complete, valid v2 envelope (built from a real predictor) whose payload is replaced by `payload`, so the
     payload is what reaches the restricted unpickler."""
     envelope = json.loads(base64.b64decode(_build("lr", _fitted("binary", "logistic_regression"), "binary").bytes_base64))
-    envelope["payload_b64"] = base64.b64encode(payload).decode("ascii")
+    envelope["payloadB64"] = base64.b64encode(payload).decode("ascii")
     return json.dumps(envelope).encode("utf-8")
 
 
@@ -280,8 +281,8 @@ MALFORMED: Dict[str, Callable[[], bytes]] = {
     "v1-format": lambda: json.dumps({"format": "joblib", "version": 1}).encode("utf-8"),
     "missing-fields": lambda: json.dumps({"format": "ps-predictor/v2", "version": 2}).encode("utf-8"),
     "version-3": lambda: _complete_envelope(version=3),
-    "invalid-base64": lambda: _complete_envelope(payload_b64="!!!!"),
-    "non-ascii-payload": lambda: _complete_envelope(payload_b64="\u00e9t\u00e9"),
+    "invalid-base64": lambda: _complete_envelope(payloadB64="!!!!"),
+    "non-ascii-payload": lambda: _complete_envelope(payloadB64="\u00e9t\u00e9"),
     "garbage-payload": lambda: _envelope_with_payload(b"garbage, not a pickle"),
     "truncated-payload": lambda: _envelope_with_payload(_truncated_payload()),
 }
@@ -295,7 +296,7 @@ def test_a_malformed_envelope_is_refused(case: str) -> None:
 
 def test_content_hash_conventions_are_pinned() -> None:
     """v1: `model_id` is the SHA-256 of the base64 TEXT. v2: `sha256` is the SHA-256 of the envelope BYTES."""
-    v1_b64, model_id = artifacts.serialize_envelope(Ridge().fit(np.eye(3), np.arange(3.0)), {}, [])
+    v1_b64, model_id = legacy.serialize_envelope(Ridge().fit(np.eye(3), np.arange(3.0)), {}, [])
     assert model_id == hashlib.sha256(v1_b64.encode("ascii")).hexdigest() == artifacts.artifact_hash(v1_b64)
     art = _build("lr", _fitted("binary", "logistic_regression"), "binary")
     raw = base64.b64decode(art.bytes_base64)

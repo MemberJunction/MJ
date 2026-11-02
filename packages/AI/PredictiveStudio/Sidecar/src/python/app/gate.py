@@ -1,8 +1,8 @@
 """The publishing gate's decision table, with the evaluation protocol's margin.
 
-`gate_decision`, `GATE_OUTCOMES`, `GATE_BRANCHES` and `NO_SIMPLE_SIGNAL_NOTE` are transcribed from the reference
-pipeline's gate. "Beats" means the lower bound of the paired interval of (comparator loss - candidate loss) on the
-same holdout rows is above `margin`; margin 0 is the reference pipeline's rule.
+`gate_decision`, `GATE_OUTCOMES`, `GATE_BRANCHES` and `NO_SIMPLE_SIGNAL_NOTE` are the gate specification's decision
+table, branch names and note. "Beats" means the lower bound of the paired interval of (comparator loss - candidate
+loss) on the same holdout rows is above `margin`; at margin 0 any positive lower bound beats.
 
 The engine recomputes the decision in TypeScript (`GateRules.DecideGate`), which is authoritative for the stored
 outcome; the sidecar uses this decision only to choose the artifacts it returns and to report `TrainerResult.gate`.

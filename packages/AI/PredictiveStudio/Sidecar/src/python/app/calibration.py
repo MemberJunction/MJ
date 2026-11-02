@@ -1,8 +1,7 @@
 """Calibration measurement and calibration maps.
 
   calibration_fit  slope and intercept of y ~ a + b * logit(p) and calibration-in-the-large (y ~ offset(logit p)),
-                   by Newton-Raphson on the Bernoulli likelihood (the same GLM the truth suite's reference pipeline
-                   fits with statsmodels)
+                   by Newton-Raphson on the Bernoulli likelihood (a logistic GLM; no statsmodels dependency)
   reliability      10 equal-count bins: mean predicted vs observed rate
   Calibrator       Platt (logistic on logit p) or isotonic, one-vs-rest + renormalised for multiclass; fit on
                    predictions for rows the predicting model never trained on (out-of-fold), applied to the

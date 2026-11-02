@@ -192,7 +192,7 @@ class _FeatureColumnHeader(_Stored):
 class _DecisionHeader(_Stored):
     action: str
     actorRole: str
-    capacityPerPeriod: Optional[Annotated[float, Field(ge=0)]]
+    capacityPerPeriod: Optional[Annotated[int, Field(gt=0)]]
     period: DecisionPeriod
 
 
@@ -270,7 +270,7 @@ class _RowKey(_Stored):
 
 @dataclass(frozen=True)
 class DecisionSpec:
-    capacity_per_period: Optional[float]
+    capacity_per_period: Optional[int]
     period: DecisionPeriod
 
 

@@ -13,6 +13,7 @@ import pytest
 
 from app import audit as AU, importance as IM, run as RUN, snapshot as SN, trainer as TR
 from app.trainer_schemas import TrainerCompleted, TrainerRequest
+from tests.tools.measures import noise_share
 from tests.gates.conftest import (W_BINARY_FEATURES, artifact_sources, completed, last_cycle_ids, shipped_artifact,
                                   world, world_frame, world_truth)
 from tests.tools.trainer_fixture import (BINARY_LABELS as LM, BINARY_TASK as BIN, NUMERIC, FileServer, JsonObject,
@@ -169,7 +170,7 @@ def test_W8_S9_4_noise_carries_at_most_ten_percent(server: FileServer) -> None:
     assert reported == set(feats) - {"MemberNumber"}, f"importance reported for {sorted(reported)}"
     signal = {i.source_column: i.drop for i in imps if i.source_column not in noise}
     assert any(v > 0 for v in signal.values()), f"no signal column has positive importance: {signal}"
-    share = IM.noise_share(imps, noise)
+    share = noise_share(imps, noise)
     assert share <= 0.10, f"noise columns carry {share:.4f} of the held-out permutation importance"
     assert any(f.kind == "high-cardinality-id" and f.sourceColumn == "MemberNumber" for f in r.leakageFlags), \
         f"flags: {r.leakageFlags}"

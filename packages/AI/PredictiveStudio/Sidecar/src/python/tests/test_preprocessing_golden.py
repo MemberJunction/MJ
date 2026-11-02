@@ -1,9 +1,7 @@
-"""Golden anti-skew tests: an identical raw row must produce an identical
-transformed vector at TRAIN time (fit_transform) and PREDICT time (transform).
-
-This is the correctness backbone (plan §6.2): preprocessing is fit once on
-training data and ONLY applied at inference. If fit and apply ever diverge,
-these tests fail.
+"""Golden anti-skew tests: an identical raw row must produce an identical transformed vector in the legacy model's
+training matrix (fit the way the retired ``/train`` route fit it, ``tests.tools.legacy_envelope.fit_transform``) and at
+``/predict`` (``preprocessing.transform``, which only applies the frozen parameters). If the frozen parameters stop
+reproducing the training matrix, these tests fail.
 """
 
 from __future__ import annotations
@@ -12,6 +10,7 @@ import numpy as np
 import pytest
 
 from app import preprocessing
+from tests.tools import legacy_envelope as legacy
 
 
 def _training_frame():
@@ -44,7 +43,7 @@ def test_golden_train_predict_identity():
     columns, rows, feature_cols = _training_frame()
     ops = _ops()
 
-    train_matrix, output_columns, fitted = preprocessing.fit_transform(
+    train_matrix, output_columns, fitted = legacy.fit_transform(
         columns, rows, ops, feature_cols
     )
 
@@ -67,7 +66,7 @@ def test_predict_never_refits_with_new_data():
     TRAINING mean/std, yielding a non-zero standardized value.
     """
     columns, rows, feature_cols = _training_frame()
-    fitted = preprocessing.fit_transform(columns, rows, _ops(), feature_cols)[2]
+    fitted = legacy.fit_transform(columns, rows, _ops(), feature_cols)[2]
 
     # one unseen row whose age differs from the training mean
     unseen = [{"age": 100, "income": 90000, "city": "NY", "score": 2.5}]
@@ -83,7 +82,7 @@ def test_predict_never_refits_with_new_data():
 def test_onehot_vocabulary_frozen():
     """An unseen category at predict time maps to all-zero indicators (no new column)."""
     columns, rows, feature_cols = _training_frame()
-    fitted = preprocessing.fit_transform(columns, rows, _ops(), feature_cols)[2]
+    fitted = legacy.fit_transform(columns, rows, _ops(), feature_cols)[2]
 
     vocab = next(o for o in fitted["ops"] if o["op"] == "onehot")["vocabulary"]
     assert vocab == ["LA", "NY", "SF"]
@@ -101,7 +100,7 @@ def test_onehot_vocabulary_frozen():
 def test_impute_fill_values_frozen():
     """Imputation fill values are learned at train and reused verbatim at predict."""
     columns, rows, feature_cols = _training_frame()
-    fitted = preprocessing.fit_transform(columns, rows, _ops(), feature_cols)[2]
+    fitted = legacy.fit_transform(columns, rows, _ops(), feature_cols)[2]
 
     age_fill = next(
         o for o in fitted["ops"] if o["op"] == "impute" and o["col"] == "age"
@@ -133,19 +132,19 @@ def test_bin_count_honors_configured_bins():
     rows = [[1.0, 1], [2.0, 0], [3.0, 1], [4.0, 0], [5.0, 1], [6.0, 0]]
     feature_cols = ["score"]
 
-    _, _, fitted3 = preprocessing.fit_transform(
+    _, _, fitted3 = legacy.fit_transform(
         columns, rows, [{"op": "bin", "col": "score", "bins": 3}], feature_cols
     )
     assert len(_bin_edges(fitted3, "score")) == 4  # 3 bins -> 4 edges
 
     # A different configured count must change the edge count (proves it isn't fixed at 4).
-    _, _, fitted2 = preprocessing.fit_transform(
+    _, _, fitted2 = legacy.fit_transform(
         columns, rows, [{"op": "bin", "col": "score", "bins": 2}], feature_cols
     )
     assert len(_bin_edges(fitted2, "score")) == 3  # 2 bins -> 3 edges
 
     # Omitting bins falls back to the documented default of 4 bins -> 5 edges.
-    _, _, fitted_default = preprocessing.fit_transform(
+    _, _, fitted_default = legacy.fit_transform(
         columns, rows, [{"op": "bin", "col": "score"}], feature_cols
     )
     assert len(_bin_edges(fitted_default, "score")) == 5  # default 4 bins -> 5 edges
@@ -154,7 +153,7 @@ def test_bin_count_honors_configured_bins():
 def test_output_column_order_stable():
     """Output column order is deterministic: onehot indicators then passthrough."""
     columns, rows, feature_cols = _training_frame()
-    _, output_columns, fitted = preprocessing.fit_transform(
+    _, output_columns, fitted = legacy.fit_transform(
         columns, rows, _ops(), feature_cols
     )
     assert output_columns == fitted["output_columns"]
@@ -167,7 +166,7 @@ def test_text_in_numeric_passthrough_column_is_refused_naming_it():
     columns = ["Region", "label"]
     rows = [["EU", 1], ["R7", 0]]
     with pytest.raises(preprocessing.NonNumericFeatureError) as exc:
-        preprocessing.fit_transform(columns, rows, [], ["Region"])
+        legacy.fit_transform(columns, rows, [], ["Region"])
     # structured fields, not the message text
     assert exc.value.column == "Region" and exc.value.value == "EU"
 
@@ -176,7 +175,7 @@ def test_impute_with_indicator_emits_a_missing_column_and_keeps_true_zero_distin
     columns = ["x", "label"]
     rows = [[0.0, 1], [None, 0], [2.0, 1]]
     ops = [{"op": "impute", "col": "x", "strategy": "median", "indicator": True}]
-    matrix, out_cols, fitted = preprocessing.fit_transform(columns, rows, ops, ["x"])
+    matrix, out_cols, fitted = legacy.fit_transform(columns, rows, ops, ["x"])
     assert out_cols == ["x__missing", "x"]
     assert matrix.tolist() == [[0.0, 0.0], [1.0, 1.0], [0.0, 2.0]]
     again = preprocessing.transform([{"x": None}], fitted, ["x"])
@@ -188,7 +187,7 @@ def test_text_in_standardized_column_is_refused_naming_column_and_value():
     rows = [[30.0, 1], ["abc", 0], [40.0, 1]]
     ops = [{"op": "standardize", "cols": ["age"]}]
     with pytest.raises(preprocessing.NonNumericFeatureError) as exc:
-        preprocessing.fit_transform(columns, rows, ops, ["age"])
+        legacy.fit_transform(columns, rows, ops, ["age"])
     assert exc.value.column == "age" and exc.value.value == "abc"
 
 
@@ -197,7 +196,7 @@ def test_text_in_binned_column_is_refused_naming_column_and_value():
     rows = [[30.0, 1], ["abc", 0], [40.0, 1], [50.0, 0]]
     ops = [{"op": "bin", "col": "age", "bins": 2}]
     with pytest.raises(preprocessing.NonNumericFeatureError) as exc:
-        preprocessing.fit_transform(columns, rows, ops, ["age"])
+        legacy.fit_transform(columns, rows, ops, ["age"])
     assert exc.value.column == "age" and exc.value.value == "abc"
 
 
@@ -206,4 +205,4 @@ def test_duplicate_output_column_is_refused_naming_it():
     rows = [[1.0, 5.0, 1], [None, 6.0, 0], [2.0, 7.0, 1]]
     ops = [{"op": "impute", "col": "x", "strategy": "mean", "indicator": True}]
     with pytest.raises(ValueError, match="x__missing"):
-        preprocessing.fit_transform(columns, rows, ops, ["x", "x__missing"])
+        legacy.fit_transform(columns, rows, ops, ["x", "x__missing"])

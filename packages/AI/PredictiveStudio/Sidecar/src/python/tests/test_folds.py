@@ -8,13 +8,14 @@ import numpy.typing as npt
 import pytest
 
 from app import folds as F
+from tests.tools.measures import shared_groups
 
 
 def test_grouped_folds_share_zero_keys_and_repeat() -> None:
     groups = [f"m{i // 4}" for i in range(400)]
     fs = F.grouped(groups, folds=5, repeats=3, seed=7)
     assert len(fs) == 15
-    assert all(F.shared_groups(f, groups) == 0 for f in fs)
+    assert all(shared_groups(f, groups) == 0 for f in fs)
     assert {f.repeat for f in fs} == {0, 1, 2}
 
 
@@ -25,7 +26,7 @@ def test_blocked_time_folds_keep_gap_and_groups() -> None:
     fs = F.blocked_time(periods, groups, folds=5, gap_periods=1, seed=0)
     for f in fs:
         assert int(periods[f.train].max()) <= int(periods[f.valid].min()) - 1
-        assert F.shared_groups(f, groups) == 0
+        assert shared_groups(f, groups) == 0
 
 
 def test_stratified_folds_keep_class_balance() -> None:

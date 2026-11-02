@@ -22,7 +22,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 import numpy as np
 from threadpoolctl import threadpool_limits
 
-from . import audit as AU, baselines as BL, code_version, encoding, evaluation as EV, scores, snapshot as SN
+from . import algorithms, audit as AU, baselines as BL, code_version, encoding, evaluation as EV, scores, snapshot as SN
 from . import trainer as TR
 from .array_types import FArr, IntArr
 from .failures import RequestRefused, RunClock, TrainerFailure
@@ -51,10 +51,10 @@ def refuse_invalid(req: TrainerRequest) -> None:
     reserved = sorted(n for n in names if n in BL.MEMBER_NAMES or n.startswith(BL.HEURISTIC_PREFIX))
     if reserved:
         raise RequestRefused(f"candidate names {reserved} are reserved for gate members")
-    baseline_only = sorted(c.name for c in req.candidates if c.driverKey in BL.BASELINE_ONLY_DRIVERS)
+    baseline_only = sorted(c.name for c in req.candidates if c.driverKey in algorithms.BASELINE_ONLY_DRIVERS)
     if baseline_only:
         raise RequestRefused(f"candidates {baseline_only} name a driver only the GLM baseline fits "
-                             f"({sorted(BL.BASELINE_ONLY_DRIVERS)})")
+                             f"({sorted(algorithms.BASELINE_ONLY_DRIVERS)})")
     if (p.holdout.kind == "rolling-origin") != (req.task.kind == "forecast"):
         raise RequestRefused("a rolling-origin holdout is for forecast tasks, and a forecast task needs one")
     if req.task.kind == "forecast":

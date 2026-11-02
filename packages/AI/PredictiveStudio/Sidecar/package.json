@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/predictive-studio-sidecar",
   "version": "6.2.0-edge.6",
-  "description": "Self-managing TypeScript wrapper for the Predictive Studio Python ML sidecar. Spawns a bundled FastAPI microservice as a child process (managed mode) or connects to a remote/containerized instance, exposing a typed /train + /predict + /health client.",
+  "description": "Self-managing TypeScript wrapper for the Predictive Studio Python ML sidecar. Spawns a bundled FastAPI microservice as a child process (managed mode) or connects to a remote/containerized instance, exposing a typed /trainer + /predict + /health client.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

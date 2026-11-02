@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app import importance as IM, scores
 from app.main import app
 from app.trainer_schemas import TrainerCompleted
+from tests.tools.measures import noise_share
 from tests.tools.trainer_fixture import FileServer, candidates, protocol, request, snapshot_files
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
@@ -40,7 +41,7 @@ def test_permutation_importance_groups_encoded_columns() -> None:
     assert [i.source_column for i in imps] == ["a", "noise"]
     assert by["a"].drop > 0 and by["a"].lower > 0 and by["a"].lower <= by["a"].drop <= by["a"].upper
     assert by["noise"].drop == pytest.approx(0.0, abs=1e-12)
-    assert IM.noise_share(imps, ["noise"]) == 0.0
+    assert noise_share(imps, ["noise"]) == 0.0
 
 
 def test_drop_is_the_mean_loss_increase_over_repeats_with_one_row_permutation_per_source() -> None:
@@ -92,8 +93,8 @@ def test_multiclass_predictions() -> None:
 def test_noise_share_counts_positive_importance_only() -> None:
     imps = [IM.ColumnImportance("a", 0.3, 0.2, 0.4), IM.ColumnImportance("n1", 0.1, 0.0, 0.2),
             IM.ColumnImportance("n2", -0.2, -0.3, 0.0)]
-    assert IM.noise_share(imps, ["n1", "n2"]) == pytest.approx(0.25)
-    assert IM.noise_share([IM.ColumnImportance("a", -0.1, -0.2, 0.0)], ["a"]) == 0.0
+    assert noise_share(imps, ["n1", "n2"]) == pytest.approx(0.25)
+    assert noise_share([IM.ColumnImportance("a", -0.1, -0.2, 0.0)], ["a"]) == 0.0
 
 
 def _importance_run(server: FileServer, df: pd.DataFrame, hold: list[str], resamples: int) -> TrainerCompleted:

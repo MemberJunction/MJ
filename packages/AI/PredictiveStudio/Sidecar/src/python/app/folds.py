@@ -11,10 +11,9 @@ snapshot rows.
                        trailing cutoff; training is the other groups' rows at periods at least `gap_periods` before the
                        earliest validation period
 
-The first repeat of the unstratified, grouped and blocked-time assignments is the reference pipeline's (one
-`default_rng(seed)`; rows dealt round-robin after one permutation, or group keys sorted then permuted), so a leakage
-audit over these folds reproduces the reference pipeline's numbers. Repeat r draws from `default_rng(seed + r)`. The
-stratified assignment has no reference counterpart.
+The first repeat of the unstratified, grouped and blocked-time assignments draws from one `default_rng(seed)` (rows
+dealt round-robin after one permutation, or group keys sorted then permuted), so a seed fixes the folds exactly.
+Repeat r draws from `default_rng(seed + r)`.
 """
 
 from __future__ import annotations
@@ -69,7 +68,7 @@ def repeated_stratified(y: npt.NDArray[np.generic], folds: int, repeats: int, se
                         stratify: bool) -> list[Fold]:
     """`repeats` independent k-fold partitions of the development rows `y`. With `stratify` (classification), each
     class is dealt round-robin over the folds after a seeded shuffle, so every fold keeps the class balance; without it
-    (regression), rows are dealt round-robin after a seeded permutation, the reference pipeline's random assignment.
+    (regression), rows are dealt round-robin after a seeded permutation.
     Raises when there are fewer rows than folds (a fold would validate nothing)."""
     _require_partition(folds, repeats)
     n = len(y)
@@ -137,8 +136,7 @@ def blocked_time(period_ordinals: IntArr, groups: Sequence[str] | None, folds: i
     (none of its groups reaches the trailing block) or no training rows (the gap leaves no other group's row early
     enough): a fold that scores nothing, or a model fitted on nothing, must not reach candidate selection.
 
-    The reference pipeline blocks on dates with a gap in days; ordinals over the unit's period kind are the product's
-    equivalent, with the gap counted in periods."""
+    Blocks are ordinals over the unit's period kind, so the gap is counted in periods, not days."""
     if gap_periods < 0:
         raise ValueError(f"blocked-time gap must be at least 0 periods, got {gap_periods}")
     n = len(period_ordinals)
@@ -166,8 +164,3 @@ def _require_nonempty(k: int, train: IntArr, valid: IntArr, gap_periods: int) ->
         raise ValueError(f"blocked-time fold {k} has no training rows: no other group has a row at least "
                          f"{gap_periods} period(s) before the earliest validation period (use a smaller gap or more "
                          "early development rows)")
-
-
-def shared_groups(fold: Fold, groups: Sequence[str]) -> int:
-    """Number of group keys present on both sides of a fold; a grouped or blocked-time fold must share none."""
-    return len({groups[int(i)] for i in fold.train} & {groups[int(i)] for i in fold.valid})

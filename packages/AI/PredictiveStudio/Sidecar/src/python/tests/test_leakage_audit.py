@@ -21,7 +21,7 @@ from app.trainer_schemas import (
 )
 from tests.tools.trainer_fixture import NUMERIC, FileServer, JsonObject, JsonValue, candidates, protocol, request, \
     snapshot_files
-from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
+from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, holdout_2024, server  # noqa: F401 - `server` is a pytest fixture
 
 client = TestClient(app)
 LABELS = {0: "no", 1: "yes"}
@@ -188,13 +188,9 @@ def test_beats_reference_with_one_row_of_a_class_is_undefined_and_quiet(positive
 LOGISTIC_ONLY: list[tuple[str, str, JsonObject]] = [("glm_candidate", "logistic_regression", {})]
 
 
-def _holdout_2024(df: pd.DataFrame) -> list[str]:
-    return [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
-
-
 def _post(server: FileServer, df: pd.DataFrame, feats: dict[str, JsonObject], reference: bool = False,
           ceiling: float = 0.9, drivers: list[tuple[str, str, JsonObject]] = LOGISTIC_ONLY) -> JsonObject:
-    m, n = snapshot_files(df, feats, _holdout_2024(df), label_map=LABELS, reference_col="Truth" if reference else None)
+    m, n = snapshot_files(df, feats, holdout_2024(df), label_map=LABELS, reference_col="Truth" if reference else None)
     audit: JsonObject = {"singleFeatureHeldOutAucMax": ceiling, "timeShiftedLabelTest": True, "dropColumnTest": True,
                          "importanceAggregation": "per-source-column", "highCardinalityIdCheck": True}
     req = request(server, m, n, TASK, protocol("binary", leakageAudit=audit), candidates("binary", drivers))

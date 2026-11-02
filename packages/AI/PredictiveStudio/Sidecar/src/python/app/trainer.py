@@ -337,7 +337,7 @@ def select_finalist(protocol: EvaluationProtocol, snap: Snapshot, columns: Seque
           for spec in candidates}
     order = [c.name for c in candidates]
     # The pooled score is each candidate's repeat-0 out-of-fold score; the paired row loss is each validated row's loss
-    # averaged over every repeat. With one repeat both are the reference pipeline's (`_select`) exactly.
+    # averaged over every repeat. With one repeat both come from the same out-of-fold predictions.
     y_val = np.asarray(dev_enc.y, dtype=np.float64)[validated]
     sel = select_one_se(order, {c: primary.aggregate(y_val, cv[c].oof) for c in order},
                         {c: cv[c].row_loss for c in order})

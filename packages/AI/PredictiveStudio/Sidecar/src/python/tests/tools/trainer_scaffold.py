@@ -27,6 +27,11 @@ def binary_frame(n: int = 1200, seed: int = 3, noise: bool = False) -> pd.DataFr
                          "T": [f"{y_}-06-01" for y_ in years], "x1": x1, "x2": x2, "city": city, "Target": y})
 
 
+def holdout_2024(df: pd.DataFrame) -> list[str]:
+    """The IDs of the rows decided in 2024: the locked holdout of a `binary_frame`-shaped frame."""
+    return [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
+
+
 FEATS: dict[str, JsonObject] = {"x1": NUMERIC, "x2": NUMERIC,
                                 "city": {"kind": "categorical", "cardinalityCap": 10, "method": "onehot"}}
 

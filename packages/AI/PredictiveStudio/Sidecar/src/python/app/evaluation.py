@@ -51,9 +51,9 @@ from .trainer_schemas import (
 )
 
 ReportedCalibration = Literal["platt", "isotonic", "auto", "not-applicable"]
-# Row permutations per source column in held-out permutation importance (the reference pipeline's count).
+# Row permutations per source column in held-out permutation importance.
 PERMUTATION_REPEATS = 5
-# Folds of the random-row cross-validation set beside blocked-time folds (the reference pipeline's count).
+# Folds of the random-row cross-validation set beside blocked-time folds.
 RANDOM_ROW_FOLDS = 5
 
 
@@ -578,12 +578,10 @@ def panel_residuals(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev:
                     X_dev: pd.DataFrame, y_dev: FArr, ordinals: IntArr) -> Optional[ResidualDiagnostics]:
     """Residual autocorrelation of an entity panel: the finalist's in-sample residuals on the development rows
     (label minus prediction), paired only within an entity in period order and pooled over entities, with a
-    Box-Pierce test whose lags are weighted by their pairs (the reference pipeline's `run._residual_panel`).
+    Box-Pierce test whose lags are weighted by their pairs.
 
     The lags are the declared `acfLags` capped at one less than the most distinct decision periods any entity has in
-    the development rows, so every lag pairs two rows of some entity; `ljungBox.lags` reports the lags used. The
-    reference pipeline caps at `max(1, min(3, rows - 1))` with `rows` the most rows any entity has: on a panel with one
-    row per entity and period (the reference pipeline's panels) the two agree whenever 3 lags are declared. None when
+    the development rows, so every lag pairs two rows of some entity; `ljungBox.lags` reports the lags used. None when
     the protocol declares no residual diagnostics, when no entity has development rows in two decision periods
     (nothing repeats over time, even if an entity has several rows in one period), or for a multiclass task (its
     prediction is a probability vector, so a residual is not one number).
@@ -619,9 +617,9 @@ def split_contrast(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: 
                    clock: RunClock) -> Optional[SplitContrast]:
     """What random-row cross-validation would have reported for blocked-time inner validation: on the rows the blocked
     folds validated, the finalist's blocked out-of-fold score beside its out-of-fold score from random-row 5-fold over
-    every development row (the reference pipeline's `run._random_row_contrast`, whose fold assignment is the first
-    unstratified repeat). For a loss, a positive `inflation` is optimism random rows hide on serially correlated
-    entity-period data. None unless the inner validation is blocked in time.
+    every development row (its fold assignment is the first unstratified repeat of `repeated_stratified`). For a loss, a
+    positive `inflation` is optimism random rows hide on serially correlated entity-period data. None unless the inner
+    validation is blocked in time.
 
     Raises:
         TrainerFailure: Stage `holdout`, prefixed "random-row contrast: ", when the development rows cannot fill the
@@ -654,6 +652,119 @@ def split_contrast(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: 
                          inflation=blocked - random_row)
 
 
+@dataclass(frozen=True)
+class _DevelopmentFit:
+    """Steps (1)-(2), development rows only: the finalist with its calibration map, the calibration decision, the
+    fitted baselines, and the finalist's out-of-fold residuals (regression only; empty for a classifier)."""
+
+    spec: CandidateSpec
+    finalist: TrainedPredictor
+    calibrator: Optional[CAL.Calibrator]
+    decision: Optional[CalibrationDecision]
+    baselines: List[BL.FittedBaseline]
+    X_dev: pd.DataFrame
+    y_dev: FArr
+    oof_residuals: FArr
+
+
+def _fit_development(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, out: SelectionOutcome,
+                     columns: Sequence[encoding.ColumnSpec]) -> _DevelopmentFit:
+    """Steps (1)-(2): decide the calibration from out-of-fold development predictions, attach the map to the finalist
+    and fit every baseline on the development rows."""
+    X_dev = snap.frame.iloc[dev].reset_index(drop=True)
+    y_dev = np.asarray(enc.y, dtype=np.float64)[dev]
+    y_val = y_dev[out.validated]
+    spec = next(c for c in req.candidates if c.name == out.selection.finalist)
+    oof = out.cv[spec.name].oof
+    calibrator, decision = decide_calibration(req, enc, oof, y_val, TR.unit_groups(snap, dev[out.validated]))
+    finalist = out.finalist
+    finalist.calibrator = calibrator
+    baselines = _fit_baselines(req, columns, X_dev, y_dev, enc, out, snap, dev)
+    regression = enc.family not in ("binary", "multiclass")
+    residuals = y_val - oof if regression else np.zeros(0, dtype=np.float64)
+    return _DevelopmentFit(spec, finalist, calibrator, decision, baselines, X_dev, y_dev, residuals)
+
+
+@dataclass(frozen=True)
+class _HoldoutGate:
+    """Step (4), first part: the finalist's holdout primary score with its interval, and the publishing gate."""
+
+    primary: MetricWithInterval
+    decision: GateRecord
+    comparisons: Dict[str, PairedComparison]
+
+
+def _gate_holdout(req: TrainerRequest, enc: EncodedLabel, fit: _DevelopmentFit, primary: scores.PrimaryScore,
+                  h: _HoldoutPredictions, g: Optional[List[str]]) -> _HoldoutGate:
+    """The primary score on the holdout predictions with its bootstrap interval, then the gate on the same rows."""
+    p = req.protocol
+    level = p.intervals.level
+    ci = IV.bootstrap_ci(h.y, h.pred, primary.aggregate, p.intervals.resamples, p.seed, g, level)
+    prim = metric_with_interval(p.primaryScore.metric, primary.aggregate(h.y, h.pred), ci, len(h.y), level)
+    gr = _run_gate(req, enc, fit.baselines, fit.spec, fit.calibrator, primary, h.y, h.pred, h.bpred, g)
+    comparisons = {k: PairedComparison(value=v.value, ci=(v.lower, v.upper), beats=v.beats)
+                   for k, v in gr.comparisons.items()}
+    return _HoldoutGate(prim, gr.decision, comparisons)
+
+
+@dataclass(frozen=True)
+class _HoldoutReport:
+    """Step (4), second part: everything else computed from the one holdout access."""
+
+    artifacts: List[ReturnedArtifact]
+    incumbent_diff: Optional[IncumbentDiff]
+    secondary: List[MetricWithInterval]
+    baselines: List[BaselineResult]
+    calibration: Optional[CalibrationReport]
+    operating_point: Optional[OperatingPoint]
+    coverage: List[PredictionIntervalCoverage]
+    slices: List[SliceResult]
+    importance: List[SourceColumnImportance]
+
+
+def _report_holdout(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, hold: IntArr, ordinals: IntArr,
+                    fit: _DevelopmentFit, gate: _HoldoutGate, h: _HoldoutPredictions, g: Optional[List[str]],
+                    columns: Sequence[encoding.ColumnSpec], primary: scores.PrimaryScore,
+                    incumbent_artifact: Optional[bytes]) -> _HoldoutReport:
+    """Artifacts, the incumbent diff and every holdout statistic, from the holdout predictions already taken (only
+    permutation importance re-predicts the same rows, permuted)."""
+    d = gate.decision
+    arts = _artifacts(req, snap, enc, fit.spec.name, fit.finalist, fit.baselines)
+    shipped_pred = None if d.shipped is None else (h.pred if d.outcome == "model" else h.bpred[d.shipped])
+    return _HoldoutReport(
+        artifacts=arts,
+        incumbent_diff=incumbent_diff(req, incumbent_artifact, enc, h.X, h.y, shipped_pred, primary, g),
+        secondary=_secondary_metrics(req, enc, h.y, h.pred, g),
+        baselines=_baseline_results(req, fit.baselines, primary, h.y, h.bpred, g),
+        calibration=_calibration_report(req, enc, h.y, h.pred, fit.decision),
+        operating_point=operating_point(req, snap, hold, ordinals, h.y, h.pred, g),
+        coverage=interval_coverage(req, enc, fit.oof_residuals, h.y, h.pred),
+        slices=slice_results(req, snap, hold, ordinals, h.y, h.pred, primary, g),
+        importance=held_out_importance(req, fit.finalist, h.X, h.y, primary, columns, g),
+    )
+
+
+def _completed(req: TrainerRequest, out: SelectionOutcome, code: CodeVersion, cost: float, finalist: str,
+               h: _HoldoutPredictions, gate: _HoldoutGate, report: _HoldoutReport,
+               leakage_flags: Sequence[LeakageFlag], residual: Optional[ResidualDiagnostics],
+               contrast: Optional[SplitContrast]) -> TrainerCompleted:
+    """The completed result, refused when any number in it is not finite."""
+    p = req.protocol
+    return refuse_non_finite(TrainerCompleted(
+        status="completed", trainingRunId=req.trainingRunId, codeVersion=code, computeSeconds=cost,
+        innerScores=inner_scores(out.cv, p.primaryScore.metric), finalist=finalist,
+        holdoutAccess=HoldoutAccess(accessedAt=h.accessed_at, count=p.holdoutAccessBudget, finalist=finalist),
+        holdout=HoldoutScores(primary=gate.primary, secondary=report.secondary), baselines=report.baselines,
+        comparisons=gate.comparisons, gate=gate_model(gate.decision), artifacts=report.artifacts,
+        incumbentDiff=report.incumbent_diff, calibration=report.calibration, slices=report.slices,
+        operatingPoint=report.operating_point,
+        cost=RunCost(computeSeconds=cost, tokens=0, usd=0.0, budget=p.budgets, stoppedByBudget=False),
+        importance=report.importance, leakageFlags=list(leakage_flags),
+        predictionIntervalCoverage=report.coverage, residualDiagnostics=residual, forecast=None,
+        innerSplitContrast=contrast,
+    ))
+
+
 def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, hold: IntArr,
              out: SelectionOutcome, columns: Sequence[encoding.ColumnSpec], code: CodeVersion, clock: RunClock,
              leakage_flags: Sequence[LeakageFlag], incumbent_artifact: Optional[bytes]) -> TrainerCompleted:
@@ -667,61 +778,22 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
     """
     p = req.protocol
     primary = scores.primary_score(p.primaryScore.metric, enc.tweedie_power)
-    level = p.intervals.level
     ordinals = SN.period_ordinals(snap)
-    X_dev = snap.frame.iloc[dev].reset_index(drop=True)
-    y_dev = np.asarray(enc.y, dtype=np.float64)[dev]
-    y_val = y_dev[out.validated]
-    finalist_spec = next(c for c in req.candidates if c.name == out.selection.finalist)
-    finalist_oof = out.cv[finalist_spec.name].oof
-    # (1)-(2): calibration decision and baselines, development rows only
-    calibrator, cal_decision = decide_calibration(req, enc, finalist_oof, y_val,
-                                                  TR.unit_groups(snap, dev[out.validated]))
-    finalist = out.finalist
-    finalist.calibrator = calibrator
-    fitted = _fit_baselines(req, columns, X_dev, y_dev, enc, out, snap, dev)
+    fit = _fit_development(req, snap, enc, dev, out, columns)
     clock.check("baselines")
-    # (3): the one holdout access
+    # (3): the one holdout access; (4): everything below uses `h.pred` / `h.bpred` only
     reader = _HoldoutReader(snap, hold, p.holdoutAccessBudget)
-    h = _score_holdout(reader, snap, enc, hold, finalist, fitted)
-    # (4): everything below uses `h.pred` / `h.bpred` only
+    h = _score_holdout(reader, snap, enc, hold, fit.finalist, fit.baselines)
     g = _groups(req, snap, hold, ordinals)
-    n = len(hold)
-    prim_ci = IV.bootstrap_ci(h.y, h.pred, primary.aggregate, p.intervals.resamples, p.seed, g, level)
-    prim = metric_with_interval(p.primaryScore.metric, primary.aggregate(h.y, h.pred), prim_ci, n, level)
-    gr = _run_gate(req, enc, fitted, finalist_spec, calibrator, primary, h.y, h.pred, h.bpred, g)
-    d = gr.decision
-    comparisons = {k: PairedComparison(value=v.value, ci=(v.lower, v.upper), beats=v.beats)
-                   for k, v in gr.comparisons.items()}
+    gate = _gate_holdout(req, enc, fit, primary, h, g)
     clock.check("holdout scoring")
-    arts = _artifacts(req, snap, enc, finalist_spec.name, finalist, fitted)
-    shipped_pred = None if d.shipped is None else (h.pred if d.outcome == "model" else h.bpred[d.shipped])
-    inc_diff = incumbent_diff(req, incumbent_artifact, enc, h.X, h.y, shipped_pred, primary, g)
-    regression = enc.family not in ("binary", "multiclass")
-    r_oof = y_val - finalist_oof if regression else np.zeros(0, dtype=np.float64)
-    secondary = _secondary_metrics(req, enc, h.y, h.pred, g)
-    base_results = _baseline_results(req, fitted, primary, h.y, h.bpred, g)
-    calibration = _calibration_report(req, enc, h.y, h.pred, cal_decision)
-    op = operating_point(req, snap, hold, ordinals, h.y, h.pred, g)
-    coverage = interval_coverage(req, enc, r_oof, h.y, h.pred)
-    sl = slice_results(req, snap, hold, ordinals, h.y, h.pred, primary, g)
-    imp = held_out_importance(req, finalist, h.X, h.y, primary, columns, g)
+    report = _report_holdout(req, snap, enc, hold, ordinals, fit, gate, h, g, columns, primary, incumbent_artifact)
     # (5): development-row statistics
-    residual = panel_residuals(req, snap, enc, dev, finalist, X_dev, y_dev, ordinals)
+    residual = panel_residuals(req, snap, enc, dev, fit.finalist, fit.X_dev, fit.y_dev, ordinals)
     contrast = split_contrast(req, snap, enc, dev, out, columns, primary, clock)
     clock.check("holdout statistics")
-    budget = p.holdoutAccessBudget
-    if reader.accesses != budget:
+    if reader.accesses != p.holdoutAccessBudget:
         raise TrainerFailure("holdout", f"the locked holdout was read {reader.accesses} time(s); the protocol's "
-                                        f"budget is {budget}")
-    cost = clock.compute_seconds()
-    return refuse_non_finite(TrainerCompleted(
-        status="completed", trainingRunId=req.trainingRunId, codeVersion=code, computeSeconds=cost,
-        innerScores=inner_scores(out.cv, p.primaryScore.metric), finalist=finalist_spec.name,
-        holdoutAccess=HoldoutAccess(accessedAt=h.accessed_at, count=budget, finalist=finalist_spec.name),
-        holdout=HoldoutScores(primary=prim, secondary=secondary), baselines=base_results, comparisons=comparisons,
-        gate=gate_model(d), artifacts=arts, incumbentDiff=inc_diff, calibration=calibration, slices=sl,
-        operatingPoint=op, cost=RunCost(computeSeconds=cost, tokens=0, usd=0.0, budget=p.budgets, stoppedByBudget=False),
-        importance=imp, leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage,
-        residualDiagnostics=residual, forecast=None, innerSplitContrast=contrast,
-    ))
+                                        f"budget is {p.holdoutAccessBudget}")
+    return _completed(req, out, code, clock.compute_seconds(), fit.spec.name, h, gate, report, leakage_flags,
+                      residual, contrast)

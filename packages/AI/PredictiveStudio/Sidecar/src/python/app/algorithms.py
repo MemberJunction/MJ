@@ -1,25 +1,16 @@
-"""Algorithm driver registry.
+"""Algorithm drivers: the trainer's estimator for one candidate.
 
-Two halves share this module:
-
-* The ``/train`` registry (``build_estimator``) maps a sidecar driver key (e.g. ``xgboost``) to a factory that builds an
-  sklearn-compatible estimator, choosing the classifier vs. regressor variant by ``problem_type``. Request
-  hyperparameters are passed straight through to the estimator constructor, and the caller's seed reaches every
-  factory.
-* The trainer estimators (``tabular_estimator``) build one candidate for a task family: the objective follows the
-  family, every random state is the protocol seed, every parallel library is held to the given thread count, and a
-  candidate hyperparameter that names one of those fixed keywords is refused.
+``tabular_estimator`` builds one candidate for a task family: the objective follows the family, every random state is
+the protocol seed, every parallel library is held to the given thread count, and a candidate hyperparameter that names
+one of those fixed keywords is refused.
 
 The driver keys MUST match the ``DriverClass`` values seeded in the ``MJ: ML Algorithms`` catalog (the two GLM
 baseline drivers excepted, see ``_TABULAR_BUILDERS``).
-
-The ``/train`` half keeps ``Any`` for its hyperparameter values and estimators: its request schema types
-hyperparameters as ``Dict[str, Any]`` and its callers duck-type the returned estimator (``fit``/``predict_proba``).
 """
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, FrozenSet, List, Literal, Tuple, Union
+from typing import Callable, Dict, FrozenSet, List, Literal, Tuple, Union
 
 from sklearn.ensemble import (
     RandomForestClassifier,
@@ -29,10 +20,6 @@ from sklearn.linear_model import LogisticRegression, PoissonRegressor, Ridge, Tw
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 
 from .trainer_schemas import HyperparameterValue
-
-# Seed shared by every estimator. Seeded training is reproducible single-threaded (n_jobs=1); the multi-threaded
-# defaults below (n_jobs=-1) are not guaranteed bit-identical across runs.
-DEFAULT_RANDOM_STATE: int = 0
 
 try:  # xgboost requires OpenMP (libomp on macOS, libgomp1 on Linux)
     from xgboost import XGBClassifier, XGBRegressor
@@ -49,12 +36,8 @@ except Exception:  # pragma: no cover
     _HAVE_LGBM = False
 
 
-# A factory takes (problem_type, hyperparameters, random_state) and returns an estimator.
-EstimatorFactory = Callable[[str, Dict[str, Any], int], Any]
-
-
 class AlgorithmNotSupportedError(ValueError):
-    """Raised when a driver key / problem-type pairing has no estimator."""
+    """Raised when a driver key / task-family pairing has no estimator."""
 
 
 def _require(flag: bool, name: str) -> None:
@@ -75,117 +58,10 @@ def _require(flag: bool, name: str) -> None:
         )
 
 
-def _xgboost(problem_type: str, hp: Dict[str, Any], random_state: int) -> Any:
-    """Build an XGBoost classifier/regressor with histogram tree method.
-
-    Hyperparameters override the histogram + n_jobs defaults. For classification
-    a default ``eval_metric=logloss`` is set to quiet modern-xgboost warnings.
-    """
-    _require(_HAVE_XGB, "xgboost")
-    common = {"n_jobs": -1, "tree_method": "hist", "random_state": random_state, **hp}
-    if problem_type == "classification":
-        # use_label_encoder removed in modern xgboost; eval_metric quiets warnings
-        common.setdefault("eval_metric", "logloss")
-        return XGBClassifier(**common)
-    return XGBRegressor(**common)
-
-
-def _lightgbm(problem_type: str, hp: Dict[str, Any], random_state: int) -> Any:
-    """Build a LightGBM classifier/regressor (quiet, small-leaf-friendly defaults)."""
-    _require(_HAVE_LGBM, "lightgbm")
-    common = {"n_jobs": -1, "verbose": -1, "min_child_samples": 5, "random_state": random_state, **hp}
-    if problem_type == "classification":
-        return LGBMClassifier(**common)
-    return LGBMRegressor(**common)
-
-
-def _logistic_regression(problem_type: str, hp: Dict[str, Any], random_state: int) -> Any:
-    """Build a logistic-regression classifier (classification only).
-
-    Raises:
-        AlgorithmNotSupportedError: When ``problem_type`` is not ``classification``.
-    """
-    if problem_type != "classification":
-        raise AlgorithmNotSupportedError(
-            "logistic_regression supports classification only."
-        )
-    params = {"max_iter": 1000, "random_state": random_state, **hp}
-    return LogisticRegression(**params)
-
-
-def _random_forest(problem_type: str, hp: Dict[str, Any], random_state: int) -> Any:
-    """Build a random-forest classifier/regressor (all cores by default)."""
-    common = {"n_jobs": -1, "random_state": random_state, **hp}
-    if problem_type == "classification":
-        return RandomForestClassifier(**common)
-    return RandomForestRegressor(**common)
-
-
-def _ridge(problem_type: str, hp: Dict[str, Any], random_state: int) -> Any:
-    """Build a ridge (L2) regressor (regression only).
-
-    Raises:
-        AlgorithmNotSupportedError: When ``problem_type`` is not ``regression``.
-    """
-    if problem_type != "regression":
-        raise AlgorithmNotSupportedError("ridge supports regression only.")
-    # Only the sag/saga solvers draw random numbers; seeding keeps them reproducible when a caller picks one.
-    params = {"random_state": random_state, **hp}
-    return Ridge(**params)
-
-
-def _mlp(problem_type: str, hp: Dict[str, Any], random_state: int) -> Any:
-    """Build a multi-layer-perceptron classifier/regressor (500-iter default cap).
-
-    The catalog stores ``hidden_layer_sizes`` as a string (``"100"``); it is parsed to the int tuple sklearn needs.
-    """
-    params: Dict[str, Any] = {"max_iter": 500, "random_state": random_state, **hp}
-    if "hidden_layer_sizes" in hp:
-        params["hidden_layer_sizes"] = parse_hidden_layer_sizes(hp["hidden_layer_sizes"])
-    if problem_type == "classification":
-        return MLPClassifier(**params)
-    return MLPRegressor(**params)
-
-
-_REGISTRY: Dict[str, EstimatorFactory] = {
-    "xgboost": _xgboost,
-    "lightgbm": _lightgbm,
-    "logistic_regression": _logistic_regression,
-    "random_forest": _random_forest,
-    "ridge": _ridge,
-    "mlp": _mlp,
-}
-
-
 def supported_algorithms() -> List[str]:
-    """Return the registered driver keys (sorted for stable health output)."""
-    return sorted(_REGISTRY.keys())
-
-
-def build_estimator(algorithm: str, problem_type: str, hyperparameters: Dict[str, Any],
-                    random_state: int = DEFAULT_RANDOM_STATE) -> Any:
-    """Build an sklearn-compatible estimator for the given driver key.
-
-    Args:
-        algorithm: Driver key (must match a seeded ``MJ: ML Algorithms`` DriverClass).
-        problem_type: ``classification`` or ``regression``; selects the estimator variant.
-        hyperparameters: Passed straight through to the estimator constructor.
-        random_state: The seed every factory passes to its estimator; a caller that omits it gets
-            ``DEFAULT_RANDOM_STATE``.
-
-    Returns:
-        An unfitted, sklearn-compatible estimator.
-
-    Raises:
-        AlgorithmNotSupportedError: For unknown keys or invalid driver/problem-type
-            pairings (e.g. ``ridge`` with classification).
-    """
-    factory = _REGISTRY.get(algorithm)
-    if factory is None:
-        raise AlgorithmNotSupportedError(
-            f"Unknown algorithm '{algorithm}'. Supported: {supported_algorithms()}"
-        )
-    return factory(problem_type, dict(hyperparameters or {}), random_state)
+    """Return the catalog driver keys a candidate may name (sorted for stable health output); the baseline-only GLM
+    drivers are left out."""
+    return sorted(k for k in _TABULAR_BUILDERS if k not in BASELINE_ONLY_DRIVERS)
 
 
 # ----------------------------------------------------------------------------- trainer estimators -----
@@ -196,9 +72,8 @@ TabularFamily = Literal["binary", "multiclass", "continuous", "count", "non-nega
 # Constructor keywords whose value is a candidate's tunable hyperparameter, or a value a trainer factory fixes.
 EstimatorParams = Dict[str, Union[HyperparameterValue, Tuple[int, ...]]]
 
-
-# A layer-size value as a request or catalog carries it: an int, the catalog's "n,m,..." string, or a JSON list.
-LayerSizesValue = Union[HyperparameterValue, List[HyperparameterValue], Tuple[HyperparameterValue, ...]]
+# A candidate's tunable hyperparameters, as the trainer request carries them (vetted against the fixed keywords).
+CandidateParams = Dict[str, HyperparameterValue]
 
 
 class ObjectiveOverrideError(ValueError):
@@ -229,24 +104,19 @@ _FIXED_KEYS: FrozenSet[str] = frozenset({
 })
 
 
-def parse_hidden_layer_sizes(value: LayerSizesValue) -> Tuple[int, ...]:
-    """Parse ``hidden_layer_sizes`` to the int tuple sklearn needs: the catalog's ``"100"`` or ``"100,50"``, a bare
-    int, or a request's JSON list (or tuple) of ints.
+def parse_hidden_layer_sizes(value: HyperparameterValue) -> Tuple[int, ...]:
+    """Parse ``hidden_layer_sizes`` to the int tuple sklearn needs: the catalog's ``"100"`` or ``"100,50"``, or a bare
+    int.
 
     Raises:
-        ValueError: When the value is missing, a bool, a non-integral number, an empty list, a list holding anything
-            but positive ints, or names a non-positive layer size.
+        ValueError: When the value is missing, a bool, a non-integral number, or names a non-positive layer size.
     """
-    if isinstance(value, (list, tuple)):
-        if any(isinstance(v, bool) or not isinstance(v, int) for v in value):
-            raise ValueError(f"hidden_layer_sizes must be a list of positive integers, got {value!r}")
-        sizes = tuple(int(v) for v in value if isinstance(v, int))
-    elif isinstance(value, bool) or value is None:
+    if isinstance(value, bool) or value is None:
         raise ValueError(f"hidden_layer_sizes must be a positive int or 'n,m,...', got {value!r}")
-    elif isinstance(value, float) and not value.is_integer():
+    if isinstance(value, float) and not value.is_integer():
         raise ValueError(f"hidden_layer_sizes must be whole numbers, got {value!r}")
-    elif isinstance(value, (int, float)):
-        sizes = (int(value),)
+    if isinstance(value, (int, float)):
+        sizes: Tuple[int, ...] = (int(value),)
     else:
         try:
             sizes = tuple(int(part.strip()) for part in value.split(",") if part.strip() != "")
@@ -298,7 +168,7 @@ def _declared_tweedie_power(driver: str, tweedie_power: float | None) -> float:
     return tweedie_power
 
 
-def _glm(driver: str, family: TabularFamily, params: EstimatorParams, seed: int, threads: int,
+def _glm(driver: str, family: TabularFamily, params: CandidateParams, seed: int, threads: int,
          tweedie_power: float | None) -> object:
     """The four GLM drivers, each tied to the family whose likelihood it fits."""
     if driver == "logistic_regression":
@@ -323,7 +193,7 @@ def _glm(driver: str, family: TabularFamily, params: EstimatorParams, seed: int,
     return TweedieRegressor(**{"alpha": 1e-4, "max_iter": 5000, **params, "power": power, "link": "log"})
 
 
-def _forest(family: TabularFamily, params: EstimatorParams, seed: int, threads: int) -> object:
+def _forest(family: TabularFamily, params: CandidateParams, seed: int, threads: int) -> object:
     """Random forest; count and non-negative targets split on Poisson deviance."""
     if family in ("binary", "multiclass"):
         return RandomForestClassifier(**{**params, "criterion": "gini", "n_jobs": threads, "random_state": seed})
@@ -331,7 +201,7 @@ def _forest(family: TabularFamily, params: EstimatorParams, seed: int, threads: 
     return RandomForestRegressor(**{**params, "criterion": criterion, "n_jobs": threads, "random_state": seed})
 
 
-def _trainer_mlp(family: TabularFamily, params: EstimatorParams, seed: int) -> object:
+def _trainer_mlp(family: TabularFamily, params: CandidateParams, seed: int) -> object:
     """Multi-layer perceptron (binary, multiclass and continuous only); the catalog's string layer sizes are parsed.
 
     sklearn's MLP has no ``n_jobs``: its matrix products run in the BLAS, so its threads are bounded by the process's
@@ -348,7 +218,7 @@ def _trainer_mlp(family: TabularFamily, params: EstimatorParams, seed: int) -> o
     return MLPRegressor(**mlp_params)
 
 
-def _trainer_xgboost(family: TabularFamily, params: EstimatorParams, seed: int, threads: int,
+def _trainer_xgboost(family: TabularFamily, params: CandidateParams, seed: int, threads: int,
                      tweedie_power: float | None) -> object:
     """XGBoost with the histogram tree method on the CPU; the objective and its evaluation metric follow the family."""
     _require(_HAVE_XGB, "xgboost")
@@ -372,7 +242,7 @@ _LIGHTGBM_OBJECTIVE: Dict[TabularFamily, str] = {
 }
 
 
-def _trainer_lightgbm(family: TabularFamily, params: EstimatorParams, seed: int, threads: int,
+def _trainer_lightgbm(family: TabularFamily, params: CandidateParams, seed: int, threads: int,
                       tweedie_power: float | None) -> object:
     """LightGBM in its deterministic row-wise histogram mode; the objective follows the family.
 
@@ -390,10 +260,14 @@ def _trainer_lightgbm(family: TabularFamily, params: EstimatorParams, seed: int,
 
 
 # Builds one candidate from (family, vetted hyperparameters, seed, threads, declared Tweedie power).
-TabularBuilder = Callable[[TabularFamily, EstimatorParams, int, int, Union[float, None]], object]
+TabularBuilder = Callable[[TabularFamily, CandidateParams, int, int, Union[float, None]], object]
 
-# The trainer's driver table. ``poisson_glm`` and ``tweedie_glm`` are baseline-only drivers (the GLM baseline fits
-# them): they have no ``MJ: ML Algorithms`` catalog row, and a candidate's driver key must never name them.
+# The drivers only the GLM baseline fits: they have no ``MJ: ML Algorithms`` catalog row, and a request candidate
+# naming one is refused.
+BASELINE_ONLY_DRIVERS: FrozenSet[str] = frozenset({"poisson_glm", "tweedie_glm"})
+
+# The trainer's driver table: every catalog driver plus the baseline-only ones.
+
 _TABULAR_BUILDERS: Dict[str, TabularBuilder] = {
     "logistic_regression": lambda f, p, s, t, w: _glm("logistic_regression", f, p, s, t, w),
     "ridge": lambda f, p, s, t, w: _glm("ridge", f, p, s, t, w),

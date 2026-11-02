@@ -71,7 +71,9 @@ version 1 of each, and the training path without them is removed.
   aliases of `PSPipelinesComponent`, `PSPipelineWizardComponent` and the Predictive Studio nav helpers are removed:
   bind `[CurrentUser]`, `[CloneFrom]`, `[InitialAlgorithmId]`, `(Saved)`, `(TrainRequested)`, `(Closed)` and the other
   PascalCase members. `PSPredictionsResourceComponent.applicationId` is `ApplicationID`.
-- `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers are removed.
+- `@memberjunction/predictive-studio-sidecar`: the `/train` route and its legacy helpers (`build_estimator`, `fit_transform`,
+  `serialize_envelope`) are removed; `/predict` still loads legacy envelopes. The `ps-predictor/v2` envelope's payload
+  key is `payloadB64`. A snapshot header's `capacityPerPeriod` must be a positive integer or null.
 - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
   pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
 - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.

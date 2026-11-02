@@ -253,6 +253,27 @@ def test_a_header_value_of_the_wrong_shape_is_malformed(change: Callable[[JsonOb
     assert _refusal(_with_header(m, change), n).problem == "malformed"
 
 
+def _set_capacity(capacity: JsonValue) -> Callable[[JsonObject], None]:
+    def change(h: JsonObject) -> None:
+        h["decision"] = {"action": "review", "actorRole": "analyst", "capacityPerPeriod": capacity, "period": "year"}
+    return change
+
+
+@pytest.mark.parametrize("capacity", [0, -3, 2.5, 50.0, True, "50"],
+                         ids=["zero", "negative", "fraction", "float-written", "bool", "text"])
+def test_a_capacity_that_is_not_a_positive_integer_is_malformed(capacity: JsonValue) -> None:
+    """The decision's capacityPerPeriod is a positive integer or null, as Core's snapshot header schema declares."""
+    m, n = _files()
+    assert _refusal(_with_header(m, _set_capacity(capacity)), n).problem == "malformed"
+
+
+@pytest.mark.parametrize("capacity", [1, 150, None])
+def test_a_positive_integer_or_null_capacity_is_accepted(capacity: JsonValue) -> None:
+    m, n = _files()
+    snap = SN.parse_snapshot(_with_header(m, _set_capacity(capacity)), n, HASH)
+    assert snap.decision.capacity_per_period == capacity
+
+
 def test_a_cardinality_cap_of_one_is_accepted() -> None:
     m, n = _files()
     snap = SN.parse_snapshot(_with_header(m, _set_cap(1)), n, HASH)

@@ -97,14 +97,19 @@ def test_tweedie_power_outside_the_open_unit_interval_above_one_is_refused(drive
         algorithms.tabular_estimator(driver, "non-negative", {}, 0, 1, power)
 
 
-def test_legacy_mlp_accepts_a_json_list_of_layer_sizes() -> None:
-    """The /train request carries hidden_layer_sizes as a JSON list as well as the catalog's string."""
-    est = algorithms.build_estimator("mlp", "classification", {"hidden_layer_sizes": [100, 50]})
-    assert est.hidden_layer_sizes == (100, 50)
-    assert algorithms.parse_hidden_layer_sizes((8, 4)) == (8, 4)
-
-
-@pytest.mark.parametrize("value", [[], [100, "a"], [0], [True], [1.5], [[100]]])
-def test_invalid_layer_size_lists_are_refused(value: object) -> None:
+@pytest.mark.parametrize("value", ["", "100,a", "0", "100,-1", True, None, 1.5, 0])
+def test_invalid_layer_sizes_are_refused(value: HyperparameterValue) -> None:
     with pytest.raises(ValueError, match="hidden_layer_sizes"):
-        algorithms.build_estimator("mlp", "classification", {"hidden_layer_sizes": value})
+        algorithms.tabular_estimator("mlp", "binary", {"hidden_layer_sizes": value}, 0, 1, None)
+
+
+def test_a_whole_number_layer_size_is_accepted() -> None:
+    assert algorithms.parse_hidden_layer_sizes(64) == (64,)
+    assert algorithms.parse_hidden_layer_sizes(64.0) == (64,)
+
+
+def test_health_lists_the_catalog_drivers_only() -> None:
+    """``/health`` reports the drivers a candidate may name; the baseline-only GLM drivers are not among them."""
+    assert algorithms.supported_algorithms() == [
+        "lightgbm", "logistic_regression", "mlp", "random_forest", "ridge", "xgboost",
+    ]

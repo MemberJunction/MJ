@@ -7,8 +7,8 @@
  */
 import { EvaluationProtocol, GateRules } from '@memberjunction/predictive-studio-core';
 
-let seed = Number(process.argv[2] ?? '7');
-const N = Number(process.argv[3] ?? '5000');
+let seed = Number(process.argv[2] || '7');
+const N = Number(process.argv[3] || '5000');
 const r = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 
 const out = [];

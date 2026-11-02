@@ -5,7 +5,7 @@ the envelope BYTES (what the engine stores as the model file), so the engine can
 hash. The payload is a joblib dump of one whole fitted trainer predictor (in-fold encoding + estimator + optional
 calibration map); it is loaded only through the restricted unpickler (`artifacts.load_v2_envelope`).
 
-    {"format": "ps-predictor/v2", "version": 2, "payload_b64": "...", "featureColumns": [column...],
+    {"format": "ps-predictor/v2", "version": 2, "payloadB64": "...", "featureColumns": [column...],
      "taskKind": "...", "classOrder": [...] | null, "featureSchemaHash": "<sha256>",
      "driverBaseline": [...] | null, "transformedColumns": [...] | null}
 
@@ -15,8 +15,8 @@ but `/predict` does not serve them (it scores rows, and a series forecaster take
 incumbent heuristic are yardsticks for the publishing gate: the heuristic reads a column `/predict` never receives, and
 neither is a model anyone should score with.
 
-The legacy `/train` route's artifacts (`format: joblib`, `artifacts.serialize_envelope`) keep their own envelope and
-their own content hash (the SHA-256 of the base64 text).
+A model trained before Prediction Units keeps its legacy (v1) envelope (`format: joblib`) and its own content hash (the
+SHA-256 of the base64 text).
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ class PredictorEnvelope(_Wire):
 
     format: Literal["ps-predictor/v2"]
     version: Literal[2]
-    payload_b64: str
+    payloadB64: str
     featureColumns: List[EnvelopeColumn]
     taskKind: TaskKind
     classOrder: Optional[List[str]]
@@ -150,7 +150,7 @@ def build(candidate: str, predictor: ShippablePredictor, columns: Sequence[Colum
     buf = io.BytesIO()
     joblib.dump(predictor, buf)
     envelope = PredictorEnvelope(
-        format=FORMAT_V2, version=2, payload_b64=base64.b64encode(buf.getvalue()).decode("ascii"),
+        format=FORMAT_V2, version=2, payloadB64=base64.b64encode(buf.getvalue()).decode("ascii"),
         featureColumns=[envelope_column(c) for c in columns], taskKind=task_kind, classOrder=class_order,
         featureSchemaHash=feature_schema_hash,
         driverBaseline=None if driver_baseline is None else [float(v) for v in np.asarray(driver_baseline).reshape(-1)],
