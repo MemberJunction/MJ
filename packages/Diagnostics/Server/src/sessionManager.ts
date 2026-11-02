@@ -625,14 +625,25 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       if (drained.length === 0) {
         return 0;
       }
+      let md: Metadata;
+      try {
+        md = new Metadata();
+        if (!md.Entities?.some((e) => e.Name === 'MJ: Diagnostic Session Chunks')) {
+          return 0;
+        }
+      } catch {
+        return 0;
+      }
       let written = 0;
       for (const item of drained) {
         try {
-          const md = new Metadata();
           const chunk = await md.GetEntityObject<MJDiagnosticSessionChunkEntity>(
             'MJ: Diagnostic Session Chunks',
             contextUser
           );
+          if (!chunk) {
+            continue;
+          }
           chunk.DiagnosticSessionID = sessionId;
           chunk.Source = item.source;
           chunk.HostInstanceLabel = this._hostInstanceLabel;
@@ -746,33 +757,36 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
           );
         }
 
-        // Also query persisted chunks if database provider is available
+        // Also query persisted chunks if database provider is available and entity exists
         try {
-          const rv = new RunView();
-          const res = await rv.RunView<MJDiagnosticSessionChunkEntity>(
-            {
-              EntityName: 'MJ: Diagnostic Session Chunks',
-              ExtraFilter: `DiagnosticSessionID = '${sessionId.replace(/'/g, "''")}'`,
-              OrderBy: 'Sequence ASC',
-              ResultType: 'simple'
-            },
-            contextUser
-          );
-          if (res.Success && Array.isArray(res.Results)) {
-            for (const row of res.Results) {
-              if (row.Data) {
-                const buf = Buffer.from(row.Data, 'base64');
-                this.unpackCompressedChunk(
-                  row.ContentKind,
-                  row.Source,
-                  buf,
-                  serverLogs,
-                  serverTraces,
-                  serverSql,
-                  clientLogs,
-                  clientWaterfall,
-                  clientTelemetry
-                );
+          const md = new Metadata();
+          if (md.Entities?.some((e) => e.Name === 'MJ: Diagnostic Session Chunks')) {
+            const rv = new RunView();
+            const res = await rv.RunView<MJDiagnosticSessionChunkEntity>(
+              {
+                EntityName: 'MJ: Diagnostic Session Chunks',
+                ExtraFilter: `DiagnosticSessionID = '${sessionId.replace(/'/g, "''")}'`,
+                OrderBy: 'Sequence ASC',
+                ResultType: 'simple'
+              },
+              contextUser
+            );
+            if (res.Success && Array.isArray(res.Results)) {
+              for (const row of res.Results) {
+                if (row.Data) {
+                  const buf = Buffer.from(row.Data, 'base64');
+                  this.unpackCompressedChunk(
+                    row.ContentKind,
+                    row.Source,
+                    buf,
+                    serverLogs,
+                    serverTraces,
+                    serverSql,
+                    clientLogs,
+                    clientWaterfall,
+                    clientTelemetry
+                  );
+                }
               }
             }
           }
