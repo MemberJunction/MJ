@@ -1,8 +1,14 @@
 import * as crypto from 'node:crypto';
 import type { ApolloServerPlugin } from '@apollo/server';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, TrimTrailingSlashes } from '@memberjunction/global';
 import { GetDiagnosticContext, DiagnosticContext } from '@memberjunction/core';
-import { BaseServerMiddleware, ApiRoute } from '@memberjunction/server';
+import { BaseServerMiddleware } from '@memberjunction/server/middleware/BaseServerMiddleware';
+
+function ApiRoute(subpath: string): string {
+  const rawRoot = (process.env.MJAPI_BASE_PATH ?? '').trim();
+  const root = rawRoot === '/' ? '' : TrimTrailingSlashes(rawRoot);
+  return `${root}${subpath}`;
+}
 
 type MiddlewareList = ReturnType<NonNullable<BaseServerMiddleware['GetPreAuthMiddleware']>>;
 type MiddlewareHandler = MiddlewareList[number];

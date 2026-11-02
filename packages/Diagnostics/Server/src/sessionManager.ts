@@ -126,10 +126,14 @@ class ServerDiagnosticContextProvider implements IDiagnosticContextProvider {
   }
 }
 
+const serverDiagnosticContextProvider = new ServerDiagnosticContextProvider();
+SetDiagnosticContextProvider(serverDiagnosticContextProvider);
+
 export function RunWithServerDiagnosticContext<T>(
   context: DiagnosticContext,
   fn: () => T
 ): T {
+  SetDiagnosticContextProvider(serverDiagnosticContextProvider);
   return diagnosticAls.run(context, fn);
 }
 

@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (462 classes)
+// @memberjunction/core-entities (465 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1883,13 +1883,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
-    MJQueryPermissionEntity,
-    MJQuerySQLEntity,
-    MJQueueEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryPermissionEntity,
+    MJQuerySQLEntity,
+    MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
@@ -2087,13 +2087,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
     GetSingleJotFormSubmissionAction,
-    GetSingleSurveyMonkeyResponseAction,
-    GetSingleTypeformResponseAction,
-    GetSurveyMonkeyDetailsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSingleSurveyMonkeyResponseAction,
+    GetSingleTypeformResponseAction,
+    GetSurveyMonkeyDetailsAction,
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
@@ -2291,13 +2291,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
-    RecordProcessCancelRunServerOperation,
-    RecordProcessGetRunStatusServerOperation,
-    RecordProcessPauseRunServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    RecordProcessCancelRunServerOperation,
+    RecordProcessGetRunStatusServerOperation,
+    RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
@@ -2495,13 +2495,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetRecordsAction,
     GetSignatureStatusAction,
     GetStockPriceAction,
-    GetUploadUrlAction,
-    GetWeatherAction,
-    Get_AI_Model_Cost_Action,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GetUploadUrlAction,
+    GetWeatherAction,
+    Get_AI_Model_Cost_Action,
     GoogleCustomSearchAction,
     GraphQLQueryAction,
     HTTPRequestAction,
@@ -2638,7 +2638,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1120;
+export const CLASS_REGISTRATIONS_COUNT = 1123;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

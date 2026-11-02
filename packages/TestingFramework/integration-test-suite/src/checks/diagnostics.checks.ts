@@ -37,6 +37,7 @@ export const DiagnosticsChecks: NamedCheck[] = [
         Name: 'DIAG1: Session registration, AsyncLocalStorage context propagation, and WithoutDiagnosticCapture suppression',
         Fn: async (ctx: IntegrationCheckContext) => {
             const manager = DiagnosticSessionManager.Instance;
+            manager.Initialize({ enableConsoleTap: false, enablePolling: false });
             const sessionId = `it-diag-session-${Date.now()}`;
             const userId = ctx.User.ID;
 

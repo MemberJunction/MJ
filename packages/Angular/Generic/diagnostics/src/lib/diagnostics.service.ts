@@ -6,6 +6,13 @@ import {
     TelemetryEvent,
 } from '@memberjunction/core';
 import {
+    DiagnosticsUploadClientCaptureOperation,
+    DiagnosticsBuildBundleOperation,
+    DiagnosticsSendBundleOperation,
+    DiagnosticsSendBundleInput,
+    DiagnosticsSendBundleOutput,
+} from '@memberjunction/core-entities';
+import {
     BoundedRingBuffer,
     DiagnosticLogEntry,
     DiagnosticTelemetryEntry,
@@ -47,6 +54,27 @@ export interface ClientBundleBuildResult {
     manifest: DiagnosticBundleManifest;
     findings: DiagnosticFinding[];
     zipBytes: Uint8Array;
+}
+
+export interface SubmitBundleToSupportOptions {
+    scrubberProfile?: DiagnosticScrubberProfile;
+    destination?: DiagnosticsSendBundleInput['Destination'];
+    collectorUrlOverride?: string;
+    contactInfo?: string;
+    note?: string;
+    ticketNumber?: string;
+}
+
+export interface SubmitBundleToSupportResult {
+    sessionId: string;
+    bundleId: string;
+    status: DiagnosticsSendBundleOutput['Status'];
+    destination: DiagnosticsSendBundleOutput['Destination'];
+    externalReferenceId?: string;
+    sentAt?: string;
+    findingsCount: number;
+    downloadUrl?: string;
+    errorMessage?: string;
 }
 
 function tryInjectNgZone(): NgZone | null {
@@ -91,6 +119,7 @@ export class MJDiagnosticsService {
     private unsubscribeTelemetry: (() => void) | null = null;
     private idbFlushTimer: ReturnType<typeof setTimeout> | null = null;
     private sessionIdHook: ((sessionId: string | null) => void) | null = null;
+    private readonly flushedTriggerSessions = new Set<string>();
 
     public get RecordingState$(): Observable<ActiveRecordingState> {
         return this.recordingStateSubject.asObservable();
@@ -232,6 +261,140 @@ export class MJDiagnosticsService {
     }
 
     /**
+     * Handles the server-sent `X-MJ-Diagnostic-Trigger: <sessionId>` header when an admin/server
+     * Watch Session matches the current user or GraphQL operation. Automatically flushes the
+     * browser flight-recorder buffers to the server session once per triggered session ID.
+     */
+    public async HandleServerTriggerHeader(sessionId: string): Promise<boolean> {
+        const trimmed = sessionId?.trim();
+        if (!trimmed || this.flushedTriggerSessions.has(trimmed)) {
+            return false;
+        }
+        this.flushedTriggerSessions.add(trimmed);
+        this.StartRecording(trimmed, 'Standard');
+
+        const uploadOp = new DiagnosticsUploadClientCaptureOperation();
+        const result = await uploadOp.Execute({
+            SessionID: trimmed,
+            CreateSelfServiceSession: false,
+            Reason: 'ServerWatchTrigger',
+            ScrubLiterals: true,
+            Environment: {
+                mjVersion: '6.2.0',
+                browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+            ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+            ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+        });
+        return result.Success;
+    }
+
+    /**
+     * Submits a full-stack (client + server) diagnostic bundle from the UX:
+     * 1. Uploads current client flight-recorder/recording buffers via `DiagnosticsUploadClientCaptureOperation`
+     * 2. Assembles the merged `.mjdiag` bundle on the server via `DiagnosticsBuildBundleOperation`
+     * 3. Encrypts and transmits the bundle to Support/Collector via `DiagnosticsSendBundleOperation`
+     */
+    public async SubmitBundleToSupport(
+        options: SubmitBundleToSupportOptions = {},
+    ): Promise<SubmitBundleToSupportResult> {
+        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? 'Standard';
+        const scrubLiterals = scrubberProfile === 'Standard';
+        const activeSessionId = this.recordingStateSubject.value.sessionId ?? undefined;
+
+        const uploadOp = new DiagnosticsUploadClientCaptureOperation();
+        const uploadRes = await uploadOp.Execute({
+            SessionID: activeSessionId,
+            CreateSelfServiceSession: !activeSessionId,
+            Reason: options.ticketNumber ? `Ticket:${options.ticketNumber}` : 'UserReportedProblem',
+            ScrubLiterals: scrubLiterals,
+            Environment: {
+                mjVersion: '6.2.0',
+                browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            Repro: {
+                userComment: options.note ? ScrubString(options.note, { scrubberProfile }) : undefined,
+                breadcrumbs: [],
+            },
+            ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+            ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+            ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+        });
+
+        if (!uploadRes.Success || !uploadRes.Output) {
+            throw new Error(uploadRes.ErrorMessage ?? 'Failed to upload client diagnostic capture');
+        }
+
+        const resolvedSessionId = uploadRes.Output.SessionID;
+        const buildOp = new DiagnosticsBuildBundleOperation();
+        const buildRes = await buildOp.Execute({
+            SessionID: resolvedSessionId,
+            Name: options.ticketNumber ? `Support Bundle (${options.ticketNumber})` : 'Support Diagnostic Bundle',
+            Description: options.note,
+            ScrubLiterals: scrubLiterals,
+        });
+
+        if (!buildRes.Success || !buildRes.Output || buildRes.Output.Status !== 'Ready') {
+            throw new Error(buildRes.ErrorMessage ?? 'Failed to assemble diagnostic bundle on server');
+        }
+
+        const destination: DiagnosticsSendBundleInput['Destination'] = options.destination ?? 'MJC';
+        const sendOp = new DiagnosticsSendBundleOperation();
+        const sendRes = await sendOp.Execute({
+            BundleID: buildRes.Output.BundleID,
+            Destination: destination,
+            CollectorUrlOverride: options.collectorUrlOverride,
+            ContactInfo: options.contactInfo,
+            Summary: options.note ?? options.ticketNumber,
+        });
+
+        if (!sendRes.Success || !sendRes.Output) {
+            return {
+                sessionId: resolvedSessionId,
+                bundleId: buildRes.Output.BundleID,
+                status: 'Failed',
+                destination,
+                findingsCount: buildRes.Output.FindingsCount,
+                downloadUrl: buildRes.Output.DownloadUrl,
+                errorMessage: sendRes.ErrorMessage ?? 'Failed to transmit bundle to collector',
+            };
+        }
+
+        return {
+            sessionId: resolvedSessionId,
+            bundleId: buildRes.Output.BundleID,
+            status: sendRes.Output.Status,
+            destination: sendRes.Output.Destination,
+            externalReferenceId: sendRes.Output.ExternalReferenceID,
+            sentAt: sendRes.Output.SentAt,
+            findingsCount: buildRes.Output.FindingsCount,
+            downloadUrl: buildRes.Output.DownloadUrl,
+            errorMessage: sendRes.Output.ErrorMessage,
+        };
+    }
+
+    /**
+     * Triggers a browser file download of a built `.mjdiag` archive.
+     */
+    public DownloadClientBundle(result: ClientBundleBuildResult): void {
+        if (typeof document === 'undefined' || typeof URL === 'undefined') {
+            return;
+        }
+        const copy = new Uint8Array(result.zipBytes.byteLength);
+        copy.set(result.zipBytes);
+        const blob = new Blob([copy.buffer], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${result.bundleId}.mjdiag`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }
+
+    /**
      * Builds a scrubbed `.mjdiag` archive from the current client-side buffers.
      */
     public async BuildClientBundle(options: ClientBundleBuildOptions = {}): Promise<ClientBundleBuildResult> {
@@ -292,6 +455,7 @@ export class MJDiagnosticsService {
         this.logBuffer.Clear();
         this.telemetryBuffer.Clear();
         this.networkBuffer.Clear();
+        this.flushedTriggerSessions.clear();
     }
 
     private RecordTelemetryEvent(event: TelemetryEvent): void {

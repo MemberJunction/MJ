@@ -11,6 +11,7 @@ import { DiagnosticScrubberProfile } from '@memberjunction/diagnostics';
 import {
     MJDiagnosticsService,
     ClientBundleBuildResult,
+    SubmitBundleToSupportResult,
 } from './diagnostics.service';
 
 @Component({
@@ -62,6 +63,20 @@ import {
                             <div class="mj-diag-summary-box">
                                 <strong>Bundle Ready:</strong> <code>{{ LastResult.bundleId }}.mjdiag</code>
                                 ({{ LastResult.zipBytes.byteLength }} bytes, {{ LastResult.findings.length }} findings)
+                                <button type="button" class="mj-diag-link-btn" (click)="OnDownloadSnapshot()">
+                                    Download .mjdiag
+                                </button>
+                            </div>
+                        }
+
+                        @if (LastSubmission) {
+                            <div class="mj-diag-summary-box">
+                                <strong>Submitted ({{ LastSubmission.status }}):</strong>
+                                @if (LastSubmission.externalReferenceId) {
+                                    Reference ID: <code>{{ LastSubmission.externalReferenceId }}</code>
+                                } @else if (LastSubmission.errorMessage) {
+                                    <span>{{ LastSubmission.errorMessage }}</span>
+                                }
                             </div>
                         }
                     </div>
@@ -70,8 +85,15 @@ import {
                         <button type="button" class="mj-diag-secondary-btn" (click)="OnStartRecording()">
                             Start Live Recording
                         </button>
-                        <button type="button" class="mj-diag-primary-btn" (click)="OnBuildSnapshot()">
+                        <button type="button" class="mj-diag-secondary-btn" (click)="OnBuildSnapshot()">
                             Build .mjdiag Snapshot
+                        </button>
+                        <button
+                            type="button"
+                            class="mj-diag-primary-btn"
+                            [disabled]="IsSubmitting"
+                            (click)="OnSubmitToSupport()">
+                            {{ IsSubmitting ? 'Submitting...' : 'Submit to Support' }}
                         </button>
                     </footer>
                 </div>
@@ -90,7 +112,7 @@ import {
         }
         .mj-diag-dialog-panel {
             width: 100%;
-            max-width: 520px;
+            max-width: 540px;
             background: var(--mj-bg-surface, #ffffff);
             color: var(--mj-text-primary, #0f172a);
             border-radius: 8px;
@@ -134,6 +156,19 @@ import {
             border-radius: 6px;
             background: var(--mj-bg-surface-sunken, #f8fafc);
             font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .mj-diag-link-btn {
+            background: transparent;
+            border: 1px solid var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary, #2563eb);
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
         }
         .mj-diag-dialog-footer {
             display: flex;
@@ -170,6 +205,7 @@ export class MJDiagnosticReportProblemDialogComponent {
     @Input() public IsVisible = false;
     @Output() public Closed = new EventEmitter<void>();
     @Output() public BundleBuilt = new EventEmitter<ClientBundleBuildResult>();
+    @Output() public BundleSubmitted = new EventEmitter<SubmitBundleToSupportResult>();
     @Output() public RecordingStarted = new EventEmitter<string>();
 
     private readonly diagnosticsService = inject(MJDiagnosticsService);
@@ -179,6 +215,8 @@ export class MJDiagnosticReportProblemDialogComponent {
     public Note = '';
     public ScrubberProfile: DiagnosticScrubberProfile = 'Standard';
     public LastResult: ClientBundleBuildResult | null = null;
+    public LastSubmission: SubmitBundleToSupportResult | null = null;
+    public IsSubmitting = false;
 
     public OnTicketInput(event: Event): void {
         const target = event.target as HTMLInputElement | null;
@@ -208,6 +246,30 @@ export class MJDiagnosticReportProblemDialogComponent {
         this.LastResult = result;
         this.cdr.markForCheck();
         this.BundleBuilt.emit(result);
+    }
+
+    public OnDownloadSnapshot(): void {
+        if (this.LastResult) {
+            this.diagnosticsService.DownloadClientBundle(this.LastResult);
+        }
+    }
+
+    public async OnSubmitToSupport(): Promise<void> {
+        this.IsSubmitting = true;
+        this.cdr.markForCheck();
+        try {
+            const submitted = await this.diagnosticsService.SubmitBundleToSupport({
+                scrubberProfile: this.ScrubberProfile,
+                ticketNumber: this.TicketNumber.trim() || undefined,
+                note: this.Note.trim() || undefined,
+                destination: 'MJC',
+            });
+            this.LastSubmission = submitted;
+            this.BundleSubmitted.emit(submitted);
+        } finally {
+            this.IsSubmitting = false;
+            this.cdr.markForCheck();
+        }
     }
 
     public OnStartRecording(): void {

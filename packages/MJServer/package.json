@@ -12,7 +12,11 @@
     "/src"
   ],
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./middleware/BaseServerMiddleware": {
+      "types": "./src/middleware/BaseServerMiddleware.ts",
+      "default": "./dist/middleware/BaseServerMiddleware.js"
+    }
   },
   "scripts": {
     "prebuild": "rimraf dist",
