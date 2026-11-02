@@ -171,18 +171,25 @@ sequenceDiagram
 
 ---
 
-## Workstream 4.2: Semantic Graph Integration into RAG (`SearchEngine`) & `PipelineExecutor`
+## Workstream 4.2: Semantic Graph Integration into RAG (`SearchEngine`), `ContentPipeline`, & `PipelineExecutor`
 
 ### Problem Statement
-`plans/canon-semantic-graph.md` specifies `@memberjunction/graph-engine` (`GraphEngine.Instance.Expand(...)`, `FindPaths(...)`, `ResolveSeeds(...)`) over polymorphic `(EntityID, RecordID)` nodes, weighted/typed edges, and pluggable `BaseGraphEdgeProvider`s. However:
-1. `AgentPreExecutionRAG` (`packages/AI/Agents/src/agent-pre-execution-rag.ts`) and `SearchEngine` (`packages/AI/Knowledge/Search/...`) currently fuse vector similarity and full-text lexical lanes via Reciprocal Rank Fusion (RRF), without a structural graph neighborhood lane.
-2. Deterministic pipelines (`packages/AI/Agents/src/pipeline/pipeline-executor.ts`) lack a declarative graph-expansion stage, forcing agents to spend an LLM tool-call turn to discover canonical definitions, narrower/broader concepts, and governing queries.
+`plans/canon-semantic-graph.md` (updated by the Canon-First Generic Graph & Onboarding workstream) specifies `@memberjunction/graph-engine` (`GraphEngine.Instance.Expand(...)`, `FindPaths(...)`, `ResolveSeeds(...)`) over polymorphic `(EntityID, RecordID)` nodes, weighted/typed edges, and pluggable `BaseGraphEdgeProvider`s.
+
+> **Nov 2026 Design Update (Generic Graph Substrate + Content Source GraphRAG Overlay)**:
+> 1. **Generic `MJ: Graph Concepts` (`__mj.GraphConcept`) & `Graph.GraphType`**: `CanonConcept` has been generalized to `MJ: Graph Concepts` (`__mj.GraphConcept`) with `GraphID NOT NULL` (`UNIQUE (GraphID, Name)`), `ConceptType` (`'Domain' | 'Term' | 'Policy' | 'Metric' | 'Process'`), `Specification`, `AuthorityTier` (`'Bylaws' | 'BoardPolicy' | 'ExecutiveSOP' | 'DepartmentPractice' | 'Reference' | 'Inferred'`), `ParentID`, and `Status` (`'Draft' | 'Proposed' | 'Approved' | 'Deprecated'`). `MJ: Graphs` (`__mj.Graph`) adds `GraphType` (`'Canon' | 'Knowledge' | 'Network' | 'Custom'`) so **Canon** is a first-class graph type (`GraphType = 'Canon'`), while any Content Source (or group of Content Sources) can also build or share a `'Knowledge'` or `'Canon'` graph.
+> 2. **Opt-In `MJ: Content Sources` Graph Overlay (`GraphStage` in `@memberjunction/content-pipeline`)**: `MJ: Content Sources` adds an optional `GraphID` FK and `Configuration.GraphOverlay` settings (`ConceptTaxonomyMode: 'auto-grow' | 'propose-only' | 'locked'`, `SourceAuthorityTier`, `GroundingMode: 'none' | 'schema-only' | 'full-canon'`, `DetectContradictions`). The new `GraphStage` deterministically clusters `MJ: Content Item Chunks` + `MJ: Content Item Tags` + section headings (`ConceptSeedClustering`), detects cross-chunk authority conflicts, and synthesizes `GraphConcept`s and `GraphEdge`s (`SourcedFrom`, `Mentions`, `Broader Than`, `Describes`, `Defines`, `Measures`, `Implements`, `Contradicts`).
+> 3. **Deterministic `TaskGraph` DAG Similarity & Workflow Telemetry (`@memberjunction/ai-core-plus`)**: Adds Weisfeiler-Lehman (WL) topological + operator-bigram + 2-hop reachability DAG fingerprinting (`ComputeDAGFingerprint`, `DiscoverWorkflowPromotionCandidates`) to surface repeated ad-hoc `TaskGraph` executions for promotion to saved Workflows, alongside `EvaluateWorkflowCanonHealth` (`Dormant`, `UsageDecay`, `ExceptionSpike`, `OutcomeDrift`, `ShadowBypassed`).
+
+However, on the retrieval and agent pipeline side:
+1. `AgentPreExecutionRAG` (`packages/AI/Agents/src/agent-pre-execution-rag.ts`) and `SearchEngine` (`packages/AI/Knowledge/Search/...`) currently fuse vector similarity and full-text lexical lanes via Reciprocal Rank Fusion (RRF), without a structural graph neighborhood lane over `MJ: Graph Concepts` and `MJ: Graph Edges`.
+2. Deterministic pipelines (`packages/AI/Agents/src/pipeline/pipeline-executor.ts`) lack a declarative graph-expansion stage, forcing agents to spend an LLM tool-call turn to discover canonical definitions, narrower/broader `GraphConcept`s, and governing queries.
 
 ### Design
 
 #### 1. `GraphSearchProvider` as an RRF Lane in `SearchEngine`
 - Implement `GraphSearchProvider` registering as an optional search provider in Knowledge Hub's `SearchEngine`:
-  - **Seed Resolution**: Map query terms and top-K lexical/entity-name hits to graph seed nodes via `GraphEngine.Instance.ResolveSeeds(queryText, graphNames, contextUser)`.
+  - **Seed Resolution**: Map query terms, top-K lexical/entity-name hits, and vector-matched `MJ: Content Item Chunks` (via their `SourcedFrom` / `Mentions` edges to `MJ: Graph Concepts`) to graph seed nodes via `GraphEngine.Instance.ResolveSeeds(queryText, graphNames, contextUser)`.
   - **Bounded Expansion**: Call `GraphEngine.Instance.Expand({ Seeds, MaxDepth: 2, MaxNodes: 25, MinWeight: 0.25 }, contextUser, provider)`.
   - **Permission Invariant**: `GraphEngine` already enforces `CanRead` + RLS on data records and `UserCanRun` / `UserCanUse` on queries and alternate views; for runs with an `Audience` (WS-4.1), intersect node visibility across `[contextUser, ...audienceReaders]`.
   - **RRF Scoring Adapter**: Rank expanded neighbor nodes by path-attenuated edge weight (`product(edge.Weight) * seedScore`), returning standardized `SearchResultItem` entries with `SourceType: 'SemanticGraph'` and human-readable provenance breadcrumbs (e.g., `"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"`).
