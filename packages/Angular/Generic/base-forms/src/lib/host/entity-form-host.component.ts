@@ -8,7 +8,6 @@ import {
 import { MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { IsPhoneViewport } from '../chrome/phone-viewport';
 
 import { BaseFormComponent } from '../base-form-component';
@@ -282,24 +281,12 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   // ── Standard-form switch strip ─────────────────────────────────────────────
 
   /**
-   * At phone width the strip drops its sentence and button for a full-width
-   * Custom / Standard segmented toggle, so the 375px header stays compact while
-   * the switch is still visible. The toolbar's View sheet offers the same switch.
+   * At phone width the mode strip is hidden; the switch moves into the toolbar's View
+   * bottom sheet instead so the 375px header stays clean while the user's chosen form
+   * (custom or standard) still mounts.
    */
-  public get UsesCompactModeStrip(): boolean {
+  public get HidesModeStrip(): boolean {
     return IsPhoneViewport();
-  }
-
-  /** Options for the phone toggle; keys are {@link EntityFormMode} values. */
-  public readonly PhoneModeOptions: ViewToggleOption[] = [
-    { key: 'default', icon: 'fa-solid fa-wand-magic-sparkles', label: 'Custom view' },
-    { key: 'standard', icon: 'fa-solid fa-table-list', label: 'Standard form' },
-  ];
-
-  /** Template handler for the phone toggle: the toggle's key is the mode to switch to. */
-  public OnPhoneModeToggle(key: string): void {
-    if (key !== 'default' && key !== 'standard') return;
-    this.SwitchFormMode(key);
   }
 
   // ── Public API (driven by dialog/slide-in chrome) ─────────────────────────
