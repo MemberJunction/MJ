@@ -113,11 +113,15 @@ class InMemoryLineageProtocol extends MJEvaluationProtocolEntityServer {
   }
 }
 
-/** A new protocol row with the given columns over a metadata provider double, its previous version in memory. */
-function newProtocolRow(columns: EvaluationProtocolColumns, previous: EvaluationProtocolColumns | null): InMemoryLineageProtocol {
+/**
+ * A new protocol row with the given columns over a metadata provider double, its previous version in memory, saved by
+ * `savingUserId` (default the fixtures' human author, U-1).
+ */
+function newProtocolRow(columns: EvaluationProtocolColumns, previous: EvaluationProtocolColumns | null, savingUserId: string | null = 'U-1'): InMemoryLineageProtocol {
   const row = Object.create(InMemoryLineageProtocol.prototype) as InMemoryLineageProtocol;
   const provider = { EntityByName: () => undefined, Entities: [] };
-  for (const [name, value] of Object.entries({ ...columns, IsSaved: false, ProviderToUse: provider, ContextCurrentUser: undefined, Previous: previous })) {
+  const savingUser = savingUserId === null ? undefined : { ID: savingUserId };
+  for (const [name, value] of Object.entries({ ...columns, IsSaved: false, ProviderToUse: provider, ContextCurrentUser: savingUser, Previous: previous })) {
     Object.defineProperty(row, name, { value, writable: true, configurable: true });
   }
   return row;
@@ -148,6 +152,20 @@ describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the gua
     expect(result.Errors.map((e) => e.Message)).toEqual([
       'This protocol is set to human-only guard fields: only a version authored by a user may change guardFieldsEditableBy; this version was authored by: scheduled-job.',
     ]);
+  });
+  it('refuses a version that names a human author other than the saving user, or names one with no saving user', async () => {
+    const relaxed = v2Of(v1, margin, { kind: 'human', userId: 'U-OTHER' });
+    for (const savingUser of ['u-2', null]) {
+      const result = await newProtocolRow(relaxed, v1, savingUser).ValidateAsync();
+      expect(result.Success).toBe(false);
+      expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([
+        ['AuthoredBy', 'AuthoredBy names the user U-OTHER, but the version is saved by ' + (savingUser === null ? 'no user' : 'another user') + '; a version is authored by a user only when that user saves it.'],
+      ]);
+    }
+  });
+  it('saves a version whose human author is the saving user (IDs compared as UUIDs)', async () => {
+    const result = await newProtocolRow(v2Of(v1, margin, { kind: 'human', userId: 'u-1' }), v1, 'U-1').ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
   });
   it('refuses a version without a dummy baseline, and a version whose previous version is missing', async () => {
     const noDummy = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft({ ...draft, baselines: [] , promotion: { ...draft.promotion, comparators: [] } }, { ID: 'P-9', LineageRootID: 'P-9', Version: 1, AuthoredBy: human });
@@ -201,6 +219,52 @@ describe('MJMLTrainingPipelineEntityServer.ValidateAsync (a failed read of the b
     serveRunViews(() => ({ Success: true, Results: [] }));
     const result = await newPipelineRow('U-9', null).ValidateAsync();
     expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', 'Prediction Unit U-9 was not found']]);
+  });
+});
+
+describe('MJMLTrainingPipelineEntityServer.ValidateAsync (rebinding a pipeline to another protocol lineage)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: countUnit, Holdout: seeded, Candidates: 1, Seed: 0, Name: 'p' });
+  const bound = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(draft, { ID: 'P-1', LineageRootID: 'P-1', Version: 1, AuthoredBy: human });
+  const relaxedBy = (author: Actor, id = 'Q-1', lineageRootId = id): EvaluationProtocolColumns => EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(
+    { ...draft, promotion: { ...draft.promotion, margin: EvaluationProtocol.ToNonNegative(0.5) } }, { ID: id, LineageRootID: lineageRootId, Version: lineageRootId === id ? 1 : 2, AuthoredBy: author },
+  );
+
+  /** A saved pipeline (no unit) whose EvaluationProtocolID changes from `fromId` to `toId`; protocol rows are served by ID. */
+  function rebound(fromId: string, toId: string, rows: readonly EvaluationProtocolColumns[]): MJMLTrainingPipelineEntityServer {
+    const runView = async (p: RunViewParams) => ({ Success: true, Results: rows.filter((r) => String(p.ExtraFilter || '').includes(`'${r.ID}'`)) });
+    // Test-double cast at the seam: the double implements only the RunView member the pipeline server calls.
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
+    const row = Object.create(MJMLTrainingPipelineEntityServer.prototype) as MJMLTrainingPipelineEntityServer;
+    const provider = { EntityByName: () => undefined, EntityByID: () => undefined, Entities: [] };
+    const fields: Record<string, { Dirty: boolean; OldValue: string | null }> = { EvaluationProtocolID: { Dirty: true, OldValue: fromId } };
+    const members = {
+      IsSaved: true, Name: 'p', PredictionUnitID: null, EvaluationProtocolID: toId, LeakageGuard: null, SourceBindings: null, TargetEntityID: null,
+      ProviderToUse: provider, ContextCurrentUser: { ID: 'U-1' }, GetFieldByName: (name: string) => fields[name] || { Dirty: false, OldValue: null },
+    };
+    for (const [name, value] of Object.entries(members)) {
+      Object.defineProperty(row, name, { value, writable: true, configurable: true });
+    }
+    return row;
+  }
+
+  it('refuses a rebind to another lineage whose guard fields an agent tool call relaxed', async () => {
+    const result = await rebound('P-1', 'Q-1', [bound, relaxedBy({ kind: 'agent', agentRunId: 'AR-1' })]).ValidateAsync();
+    expect(result.Success).toBe(false);
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([[
+      'EvaluationProtocolID',
+      'Binding Evaluation Protocol Q-1 in place of P-1 (another lineage) changes the guard fields: An agent tool call cannot change the guard fields promotion; they are set in protocol configuration (UI, a non-agent API caller, a scheduled job or shipped metadata).',
+    ]]);
+  });
+  it('allows a rebind to another lineage whose guard fields a scheduled job set, under non-agent', async () => {
+    const result = await rebound('P-1', 'Q-1', [bound, relaxedBy({ kind: 'scheduled-job', scheduledJobRunId: 'SJ-1' })]).ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
+  });
+  it('leaves a rebind within the lineage to the version\'s own save-time rule', async () => {
+    const result = await rebound('P-1', 'P-2', [bound, relaxedBy({ kind: 'agent', agentRunId: 'AR-1' }, 'P-2', 'P-1')]).ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
   });
 });
 

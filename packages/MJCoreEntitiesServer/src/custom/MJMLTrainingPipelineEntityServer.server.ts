@@ -52,6 +52,7 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
 
         await this.runLeakageGuardCheck(result);
         if (this.needsUnitProtocolCheck()) await this.checkUnitAndProtocol(result);
+        await this.checkProtocolRebind(result);
         return result;
     }
 
@@ -277,6 +278,52 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
                 : null,
         ]);
         return { Unit: unit, Protocol: protocol };
+    }
+
+    /**
+     * Rebinding a saved pipeline from one protocol to a protocol of another lineage changes the guard fields the
+     * pipeline trains under without saving a version of the bound lineage, so it is held to the same rule: when the
+     * guard fields differ, the new protocol's author must be one the previous protocol's `GuardFieldsEditableBy`
+     * allows (never an agent tool call; under `human-only`, only a user). A rebind within the lineage needs no check:
+     * the version's own save applied the rule.
+     */
+    private async checkProtocolRebind(result: ValidationResult): Promise<void> {
+        if (!this.IsSaved) return;
+        const field = this.GetFieldByName('EvaluationProtocolID');
+        const fromID: string | null = field?.Dirty === true ? field.OldValue : null;
+        const toID = this.EvaluationProtocolID;
+        if (!fromID || !toID || UUIDsEqual(fromID, toID)) return;
+        const provider = this.ProviderToUse;
+        if (!VersionedRowGuard.IsMetadataProvider(provider)) {
+            LogStatus(`MJMLTrainingPipelineEntityServer: the provider is not a metadata provider, so the protocol rebind check was skipped for pipeline "${this.Name}"`);
+            return;
+        }
+        const user = this.ContextCurrentUser;
+        const [fromRead, toRead] = await Promise.all([
+            VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(fromID)}'`, user),
+            VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(toID)}'`, user),
+        ]);
+        const from = this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${fromID}`, fromRead);
+        const to = this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${toID}`, toRead);
+        if (!from || !to || UUIDsEqual(from.LineageRootID, to.LineageRootID)) return;
+        const problem = MJMLTrainingPipelineEntityServer.GetProtocolRebindProblem(from, to);
+        if (problem !== null) VersionedRowGuard.Fail(result, 'EvaluationProtocolID', problem);
+    }
+
+    /**
+     * Why a pipeline may not move from protocol `from` to protocol `to` of another lineage: the guard fields differ and
+     * `to`'s author may not change them under `from`'s `GuardFieldsEditableBy`; or why either row does not parse.
+     * Null when the move is allowed. Pure.
+     */
+    public static GetProtocolRebindProblem(from: EvaluationProtocolColumns, to: EvaluationProtocolColumns): string | null {
+        const previous = EvaluationProtocol.ParseEvaluationProtocolRow(from);
+        if (previous.Ok === false) return `Evaluation Protocol ${from.ID} does not parse: ${previous.Errors.join('; ')}`;
+        const next = EvaluationProtocol.ParseEvaluationProtocolRow(to);
+        if (next.Ok === false) return `Evaluation Protocol ${to.ID} does not parse: ${next.Errors.join('; ')}`;
+        const refusals = EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: next.Value, Previous: previous.Value, AuthoredBy: next.Value.authoredBy })
+            .filter((r) => r.Kind === 'guard-field-edited-by-disallowed-author');
+        if (refusals.length === 0) return null;
+        return `Binding Evaluation Protocol ${to.ID} in place of ${from.ID} (another lineage) changes the guard fields: ${EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])}`;
     }
 
     /** The row a read returned; null with "Reading … failed" or "… was not found" recorded on `field`. */

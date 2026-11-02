@@ -1,15 +1,16 @@
 import { BaseEntity, LogStatus, type EntitySaveOptions, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEvaluationProtocolEntity } from '@memberjunction/core-entities';
-import { EvaluationProtocol, EvaluationProtocolRules, type EvaluationProtocolColumns, type EvaluationProtocolSpec, type ProtocolRefusal } from '@memberjunction/predictive-studio-core';
+import { EvaluationProtocol, EvaluationProtocolRules, type Actor, type EvaluationProtocolColumns, type EvaluationProtocolSpec, type ProtocolRefusal } from '@memberjunction/predictive-studio-core';
 import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.server';
 
 /**
  * `MJ: Evaluation Protocols`: immutable versions plus the protocol's own shape checks. On insert, the protocol rules
  * that do not need a Prediction Unit are checked against the previous version of the lineage: a dummy baseline is
  * declared, and the guard fields change only when the author may change them under the previous version's
- * `GuardFieldsEditableBy` (never an agent tool call; under `human-only`, only a user). The rules that need a unit run
- * where a pipeline binds a unit and a protocol.
+ * `GuardFieldsEditableBy` (never an agent tool call; under `human-only`, only a user). A version authored by a user
+ * names the user who saves it: the guard-field rule trusts `AuthoredBy`, so a version may not claim another user (or
+ * a user when no user saves it). The rules that need a unit run where a pipeline binds a unit and a protocol.
  */
 @RegisterClass(BaseEntity, 'MJ: Evaluation Protocols')
 export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity {
@@ -45,6 +46,11 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
       VersionedRowGuard.Fail(result, 'Version', `Evaluation Protocol does not parse: ${parsed.Errors.join('; ')}`);
       return result;
     }
+    const impersonation = MJEvaluationProtocolEntityServer.GetHumanAuthorProblem(parsed.Value.authoredBy, this.ContextCurrentUser?.ID || null);
+    if (impersonation !== null) {
+      VersionedRowGuard.Fail(result, 'AuthoredBy', impersonation);
+      return result;
+    }
     const previous = await VersionedRowGuard.PreviousVersion<EvaluationProtocolColumns, EvaluationProtocolSpec>(result, {
       Label: 'Evaluation Protocol', LineageRootID: this.LineageRootID, Version: this.Version,
       Load: (version) => this.LoadVersion(provider, version),
@@ -55,6 +61,18 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
       VersionedRowGuard.Fail(result, MJEvaluationProtocolEntityServer.refusalField(r), EvaluationProtocolRules.DescribeProtocolRefusal(r));
     }
     return result;
+  }
+
+  /**
+   * Why a version's author cannot be accepted: it names a user other than the one saving it (or names a user when no
+   * user saves it). Null for any other author, and for the saving user. Pure.
+   *
+   * @param author the version's `AuthoredBy`
+   * @param savingUserId the ID of the user saving the version, or null when none is known
+   */
+  public static GetHumanAuthorProblem(author: Actor, savingUserId: string | null): string | null {
+    if (author.kind !== 'human' || (savingUserId !== null && UUIDsEqual(author.userId, savingUserId))) return null;
+    return `AuthoredBy names the user ${author.userId}, but the version is saved by ${savingUserId === null ? 'no user' : 'another user'}; a version is authored by a user only when that user saves it.`;
   }
 
   /** The column a protocol refusal is reported on. */
