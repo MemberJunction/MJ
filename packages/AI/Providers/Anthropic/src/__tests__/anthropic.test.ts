@@ -1059,6 +1059,36 @@ describe('AnthropicLLM — native tool calling', () => {
             }]);
         });
 
+        it('places a cache breakpoint on the last tool when caching is on and a breakpoint is spare', async () => {
+            const otherTool = { ...WEATHER_TOOL, name: 'get_forecast' };
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'weather?' }], tools: [WEATHER_TOOL, otherTool], enableCaching: true });
+
+            const tools = mockStream.mock.calls[0][0].tools;
+            expect(tools[0].cache_control).toBeUndefined();
+            expect(tools[1].cache_control).toEqual({ type: 'ephemeral' });
+        });
+
+        it('leaves the tools unmarked when caching is off', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'weather?' }], tools: [WEATHER_TOOL] });
+
+            expect(mockStream.mock.calls[0][0].tools[0].cache_control).toBeUndefined();
+        });
+
+        it('leaves the tools unmarked when the system and message segments already use all four breakpoints', async () => {
+            // Three markers in the system prompt → three breakpoints there; the last user message takes the fourth.
+            const system = ['a', 'b', 'c', 'd'].join(ANTHROPIC_CACHE_BREAKPOINT);
+            await run({
+                messages: [{ role: ChatMessageRole.system, content: system }, { role: ChatMessageRole.user, content: 'weather?' }],
+                tools: [WEATHER_TOOL],
+                enableCaching: true
+            });
+
+            const request = mockStream.mock.calls[0][0];
+            const systemBreakpoints = request.system.filter((b: { cache_control?: { type: string } }) => b.cache_control).length;
+            expect(systemBreakpoints).toBe(3);
+            expect(request.tools[0].cache_control).toBeUndefined();
+        });
+
         it('sends no tool fields at all when the caller declares none', async () => {
             await run({ messages: [{ role: ChatMessageRole.user, content: 'hi' }] });
 

@@ -1018,6 +1018,25 @@ describe('ActionEngineServer', () => {
             await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
         });
 
+        it('logs the action\'s own result code when it matches none of the metadata result codes', async () => {
+            let loggedCode: string | undefined;
+            const logEntity = {
+                Save: vi.fn().mockResolvedValue(true),
+                set EndedAt(_v: Date) {},
+                set Params(_v: string) {},
+                set ResultCode(v: string | undefined) { loggedCode = v; },
+                set Message(_v: string | undefined) {},
+            };
+
+            const params = { Params: [] };
+            const result = { Result: undefined, ResultCode: 'CUSTOM_CODE', Message: 'Done' };
+
+            await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
+
+            await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+            expect(loggedCode).toBe('CUSTOM_CODE');
+        });
+
         it('should log error when save fails', async () => {
             const logEntity = {
                 Save: vi.fn().mockResolvedValue(false),

@@ -70,6 +70,29 @@ describe('sub-agent tools', () => {
         const t = BuildSubAgentTool(agent('A'.repeat(80)));
         expect(t.name.length).toBeLessThanOrEqual(64);
     });
+    it('includes resumeRunId in inputSchema.properties only when consultEnabled is true', () => {
+        const withoutConsult = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), { consultEnabled: false });
+        expect(Object.keys(withoutConsult.inputSchema.properties ?? {}).sort()).toEqual(['message', 'terminateAfter']);
+
+        const withConsult = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), { consultEnabled: true });
+        expect(Object.keys(withConsult.inputSchema.properties ?? {}).sort()).toEqual(['message', 'resumeRunId', 'terminateAfter']);
+        const props = withConsult.inputSchema.properties as Record<string, { type: string; description?: string }>;
+        expect(props.resumeRunId.type).toBe('string');
+        expect(props.resumeRunId.description).toMatch(/earlier run that ended with a question/i);
+    });
+    it('includes presetName enum in inputSchema.properties only when presetNames is non-empty', () => {
+        const withoutPresets = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), { presetNames: [] });
+        expect(Object.keys(withoutPresets.inputSchema.properties ?? {}).sort()).toEqual(['message', 'terminateAfter']);
+
+        const withPresets = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), {
+            presetNames: ['Draft', 'Standard', 'High'],
+        });
+        expect(Object.keys(withPresets.inputSchema.properties ?? {}).sort()).toEqual(['message', 'presetName', 'terminateAfter']);
+        const props = withPresets.inputSchema.properties as Record<string, { type: string; enum?: string[]; description?: string }>;
+        expect(props.presetName.type).toBe('string');
+        expect(props.presetName.enum).toEqual(['Draft', 'Standard', 'High']);
+        expect(props.presetName.description).toMatch(/Preset for this sub-agent/i);
+    });
 });
 
 describe('buildNativeToolSet', () => {
@@ -83,6 +106,17 @@ describe('buildNativeToolSet', () => {
         expect(set.byToolName.get(ASK_USER_TOOL)?.kind).toBe('askUser');
         expect(set.byToolName.get(COMPLETE_TASK_TOOL)?.kind).toBe('complete');
     });
+    it('threads subAgentOptions per sub-agent to expose resumeRunId selectively', () => {
+        const set = BuildNativeToolSet(
+            actionSet(),
+            [agent('Copywriter Agent'), agent('Editor Agent')],
+            (sa) => ({ consultEnabled: sa.Name === 'Copywriter Agent' })
+        );
+        const copyTool = set.tools.find((t) => t.name === 'delegate_to_copywriter_agent')!;
+        const editorTool = set.tools.find((t) => t.name === 'delegate_to_editor_agent')!;
+        expect(Object.keys(copyTool.inputSchema.properties ?? {}).sort()).toEqual(['message', 'resumeRunId', 'terminateAfter']);
+        expect(Object.keys(editorTool.inputSchema.properties ?? {}).sort()).toEqual(['message', 'terminateAfter']);
+    });
     it('rejects an Action that collides with a reserved name', () => {
         expect(() => BuildNativeToolSet(actionSet('Ask User'), [])).toThrow(/reserved/i);
     });
@@ -92,5 +126,9 @@ describe('buildNativeToolSet', () => {
     it('works with no actions at all (a pure orchestrator)', () => {
         const set = BuildNativeToolSet(actionSet(), [agent('Copywriter Agent'), agent('Editor Agent')]);
         expect(set.tools.map((t) => t.name)).toEqual(['delegate_to_copywriter_agent', 'delegate_to_editor_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL]);
+    });
+    it('declares sub-agents in name order whatever order they were loaded in, so the declarations repeat byte-for-byte', () => {
+        const set = BuildNativeToolSet(actionSet(), [agent('Editor Agent'), agent('Copywriter Agent')]);
+        expect(set.tools.map((t) => t.name).slice(0, 2)).toEqual(['delegate_to_copywriter_agent', 'delegate_to_editor_agent']);
     });
 });

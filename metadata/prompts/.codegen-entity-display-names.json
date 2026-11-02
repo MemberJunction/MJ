@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Entity Display Name Generation",
+      "Description": "Improves an entity's human-readable DisplayName by expanding schema abbreviations that the deterministic name conversion cannot resolve (ACCT_STAT_CD -> Account Status Codes). Presentation-only; never changes Entity.Name.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/entity-display-names.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "OutputType": "object",
+      "OutputExample": "",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "E68381CB-BE4C-438F-97F8-2A1649CA9DC4"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:36.983Z",
+            "checksum": "72a39de6b3e7877160bdf3970c2af6bda70f947fd7f44ee85c8a0d7b863f8d1c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "245521A3-8FAB-4A0C-A722-8263219E517A"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:36.995Z",
+            "checksum": "bbd25c184e2faf2a27fc3ea45401fe1bb491833448227011952b9c2a5dbc535a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "AACBC24B-A2D4-4A15-8E69-53C18BF2B573"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:37.006Z",
+            "checksum": "681b374ee1553a33bd3eaec4ccf26074c9ecdc0aaf252d7f6efb2a0424addee5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "397A4001-32D5-4F08-A39E-F9373E571FBC"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:37.018Z",
+            "checksum": "f73dcd14aeb277725c2bf0b147d266c30a90951d1f35572303cd1cf8aba4ca73"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "85DB131C-F827-4DCA-A505-CEBE755F34ED"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:36.933Z",
+      "checksum": "31a4271db2dfaae7cf9f50a36518b08bdd4e86b1fb341c7382191159c71302e0"
+    }
+  }
+]

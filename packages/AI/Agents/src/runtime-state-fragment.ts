@@ -165,6 +165,9 @@ const FRAGMENT_TAG_PATTERN = new RegExp(`<\\s*(/?)\\s*(${RUNTIME_STATE_TAG}|${AG
  * is pre-existing, layout-independent, and addressed structurally elsewhere.
  */
 export function EscapeRuntimeStateTags(text: string): string {
+    if (!text.includes('<')) {
+        return text;
+    }
     return text.replace(FRAGMENT_TAG_PATTERN, (_m, slash: string, tag: string) => `&lt;${slash}${tag.toLowerCase()}&gt;`);
 }
 

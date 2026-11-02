@@ -9,6 +9,8 @@
  * @module @memberjunction/ai-agents/realtime/realtime-recording-capture
  */
 
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
+
 /** Media kind tag stored on a realtime recording session. */
 export type RealtimeRecordingMedia = 'Audio' | 'AudioVideo';
 
@@ -64,6 +66,7 @@ export class RealtimeRecordingController {
 
     private outboundFrames: CapturedFrame[] = [];
     private inboundFrames: CapturedFrame[] = [];
+    private cachedMixedTimeline: { Pcm: Int16Array; SampleRate: number } | null = null;
 
     constructor(options?: RealtimeRecordingOptions) {
         this.outputSampleRate = options?.OutputSampleRate ?? 24000;
@@ -95,6 +98,7 @@ export class RealtimeRecordingController {
         this.startEpochMs = null;
         this.outboundFrames = [];
         this.inboundFrames = [];
+        this.cachedMixedTimeline = null;
     }
 
     public get IsRecording(): boolean {
@@ -181,6 +185,9 @@ export class RealtimeRecordingController {
      * exact same signal. Returns `null` when nothing was captured.
      */
     private mixTimeline(): { Pcm: Int16Array; SampleRate: number } | null {
+        if (this.cachedMixedTimeline !== null) {
+            return this.cachedMixedTimeline;
+        }
         if (!this.HasAudio) {
             return null;
         }
@@ -192,7 +199,9 @@ export class RealtimeRecordingController {
         const accumulator = new Float64Array(timelineLength);
         this.mixFrames(accumulator, this.outboundFrames, targetRate, this.outputSampleRate);
         this.mixFrames(accumulator, this.inboundFrames, targetRate, this.inputSampleRate);
-        return { Pcm: this.clampToInt16(accumulator), SampleRate: targetRate };
+        const mixed = { Pcm: this.clampToInt16(accumulator), SampleRate: targetRate };
+        this.cachedMixedTimeline = mixed;
+        return mixed;
     }
 
     /**
@@ -237,6 +246,7 @@ export class RealtimeRecordingController {
         if (samples.length === 0) {
             return;
         }
+        this.cachedMixedTimeline = null;
         list.push({ offsetMs: this.NowOffsetMs(), samples });
     }
 
@@ -372,8 +382,12 @@ export class RealtimeRecordingController {
         buffer.write('data', 36, 'ascii');
         buffer.writeUInt32LE(dataSize, 40);
 
-        for (let i = 0; i < pcm.length; i++) {
-            buffer.writeInt16LE(pcm[i], WAV_HEADER_BYTES + i * bytesPerSample);
+        if (IS_LITTLE_ENDIAN) {
+            Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength).copy(buffer, WAV_HEADER_BYTES);
+        } else {
+            for (let i = 0; i < pcm.length; i++) {
+                buffer.writeInt16LE(pcm[i], WAV_HEADER_BYTES + i * bytesPerSample);
+            }
         }
 
         return buffer;

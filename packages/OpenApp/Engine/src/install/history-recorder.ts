@@ -247,6 +247,7 @@ export async function RecordAppDependencies(
         ExtraFilter: `Name = '${EscapeSQLString(depName)}'`,
         ResultType: 'simple',
         MaxRows: 1,
+        SkipTotalRowCount: true,
       },
       contextUser,
     );

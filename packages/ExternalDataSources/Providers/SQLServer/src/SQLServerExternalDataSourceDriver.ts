@@ -511,9 +511,4 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   protected sqlDialectKey(): SqlDialectKey {
     return 'sqlserver';
   }
-
-  /** Quote a SQL identifier with T-SQL brackets, escaping embedded `]`. */
-  protected quoteIdent(name: string): string {
-    return `[${name.replace(/]/g, ']]')}]`;
-  }
 }

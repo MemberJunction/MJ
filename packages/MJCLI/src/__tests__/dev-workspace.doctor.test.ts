@@ -4,9 +4,10 @@
  * pure. The pnpm version is injected — no spawns, and doctor writes nothing.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { BuildSentinel, BuildWorkspaceYaml } from '../lib/dev-workspace/build.js';
+import { OutputDirOf, ResolveEntryFile } from '../lib/dev-workspace/build-output.js';
 import {
   CollectDoctorReport,
   CollectSingletonCensus,
@@ -222,7 +223,7 @@ describe('open app client packages check', () => {
     expect(check.Detail).toContain('bizapps-caliber');
     expect(DoctorHasFailures(report)).toBe(true);
     // the point of the fix: every other check still ran
-    expect(report.Checks).toHaveLength(10);
+    expect(report.Checks).toHaveLength(11);
     expect(checkNamed(report, 'member dirs').Severity).toBe('pass');
     expect(checkNamed(report, 'sentinel').Severity).toBe('pass');
   });
@@ -272,6 +273,154 @@ describe('open app client packages check', () => {
     const check = checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages');
     expect(check.Severity).toBe('pass');
     expect(check.Detail).not.toContain('orders-ng');
+  });
+});
+
+describe('build output check', () => {
+  const OLD = new Date('2026-01-01T00:00:00Z');
+  const NEW = new Date('2026-01-02T00:00:00Z');
+
+  /** A member with one buildable package at `packages/Core`, plus whatever extra files a case needs. */
+  function buildableFixture(pkg: Record<string, unknown>, files: Record<string, string>) {
+    return {
+      'bizapps-x': {
+        RootPackageJson: { name: 'x' },
+        MjAppJson: true,
+        Packages: { Core: { name: '@mj-biz-apps/x-core', scripts: { build: 'tsc' }, ...pkg } },
+        Files: files,
+      },
+    };
+  }
+
+  /** Sets one fixture file's modification time. */
+  function touch(parentDir: string, repoRelPath: string, when: Date): void {
+    utimesSync(path.join(parentDir, 'bizapps-x', repoRelPath), when, when);
+  }
+
+  /** A generated, installed workspace over the given fixture — the state the check judges. */
+  function installedWorkspace(spec: ReturnType<typeof buildableFixture>): string {
+    const dir = CreateFixtureParent(spec);
+    writeGeneratedWorkspace(dir, ['bizapps-x']);
+    mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
+    return dir;
+  }
+
+  it('FAILS when a buildable package has no output, and names the rebuild command', () => {
+    parent = installedWorkspace(buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/src/index.ts': '' }));
+    const report = CollectDoctorReport(parent, '10.33.0', 'flag');
+    const check = checkNamed(report, 'build output');
+    expect(check.Severity).toBe('fail');
+    expect(check.Detail).toContain('@mj-biz-apps/x-core (bizapps-x/packages/Core)');
+    expect(check.Detail).toContain('pnpm --filter @mj-biz-apps/x-core run build');
+    expect(DoctorHasFailures(report)).toBe(true);
+  });
+
+  it('FAILS when the output folder exists but the declared entry file does not', () => {
+    parent = installedWorkspace(buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/src/index.ts': '', 'packages/Core/dist/other.js': '' }));
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('fail');
+  });
+
+  it('WARNS, without failing doctor, when a source file is newer than the output', () => {
+    parent = installedWorkspace(buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/src/index.ts': '', 'packages/Core/dist/index.js': '' }));
+    touch(parent, 'packages/Core/dist/index.js', OLD);
+    touch(parent, 'packages/Core/src/index.ts', NEW);
+
+    const report = CollectDoctorReport(parent, '10.33.0', 'flag');
+    const check = checkNamed(report, 'build output');
+    expect(check.Severity).toBe('warn');
+    expect(check.Detail).toContain('older than their source: @mj-biz-apps/x-core');
+    expect(DoctorHasFailures(report)).toBe(false);
+  });
+
+  it('passes when the output is at least as new as every source file', () => {
+    parent = installedWorkspace(buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/src/index.ts': '', 'packages/Core/dist/index.js': '' }));
+    touch(parent, 'packages/Core/src/index.ts', OLD);
+    touch(parent, 'packages/Core/dist/index.js', NEW);
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('pass');
+  });
+
+  it('does not call the output stale when only a test file is newer', () => {
+    parent = installedWorkspace(
+      buildableFixture(
+        { main: 'dist/index.js' },
+        {
+          'packages/Core/src/index.ts': '',
+          'packages/Core/src/index.test.ts': '',
+          'packages/Core/src/__tests__/helper.ts': '',
+          'packages/Core/dist/index.js': '',
+        },
+      ),
+    );
+    touch(parent, 'packages/Core/src/index.ts', OLD);
+    touch(parent, 'packages/Core/dist/index.js', OLD);
+    touch(parent, 'packages/Core/src/index.test.ts', NEW);
+    touch(parent, 'packages/Core/src/__tests__/helper.ts', NEW);
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('pass');
+  });
+
+  it('reads the output folder from package.json rather than assuming dist/', () => {
+    parent = installedWorkspace(
+      buildableFixture({ main: './build/esm/index.js' }, { 'packages/Core/src/index.ts': '', 'packages/Core/build/esm/index.js': '' }),
+    );
+    touch(parent, 'packages/Core/src/index.ts', OLD);
+    touch(parent, 'packages/Core/build/esm/index.js', NEW);
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('pass');
+  });
+
+  it('falls back to dist/ when the package declares no entry point', () => {
+    parent = installedWorkspace(buildableFixture({}, { 'packages/Core/src/index.ts': '' }));
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Detail).toContain('not built');
+  });
+
+  it('skips a package with no src/ folder — there is no source to compare', () => {
+    parent = installedWorkspace(buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/README.md': '' }));
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('skip');
+  });
+
+  it('skips a package with no build script', () => {
+    parent = installedWorkspace(buildableFixture({ scripts: {} }, { 'packages/Core/src/index.ts': '' }));
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('skip');
+  });
+
+  it('skips before pnpm install has run at the parent', () => {
+    parent = CreateFixtureParent(buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/src/index.ts': '' }));
+    writeGeneratedWorkspace(parent, ['bizapps-x']);
+    const report = CollectDoctorReport(parent, '10.33.0', 'flag');
+    expect(checkNamed(report, 'build output').Severity).toBe('skip');
+    expect(DoctorHasFailures(report)).toBe(false);
+  });
+
+  it('ignores a candidate repo that is not a workspace member', () => {
+    parent = CreateFixtureParent({
+      ...buildableFixture({ main: 'dist/index.js' }, { 'packages/Core/src/index.ts': '' }),
+      'bizapps-y': { RootPackageJson: { name: 'y' }, MjAppJson: true },
+    });
+    writeGeneratedWorkspace(parent, ['bizapps-y']); // bizapps-x, the unbuilt one, is deliberately excluded
+    mkdirSync(path.join(parent, 'node_modules'), { recursive: true });
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'build output').Severity).toBe('skip');
+  });
+});
+
+describe('ResolveEntryFile / OutputDirOf', () => {
+  it('prefers main, then module, then the exports root', () => {
+    expect(ResolveEntryFile({ main: 'dist/a.js', module: 'esm/b.js' })).toBe(path.normalize('dist/a.js'));
+    expect(ResolveEntryFile({ module: 'esm/b.js' })).toBe(path.normalize('esm/b.js'));
+    expect(ResolveEntryFile({ exports: { '.': { import: './lib/c.js' } } })).toBe(path.normalize('lib/c.js'));
+    expect(ResolveEntryFile({ exports: './lib/d.js' })).toBe(path.normalize('lib/d.js'));
+  });
+
+  it('returns null for no entry, or an exports shape it does not read', () => {
+    expect(ResolveEntryFile({})).toBeNull();
+    expect(ResolveEntryFile({ exports: ['./a.js'] })).toBeNull();
+  });
+
+  it('takes the first path segment as the output folder', () => {
+    expect(OutputDirOf(path.normalize('dist/esm/index.js'))).toBe('dist');
+  });
+
+  it('has no output folder for an entry at the package root or inside src/', () => {
+    expect(OutputDirOf('index.js')).toBeNull();
+    expect(OutputDirOf(path.normalize('src/index.ts'))).toBeNull();
   });
 });
 

@@ -35,6 +35,11 @@ describe('bindings', () => {
         const binding = ToSubscriptionBinding({ ...SUBSCRIPTION_ROW, MaxProcessingSeconds: 120 }, TOPIC_ROW);
         expect(binding.Config).toEqual({ SubscriptionID: SUBSCRIPTION_ROW.ID, TopicID: TOPIC_ROW.ID });
         expect(binding.Policy).toMatchObject({ SubscriptionName: 'venue-import', TopicName: 'import.ready', PartitionMode: 'Ordered', MaxProcessingSeconds: 120 });
+        expect(binding.Policy.ExhaustionBehavior).toBeUndefined();
+        const discardViaConfig = ToSubscriptionBinding({ ...SUBSCRIPTION_ROW, BindingConfig: '{"ExhaustionBehavior":"Discard"}' }, TOPIC_ROW);
+        expect(discardViaConfig.Policy.ExhaustionBehavior).toBe('Discard');
+        const discardViaProp = ToSubscriptionBinding({ ...SUBSCRIPTION_ROW, ExhaustionBehavior: 'Discard' }, TOPIC_ROW);
+        expect(discardViaProp.Policy.ExhaustionBehavior).toBe('Discard');
         expect(ToTopicBinding(TOPIC_ROW)).toEqual({ TopicName: 'import.ready', IsFifo: false, MaxPayloadBytes: 262144, Config: { TopicID: TOPIC_ROW.ID } });
     });
 

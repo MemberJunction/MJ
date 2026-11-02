@@ -70,18 +70,18 @@ describe('LiveKitControlBarComponent (DOM)', () => {
     const f = render({ ShowAgentVision: true, AgentVisionOn: true });
     const asked: boolean[] = [];
     f.componentInstance.ToggleAgentVision.subscribe((on: boolean) => asked.push(on));
-    (query(f, 'button[title="Stop letting the agent see your camera and screen"]') as HTMLButtonElement).click();
+    (query(f, 'button[title="Stop letting the agent, and any agent that joins later, see your camera and screen"]') as HTMLButtonElement).click();
     expect(asked).toEqual([false]);
   });
 
   it('names the agent-vision switch for every agent in the room when there is more than one', () => {
-    expect(query(render({ ShowAgentVision: true, AgentCount: 2 }), 'button[title="Let agents in this room see your camera and screen"]')).not.toBeNull();
-    expect(query(render({ ShowAgentVision: true, AgentCount: 1 }), 'button[title="Let the agent see your camera and screen"]')).not.toBeNull();
+    expect(query(render({ ShowAgentVision: true, AgentCount: 2 }), 'button[title="Let every agent in this room, including any that join later, see your camera and screen"]')).not.toBeNull();
+    expect(query(render({ ShowAgentVision: true, AgentCount: 1 }), 'button[title="Let the agent, and any agent that joins later, see your camera and screen"]')).not.toBeNull();
   });
 
   it('keeps the agent-vision switch when the microphone, camera and share controls are gated off', () => {
     const f = render({ EnableMicrophoneControl: false, EnableCameraControl: false, EnableScreenShareControl: false, ShowAgentVision: true });
-    expect(query(f, 'button[title="Let the agent see your camera and screen"]')).not.toBeNull();
+    expect(query(f, 'button[title="Let the agent, and any agent that joins later, see your camera and screen"]')).not.toBeNull();
   });
 
   it('shows the unread chat badge only when there are unread messages', () => {

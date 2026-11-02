@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { IntegrationProgressReader } from './IntegrationProgressReader.js';
-import type { IntegrationRunResult } from './types.js';
+import type { IntegrationRunResult, IntegrationRunSnapshot } from './types.js';
 
 /**
  * Closes out run artifacts that a process death left open.
@@ -24,6 +24,10 @@ import type { IntegrationRunResult } from './types.js';
  * `'killed'` is already the artifact vocabulary's term for this exit, so consumers that classify by
  * `exitReason` need no change to understand the result.
  *
+ * `skip` names the runs that are NOT dead: ones the starting process is itself the continuation
+ * of and will resume (see `RSUPostRestartProgressSession` in MJServer). They are reported in
+ * `Skipped`, untouched, so the caller can sweep whichever of them nothing resumed after all.
+ *
  * KNOWN LIMIT — assumes ONE process per artifact directory, which is the same single-writer
  * assumption the surrounding services document. If MJAPI is ever scaled past one replica sharing a
  * directory, a starting replica would close out a sibling's live runs. Gate the call, not this
@@ -32,22 +36,32 @@ import type { IntegrationRunResult } from './types.js';
 export async function SweepInterruptedRuns(
     rootDir?: string,
     log: (message: string) => void = () => {},
-): Promise<{ Swept: string[]; Failed: string[] }> {
+    skip?: (snapshot: IntegrationRunSnapshot) => boolean,
+): Promise<{ Swept: string[]; Failed: string[]; Skipped: string[] }> {
     const reader = rootDir ? new IntegrationProgressReader(rootDir) : new IntegrationProgressReader();
     const swept: string[] = [];
     const failed: string[] = [];
+    const skipped: string[] = [];
 
     let inFlight: Awaited<ReturnType<IntegrationProgressReader['FindInFlight']>>;
     try {
         inFlight = await reader.FindInFlight();
     } catch (e) {
         log(`[RunReconciler] could not list in-flight runs: ${e instanceof Error ? e.message : String(e)}`);
-        return { Swept: swept, Failed: failed };
+        return { Swept: swept, Failed: failed, Skipped: skipped };
     }
-    if (inFlight.length === 0) return { Swept: swept, Failed: failed };
+    if (inFlight.length === 0) return { Swept: swept, Failed: failed, Skipped: skipped };
 
     for (const snap of inFlight) {
         const runID = snap.manifest.runID;
+        // A run the caller intends to pick back up is not dead — it is waiting for its continuation
+        // (an RSU run killed inside its own RestartMJAPI step is exactly this). Leave it in flight
+        // and name it, so the caller can close out whatever it then fails to re-attach to.
+        if (skip?.(snap)) {
+            skipped.push(runID);
+            log(`[RunReconciler] left ${snap.manifest.runKind} run ${runID} in flight for its continuation to resume`);
+            continue;
+        }
         // Name the step it died on. That is the single most useful fact for whoever reads this
         // afterwards, and it is the one thing a killed run cannot say for itself.
         const lastStage = snap.latestEvent?.stage;
@@ -83,5 +97,5 @@ export async function SweepInterruptedRuns(
             log(`[RunReconciler] could not close run ${runID}: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
-    return { Swept: swept, Failed: failed };
+    return { Swept: swept, Failed: failed, Skipped: skipped };
 }

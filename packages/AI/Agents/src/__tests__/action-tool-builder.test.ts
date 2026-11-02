@@ -72,6 +72,18 @@ describe('buildToolFromAction', () => {
         expect(props.ids.items.type).toEqual(['string', 'number', 'boolean']);
     });
 
+    it('declares properties and required in name order whatever order the params arrived in', () => {
+        const tool = BuildToolFromAction(action('Do Thing'), [
+            param({ Name: 'zeta', IsRequired: true }),
+            param({ Name: 'alpha' }),
+            param({ Name: 'Mid', IsRequired: true })
+        ]);
+        const schema = tool.inputSchema as { properties: Record<string, unknown>; required: string[] };
+        // Ordinal order: uppercase sorts before lowercase, and the order never depends on the process locale.
+        expect(Object.keys(schema.properties)).toEqual(['Mid', 'alpha', 'zeta']);
+        expect(schema.required).toEqual(['Mid', 'zeta']);
+    });
+
     it('lists required params and omits the key when there are none', () => {
         const withReq = BuildToolFromAction(action('T'), [param({ Name: 'a', IsRequired: true }), param({ Name: 'b' })]);
         expect((withReq.inputSchema as { required: string[] }).required).toEqual(['a']);

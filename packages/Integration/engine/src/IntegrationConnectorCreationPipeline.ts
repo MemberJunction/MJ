@@ -1,5 +1,6 @@
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { LogError, Metadata } from '@memberjunction/core';
+import type { DatabaseProviderBase, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type {
     MJCompanyIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -13,12 +14,14 @@ import {
     SoftPKClassifier,
     type LLMOneShotCallback,
 } from '@memberjunction/integration-pk-classifier';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
-import { LoadCatalogScope, RunInCatalogScope } from './CatalogScope.js';
+import { LoadCatalogScope, RefreshCatalogScope, RunInCatalogScope } from './CatalogScope.js';
 import { IntegrationSchemaSync, type PersistSchemaOptions, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo, SourceSchemaInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
+import { DescribePersistCounts } from './SchemaPersistCounts.js';
 import { getHeapStatistics } from 'node:v8';
 import { totalmem } from 'node:os';
 
@@ -124,6 +127,25 @@ function emptyPersistResult(): PersistSchemaResult {
         FieldMergeLog: [],
         ObjectsDeactivated: [],
         FieldsDeactivated: [],
+    };
+}
+
+/**
+ * The first-discovery result once the healing pass has re-persisted the objects it sampled.
+ *
+ * Not a sum: the heal re-persists objects the first pass CREATED, so adding its counts would report
+ * them a second time, as updates. The first pass's object and field counts stand; what the heal adds
+ * is its provenance (the merge logs, now carrying the sampled evidence) and any field that sampling
+ * found and the declaration did not. It is scoped and never authoritative, so it retires nothing.
+ */
+export function MergeHealedPersistResult(first: PersistSchemaResult, heal: PersistSchemaResult): PersistSchemaResult {
+    return {
+        ...first,
+        FieldsCreated: first.FieldsCreated + heal.FieldsCreated,
+        ObjectMergeLog: [...first.ObjectMergeLog, ...heal.ObjectMergeLog],
+        FieldMergeLog: [...first.FieldMergeLog, ...heal.FieldMergeLog],
+        ObjectsDeactivated: [...first.ObjectsDeactivated],
+        FieldsDeactivated: [...first.FieldsDeactivated],
     };
 }
 
@@ -518,8 +540,8 @@ export class IntegrationConnectorCreationPipeline {
             if (served.Success) {
                 const p = served.PersistResult;
                 await emitter.complete(
-                    `${pointer} Outcome: ${p?.ObjectsCreated ?? 0} objects created, ` +
-                    `${p?.ObjectsUpdated ?? 0} updated, ${served.UnresolvedObjects.length} unresolved PKs.`
+                    `${pointer} Outcome: ${DescribePersistCounts(p)}, ` +
+                    `${served.UnresolvedObjects.length} unresolved PKs.`
                 );
             } else {
                 emitter.stageError('Coalesced', served.FailureMessage ?? 'no reason reported', {
@@ -613,7 +635,51 @@ export class IntegrationConnectorCreationPipeline {
             await withDeadline('ConnectionTest', this.stageConnectionTest(emitter, opts));
             // Introspect + Persist as ONE traversal of the source when the connector can stream;
             // the old whole-schema persist when it cannot. See streamIntrospectAndPersist.
-            const persistResult = await this.streamIntrospectAndPersist(emitter, opts, withDeadline);
+            let persistResult = await this.streamIntrospectAndPersist(emitter, opts, withDeadline);
+
+            // MJ-DISC-16 — heal first-discovery sampling in the SAME run.
+            //
+            // The Introspect above could not sample any net-new object: sampling reads the catalog,
+            // and those rows only came into existence in the Persist that follows it. So a
+            // brand-new object lands with the widths its catalog DESCRIPTION claims and no evidence
+            // from actual records — and at sync, values longer than the guess are dropped. From the
+            // outside that is indistinguishable from a clean discovery.
+            //
+            // Their rows exist now. Refresh the engine's catalog cache and run one more
+            // Introspect+Persist, which this time can sample them. Verified live 2026-09-07: a
+            // manual second refresh sampled all 258 custom types cleanly.
+            //
+            // Scoped to the objects that went unsampled. Re-running the whole source would double a
+            // large connector's time and API calls for a handful of objects, inside the same run
+            // deadline PKClassify still needs. A scoped introspection is never authoritative, and
+            // DeactivateAbsent is off, so the heal cannot retire anything the first pass kept.
+            //
+            // Non-fatal by design — a failed heal leaves exactly the state we already had, and
+            // failing the whole discovery over it would be worse than the guessed widths. So it is
+            // a warning, which never fails the run, not a stage error.
+            const unsampled = [...(this._firstDiscoveryFallbacks ?? [])];
+            if (unsampled.length > 0) {
+                try {
+                    emitter.stageStart('Introspect', `${unsampled.length} first-discovered object(s) were persisted without sampling — sampling them now`);
+                    await IntegrationEngineBase.Instance.RefreshCatalog(opts.ContextUser);
+                    // The new rows are this connection's own, and those live in the catalog scope, not
+                    // in the engine's shared arrays (MJ-RUN-43). The scope was loaded before Persist
+                    // wrote them, so re-read it too, or the second pass samples the same empty
+                    // catalog as the first (MJ-RUN-46; see RefreshCatalog).
+                    await RefreshCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
+                    const healOpts: ConnectorCreationPipelineOptions = {
+                        ...opts,
+                        IntrospectOptions: { ...(opts.IntrospectOptions ?? {}), ObjectNames: unsampled },
+                        DeactivateAbsent: false,
+                    };
+                    const healed = await this.streamIntrospectAndPersist(emitter, healOpts, withDeadline);
+                    persistResult = MergeHealedPersistResult(persistResult, healed);
+                } catch (healErr) {
+                    const hm = healErr instanceof Error ? healErr.message : String(healErr);
+                    emitter.Warning('Introspect', 'first-discovery-heal-failed', `First-discovery healing pass failed (run schema refresh once more to complete sampling evidence): ${hm}`);
+                }
+            }
+
             const { verdicts, unresolved } = await withDeadline('PKClassify', this.stagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
@@ -621,7 +687,7 @@ export class IntegrationConnectorCreationPipeline {
                 succeeded: verdicts.filter(v => v.Confident).length,
                 skipped: unresolved.length,
             });
-            await emitter.complete(`Pipeline complete. ${persistResult.ObjectsCreated} objects created, ${persistResult.ObjectsUpdated} updated, ${unresolved.length} unresolved PKs.`);
+            await emitter.complete(`Pipeline complete. ${DescribePersistCounts(persistResult)}, ${unresolved.length} unresolved PKs.`);
 
             return {
                 RunID: runID,
@@ -666,11 +732,19 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 2: introspect ──────────────────────────────────────────────
 
+    /**
+     * Objects whose sampling fell back because they had no catalog row yet — the first-discovery
+     * case. Reset at the start of every Introspect so a healing pass cannot inherit the first
+     * pass's list and loop.
+     */
+    private _firstDiscoveryFallbacks?: Set<string>;
+
     private async stageIntrospect(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
         onObject?: (obj: SourceObjectInfo) => Promise<void>,
     ): Promise<SourceSchemaInfo> {
+        this._firstDiscoveryFallbacks = new Set<string>();
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
         // Sampling is now per OBJECT, so this stage's cost scales with the catalog — and on a large
@@ -1016,6 +1090,13 @@ export class IntegrationConnectorCreationPipeline {
      */
     private reportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
         const msg = err instanceof Error ? err.message : String(err);
+        // MJ-DISC-16: an object discovered for the FIRST time cannot be sampled in the run that
+        // discovers it — sampling reads through the catalog, and its row only exists after Persist.
+        // Remember exactly those, so the pipeline can heal them in the same run rather than leaving
+        // a brand-new object with catalog-guessed widths until someone happens to refresh again.
+        if (/IntegrationObject not found/i.test(msg)) {
+            (this._firstDiscoveryFallbacks ??= new Set<string>()).add(objectName);
+        }
         emitter.stageError(
             'Introspect',
             `Sampling fell back to the catalog description for "${objectName}" — real widths and ` +
@@ -1130,6 +1211,45 @@ export class IntegrationConnectorCreationPipeline {
     }
 
     /**
+     * Is the connection this run belongs to still THERE?
+     *
+     * The run holds an in-memory `CompanyIntegration`; a delete that lands mid-run removes its row and
+     * nothing tells the pipeline. `startSchemaRefreshPipelineDetached` is fire-and-forget, nothing
+     * cancels it, and ConnectionTest passed before the delete — so the run carries on, the per-object
+     * credential lookups fail (the credential went with the connection), each failure is handled as a
+     * legitimate SAMPLING fallback, and Persist then writes 27 description-only object shapes for a
+     * connection that no longer exists. Observed live on the sandbox 2026-09-11: one full pass wrote
+     * 27 objects while the connection list reported zero connections.
+     *
+     * Whether that is loud or silent depends entirely on which catalog is the target, which is why the
+     * check belongs HERE and not in a writer. Per-connection, every row carries
+     * `CompanyIntegrationID` and the FK rejects all 27 — noisy, atomic, nothing lands. SHARED, every
+     * row is keyed by `IntegrationID`, which never goes away: the identical run SUCCEEDS and
+     * overwrites the declared floor with description-only shapes, for this connector's every other
+     * connection. That is the mechanism that corrupted a tenant's declared catalog earlier in this
+     * programme; the FK is all that turned it from invisible damage into clean rollbacks.
+     *
+     * Read with BypassCache — a cached row is exactly the stale answer this question cannot accept.
+     * A failed READ is NOT treated as a deleted connection: refusing a run because a SELECT failed
+     * would turn a transient DB blip into a failed discovery, so only a definitive empty result stops
+     * the write.
+     */
+    private async connectionStillExists(opts: ConnectorCreationPipelineOptions): Promise<boolean> {
+        // The run's own provider, as every other read in this run uses.
+        const rv = new RunView(opts.Provider as DatabaseProviderBase | undefined);
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Company Integrations',
+            ExtraFilter: `ID='${EscapeSQLString(String(opts.CompanyIntegration.ID))}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+            BypassCache: true,
+        }, opts.ContextUser);
+        if (!result.Success) return true;                 // could not ask ⇒ do not invent an answer
+        return result.Results.length > 0;
+    }
+
+    /**
      * One traversal of the source, persisted object by object.
      *
      * Peak memory becomes one object's fields instead of the whole catalog. Only object NAMES are
@@ -1189,6 +1309,19 @@ export class IntegrationConnectorCreationPipeline {
     ): Promise<PersistSchemaResult> {
         emitter.stageStart('Persist', 'Upserting IntegrationObject/Field rows with overlay precedence');
         const startMs = Date.now();
+
+        // Liveness, re-checked at the WRITE — not only at the start of the run. See
+        // connectionStillExists: the whole harm of a detached run outliving its connection lands in
+        // this stage, and on a shared catalog it lands as a SUCCESS.
+        if (!await this.connectionStillExists(opts)) {
+            const msg =
+                `Connection ${opts.CompanyIntegration.ID} was deleted while this discovery was running, so ` +
+                `nothing was persisted. The objects introspected by this run describe a connection that no ` +
+                `longer exists; writing them would overwrite the declared catalog every other connection of ` +
+                `this connector rebases from.`;
+            emitter.stageError('Persist', msg, { code: 'connection-deleted' });
+            throw new Error(msg);
+        }
         const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
             IntegrationID: opts.CompanyIntegration.IntegrationID,
             // The connection this discovery belongs to, and which catalog it writes into. Resolved

@@ -134,6 +134,12 @@ export class ClassFactory {
     private _reportedResolutionFailures: Set<string> = new Set();
 
     /**
+     * `baseClassName|key|subClassName` triples whose duplicate-copy warning has already been
+     * emitted, so a package installed in several physical copies warns once rather than per copy.
+     */
+    private _reportedDuplicateCopies: Set<string> = new Set();
+
+    /**
      * Registers a lazy loader callback that will be called when a class registration cannot
      * be found synchronously. Multiple loaders can be registered and will be called in order
      * until one succeeds.
@@ -256,6 +262,14 @@ export class ClassFactory {
                 }
             }
             else if (priority === 0 || priority === null || priority === undefined) {
+                // A second physical copy of a package re-runs its module-level registrations. Without
+                // this check the copy takes highest priority + 1 and can outrank a real subclass that
+                // registered between the two copies. Skip it instead, so the earlier resolution stands.
+                if (this.isDuplicateCopy(registrations, subClass, subClassName)) {
+                    this.warnDuplicateCopyOnce(subClassName, effectiveBaseClassName, key);
+                    return;
+                }
+
                 // when priority is not provided or is zero, which is logically the same, check to see what the highest earlier registration was and increment by 1
                 // this automatically makes the most recent registration higher, IF IT DIDN'T ALREADY have a priority explicitly set
                 let highestPriority = 0;
@@ -352,6 +366,50 @@ export class ClassFactory {
             }
             rootBucket.push(reg);
         }
+    }
+
+    /**
+     * True when `subClass` is a second physical copy of a class that is already registered for
+     * this base class + key: a distinct constructor with the same name and the same source text.
+     *
+     * A class whose parent has its own name (`class X extends X`) is an override of that parent,
+     * not a copy, even when its source matches an earlier registration, so it is never treated as
+     * a duplicate. Name alone cannot tell a copy from a different class that happens to share the
+     * name; the identical source is what separates them.
+     */
+    private isDuplicateCopy(registrations: ClassRegistration[], subClass: unknown, subClassName: string): boolean {
+        if (typeof subClass !== 'function') {
+            return false;
+        }
+        const parent: unknown = Object.getPrototypeOf(subClass);
+        if (typeof parent === 'function' && (parent as NamedClass).name === subClassName) {
+            return false;
+        }
+        const source = Function.prototype.toString.call(subClass);
+        return registrations.some(r =>
+            r.SubClass !== subClass &&
+            typeof r.SubClass === 'function' &&
+            (r.SubClass as NamedClass).name === subClassName &&
+            Function.prototype.toString.call(r.SubClass) === source
+        );
+    }
+
+    /**
+     * Warns, once per base class + key + class, that a second copy of a registration was ignored.
+     */
+    private warnDuplicateCopyOnce(subClassName: string, effectiveBaseClassName: string, key: string | null): void {
+        const reportKey = `${effectiveBaseClassName}|${key ?? ''}|${subClassName}`;
+        if (this._reportedDuplicateCopies.has(reportKey)) {
+            return;
+        }
+        this._reportedDuplicateCopies.add(reportKey);
+        console.warn(
+            `*** ClassFactory.Register: ignored a second copy of ${subClassName} for base class ${effectiveBaseClassName} ` +
+            `with key '${key}'. Its source is identical to a class already registered under that name, which means the ` +
+            `package that defines it is installed more than once (for example, nested by peer-dependency resolution). ` +
+            `The first registration is kept, so any subclass registered after it still wins. Deduplicate the package ` +
+            `to remove this warning. ***`
+        );
     }
 
     /**
@@ -509,11 +567,16 @@ export class ClassFactory {
     }
 
     /**
-     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
-     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
-     * factory actually knows about.
+     * Describes a key that has no registration for `baseClass`, listing every key that IS
+     * registered for it. Callers that look a class up with `GetRegistration`/`GetRegistrationAsync`
+     * and get nothing back can use this to build an error that shows the known keys next to the
+     * requested one, so a typo or a missing (uninstalled or tree-shaken) class is visible.
+     *
+     * @param baseClass - the base class that was looked up
+     * @param key - the key that was requested
+     * @returns e.g. `ClassFactory: no registration found for base class 'X' with key 'Y'. Registered keys for 'X': 'A', 'B'.`
      */
-    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+    public DescribeMissingRegistration(baseClass: unknown, key: string | null | undefined): string {
         const baseClassName = (baseClass as NamedClass).name;
         const known = this.GetAllRegistrations(baseClass)
             .map(r => r.Key)
@@ -523,7 +586,19 @@ export class ClassFactory {
 
         return (
             `ClassFactory: no registration found for base class '${baseClassName}' with key '${key ?? '(null)'}'. ` +
-            `Registered keys for '${baseClassName}': ${knownText}. ` +
+            `Registered keys for '${baseClassName}': ${knownText}.`
+        );
+    }
+
+    /**
+     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
+     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
+     * factory actually knows about.
+     */
+    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+        const baseClassName = (baseClass as NamedClass).name;
+        return (
+            this.DescribeMissingRegistration(baseClass, key) + ' ' +
             `RequiresSubclass=${requiresSubclass}. ` +
             (requiresSubclass
                 ? `'${baseClassName}' is marked '@RequiresSubclass()', so it CANNOT be used as a fallback — ` +

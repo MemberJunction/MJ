@@ -235,7 +235,7 @@ describe('OpenAISipBridge', () => {
             ended = true;
         });
 
-        await bridge.Disconnect('Completed');
+        await bridge.Disconnect('Explicit');
         expect(mockRest.hungUp).toEqual(['sess_hangup_1']);
         expect(ended).toBe(true);
     });

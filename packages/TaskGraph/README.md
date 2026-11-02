@@ -66,8 +66,8 @@ without standing up the agent framework.
 
 | File | Responsibility |
 |---|---|
-| `TaskGraphService.ts` | Validate a spec, resolve names to IDs in parallel, write parent + children + edges concurrently inside a single entity transaction. The only write path. |
-| `TaskGraphDispatcher.ts` | Single-pass poll, claim, pre-hydrated execute, evaluate edges, propagate, roll up, settle, credit cost. |
+| `TaskGraphService.ts` | Validate a spec, resolve names to IDs in parallel (including sanitized native tool-name fallback and `Configuration.stepActionIds` for multi-step `steps[]` loop bodies), write parent + children + edges concurrently inside a single entity transaction. The only write path. |
+| `TaskGraphDispatcher.ts` | Single-pass poll, claim, pre-hydrated execute (including multi-step `ForEach`/`While` `steps[]` chaining via `steps.<id>.*`), evaluate edges, propagate, roll up, settle, credit cost. |
 | `TaskClaimStore.ts` | The atomic claim protocol — guarded writes so two instances cannot run the same task. |
 | `TaskLoopExecutor.ts` | `ForEach` / `While` semantics: bounds, ordering, concurrency, delay, failure. |
 | `DispatcherConditionEvaluator.ts` | Edge conditions, over the superset context both dialects can read. |
@@ -211,11 +211,13 @@ section](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#cost-and-tokens-the-seam)
 cd packages/TaskGraph && pnpm test
 ```
 
-Unit tests cover the pure pieces — loop semantics, dispatchable kinds, configuration persistence,
-parent metadata. The dispatcher driving **real rows against SQL Server** is covered by the `IT74`
-bundle in `@memberjunction/integration-test-suite`, which uses a stub agent runner so it stays in
-the deterministic tier: no model calls, no tokens, real claim protocol, real condition evaluator,
-real rollup.
+Unit tests cover the pure pieces — loop semantics (including multi-step `steps[]` loop bodies and
+parallel array-append safety), dispatchable kinds, configuration persistence, and parent metadata.
+The dispatcher driving **real rows against SQL Server** is covered by `IT74` (core graph dispatch),
+`IT147` (deterministic multi-step `ForEach`/`While` `steps[]`, Flow graduation round-trip, and
+agent-submitted `Tasks` settlement against `ActionEngineServer`), and `IT148` (live native
+tool-calling LLM providers emitting and settling durable task graphs) in
+`@memberjunction/integration-test-suite`.
 
 ---
 

@@ -21,8 +21,9 @@ export default class DevWorkspaceDoctor extends Command {
   static description =
     'Health-check the generated cross-repo pnpm workspace at a parent directory: workspace files, sentinel, ' +
     'pnpm pin vs. active version, member directories, detected-but-unlisted repos, members carrying a standalone ' +
-    'install, and a one-copy census of the parent package store (more than one @angular/core, rxjs, zone.js or ' +
-    'MJ core/global is a FAIL). Prints PASS/WARN/FAIL per check and exits non-zero on any FAIL. Read-only.';
+    'install, a one-copy census of the parent package store (more than one @angular/core, rxjs, zone.js or ' +
+    'MJ core/global is a FAIL), and member packages whose build output is missing (FAIL) or older than their ' +
+    'source (WARN). Prints PASS/WARN/FAIL per check and exits non-zero on any FAIL. Read-only.';
 
   static examples = [
     '<%= config.bin %> dev workspace doctor',

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     IRemoteBrowserProviderFeatures,
     RemoteBrowserActionResult,
@@ -66,6 +66,8 @@ describe('CdpRemoteBrowserSession — core', () => {
         failure.Success = false;
         failure.Error = 'element not found';
         adapter.NextExecuteResult = failure;
+        // No DOM under node: the click guard is told the selector matches one harmless element.
+        adapter.EvaluateFallback = { Found: true, Label: 'x', Destructive: false };
 
         const result = await session.ExecuteAction({ Kind: 'click', Selector: '#x' });
 
@@ -340,6 +342,8 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
 
     it('ExecuteAction does NOT force a frame for a non-navigation action (click)', async () => {
         const { session, adapter } = buildSession({});
+        // The click guard finds nothing at the target (no DOM under node), so the click proceeds.
+        adapter.EvaluateFallback = { Found: false, Label: '', Destructive: false };
         await session.ExecuteAction({ Kind: 'click', X: 1, Y: 1 });
         expect(adapter.CaptureScreencastFrameCount).toBe(0);
     });
@@ -351,5 +355,54 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
         adapter.NextExecuteResult = failure;
         await session.ExecuteAction({ Kind: 'navigate', Url: 'https://go.test/' });
         expect(adapter.CaptureScreencastFrameCount).toBe(0);
+    });
+});
+
+describe('CdpRemoteBrowserSession — navigation guard and page text', () => {
+    it('Navigate normalizes a bare domain to https:// before delegating to the adapter', async () => {
+        const { session, adapter } = buildSession({});
+        await session.Navigate('example.com');
+        expect(adapter.NavigatedUrls).toEqual(['https://example.com']);
+    });
+
+    it('Navigate refuses a non-http(s) scheme without touching the browser', async () => {
+        const { session, adapter } = buildSession({});
+        const result = await session.Navigate('file:///proc/self/environ');
+        expect(result.Success).toBe(false);
+        expect(result.Detail).toContain('Only http and https');
+        expect(adapter.NavigatedUrls).toEqual([]);
+    });
+
+    it('getPageText returns the visible text, capped so a long page cannot flood the context', async () => {
+        const { session, adapter } = buildSession({});
+        adapter.VisibleTextValue = 'x'.repeat(25000);
+        const result = await session.ExecuteAction({ Kind: 'getPageText' });
+        expect(result.Success).toBe(true);
+        expect(result.Detail).toHaveLength(20000);
+    });
+
+    it('a click the guard cannot check (no page) is not made', async () => {
+        const { session, adapter } = buildSession({});
+        await expect(session.ExecuteAction({ Kind: 'click', X: 5, Y: 5 })).rejects.toThrow('did not respond');
+        expect(adapter.ExecutedActions).toEqual([]);
+    });
+});
+
+describe('CdpRemoteBrowserSession — navigation restriction wiring', () => {
+    it('restricts its adapter to http(s) as soon as it is built', () => {
+        const restrict = vi.spyOn(FakePlaywrightBrowserAdapter.prototype, 'RestrictNavigation');
+        try {
+            buildSession({});
+            expect(restrict).toHaveBeenCalledWith(null);
+        } finally {
+            restrict.mockRestore();
+        }
+    });
+
+    it('hands a private-network allow-list to its adapter', async () => {
+        const { session, adapter } = buildSession({});
+        const restrict = vi.spyOn(adapter, 'RestrictNavigation').mockResolvedValue(undefined);
+        await session.RestrictPrivateNetwork(['localhost:4200']);
+        expect(restrict).toHaveBeenCalledWith(['localhost:4200']);
     });
 });

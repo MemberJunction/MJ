@@ -1,0 +1,86 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Style, Voice, GenerationPolicy, and NeverInvent (MJ: Brand Kits entity)",
+      "so CodeGen emits typed StyleObject, VoiceObject, GenerationPolicyObject, and NeverInventObject accessors."
+    ],
+    "fields": {
+      "Name": "MJ: Brand Kits"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IBrandStyle",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "Style field — visual and motion style tokens for the brand kit"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=Style"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:54:25.016Z",
+            "checksum": "835d9ab91f7ea1717b50a180ce2759b22e16ad5c8149505a6cbbe87ac3e0631b"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IBrandVoice",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "Voice field — default TTS voice configuration for the brand kit"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=Voice"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:54:25.025Z",
+            "checksum": "93a1eca90fdcd1efb41bdf948fb2d1b4c64b913f9a5dbbbd361ec33c2d5a1d5e"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IBrandGenerationPolicy",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "GenerationPolicy field — media generation permissions and guardrails for the brand kit"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=GenerationPolicy"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:54:25.034Z",
+            "checksum": "a372f9fd0d6d738f31adebb2f080d2e99a1b784cf64a2b3a2d0df5bba1290c3a"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "BrandNeverInventItem",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBrandKitJsonTypes.ts"
+          },
+          "_comments": [
+            "NeverInvent field — array of facts or claims that must never be fabricated"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Brand Kits&Name=NeverInvent"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:54:25.043Z",
+            "checksum": "aa4c177e02c7dbdf3ea481d94af0bf88ac683a7f288e53ceb46cc7fe3bb37abc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Brand Kits"
+    }
+  }
+]

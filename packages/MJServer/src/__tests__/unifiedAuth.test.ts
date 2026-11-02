@@ -8,7 +8,7 @@
  * module (context.ts), vi.mock cannot intercept the intra-module call.
  * Instead we mock the LOWER-LEVEL dependencies that `getUserPayload` calls.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── Hoisted mocks (available inside vi.mock factories) ─────────────────────
 const {
@@ -102,6 +102,7 @@ vi.mock('@memberjunction/api-keys', () => ({
 }));
 
 import { CreateUnifiedAuthMiddleware } from '../context.js';
+import { userEmailMap } from '../config.js';
 import type { Request, Response, NextFunction } from 'express';
 import type { DataSourceInfo } from '../types.js';
 
@@ -136,6 +137,8 @@ function makeMockRes(): Response & { _status: number; _json: Record<string, unkn
 }
 
 const mockDataSources: DataSourceInfo[] = [];
+/** The mocked config's map object; tests add entries and the afterEach clears them. */
+const mockedUserEmailMap = userEmailMap as Record<string, string>;
 const MOCK_POOL = {} as unknown as import('mssql').ConnectionPool;
 
 const mockUserRecord = {
@@ -462,5 +465,74 @@ describe('createUnifiedAuthMiddleware', () => {
 
       expect(next).toHaveBeenCalled();
     });
+  });
+});
+
+// ─── Login identity reporting ───────────────────────────────────────────────
+// The session-audit block runs once per issued token (deduped on iss/sub/iat), so each test
+// presents a token with its own `iat`.
+
+describe('login identity reporting', () => {
+  let middleware: ReturnType<typeof CreateUnifiedAuthMiddleware>;
+  let iat = 1_700_000_000;
+
+  function presentToken(email: string): void {
+    iat += 1;
+    mockJwtDecode.mockReturnValue({
+      iss: 'https://test-issuer.com',
+      sub: 'user-1',
+      iat,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    mockExtractUserInfo.mockReturnValue({ email, preferredUsername: email });
+  }
+
+  async function authenticate(): Promise<void> {
+    const req = makeMockReq({ headers: { authorization: `Bearer token-${iat}` } });
+    await middleware(req, makeMockRes(), vi.fn());
+  }
+
+  function warnings(spy: ReturnType<typeof vi.spyOn>): string[] {
+    return spy.mock.calls.map((call) => String(call[0]));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupSuccessfulAuth();
+    middleware = CreateUnifiedAuthMiddleware(mockDataSources);
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(mockedUserEmailMap)) {
+      delete mockedUserEmailMap[key];
+    }
+  });
+
+  it('logs nothing when the token identity and the user record agree', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    presentToken('test@example.com');
+    await authenticate();
+    expect(warnings(warn).filter((w) => w.startsWith('[Auth]'))).toEqual([]);
+    warn.mockRestore();
+  });
+
+  it('looks the user up by the mapped email and logs the remap', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockedUserEmailMap['other@example.org'] = 'test@example.com';
+    presentToken('other@example.org');
+    await authenticate();
+    expect(mockVerifyUserRecord.mock.calls[0][0]).toBe('test@example.com');
+    expect(warnings(warn)).toContainEqual(expect.stringContaining("USER_EMAIL_MAP remapped login 'other@example.org' to 'test@example.com'"));
+    warn.mockRestore();
+  });
+
+  it('logs a login that resolved to a record with a different email', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    presentToken('someone-else@example.org');
+    await authenticate();
+    expect(warnings(warn)).toContainEqual(
+      expect.stringContaining("Login identity 'someone-else@example.org' resolved to user user-1 with a different email (test@example.com)"),
+    );
+    warn.mockRestore();
   });
 });

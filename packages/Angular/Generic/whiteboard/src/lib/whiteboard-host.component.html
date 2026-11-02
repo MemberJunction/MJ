@@ -81,7 +81,8 @@
     (WidgetSubmitted)="WidgetSubmitted.emit($event)"
     (WidgetInteraction)="WidgetInteraction.emit($event)"
     (ContentApplying)="ContentApplying.emit($event)"
-    (ContentApplied)="ContentApplied.emit($event)"/>
+    (ContentApplied)="ContentApplied.emit($event)"
+    (WidgetActionsChanged)="WidgetActionsChanged.emit($event)"/>
 
   <!-- the toolbar is authoring chrome: a read-only board renders none, matching
        WhiteboardSnapshotComponent. Zoom stays — navigation is not mutation. -->
@@ -130,6 +131,15 @@
       @if (!ReadOnly) {
         <span class="undo" (click)="OnToastUndo($event)"><i class="fa-solid fa-rotate-left"></i> Undo</span>
       }
+    </div>
+  }
+
+  <!-- agent WIDGET toast: what the agent did inside a widget. Never merged with the board-edit
+       toast above and never offers Undo — a widget action is not a board edit. -->
+  @if (WidgetToastText) {
+    <div class="board-toast board-toast--widget" [class.board-toast--stacked]="!!ToastText">
+      <i class="fa-solid fa-hand-pointer"></i>
+      <span class="board-toast__text">{{ WidgetToastText }}</span>
     </div>
   }
 </div>

@@ -5,7 +5,7 @@
  * leaving member repos, .bak backups and unrelated files alone.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { BuildSentinel, SENTINEL_MARKER } from '../lib/dev-workspace/build.js';
 import {
@@ -14,9 +14,11 @@ import {
   ExecuteClean,
   LOCKFILE_NAME,
   NODE_MODULES_NAME,
+  OwnedLegacyFiles,
   PlanClean,
   ReadSentinel,
   RenderCleanPlan,
+  RetireLegacyFiles,
 } from '../lib/dev-workspace/clean.js';
 import { GENERATED_FILE_NAMES, SENTINEL_FILE_NAME, WORKSPACE_FILE_NAMES } from '../lib/dev-workspace/write.js';
 import { CreateFixtureParent, RemoveFixture } from './dev-workspace-fixture.js';
@@ -219,12 +221,12 @@ describe('ExecuteClean', () => {
   it('reports absent paths as already gone instead of erroring', () => {
     parent = CreateFixtureParent({});
     writeFileSync(path.join(parent, SENTINEL_FILE_NAME), BuildSentinel(GENERATED_FILE_NAMES, ['bizapps-x']), 'utf8');
-    writeFileSync(path.join(parent, 'turbo.json'), 'partial\n', 'utf8');
+    writeFileSync(path.join(parent, '.npmrc'), 'partial\n', 'utf8');
 
     const result = ExecuteClean(PlanClean(parent));
 
-    expect(result.Removed).toEqual(['turbo.json', SENTINEL_FILE_NAME]);
-    expect(result.AlreadyGone).toEqual(['pnpm-workspace.yaml', '.npmrc', 'package.json', LOCKFILE_NAME, NODE_MODULES_NAME]);
+    expect(result.Removed).toEqual(['.npmrc', SENTINEL_FILE_NAME]);
+    expect(result.AlreadyGone).toEqual(['pnpm-workspace.yaml', 'package.json', LOCKFILE_NAME, NODE_MODULES_NAME]);
     expect(readdirSync(parent)).toEqual([]);
   });
 
@@ -249,5 +251,52 @@ describe('ExecuteClean', () => {
     const second = ExecuteClean(PlanClean(parent));
     expect(second.Removed).toEqual([]);
     expect(second.AlreadyGone).toHaveLength(CLEAN_TARGET_COUNT);
+  });
+});
+
+// #4913: earlier generator versions wrote turbo.json at the parent. Only a sentinel that lists it
+// proves the generator wrote it, so only then is it cleaned up.
+describe('legacy turbo.json', () => {
+  /** A workspace an earlier generator version wrote: its sentinel lists turbo.json. */
+  function seedLegacyWorkspace(parentDir: string): void {
+    seedWorkspace(parentDir);
+    writeFileSync(path.join(parentDir, 'turbo.json'), '{"tasks":{}}\n', 'utf8');
+    writeFileSync(path.join(parentDir, SENTINEL_FILE_NAME), BuildSentinel([...GENERATED_FILE_NAMES, 'turbo.json'], ['bizapps-x']), 'utf8');
+  }
+
+  it('OwnedLegacyFiles returns only legacy names a valid sentinel lists', () => {
+    const valid = (files: string[]) => ({ Kind: 'valid' as const, Sentinel: { generatedBy: SENTINEL_MARKER, files, members: ['x'] } });
+    expect(OwnedLegacyFiles(valid(['package.json', 'turbo.json']))).toEqual(['turbo.json']);
+    expect(OwnedLegacyFiles(valid(['package.json', 'NOTES.md']))).toEqual([]); // a sentinel cannot widen the set
+    expect(OwnedLegacyFiles({ Kind: 'absent' })).toEqual([]);
+  });
+
+  it('clean removes turbo.json when the sentinel lists it', () => {
+    parent = CreateFixtureParent({});
+    seedLegacyWorkspace(parent);
+    const result = ExecuteClean(PlanClean(parent, ReadSentinel(parent)));
+    expect(result.Removed).toContain('turbo.json');
+    expect(readdirSync(parent)).toEqual([]);
+  });
+
+  it('clean leaves a turbo.json the sentinel does not list (hand-made) alone', () => {
+    parent = CreateFixtureParent({});
+    seedWorkspace(parent);
+    writeFileSync(path.join(parent, 'turbo.json'), 'mine\n', 'utf8');
+    ExecuteClean(PlanClean(parent, ReadSentinel(parent)));
+    expect(readdirSync(parent)).toEqual(['turbo.json']);
+  });
+
+  it('RetireLegacyFiles moves a sentinel-listed turbo.json to .bak and ignores an unlisted one', () => {
+    parent = CreateFixtureParent({});
+    seedLegacyWorkspace(parent);
+    expect(RetireLegacyFiles(parent, ReadSentinel(parent))).toEqual(['turbo.json']);
+    expect(existsSync(path.join(parent, 'turbo.json'))).toBe(false);
+    expect(readFileSync(path.join(parent, 'turbo.json.bak'), 'utf8')).toBe('{"tasks":{}}\n');
+
+    writeFileSync(path.join(parent, 'turbo.json'), 'mine\n', 'utf8');
+    seedWorkspace(parent); // the current sentinel does not list turbo.json
+    expect(RetireLegacyFiles(parent, ReadSentinel(parent))).toEqual([]);
+    expect(existsSync(path.join(parent, 'turbo.json'))).toBe(true);
   });
 });

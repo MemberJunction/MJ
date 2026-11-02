@@ -1,8 +1,12 @@
 import {
+  IsWhiteboardFontFamily,
+  IsWhiteboardFontWeight,
   WHITEBOARD_DEFAULTS,
+  WhiteboardAuthor,
   WhiteboardBounds,
   WhiteboardConnectorItem,
   WhiteboardFontFamily,
+  WhiteboardFontWeight,
   WhiteboardHighlightItem,
   WhiteboardHtmlItem,
   WhiteboardImageItem,
@@ -40,8 +44,10 @@ import {
  *
  * SECURITY: every piece of user/agent-authored text (item text, labels, names, the title,
  * the agent name, the timestamp) is HTML-escaped via {@link escapeHtml} before it touches
- * the document. Output is deterministic for a given state + options (the caller passes
- * `GeneratedAt`).
+ * the document. Closed-set fields (`Author`, `FontWeight`, `FontFamily`) are emitted only as
+ * one of their literal values ({@link authorOf}, {@link fontWeightOf}, {@link fontStackOf}),
+ * never as the raw item value — board JSON is shared between users. Output is
+ * deterministic for a given state + options (the caller passes `GeneratedAt`).
  */
 
 /** Options for {@link BuildWhiteboardExportHtml}. */
@@ -228,25 +234,46 @@ function exportBounds(state: WhiteboardState): WhiteboardBounds {
   };
 }
 
+/**
+ * The item's author as a closed-set value. Board JSON is shared between users, so the
+ * persisted `Author` is not trusted to be one of the literals: anything but `'agent'`
+ * renders as `'user'`. Interpolate THIS, never `item.Author`.
+ */
+function authorOf(item: WhiteboardItem): WhiteboardAuthor {
+  return item.Author === 'agent' ? 'agent' : 'user';
+}
+
+/** The item's font weight when it is one of the {@link WhiteboardFontWeight} literals, else `null`. */
+function fontWeightOf(item: WhiteboardStickyItem | WhiteboardTextItem): WhiteboardFontWeight | null {
+  return IsWhiteboardFontWeight(item.FontWeight) ? item.FontWeight : null;
+}
+
+/** The literal font stack for the item's family key (sans for a missing or unknown key). */
+function fontStackOf(item: WhiteboardStickyItem | WhiteboardTextItem): string {
+  return FONT_STACKS[IsWhiteboardFontFamily(item.FontFamily) ? item.FontFamily : 'sans'];
+}
+
 /** Inline font-style fragment from the optional text-style fields. */
 function textStyleCss(item: WhiteboardStickyItem | WhiteboardTextItem): string {
   const parts: string[] = [];
   if (item.FontSize != null) {
     parts.push(`font-size:${n(item.FontSize)}px`);
   }
-  if (item.FontFamily) {
+  if (IsWhiteboardFontFamily(item.FontFamily)) {
     parts.push(`font-family:${FONT_STACKS[item.FontFamily]}`);
   }
-  if (item.FontWeight != null) {
-    parts.push(`font-weight:${item.FontWeight}`);
+  const weight = fontWeightOf(item);
+  if (weight != null) {
+    parts.push(`font-weight:${weight}`);
   }
   return parts.length > 0 ? parts.join(';') + ';' : '';
 }
 
 /** The small ownership chip rendered on each box/ink item. */
 function chipHtml(item: WhiteboardItem, agentName: string): string {
-  const label = item.Author === 'agent' ? escapeHtml(agentName) : 'You';
-  return `<span class="chip chip--${item.Author}">${label}</span>`;
+  const author = authorOf(item);
+  const label = author === 'agent' ? escapeHtml(agentName) : 'You';
+  return `<span class="chip chip--${author}">${label}</span>`;
 }
 
 // ────────────────────────────────────────────── box items (positioned divs)
@@ -505,8 +532,8 @@ function boxItemSvg(item: WhiteboardItem, state: WhiteboardState, ox: number, oy
       const fill = isAgent ? PALETTE.StickyAgentBg : PALETTE.StickyAmberBg;
       const stroke = isAgent ? PALETTE.StickyAgentBorder : PALETTE.StickyAmberBorder;
       const fs = item.FontSize ?? 12;
-      const font = FONT_STACKS[item.FontFamily ?? 'sans'];
-      const weight = item.FontWeight ?? 400;
+      const font = fontStackOf(item);
+      const weight = fontWeightOf(item) ?? 400;
       return `<rect x="${n(b.X - ox)}" y="${n(b.Y - oy)}" width="${n(b.W)}" height="${n(b.H)}" rx="6" fill="${fill}" stroke="${stroke}"/>` +
         `<text x="${n(b.X - ox + 10)}" y="${n(b.Y - oy + 10 + fs)}" font-size="${n(fs)}" font-family="${font}" font-weight="${weight}" fill="${PALETTE.TextPrimary}">${svgLine(item.Text)}</text>`;
     }
@@ -530,8 +557,8 @@ function boxItemSvg(item: WhiteboardItem, state: WhiteboardState, ox: number, oy
     }
     case 'text': {
       const fs = item.FontSize ?? 12;
-      const font = FONT_STACKS[item.FontFamily ?? 'sans'];
-      const weight = item.FontWeight ?? 400;
+      const font = fontStackOf(item);
+      const weight = fontWeightOf(item) ?? 400;
       const color = item.Color ? escapeHtml(item.Color) : PALETTE.TextPrimary;
       return `<text x="${n(item.X - ox)}" y="${n(item.Y - oy + fs)}" font-size="${n(fs)}" font-family="${font}" font-weight="${weight}" fill="${color}">${svgLine(item.Text)}</text>`;
     }

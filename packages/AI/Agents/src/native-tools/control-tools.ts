@@ -10,7 +10,7 @@
  */
 import type { ChatTool } from '@memberjunction/ai';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { SanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
+import { SanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, CompareToolNames, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
 import type { ParamValueSchema } from './action-param-schema';
 import { DEFAULT_NATIVE_CONTROL_CONFIG, type CompleteTaskPayloadForm, type NativeControlConfig } from './native-control-config';
 import { BuildAgentTool, type AgentToolDefinition } from './agent-tools';
@@ -180,8 +180,15 @@ export function BuildCompleteTaskTool(options: CompleteTaskToolOptions = {}): Ch
     };
 }
 
+export interface SubAgentToolOptions {
+    /** When true, exposes `resumeRunId` in the tool's inputSchema so the parent can resume an open consult. */
+    consultEnabled?: boolean;
+    /** When non-empty, exposes `presetName` in the tool's inputSchema with these active preset names. */
+    presetNames?: string[];
+}
+
 /** One tool per sub-agent: `delegate_to_<sanitized name>`, described by the agent's own description. */
-export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
+export function BuildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubAgentToolOptions): ChatTool {
     const name = `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(agent.Name)}`.slice(0, MAX_TOOL_NAME_LENGTH);
     return {
         name,
@@ -190,7 +197,24 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
             type: 'object',
             properties: {
                 message: { type: 'string', description: 'Instructions for the sub-agent — what to do. Not the payload; it receives that separately.' },
-                terminateAfter: { type: 'boolean', description: 'true to end your own run when the sub-agent finishes; false (default) to continue with its result.' }
+                terminateAfter: { type: 'boolean', description: 'true to end your own run when the sub-agent finishes; false (default) to continue with its result.' },
+                ...(options?.consultEnabled === true
+                    ? {
+                        resumeRunId: {
+                            type: 'string',
+                            description: "Optional. The ID of this sub-agent's earlier run that ended with a question to you; set it only to answer that question and resume that run."
+                        }
+                    }
+                    : {}),
+                ...(options?.presetNames && options.presetNames.length > 0
+                    ? {
+                        presetName: {
+                            type: 'string',
+                            enum: options.presetNames,
+                            description: 'Configuration preset for this sub-agent'
+                        }
+                    }
+                    : {})
             },
             required: ['message']
         }
@@ -198,14 +222,16 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
 }
 
 /** @deprecated Use {@link BuildSubAgentTool}. */
-export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
-    return BuildSubAgentTool(agent);
+export function buildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubAgentToolOptions): ChatTool {
+    return BuildSubAgentTool(agent, options);
 }
 
 /**
  * The fixed control tools this agent declares, with their bindings — `payload_change_request`,
  * `ask_user` and `complete_task`, each unless its configuration turns it off.
  */
+export type SubAgentOptionsResolver = (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined;
+
 function buildControlBindings(control: NativeControlConfig): NativeToolBinding[] {
     const bindings: NativeToolBinding[] = [];
     if (control.PayloadChangeTool) {
@@ -259,10 +285,13 @@ function addBinding(set: NativeToolSet, binding: NativeToolBinding, isControl: b
 export function BuildNativeToolSet(
     actionSet: ActionToolSet,
     subAgents: readonly MJAIAgentEntityExtended[],
-    control: NativeControlConfig = DEFAULT_NATIVE_CONTROL_CONFIG,
+    controlOrSubAgentOptions: NativeControlConfig | SubAgentOptionsResolver = DEFAULT_NATIVE_CONTROL_CONFIG,
     agentTools: readonly AgentToolDefinition[] = [],
-    frameworkTools: readonly AgentToolDefinition[] = []
+    frameworkTools: readonly AgentToolDefinition[] = [],
+    subAgentOptions?: SubAgentOptionsResolver
 ): NativeToolSet {
+    const control = typeof controlOrSubAgentOptions === 'function' ? DEFAULT_NATIVE_CONTROL_CONFIG : controlOrSubAgentOptions;
+    const resolveSubAgentOptions = typeof controlOrSubAgentOptions === 'function' ? controlOrSubAgentOptions : subAgentOptions;
     for (const reserved of NATIVE_CONTROL_TOOL_NAMES) {
         const clash = actionSet.byToolName.get(reserved);
         if (clash) {
@@ -277,8 +306,10 @@ export function BuildNativeToolSet(
         }
     }
     const set: NativeToolSet = { tools: [...actionSet.tools], byToolName: new Map<string, NativeToolBinding>(actionSet.byToolName), controlToolNames: [] };
-    for (const agent of subAgents) {
-        const tool = BuildSubAgentTool(agent);
+    // Name order, as the action tools are: the sub-agents arrive in load order, and the declarations
+    // have to read the same on every request for the provider's prompt cache to hold.
+    for (const agent of [...subAgents].sort((a, b) => CompareToolNames(a.Name, b.Name))) {
+        const tool = BuildSubAgentTool(agent, resolveSubAgentOptions?.(agent));
         addBinding(set, { kind: 'subAgent', toolName: tool.name, agent, tool }, true);
     }
     const reserved = [...NATIVE_CONTROL_TOOL_NAMES, ...FRAMEWORK_TOOL_NAMES];
@@ -297,6 +328,10 @@ export function BuildNativeToolSet(
 }
 
 /** @deprecated Use {@link BuildNativeToolSet}. */
-export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
-    return BuildNativeToolSet(actionSet, subAgents);
+export function buildNativeToolSet(
+    actionSet: ActionToolSet,
+    subAgents: readonly MJAIAgentEntityExtended[],
+    subAgentOptions?: SubAgentOptionsResolver
+): NativeToolSet {
+    return BuildNativeToolSet(actionSet, subAgents, subAgentOptions);
 }

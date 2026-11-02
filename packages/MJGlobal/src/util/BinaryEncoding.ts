@@ -380,10 +380,8 @@ export interface Float32VectorCodec {
     Decode(bytes: Uint8Array): Float32Array;
 }
 
-/** True when this host stores multi-byte numbers little-endian. */
-function hostIsLittleEndian(): boolean {
-    return new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
-}
+/** True when this host stores multi-byte numbers little-endian (true on x86_64 and ARM64). */
+export const IS_LITTLE_ENDIAN: boolean = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 /** Typed-array copy; correct only on little-endian hosts. */
 const TypedArrayFloat32Codec: Float32VectorCodec = {
@@ -419,7 +417,7 @@ const DataViewFloat32Codec: Float32VectorCodec = {
 /** Both float32 vector implementations. Exposed for tests; use the functions below instead. */
 export const Float32VectorCodecs: readonly Float32VectorCodec[] = [TypedArrayFloat32Codec, DataViewFloat32Codec];
 
-const float32Codec: Float32VectorCodec = hostIsLittleEndian() ? TypedArrayFloat32Codec : DataViewFloat32Codec;
+const float32Codec: Float32VectorCodec = IS_LITTLE_ENDIAN ? TypedArrayFloat32Codec : DataViewFloat32Codec;
 
 /**
  * Encodes a vector as little-endian float32 bytes. Values are rounded to single precision, which

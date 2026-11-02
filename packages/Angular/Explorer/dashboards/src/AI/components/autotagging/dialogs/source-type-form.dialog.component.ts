@@ -1154,6 +1154,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             ExtraFilter: `Name = '${KNOWLEDGE_HUB_APPLICATION_NAME.replace(/'/g, "''")}'`,
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         });
         this.khApplicationID = result.Success && result.Results.length > 0 ? result.Results[0].ID : null;

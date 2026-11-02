@@ -82,6 +82,12 @@ export interface IRealtimeAudioMeter {
     Close(): void;
 }
 
+/** A microphone track and the clone a mic meter reads in its place (see {@link RealtimeAudioMeter.ForMicStream}). */
+interface MirroredMicTrack {
+    Source: MediaStreamTrack;
+    Clone: MediaStreamTrack;
+}
+
 /**
  * `AnalyserNode`-backed audio meter. Use the static factories — they are defensive
  * (return `null` where Web Audio is unavailable) and encode the two ownership modes:
@@ -92,16 +98,20 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
     private readonly analyser: AnalyserNode;
     /** A context this meter created and therefore owns (closed in {@link Close}), or null. */
     private readonly ownedContext: AudioContext | null;
-    /** Cloned tracks this meter owns (stopped in {@link Close}); empty when it taps tracks it doesn't own. */
-    private readonly ownedTracks: MediaStreamTrack[];
+    /**
+     * Mic tracks paired with the clones this meter reads (stopped in {@link Close}); empty when it taps tracks
+     * it doesn't own. Muting disables the source tracks only, so each read copies the source's `enabled` flag
+     * onto its clone.
+     */
+    private readonly mirroredTracks: readonly MirroredMicTrack[];
     private readonly timeDomain: Uint8Array<ArrayBuffer>;
     private readonly frequency: Uint8Array<ArrayBuffer>;
     private closed = false;
 
-    private constructor(analyser: AnalyserNode, ownedContext: AudioContext | null, ownedTracks: MediaStreamTrack[] = []) {
+    private constructor(analyser: AnalyserNode, ownedContext: AudioContext | null, mirroredTracks: readonly MirroredMicTrack[] = []) {
         this.analyser = analyser;
         this.ownedContext = ownedContext;
-        this.ownedTracks = ownedTracks;
+        this.mirroredTracks = mirroredTracks;
         this.timeDomain = new Uint8Array(analyser.fftSize);
         this.frequency = new Uint8Array(analyser.frequencyBinCount);
     }
@@ -110,9 +120,10 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
      * Shared builder: taps `stream` with a private `AudioContext` + analyser-only sink. A fresh
      * `AudioContext` starts SUSPENDED and, with no destination route, nothing auto-starts its clock —
      * so the analyser would read pure silence forever; we resume it (the session always starts from a
-     * user gesture, so this is permitted). `ownedTracks` are clones this meter must stop on Close.
+     * user gesture, so this is permitted). `mirroredTracks` pair mic tracks with the clones this meter must
+     * stop on Close.
      */
-    private static buildStreamMeter(stream: MediaStream, ownedTracks: MediaStreamTrack[]): RealtimeAudioMeter {
+    private static buildStreamMeter(stream: MediaStream, mirroredTracks: readonly MirroredMicTrack[]): RealtimeAudioMeter {
         const context = new AudioContext();
         const source = context.createMediaStreamSource(stream);
         const analyser = RealtimeAudioMeter.createAnalyser(context);
@@ -120,7 +131,7 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
         if (context.state === 'suspended') {
             void context.resume();
         }
-        return new RealtimeAudioMeter(analyser, context, ownedTracks);
+        return new RealtimeAudioMeter(analyser, context, mirroredTracks);
     }
 
     /**
@@ -146,6 +157,11 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
      * while the user speaks even though the mic is live. A cloned track is independent of the PC sender
      * and meters reliably; it is stopped in {@link Close}. Harmless for the WS drivers (the clone is just
      * an extra short-lived track). Returns `null` when Web Audio / the stream has no usable audio track.
+     *
+     * Muting: drivers mute by disabling the ORIGINAL track(s), which a clone does not follow. The meter keeps
+     * each original and copies its `enabled` flag onto the clone on every read, and reads silence while every
+     * original is disabled. A clone made from a muted track starts disabled; the same copy re-enables it on
+     * unmute.
      */
     public static ForMicStream(stream: MediaStream): RealtimeAudioMeter | null {
         try {
@@ -153,8 +169,8 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
             if (audioTracks.length === 0) {
                 return null;
             }
-            const clones = audioTracks.map((t) => t.clone());
-            return RealtimeAudioMeter.buildStreamMeter(new MediaStream(clones), clones);
+            const mirrored = audioTracks.map((track): MirroredMicTrack => ({ Source: track, Clone: track.clone() }));
+            return RealtimeAudioMeter.buildStreamMeter(new MediaStream(mirrored.map((m) => m.Clone)), mirrored);
         } catch {
             return null;
         }
@@ -182,9 +198,27 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
         return analyser;
     }
 
+    /**
+     * Copies each mic track's `enabled` flag onto its clone and reports whether the mic is muted: true when
+     * this meter mirrors mic tracks and every one is disabled. Always false for meters with no mic tracks.
+     */
+    private syncMicMute(): boolean {
+        if (this.mirroredTracks.length === 0) {
+            return false;
+        }
+        let anyEnabled = false;
+        for (const { Source, Clone } of this.mirroredTracks) {
+            if (Clone.enabled !== Source.enabled) {
+                Clone.enabled = Source.enabled;
+            }
+            anyEnabled = anyEnabled || Source.enabled;
+        }
+        return !anyEnabled;
+    }
+
     /** @inheritdoc */
     public Level(): number {
-        if (this.closed) {
+        if (this.closed || this.syncMicMute()) {
             return 0;
         }
         this.analyser.getByteTimeDomainData(this.timeDomain);
@@ -193,7 +227,7 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
 
     /** @inheritdoc */
     public Bins(count: number = REALTIME_AUDIO_BIN_COUNT): number[] {
-        if (this.closed) {
+        if (this.closed || this.syncMicMute()) {
             return new Array<number>(count).fill(0);
         }
         this.analyser.getByteFrequencyData(this.frequency);
@@ -212,9 +246,9 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
             /* already disconnected */
         }
         // Stop any cloned tracks this meter owns (mic-meter clones) so they don't linger.
-        for (const track of this.ownedTracks) {
+        for (const { Clone } of this.mirroredTracks) {
             try {
-                track.stop();
+                Clone.stop();
             } catch {
                 /* already stopped */
             }

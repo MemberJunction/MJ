@@ -12,12 +12,13 @@
  * with LLM enrichment, passthrough inheritance from dependency queries, and the
  * heuristic fallbacks — all without a database connection.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import { EntityInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 import type {
     MJQueryEntityExtended,
     MJQueryFieldEntity,
@@ -38,6 +39,7 @@ import {
     MapQueryParamTypeToParserType,
     EnrichFieldTypesFromCompositions,
     EnrichFieldTypesFromEntityMetadata,
+    BuildFieldsForSelectStar,
 } from '../custom/query-extraction/resolve';
 import type {
     ExtractedField,
@@ -944,10 +946,15 @@ describe('Passthrough Parameter Extraction', () => {
     });
 
     describe('ResolveQueryByNameAndCategory', () => {
-        it('should resolve a query by unique name when no category segments given', () => {
+        // References resolve by full category path + name only (DISCUSSION §6, 2026-10-27: "Category path + query
+        // name must be unique"; COMPAT-MAP B21), so a bare name no longer finds a query that sits in a category.
+        // Was: 'should resolve a query by unique name when no category segments given'.
+        it('should not resolve a bare name to a query in a category, and resolves a query with no category', () => {
             const q = stubQuery({ name: 'Sales Summary', categoryPath: 'Reports' });
-            expect(ResolveQueryByNameAndCategory('Sales Summary', [], [q])).toBe(q);
-            expect(ResolveQueryByNameAndCategory('sales summary', [], [q])).toBe(q); // case-insensitive
+            expect(ResolveQueryByNameAndCategory('Sales Summary', [], [q])).toBeUndefined();
+            expect(ResolveQueryByNameAndCategory('sales summary', ['reports'], [q])).toBe(q); // case-insensitive
+            const uncategorized = stubQuery({ name: 'Loose', categoryPath: '' });
+            expect(ResolveQueryByNameAndCategory('Loose', [], [uncategorized])).toBe(uncategorized);
         });
 
         it('should return undefined for an ambiguous name without category disambiguation', () => {
@@ -956,13 +963,36 @@ describe('Passthrough Parameter Extraction', () => {
             expect(ResolveQueryByNameAndCategory('Report', [], [q1, q2])).toBeUndefined();
         });
 
-        // NOTE (real behavior): the category-qualified branch compares against
-        // "/Segments/" (leading + trailing slashes), but MJQueryEntityExtended.CategoryPath
-        // is built WITHOUT surrounding slashes ("Segments"), so the qualified branch never
-        // matches real metadata and resolution succeeds only via the name-only fallback.
-        it('should fall back to name-only matching when the category-qualified branch does not match', () => {
+        // Composition resolves by full category path + name only; no name-only fallback
+        // (DISCUSSION §6, 2026-10-27: "Category path + query name must be unique"). CR1 (was pinned).
+        // Inverted from "should fall back to name-only matching when the category-qualified branch does not match".
+        it('should not fall back to name-only matching when the category path does not match', () => {
             const q = stubQuery({ name: 'Sales Summary', categoryPath: 'Reports' });
-            expect(ResolveQueryByNameAndCategory('Sales Summary', ['Reports'], [q])).toBe(q);
+            expect(ResolveQueryByNameAndCategory('Sales Summary', ['Other'], [q])).toBeUndefined();
+        });
+
+        // A path that is a whole-segment suffix of exactly one same-named query's category path resolves (with a
+        // warning; save refuses it), so a stored query naming "Demos/Active Users" for "MJ/Demos/Active Users" runs.
+        it('should resolve a partial path that is a segment suffix of exactly one query\'s category path', () => {
+            const q = stubQuery({ name: 'Active Users', categoryPath: 'MJ/Demos' });
+            expect(ResolveQueryByNameAndCategory('Active Users', ['Demos'], [q])).toBe(q);
+            expect(ResolveQueryByNameAndCategory('Active Users', ['MJ'], [q])).toBeUndefined(); // a leading segment is not a suffix
+            expect(ResolveQueryByNameAndCategory('Active Users', ['mos'], [q])).toBeUndefined(); // nor part of a segment
+        });
+
+        it('should not resolve a partial path that is a suffix of more than one query\'s category path', () => {
+            const mj = stubQuery({ id: 'q-mj', name: 'Active Users', categoryPath: 'MJ/Demos' });
+            const archive = stubQuery({ id: 'q-archive', name: 'Active Users', categoryPath: 'Archive/Demos' });
+            expect(ResolveQueryByNameAndCategory('Active Users', ['Demos'], [mj, archive])).toBeUndefined();
+            expect(ResolveQueryByNameAndCategory('Active Users', ['Archive', 'Demos'], [mj, archive])).toBe(archive);
+        });
+
+        // Composition resolves by full category path + name (DISCUSSION §6, 2026-10-27). CR1 (was pinned: the
+        // qualified branch compared "/Finance/" against "Finance" and never matched).
+        it('should resolve the same-named query in the referenced category path', () => {
+            const sales = stubQuery({ id: 'q-sales', name: 'Report', categoryPath: 'Golden/Sales' });
+            const finance = stubQuery({ id: 'q-finance', name: 'Report', categoryPath: 'Golden/Finance' });
+            expect(ResolveQueryByNameAndCategory('Report', ['Golden', 'Finance'], [sales, finance])).toBe(finance);
         });
     });
 
@@ -1295,7 +1325,8 @@ describe('Field Type Enrichment from Composition References', () => {
         expect(result[0].sqlFullType).toBe('varchar(50)'); // Unchanged
     });
 
-    it('should use unqualified fallback when no table qualifier', () => {
+    // Kept as a protect: the one composition the query reads is the right place to find "Status".
+    it('should resolve an unqualified column against the single composition the query reads', () => {
         const fields: ExtractedField[] = [{
             name: 'Status', description: 'Status field', type: 'string', optional: false,
         }];
@@ -1313,6 +1344,29 @@ describe('Field Type Enrichment from Composition References', () => {
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(20)');
+    });
+
+    // Pinned: unqualified names resolve only against the tables the query reads, not a global first match
+    // (DISCUSSION §6, 2026-10-27: binding split — the database describes output columns). E2.
+    // Inverted from "should use unqualified fallback when no table qualifier": that fallback searches every
+    // composition ref, including one read only inside a WHERE subquery.
+    // Observed today: "Status" takes the subquery dependency's type (expected undefined, received 'int').
+    it.fails('should not resolve an unqualified column from a composition read only in a subquery', () => {
+        const sql = 'SELECT Status FROM ext.Widgets w WHERE w.OwnerID IN (SELECT o.ID FROM {{query:"Shared/Owners"}} o)';
+        const owners = stubQuery({
+            name: 'Owners',
+            categoryPath: 'Shared',
+            fields: [
+                stubQueryField({ name: 'ID', sqlBaseType: 'uniqueidentifier', sqlFullType: 'uniqueidentifier' }),
+                stubQueryField({ name: 'Status', sqlBaseType: 'int', sqlFullType: 'int' }),
+            ],
+        });
+        const refs = ResolveCompositionReferences(sql, 'Widget Statuses', [owners]);
+        const selectColumns = extractSelectColumns(sql);
+        const fields: ExtractedField[] = [{ name: 'Status', description: 'Status', type: 'string', optional: false }];
+
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
+        expect(result[0].sqlFullType).toBeUndefined();
     });
 
     it('should disambiguate same field name across multiple deps using qualifier', () => {
@@ -1422,6 +1476,61 @@ describe('Field Type Enrichment from Composition References', () => {
 
         const result = EnrichFieldTypesFromCompositions(fields, [], [], stubMetadataProvider());
         expect(result).toBe(fields);
+    });
+    describe('same-named dependency queries in different categories (CR2)', () => {
+        const salesReport = () => stubQuery({
+            id: 'q-sales-report',
+            name: 'Report',
+            categoryPath: 'Golden/Sales',
+            fields: [stubQueryField({ name: 'Bookings', sqlBaseType: 'int', sqlFullType: 'int' })],
+        });
+        const financeReport = () => stubQuery({
+            id: 'q-finance-report',
+            name: 'Report',
+            categoryPath: 'Golden/Finance',
+            fields: [stubQueryField({ name: 'Revenue', sqlBaseType: 'decimal', sqlFullType: 'decimal(18,2)' })],
+        });
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('protect: SELECT * over a composition expands the fields of the dependency when the name is unique', () => {
+            vi.spyOn(QueryEngine.Instance, 'Queries', 'get').mockReturnValue([financeReport()]);
+            const fields = BuildFieldsForSelectStar('SELECT * FROM {{query:"Golden/Finance/Report"}} r', [], [], stubMetadataProvider());
+            expect(fields?.map(f => f.name)).toEqual(['Revenue']);
+        });
+
+        // Pinned: field-type lookups from compositions use the resolved query (full category path + name),
+        // not the first query with that name (DISCUSSION §6, 2026-10-27). CR2 (expandFieldsFromCompositionRefs).
+        // Observed today: the fields of "Golden/Sales/Report" (expected ['Revenue'], received ['Bookings']).
+        it.fails('SELECT * over a composition expands the fields of the query at the referenced category path', () => {
+            vi.spyOn(QueryEngine.Instance, 'Queries', 'get').mockReturnValue([salesReport(), financeReport()]);
+            const fields = BuildFieldsForSelectStar('SELECT * FROM {{query:"Golden/Finance/Report"}} r', [], [], stubMetadataProvider());
+            expect(fields?.map(f => f.name)).toEqual(['Revenue']);
+        });
+
+        // Pinned: field-type lookups from compositions use the resolved query, not first-by-name
+        // (DISCUSSION §6, 2026-10-27). CR2 (buildDependencyFieldLookup): the flat fallback keys every
+        // dependency's fields by field name alone, so the first dependency wins.
+        // Observed today: "Amount" takes the type of the Sales dependency (expected not 'int', received 'int').
+        it.fails('the flat fallback does not take a field type from a same-named query the column does not read', () => {
+            const amount = (sqlBaseType: string, sqlFullType: string) => stubQueryField({ name: 'Amount', sqlBaseType, sqlFullType });
+            const sales = stubQuery({ id: 'q-sales', name: 'Report', categoryPath: 'Golden/Sales', fields: [amount('int', 'int')] });
+            const finance = stubQuery({ id: 'q-finance', name: 'Report', categoryPath: 'Golden/Finance', fields: [amount('decimal', 'decimal(18,2)')] });
+            const refs: ResolvedCompositionReference[] = [
+                { DepQuery: sales, ReferencePath: 'Golden/Sales/Report', Alias: 's', ParameterMapping: null, PassthroughMappings: [] },
+                { DepQuery: finance, ReferencePath: 'Golden/Finance/Report', Alias: 'f', ParameterMapping: null, PassthroughMappings: [] },
+            ];
+            // SELECT ISNULL(f.Amount, 0) AS Amount FROM {{query:"Golden/Sales/Report"}} s JOIN {{query:"Golden/Finance/Report"}} f ON ...
+            const selectColumns: SQLSelectColumn[] = [{
+                OutputName: 'Amount', SourceColumn: 'ISNULL(f.Amount, 0)', TableQualifier: null, IsExpression: true,
+            }];
+            const fields: ExtractedField[] = [{ name: 'Amount', description: 'Amount', type: 'number', optional: false }];
+
+            const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
+            expect(result[0].sqlFullType).not.toBe('int');
+        });
     });
 });
 
@@ -1572,7 +1681,9 @@ describe('Field Type Enrichment from Entity Metadata', () => {
         expect(result[0].sourceEntity).toBe('Custom Users'); // Preserved
     });
 
-    it('should handle unqualified SELECT columns by searching all entities', () => {
+    // Kept as a protect (renamed from "should handle unqualified SELECT columns by searching all entities"):
+    // the flat lookup is built from the tables the query references, and the one table read here is right.
+    it('should resolve an unqualified SELECT column against the single table the query reads', () => {
         // SELECT Name (no table qualifier)
         const sql = 'SELECT Name FROM __mj.vwUsers u';
         const selectColumns = extractSelectColumns(sql, tsqlDialect);
@@ -1588,6 +1699,28 @@ describe('Field Type Enrichment from Entity Metadata', () => {
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(100)');
         expect(result[0].sourceEntity).toBe('Users');
+    });
+
+    // Pinned: unqualified names resolve only against the tables the query reads, not a global first match
+    // (DISCUSSION §6, 2026-10-27: binding split — the database describes output columns). E2.
+    // Inverted from "should handle unqualified SELECT columns by searching all entities": the flat lookup
+    // spans every table in the SQL, so a column of a non-entity outer table is attributed to an entity
+    // read only inside a WHERE subquery.
+    // Observed today: sourceEntity 'Users' (expected undefined, received 'Users').
+    it.fails('should not attribute an unqualified SELECT column to an entity read only in a subquery', () => {
+        const sql = 'SELECT Name FROM ext.Widgets w WHERE w.OwnerID IN (SELECT u.ID FROM __mj.vwUsers u)';
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'Widget name', type: 'string', optional: false,
+        }];
+
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
+        expect(result[0].sourceEntity).toBeUndefined();
+        expect(result[0].sqlFullType).toBeUndefined();
     });
 
     it('should return fields unchanged when no table refs resolve to entities', () => {

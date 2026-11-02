@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Base64ToFloat32Vector } from '@memberjunction/global';
 import type { SimpleEmbeddingResult } from '@memberjunction/core';
 
-const { logError, stubState, superSave, generateEmbeddingByFieldName, generateEmbeddingsByFieldName, embedTextLocalHelper, aiEngineStub, tagEngineStub } =
+const { logError, stubState, superSave, generateEmbeddingByFieldName, generateEmbeddingsByFieldName, embedTextLocalHelper, isLocalEmbeddingStaleHelper, aiEngineStub, tagEngineStub } =
     vi.hoisted(() => ({
         logError: vi.fn(),
         /** Drives the stub's IsSaved / GetFieldByName(...).Dirty answers. */
@@ -22,6 +22,7 @@ const { logError, stubState, superSave, generateEmbeddingByFieldName, generateEm
         generateEmbeddingByFieldName: vi.fn(),
         generateEmbeddingsByFieldName: vi.fn(),
         embedTextLocalHelper: vi.fn(),
+        isLocalEmbeddingStaleHelper: vi.fn(),
         aiEngineStub: {
             EnsureLoaded: vi.fn(),
             AddOrUpdateSingleNoteEmbedding: vi.fn(),
@@ -71,14 +72,19 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         MJAIAgentNoteEntity: class extends StubEntity {},
         MJAIAgentExampleEntity: class extends StubEntity {},
         MJComponentEntityExtended: class extends StubEntity {},
-        MJQueryEntityExtended: class extends StubEntity {},
+        MJQueryEntityExtended: class extends StubEntity {
+            /** The query's declared child collections, empty: this save declares no children. */
+            public DeclaredParameters = { Items: [] };
+            public DeclaredFields = { Items: [] };
+            public DeclaredEntities = { Items: [] };
+        },
         MJTagEntity: class extends StubEntity {},
     };
 });
 
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: aiEngineStub } }));
 vi.mock('@memberjunction/tag-engine', () => ({ TagEngine: { Instance: tagEngineStub } }));
-vi.mock('../custom/util', () => ({ EmbedTextLocalHelper: embedTextLocalHelper }));
+vi.mock('../custom/util', () => ({ EmbedTextLocalHelper: embedTextLocalHelper, IsLocalEmbeddingStaleHelper: isLocalEmbeddingStaleHelper }));
 // The approval rules have their own tests (approvalStamp.test.ts); here they approve nothing.
 vi.mock('../custom/approvalStamp', () => ({ ApplyApprovalRulesAsync: vi.fn(async () => false), ApprovalRefusalResult: vi.fn() }));
 
@@ -130,6 +136,7 @@ beforeEach(() => {
     generateEmbeddingByFieldName.mockResolvedValue(true);
     generateEmbeddingsByFieldName.mockResolvedValue(true);
     aiEngineStub.EnsureLoaded.mockResolvedValue(undefined);
+    isLocalEmbeddingStaleHelper.mockResolvedValue(false);
 });
 
 describe('MJAIAgentNoteEntityServer embedding columns', () => {
@@ -160,6 +167,19 @@ describe('MJAIAgentNoteEntityServer embedding columns', () => {
         expect(note.EmbeddingModelID).toBeNull();
         // no vector left, so the in-memory index must drop the note
         expect(aiEngineStub.RemoveSingleNoteEmbedding).toHaveBeenCalledWith('rec-1');
+    });
+
+    it('leaves the new/dirty/stale decision for an unchanged note to GenerateEmbedding', async () => {
+        stubState.isSaved = true; // nothing dirty
+        const note = create(MJAIAgentNoteEntityServer);
+        note.Note = 'Prefers concise answers';
+        note.Status = 'Active';
+        note.EmbeddingModelID = 'old-model';
+
+        expect(await note.Save()).toBe(true);
+
+        expect(generateEmbeddingByFieldName).toHaveBeenCalledTimes(1);
+        expect(isLocalEmbeddingStaleHelper).not.toHaveBeenCalled(); // asked once, inside GenerateEmbedding
     });
 });
 
@@ -284,7 +304,25 @@ describe('MJQueryEntityServer embedding columns', () => {
         expect(logError).toHaveBeenCalledWith('[MJQueryEntityServer] Embedding refresh failed for query "Active Members": no model');
     });
 
-    it('Save clears both columns when nothing is dirty and the description is empty', async () => {
+    it('keeps an unchanged query\'s vector when re-embedding a stale model fails', async () => {
+        stubState.isSaved = true;
+        isLocalEmbeddingStaleHelper.mockResolvedValue(true);
+        embedTextLocalHelper.mockResolvedValue({ vector: [], modelID: 'default-model' });
+        const query = create(MJQueryEntityServer);
+        query.Name = 'Active Members';
+        query.Description = 'Members with a current subscription';
+        query.SQL = 'SELECT 1';
+        query.EmbeddingVector = JSON.stringify(VECTOR);
+        query.EmbeddingModelID = 'old-model';
+
+        expect(await query.Save()).toBe(true);
+
+        expect(embedTextLocalHelper).toHaveBeenCalled();
+        expect(query.EmbeddingVector).toBe(JSON.stringify(VECTOR));
+        expect(query.EmbeddingModelID).toBe('old-model');
+    });
+
+    it('Save keeps the vector when nothing is dirty and the description is empty', async () => {
         stubState.isSaved = true; // no dirty fields: no embedding, no SQL extraction
         const query = create(MJQueryEntityServer);
         query.Name = 'Active Members';
@@ -297,9 +335,20 @@ describe('MJQueryEntityServer embedding columns', () => {
         expect(await query.Save()).toBe(true);
 
         expect(embedTextLocalHelper).not.toHaveBeenCalled();
-        expect(query.EmbeddingVector).toBeNull();
-        expect(query.EmbeddingVectorBinary).toBeNull();
-        expect(query.EmbeddingModelID).toBeNull();
+        expect(query.EmbeddingVector).toBe(JSON.stringify(VECTOR));
+        expect(query.EmbeddingModelID).toBe(MODEL_ID);
+    });
+
+    it('does not embed an unchanged query that holds no vector, even when no model is recorded', async () => {
+        stubState.isSaved = true;
+        isLocalEmbeddingStaleHelper.mockResolvedValue(true);
+        const query = create(MJQueryEntityServer);
+        query.Name = 'Active Members';
+        query.SQL = 'SELECT 1';
+
+        expect(await query.Save()).toBe(true);
+
+        expect(embedTextLocalHelper).not.toHaveBeenCalled();
     });
 });
 
@@ -375,5 +424,34 @@ describe('MJTagEntityServer embedding columns', () => {
         expect(embedTextLocalHelper).not.toHaveBeenCalled();
         expect(tag.EmbeddingVector).toBe(JSON.stringify(VECTOR));
         expect(tag.EmbeddingVectorBinary).toBe('AAAAPw==');
+    });
+
+    it('keeps an unchanged tag\'s vector when re-embedding a stale model fails', async () => {
+        stubState.isSaved = true;
+        isLocalEmbeddingStaleHelper.mockResolvedValue(true);
+        embedTextLocalHelper.mockRejectedValue(new Error('model failed to load'));
+        const tag = newTag('Finance', null);
+        tag.EmbeddingVector = JSON.stringify(VECTOR);
+        tag.EmbeddingModelID = 'old-model';
+
+        expect(await tag.Save()).toBe(true);
+
+        expect(tag.EmbeddingVector).toBe(JSON.stringify(VECTOR));
+        expect(tag.EmbeddingModelID).toBe('old-model');
+    });
+
+    it('re-embeds an unchanged tag whose stored vector came from another model', async () => {
+        stubState.isSaved = true;
+        isLocalEmbeddingStaleHelper.mockResolvedValue(true);
+        embedTextLocalHelper.mockResolvedValue({ vector: VECTOR, modelID: 'default-model' });
+        const tag = newTag('Finance', null);
+        tag.EmbeddingVector = JSON.stringify([9, 9, 9]);
+        tag.EmbeddingModelID = 'old-model';
+
+        expect(await tag.Save()).toBe(true);
+
+        expect(embedTextLocalHelper).toHaveBeenCalledWith(tag, 'Finance');
+        expect(tag.EmbeddingModelID).toBe('default-model');
+        expect(tag.EmbeddingVector).toBe(JSON.stringify(VECTOR));
     });
 });

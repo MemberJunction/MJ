@@ -61,6 +61,26 @@ interface SerializedMediaState {
 let mediaIdCounter = 0;
 
 /**
+ * Validates that an external/public media URL uses an explicit `http:` or `https:` scheme with a
+ * non-empty host (never `javascript:`, `data:`, `blob:`, `file:`, or scheme-relative `//...`).
+ */
+export function IsAllowedExternalMediaUrl(url: string | null | undefined): boolean {
+  if (typeof url !== 'string') {
+    return false;
+  }
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('//') || !/^https?:\/\//i.test(trimmed)) {
+    return false;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The Media channel's STATE ENGINE — a pure, framework-free model of what's on the shared Media
  * surface: an ordered list of {@link MediaItem}s plus which one is active. Mutations push the new
  * state through {@link Changed$} so the channel persists it and the surface re-renders. Mirrors
@@ -192,7 +212,13 @@ export class MediaChannelState {
     }
     const item = value as Record<string, unknown>;
     const validTypes: MediaItemType[] = ['image', 'video', 'audio', 'pdf', 'web'];
-    const hasUrl = typeof item['Url'] === 'string' && (item['Url'] as string).length > 0;
+    const rawUrl = item['Url'];
+    if (rawUrl !== undefined && rawUrl !== null && rawUrl !== '') {
+      if (typeof rawUrl !== 'string' || !IsAllowedExternalMediaUrl(rawUrl)) {
+        return false;
+      }
+    }
+    const hasUrl = typeof rawUrl === 'string' && rawUrl.trim().length > 0;
     const hasFileID = typeof item['FileID'] === 'string' && (item['FileID'] as string).length > 0;
     return (
       typeof item['Id'] === 'string' &&

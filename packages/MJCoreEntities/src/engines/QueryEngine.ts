@@ -42,15 +42,38 @@ const RESULT_AFFECTING_COLUMNS: Readonly<Record<string, readonly string[] | 'all
     'mj: query sqls': 'all',
     'mj: query parameters': ['QueryID', 'Name', 'Type', 'IsRequired', 'ValidationFilters'],
     'mj: query dependencies': 'all',
+    'mj: query fields': ['QueryID', 'Name', 'Sequence', 'SQLBaseType', 'SQLFullType', 'SourceEntityID', 'SourceFieldName', 'IsComputed', 'IsNullable', 'SourceEntityFieldID'],
 };
 
 /** Engine properties a query definition is computed from. A change to any of them clears the memo. */
-const DEFINITION_PROPERTIES = new Set(['_queries', '_parameters', '_dependencies', '_querySQLs', '_sqlDialects']);
+const DEFINITION_PROPERTIES = new Set(['_queries', '_parameters', '_fields', '_dependencies', '_querySQLs', '_sqlDialects']);
+
+/**
+ * The facts of one Query Field row that are part of its query's definition signature, in hashed
+ * order. A fact is something about the result column itself: its name, its position, its type, its
+ * nullability, and where its values come from (source entity, source entity field and field name).
+ * An unknown nullability (`null`) hashes differently from both `true` and `false`. A new fact column belongs here, as one more entry, so that editing it
+ * changes the signature. Descriptions and other annotations (`Description`,
+ * `ComputationDescription`, `SummaryDescription`, detection method and confidence) never belong
+ * here: editing them must not change the signature, or it would throw away the query's cached
+ * results.
+ */
+const QUERY_FIELD_FACTS: ReadonlyArray<(field: MJQueryFieldEntity) => string> = [
+    field => field.Name,
+    field => String(field.Sequence),
+    field => field.SQLFullType?.trim() ? field.SQLFullType : (field.SQLBaseType ?? ''),
+    field => (field.SourceEntityID ?? '').toLowerCase(),
+    field => field.SourceFieldName ?? '',
+    field => field.IsComputed ? '1' : '0',
+    field => field.IsNullable == null ? '' : (field.IsNullable ? '1' : '0'),
+    field => (field.SourceEntityFieldID ?? '').toLowerCase(),
+];
 
 /** Rows of the definition entities, grouped by query, built once per memo generation. */
 interface DefinitionIndexes {
     QueriesByID: UUIDMap<MJQueryEntityExtended>;
     ParametersByQuery: UUIDMap<MJQueryParameterEntity[]>;
+    FieldsByQuery: UUIDMap<MJQueryFieldEntity[]>;
     DependenciesByQuery: UUIDMap<MJQueryDependencyEntity[]>;
     DependentsByQuery: UUIDMap<MJQueryDependencyEntity[]>;
     QuerySQLsByQuery: UUIDMap<MJQuerySQLEntity[]>;
@@ -229,24 +252,41 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
     private _pendingSlotInvalidations = new Map<string, ReturnType<typeof setTimeout>>();
 
     /**
+     * The default settle window, in milliseconds, before an edited query's cached results are
+     * deleted. Settable so a harness can collapse it: a test that edits a query and then wants to
+     * observe the deletion otherwise has to sleep past this window on every such check, and a test
+     * that warms a slot after creating a fixture has to sleep past it to avoid the deletion landing
+     * mid-check. Mirrors {@link ProviderBase.MetadataDatasetRefreshDebounceMs}, which exists for
+     * the same reason.
+     *
+     * Lower it only in a harness. In a real process the window is what makes the deletion happen
+     * once per edit instead of once per save in the burst — see the instance getter.
+     */
+    public static DefaultDefinitionEditSettleMs: number = 3000;
+
+    /**
      * How long, in milliseconds, a query must go without a result-affecting save on this process
      * before its cached results are deleted. One edit saves the query, then its parameters, fields,
      * entities and dependencies, then the query again, over several seconds; waiting for the burst
      * to settle deletes the slots once instead of once per save.
      */
     protected get DefinitionEditSettleMs(): number {
-        return 3000;
+        return QueryEngine.DefaultDefinitionEditSettleMs;
     }
 
     /**
      * The signature of what a query's results are computed from on `platform`: a hash of the SQL
      * that runs there (`GetPlatformSQL`), the columns that change how it runs (`UsesTemplate`,
      * `ExternalDataSourceID`, `IsMaterialized`, `SQLDialectID`), its `CacheValidationSQL`, its
-     * parameters' names, types, required flags and validation filters, and, recursively, the signatures of the queries it composes (a cycle
-     * is hashed as a marker rather than followed). Descriptive columns, parameter default values
-     * (informational only), field rows, permissions and cache settings are not part of it.
+     * parameters' names, types, required flags and validation filters, its result fields' facts in
+     * column order (see {@link QUERY_FIELD_FACTS}: name, sequence, SQL type, source entity and field,
+     * computed flag, nullability, source entity field), and, recursively, the signatures of the queries it composes (a cycle is
+     * hashed as a marker rather than followed). Descriptive columns (the query's, its parameters'
+     * and its fields'), parameter default values (informational only), permissions and cache
+     * settings are not part of it.
      *
-     * The stamp is the newest `__mj_UpdatedAt` across the same rows. Computed once per query and
+     * The stamp is the newest `__mj_UpdatedAt` across the query, its parameter, field and dialect
+     * SQL rows, its dependency rows and the stamps of the queries it composes. Computed once per query and
      * platform, and again only after this engine's query data changes.
      *
      * @returns The signature, or undefined when the engine does not hold the query
@@ -273,7 +313,12 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
         visiting.add(key);
         const parts = this.definitionParts(query, platform, indexes);
         let newest = QueryEngine.timestampMs(query.__mj_UpdatedAt);
-        for (const row of [...(indexes.ParametersByQuery.Get(query.ID) ?? []), ...(indexes.QuerySQLsByQuery.Get(query.ID) ?? [])]) {
+        const ownRows = [
+            ...(indexes.ParametersByQuery.Get(query.ID) ?? []),
+            ...(indexes.FieldsByQuery.Get(query.ID) ?? []),
+            ...(indexes.QuerySQLsByQuery.Get(query.ID) ?? []),
+        ];
+        for (const row of ownRows) {
             newest = Math.max(newest, QueryEngine.timestampMs(row.__mj_UpdatedAt));
         }
         let cyclic = false;
@@ -318,7 +363,18 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
         for (const p of parameters) {
             parts.push(`param:${p.Name.toLowerCase()}\u0002${p.Type}\u0002${p.IsRequired ? 1 : 0}\u0002${p.ValidationFilters ?? ''}`);
         }
+        for (const field of QueryEngine.sortedFields(indexes.FieldsByQuery.Get(query.ID))) {
+            parts.push(`field:${QUERY_FIELD_FACTS.map(fact => fact(field)).join('\u0002')}`);
+        }
         return parts;
+    }
+
+    /** Field rows in result-column order (Sequence, then Name, then ID), so the hash does not depend on load order. */
+    private static sortedFields(rows: MJQueryFieldEntity[] | undefined): MJQueryFieldEntity[] {
+        return [...(rows ?? [])].sort((a, b) =>
+            (a.Sequence - b.Sequence)
+            || a.Name.toLowerCase().localeCompare(b.Name.toLowerCase())
+            || a.ID.toLowerCase().localeCompare(b.ID.toLowerCase()));
     }
 
     /** Dependency rows in a stable order, so the hash does not depend on load order. */
@@ -332,6 +388,7 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
             this._definitionIndexes = {
                 QueriesByID: IndexByUUID(this.Queries),
                 ParametersByQuery: GroupByUUID(this.Parameters, p => p.QueryID),
+                FieldsByQuery: GroupByUUID(this.Fields, f => f.QueryID),
                 DependenciesByQuery: GroupByUUID(this.Dependencies, d => d.QueryID),
                 DependentsByQuery: GroupByUUID(this.Dependencies, d => d.DependsOnQueryID),
                 QuerySQLsByQuery: GroupByUUID(this.QuerySQLs, q => q.QueryID),

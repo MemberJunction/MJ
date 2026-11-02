@@ -382,6 +382,7 @@ class CatalogHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => SKILLS,
             GetSkillsForAgent: (): unknown[] => SKILLS,
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (agentId: string): unknown => this.catalog.get(agentId),
             SetAgentBaseCatalog: (agentId: string, cat: unknown): void => {
                 this.catalog.set(agentId, cat);
@@ -512,6 +513,7 @@ const GOLDEN: Record<string, unknown> = {
         includeFinishIfDocs: false,
         // Decisions are opt-in too (includeDecisionsDocs defaults to false), so their docs and type are out.
         includeDecisionsDocs: false,
+        enableHandoff: false,
         includeResponseTypeDefinition: {
             payload: true,
             responseForms: true,
@@ -526,6 +528,7 @@ const GOLDEN: Record<string, unknown> = {
             pipeline: true,
             memoryWrites: true,
             tasks: false,
+            handoff: false,
         },
     },
 };
@@ -640,6 +643,21 @@ beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
     harness = new CatalogHarness();
+});
+
+describe('runtime actionChanges that remove every action', () => {
+    it('leave the run with no actions: an empty computed list never falls back to the agent configuration', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(actionsEnvelope('Look Up Weather')), () => llmEnvelope(SUCCESS)]);
+        const params: ExecuteAgentParams = {
+            ...makeParams(),
+            actionChanges: [{ scope: 'root', mode: 'remove', actionIds: ACTIONS.map(a => a.ID) }],
+        };
+
+        await agent.Execute(params);
+
+        expect(harness.actionsRun).toEqual([]);
+        expect((agent as unknown as AgentInternals)._effectiveActions).toEqual([]);
+    });
 });
 
 describe('catalog narrowing — off by default', () => {

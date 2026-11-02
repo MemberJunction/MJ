@@ -881,6 +881,44 @@ describe('TemplateEngineServer', () => {
             expect(afterClear.Names.has('childVar')).toBe(true);
         });
 
+        it('should keep compiled templates across a warm Config(false) and drop them on Config(true)', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const compile = vi.spyOn(engine as unknown as { createNunjucksTemplate: () => unknown }, 'createNunjucksTemplate');
+            try {
+                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(1);
+
+                await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
+                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(1);
+
+                await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
+                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(2);
+            } finally {
+                compile.mockRestore();
+            }
+        });
+
+        it('should see an edited embedded template after a warm Config(false)', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const text = '{% template "Child" %}{{ a }}';
+            expect(engine.GetReferencedVariables(text).Names.has('childVar')).toBe(true);
+
+            // AutoRefresh updates the embedded template in place; the parent's text does not change.
+            const content = childTemplate.Content[0];
+            const original = content.TemplateText;
+            content.TemplateText = '{{ editedChildVar }}';
+            try {
+                await engine.Config(false, { ID: 'test-user', Name: 'Test' } as never);
+                const result = engine.GetReferencedVariables(text);
+                expect(result.Names.has('editedChildVar')).toBe(true);
+                expect(result.Names.has('childVar')).toBe(false);
+            } finally {
+                content.TemplateText = original;
+            }
+        });
+
         it('should return a frozen result', async () => {
             await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
 

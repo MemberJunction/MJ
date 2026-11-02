@@ -123,6 +123,17 @@ export interface ResponseTypeInclusionRules {
      * @default false
      */
     tasks?: boolean;
+
+    /**
+     * Include `'Handoff'` in the nextStep.type union and the `handoff` property.
+     * Auto-aligns with `enableHandoff` unless explicitly set.
+     *
+     * Like `tasks`, this defaults to **false** because `enableHandoff` does: an agent that has
+     * not opted in (or is running where handoff is withheld) must not see the type, or the model
+     * will reach for it.
+     * @default false
+     */
+    handoff?: boolean;
 }
 
 /**
@@ -140,8 +151,9 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     pipeline: true,
     decisions: true,
     finishIf: true,
-    // The one section that defaults OFF — see `enableTaskGraphs` (D3).
-    tasks: false
+    // The sections that default OFF — capability gates, see `enableTaskGraphs` (D3) and `enableHandoff` (D14).
+    tasks: false,
+    handoff: false
 };
 
 /**
@@ -191,9 +203,9 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  *   Model Vendors: the vendor's defaults beat the model's own bag and the inference provider's
  *   model-vendor row is the tie-breaker) is `true` — otherwise replace-in-place. Nothing about a
  *   provider is hard-coded: a new host, or one model on a host that caches differently from the
- *   rest, is a metadata change. The answer is taken from a runtime model override, else the FIRST
- *   iteration's model selection, and then frozen for the rest of the run so a failover cannot flip
- *   the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place;
+ *   rest, is a metadata change. A runtime model override that names a vendor, or whose catalog says
+ *   yes, answers immediately; otherwise the FIRST iteration's model selection decides. The answer is
+ *   then frozen for the rest of the run so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place;
  *   if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary, so
  *   deferring loses nothing. The prompt's bound models are deliberately not consulted: prompts
  *   commonly bind several vendors for failover. One case is decided by the driver, not the catalog:
@@ -542,6 +554,20 @@ export interface LoopAgentTypePromptParams {
      */
     enableTaskGraphs?: boolean;
 
+    /**
+     * Allow this agent to transfer the conversation turn to another agent (`nextStep.type === 'Handoff'`).
+     *
+     * **Defaults to false, like `enableTaskGraphs`, and is enforced rather than advisory.**
+     * A handoff detaches the current run and causes the host to start a peer agent run in the same
+     * conversation as that agent itself. `LoopAgentType` rejects a `'Handoff'` step from a disabled
+     * agent with a corrective Retry, on top of omitting the type from the prompt. Even when enabled
+     * on the agent, `BaseAgent` withholds Handoff on sub-agent runs, runs without a
+     * `conversationDetailId`, and runs where the host has not supplied `handoffChain`.
+     *
+     * @default false
+     */
+    enableHandoff?: boolean;
+
     // === Content Limiting ===
 
     /**
@@ -672,8 +698,9 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     finishIfThreshold: 0.9,
     // Off: an opt-in check that costs a decision call per flagged payload change.
     payloadFeedbackCheck: false,
-    // Deliberately false — a capability gate, not a token-savings flag (D3).
+    // Deliberately false — capability gates, not token-savings flags (D3, D14).
     enableTaskGraphs: false,
+    enableHandoff: false,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1,
     clientToolResultMaxChars: -1,

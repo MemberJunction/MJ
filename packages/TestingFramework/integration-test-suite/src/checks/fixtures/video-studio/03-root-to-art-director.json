@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Art Director to establish the visual style and motion rules.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Art Director",
+            "message": "Establish the palette, typography, composition, pacing, and motion rules.",
+            "terminateAfter": false
+        }
+    }
+}

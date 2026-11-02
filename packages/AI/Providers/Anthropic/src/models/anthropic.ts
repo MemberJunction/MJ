@@ -36,6 +36,15 @@ const MAX_CACHE_BREAKPOINTS = 4;
 /** A minimal Anthropic text content block, optionally carrying an ephemeral cache breakpoint. */
 type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
 
+/**
+ * Any request block that may carry a cache breakpoint — what {@link AnthropicLLM.countCacheBreakpoints} reads.
+ * `type` is on every block param, so a block without `cache_control` (a thinking block) still matches.
+ */
+type CacheableBlock = { type: string; cache_control?: { type: string } | null };
+
+/** A tool declaration with the optional breakpoint Anthropic accepts on tools. */
+type CacheableTool = Tool & { cache_control?: { type: 'ephemeral' } };
+
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
     /**
@@ -593,7 +602,7 @@ export class AnthropicLLM extends BaseLLM {
      * @param params The chat params for this request
      * @returns The Anthropic tool declarations, or undefined when no tools were declared
      */
-    private buildAnthropicTools(params: ChatParams): Tool[] | undefined {
+    private buildAnthropicTools(params: ChatParams): CacheableTool[] | undefined {
         if (!params.tools || params.tools.length === 0) {
             return undefined;
         }
@@ -602,6 +611,17 @@ export class AnthropicLLM extends BaseLLM {
             description: tool.description,
             input_schema: tool.inputSchema as Tool.InputSchema
         }));
+    }
+
+    /**
+     * The `cache_control` breakpoints a request already carries on its system blocks and message content
+     * blocks, so a further one is only placed while the request still has one of its
+     * {@link MAX_CACHE_BREAKPOINTS} to spare.
+     */
+    private static countCacheBreakpoints(createParams: MessageCreateParams): number {
+        const systemBlocks: CacheableBlock[] = Array.isArray(createParams.system) ? createParams.system : [];
+        const messageBlocks: CacheableBlock[] = createParams.messages.flatMap((m) => (Array.isArray(m.content) ? m.content : []));
+        return [...systemBlocks, ...messageBlocks].filter((block) => !!block.cache_control).length;
     }
 
     /**
@@ -845,6 +865,13 @@ export class AnthropicLLM extends BaseLLM {
                 const toolChoice = this.buildAnthropicToolChoice(params, thinking.thinking?.type === 'enabled');
                 if (toolChoice) {
                     createParams.tool_choice = toolChoice;
+                }
+                // A breakpoint on the last tool. Tools open Anthropic's cache prefix (tools → system →
+                // messages), so with it a changed system prompt costs the system and message segments only,
+                // not the tool declarations too. Only while the request still has a breakpoint to spare
+                // after the system and message segments took theirs.
+                if ((params.enableCaching ?? true) && AnthropicLLM.countCacheBreakpoints(createParams) < MAX_CACHE_BREAKPOINTS) {
+                    anthropicTools[anthropicTools.length - 1].cache_control = { type: 'ephemeral' };
                 }
             }
 

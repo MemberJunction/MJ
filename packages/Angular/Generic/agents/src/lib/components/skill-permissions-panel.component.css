@@ -155,7 +155,7 @@
 
 .ap-avatar.ap-avatar-role {
     background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
-    color: color-mix(in srgb, var(--mj-brand-primary) 80%, purple);
+    color: color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-text-violet));
 }
 
 .ap-row-info {

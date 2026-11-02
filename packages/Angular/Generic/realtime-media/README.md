@@ -227,7 +227,7 @@ Each button is a circle named by what a click does, such as "Mute microphone" or
 | `ShowLabels` | `false` | A label under each button: Mute or Unmute, Video or Stop video, Share or Stop sharing, Let the agent see me or Hide from the agent (Let agents see me or Hide from agents with `AgentCount` above 1). |
 | `CameraOptional` | `false` | For a call where the camera usually stays off, such as one with an agent: the camera button is neutral while off and filled while on, instead of red while off. |
 | `ShowAgentVision`, `AgentVisionOn` | `false` | Show the agent-vision button, and whether it is on (filled). |
-| `AgentCount` | `1` | The number of agents in the room. The agent-vision button speaks of "the agent" ("Let the agent see your camera and screen") with one, and of "agents in this room" with more. `mj-media-tile` and `mj-self-view` take it too; `AgentVisionText(agentCount)` returns the words. |
+| `AgentCount` | `1` | The number of agents in the room. The agent-vision choice is room-wide: every agent in the room honors it, including agents that join later, and the button's name says so. It speaks of "the agent" ("Let the agent, and any agent that joins later, see your camera and screen") with one, and of "every agent in this room, including any that join later" with more. `mj-media-tile` and `mj-self-view` take it too; `AgentVisionText(agentCount)` returns the words. |
 
 Outputs: `MicrophoneToggled(boolean)` and `CameraToggled(boolean)`, each with the state asked for;
 `ShareRequested(MediaShareRequest)`; `StopShareRequested`; and `AgentVisionToggled(boolean)`. The agent-vision button

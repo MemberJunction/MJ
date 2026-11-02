@@ -42,7 +42,10 @@ import { CreatedRecordKeyFields, IsKeyReference, KeyFieldValue } from '../lib/cr
 import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 import { DEFAULT_RECORD_FILE_PATTERN, RECORD_FILE_GLOB_OPTIONS } from '../lib/record-file-glob';
+import { FileMayHaveDeletions, RecordsHaveDeletions, TextHasInclude } from '../lib/deletion-prescan';
+import { ResolveSqlLogFilter } from '../lib/sql-log-filters';
 import { resolveCollectionRelationship } from '@memberjunction/record-graph';
+import { CollectionPromotionResolver } from '../lib/collection-promotion';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Atomic pushes (the default) run one JSON-root graph at a time on the host provider, inside
@@ -275,6 +278,13 @@ export class PushService {
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
   private confirmedCollections: Set<string> = new Set<string>();
+  /** Decides which relatedEntities groups are saved as collection items; created on first use. */
+  private collectionPromotionResolver: CollectionPromotionResolver | null = null;
+  /**
+   * Promoted relatedEntities items created by a save, waiting for it to succeed so their new keys
+   * can be written back into the item, the same way a separately saved related record gets its key.
+   */
+  private pendingPromotedKeys = new Map<RecordData, Array<{ Item: RecordData; Child: BaseEntity }>>();
   /** Write mode per entity directory, resolved once at the start of the push. */
   private directoryModes: Map<string, PushWriteMode> = new Map();
   /** The directory being processed right now, and how it writes. */
@@ -632,6 +642,7 @@ export class PushService {
         this.envSqlLog = new EnvSqlLog(this.syncEngine);
         this.lookupSqlLog = new LookupSqlLog(this.syncEngine);
         const schemaPlaceholders = ResolveSchemaPlaceholders(this.syncConfig, configManager.GetMJConfig());
+        const logFilter = ResolveSqlLogFilter(this.syncConfig?.sqlLogging);
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
           // Env values are left out first, then lookup IDs become subqueries; the logger's schema
           // placeholder rewrite runs after both, so the subqueries' schema names become placeholders.
@@ -645,8 +656,8 @@ export class PushService {
           prettyPrint: true,
           // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
           // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
-          filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
-          filterType: this.syncConfig?.sqlLogging?.filterType,
+          filterPatterns: logFilter.Patterns,
+          filterType: logFilter.FilterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
           variableBatchThreshold: this.syncConfig?.sqlLogging?.variableBatchThreshold ?? 200,
         });
@@ -1185,7 +1196,9 @@ export class PushService {
         
         // Analyze dependencies and get sorted records
         const analyzer = new RecordDependencyAnalyzer();
-        const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+        const promotions = this.collectionPromotions();
+        await promotions.Prepare(records, entityConfig.entity);
+        const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity, promotions);
         for (const flattened of analysisResult.sortedRecords) {
           flattened.FilePath = filePath;
         }
@@ -1555,7 +1568,10 @@ export class PushService {
     // silent no-ops when seeding a fresh DB from JSON files that already
     // carry stored checksums from another environment.
     // The deferred retry (allowDefer false) never takes this shortcut: the first pass left fields unsaved
-    if (allowDefer && options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
+    // A record whose relatedEntities are saved as collection items never takes the shortcut: its
+    // checksum does not cover those items, so an edit to one would be skipped.
+    const hasPromotedGroups = this.collectionPromotions().PromotedGroups(entityName, record).length > 0;
+    if (allowDefer && options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord && !hasPromotedGroups) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
       // checksum was also computed with file content and composition payloads, so the comparison is apples-to-apples.
@@ -2159,6 +2175,8 @@ export class PushService {
       // We don't return early here because we still want to update primaryKey and sync metadata
     }
 
+    this.writeBackPromotedKeys(record);
+
     // Update primaryKey for new records
     if (isNew) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
@@ -2725,21 +2743,14 @@ export class PushService {
         ignore: ['**/node_modules/**', '**/.mj-*.json']
       });
 
-      // Quick scan for delete directives without full processing
+      // Quick scan for delete markers at any depth. A file that uses @include falls through to
+      // the full audit, which expands includes before looking.
       for (const filePath of files) {
         try {
           const content = await fs.readFile(filePath, 'utf-8');
-          // Fast string check for delete directives
-          if (content.includes('"delete"') && content.includes('true')) {
-            // More precise check - parse JSON to confirm
-            const data = JSON.parse(content);
-            const records = Array.isArray(data) ? data : [data];
-
-            const hasDelete = records.some((r: RecordData) => r.deleteRecord?.delete === true);
-            if (hasDelete) {
-              hasAnyDeletions = true;
-              break;
-            }
+          if (FileMayHaveDeletions(content)) {
+            hasAnyDeletions = true;
+            break;
           }
         } catch (error) {
           // Ignore errors in quick scan
@@ -2791,10 +2802,7 @@ export class PushService {
 
           // Handle @include directives if present
           let fileData = rawFileData;
-          const jsonString = JSON.stringify(rawFileData);
-          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
-          if (hasIncludes) {
+          if (TextHasInclude(JSON.stringify(rawFileData))) {
             const jsonPreprocessor = new JsonPreprocessor();
             fileData = await jsonPreprocessor.processFile(filePath);
           }
@@ -2955,25 +2963,7 @@ export class PushService {
    * Recursively check if any records in an array (including nested relatedEntities) have deletions
    */
   private hasAnyDeletions(records: RecordData[]): boolean {
-    for (const record of records) {
-      // Check this record
-      if (record.deleteRecord?.delete === true) {
-        return true;
-      }
-
-      // Check nested related entities recursively
-      if (record.relatedEntities) {
-        for (const relatedRecords of Object.values(record.relatedEntities)) {
-          if (Array.isArray(relatedRecords)) {
-            if (this.hasAnyDeletions(relatedRecords)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-
-    return false;
+    return RecordsHaveDeletions(records);
   }
 
   /**
@@ -3260,10 +3250,11 @@ export class PushService {
       ? resolutionCollector
       : { notes: resolutionCollector.notes, fieldPrefix: resolutionCollector.fieldPrefix, EnvFields: new Map() };
     try {
+      // `@parent:` in a composition child refers to its owner, as it does for a related record.
       const value = await this.syncEngine.processFieldValue(
         rawValue,
         entityDir,
-        null,
+        ownerRecord,
         null,
         0,
         batchContext,
@@ -3349,6 +3340,59 @@ export class PushService {
     }
     for (const warning of this.lookupSqlLog?.Rewriter.Warnings() ?? []) {
       this.addWarning(warning, callbacks);
+    }
+  }
+
+  /** The resolver deciding which relatedEntities groups are saved as collection items. */
+  private collectionPromotions(): CollectionPromotionResolver {
+    if (!this.collectionPromotionResolver) {
+      this.collectionPromotionResolver = new CollectionPromotionResolver(() => this.syncEngine.GetProvider(), this.contextUser);
+    }
+    return this.collectionPromotionResolver;
+  }
+
+  /**
+   * The collections to apply to a record: its own `collections`, plus, for a flattened record
+   * (depth 0), the `relatedEntities` groups promoted to collection items. The record itself is not
+   * changed, so its file keeps the format the author wrote.
+   *
+   * @returns The collections and the set of promoted items among them, or `null` when there are none.
+   */
+  private collectionsToApply(
+    record: RecordData,
+    entityName: string,
+    depth: number
+  ): { Collections: Record<string, RecordData[]>; PromotedItems: Set<RecordData> } | null {
+    const collections: Record<string, RecordData[]> =
+      record.collections && typeof record.collections === 'object' ? { ...record.collections } : {};
+    const promotedItems = new Set<RecordData>();
+    if (depth === 0) {
+      for (const group of this.collectionPromotions().PromotedGroups(entityName, record)) {
+        const name = group.Promotion.CollectionName;
+        collections[name] = [...(collections[name] ?? []), ...group.Items];
+        group.Items.forEach((item) => promotedItems.add(item));
+      }
+    }
+    return Object.keys(collections).length > 0 ? { Collections: collections, PromotedItems: promotedItems } : null;
+  }
+
+  /** Remembers a promoted item created without a key, to receive its key once the save succeeds. */
+  private queuePromotedKey(record: RecordData, item: RecordData, child: BaseEntity): void {
+    const pending = this.pendingPromotedKeys.get(record) ?? [];
+    pending.push({ Item: item, Child: child });
+    this.pendingPromotedKeys.set(record, pending);
+  }
+
+  /** Writes the saved keys of a record's new promoted items back into the items. */
+  private writeBackPromotedKeys(record: RecordData): void {
+    const pending = this.pendingPromotedKeys.get(record);
+    this.pendingPromotedKeys.delete(record);
+    for (const { Item, Child } of pending ?? []) {
+      const primaryKey: Record<string, unknown> = {};
+      for (const pk of Child.EntityInfo.PrimaryKeys) {
+        primaryKey[pk.Name] = Child.Get(pk.Name);
+      }
+      Item.primaryKey = primaryKey;
     }
   }
 
@@ -3441,8 +3485,9 @@ export class PushService {
     }
 
     // 2. Collections: owner.Lines.Create() (or load existing by PK into the collection), recurse apply on child entity
-    if (record.collections && typeof record.collections === 'object') {
-      for (const [colName, colItems] of Object.entries(record.collections)) {
+    const collectionsToApply = this.collectionsToApply(record, entityName, depth);
+    if (collectionsToApply) {
+      for (const [colName, colItems] of Object.entries(collectionsToApply.Collections)) {
         if (!Array.isArray(colItems)) {
           throw new Error(
             `Collection "${colName}" in ${entityName} must be an array of records. ` +
@@ -3555,6 +3600,9 @@ export class PushService {
               targetChild = await col.Create();
               for (const [pkK, pkV] of Object.entries(childKey ?? {})) {
                 targetChild.Set(pkK, pkV);
+              }
+              if (collectionsToApply.PromotedItems.has(itemData) && !childKey) {
+                this.queuePromotedKey(record, itemData, targetChild);
               }
             } else {
               matchedItemSet.add(targetChild);

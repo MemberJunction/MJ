@@ -1,8 +1,8 @@
-import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, FindSimilarNames, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
-import { Violation } from '../component-linter';
+import { Violation, FieldAccessViolationDetails } from '../component-linter';
 import { TypeContext } from '../type-context';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -163,11 +163,20 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
       // Field exists — no violation
       if (validFields.has(propertyName)) return;
 
+      const details: FieldAccessViolationDetails = {
+        Kind: 'field-access',
+        Field: propertyName,
+        TargetType: 'query',
+        TargetName: queryName,
+        SimilarFields: FindSimilarNames(propertyName, validFields),
+        AvailableFields: Array.from(validFields),
+      };
+
       // Check for case mismatch first (medium severity)
       const caseFix = FindCaseMismatch(propertyName, validFields);
       if (caseFix) {
-        violations.push(
-          CreateViolation(
+        violations.push({
+          ...CreateViolation(
             'query-result-field-access-validation',
             'medium',
             node,
@@ -177,8 +186,9 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
               text: `Use the correct casing: "${caseFix}".`,
               example: `// Change:\n${paramName}.${propertyName}\n// To:\n${paramName}.${caseFix}`,
             }
-          )
-        );
+          ),
+          Details: details,
+        });
         return;
       }
 
@@ -188,8 +198,8 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
       const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
 
       if (closest) {
-        violations.push(
-          CreateViolation(
+        violations.push({
+          ...CreateViolation(
             'query-result-field-access-validation',
             'high',
             node,
@@ -199,11 +209,12 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
               text: `Replace "${propertyName}" with "${closest}".`,
               example: `// Change:\n${paramName}.${propertyName}\n// To:\n${paramName}.${closest}`,
             }
-          )
-        );
+          ),
+          Details: details,
+        });
       } else {
-        violations.push(
-          CreateViolation(
+        violations.push({
+          ...CreateViolation(
             'query-result-field-access-validation',
             'high',
             node,
@@ -212,8 +223,9 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
             {
               text: `Use one of the valid fields from the "${queryName}" query.`,
             }
-          )
-        );
+          ),
+          Details: details,
+        });
       }
     }
 

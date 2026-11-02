@@ -80,18 +80,10 @@ const codegenConfig = {
   },
   advancedGeneration: {
     enableAdvancedGeneration: true,
-    AIVendor: 'openai',
-    AIModel: 'gpt-4-1106-preview',
     features: [
       {
         name: 'EntityNames',
         description: 'Use AI to generate better entity names when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'DefaultInViewFields',
-        description:
-          'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
         enabled: false,
       },
       {
@@ -100,20 +92,9 @@ const codegenConfig = {
         enabled: false,
       },
       {
-        name: 'EntityFieldDescriptions',
-        description: 'Use AI to generate descriptions for fields, only used when new fields are detected',
-        enabled: false,
-      },
-      {
-        name: 'FormLayout',
+        name: 'FormLayoutGeneration',
         description:
-          'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-        enabled: false,
-      },
-      {
-        name: 'FormTabs',
-        description:
-          "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
+          'Use AI to generate semantic field categories and layout for new entities, newly added fields, and fields whose upstream schema changes re-opened them for review.',
         enabled: false,
       },
       {
@@ -195,6 +176,24 @@ const mjServerConfig = {
   viewingSystem: {
     enableSmartFilters: true,
   },
+
+  // ---------------------------------------------------------------------------
+  // Serverless database (Azure SQL serverless, Aurora Serverless, Neon)
+  // ---------------------------------------------------------------------------
+  // By default MJAPI queries the database on several timers and holds 5 pooled
+  // connections, so a serverless database never auto-pauses. Uncomment what you
+  // need; guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md explains each setting
+  // and what turning it off costs. Env equivalents shown in comments.
+  // In databaseSettings above: METADATA_CACHE_REFRESH_INTERVAL=0, and add connectionPool: { min: 0 }.
+  // scheduledJobs: { enabled: false },
+  // agentSessions: {
+  //   janitor: { enabled: false },          // MJ_SESSION_JANITOR_ENABLED=false
+  //   bridgeReconciler: { enabled: false }, // MJ_BRIDGE_RECONCILER_ENABLED=false
+  //   handoffOfferExpiry: { enabled: false }, // MJ_HANDOFF_OFFER_EXPIRY_ENABLED=false
+  // },
+  // conversationDetailReconciler: { enabled: false }, // MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED=false
+  // agentRunWatchdog: { sweepIntervalMs: 0 },         // MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS=0
+  // (also set MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 in the environment)
   askSkip: {
     chatURL: process.env.ASK_SKIP_CHAT_URL,
     learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,

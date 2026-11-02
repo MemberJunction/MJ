@@ -49,8 +49,8 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
-import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
+import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift, Canonicalize } from '@memberjunction/global';
+import { SQLParser, IsBalancedSQLFragment, LexSQL, StrictFragmentValidator, type StrictStatementReads } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate, StatusUpdateOwnerID } from './PushStatusResolver.js';
@@ -77,11 +77,29 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: ai agent runs',
 ]);
 
+/** One field's values in a concurrency-conflict diagnostic. */
+interface ConflictDiagnosticEntry<TValue> {
+  FieldName: string;
+  ClientOldValue?: TValue;
+  ClientNewValue?: TValue;
+  DBValue?: TValue;
+}
+
+interface ActiveEntitySessionListener {
+  pubSub: PubSubEngine;
+  userPayload: UserPayload;
+  lastSeenAt: number;
+}
+
+const ACTIVE_ENTITY_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const ACTIVE_ENTITY_SESSION_MAX_PER_ENTITY = 2048;
+
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
 
   private static _eventSubscriptionKey: string = '___MJServer___ResolverBase___EventSubscriptions';
+  private static _activeEntitySessionsKey: string = '___MJServer___ResolverBase___ActiveEntitySessions';
   private get eventSubscriptions(): Map<string, Subscription> {
     // here we use the global object store instead of a static member becuase in some cases based on import code paths/bundling/etc, the static member
     // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
@@ -90,7 +108,15 @@ export class ResolverBase {
       LogDebug(`>>>>> MJServer.ResolverBase.EventSubscriptions: Creating new Map - this should only happen once per server instance <<<<<<`);
       g[ResolverBase._eventSubscriptionKey] = new Map<string, Subscription>();
     }
-    return g[ResolverBase._eventSubscriptionKey];
+    return g[ResolverBase._eventSubscriptionKey] as Map<string, Subscription>;
+  }
+
+  private get activeEntitySessions(): Map<string, Map<string, ActiveEntitySessionListener>> {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (!g[ResolverBase._activeEntitySessionsKey]) {
+      g[ResolverBase._activeEntitySessionsKey] = new Map<string, Map<string, ActiveEntitySessionListener>>();
+    }
+    return g[ResolverBase._activeEntitySessionsKey] as Map<string, Map<string, ActiveEntitySessionListener>>;
   }
 
   /**
@@ -438,30 +464,29 @@ export class ResolverBase {
       if (field.AllowDecryptInAPI) continue;
 
       // AllowDecryptInAPI is false - we need to filter the value
+      if (!field.SendEncryptedValue) {
+        // SendEncryptedValue is false - replace with sentinel immediately without touching EncryptionEngine
+        dataObject[fieldName] = ENCRYPTED_SENTINEL;
+        continue;
+      }
+
       const engine = EncryptionEngine.Instance;
       await engine.Config(false, contextUser);
       const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
-      if (field.SendEncryptedValue) {
-        // Re-encrypt the value before sending
-        // Only re-encrypt if it's not already encrypted (data provider decrypted it)
-        if (typeof value === 'string' && !IsValueEncrypted(value, keyMarker)) {
-          try {
-            const encryptedValue = await engine.Encrypt(
-              value,
-              field.EncryptionKeyID as string,
-              contextUser
-            );
-            dataObject[fieldName] = encryptedValue;
-          } catch (err) {
-            // If re-encryption fails, use sentinel for safety
-            LogError(`Failed to re-encrypt field ${fieldName} for API response: ${err}`);
-            dataObject[fieldName] = ENCRYPTED_SENTINEL;
-          }
+      // Only encrypt if the value is not already encrypted (PreserveRestrictedApiCiphertext keeps DB/cache ciphertext intact)
+      if (typeof value === 'string' && !IsValueEncrypted(value, keyMarker)) {
+        try {
+          const encryptedValue = await engine.Encrypt(
+            value,
+            field.EncryptionKeyID as string,
+            contextUser
+          );
+          dataObject[fieldName] = encryptedValue;
+        } catch (err) {
+          // If re-encryption fails, use sentinel for safety
+          LogError(`Failed to re-encrypt field ${fieldName} for API response: ${err}`);
+          dataObject[fieldName] = ENCRYPTED_SENTINEL;
         }
-        // If already encrypted (shouldn't happen normally), keep as-is
-      } else {
-        // SendEncryptedValue is false - replace with sentinel
-        dataObject[fieldName] = ENCRYPTED_SENTINEL;
       }
     }
 
@@ -661,7 +686,8 @@ export class ResolverBase {
           viewInput.DataSource,
           viewInput.IncludeBinaryFields,
           viewInput.AlternateBaseView,
-          viewInput.Properties
+          viewInput.Properties,
+          viewInput.SkipTotalRowCount
         );
       }
       else {
@@ -710,7 +736,8 @@ export class ResolverBase {
         viewInput.DataSource,
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
-        viewInput.Properties
+        viewInput.Properties,
+        viewInput.SkipTotalRowCount
       );
     } catch (err) {
       console.log(err);
@@ -759,7 +786,9 @@ export class ResolverBase {
         viewInput.BypassCache,
         viewInput.DataSource,
         viewInput.IncludeBinaryFields,
-        viewInput.AlternateBaseView
+        viewInput.AlternateBaseView,
+        undefined,
+        viewInput.SkipTotalRowCount
       );
     } catch (err) {
       console.log(err);
@@ -834,6 +863,7 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          skipTotalRowCount: viewInput.SkipTotalRowCount,
           alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
         });
@@ -1101,7 +1131,7 @@ export class ResolverBase {
    * Fails closed: no user, or an unresolvable reference, refuses.
    *
    * The references come from a walk of the whole parse tree
-   * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
+   * (`StrictFragmentValidator.ValidateReadOnlyStatement`). The statement is refused when that walk does not
    * account for every SELECT in the text, or when a FROM item names no table (a table function or
    * a row list).
    *
@@ -1122,14 +1152,7 @@ export class ResolverBase {
     }
     const dialect = this.dialectForProvider(provider);
     ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
-    const parser = new SQLParser(sqlText, dialect);
-    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
-    }
-    if (this.astContainsWriteNode(parser.AST)) {
-      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-    }
-    const reads = ClientClauseScreen.CollectStatementReads(parser);
+    const reads = this.strictReadOnlyStatementReads(sqlText, dialect, label);
     ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
     const allowed = this.entityBaseViewAllowList(provider);
     for (const relation of reads.Relations) {
@@ -1198,9 +1221,19 @@ export class ResolverBase {
     return LexSQL(clause, dialect).some((t) => (t.Kind === 'string' || t.Kind === 'identifier') && t.Text.includes('\\'));
   }
 
-  /** Write/DDL node walk shared with the clause screen; see `ClientClauseScreen.AstContainsWriteNode`. */
-  private astContainsWriteNode(node: unknown): boolean {
-    return ClientClauseScreen.AstContainsWriteNode(node);
+  /**
+   * Parses a whole statement with the strict validator and returns what it reads; throws unless it
+   * is one plain read-only SELECT with no write or DDL at any depth.
+   */
+  private strictReadOnlyStatementReads(sqlText: string, dialect: SQLParserDialect, label: string): StrictStatementReads {
+    const result = StrictFragmentValidator.ValidateReadOnlyStatement(sqlText, dialect, { CollectReads: true });
+    if (result.Refusal === 'NestedWrite') {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+    if (!result.IsValid || !result.Reads) {
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+    }
+    return result.Reads;
   }
 
   private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
@@ -1241,7 +1274,8 @@ export class ResolverBase {
     dataSource?: 'Live' | 'Materialized',
     includeBinaryFields?: boolean,
     alternateBaseView?: string,
-    properties?: ViewPropertyValues
+    properties?: ViewPropertyValues,
+    skipTotalRowCount?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1324,9 +1358,11 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          SkipTotalRowCount: skipTotalRowCount,
           AlternateBaseView: alternateBaseView,
           Properties: properties,
           TimeZone: userPayload?.TimeZone,
+          PreserveRestrictedApiCiphertext: true,
         },
         user
       );
@@ -1488,9 +1524,11 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          SkipTotalRowCount: param.skipTotalRowCount,
           AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
           TimeZone: param.userPayload?.TimeZone,
+          PreserveRestrictedApiCiphertext: true,
         });
       }
 
@@ -1691,12 +1729,40 @@ export class ResolverBase {
   }
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
-    // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
-    // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
-    // cause issues with multiple messages for the same event.
+    // Maintain a single MJGlobal event listener per entity name so CloudEvents are emitted once
+    // per event, while routing WebSocket status updates dynamically across all active user sessions
+    // that have interacted with this entity type (instead of closing over only the first caller).
     const uniqueKey = entityObject.EntityInfo.Name;
+    const now = Date.now();
+    const isFreshSubscription = !this.eventSubscriptions.has(uniqueKey);
 
-    if (!this.eventSubscriptions.has(uniqueKey)) {
+    let sessionsForEntity = isFreshSubscription ? undefined : this.activeEntitySessions.get(uniqueKey);
+    if (!sessionsForEntity) {
+      sessionsForEntity = new Map<string, ActiveEntitySessionListener>();
+      this.activeEntitySessions.set(uniqueKey, sessionsForEntity);
+    } else {
+      // Opportunistically evict expired session entries and enforce a safe per-entity cap
+      for (const [key, entry] of sessionsForEntity) {
+        if (now - entry.lastSeenAt > ACTIVE_ENTITY_SESSION_TTL_MS) {
+          sessionsForEntity.delete(key);
+        }
+      }
+      if (sessionsForEntity.size >= ACTIVE_ENTITY_SESSION_MAX_PER_ENTITY) {
+        const oldestKey = sessionsForEntity.keys().next().value;
+        if (oldestKey !== undefined) {
+          sessionsForEntity.delete(oldestKey);
+        }
+      }
+    }
+
+    if (userPayload) {
+      const sessionKey = userPayload.sessionId
+        ? `${userPayload.userRecord?.ID ?? ''}:${userPayload.sessionId}`
+        : (userPayload.userRecord?.ID ?? '__anonymous__');
+      sessionsForEntity.set(sessionKey, { pubSub, userPayload, lastSeenAt: now });
+    }
+
+    if (isFreshSubscription) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
       LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
@@ -1710,15 +1776,28 @@ export class ResolverBase {
           }
 
           const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity, event.args instanceof BaseEntityEvent ? event.args.ChangedFieldNames : undefined) : null;
-          const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
+          const eventToLog = { entityName: uniqueKey, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
           LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
           await this.EmitCloudEvent(event);
-          LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);  
+          LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);
 
-          if (event.args && event.args instanceof BaseEntityEvent && this.EntityEventBelongsToSession(event.args, userPayload)) {
-            // message from an entity object of this session's user, relay it to the client
-            LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            this.PublishStatusUpdate(pubSub, userPayload.sessionId, this.EntityStatusMessage(event.args), userPayload);
+          if (event.args && event.args instanceof BaseEntityEvent) {
+            const activeSessions = this.activeEntitySessions.get(uniqueKey);
+            if (activeSessions && activeSessions.size > 0) {
+              const eventNow = Date.now();
+              let serializedMessage: string | undefined;
+              for (const [sKey, session] of activeSessions) {
+                if (eventNow - session.lastSeenAt > ACTIVE_ENTITY_SESSION_TTL_MS) {
+                  activeSessions.delete(sKey);
+                  continue;
+                }
+                if (this.EntityEventBelongsToSession(event.args, session.userPayload)) {
+                  LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
+                  serializedMessage ??= this.EntityStatusMessage(event.args);
+                  this.PublishStatusUpdate(session.pubSub, session.userPayload.sessionId, serializedMessage, session.userPayload);
+                }
+              }
+            }
           }
         }
       });
@@ -2243,143 +2322,335 @@ export class ResolverBase {
     return entityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
   }
 
-  protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
-    // we have OldValues, so we need to compare them to the values we just loaded from the DB
-    const clientOldValues = {};
-    // for each item in the oldValues array, add it to the clientOldValues object
-    input.OldValues___.forEach((item) => {
-      // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
-      const field = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, item.Key);
-      const val = this.ClientOldValueToFieldValue(field, item.Value);
-      clientOldValues[item.Key] = val;
-    });
+  /**
+   * Whether the API never gives a client this field's stored value: an encrypted field that is not
+   * decrypted for the API reaches the client only as the sentinel or as fresh ciphertext, so the
+   * client's old value for it can never be compared with the database value.
+   */
+  private isFieldOpaqueToClient(field: EntityFieldInfo | undefined): boolean {
+    return Boolean(field?.Encrypt && !field.AllowDecryptInAPI);
+  }
 
-    // clientOldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
-    // with the DB values
+  /**
+   * The client's new values without the opaque fields it only echoed back: the sentinel, or the same
+   * value it received as the old value. Writing either would replace the stored secret.
+   */
+  private withoutEchoedOpaqueValues<TOldVal, TNewVal>(
+    entityInfo: EntityInfo,
+    clientNewValues: Record<string, TNewVal>,
+    clientOldValues: Record<string, TOldVal>,
+  ): Record<string, TNewVal> {
+    const kept: Record<string, TNewVal> = {};
+    for (const key of Object.keys(clientNewValues)) {
+      const f = this.findEntityFieldByCodeNameOrName(entityInfo, key);
+      const newValue = clientNewValues[key];
+      const unchanged = key in clientOldValues && !this.areEntityFieldValuesDifferent(f, clientOldValues[key], newValue, false);
+      const echoed = this.isFieldOpaqueToClient(f) && (newValue === ENCRYPTED_SENTINEL || unchanged);
+      if (!echoed) {
+        kept[key] = newValue;
+      }
+    }
+    return kept;
+  }
+
+  /**
+   * Copies concurrency-conflict diagnostic entries with every encrypted field's values replaced by
+   * the sentinel, so the console, the error log and `MJ: Error Logs` never hold a secret.
+   */
+  private redactEncryptedConflictValues<TValue>(
+    entityInfo: EntityInfo,
+    entries: ReadonlyArray<ConflictDiagnosticEntry<TValue>>,
+  ): ConflictDiagnosticEntry<TValue | string>[] {
+    return entries.map((entry) => {
+      if (!this.findEntityFieldByCodeNameOrName(entityInfo, entry.FieldName)?.Encrypt) {
+        return entry;
+      }
+      const redacted: ConflictDiagnosticEntry<TValue | string> = { FieldName: entry.FieldName };
+      if ('ClientOldValue' in entry) redacted.ClientOldValue = ENCRYPTED_SENTINEL;
+      if ('ClientNewValue' in entry) redacted.ClientNewValue = ENCRYPTED_SENTINEL;
+      if ('DBValue' in entry) redacted.DBValue = ENCRYPTED_SENTINEL;
+      return redacted;
+    });
+  }
+
+  /**
+   * Compares two typed entity field values for semantic inequality, handling `Date` epoch equality
+   * (plus optional non-`datetimeoffset` timezone-hour-shift tolerance) and `null`/`undefined` normalization.
+   */
+  private areEntityFieldValuesDifferent<TLeft, TRight>(
+    field: EntityFieldInfo | undefined,
+    left: TLeft,
+    right: TRight,
+    allowTimezoneShiftWarning: boolean,
+    fieldKeyForLog?: string
+  ): boolean {
+    const normalizedLeft = left === undefined ? null : left;
+    const normalizedRight = right === undefined ? null : right;
+
+    if (normalizedLeft instanceof Date) {
+      const rightDate =
+        normalizedRight instanceof Date
+          ? normalizedRight
+          : field?.TSType === EntityFieldTSType.Date && normalizedRight !== null
+            ? this.ClientOldValueToFieldValue(field, normalizedRight)
+            : null;
+      if (!(rightDate instanceof Date) || isNaN(rightDate.getTime())) {
+        return true;
+      }
+      if (this.datesEqualAtColumnResolution(field, normalizedLeft, rightDate)) {
+        return false;
+      }
+      const sqlType = field?.SQLFullType?.trim().toLowerCase() || '';
+      if (sqlType !== 'datetimeoffset' && IsOnlyTimezoneShift(normalizedLeft, rightDate)) {
+        if (allowTimezoneShiftWarning && fieldKeyForLog) {
+          console.warn(
+            `Timezone hour shift detected on field "${fieldKeyForLog}" (${sqlType || 'datetime'}). ` +
+            `Client: ${normalizedLeft.toISOString()}, DB: ${rightDate.toISOString()}. ` +
+            `Consider using datetimeoffset to avoid timezone ambiguity.`
+          );
+        }
+        return false;
+      }
+      return true;
+    }
+
+    if (normalizedRight instanceof Date && field?.TSType === EntityFieldTSType.Date && normalizedLeft !== null) {
+      const leftDate = this.ClientOldValueToFieldValue(field, normalizedLeft);
+      if (leftDate instanceof Date && !isNaN(leftDate.getTime())) {
+        return !this.datesEqualAtColumnResolution(field, leftDate, normalizedRight);
+      }
+    }
+
+    if (typeof normalizedLeft === 'string' && typeof normalizedRight === 'string' && this.jsonStringsEquivalent(normalizedLeft, normalizedRight)) {
+      return false;
+    }
+
+    return Object.is(normalizedLeft, normalizedRight) ? false : normalizedLeft !== (normalizedRight as never);
+  }
+
+  /**
+   * True when two instants would be stored as the same value in the field's column: SQL Server
+   * `datetime` resolves to 1/300 s and `smalldatetime` to one minute; every other type keeps milliseconds.
+   */
+  private datesEqualAtColumnResolution(field: EntityFieldInfo | undefined, left: Date, right: Date): boolean {
+    return Math.abs(left.getTime() - right.getTime()) < this.dateColumnResolutionMs(field);
+  }
+
+  private dateColumnResolutionMs(field: EntityFieldInfo | undefined): number {
+    switch ((field?.Type ?? '').trim().toLowerCase()) {
+      case 'datetime':
+        return 1000 / 300;
+      case 'smalldatetime':
+        return 60_000;
+      default:
+        return 1;
+    }
+  }
+
+  /**
+   * True when both strings are JSON documents with the same content, ignoring whitespace and key order.
+   */
+  private jsonStringsEquivalent(left: string, right: string): boolean {
+    const canonicalLeft = this.canonicalJSONDocument(left);
+    return canonicalLeft !== null && canonicalLeft === this.canonicalJSONDocument(right);
+  }
+
+  /**
+   * Canonical form of a JSON object or array string, or null when the text is not one.
+   */
+  private canonicalJSONDocument(text: string): string | null {
+    const first = text.trimStart().charAt(0);
+    if (first !== '{' && first !== '[') {
+      return null;
+    }
+    try {
+      return Canonicalize(JSON.parse(text));
+    } catch {
+      return null;
+    }
+  }
+
+  protected async TestAndSetClientOldValuesToDBValues<
+    TOldVal,
+    TNewVal,
+    TInput extends { OldValues___?: ReadonlyArray<{ Key: string; Value: TOldVal }> | null }
+  >(
+    input: TInput,
+    rawClientNewValues: Record<string, TNewVal>,
+    entityObject: BaseEntity,
+    contextUser: UserInfo
+  ): Promise<void> {
+    type ConvertedFieldValue = ReturnType<ResolverBase['ClientOldValueToFieldValue']>;
+    const clientOldValues: Record<string, ConvertedFieldValue> = {};
+    for (const item of input.OldValues___ ?? []) {
+      // Transform string-serialized wire values to match the field's TypeScript type
+      const field = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, item.Key);
+      clientOldValues[item.Key] = this.ClientOldValueToFieldValue(field, item.Value);
+    }
+    const clientNewValues = this.withoutEchoedOpaqueValues(entityObject.EntityInfo, rawClientNewValues, clientOldValues);
+
     // fls-guard: compared on the server only, never returned
     const dbValues = entityObject.GetAll();
 
-    // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
-    const dbDifferences = [];
-    Object.keys(clientOldValues).forEach((key) => {
+    interface DBDifferenceEntry {
+      FieldName: string;
+      ClientOldValue: ConvertedFieldValue;
+      DBValue: ConvertedFieldValue;
+    }
+    interface ClientDifferenceEntry {
+      FieldName: string;
+      ClientOldValue: ConvertedFieldValue;
+      ClientNewValue: TNewVal;
+    }
+
+    const dbDifferences: DBDifferenceEntry[] = [];
+    const dbDiffByField = new Map<string, DBDifferenceEntry>();
+
+    for (const key of Object.keys(clientOldValues)) {
       const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
-      const dbVal = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
-      let different = false;
-      switch (typeof clientOldValues[key]) {
-        case 'number':
-          different = clientOldValues[key] !== dbVal;
-          break;
-        case 'boolean':
-          different = clientOldValues[key] !== dbVal;
-          break;
-        case 'object':
-          if (clientOldValues[key] instanceof Date) {
-            const clientDate = clientOldValues[key] as Date;
-            const dbDate = dbVal;
-            if (dbDate == null || !(dbDate instanceof Date)) {
-              different = true;
-            } else if (clientDate.getTime() !== dbDate.getTime()) {
-              // Check if this is a datetime/datetime2 field with only a timezone hour shift
-              const sqlType = f?.SQLFullType?.trim().toLowerCase() || '';
-              if (sqlType !== 'datetimeoffset' && IsOnlyTimezoneShift(clientDate, dbDate)) {
-                console.warn(
-                  `Timezone hour shift detected on field "${key}" (${sqlType || 'datetime'}). ` +
-                  `Client: ${clientDate.toISOString()}, DB: ${dbDate.toISOString()}. ` +
-                  `Consider using datetimeoffset to avoid timezone ambiguity.`
-                );
-                different = false; // Allow timezone shifts through for non-datetimeoffset fields
-              } else {
-                different = true;
-              }
-            }
-          } else if (clientOldValues[key] === null) {
-            different = dbVal !== null;
-          }
-          break;
-        default:
-          different = clientOldValues[key] !== dbVal;
-          break;
+      if (this.isFieldOpaqueToClient(f)) {
+        continue;
       }
+      const dbVal: ConvertedFieldValue = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
+      const different = this.areEntityFieldValuesDifferent(f, clientOldValues[key], dbVal, true, key);
       if (different && f && !f.ReadOnly) {
-        // only include updateable fields
-        dbDifferences.push({
+        const entry: DBDifferenceEntry = {
           FieldName: key,
           ClientOldValue: clientOldValues[key],
           DBValue: dbVal,
-        });
+        };
+        dbDifferences.push(entry);
+        dbDiffByField.set(key, entry);
       }
-    });
+    }
+
+    let fieldsToPreserveFromDB: Set<string> | undefined;
 
     if (dbDifferences.length > 0) {
-      // now we have an array of any dbDifferences with length > 0, between the clientOldValues and the dbValues, we need to check to see if any of the differences are on fields that the client is trying to update
-      // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
-      const clientDifferences = [];
-      Object.keys(clientOldValues).forEach((key) => {
+      const clientDifferences: ClientDifferenceEntry[] = [];
+      const clientDiffFieldNames = new Set<string>();
+
+      for (const key of Object.keys(clientOldValues)) {
         const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
-        if (key in clientNewValues && clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
-          // only include updateable fields
+        if (
+          key in clientNewValues &&
+          f &&
+          f.AllowUpdateAPI &&
+          !f.IsPrimaryKey &&
+          this.areEntityFieldValuesDifferent(f, clientOldValues[key], clientNewValues[key], false)
+        ) {
           clientDifferences.push({
             FieldName: key,
             ClientOldValue: clientOldValues[key],
             ClientNewValue: clientNewValues[key],
           });
+          clientDiffFieldNames.add(key);
         }
+      }
+
+      // True conflicting overlap: client modified a field whose authoritative DB value differs from BOTH
+      // ClientOldValue AND ClientNewValue (idempotent concurrent writes to the same value converge cleanly).
+      const overlap = clientDifferences.filter((cd) => {
+        const dd = dbDiffByField.get(cd.FieldName);
+        if (!dd) {
+          return false;
+        }
+        const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, cd.FieldName);
+        return this.areEntityFieldValuesDifferent(f, cd.ClientNewValue, dd.DBValue, true);
       });
 
-      // now we have clientDifferences which shows what the client thinks they are changing. And, we have the dbDifferences array that shows changes between the clientOldValues and the dbValues
-      // if there is ANY overlap in the FIELDS that appear in both arrays, we need to log a warning but allow the save to continue
-      const dbDiffFieldNames = new Set(dbDifferences.map((dd) => dd.FieldName));
-      const overlap = clientDifferences.filter((cd) => dbDiffFieldNames.has(cd.FieldName));
       if (overlap.length > 0) {
+        const conflictingFields = overlap.map((o) => o.FieldName);
+        const entityInfo = entityObject.EntityInfo;
+        const shownClientDifferences = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, clientDifferences);
+        const shownDBDifferences = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, dbDifferences);
+        const shownOverlap = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, overlap);
         const msg = {
           Message:
-            'Inconsistency between old values provided for changed fields, and the values of one or more of those fields in the database. Save operation continued with warning.',
-          ClientDifferences: clientDifferences,
-          DBDifferences: dbDifferences,
-          Overlap: overlap,
+            'Concurrent modification conflict: one or more fields modified by the client were updated in the database since the record was loaded. Save rejected to prevent overwriting concurrent changes.',
+          ClientDifferences: shownClientDifferences,
+          DBDifferences: shownDBDifferences,
+          Overlap: shownOverlap,
         };
-        
-        // Log as warning to console and ErrorLog table instead of throwing error
-        console.warn('Entity save inconsistency detected but allowing save to continue:', JSON.stringify(msg));
+
+        console.warn('Entity save concurrency conflict detected — rejecting conflicting update:', JSON.stringify(msg));
         LogErrorEx({
           message: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
           severity: 'warning',
           category: 'ResolverBase.TestAndSetClientOldValuesToDBValues',
           metadata: {
             entityName: entityObject.EntityInfo.Name,
-            clientDifferences: clientDifferences,
-            dbDifferences: dbDifferences,
-            overlap: overlap,
+            clientDifferences: shownClientDifferences,
+            dbDifferences: shownDBDifferences,
+            overlap: shownOverlap,
           },
         });
 
-        // Create ErrorLog record in the database — use the entity's bound provider so the
-        // ErrorLog write goes to the same connection as the entity that triggered it.
+        // Persist SAVE_INCONSISTENCY ErrorLog record on the entity's bound provider before rejecting
         try {
-          const md = entityObject.ProviderToUse as unknown as IMetadataProvider;
-          const errorLogEntity = await md.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
-          // Code is NCHAR(20); a longer value is rejected at the database
-          errorLogEntity.Code = 'SAVE_INCONSISTENCY';
-          errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
-          errorLogEntity.Status = 'Warning';
-          errorLogEntity.Category = 'Entity Save';
-          errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
-          
-          const saveResult = await errorLogEntity.Save();
-          if (!saveResult) {
-            console.error(
-              `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
-            );
+          const hasEntityObjectFactory = (
+            p: object | null | undefined
+          ): p is Pick<IMetadataProvider, 'GetEntityObject'> => Boolean(p && 'GetEntityObject' in p);
+          const providerCandidate = entityObject.ProviderToUse;
+          if (hasEntityObjectFactory(providerCandidate)) {
+            const errorLogEntity = await providerCandidate.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
+            // Code is NCHAR(20); a longer value is rejected at the database
+            errorLogEntity.Code = 'SAVE_INCONSISTENCY';
+            errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
+            errorLogEntity.Status = 'Warning';
+            errorLogEntity.Category = 'Entity Save';
+            errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
+
+            const saveResult = await errorLogEntity.Save();
+            if (!saveResult) {
+              console.error(
+                `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
+              );
+            }
           }
         } catch (errorLogError) {
           console.error('Error creating ErrorLog record:', errorLogError);
         }
+
+        throw new GraphQLError(
+          `Concurrent modification conflict on ${entityObject.EntityInfo.Name} for field(s): ${conflictingFields.join(', ')}. Reload the record and retry your changes.`,
+          {
+            extensions: {
+              code: 'CONCURRENT_MODIFICATION_CONFLICT',
+              entityName: entityObject.EntityInfo.Name,
+              conflictingFields,
+            },
+          }
+        );
+      }
+
+      // Non-overlapping concurrent DB edits: preserve any field that changed in the database
+      // when the client itself did NOT modify that field (prevents full-payload clients or forged
+      // OldValues___ from clobbering concurrent DB updates on untouched columns).
+      fieldsToPreserveFromDB = new Set<string>();
+      for (const dd of dbDifferences) {
+        if (!clientDiffFieldNames.has(dd.FieldName)) {
+          fieldsToPreserveFromDB.add(dd.FieldName);
+          const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, dd.FieldName);
+          if (f) {
+            fieldsToPreserveFromDB.add(f.Name);
+            fieldsToPreserveFromDB.add(f.CodeName);
+          }
+        }
       }
     }
 
-    // If we get here that means we've not thrown an exception, so there is
-    // NO OVERLAP, so we can set the new values from the data provided from the client now...
-    entityObject.SetMany(clientNewValues);
+    if (fieldsToPreserveFromDB && fieldsToPreserveFromDB.size > 0) {
+      const mergedValues: Record<string, TNewVal> = {};
+      for (const key of Object.keys(clientNewValues)) {
+        if (!fieldsToPreserveFromDB.has(key)) {
+          mergedValues[key] = clientNewValues[key];
+        }
+      }
+      entityObject.SetMany(mergedValues);
+    } else {
+      entityObject.SetMany(clientNewValues);
+    }
   }
 
   protected async DeleteRecord(

@@ -5,6 +5,7 @@
       "Description": "Video content (MP4, WebM, etc.). Delivered inline as video_url where the model supports the modality.",
       "ParentID": null,
       "ContentType": "video/*",
+      "DriverClass": "VideoArtifactViewerPlugin",
       "ToolLibraryClass": null,
       "IsEnabled": true,
       "Priority": 0,
@@ -16,8 +17,8 @@
       "ID": "AE8893ED-05F8-4314-8D6F-F4B758F37A78"
     },
     "sync": {
-      "lastModified": "2026-05-20T01:27:07.922Z",
-      "checksum": "02c978956a1d2840c3d0dce698de3f73215d2124371f3a5e1811f51997178a86"
+      "lastModified": "2026-11-01T22:53:23.000Z",
+      "checksum": "7958069419355a040e2e0ed3866220939b1f1185bd19fbd8db8198f19905c384"
     }
   }
 ]

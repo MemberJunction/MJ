@@ -131,8 +131,7 @@ function baseStatus(): WorkspaceStatus {
     Files: [
       { Name: 'pnpm-workspace.yaml', Exists: true },
       { Name: '.npmrc', Exists: true },
-      { Name: 'package.json', Exists: true },
-      { Name: 'turbo.json', Exists: false },
+      { Name: 'package.json', Exists: false },
     ],
     LockfileExists: true,
     NodeModulesExists: false,
@@ -153,7 +152,7 @@ describe('RenderStatus', () => {
   it('shows file presence, members, unlisted candidates, and a pnpm match', () => {
     const report = RenderStatus(baseStatus());
     expect(report).toContain('pnpm-workspace.yaml');
-    expect(report).toContain('turbo.json');
+    expect(report).toContain('package.json');
     expect(report).toContain('members (1): bizapps-x');
     expect(report).toContain('not in workspace: bizapps-y');
     expect(report).toContain('match');
