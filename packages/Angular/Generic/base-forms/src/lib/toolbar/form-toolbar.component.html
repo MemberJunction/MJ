@@ -91,7 +91,10 @@
      ============================================ -->
 @if (!EditMode) {
   @if (!IsToolbarExpanded) {
-    <div class="mj-forms-toolbar-collapsed-pill" role="toolbar" aria-label="Form actions">
+    <div class="mj-forms-toolbar-collapsed-pill"
+         [class.mj-forms-toolbar-collapsed-pill--rail]="ChromeLayout === 'left-nav'"
+         role="toolbar"
+         aria-label="Form actions">
       @if (EditActionItem; as editItem) {
         <button type="button"
           class="mj-forms-collapsed-btn mj-forms-collapsed-btn--edit"
@@ -352,7 +355,7 @@
             @if (CurrentEntityName) {
               <button class="mj-forms-menu-item" type="button"
                 data-toolbar-pin="entity"
-                [attr.aria-pressed]="IsToolbarPinnedOpen && EntityToolbarPinState === true"
+                [attr.aria-pressed]="IsToolbarPinnedOpen"
                 (click)="ToggleEntityToolbarPin()">
                 <span class="mj-forms-menu-icon"><i class="fa-solid fa-thumbtack"></i></span>
                 <span class="mj-forms-menu-label">{{ IsToolbarPinnedOpen ? 'Unpin toolbar for ' + CurrentEntityDisplayName : 'Pin toolbar for ' + CurrentEntityDisplayName }}</span>

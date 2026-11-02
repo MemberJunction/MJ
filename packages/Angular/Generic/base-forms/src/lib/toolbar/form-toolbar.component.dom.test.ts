@@ -906,8 +906,14 @@ describe('MjFormToolbarComponent (DOM)', () => {
       vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const f = renderRaw({ EditMode: false });
       expect(f.componentInstance.IsToolbarExpanded).toBe(false);
-      expect(query(f, '.mj-forms-toolbar-collapsed-pill')).not.toBeNull();
+      const pill = query(f, '.mj-forms-toolbar-collapsed-pill');
+      expect(pill).not.toBeNull();
+      expect(pill!.classList.contains('mj-forms-toolbar-collapsed-pill--rail')).toBe(false);
       expect(query(f, '.mj-forms-toolbar')).toBeNull();
+
+      f.componentRef.setInput('ChromeLayout', 'left-nav');
+      f.detectChanges();
+      expect(query(f, '.mj-forms-toolbar-collapsed-pill--rail')).not.toBeNull();
     });
 
     it('still collapses to the pill in Read Mode on an IS-A entity (the hierarchy breadcrumb is its own row)', () => {
@@ -961,6 +967,8 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
       expect(f.componentInstance.IsGlobalToolbarPinned).toBe(true);
       expect(f.componentInstance.IsToolbarPinnedOpen).toBe(true);
+      openView(f);
+      expect(query(f, '[data-toolbar-pin="entity"]')?.getAttribute('aria-pressed')).toBe('true');
       expect(f.componentInstance.IsToolbarExpanded).toBe(true);
       expect(save).toHaveBeenCalledWith(
         TOOLBAR_VISIBILITY_SETTING_KEY,
@@ -979,6 +987,8 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
       expect(f.componentInstance.IsGlobalToolbarPinned).toBe(true);
       expect(f.componentInstance.IsToolbarPinnedOpen).toBe(true);
+      openView(f);
+      expect(query(f, '[data-toolbar-pin="entity"]')?.getAttribute('aria-pressed')).toBe('true');
 
       // Toggling entity pin when GlobalPinned is true sets EntityPinned['MJ: Entities'] = false, overriding GlobalPinned
       f.componentInstance.ToggleEntityToolbarPin();

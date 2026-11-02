@@ -837,9 +837,9 @@ mj-collapsible-panel.mj-form-role-more {
   .mj-forms-chrome-rail-item {
     flex: 0 0 auto;
     width: auto;
-    height: 30px;
-    min-height: 30px;
-    padding: 0 10px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 11px;
     font-size: 12.5px;
     border-radius: var(--mj-radius-full, 9999px);
     white-space: nowrap;
